@@ -1,6 +1,36 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
+# ------------------------------------------------------------
+# OS / Filesystem
+# ------------------------------------------------------------
+.DS_Store
+Thumbs.db
+
+# ------------------------------------------------------------
+# Editor / IDE
+# ------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ------------------------------------------------------------
+# Environment / Local config
+# ------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# ------------------------------------------------------------
+# Logs / Temp / Cache
+# ------------------------------------------------------------
+*.log
+tmp/
+temp/
+.cache/
+
+# ------------------------------------------------------------
+# Go artifacts
+# ------------------------------------------------------------
 # Binaries for programs and plugins
 *.exe
 *.exe~
@@ -11,22 +41,42 @@
 # Test binary, built with `go test -c`
 *.test
 
-# Code coverage profiles and other test artifacts
+# Coverage / profiling
 *.out
 coverage.*
 *.coverprofile
 profile.cov
+coverage.out
+cpu.out
+mem.out
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Build output
+bin/
+build/
+dist/
 
-# Go workspace file
+# Go workspace file (useful for local multi-module dev)
 go.work
 go.work.sum
 
-# env file
-.env
+# Dependency directories (uncomment if you choose not to commit vendored deps)
+# vendor/
 
-# Editor/IDE
-# .idea/
-# .vscode/
+# ------------------------------------------------------------
+# Frontend (Node/Vite/Vue and common JS tooling)
+# ------------------------------------------------------------
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+.vite/
+.eslintcache
+*.tsbuildinfo
+
+# Test / coverage outputs
+coverage/
+*.lcov
