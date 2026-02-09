@@ -593,9 +593,13 @@ func (s *EventService) Publish(ctx context.Context, event domain.RunEvent) error
 
 #### 前端 SPA
 
-- **嵌入**：`web/dist/` 通过 `//go:embed` 编译入二进制
-- **路由**：API 路由 (`/api/*`) 优先匹配；其余路由返回 `index.html`（SPA 前端路由）
-- **构建**：`make build-web` 先构建前端，`make build` 再编译 Go 二进制
+- **技术基线**：Vue + TypeScript + Vite + Tailwind CSS + pnpm（均按 latest stable 策略维护）
+- **定位**：前端为统一业务入口（AI 工作台 + 管理控制台），不引入独立后端语义
+- **强制构建链路**：`pnpm install -> pnpm build -> 产出 web/dist -> go:embed 打包 -> go build 生成单二进制`
+- **嵌入约束**：`web/dist/` 必须通过 `//go:embed` 编译入二进制；运行时不得依赖外部静态目录
+- **路由约束**：API 路由 (`/api/*`) 优先匹配；其余路由返回 `index.html`（SPA 前端路由）
+- **体验约束**：必须支持响应式设计（桌面/平板/移动端）、深色/浅色模式、国际化（至少 `zh-CN` + `en`）
+- **发布门禁**：若缺失 `web/dist` 或未成功嵌入，构建产物判定为不合格，禁止发布
 
 ### 4.4 架构全景图（ASCII）
 
@@ -1299,6 +1303,7 @@ func main() {
     // 8. 初始化 Layer 1: Access
     router := api.NewRouter(engine, scheduler, agentRT, intentOrch, toolRegistry, algorithmLib, workflowDefs)
     sseBroker := sse.NewBroker(eventBus)
+    mustCheckEmbeddedWebAssets(router)               // index.html + 静态资源入口必须可用
 
     // 9. 启动
     scheduler.Start()
@@ -1321,6 +1326,8 @@ func main() {
 - 显式启用的外部依赖（PostgreSQL/MySQL、Redis、MinIO/S3、MediaMTX）必须在启动阶段通过健康检查
 - 任何已启用依赖连接失败即中止启动，避免静默回退导致运行语义漂移
 - 所有数据库驱动（sqlite/mysql/postgres）对外 API 语义一致，差异仅允许存在于非功能层（性能/运维）
+- 启动阶段必须校验二进制内嵌前端资源（`index.html` 与静态资源入口）可用，缺失即启动失败
+- 目标环境即使无 Node/pnpm，也必须可由单二进制直接提供前端页面与 API 服务
 
 ---
 
@@ -1338,6 +1345,165 @@ func main() {
 - Intent Orchestrator 负责统一解析、规划、确认、执行，不允许各模块私有化“旁路执行”
 - 所有 AI 触发动作必须生成可审计事件（`intent_*` + `policy_*` + 领域事件）
 - 失败恢复与重试策略在 Control Layer 统一管理，保持 API/AI 执行行为一致
+
+### 8.3 业务一致性验收契约
+
+同一能力在 AI/API/UI 三入口必须满足以下一致性项：
+
+| 一致性项 | 验收要求 |
+|----------|----------|
+| 输入约束 | 参数必填、类型、范围、默认值一致 |
+| 权限检查 | 相同角色在三入口得到相同授权结果 |
+| 审批链路 | 风险分级与审批触发条件一致 |
+| 输出结构 | 成功/失败返回结构与关键字段一致 |
+| 错误语义 | 错误码、错误分类、可读提示语义一致 |
+
+每个能力发布前必须产出一致性验收记录（Entry Parity Record），至少包含：
+
+1. 能力标识与版本
+2. 三入口请求样例与响应样例
+3. 权限与审批对照结果
+4. 差异项与处理结论
+
+### 8.4 前端入口一致性补充
+
+- 前端 UI 仅作为能力入口层，所有动作必须映射到同一 `capability_id` / `intent_action`
+- 前端不得引入绕过 Intent Orchestrator 或 Policy Engine 的私有执行路径
+- 前端触发写操作必须遵循与 AI/API 相同的权限校验、审批触发、审计事件要求
+- 响应式布局、主题切换、国际化仅影响呈现，不得改变能力语义与权限结果
+
+---
+
+## 9. 业务运行协议（非商业化）
+
+### 9.1 运行协同规则
+
+运行中的业务协同遵循：
+
+1. 任务分派：发起人、执行者、审核者必须可追溯
+2. 审批升级：超时或冲突自动升级到上级审核角色
+3. 人工接管：命中高风险或异常阈值后自动冻结并转人工
+4. 终止与重试：终止需记录原因；重试需携带上一次失败证据
+5. 归档：所有任务必须绑定 run_id/trace_id 与最终产物
+
+### 9.2 关键异常场景 SOP
+
+| 异常场景 | SOP |
+|----------|-----|
+| 工具失败 | 按重试策略执行，超限后转人工裁决 |
+| 依赖不可达 | 触发降级路径；无降级路径时终止并告警 |
+| 审批超时 | 自动升级；高风险默认拒绝并回退 |
+| 上下文冲突 | 冻结冲突节点，人工合并后继续执行 |
+
+### 9.3 文档层公共契约类型
+
+```go
+type BusinessScenarioSpec struct {
+    ScenarioID        string
+    Goal              string
+    TriggerCondition  string
+    Inputs            []string
+    Outputs           []string
+    DefinitionOfDone  string
+}
+
+type RoleTaskFlowSpec struct {
+    Role              string
+    AllowedActions    []string
+    ApprovalLinks     []string
+    HandoverPoints    []string
+}
+
+type TaskOutcomeContract struct {
+    SuccessCriteria   []string
+    PartialCriteria   []string
+    FailureCriteria   []string
+    EvidenceFields    []string
+}
+
+type HumanReviewPolicy struct {
+    TriggerRules      []string
+    ReviewerRole      string
+    TimeoutSeconds    int64
+    TimeoutAction     string
+    RejectFlow        string
+}
+
+type EntryParityContract struct {
+    CapabilityID      string
+    CheckItems        []string
+    Score             float64
+    Differences       []string
+}
+
+type BusinessSLOSpec struct {
+    Metric            string
+    Window            string
+    Threshold         string
+    AlertLevel        string
+}
+
+type FailurePlaybookSpec struct {
+    FailureType       string
+    DegradeStrategy   string
+    HumanTakeover     string
+    RecoverCriteria   string
+}
+
+type BinaryArtifactContract struct {
+    ArtifactType             string   // single_go_binary
+    EmbeddedWebDistRequired  bool
+    ExternalStaticDirAllowed bool
+    StartupCheckRequired     bool
+    ReleaseGateChecks        []string
+}
+
+type FrontendEmbedBuildSpec struct {
+    InstallCommand   string
+    BuildCommand     string
+    DistPath         string
+    EmbedPattern     string
+    GoBuildCommand   string
+    FailureConditions []string
+}
+
+type TechStackVersionPolicy struct {
+    Component       string
+    VersionRule     string   // latest_stable
+    SourceOfTruth   string
+    CheckCycle      string
+    GateRule        string
+}
+
+type FrontendUXContract struct {
+    ResponsiveBreakpoints []string
+    SupportsLightMode     bool
+    SupportsDarkMode      bool
+    SupportedLocales      []string
+    FallbackLocale        string
+}
+```
+
+### 9.4 P0/P1 排期（仅业务完整性）
+
+| 优先级 | 周期 | 交付 |
+|--------|------|------|
+| P0 | 2 周 | 完成 `BusinessScenarioSpec`、`RoleTaskFlowSpec`、`TaskOutcomeContract`、`EntryParityContract` 文档化，并定义首批 10 个任务闭环与 DoD |
+| P0 | 1 周 | 完成 `BinaryArtifactContract`、`FrontendEmbedBuildSpec`、`TechStackVersionPolicy`、`FrontendUXContract` 文档化，并形成发布门禁清单 |
+| P0 | 1 周 | 完成 `HumanReviewPolicy`、`FailurePlaybookSpec`，落地人工复核与异常回退协议 |
+| P1 | 2 周 | 完成 `BusinessSLOSpec` 与指标采集口径，补齐附录 D |
+| P1 | 1 周 | 完成运行协议检查表，形成发布前业务验收清单 |
+
+### 9.5 业务验收场景
+
+1. 闭环完整性：每个任务都能跑通 `触发 -> 执行 -> 复核 -> 产物确认 -> 归档`
+2. 入口一致性：同一任务从 AI/API/UI 触发结果一致
+3. 人工介入：高风险或低置信任务必须转人工复核
+4. 异常回退：依赖失败、工具失败、审批超时均进入定义回退路径
+5. 结果判定：无证据字段的任务不得标记业务完成
+6. 可追溯性：每个任务可关联完整事件链和最终产物
+7. 构建完整性：标准构建链路产物必须为内嵌前端资源的单一二进制
+8. 前端体验一致性：桌面/平板/移动端显示正常，深浅色模式与国际化切换不影响能力语义
 
 ---
 
@@ -1486,3 +1652,50 @@ audit:
 
 - 条件：`mediamtx.enabled=true` 且 `mediamtx.api_address` 不可达
 - 结果：启动失败（fail-fast），不自动降级为“关闭流媒体能力”
+
+## 附录 D：业务 SLO 指标（非商业化）
+
+| 指标 | 定义 | 默认阈值（建议） |
+|------|------|------------------|
+| 业务完成率 | 成功任务数 / 总任务数 | `>= 95%` |
+| 人工介入率 | 进入人工复核任务数 / 总任务数 | `<= 20%` |
+| 一次通过率 | 无重试且直接完成任务数 / 总任务数 | `>= 85%` |
+| 复核时延 | 从复核触发到复核完成的 P95 耗时 | `<= 30 min` |
+| 回退成功率 | 触发回退后恢复到可继续状态的比例 | `>= 98%` |
+| 可追溯完整率 | 可关联 run_id/trace_id 与产物的任务比例 | `= 100%` |
+
+## 附录 E：前后端技术栈与版本治理（Latest Stable）
+
+### E.1 技术栈基线
+
+| 层 | 技术栈 | 版本策略 |
+|----|--------|----------|
+| 前端 | Vue + TypeScript + Vite + Tailwind CSS + pnpm | latest stable |
+| 后端 | Go + 核心后端依赖 | latest stable |
+
+### E.2 版本治理规则
+
+- 文档不锁定 patch 号，仅声明 `latest stable`
+- 每次迭代前执行版本检查并记录结果
+- 升级导致契约变化时，必须先更新本文档中的契约与验收条目
+- 版本升级不得破坏“单二进制内嵌前端”发布模型
+
+### E.3 单二进制前端内嵌构建链路
+
+1. `pnpm install`
+2. `pnpm build` 产出 `web/dist`
+3. `go:embed web/dist/*` 将静态资源编译进 Go 程序
+4. `go build` 产出单一可执行文件
+
+### E.4 构建验收门禁
+
+1. `web/dist/index.html` 存在且构建成功
+2. 二进制启动后可返回前端入口页面
+3. 目标机器在无 Node/pnpm 环境下仍可正常访问前端页面
+4. 任一门禁失败则构建/发布流程失败
+
+### E.5 前端体验基线
+
+- 响应式：至少覆盖桌面、平板、移动端三档布局
+- 主题：支持浅色与深色模式，主题切换不影响功能可用性
+- 国际化：至少支持 `zh-CN` 与 `en`，缺失翻译时回退到默认语言
