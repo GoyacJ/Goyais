@@ -80,3 +80,7 @@ node_modules/
 # Test / coverage outputs
 coverage/
 *.lcov
+
+# AI
+.agents
+AGENTS.md

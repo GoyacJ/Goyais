@@ -1,0 +1,1612 @@
+openapi: 3.0.3
+info:
+  title: Goyais API
+  version: 1.0.0
+  description: |
+    Goyais v0.1 初版 API 契约。
+    - API 基础路径固定为 /api/v1
+    - v0.1 通过 x-release 标注，不体现在 URL
+    - 所有错误响应固定外层包装：{ error: { code, messageKey, details } }
+    - messageKey 即 i18nKey
+  x-release: v0.1
+servers:
+  - url: /api/v1
+tags:
+  - name: Health
+    description: 健康检查
+  - name: Command
+    description: Command-first 规范入口
+  - name: Asset
+    description: 资产管理
+  - name: WorkflowTemplate
+    description: DAG 模板
+  - name: WorkflowRun
+    description: 运行与回放
+  - name: Registry
+    description: 能力与算法注册中心
+  - name: PluginMarket
+    description: 插件市场
+  - name: Stream
+    description: 流媒体控制面
+
+security:
+  - bearerAuth: []
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Health check
+      operationId: healthz
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, timestamp, mode, providers]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                  mode:
+                    type: string
+                    description: 当前运行模式，用于 minimal/full 验收。
+                    enum: [minimal, full]
+                    example: minimal
+                  providers:
+                    type: object
+                    description: 当前生效 provider 选择，用于 provider 切换验收。
+                    required: [db, cache, vector, objectStore, stream]
+                    properties:
+                      db:
+                        type: string
+                        example: sqlite
+                      cache:
+                        type: string
+                        example: memory
+                      vector:
+                        type: string
+                        example: sqlite
+                      objectStore:
+                        type: string
+                        example: local
+                      stream:
+                        type: string
+                        example: mediamtx
+
+  /commands:
+    get:
+      tags: [Command]
+      summary: List commands
+      operationId: listCommands
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Command list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandListResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [Command]
+      summary: Submit command (canonical)
+      operationId: createCommand
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandCreateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resource, commandRef]
+                properties:
+                  resource:
+                    $ref: '#/components/schemas/Command'
+                  commandRef:
+                    $ref: '#/components/schemas/CommandRef'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /commands/{commandId}:
+    get:
+      tags: [Command]
+      summary: Get command by id
+      operationId: getCommand
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: Command detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /assets:
+    get:
+      tags: [Asset]
+      summary: List assets
+      operationId: listAssets
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Asset list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetListResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [Asset]
+      summary: Create asset (domain sugar -> command)
+      operationId: createAsset
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetCreateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseAsset'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /assets/{assetId}:
+    get:
+      tags: [Asset]
+      summary: Get asset
+      operationId: getAsset
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200':
+          description: Asset detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    patch:
+      tags: [Asset]
+      summary: Update asset (domain sugar -> command)
+      operationId: updateAsset
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/AssetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetUpdateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseAsset'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      tags: [Asset]
+      summary: Delete asset (domain sugar -> command)
+      operationId: deleteAsset
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resource, commandRef]
+                properties:
+                  resource:
+                    type: object
+                    required: [id, status]
+                    properties:
+                      id:
+                        type: string
+                      status:
+                        type: string
+                        example: deleting
+                  commandRef:
+                    $ref: '#/components/schemas/CommandRef'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /assets/{assetId}/lineage:
+    get:
+      tags: [Asset]
+      summary: Get asset lineage graph
+      operationId: getAssetLineage
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200':
+          description: Lineage
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assetId:
+                    type: string
+                  nodes:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  edges:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-templates:
+    get:
+      tags: [WorkflowTemplate]
+      summary: List workflow templates
+      operationId: listWorkflowTemplates
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Template list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowTemplateListResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [WorkflowTemplate]
+      summary: Create workflow template (domain sugar -> command)
+      operationId: createWorkflowTemplate
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowTemplateCreateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowTemplate'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-templates/{templateId}:
+    get:
+      tags: [WorkflowTemplate]
+      summary: Get workflow template
+      operationId: getWorkflowTemplate
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/TemplateId'
+      responses:
+        '200':
+          description: Template detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowTemplate'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-templates/{templateId}:patch:
+    post:
+      tags: [WorkflowTemplate]
+      summary: Patch workflow template (domain sugar -> command)
+      operationId: patchWorkflowTemplate
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/TemplateId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowTemplatePatchRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowTemplate'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-templates/{templateId}:publish:
+    post:
+      tags: [WorkflowTemplate]
+      summary: Publish workflow template (domain sugar -> command)
+      operationId: publishWorkflowTemplate
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/TemplateId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowTemplate'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-runs:
+    get:
+      tags: [WorkflowRun]
+      summary: List workflow runs
+      operationId: listWorkflowRuns
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Run list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowRunListResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [WorkflowRun]
+      summary: Run workflow (domain sugar -> command)
+      operationId: createWorkflowRun
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowRunCreateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowRun'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-runs/{runId}:
+    get:
+      tags: [WorkflowRun]
+      summary: Get workflow run
+      operationId: getWorkflowRun
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: Run detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowRun'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-runs/{runId}:cancel:
+    post:
+      tags: [WorkflowRun]
+      summary: Cancel run (domain sugar -> command)
+      operationId: cancelWorkflowRun
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowRun'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-runs/{runId}/steps:
+    get:
+      tags: [WorkflowRun]
+      summary: List step runs
+      operationId: listStepRuns
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Step run list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StepRunListResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /registry/capabilities:
+    get:
+      tags: [Registry]
+      summary: List capabilities
+      operationId: listCapabilities
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Capability list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityListResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /registry/capabilities/{capabilityId}:
+    get:
+      tags: [Registry]
+      summary: Get capability
+      operationId: getCapability
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/CapabilityId'
+      responses:
+        '200':
+          description: Capability detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Capability'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /registry/algorithms:
+    get:
+      tags: [Registry]
+      summary: List algorithms
+      operationId: listAlgorithms
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Algorithm list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlgorithmListResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /registry/providers:
+    get:
+      tags: [Registry]
+      summary: List capability providers
+      operationId: listProviders
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Provider list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderListResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /plugin-market/packages:
+    get:
+      tags: [PluginMarket]
+      summary: List plugin packages
+      operationId: listPluginPackages
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Package list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginPackageListResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [PluginMarket]
+      summary: Upload plugin package (domain sugar -> command)
+      operationId: uploadPluginPackage
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PluginPackageUploadRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginPackage'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /plugin-market/installs:
+    post:
+      tags: [PluginMarket]
+      summary: Install plugin package (domain sugar -> command)
+      operationId: installPlugin
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PluginInstallRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /plugin-market/installs/{installId}:enable:
+    post:
+      tags: [PluginMarket]
+      summary: Enable install (domain sugar -> command)
+      operationId: enablePluginInstall
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/InstallId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /plugin-market/installs/{installId}:disable:
+    post:
+      tags: [PluginMarket]
+      summary: Disable install (domain sugar -> command)
+      operationId: disablePluginInstall
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/InstallId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /plugin-market/installs/{installId}:rollback:
+    post:
+      tags: [PluginMarket]
+      summary: Rollback install (domain sugar -> command)
+      operationId: rollbackPluginInstall
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/InstallId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /streams:
+    get:
+      tags: [Stream]
+      summary: List streams
+      operationId: listStreams
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Stream list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreamListResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [Stream]
+      summary: Create stream (domain sugar -> command)
+      operationId: createStream
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StreamCreateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseStream'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /streams/{streamId}:
+    get:
+      tags: [Stream]
+      summary: Get stream
+      operationId: getStream
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/StreamId'
+      responses:
+        '200':
+          description: Stream detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stream'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /streams/{streamId}:record-start:
+    post:
+      tags: [Stream]
+      summary: Start stream recording (domain sugar -> command)
+      operationId: startStreamRecording
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/StreamId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseStream'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /streams/{streamId}:record-stop:
+    post:
+      tags: [Stream]
+      summary: Stop stream recording (domain sugar -> command)
+      operationId: stopStreamRecording
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/StreamId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseStream'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /streams/{streamId}:kick:
+    post:
+      tags: [Stream]
+      summary: Kick stream connection (domain sugar -> command)
+      operationId: kickStream
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/StreamId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseStream'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    XTenantId:
+      name: X-Tenant-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 可选租户上下文。服务端必须校验是否属于 JWT 可访问范围。
+    XWorkspaceId:
+      name: X-Workspace-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 可选工作区上下文。服务端必须校验是否属于 JWT 可访问范围。
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+      description: 若存在 cursor，则 cursor 优先级高于 page/pageSize，服务端必须忽略 page/pageSize。
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 20
+    CommandId:
+      name: commandId
+      in: path
+      required: true
+      schema:
+        type: string
+    AssetId:
+      name: assetId
+      in: path
+      required: true
+      schema:
+        type: string
+    TemplateId:
+      name: templateId
+      in: path
+      required: true
+      schema:
+        type: string
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema:
+        type: string
+    CapabilityId:
+      name: capabilityId
+      in: path
+      required: true
+      schema:
+        type: string
+    InstallId:
+      name: installId
+      in: path
+      required: true
+      schema:
+        type: string
+    StreamId:
+      name: streamId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    ErrorResponse:
+      description: 'Error（响应体固定为 { error: { code, messageKey, details } }）'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    Visibility:
+      type: string
+      enum: [PRIVATE, WORKSPACE, TENANT, PUBLIC]
+
+    Permission:
+      type: string
+      enum: [READ, WRITE, EXECUTE, MANAGE, SHARE]
+
+    ACLItem:
+      type: object
+      required: [subjectType, subjectId, permissions]
+      properties:
+        subjectType:
+          type: string
+          enum: [user, role, workspace]
+        subjectId:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ResourceBase:
+      type: object
+      required:
+        - id
+        - tenantId
+        - workspaceId
+        - ownerId
+        - visibility
+        - acl
+        - createdAt
+        - updatedAt
+        - status
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        workspaceId:
+          type: string
+        ownerId:
+          type: string
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        acl:
+          type: array
+          items:
+            $ref: '#/components/schemas/ACLItem'
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CommandRef:
+      type: object
+      required: [commandId, status, acceptedAt]
+      properties:
+        commandId:
+          type: string
+        status:
+          type: string
+        acceptedAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required: [code, messageKey]
+      properties:
+        code:
+          type: string
+          description: 机器可读错误码
+        messageKey:
+          type: string
+          description: i18n key（即 messageKey）
+        details:
+          type: object
+          additionalProperties: true
+
+    ErrorResponse:
+      type: object
+      description: 固定外层字段为 error，不返回裸 error 对象。
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/Error'
+
+    PageInfo:
+      type: object
+      required: [page, pageSize, total]
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+
+    CursorInfo:
+      type: object
+      properties:
+        nextCursor:
+          type: string
+          nullable: true
+
+    Command:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [commandType, payload]
+          properties:
+            commandType:
+              type: string
+              example: workflow.run
+            payload:
+              type: object
+              additionalProperties: true
+            result:
+              type: object
+              additionalProperties: true
+            error:
+              $ref: '#/components/schemas/Error'
+
+    CommandCreateRequest:
+      type: object
+      required: [commandType, payload]
+      properties:
+        commandType:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+
+    Asset:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [name, assetType, mimeType]
+          properties:
+            name:
+              type: string
+            assetType:
+              type: string
+            mimeType:
+              type: string
+            size:
+              type: integer
+            hash:
+              type: string
+            uri:
+              type: string
+            metadata:
+              type: object
+              additionalProperties: true
+
+    AssetCreateRequest:
+      type: object
+      required: [name, assetType]
+      properties:
+        name:
+          type: string
+        assetType:
+          type: string
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        metadata:
+          type: object
+          additionalProperties: true
+        dataRef:
+          type: string
+          description: 上传后引用或预签名上传引用
+
+    AssetUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    WorkflowTemplate:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [name, graph]
+          properties:
+            name:
+              type: string
+            description:
+              type: string
+            graph:
+              type: object
+              additionalProperties: true
+            schemaInputs:
+              type: object
+              additionalProperties: true
+            schemaOutputs:
+              type: object
+              additionalProperties: true
+            uiState:
+              type: object
+              additionalProperties: true
+            currentVersion:
+              type: string
+
+    WorkflowTemplateCreateRequest:
+      type: object
+      required: [name, graph]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        graph:
+          type: object
+          additionalProperties: true
+        schemaInputs:
+          type: object
+          additionalProperties: true
+        schemaOutputs:
+          type: object
+          additionalProperties: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+
+    WorkflowTemplatePatchRequest:
+      type: object
+      required: [operations]
+      properties:
+        operations:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    WorkflowRun:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [templateId, templateVersion]
+          properties:
+            templateId:
+              type: string
+            templateVersion:
+              type: string
+            inputs:
+              type: object
+              additionalProperties: true
+            outputs:
+              type: object
+              additionalProperties: true
+            startedAt:
+              type: string
+              format: date-time
+            finishedAt:
+              type: string
+              format: date-time
+              nullable: true
+            error:
+              $ref: '#/components/schemas/Error'
+
+    WorkflowRunCreateRequest:
+      type: object
+      required: [templateId]
+      properties:
+        templateId:
+          type: string
+        templateVersion:
+          type: string
+        inputs:
+          type: object
+          additionalProperties: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+
+    StepRun:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [runId, stepKey]
+          properties:
+            runId:
+              type: string
+            stepKey:
+              type: string
+            stepType:
+              type: string
+            attempt:
+              type: integer
+            input:
+              type: object
+              additionalProperties: true
+            output:
+              type: object
+              additionalProperties: true
+            logRef:
+              type: string
+            startedAt:
+              type: string
+              format: date-time
+            finishedAt:
+              type: string
+              format: date-time
+              nullable: true
+            error:
+              $ref: '#/components/schemas/Error'
+
+    Capability:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [name, kind, version]
+          properties:
+            name:
+              type: string
+            kind:
+              type: string
+              enum: [tool, model, skill, algorithmRef]
+            version:
+              type: string
+            providerId:
+              type: string
+            inputSchema:
+              type: object
+              additionalProperties: true
+            outputSchema:
+              type: object
+              additionalProperties: true
+            requiredPermissions:
+              type: array
+              items:
+                type: string
+            egressPolicy:
+              type: object
+              additionalProperties: true
+
+    Algorithm:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [name, version]
+          properties:
+            name:
+              type: string
+            version:
+              type: string
+            templateRef:
+              type: string
+            defaults:
+              type: object
+              additionalProperties: true
+            constraints:
+              type: object
+              additionalProperties: true
+            dependencies:
+              type: object
+              additionalProperties: true
+
+    CapabilityProvider:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [name, providerType]
+          properties:
+            name:
+              type: string
+            providerType:
+              type: string
+              enum: [http, container, mcp]
+            endpoint:
+              type: string
+            metadata:
+              type: object
+              additionalProperties: true
+
+    PluginPackage:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [name, version, packageType]
+          properties:
+            name:
+              type: string
+            version:
+              type: string
+            packageType:
+              type: string
+              enum: [tool-provider, skill-pack, algo-pack, mcp-provider]
+            manifest:
+              type: object
+              additionalProperties: true
+
+    PluginInstall:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [packageId, scope]
+          properties:
+            packageId:
+              type: string
+            scope:
+              type: string
+              enum: [workspace, tenant]
+            error:
+              $ref: '#/components/schemas/Error'
+
+    PluginPackageUploadRequest:
+      type: object
+      required: [name, version, packageType]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        packageType:
+          type: string
+        manifest:
+          type: object
+          additionalProperties: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+
+    PluginInstallRequest:
+      type: object
+      required: [packageId]
+      properties:
+        packageId:
+          type: string
+        scope:
+          type: string
+          enum: [workspace, tenant]
+          default: workspace
+
+    Stream:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [path, protocol]
+          properties:
+            path:
+              type: string
+            protocol:
+              type: string
+              enum: [rtsp, rtmp, srt, webrtc, hls]
+            source:
+              type: string
+              enum: [push, pull]
+            endpoints:
+              type: object
+              additionalProperties: true
+            state:
+              type: object
+              additionalProperties: true
+
+    StreamCreateRequest:
+      type: object
+      required: [path, protocol]
+      properties:
+        path:
+          type: string
+        protocol:
+          type: string
+        source:
+          type: string
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    WriteResponseAsset:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          $ref: '#/components/schemas/Asset'
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponseWorkflowTemplate:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          $ref: '#/components/schemas/WorkflowTemplate'
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponseWorkflowRun:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          type: object
+          required: [id, status]
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponsePluginPackage:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          $ref: '#/components/schemas/PluginPackage'
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponsePluginInstall:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          type: object
+          required: [id, status]
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponseStream:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          type: object
+          required: [id, status]
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    CommandListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Command'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    AssetListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Asset'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    WorkflowTemplateListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowTemplate'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    WorkflowRunListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowRun'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    StepRunListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StepRun'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    CapabilityListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Capability'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    AlgorithmListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Algorithm'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    ProviderListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CapabilityProvider'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    PluginPackageListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PluginPackage'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    StreamListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Stream'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'

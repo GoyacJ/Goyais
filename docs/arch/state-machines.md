@@ -1,0 +1,138 @@
+# Goyais v0.1 状态机定义
+
+本文件定义 v0.1 三个核心状态机：
+- WorkflowRun / StepRun
+- PluginInstall
+- Stream 录制
+
+所有状态转换必须产生审计事件（`audit_events`）。
+
+## 1. WorkflowRun / StepRun
+
+## 1.1 WorkflowRun 状态
+- `pending`
+- `running`
+- `succeeded`
+- `failed`
+- `canceled`
+
+## 1.2 WorkflowRun 转换
+
+| From | Trigger | Guard | To | 审计事件 |
+|---|---|---|---|---|
+| pending | scheduler.dispatch | 授权通过、模板版本存在 | running | `workflow.run.started` |
+| running | all_steps_succeeded | 所有必需 step 成功 | succeeded | `workflow.run.succeeded` |
+| running | any_step_failed_and_no_retry | 重试次数耗尽 | failed | `workflow.run.failed` |
+| running | command.cancel | 发起者有 cancel 权限 | canceled | `workflow.run.canceled` |
+| pending | command.cancel | 发起者有 cancel 权限 | canceled | `workflow.run.canceled` |
+
+## 1.3 StepRun 状态
+- `pending`
+- `running`
+- `succeeded`
+- `failed`
+- `canceled`
+- `skipped`
+
+## 1.4 StepRun 转换
+
+| From | Trigger | Guard | To | 审计事件 |
+|---|---|---|---|---|
+| pending | executor.start | step 依赖满足且授权通过 | running | `workflow.step.started` |
+| running | executor.success | 输出 schema 校验通过 | succeeded | `workflow.step.succeeded` |
+| running | executor.error | 可重试次数未耗尽 | pending | `workflow.step.retry_scheduled` |
+| running | executor.error | 无重试机会 | failed | `workflow.step.failed` |
+| pending/running | run.cancel | run 进入 canceled | canceled | `workflow.step.canceled` |
+| pending | dependency.failed | 上游失败且策略不允许继续 | skipped | `workflow.step.skipped` |
+
+## 1.5 约束
+- run/step 的 `error_code/message_key` 必须在失败态填写。
+- step 进入 `running` 前必须通过 Tool Gate（再次授权）。
+- `failed`/`canceled`/`succeeded` 为终态，不可回退。
+
+---
+
+## 2. PluginInstall 状态机
+
+## 2.1 PluginInstall 状态
+- `uploaded`
+- `validating`
+- `installing`
+- `enabled`
+- `disabled`
+- `failed`
+- `rolled_back`
+
+## 2.2 转换定义
+
+| From | Trigger | Guard | To | 审计事件 |
+|---|---|---|---|---|
+| uploaded | command.install | 包文件存在 | validating | `plugin.install.validating` |
+| validating | validation.pass | 依赖满足、权限 ceiling 未超界 | installing | `plugin.install.installing` |
+| validating | validation.fail | 签名/依赖/权限校验失败 | failed | `plugin.install.failed` |
+| installing | install.success | Registry 注册成功 | enabled | `plugin.install.enabled` |
+| installing | install.fail | 安装步骤失败 | failed | `plugin.install.failed` |
+| enabled | command.disable | 调用者有管理权限 | disabled | `plugin.install.disabled` |
+| disabled | command.enable | 依赖仍满足 | enabled | `plugin.install.enabled` |
+| enabled/disabled | command.rollback | 目标版本可用 | rolled_back | `plugin.install.rolled_back` |
+
+## 2.3 约束
+- `failed` 需包含 `error_code/message_key`。
+- rollback 结果必须保留与 `commandId` 的关联。
+- `enabled` 前，Capability 必须可在 Registry 查询到。
+
+---
+
+## 3. Stream 录制状态机
+
+包含两层状态：
+1. 流在线状态（StreamingAsset）。
+2. 录制任务状态（StreamRecording）。
+
+## 3.1 StreamingAsset 状态
+- `offline`
+- `online`
+- `recording`
+- `error`
+
+### 转换
+
+| From | Trigger | Guard | To | 审计事件 |
+|---|---|---|---|---|
+| offline | mediamtx.onPublish | path 授权通过 | online | `stream.online` |
+| online | command.record_start | 用户有 EXECUTE 权限 | recording | `stream.record.start` |
+| recording | command.record_stop | 录制任务存在 | online | `stream.record.stop` |
+| online/recording | mediamtx.disconnect | 连接断开 | offline | `stream.offline` |
+| any | provider.error | 控制面异常 | error | `stream.error` |
+
+## 3.2 StreamRecording 状态
+- `starting`
+- `recording`
+- `stopping`
+- `succeeded`
+- `failed`
+- `canceled`
+
+### 转换
+
+| From | Trigger | Guard | To | 审计事件 |
+|---|---|---|---|---|
+| starting | provider.ack | MediaMTX 返回成功 | recording | `stream.recording` |
+| starting | provider.error | 启动失败 | failed | `stream.record.failed` |
+| recording | command.record_stop | 调用者有权限 | stopping | `stream.record.stopping` |
+| stopping | provider.file_ready | 录制文件落盘并入 asset | succeeded | `stream.record.succeeded` |
+| stopping | provider.error | 停止失败或文件缺失 | failed | `stream.record.failed` |
+| starting/recording | command.cancel | 调用者有权限 | canceled | `stream.record.canceled` |
+
+## 3.3 约束
+- `succeeded` 时必须回填 `asset_id` 并写入 `asset_lineage`。
+- 无占位静态文件时 `/favicon.ico`、`/robots.txt` 404 不影响流状态。
+- 事件触发 `workflow.run` 必须经过 Command Gate。
+
+---
+
+## 4. 与 API/数据模型一致性要求
+
+- 状态枚举必须与 `docs/api/openapi.yaml`、`docs/arch/data-model.md` 完全一致。
+- 任意状态拒绝时，返回错误结构：`error { code, messageKey, details }`。
+- 所有转换需关联 `tenantId/workspaceId/ownerId` 上下文并可审计。
