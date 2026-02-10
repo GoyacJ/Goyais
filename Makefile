@@ -8,7 +8,7 @@ COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_TIME ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS := -X goyais/internal/buildinfo.Version=$(VERSION) -X goyais/internal/buildinfo.Commit=$(COMMIT) -X goyais/internal/buildinfo.BuildTime=$(BUILD_TIME)
 
-.PHONY: web-install web-build web-dev prepare-embed build clean
+.PHONY: web-install web-build web-dev prepare-embed build clean precommit-guard worktree-audit contract-regression
 
 web-install:
 	pnpm -C $(WEB_DIR) install --frozen-lockfile
@@ -32,3 +32,12 @@ build: prepare-embed
 
 clean:
 	rm -rf build
+
+precommit-guard:
+	bash scripts/git/precommit_guard.sh
+
+worktree-audit:
+	bash scripts/git/worktree_audit.sh
+
+contract-regression:
+	bash scripts/ci/contract_regression.sh
