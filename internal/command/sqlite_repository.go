@@ -319,6 +319,105 @@ func (r *SQLiteRepository) HasCommandPermission(ctx context.Context, req Request
 	return true, nil
 }
 
+func (r *SQLiteRepository) GetShareResource(ctx context.Context, req RequestContext, resourceType, resourceID string) (ShareResource, error) {
+	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return ShareResource{}, ErrInvalidShareRequest
+	}
+
+	query := ""
+	switch resourceType {
+	case "command":
+		query = `SELECT tenant_id, workspace_id, owner_id, visibility
+		         FROM commands
+		         WHERE id = ? AND tenant_id = ? AND workspace_id = ?`
+	case "asset":
+		query = `SELECT tenant_id, workspace_id, owner_id, visibility
+		         FROM assets
+		         WHERE id = ? AND tenant_id = ? AND workspace_id = ?`
+	default:
+		return ShareResource{}, ErrInvalidShareRequest
+	}
+
+	resource := ShareResource{
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+	}
+	err := r.db.QueryRowContext(
+		ctx,
+		query,
+		resourceID,
+		req.TenantID,
+		req.WorkspaceID,
+	).Scan(
+		&resource.TenantID,
+		&resource.WorkspaceID,
+		&resource.OwnerID,
+		&resource.Visibility,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ShareResource{}, ErrNotFound
+	}
+	if err != nil {
+		return ShareResource{}, fmt.Errorf("query share resource %s: %w", resourceType, err)
+	}
+	return resource, nil
+}
+
+func (r *SQLiteRepository) HasShareResourcePermission(
+	ctx context.Context,
+	req RequestContext,
+	resourceType,
+	resourceID,
+	permission string,
+	now time.Time,
+) (bool, error) {
+	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
+	resourceID = strings.TrimSpace(resourceID)
+	permission = strings.ToUpper(strings.TrimSpace(permission))
+	if resourceID == "" || permission == "" {
+		return false, nil
+	}
+	switch resourceType {
+	case "command", "asset":
+	default:
+		return false, ErrInvalidShareRequest
+	}
+
+	var marker int
+	err := r.db.QueryRowContext(
+		ctx,
+		`SELECT 1
+		 FROM acl_entries a
+		 WHERE a.tenant_id = ?
+		   AND a.workspace_id = ?
+		   AND a.resource_type = ?
+		   AND a.resource_id = ?
+		   AND a.subject_type = 'user'
+		   AND a.subject_id = ?
+		   AND (a.expires_at IS NULL OR a.expires_at >= ?)
+		   AND EXISTS (
+		     SELECT 1 FROM json_each(a.permissions) p WHERE p.value = ?
+		   )
+		 LIMIT 1`,
+		req.TenantID,
+		req.WorkspaceID,
+		resourceType,
+		resourceID,
+		req.UserID,
+		now.UTC().Format(time.RFC3339Nano),
+		permission,
+	).Scan(&marker)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("query share resource permission: %w", err)
+	}
+	return true, nil
+}
+
 func (r *SQLiteRepository) CreateShare(ctx context.Context, in ShareCreateInput) (Share, error) {
 	now := in.Now.UTC()
 	if now.IsZero() {
@@ -502,8 +601,10 @@ func (r *SQLiteRepository) AppendCommandEvent(ctx context.Context, req RequestCo
 }
 
 func (r *SQLiteRepository) AppendAuditEvent(ctx context.Context, req RequestContext, commandID, eventType, decision, reason string, payload []byte) error {
-	if len(payload) == 0 {
-		payload = []byte("{}")
+	payload = buildAuditPayload(req, payload)
+	traceID := strings.TrimSpace(req.TraceID)
+	if traceID == "" {
+		traceID = newID("trace")
 	}
 	_, err := r.db.ExecContext(
 		ctx,
@@ -513,7 +614,7 @@ func (r *SQLiteRepository) AppendAuditEvent(ctx context.Context, req RequestCont
 		req.TenantID,
 		req.WorkspaceID,
 		req.UserID,
-		newID("trace"),
+		traceID,
 		commandID,
 		eventType,
 		"command",
@@ -527,6 +628,34 @@ func (r *SQLiteRepository) AppendAuditEvent(ctx context.Context, req RequestCont
 		return fmt.Errorf("insert audit event: %w", err)
 	}
 	return nil
+}
+
+func buildAuditPayload(req RequestContext, payload []byte) []byte {
+	var base any
+	if len(payload) > 0 {
+		_ = json.Unmarshal(payload, &base)
+	}
+	if base == nil {
+		base = map[string]any{}
+	}
+
+	ctxPayload := map[string]any{
+		"roles":         req.Roles,
+		"policyVersion": req.PolicyVersion,
+	}
+	if strings.TrimSpace(req.TraceID) != "" {
+		ctxPayload["traceId"] = strings.TrimSpace(req.TraceID)
+	}
+
+	out := map[string]any{
+		"context": ctxPayload,
+		"data":    base,
+	}
+	raw, err := json.Marshal(out)
+	if err != nil {
+		return []byte(`{"context":{},"data":{}}`)
+	}
+	return raw
 }
 
 func (r *SQLiteRepository) SetStatus(ctx context.Context, req RequestContext, commandID, status string, result []byte, errorCode, messageKey string, finishedAt *time.Time) (Command, error) {

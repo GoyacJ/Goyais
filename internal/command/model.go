@@ -31,10 +31,13 @@ const (
 )
 
 type RequestContext struct {
-	TenantID    string
-	WorkspaceID string
-	UserID      string
-	OwnerID     string
+	TenantID      string
+	WorkspaceID   string
+	UserID        string
+	OwnerID       string
+	Roles         []string
+	PolicyVersion string
+	TraceID       string
 }
 
 type Command struct {
@@ -98,6 +101,15 @@ type Share struct {
 	ExpiresAt    *time.Time
 	CreatedBy    string
 	CreatedAt    time.Time
+}
+
+type ShareResource struct {
+	ResourceType string
+	ResourceID   string
+	TenantID     string
+	WorkspaceID  string
+	OwnerID      string
+	Visibility   string
 }
 
 type ShareCreateInput struct {

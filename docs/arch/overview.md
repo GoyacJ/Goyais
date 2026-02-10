@@ -174,17 +174,21 @@ Command 执行管道（必须）：
   - 缺失任一 header 返回 `400 MISSING_CONTEXT` + `error.context.missing`。
 
 ### 7.2 过渡模式（未接 JWT）
-- 在 JWT 尚未接入前，`/api/v1/commands*`、`/api/v1/workflow-*`、`/api/v1/assets*` 请求必须携带：
+- 在 JWT 尚未接入前，`/api/v1/commands*`、`/api/v1/workflow-*`、`/api/v1/assets*`、`/api/v1/shares*` 请求必须携带：
   - `X-Tenant-Id`
   - `X-Workspace-Id`
   - `X-User-Id`
+- 可选上下文头：
+  - `X-Roles`（逗号分隔，缺省视为 `member`）
+  - `X-Policy-Version`（缺省 `v0.1`）
+  - `X-Trace-Id`（缺省由服务端生成）
 - 服务端映射：`ownerId = X-User-Id`。
 - 缺任一 header 返回：`400 MISSING_CONTEXT + error.context.missing`，并在 `details.missingHeaders` 返回缺失列表。
 - `GET /api/v1/system/healthz` 作为 `GET /api/v1/healthz` 的别名端点，返回结构一致。
 
 ### 7.3 当前接口落地状态（2026-02）
 - 已落地（可用）：
-  - `commands`、`shares`
+  - `commands`、`shares`（`resourceType=command|asset`）
   - `assets`：`GET /assets`、`GET /assets/{id}`、`POST /assets`（domain sugar -> `asset.upload` command）
   - `workflow`：
     - `GET/POST /workflow-templates`

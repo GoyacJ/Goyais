@@ -23,6 +23,7 @@ prepare-embed: web-build
 	rm -rf internal/access/webstatic/dist
 	mkdir -p internal/access/webstatic
 	cp -R $(WEB_DIR)/dist internal/access/webstatic/dist
+	touch internal/access/webstatic/dist/.keep
 
 build: prepare-embed
 	mkdir -p $(dir $(BINARY))

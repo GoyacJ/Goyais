@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -68,16 +69,48 @@ func TestAPIContractRegression(t *testing.T) {
 		assertStatus(t, respConflict, http.StatusConflict)
 		assertErrorCode(t, respConflict.Body, "IDEMPOTENCY_KEY_CONFLICT")
 
+		noIdempotencyHeaders := headersWithJSONContext("u1")
+		respNoIdem1 := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", noIdempotencyHeaders, body)
+		defer respNoIdem1.Body.Close()
+		assertStatus(t, respNoIdem1, http.StatusAccepted)
+		commandNoIdem1 := readJSONPath(t, respNoIdem1.Body, "commandRef.commandId").(string)
+
+		respNoIdem2 := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", noIdempotencyHeaders, body)
+		defer respNoIdem2.Body.Close()
+		assertStatus(t, respNoIdem2, http.StatusAccepted)
+		commandNoIdem2 := readJSONPath(t, respNoIdem2.Body, "commandRef.commandId").(string)
+		if commandNoIdem1 == commandNoIdem2 {
+			t.Fatalf("expected distinct command ids when Idempotency-Key is missing")
+		}
+
 		listResp := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands?page=1&pageSize=20", headersWithContext("u1"), nil)
 		defer listResp.Body.Close()
 		assertStatus(t, listResp, http.StatusOK)
 		var payload map[string]any
 		mustDecodeJSON(t, listResp.Body, &payload)
-		if _, ok := payload["items"].([]any); !ok {
+		items, ok := payload["items"].([]any)
+		if !ok {
 			t.Fatalf("expected items array in command list response")
 		}
 		if _, ok := payload["pageInfo"].(map[string]any); !ok {
 			t.Fatalf("expected pageInfo in command list response")
+		}
+		if len(items) == 0 {
+			t.Fatalf("expected commands for cursor assertion")
+		}
+
+		last := items[len(items)-1].(map[string]any)
+		cursor := buildCursor(t, last["createdAt"].(string), last["id"].(string))
+		cursorResp := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands?cursor="+cursor+"&page=1&pageSize=1", headersWithContext("u1"), nil)
+		defer cursorResp.Body.Close()
+		assertStatus(t, cursorResp, http.StatusOK)
+		var cursorPayload map[string]any
+		mustDecodeJSON(t, cursorResp.Body, &cursorPayload)
+		if _, ok := cursorPayload["cursorInfo"].(map[string]any); !ok {
+			t.Fatalf("expected cursorInfo when cursor query is provided")
+		}
+		if _, ok := cursorPayload["pageInfo"]; ok {
+			t.Fatalf("did not expect pageInfo when cursor query is provided")
 		}
 
 		commandID = commandID1
@@ -94,16 +127,38 @@ func TestAPIContractRegression(t *testing.T) {
 		defer resp.Body.Close()
 		assertStatus(t, resp, http.StatusCreated)
 
-		respInvalid := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/shares", headersWithJSONContext("u1"), map[string]any{
-			"resourceType": "asset",
-			"resourceId":   "ast_1",
+		respForbidden := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/shares", headersWithJSONContext("u2"), map[string]any{
+			"resourceType": "command",
+			"resourceId":   commandID,
 			"subjectType":  "user",
+			"subjectId":    "u3",
+			"permissions":  []string{"READ"},
+		})
+		defer respForbidden.Body.Close()
+		assertStatus(t, respForbidden, http.StatusForbidden)
+		assertMessageKey(t, respForbidden.Body, "error.authz.forbidden")
+
+		respInvalidSubject := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/shares", headersWithJSONContext("u1"), map[string]any{
+			"resourceType": "command",
+			"resourceId":   commandID,
+			"subjectType":  "role",
 			"subjectId":    "u2",
 			"permissions":  []string{"READ"},
 		})
-		defer respInvalid.Body.Close()
-		assertStatus(t, respInvalid, http.StatusBadRequest)
-		assertErrorCode(t, respInvalid.Body, "INVALID_SHARE_REQUEST")
+		defer respInvalidSubject.Body.Close()
+		assertStatus(t, respInvalidSubject, http.StatusBadRequest)
+		assertErrorCode(t, respInvalidSubject.Body, "INVALID_SHARE_REQUEST")
+
+		respInvalidPermission := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/shares", headersWithJSONContext("u1"), map[string]any{
+			"resourceType": "command",
+			"resourceId":   commandID,
+			"subjectType":  "user",
+			"subjectId":    "u2",
+			"permissions":  []string{"OWNER"},
+		})
+		defer respInvalidPermission.Body.Close()
+		assertStatus(t, respInvalidPermission, http.StatusBadRequest)
+		assertErrorCode(t, respInvalidPermission.Body, "INVALID_SHARE_REQUEST")
 	})
 
 	var assetID string
@@ -170,10 +225,60 @@ func TestAPIContractRegression(t *testing.T) {
 		respList := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets", headersWithContext("u1"), nil)
 		defer respList.Body.Close()
 		assertStatus(t, respList, http.StatusOK)
+		var listPayload map[string]any
+		mustDecodeJSON(t, respList.Body, &listPayload)
+		items, ok := listPayload["items"].([]any)
+		if !ok || len(items) == 0 {
+			t.Fatalf("expected assets for cursor assertion")
+		}
 
 		respGet := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets/"+assetID, headersWithContext("u1"), nil)
 		defer respGet.Body.Close()
 		assertStatus(t, respGet, http.StatusOK)
+
+		respForbidden := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets/"+assetID, headersWithContext("u2"), nil)
+		defer respForbidden.Body.Close()
+		assertStatus(t, respForbidden, http.StatusForbidden)
+		assertMessageKey(t, respForbidden.Body, "error.authz.forbidden")
+
+		respShareForbidden := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/shares", headersWithJSONContext("u2"), map[string]any{
+			"resourceType": "asset",
+			"resourceId":   assetID,
+			"subjectType":  "user",
+			"subjectId":    "u3",
+			"permissions":  []string{"READ"},
+		})
+		defer respShareForbidden.Body.Close()
+		assertStatus(t, respShareForbidden, http.StatusForbidden)
+		assertMessageKey(t, respShareForbidden.Body, "error.authz.forbidden")
+
+		respShare := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/shares", headersWithJSONContext("u1"), map[string]any{
+			"resourceType": "asset",
+			"resourceId":   assetID,
+			"subjectType":  "user",
+			"subjectId":    "u2",
+			"permissions":  []string{"READ"},
+		})
+		defer respShare.Body.Close()
+		assertStatus(t, respShare, http.StatusCreated)
+
+		respSharedRead := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets/"+assetID, headersWithContext("u2"), nil)
+		defer respSharedRead.Body.Close()
+		assertStatus(t, respSharedRead, http.StatusOK)
+
+		last := items[len(items)-1].(map[string]any)
+		cursor := buildCursor(t, last["createdAt"].(string), last["id"].(string))
+		respCursor := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets?cursor="+cursor+"&page=1&pageSize=1", headersWithContext("u1"), nil)
+		defer respCursor.Body.Close()
+		assertStatus(t, respCursor, http.StatusOK)
+		var cursorPayload map[string]any
+		mustDecodeJSON(t, respCursor.Body, &cursorPayload)
+		if _, ok := cursorPayload["cursorInfo"].(map[string]any); !ok {
+			t.Fatalf("expected cursorInfo for asset cursor list")
+		}
+		if _, ok := cursorPayload["pageInfo"]; ok {
+			t.Fatalf("did not expect pageInfo when cursor is used in asset list")
+		}
 
 		respLineage := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets/"+assetID+"/lineage", headersWithContext("u1"), nil)
 		defer respLineage.Body.Close()
@@ -255,9 +360,23 @@ func TestAPIContractRegression(t *testing.T) {
 		})
 		defer respRunSync.Body.Close()
 		assertStatus(t, respRunSync, http.StatusAccepted)
-		runSyncID := readJSONPath(t, respRunSync.Body, "resource.id").(string)
+		var runSyncPayload map[string]any
+		mustDecodeJSON(t, respRunSync.Body, &runSyncPayload)
+		runSyncResource, ok := runSyncPayload["resource"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected workflow run resource")
+		}
+		runSyncID, _ := runSyncResource["id"].(string)
 		if runSyncID == "" {
 			t.Fatalf("expected sync run id")
+		}
+		commandRef, ok := runSyncPayload["commandRef"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected commandRef in workflow run response")
+		}
+		domainCommandID, _ := commandRef["commandId"].(string)
+		if domainCommandID == "" {
+			t.Fatalf("expected workflow run command id")
 		}
 
 		respGetSync := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+runSyncID, headersWithContext("u1"), nil)
@@ -328,6 +447,42 @@ func TestAPIContractRegression(t *testing.T) {
 		}
 		if _, ok := templateCursorPayload["pageInfo"]; ok {
 			t.Fatalf("did not expect pageInfo when cursor is used")
+		}
+
+		// AI/UI same action should produce the same command type and payload shape.
+		respCanonical := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headersWithJSONContext("u1"), map[string]any{
+			"commandType": "workflow.run",
+			"payload": map[string]any{
+				"templateId": templateID,
+				"inputs":     map[string]any{"k": "v"},
+				"visibility": "",
+				"mode":       "sync",
+			},
+		})
+		defer respCanonical.Body.Close()
+		assertStatus(t, respCanonical, http.StatusAccepted)
+		canonicalCommandID := readJSONPath(t, respCanonical.Body, "commandRef.commandId").(string)
+		if canonicalCommandID == "" {
+			t.Fatalf("expected canonical workflow.run command id")
+		}
+
+		domainCommandResp := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+domainCommandID, headersWithContext("u1"), nil)
+		defer domainCommandResp.Body.Close()
+		assertStatus(t, domainCommandResp, http.StatusOK)
+		var domainCommandPayload map[string]any
+		mustDecodeJSON(t, domainCommandResp.Body, &domainCommandPayload)
+
+		canonicalCommandResp := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+canonicalCommandID, headersWithContext("u1"), nil)
+		defer canonicalCommandResp.Body.Close()
+		assertStatus(t, canonicalCommandResp, http.StatusOK)
+		var canonicalCommandPayload map[string]any
+		mustDecodeJSON(t, canonicalCommandResp.Body, &canonicalCommandPayload)
+
+		if domainCommandPayload["commandType"] != canonicalCommandPayload["commandType"] {
+			t.Fatalf("workflow.run commandType mismatch: domain=%v canonical=%v", domainCommandPayload["commandType"], canonicalCommandPayload["commandType"])
+		}
+		if !reflect.DeepEqual(domainCommandPayload["payload"], canonicalCommandPayload["payload"]) {
+			t.Fatalf("workflow.run payload mismatch: domain=%v canonical=%v", domainCommandPayload["payload"], canonicalCommandPayload["payload"])
 		}
 	})
 

@@ -11,6 +11,8 @@ type Repository interface {
 	GetForAccess(ctx context.Context, req RequestContext, id string) (Command, error)
 	List(ctx context.Context, params ListParams) (ListResult, error)
 	HasCommandPermission(ctx context.Context, req RequestContext, commandID, permission string, now time.Time) (bool, error)
+	GetShareResource(ctx context.Context, req RequestContext, resourceType, resourceID string) (ShareResource, error)
+	HasShareResourcePermission(ctx context.Context, req RequestContext, resourceType, resourceID, permission string, now time.Time) (bool, error)
 	CreateShare(ctx context.Context, in ShareCreateInput) (Share, error)
 	ListShares(ctx context.Context, params ShareListParams) (ShareListResult, error)
 	DeleteShare(ctx context.Context, req RequestContext, shareID string) error

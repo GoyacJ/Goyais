@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -186,6 +188,15 @@ func extractRequestContext(w http.ResponseWriter, r *http.Request) (command.Requ
 	tenantID := strings.TrimSpace(r.Header.Get("X-Tenant-Id"))
 	workspaceID := strings.TrimSpace(r.Header.Get("X-Workspace-Id"))
 	userID := strings.TrimSpace(r.Header.Get("X-User-Id"))
+	roles := parseRolesHeader(r.Header.Get("X-Roles"))
+	policyVersion := strings.TrimSpace(r.Header.Get("X-Policy-Version"))
+	if policyVersion == "" {
+		policyVersion = "v0.1"
+	}
+	traceID := strings.TrimSpace(r.Header.Get("X-Trace-Id"))
+	if traceID == "" {
+		traceID = newTraceID()
+	}
 
 	missing := make([]string, 0, 3)
 	if tenantID == "" {
@@ -206,11 +217,43 @@ func extractRequestContext(w http.ResponseWriter, r *http.Request) (command.Requ
 	}
 
 	return command.RequestContext{
-		TenantID:    tenantID,
-		WorkspaceID: workspaceID,
-		UserID:      userID,
-		OwnerID:     userID,
+		TenantID:      tenantID,
+		WorkspaceID:   workspaceID,
+		UserID:        userID,
+		OwnerID:       userID,
+		Roles:         roles,
+		PolicyVersion: policyVersion,
+		TraceID:       traceID,
 	}, true
+}
+
+func parseRolesHeader(raw string) []string {
+	parts := strings.Split(strings.TrimSpace(raw), ",")
+	roles := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		value := strings.ToLower(strings.TrimSpace(part))
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		roles = append(roles, value)
+	}
+	if len(roles) == 0 {
+		return []string{"member"}
+	}
+	return roles
+}
+
+func newTraceID() string {
+	buf := make([]byte, 8)
+	if _, err := rand.Read(buf); err != nil {
+		return "trace_generated"
+	}
+	return "trace_" + hex.EncodeToString(buf)
 }
 
 func writeCommandError(w http.ResponseWriter, err error) {

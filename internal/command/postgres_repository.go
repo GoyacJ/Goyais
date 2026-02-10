@@ -34,6 +34,14 @@ func (r *PostgresRepository) HasCommandPermission(context.Context, RequestContex
 	return false, ErrNotImplemented
 }
 
+func (r *PostgresRepository) GetShareResource(context.Context, RequestContext, string, string) (ShareResource, error) {
+	return ShareResource{}, ErrNotImplemented
+}
+
+func (r *PostgresRepository) HasShareResourcePermission(context.Context, RequestContext, string, string, string, time.Time) (bool, error) {
+	return false, ErrNotImplemented
+}
+
 func (r *PostgresRepository) CreateShare(context.Context, ShareCreateInput) (Share, error) {
 	return Share{}, ErrNotImplemented
 }

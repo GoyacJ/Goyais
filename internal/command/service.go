@@ -233,12 +233,15 @@ func (s *Service) CreateShare(
 	permissions []string,
 	expiresAt *time.Time,
 ) (Share, error) {
-	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
+	normalizedResourceType, err := normalizeShareResourceType(resourceType)
+	if err != nil {
+		return Share{}, err
+	}
 	subjectType = strings.ToLower(strings.TrimSpace(subjectType))
 	subjectID = strings.TrimSpace(subjectID)
 	resourceID = strings.TrimSpace(resourceID)
 
-	if resourceType != "command" || resourceID == "" || subjectType != "user" || subjectID == "" {
+	if resourceID == "" || subjectType != "user" || subjectID == "" {
 		return Share{}, ErrInvalidShareRequest
 	}
 
@@ -247,7 +250,7 @@ func (s *Service) CreateShare(
 		return Share{}, err
 	}
 
-	cmd, err := s.repo.GetForAccess(ctx, reqCtx, resourceID)
+	resource, err := s.repo.GetShareResource(ctx, reqCtx, normalizedResourceType, resourceID)
 	if err != nil {
 		if errors.Is(err, ErrNotImplemented) {
 			return Share{}, err
@@ -255,18 +258,26 @@ func (s *Service) CreateShare(
 		return Share{}, ErrInvalidShareRequest
 	}
 
-	allowed, reason, err := s.authorizeCommand(ctx, reqCtx, cmd, PermissionShare)
-	if err != nil {
-		return Share{}, err
+	allowed := reqCtx.UserID == resource.OwnerID
+	reason := "authorized"
+	if !allowed {
+		hasPermission, err := s.repo.HasShareResourcePermission(ctx, reqCtx, normalizedResourceType, resourceID, PermissionShare, time.Now().UTC())
+		if err != nil {
+			return Share{}, err
+		}
+		if hasPermission {
+			allowed = true
+		}
 	}
 	if !allowed {
+		reason = "permission_denied"
 		_ = s.repo.AppendAuditEvent(ctx, reqCtx, resourceID, "share.create", "deny", reason, nil)
 		return Share{}, &ForbiddenError{Reason: reason}
 	}
 
 	created, err := s.repo.CreateShare(ctx, ShareCreateInput{
 		Context:      reqCtx,
-		ResourceType: resourceType,
+		ResourceType: normalizedResourceType,
 		ResourceID:   resourceID,
 		SubjectType:  subjectType,
 		SubjectID:    subjectID,
@@ -396,6 +407,16 @@ func normalizePermissions(raw []string) ([]string, error) {
 	}
 	sort.Strings(result)
 	return result, nil
+}
+
+func normalizeShareResourceType(raw string) (string, error) {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	switch value {
+	case "command", "asset":
+		return value, nil
+	default:
+		return "", ErrInvalidShareRequest
+	}
 }
 
 func reasonOrDefault(value, fallback string) string {

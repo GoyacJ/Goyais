@@ -84,7 +84,7 @@
 - `id`
 - `tenant_id`
 - `workspace_id`
-- `resource_type`（v0.1 share API 写入固定 `command`；查询判定可覆盖 `asset/workflow_template/workflow_run`）
+- `resource_type`（v0.1 share API 支持 `command/asset`；查询判定可覆盖 `workflow_template/workflow_run`）
 - `resource_id`
 - `subject_type`（v0.1 固定 `user`）
 - `subject_id`
