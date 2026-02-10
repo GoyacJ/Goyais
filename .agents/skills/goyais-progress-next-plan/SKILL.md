@@ -103,6 +103,8 @@ bash .agents/skills/goyais-progress-next-plan/scripts/implementation_scan.sh dee
 - `path`: 绝对路径
 - `command`: 关键命令（可复现）
 
+必须全中文显示
+
 ## 与其他 skills 协作
 
 - 约束核查：`goyais-norms`
