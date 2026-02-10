@@ -435,21 +435,26 @@ func scanPostgresCapabilities(rows *sql.Rows) ([]Capability, error) {
 func scanPostgresCapability(row interface{ Scan(dest ...any) error }) (Capability, error) {
 	var item Capability
 	var providerID sql.NullString
+	var aclRaw string
+	var inputSchemaRaw string
+	var outputSchemaRaw string
+	var requiredPermissionsRaw string
+	var egressPolicyRaw string
 	if err := row.Scan(
 		&item.ID,
 		&item.TenantID,
 		&item.WorkspaceID,
 		&item.OwnerID,
 		&item.Visibility,
-		&item.ACLJSON,
+		&aclRaw,
 		&providerID,
 		&item.Name,
 		&item.Kind,
 		&item.Version,
-		&item.InputSchemaJSON,
-		&item.OutputSchemaJSON,
-		&item.RequiredPermissionsJSON,
-		&item.EgressPolicyJSON,
+		&inputSchemaRaw,
+		&outputSchemaRaw,
+		&requiredPermissionsRaw,
+		&egressPolicyRaw,
 		&item.Status,
 		&item.CreatedAt,
 		&item.UpdatedAt,
@@ -459,6 +464,11 @@ func scanPostgresCapability(row interface{ Scan(dest ...any) error }) (Capabilit
 	if providerID.Valid {
 		item.ProviderID = providerID.String
 	}
+	item.ACLJSON = ensureJSONRaw(json.RawMessage(strings.TrimSpace(aclRaw)), "[]")
+	item.InputSchemaJSON = ensureJSONRaw(json.RawMessage(strings.TrimSpace(inputSchemaRaw)), "{}")
+	item.OutputSchemaJSON = ensureJSONRaw(json.RawMessage(strings.TrimSpace(outputSchemaRaw)), "{}")
+	item.RequiredPermissionsJSON = ensureJSONRaw(json.RawMessage(strings.TrimSpace(requiredPermissionsRaw)), "[]")
+	item.EgressPolicyJSON = ensureJSONRaw(json.RawMessage(strings.TrimSpace(egressPolicyRaw)), "{}")
 	item.CreatedAt = item.CreatedAt.UTC()
 	item.UpdatedAt = item.UpdatedAt.UTC()
 	return item, nil
@@ -481,25 +491,33 @@ func scanPostgresAlgorithms(rows *sql.Rows) ([]Algorithm, error) {
 
 func scanPostgresAlgorithm(row interface{ Scan(dest ...any) error }) (Algorithm, error) {
 	var item Algorithm
+	var aclRaw string
+	var defaultsRaw string
+	var constraintsRaw string
+	var dependenciesRaw string
 	if err := row.Scan(
 		&item.ID,
 		&item.TenantID,
 		&item.WorkspaceID,
 		&item.OwnerID,
 		&item.Visibility,
-		&item.ACLJSON,
+		&aclRaw,
 		&item.Name,
 		&item.Version,
 		&item.TemplateRef,
-		&item.DefaultsJSON,
-		&item.ConstraintsJSON,
-		&item.DependenciesJSON,
+		&defaultsRaw,
+		&constraintsRaw,
+		&dependenciesRaw,
 		&item.Status,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	); err != nil {
 		return Algorithm{}, err
 	}
+	item.ACLJSON = ensureJSONRaw(json.RawMessage(strings.TrimSpace(aclRaw)), "[]")
+	item.DefaultsJSON = ensureJSONRaw(json.RawMessage(strings.TrimSpace(defaultsRaw)), "{}")
+	item.ConstraintsJSON = ensureJSONRaw(json.RawMessage(strings.TrimSpace(constraintsRaw)), "{}")
+	item.DependenciesJSON = ensureJSONRaw(json.RawMessage(strings.TrimSpace(dependenciesRaw)), "{}")
 	item.CreatedAt = item.CreatedAt.UTC()
 	item.UpdatedAt = item.UpdatedAt.UTC()
 	return item, nil
@@ -522,23 +540,27 @@ func scanPostgresProviders(rows *sql.Rows) ([]CapabilityProvider, error) {
 
 func scanPostgresProvider(row interface{ Scan(dest ...any) error }) (CapabilityProvider, error) {
 	var item CapabilityProvider
+	var aclRaw string
+	var metadataRaw string
 	if err := row.Scan(
 		&item.ID,
 		&item.TenantID,
 		&item.WorkspaceID,
 		&item.OwnerID,
 		&item.Visibility,
-		&item.ACLJSON,
+		&aclRaw,
 		&item.Name,
 		&item.ProviderType,
 		&item.Endpoint,
-		&item.MetadataJSON,
+		&metadataRaw,
 		&item.Status,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	); err != nil {
 		return CapabilityProvider{}, err
 	}
+	item.ACLJSON = ensureJSONRaw(json.RawMessage(strings.TrimSpace(aclRaw)), "[]")
+	item.MetadataJSON = ensureJSONRaw(json.RawMessage(strings.TrimSpace(metadataRaw)), "{}")
 	item.CreatedAt = item.CreatedAt.UTC()
 	item.UpdatedAt = item.UpdatedAt.UTC()
 	return item, nil

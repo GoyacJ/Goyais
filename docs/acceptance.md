@@ -182,6 +182,7 @@
 - `go test ./...`
 - `GOYAIS_IT_POSTGRES_DSN='<dsn>' go test ./internal/integration -run TestPostgresCommandAssetWorkflowContract -v`
 - `GOYAIS_IT_OBJECT_STORE_ENDPOINT=<endpoint> GOYAIS_IT_OBJECT_STORE_ACCESS_KEY=<ak> GOYAIS_IT_OBJECT_STORE_SECRET_KEY=<sk> GOYAIS_IT_OBJECT_STORE_BUCKET=<bucket> GOYAIS_IT_OBJECT_STORE_USE_SSL=false go test ./internal/asset -run TestS3CompatibleStoreIntegration -v`
+- `GOYAIS_IT_REDIS_ADDR='<host:port>' GOYAIS_IT_REDIS_PASSWORD='<password>' go test ./internal/platform/cache -run TestRedisProviderIntegration -v`
 - `pnpm -C web typecheck`
 - `pnpm -C web test:run`
 - `make build`
