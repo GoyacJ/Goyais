@@ -17,6 +17,11 @@ type Config struct {
 	Paths       RuntimePathConf   `json:"paths"`
 }
 
+const (
+	AuthContextModeJWTOrHeader = "jwt_or_header"
+	AuthContextModeHeaderOnly  = "header_only"
+)
+
 type ServerConfig struct {
 	Addr string `json:"addr"`
 }
@@ -73,6 +78,7 @@ type CommandConfig struct {
 
 type AuthzConfig struct {
 	AllowPrivateToPublic bool `json:"allowPrivateToPublic"`
+	ContextMode          string `json:"contextMode"`
 }
 
 type RuntimePathConf struct {
@@ -94,6 +100,7 @@ type fileConfig struct {
 	} `yaml:"command"`
 	Authz struct {
 		AllowPrivateToPublic bool `yaml:"allow_private_to_public"`
+		ContextMode          string `yaml:"context_mode"`
 	} `yaml:"authz"`
 	Cache struct {
 		Provider      string `yaml:"provider"`

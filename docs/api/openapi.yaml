@@ -1467,31 +1467,31 @@ components:
     RequiredXTenantId:
       name: X-Tenant-Id
       in: header
-      required: true
+      required: false
       schema:
         type: string
-      description: 未接入 JWT 阶段必须传入。
+      description: 当 `GOYAIS_AUTH_CONTEXT_MODE=header_only` 或请求未携带有效 Bearer JWT 时必须传入。
     RequiredXWorkspaceId:
       name: X-Workspace-Id
       in: header
-      required: true
+      required: false
       schema:
         type: string
-      description: 未接入 JWT 阶段必须传入。
+      description: 当 `GOYAIS_AUTH_CONTEXT_MODE=header_only` 或请求未携带有效 Bearer JWT 时必须传入。
     RequiredXUserId:
       name: X-User-Id
       in: header
-      required: true
+      required: false
       schema:
         type: string
-      description: 未接入 JWT 阶段必须传入，服务端将 ownerId 映射为该值。
+      description: 当 `GOYAIS_AUTH_CONTEXT_MODE=header_only` 或请求未携带有效 Bearer JWT 时必须传入，服务端将 ownerId 映射为该值。
     XRoles:
       name: X-Roles
       in: header
       required: false
       schema:
         type: string
-      description: 可选。逗号分隔角色列表，未提供时默认 `member`。
+      description: 可选。逗号分隔角色列表；当存在 JWT claims 时仅允许在 claims.roles 范围内覆盖。
     XPolicyVersion:
       name: X-Policy-Version
       in: header

@@ -343,6 +343,7 @@ payload 约定（v0.1）：
 - `payload.context.roles`：请求角色列表（默认 `member`）。
 - `payload.context.policyVersion`：策略版本（默认 `v0.1`）。
 - `payload.context.traceId`：跨 command/run/step 关联追踪 ID。
+- `payload.context` 来源受 `GOYAIS_AUTH_CONTEXT_MODE` 控制（`jwt_or_header|header_only`），但落库字段语义不变（`tenant_id/workspace_id/owner_id`）。
 - `payload.data`：事件原始业务数据（脱敏/摘要后落库）。
 
 建议索引：

@@ -92,6 +92,7 @@ func defaultsForProfile(profile string) Config {
 		},
 		Authz: AuthzConfig{
 			AllowPrivateToPublic: false,
+			ContextMode:          AuthContextModeJWTOrHeader,
 		},
 	}
 
@@ -139,6 +140,9 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	}
 	if fc.Authz.AllowPrivateToPublic {
 		cfg.Authz.AllowPrivateToPublic = true
+	}
+	if v := strings.ToLower(strings.TrimSpace(fc.Authz.ContextMode)); v != "" {
+		cfg.Authz.ContextMode = v
 	}
 	if v := strings.ToLower(strings.TrimSpace(fc.Cache.Provider)); v != "" {
 		cfg.Providers.Cache = v
@@ -232,6 +236,9 @@ func applyEnvOverrides(cfg *Config) {
 		if parsed, err := strconv.ParseBool(v); err == nil {
 			cfg.Authz.AllowPrivateToPublic = parsed
 		}
+	}
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_AUTH_CONTEXT_MODE"))); v != "" {
+		cfg.Authz.ContextMode = v
 	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_CACHE_PROVIDER"))); v != "" {
 		cfg.Providers.Cache = v
@@ -327,6 +334,9 @@ func applyDerivedDefaults(cfg *Config) {
 	}
 	if strings.TrimSpace(cfg.ObjectStore.Bucket) == "" {
 		cfg.ObjectStore.Bucket = "goyais-local"
+	}
+	if strings.TrimSpace(cfg.Authz.ContextMode) == "" {
+		cfg.Authz.ContextMode = AuthContextModeJWTOrHeader
 	}
 	if strings.TrimSpace(cfg.ObjectStore.Region) == "" {
 		cfg.ObjectStore.Region = "us-east-1"
@@ -455,6 +465,9 @@ func validate(cfg Config) error {
 	}
 	if cfg.Command.MaxConcurrency <= 0 {
 		return errors.New("command.max_concurrency must be positive")
+	}
+	if !contains([]string{AuthContextModeJWTOrHeader, AuthContextModeHeaderOnly}, cfg.Authz.ContextMode) {
+		return fmt.Errorf("invalid auth.context_mode: %s", cfg.Authz.ContextMode)
 	}
 
 	return nil

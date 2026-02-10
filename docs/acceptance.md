@@ -73,6 +73,10 @@
 ### 5.1 A2 最小闭环（Thread #3）
 - [x] `POST /api/v1/commands`（携带 `X-Tenant-Id/X-Workspace-Id/X-User-Id`）返回 `202` 且包含 `resource + commandRef`。
 - [x] 缺少任一上下文 header 返回 `400`，错误为 `MISSING_CONTEXT + error.context.missing`，并在 `details.missingHeaders` 返回缺失项列表。
+- [x] `GOYAIS_AUTH_CONTEXT_MODE=jwt_or_header` 时，携带有效 Bearer JWT 可在不提供 `X-Tenant-Id/X-Workspace-Id/X-User-Id` 的情况下创建 command。
+- [x] `GOYAIS_AUTH_CONTEXT_MODE=jwt_or_header` 时，`X-Tenant-Id/X-Workspace-Id/X-Roles` 仅允许在 JWT claims 可访问范围内覆盖，越权返回 `403 FORBIDDEN + error.authz.forbidden`。
+- [x] Bearer JWT 非法时返回 `400 INVALID_TOKEN + error.context.invalid_token`。
+- [x] `GOYAIS_AUTH_CONTEXT_MODE=header_only` 时，携带 JWT 但缺少上下文 header 仍返回 `400 MISSING_CONTEXT`。
 - [x] `GET /api/v1/commands` 返回 `items`，并固定按 `created_at DESC, id DESC` 排序。
 - [x] cursor 模式 token 基于 `(created_at,id)`，若请求带 `cursor` 则忽略 `page/pageSize`。
 - [x] 同 `(tenant,workspace,owner,idempotency_key)` 且同请求哈希复用同一 `commandId`。
