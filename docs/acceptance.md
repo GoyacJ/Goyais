@@ -5,9 +5,9 @@
 ## 1. 基础验收条件
 
 - [x] API 前缀统一为 `/api/v1`。
-- [ ] 所有副作用动作可通过 `/api/v1/commands` 表达并追踪。
+- [x] 所有副作用动作可通过 `/api/v1/commands` 表达并追踪（含 domain sugar：assets/workflow/shares）。
 - [x] 错误模型统一为 `error: { code, messageKey, details }`。
-- [ ] 关键对象包含通用字段：`id/tenantId/workspaceId/ownerId/visibility/acl/createdAt/updatedAt/status`。
+- [x] 关键对象（commands/assets/workflow templates+runs+steps）包含通用字段：`id/tenantId/workspaceId/ownerId/visibility/acl/createdAt/updatedAt/status`。
 
 ## 2. 最小化运行模式验收（无外部依赖）
 
@@ -29,8 +29,8 @@
 
 ### 3.2 Object store provider
 - [x] `object_store.provider=local` 可上传/读取/删除。
-- [ ] `object_store.provider=minio` 可上传/读取/删除。
-- [ ] `object_store.provider=s3` 可上传/读取/删除。
+- [x] `object_store.provider=minio` 可上传/读取/删除。
+- [x] `object_store.provider=s3` 可上传/读取/删除。
 
 ### 3.3 Cache + Vector provider
 - [x] `cache.provider=memory` 下系统可运行。
@@ -42,7 +42,7 @@
 
 ### 4.1 构建与独立运行
 - [x] 执行 `make build` 后产出单个可执行文件。
-- [ ] 改名或删除 `web/dist`（可选强化：改名或删除 `web/`）后，启动该二进制。
+- [x] 改名或删除 `web/dist`（可选强化：改名或删除 `web/`）后，启动该二进制。
 - [x] 访问 `/` 返回 200。
 - [x] 访问 `/canvas` 返回 200（SPA fallback 生效）。
 - [x] 访问 `/api/v1/healthz` 返回 200。
@@ -79,16 +79,17 @@
 ## 6. Visibility/ACL 与隔离验收
 
 - [x] 已实现对象（commands/assets/workflow/shares）支持 `PRIVATE/WORKSPACE/TENANT/PUBLIC`。
-- [ ] 未实现对象（algorithm/plugin/stream）visibility/ACL 延后到 M2。
-- [ ] ACL 可赋予 `READ/WRITE/EXECUTE/MANAGE/SHARE`。
-- [ ] 无权限用户访问资源返回拒绝，并包含明确 `messageKey`。
-- [ ] `PRIVATE` 输入默认不得直接产生 `PUBLIC` 输出（除非策略放开且权限满足）。
+- [x] 未实现对象（algorithm/plugin/stream）visibility/ACL 延后到 M2。
+- [x] ACL 可赋予 `READ/WRITE/EXECUTE/MANAGE/SHARE`。
+- [x] 无权限用户访问资源返回拒绝，并包含明确 `messageKey`。
+- [x] `PRIVATE` 输入默认不得直接产生 `PUBLIC` 输出（除非策略放开且权限满足）。
 
 ### 6.1 A3 最小闭环（Thread #4）
 - [x] `POST /api/v1/shares` 仅允许 `resourceType=command|asset`，其他值返回 `400 INVALID_SHARE_REQUEST`。
 - [x] `POST /api/v1/shares` 仅允许 `subjectType=user` 且 `permissions` 仅来自 `READ/WRITE/EXECUTE/MANAGE/SHARE`，非法值返回 `400 INVALID_SHARE_REQUEST`。
 - [x] `POST /api/v1/shares` 创建前必须校验同资源 SHARE 权限：owner 或该资源上已有 `ACL.SHARE`。
 - [x] 非 owner 且无该资源 `SHARE` 权限时，`POST /api/v1/shares` 返回 `403 FORBIDDEN + messageKey=error.authz.forbidden`。
+- [x] `POST /api/v1/shares` 与 `DELETE /api/v1/shares/{shareId}` 走 command-first，返回 `202 + resource + commandRef`，且可由 `GET /api/v1/commands/{commandId}` 追踪。
 - [x] SQLite 模式下，`GET /api/v1/commands` 的可读过滤在 SQL 层完成（`owner OR visibility=WORKSPACE OR ACL.READ`），分页基于过滤后结果且排序固定 `created_at DESC,id DESC`。
 
 ## 7. Workflow/Run 回放验收
@@ -138,7 +139,7 @@
 - [x] owner 访问 `GET /api/v1/assets/{assetId}` 返回 `200`。
 - [x] 非 owner 且无 share 时访问 `GET /api/v1/assets/{assetId}` 返回 `403 FORBIDDEN` + `messageKey=error.authz.forbidden`。
 - [x] owner 对同一 `asset` 创建 `READ` share 后，非 owner 访问 `GET /api/v1/assets/{assetId}` 返回 `200`。
-- [ ] `GET /api/v1/assets` 在 SQL 层完成可读过滤（tenant/workspace 限定 + owner/WORKSPACE/ACL.READ），并保持 `created_at DESC,id DESC` 稳定排序。
+- [x] `GET /api/v1/assets` 在 SQL 层完成可读过滤（tenant/workspace 限定 + owner/WORKSPACE/ACL.READ），并保持 `created_at DESC,id DESC` 稳定排序。
 - [x] cursor 模式下 `cursor` 优先于 `page/pageSize`，分页无重复/漏项。
 
 ### 12.2 Shares（asset）规则（必须通过）
@@ -157,13 +158,15 @@
 
 ## 13. 结果判定
 
-- [ ] P0 条目（2、4、5、6）全部通过。
-- [ ] 其余条目无阻断性失败。
-- [ ] 失败项形成缺陷清单并绑定后续里程碑。
+- [x] P0 条目（2、4、5、6）全部通过。
+- [x] 其余条目无阻断性失败（M2 占位项已标注 deferred）。
+- [x] 失败项形成缺陷清单并绑定后续里程碑（见 7/8/9/11 与 M2 规划）。
 
 ## 14. 本轮证据命令（2026-02-10）
 
 - `go test ./...`
+- `GOYAIS_IT_POSTGRES_DSN='<dsn>' go test ./internal/integration -run TestPostgresCommandAssetWorkflowContract -v`
+- `GOYAIS_IT_OBJECT_STORE_ENDPOINT=<endpoint> GOYAIS_IT_OBJECT_STORE_ACCESS_KEY=<ak> GOYAIS_IT_OBJECT_STORE_SECRET_KEY=<sk> GOYAIS_IT_OBJECT_STORE_BUCKET=<bucket> GOYAIS_IT_OBJECT_STORE_USE_SSL=false go test ./internal/asset -run TestS3CompatibleStoreIntegration -v`
 - `pnpm -C web typecheck`
 - `pnpm -C web test:run`
 - `make build`

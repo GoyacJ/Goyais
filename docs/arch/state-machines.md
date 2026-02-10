@@ -35,11 +35,14 @@
 - provider 认证失败（如 Redis NOAUTH）不改变 command 状态机，但会将 healthz 状态标记为 `degraded`。
 - 当 provider 就绪恢复后，healthz 状态回到 `ok`，不需要额外迁移。
 
-## 0.4 Share 创建授权闸门（A3）
+## 0.4 Share Domain Sugar + 授权闸门（A3）
+- `POST /api/v1/shares` 必须转换为 `share.create` command 执行（Command-first）。
+- `DELETE /api/v1/shares/{shareId}` 必须转换为 `share.delete` command 执行（Command-first）。
 - `POST /api/v1/shares` 执行顺序固定：`Tenant -> Visibility -> ACL -> RBAC -> Egress`。
 - v0.1 支持 `resource_type=command|asset`，且 `subject_type=user`。
 - 分享前必须校验“同资源 SHARE 权限”：`owner` 或 `acl_entries(resource_type=<目标资源类型>, resource_id=<目标资源ID>, permission=SHARE)` 命中。
 - 校验失败返回 `403 FORBIDDEN`，`messageKey=error.authz.forbidden`。
+- `share.delete` v0.1 最小语义：仅允许创建者删除同租户/工作区下的 share 记录；不存在时返回 `404 SHARE_NOT_FOUND`。
 
 ## 0.5 Asset Domain Sugar（A/B 过渡）
 - `POST /api/v1/assets` 必须转换为 `asset.upload` command 执行（Command-first）。
@@ -191,7 +194,7 @@
 
 ## 5. Share 授权判定点（A3/B1）
 
-`POST /api/v1/shares` 在写入 ACL 前必须按固定顺序执行：
+`POST /api/v1/shares` 在写入 ACL 前必须按固定顺序执行（通过 `share.create` command）：
 1. 请求字段校验（`resourceType`、`subjectType`、`permissions`）。
 2. 目标资源存在性与租户/工作区一致性校验。
 3. 分享者权限校验：
@@ -202,3 +205,9 @@
 拒绝语义：
 - 权限不足返回 `403 FORBIDDEN` + `messageKey=error.authz.forbidden`。
 - 非法入参返回 `400 INVALID_SHARE_REQUEST`。
+
+`DELETE /api/v1/shares/{shareId}`（`share.delete` command）：
+1. 请求上下文校验（tenant/workspace/user）。
+2. share 存在性与作用域校验（同 tenant/workspace）。
+3. 删除权限校验（v0.1 最小语义：`created_by == request.userId`）。
+4. 删除成功后返回最小资源快照 `{id,status=deleted}`。

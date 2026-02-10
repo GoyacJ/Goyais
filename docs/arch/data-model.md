@@ -102,6 +102,9 @@
 - SQLite：`permissions` 使用 `TEXT` 存 JSON 数组；权限包含判断使用 `json_each`（示例：`EXISTS (SELECT 1 FROM json_each(a.permissions) p WHERE p.value='READ')`）。
 - PostgreSQL：`permissions` 使用 `JSONB`；权限包含判断使用 `@>`（示例：`a.permissions @> '["READ"]'::jsonb`）。
 - 过期判定统一：`expires_at < now` 视为无效 ACL。
+- 写入路径固定为 Command-first：
+  - `share.create`：新增 `acl_entries` 记录（subjectType 固定 `user`）。
+  - `share.delete`：按 `(id, tenant_id, workspace_id, created_by)` 删除记录。
 
 ## 3.3 资产与血缘
 
@@ -258,7 +261,7 @@
 
 ### commands
 - `id, tenant_id, workspace_id, owner_id`
-- `command_type`
+- `command_type`（示例：`asset.upload`、`workflow.run`、`share.create`、`share.delete`）
 - `payload`（JSON）
 - `status`（accepted/running/succeeded/failed/canceled）
 - `visibility`（默认 `PRIVATE`，NOT NULL）
