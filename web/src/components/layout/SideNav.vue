@@ -5,15 +5,15 @@
     @mouseenter="hovering = true"
     @mouseleave="hovering = false"
   >
-    <div class="flex items-center justify-between gap-2 border-b border-ui-border px-3 py-3">
+    <div class="flex h-[4.25rem] shrink-0 items-center justify-between gap-2 border-b border-ui-border px-3 py-2">
       <div
-        class="min-w-0"
+        class="min-w-0 flex-1"
         :class="collapsed
           ? 'pointer-events-none max-w-0 overflow-hidden opacity-0'
           : 'max-w-[11rem] opacity-100 transition-[opacity,max-width] duration-150'"
       >
-        <p class="text-[11px] uppercase tracking-[0.14em] text-ui-muted">{{ t('common.workspaceLabel') }}</p>
-        <p class="truncate text-sm font-semibold text-ui-fg">{{ t('common.workspace') }}</p>
+        <p class="text-[11px] uppercase leading-none tracking-[0.14em] text-ui-muted">{{ t('common.workspaceLabel') }}</p>
+        <p class="truncate text-sm font-semibold leading-tight text-ui-fg">{{ t('common.workspace') }}</p>
       </div>
       <button
         type="button"
@@ -25,7 +25,7 @@
       </button>
     </div>
 
-    <nav class="ui-page p-3">
+    <nav class="ui-page min-h-0 flex-1 overflow-auto p-3">
       <RouterLink
         v-for="item in NAV_ITEMS"
         :key="item.to"
