@@ -584,6 +584,49 @@ func TestAPIContractRegression(t *testing.T) {
 		}
 	})
 
+	t.Run("registry read routes available", func(t *testing.T) {
+		respCapabilities := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/registry/capabilities?page=1&pageSize=20", headersWithContext("u1"), nil)
+		defer respCapabilities.Body.Close()
+		assertStatus(t, respCapabilities, http.StatusOK)
+		var capabilitiesPayload map[string]any
+		mustDecodeJSON(t, respCapabilities.Body, &capabilitiesPayload)
+		if _, ok := capabilitiesPayload["items"].([]any); !ok {
+			t.Fatalf("expected capabilities items array")
+		}
+		if _, ok := capabilitiesPayload["pageInfo"].(map[string]any); !ok {
+			t.Fatalf("expected capabilities pageInfo")
+		}
+
+		seedCursor, err := command.EncodeCursor(time.Now().UTC(), "cap_seed")
+		if err != nil {
+			t.Fatalf("encode registry cursor: %v", err)
+		}
+		respCapabilitiesCursor := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/registry/capabilities?cursor="+seedCursor+"&page=1&pageSize=1", headersWithContext("u1"), nil)
+		defer respCapabilitiesCursor.Body.Close()
+		assertStatus(t, respCapabilitiesCursor, http.StatusOK)
+		var capabilitiesCursorPayload map[string]any
+		mustDecodeJSON(t, respCapabilitiesCursor.Body, &capabilitiesCursorPayload)
+		if _, ok := capabilitiesCursorPayload["cursorInfo"].(map[string]any); !ok {
+			t.Fatalf("expected capabilities cursorInfo")
+		}
+		if _, ok := capabilitiesCursorPayload["pageInfo"]; ok {
+			t.Fatalf("did not expect capabilities pageInfo when cursor is used")
+		}
+
+		respCapabilityMissing := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/registry/capabilities/cap_missing", headersWithContext("u1"), nil)
+		defer respCapabilityMissing.Body.Close()
+		assertStatus(t, respCapabilityMissing, http.StatusNotFound)
+		assertMessageKey(t, respCapabilityMissing.Body, "error.registry.not_found")
+
+		respAlgorithms := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/registry/algorithms", headersWithContext("u1"), nil)
+		defer respAlgorithms.Body.Close()
+		assertStatus(t, respAlgorithms, http.StatusOK)
+
+		respProviders := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/registry/providers", headersWithContext("u1"), nil)
+		defer respProviders.Body.Close()
+		assertStatus(t, respProviders, http.StatusOK)
+	})
+
 	t.Run("placeholder domains return 501", func(t *testing.T) {
 		checkNotImplemented := func(method, path, messageKey string) {
 			t.Helper()
@@ -592,10 +635,6 @@ func TestAPIContractRegression(t *testing.T) {
 			assertStatus(t, resp, http.StatusNotImplemented)
 			assertMessageKey(t, resp.Body, messageKey)
 		}
-
-		checkNotImplemented(http.MethodGet, "/api/v1/registry/capabilities", "error.registry.not_implemented")
-		checkNotImplemented(http.MethodGet, "/api/v1/registry/capabilities/cap_1", "error.registry.not_implemented")
-		checkNotImplemented(http.MethodGet, "/api/v1/registry/algorithms", "error.registry.not_implemented")
 
 		checkNotImplemented(http.MethodGet, "/api/v1/plugin-market/packages", "error.plugin.not_implemented")
 		checkNotImplemented(http.MethodPost, "/api/v1/plugin-market/installs", "error.plugin.not_implemented")
