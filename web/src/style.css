@@ -295,4 +295,122 @@
     mask-size: 210px 210px;
     opacity: 0.34;
   }
+
+  .ui-shell-main {
+    transition: padding 120ms ease;
+  }
+
+  html[data-layout='console'] .ui-window-board--console {
+    background: rgb(var(--ui-neutral-panel) / 0.78);
+  }
+
+  html[data-layout='topnav'] .ui-window-board--topnav {
+    background: rgb(var(--ui-neutral-panel) / 0.8);
+  }
+
+  html[data-layout='focus'] .ui-window-board--focus {
+    background: rgb(var(--ui-neutral-panel) / 0.85);
+  }
+
+  .ui-window-board-wrap {
+    position: relative;
+  }
+
+  .ui-window-board {
+    position: relative;
+    min-height: 35rem;
+    width: 100%;
+  }
+
+  .ui-window-board::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--ui-radius-card);
+    border: 1px dashed rgb(var(--ui-neutral-border) / 0.8);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .ui-window-board-toolbar {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .ui-window-pane {
+    user-select: none;
+    min-width: var(--ui-window-min-w);
+    min-height: var(--ui-window-min-h);
+    backdrop-filter: blur(2px);
+  }
+
+  .ui-window-pane-header {
+    touch-action: none;
+  }
+
+  .ui-window-pane-body {
+    user-select: text;
+  }
+
+  .ui-window-resize-right,
+  .ui-window-resize-bottom,
+  .ui-window-resize-corner {
+    position: absolute;
+    border: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  .ui-window-resize-right {
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: 0.625rem;
+    cursor: ew-resize;
+  }
+
+  .ui-window-resize-bottom {
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 0.625rem;
+    cursor: ns-resize;
+  }
+
+  .ui-window-resize-corner {
+    right: 0;
+    bottom: 0;
+    width: 1rem;
+    height: 1rem;
+    cursor: nwse-resize;
+  }
+
+  .ui-window-resize-corner::before {
+    content: '';
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    width: 8px;
+    height: 8px;
+    border-right: 1px solid rgb(var(--ui-neutral-border) / 0.9);
+    border-bottom: 1px solid rgb(var(--ui-neutral-border) / 0.9);
+  }
+
+  .ui-window-flow-pane {
+    display: block;
+  }
+}
+
+@media (max-width: 1023px) {
+  .ui-window-board {
+    min-height: 0;
+    border-style: solid;
+  }
+
+  .ui-window-pane {
+    position: static !important;
+    height: auto !important;
+    width: auto !important;
+  }
 }

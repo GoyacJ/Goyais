@@ -12,15 +12,60 @@ import StreamsView from '@/views/StreamsView.vue'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'home', component: HomeView },
-    { path: '/canvas', name: 'canvas', component: CanvasView },
-    { path: '/commands', name: 'commands', component: CommandsView },
-    { path: '/assets', name: 'assets', component: AssetsView },
-    { path: '/plugins', name: 'plugins', component: PluginsView },
-    { path: '/streams', name: 'streams', component: StreamsView },
-    { path: '/settings', name: 'settings', component: SettingsView },
-    { path: '/forbidden', name: 'forbidden', component: ForbiddenView },
-    { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView },
+    {
+      path: '/',
+      name: 'home',
+      component: HomeView,
+      meta: { layoutDefault: 'topnav', windowed: true, windowManifestKey: 'home' },
+    },
+    {
+      path: '/canvas',
+      name: 'canvas',
+      component: CanvasView,
+      meta: { layoutDefault: 'focus', windowed: true, windowManifestKey: 'canvas' },
+    },
+    {
+      path: '/commands',
+      name: 'commands',
+      component: CommandsView,
+      meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'commands' },
+    },
+    {
+      path: '/assets',
+      name: 'assets',
+      component: AssetsView,
+      meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'assets' },
+    },
+    {
+      path: '/plugins',
+      name: 'plugins',
+      component: PluginsView,
+      meta: { layoutDefault: 'topnav', windowed: true, windowManifestKey: 'plugins' },
+    },
+    {
+      path: '/streams',
+      name: 'streams',
+      component: StreamsView,
+      meta: { layoutDefault: 'topnav', windowed: true, windowManifestKey: 'streams' },
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: SettingsView,
+      meta: { layoutDefault: 'topnav', windowed: true, windowManifestKey: 'settings' },
+    },
+    {
+      path: '/forbidden',
+      name: 'forbidden',
+      component: ForbiddenView,
+      meta: { layoutDefault: 'topnav', windowed: true, windowManifestKey: 'forbidden' },
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: NotFoundView,
+      meta: { layoutDefault: 'topnav', windowed: true, windowManifestKey: 'not-found' },
+    },
   ],
 })
 

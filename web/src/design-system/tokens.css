@@ -47,6 +47,10 @@
   --ui-control-py: 0.375rem;
   --ui-page-gap: 1rem;
   --ui-table-row-h: 2.125rem;
+  --ui-window-header-h: 2rem;
+  --ui-window-min-w: 18rem;
+  --ui-window-min-h: 12rem;
+  --ui-shell-content-pad: 1rem;
 }
 
 .dark {
@@ -90,6 +94,7 @@ html[data-density='compact'] {
   --ui-control-py: 0.375rem;
   --ui-page-gap: 1rem;
   --ui-table-row-h: 2.125rem;
+  --ui-shell-content-pad: 1rem;
 }
 
 html[data-density='comfortable'] {
@@ -98,4 +103,8 @@ html[data-density='comfortable'] {
   --ui-control-py: 0.5rem;
   --ui-page-gap: 1.25rem;
   --ui-table-row-h: 2.75rem;
+  --ui-shell-content-pad: 1.25rem;
+  --ui-window-header-h: 2.25rem;
+  --ui-window-min-w: 19rem;
+  --ui-window-min-h: 13rem;
 }

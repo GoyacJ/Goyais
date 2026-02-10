@@ -1,11 +1,28 @@
 <template>
   <header class="ui-surface flex flex-wrap items-center justify-between gap-3 rounded-none border-x-0 border-t-0 px-4 py-3">
-    <div class="min-w-0">
-      <p class="ui-monospace text-[11px] uppercase tracking-[0.15em] text-ui-muted">Console-first</p>
-      <h1 class="truncate text-lg font-semibold">{{ t('common.appName') }}</h1>
+    <div class="flex min-w-0 items-center gap-2">
+      <button
+        v-if="showMobileNavButton"
+        type="button"
+        class="ui-control ui-focus-ring ui-pressable inline-flex h-8 min-h-0 items-center gap-2 px-2 py-1 text-xs"
+        :aria-label="t('common.openNavigation')"
+        @click="emit('toggleMobileNav')"
+      >
+        <Icon name="canvas" :size="14" decorative />
+        <span>NAV</span>
+      </button>
+
+      <div class="min-w-0">
+        <p class="ui-monospace text-[11px] uppercase tracking-[0.15em] text-ui-muted">Console-first</p>
+        <h1 class="truncate text-lg font-semibold">{{ t('common.appName') }}</h1>
+      </div>
     </div>
 
     <div class="flex min-w-0 flex-wrap items-center gap-2">
+      <span v-if="focusMode" class="ui-control ui-monospace h-8 min-h-0 bg-primary-500/15 px-2 py-1 text-xs text-primary-700 dark:text-primary-500">
+        {{ t('common.layoutFocus') }}
+      </span>
+
       <span class="ui-control ui-monospace h-8 min-h-0 bg-ui-hover px-2 py-1 text-xs text-ui-muted">
         {{ t('common.workspace') }}
       </span>
@@ -14,6 +31,8 @@
         <Icon name="search" :size="14" decorative />
         <span>{{ t('common.searchPlaceholder') }}</span>
       </button>
+
+      <LayoutSwitcher />
 
       <label class="flex items-center gap-2 text-xs text-ui-muted">
         <span>{{ t('common.theme') }}</span>
@@ -40,11 +59,27 @@
 <script setup lang="ts">
 import Dropdown, { type DropdownItem } from '@/components/ui/Dropdown.vue'
 import Icon from '@/components/ui/Icon.vue'
+import LayoutSwitcher from '@/components/layout/LayoutSwitcher.vue'
 import { useToast } from '@/composables/useToast'
 import { useThemeStore } from '@/design-system/theme'
 import type { SupportedLocale, ThemeMode } from '@/design-system/types'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+withDefaults(
+  defineProps<{
+    showMobileNavButton?: boolean
+    focusMode?: boolean
+  }>(),
+  {
+    showMobileNavButton: false,
+    focusMode: false,
+  },
+)
+
+const emit = defineEmits<{
+  (e: 'toggleMobileNav'): void
+}>()
 
 const { t, locale } = useI18n({ useScope: 'global' })
 const { themeMode, setThemeMode } = useThemeStore()
