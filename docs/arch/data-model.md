@@ -245,14 +245,18 @@ v0.1 当前实现进度：
 
 ### streaming_assets
 - `id, tenant_id, workspace_id, owner_id, visibility`
-- `stream_id`
+- `acl_json`（JSON）
 - `path`
 - `protocol`（rtsp/rtmp/srt/webrtc/hls）
 - `source`（push/pull）
-- `endpoints`（JSON）
-- `state`（JSON）
+- `endpoints_json`（JSON）
+- `state_json`（JSON）
 - `status`（offline/online/recording/error）
 - `created_at, updated_at`
+
+约束与索引：
+- `UNIQUE(tenant_id, workspace_id, path)`
+- `streaming_assets(tenant_id, workspace_id, created_at desc, id desc)`
 
 ### stream_recordings
 - `id`
@@ -265,11 +269,15 @@ v0.1 当前实现进度：
 - `message_key`
 - `created_at, updated_at`
 
+建议索引：
+- `stream_recordings(stream_id, created_at desc, id desc)`
+- `stream_recordings(tenant_id, workspace_id, created_at desc, id desc)`
+
 ## 3.7 命令、审计与上下文索引
 
 ### commands
 - `id, tenant_id, workspace_id, owner_id`
-- `command_type`（示例：`asset.upload`、`workflow.run`、`workflow.retry`、`share.create`、`share.delete`、`plugin.upload`、`plugin.install`、`plugin.enable`、`plugin.disable`、`plugin.rollback`）
+- `command_type`（示例：`asset.upload`、`workflow.run`、`workflow.retry`、`share.create`、`share.delete`、`plugin.upload`、`plugin.install`、`plugin.enable`、`plugin.disable`、`plugin.rollback`、`stream.create`、`stream.record.start`、`stream.record.stop`、`stream.kick`）
 - `payload`（JSON）
 - `status`（accepted/running/succeeded/failed/canceled）
 - `visibility`（默认 `PRIVATE`，NOT NULL）

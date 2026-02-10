@@ -220,8 +220,17 @@ Command 执行管道（必须）：
     - `POST /plugin-market/packages`（domain sugar -> `plugin.upload` command）
     - `POST /plugin-market/installs`（domain sugar -> `plugin.install` command）
     - `POST /plugin-market/installs/{installId}:enable|:disable|:rollback`（domain sugar -> `plugin.enable|plugin.disable|plugin.rollback` command）
+  - `streams`（D1 MVP）：
+    - `GET /streams`
+    - `POST /streams`（domain sugar -> `stream.create` command）
+    - `GET /streams/{streamId}`
+    - `POST /streams/{streamId}:record-start`（domain sugar -> `stream.record.start` command）
+    - `POST /streams/{streamId}:record-stop`（domain sugar -> `stream.record.stop` command）
+    - `POST /streams/{streamId}:kick`（domain sugar -> `stream.kick` command）
+    - `record-stop` 成功后写入 `asset_lineage`（`relation=recorded_from`）
+    - `onPublishTemplateId` 存在时，通过 command gate 触发一次 `workflow.run`
 - 占位（可达但未实现）：
-  - `streams-*`
+  - `assets` 的 `PATCH /assets/{assetId}`、`DELETE /assets/{assetId}`、`GET /assets/{assetId}/lineage`
   - 统一返回：`501 NOT_IMPLEMENTED` + 领域 `messageKey`
 
 ## 8. 配置规范

@@ -15,6 +15,7 @@ import (
 	"goyais/internal/asset"
 	"goyais/internal/command"
 	"goyais/internal/plugin"
+	"goyais/internal/stream"
 	"goyais/internal/workflow"
 )
 
@@ -95,6 +96,18 @@ type pluginInstallActionCommandPayload struct {
 	InstallID string `json:"installId"`
 }
 
+type streamCreateCommandPayload struct {
+	Path       string          `json:"path"`
+	Protocol   string          `json:"protocol"`
+	Source     string          `json:"source"`
+	Visibility string          `json:"visibility"`
+	State      json.RawMessage `json:"state"`
+}
+
+type streamActionCommandPayload struct {
+	StreamID string `json:"streamId"`
+}
+
 const timeRFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
 
 func registerCommandExecutors(
@@ -102,6 +115,7 @@ func registerCommandExecutors(
 	assetService *asset.Service,
 	workflowService *workflow.Service,
 	pluginService *plugin.Service,
+	streamService *stream.Service,
 ) {
 	if commandService == nil {
 		return
@@ -125,6 +139,12 @@ func registerCommandExecutors(
 		commandService.SetExecutor("plugin.enable", newPluginEnableExecutor(pluginService))
 		commandService.SetExecutor("plugin.disable", newPluginDisableExecutor(pluginService))
 		commandService.SetExecutor("plugin.rollback", newPluginRollbackExecutor(pluginService))
+	}
+	if streamService != nil {
+		commandService.SetExecutor("stream.create", newStreamCreateExecutor(streamService))
+		commandService.SetExecutor("stream.record.start", newStreamRecordStartExecutor(commandService, streamService))
+		commandService.SetExecutor("stream.record.stop", newStreamRecordStopExecutor(streamService))
+		commandService.SetExecutor("stream.kick", newStreamKickExecutor(streamService))
 	}
 }
 
@@ -570,6 +590,174 @@ func mapPluginExecutionError(err error) error {
 	}
 }
 
+func newStreamCreateExecutor(streamService *stream.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req streamCreateCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapStreamExecutionError(stream.ErrInvalidRequest)
+		}
+		if len(req.State) == 0 {
+			req.State = json.RawMessage(`{}`)
+		}
+
+		created, err := streamService.CreateStream(
+			ctx,
+			reqCtx,
+			req.Path,
+			req.Protocol,
+			req.Source,
+			req.Visibility,
+			req.State,
+		)
+		if err != nil {
+			return nil, mapStreamExecutionError(err)
+		}
+
+		result := map[string]any{
+			"stream": toStreamResultPayload(created),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func newStreamRecordStartExecutor(commandService *command.Service, streamService *stream.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req streamActionCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapStreamExecutionError(stream.ErrInvalidRequest)
+		}
+
+		started, err := streamService.StartRecording(ctx, reqCtx, req.StreamID)
+		if err != nil {
+			return nil, mapStreamExecutionError(err)
+		}
+
+		result := map[string]any{
+			"stream":    toStreamResultPayload(started.Stream),
+			"recording": toStreamRecordingResultPayload(started.Recording),
+		}
+
+		if templateID := strings.TrimSpace(started.OnPublishTemplateID); templateID != "" && commandService != nil {
+			workflowPayload, _ := json.Marshal(map[string]any{
+				"templateId": templateID,
+				"inputs": map[string]any{
+					"streamId":    started.Stream.ID,
+					"recordingId": started.Recording.ID,
+					"trigger":     "stream.onPublish",
+				},
+				"visibility": started.Stream.Visibility,
+				"mode":       "sync",
+			})
+			onPublish := map[string]any{
+				"templateId": templateID,
+			}
+			onPublishCommand, submitErr := commandService.Submit(
+				ctx,
+				reqCtx,
+				"workflow.run",
+				workflowPayload,
+				"stream-onpublish-"+started.Recording.ID,
+				started.Stream.Visibility,
+			)
+			if submitErr != nil {
+				onPublish["status"] = "failed"
+				onPublish["error"] = submitErr.Error()
+			} else {
+				onPublish["status"] = "submitted"
+				onPublish["commandId"] = onPublishCommand.ID
+			}
+			result["onPublish"] = onPublish
+		}
+
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func newStreamRecordStopExecutor(streamService *stream.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req streamActionCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapStreamExecutionError(stream.ErrInvalidRequest)
+		}
+
+		stopped, err := streamService.StopRecording(ctx, reqCtx, req.StreamID)
+		if err != nil {
+			return nil, mapStreamExecutionError(err)
+		}
+
+		result := map[string]any{
+			"stream":    toStreamResultPayload(stopped.Stream),
+			"recording": toStreamRecordingResultPayload(stopped.Recording),
+			"assetId":   stopped.AssetID,
+			"lineageId": stopped.LineageID,
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func newStreamKickExecutor(streamService *stream.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req streamActionCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapStreamExecutionError(stream.ErrInvalidRequest)
+		}
+
+		item, err := streamService.KickStream(ctx, reqCtx, req.StreamID)
+		if err != nil {
+			return nil, mapStreamExecutionError(err)
+		}
+
+		result := map[string]any{
+			"stream": toStreamResultPayload(item),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func mapStreamExecutionError(err error) error {
+	switch {
+	case errors.Is(err, stream.ErrInvalidRequest):
+		return &command.ExecutionError{
+			Code:       "INVALID_STREAM_REQUEST",
+			MessageKey: "error.stream.invalid_request",
+			Err:        command.ErrInvalidCommandRequest,
+		}
+	case errors.Is(err, stream.ErrStreamNotFound), errors.Is(err, stream.ErrRecordingNotFound):
+		return &command.ExecutionError{
+			Code:       "STREAM_NOT_FOUND",
+			MessageKey: "error.stream.not_found",
+			Err:        command.ErrInvalidCommandRequest,
+		}
+	case errors.Is(err, stream.ErrNotImplemented):
+		return &command.ExecutionError{
+			Code:       "NOT_IMPLEMENTED",
+			MessageKey: "error.stream.not_implemented",
+			Err:        command.ErrNotImplemented,
+		}
+	case errors.Is(err, stream.ErrForbidden):
+		reason := ""
+		var forbidden *stream.ForbiddenError
+		if errors.As(err, &forbidden) {
+			reason = forbidden.Reason
+		}
+		return &command.ExecutionError{
+			Code:       "FORBIDDEN",
+			MessageKey: "error.authz.forbidden",
+			Err:        &command.ForbiddenError{Reason: reason},
+		}
+	default:
+		return &command.ExecutionError{
+			Code:       "INTERNAL_ERROR",
+			MessageKey: "error.common.internal",
+			Err:        fmt.Errorf("stream executor: %w", err),
+		}
+	}
+}
+
 func newShareCreateExecutor(commandService *command.Service) command.ExecuteFunc {
 	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
 		var req shareCreateCommandPayload
@@ -789,6 +977,53 @@ func toPluginInstallResultPayload(item plugin.PluginInstall) map[string]any {
 	}
 	if item.InstalledAt != nil {
 		result["installedAt"] = item.InstalledAt.UTC().Format(timeRFC3339Nano)
+	}
+	if item.ErrorCode != "" || item.MessageKey != "" {
+		result["error"] = map[string]any{
+			"code":       item.ErrorCode,
+			"messageKey": item.MessageKey,
+		}
+	}
+	return result
+}
+
+func toStreamResultPayload(item stream.Stream) map[string]any {
+	return map[string]any{
+		"id":          item.ID,
+		"tenantId":    item.TenantID,
+		"workspaceId": item.WorkspaceID,
+		"ownerId":     item.OwnerID,
+		"visibility":  item.Visibility,
+		"acl":         decodeJSON(item.ACLJSON, []any{}),
+		"path":        item.Path,
+		"protocol":    item.Protocol,
+		"source":      item.Source,
+		"endpoints":   decodeJSON(item.EndpointsJSON, map[string]any{}),
+		"state":       decodeJSON(item.StateJSON, map[string]any{}),
+		"status":      item.Status,
+		"createdAt":   item.CreatedAt.UTC().Format(timeRFC3339Nano),
+		"updatedAt":   item.UpdatedAt.UTC().Format(timeRFC3339Nano),
+	}
+}
+
+func toStreamRecordingResultPayload(item stream.Recording) map[string]any {
+	result := map[string]any{
+		"id":          item.ID,
+		"streamId":    item.StreamID,
+		"tenantId":    item.TenantID,
+		"workspaceId": item.WorkspaceID,
+		"ownerId":     item.OwnerID,
+		"visibility":  item.Visibility,
+		"status":      item.Status,
+		"startedAt":   item.StartedAt.UTC().Format(timeRFC3339Nano),
+		"createdAt":   item.CreatedAt.UTC().Format(timeRFC3339Nano),
+		"updatedAt":   item.UpdatedAt.UTC().Format(timeRFC3339Nano),
+	}
+	if item.AssetID != "" {
+		result["assetId"] = item.AssetID
+	}
+	if item.FinishedAt != nil {
+		result["finishedAt"] = item.FinishedAt.UTC().Format(timeRFC3339Nano)
 	}
 	if item.ErrorCode != "" || item.MessageKey != "" {
 		result["error"] = map[string]any{

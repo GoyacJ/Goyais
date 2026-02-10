@@ -805,18 +805,160 @@ func TestAPIContractRegression(t *testing.T) {
 		assertErrorCode(t, respForbiddenEnable.Body, "FORBIDDEN")
 	})
 
-	t.Run("placeholder domains return 501", func(t *testing.T) {
-		checkNotImplemented := func(method, path, messageKey string) {
-			t.Helper()
-			resp := mustRequest(t, client, method, baseURL+path, headersWithContext("u1"), nil)
-			defer resp.Body.Close()
-			assertStatus(t, resp, http.StatusNotImplemented)
-			assertMessageKey(t, resp.Body, messageKey)
+	t.Run("stream routes available", func(t *testing.T) {
+		respCreate := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams", headersWithJSONContext("u1"), map[string]any{
+			"path":       "live/demo-main",
+			"protocol":   "rtmp",
+			"source":     "push",
+			"visibility": "PRIVATE",
+			"metadata": map[string]any{
+				"onPublishTemplateId": templateID,
+			},
+		})
+		defer respCreate.Body.Close()
+		assertStatus(t, respCreate, http.StatusAccepted)
+		var createPayload map[string]any
+		mustDecodeJSON(t, respCreate.Body, &createPayload)
+		createResource, _ := createPayload["resource"].(map[string]any)
+		streamID, _ := createResource["id"].(string)
+		if streamID == "" {
+			t.Fatalf("expected stream id")
+		}
+		if createStatus := createResource["status"]; createStatus != "online" {
+			t.Fatalf("unexpected stream status after create: %v", createStatus)
+		}
+		createCommandRef, _ := createPayload["commandRef"].(map[string]any)
+		createCommandID, _ := createCommandRef["commandId"].(string)
+		if createCommandID == "" {
+			t.Fatalf("expected stream create command id")
+		}
+		respCreateCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+createCommandID, headersWithContext("u1"), nil)
+		defer respCreateCommand.Body.Close()
+		assertStatus(t, respCreateCommand, http.StatusOK)
+		if got := readJSONPath(t, respCreateCommand.Body, "commandType"); got != "stream.create" {
+			t.Fatalf("unexpected stream create command type: %v", got)
 		}
 
-		checkNotImplemented(http.MethodGet, "/api/v1/streams", "error.stream.not_implemented")
-		checkNotImplemented(http.MethodGet, "/api/v1/streams/stream_1", "error.stream.not_implemented")
-		checkNotImplemented(http.MethodPost, "/api/v1/streams/stream_1:record-start", "error.stream.not_implemented")
+		respList := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/streams?page=1&pageSize=20", headersWithContext("u1"), nil)
+		defer respList.Body.Close()
+		assertStatus(t, respList, http.StatusOK)
+		var listPayload map[string]any
+		mustDecodeJSON(t, respList.Body, &listPayload)
+		listItems, ok := listPayload["items"].([]any)
+		if !ok || len(listItems) == 0 {
+			t.Fatalf("expected stream list items")
+		}
+		if _, ok := listPayload["pageInfo"].(map[string]any); !ok {
+			t.Fatalf("expected stream list pageInfo")
+		}
+		lastStream, _ := listItems[len(listItems)-1].(map[string]any)
+		streamCursor := buildCursor(t, lastStream["createdAt"].(string), lastStream["id"].(string))
+		respListCursor := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/streams?cursor="+streamCursor+"&page=1&pageSize=1", headersWithContext("u1"), nil)
+		defer respListCursor.Body.Close()
+		assertStatus(t, respListCursor, http.StatusOK)
+		var listCursorPayload map[string]any
+		mustDecodeJSON(t, respListCursor.Body, &listCursorPayload)
+		if _, ok := listCursorPayload["cursorInfo"].(map[string]any); !ok {
+			t.Fatalf("expected stream list cursorInfo")
+		}
+		if _, ok := listCursorPayload["pageInfo"]; ok {
+			t.Fatalf("did not expect stream list pageInfo when cursor is used")
+		}
+
+		respGet := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/streams/"+streamID, headersWithContext("u1"), nil)
+		defer respGet.Body.Close()
+		assertStatus(t, respGet, http.StatusOK)
+
+		respGetForbidden := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/streams/"+streamID, headersWithContext("u2"), nil)
+		defer respGetForbidden.Body.Close()
+		assertStatus(t, respGetForbidden, http.StatusForbidden)
+		assertMessageKey(t, respGetForbidden.Body, "error.authz.forbidden")
+
+		respStart := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams/"+streamID+":record-start", headersWithJSONContext("u1"), map[string]any{})
+		defer respStart.Body.Close()
+		assertStatus(t, respStart, http.StatusAccepted)
+		var startPayload map[string]any
+		mustDecodeJSON(t, respStart.Body, &startPayload)
+		startResource, _ := startPayload["resource"].(map[string]any)
+		if startStatus := startResource["status"]; startStatus != "recording" {
+			t.Fatalf("unexpected stream status after record-start: %v", startStatus)
+		}
+		startCommandRef, _ := startPayload["commandRef"].(map[string]any)
+		startCommandID, _ := startCommandRef["commandId"].(string)
+		if startCommandID == "" {
+			t.Fatalf("expected stream record-start command id")
+		}
+		respStartCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+startCommandID, headersWithContext("u1"), nil)
+		defer respStartCommand.Body.Close()
+		assertStatus(t, respStartCommand, http.StatusOK)
+		var startCommandPayload map[string]any
+		mustDecodeJSON(t, respStartCommand.Body, &startCommandPayload)
+		if commandType, _ := startCommandPayload["commandType"].(string); commandType != "stream.record.start" {
+			t.Fatalf("unexpected record-start commandType: %v", commandType)
+		}
+		resultPayload, _ := startCommandPayload["result"].(map[string]any)
+		onPublishPayload, _ := resultPayload["onPublish"].(map[string]any)
+		onPublishCommandID, _ := onPublishPayload["commandId"].(string)
+		if onPublishCommandID == "" {
+			t.Fatalf("expected onPublish workflow command id")
+		}
+		respOnPublishCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+onPublishCommandID, headersWithContext("u1"), nil)
+		defer respOnPublishCommand.Body.Close()
+		assertStatus(t, respOnPublishCommand, http.StatusOK)
+		var onPublishCommand map[string]any
+		mustDecodeJSON(t, respOnPublishCommand.Body, &onPublishCommand)
+		if gotType, _ := onPublishCommand["commandType"].(string); gotType != "workflow.run" {
+			t.Fatalf("unexpected onPublish command type: %v", gotType)
+		}
+		onPublishInputs, _ := onPublishCommand["payload"].(map[string]any)
+		if gotTemplateID, _ := onPublishInputs["templateId"].(string); gotTemplateID != templateID {
+			t.Fatalf("unexpected onPublish workflow template id: got=%v want=%s", gotTemplateID, templateID)
+		}
+
+		respStartForbidden := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams/"+streamID+":record-start", headersWithJSONContext("u2"), map[string]any{})
+		defer respStartForbidden.Body.Close()
+		assertStatus(t, respStartForbidden, http.StatusForbidden)
+		assertMessageKey(t, respStartForbidden.Body, "error.authz.forbidden")
+
+		respStop := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams/"+streamID+":record-stop", headersWithJSONContext("u1"), map[string]any{})
+		defer respStop.Body.Close()
+		assertStatus(t, respStop, http.StatusAccepted)
+		var stopPayload map[string]any
+		mustDecodeJSON(t, respStop.Body, &stopPayload)
+		stopResource, _ := stopPayload["resource"].(map[string]any)
+		if stopStatus := stopResource["status"]; stopStatus != "online" {
+			t.Fatalf("unexpected stream status after record-stop: %v", stopStatus)
+		}
+		stopCommandRef, _ := stopPayload["commandRef"].(map[string]any)
+		stopCommandID, _ := stopCommandRef["commandId"].(string)
+		if stopCommandID == "" {
+			t.Fatalf("expected stream record-stop command id")
+		}
+		respStopCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+stopCommandID, headersWithContext("u1"), nil)
+		defer respStopCommand.Body.Close()
+		assertStatus(t, respStopCommand, http.StatusOK)
+		var stopCommandPayload map[string]any
+		mustDecodeJSON(t, respStopCommand.Body, &stopCommandPayload)
+		stopResult, _ := stopCommandPayload["result"].(map[string]any)
+		recordedAssetID, _ := stopResult["assetId"].(string)
+		if recordedAssetID == "" {
+			t.Fatalf("expected recorded asset id")
+		}
+		if lineageID, _ := stopResult["lineageId"].(string); lineageID == "" {
+			t.Fatalf("expected lineage id")
+		}
+
+		respRecordedAsset := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets/"+recordedAssetID, headersWithContext("u1"), nil)
+		defer respRecordedAsset.Body.Close()
+		assertStatus(t, respRecordedAsset, http.StatusOK)
+
+		respKick := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams/"+streamID+":kick", headersWithJSONContext("u1"), map[string]any{})
+		defer respKick.Body.Close()
+		assertStatus(t, respKick, http.StatusAccepted)
+		if kickStatus := readJSONPath(t, respKick.Body, "resource.status"); kickStatus != "offline" {
+			t.Fatalf("unexpected stream status after kick: %v", kickStatus)
+		}
+
 	})
 
 	t.Run("static routing contracts", func(t *testing.T) {
