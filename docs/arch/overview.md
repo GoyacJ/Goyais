@@ -182,6 +182,14 @@ Command 执行管道（必须）：
 - 缺任一 header 返回：`400 MISSING_CONTEXT + error.context.missing`，并在 `details.missingHeaders` 返回缺失列表。
 - `GET /api/v1/system/healthz` 作为 `GET /api/v1/healthz` 的别名端点，返回结构一致。
 
+### 7.3 当前接口落地状态（2026-02）
+- 已落地（可用）：
+  - `commands`、`shares`
+  - `assets`：`GET /assets`、`GET /assets/{id}`、`POST /assets`（domain sugar -> `asset.upload` command）
+- 占位（可达但未实现）：
+  - `workflow-*`、`registry-*`、`plugin-market-*`、`streams-*`
+  - 统一返回：`501 NOT_IMPLEMENTED` + 领域 `messageKey`
+
 ## 8. 配置规范
 
 ### 8.1 命名

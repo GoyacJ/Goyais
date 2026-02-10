@@ -105,8 +105,16 @@ export default {
     canceled: 'Canceled',
   },
   error: {
+    api: {
+      not_found: 'API route not found.',
+    },
     common: {
       unknown: 'Unknown error. Please try again later.',
+      internal: 'Internal server error. Please try again later.',
+    },
+    pagination: {
+      invalid: 'Pagination parameters are invalid.',
+      invalid_cursor: 'Cursor token is invalid.',
     },
     context: {
       missing: 'Request context is missing.',
@@ -116,6 +124,33 @@ export default {
     },
     command: {
       invalidPayload: 'Command payload is invalid.',
+      invalid_request: 'Command request is invalid.',
+      not_implemented: 'Command provider is not implemented.',
+      idempotency_conflict: 'Idempotency key conflicts with a different request.',
+      not_found: 'Command does not exist.',
+    },
+    share: {
+      invalid_request: 'Share request is invalid.',
+      invalid_cursor: 'Share cursor is invalid.',
+      not_found: 'Share record does not exist.',
+      not_implemented: 'Share capability is not implemented.',
+    },
+    asset: {
+      invalid_request: 'Asset request is invalid.',
+      not_found: 'Asset does not exist.',
+      not_implemented: 'Asset capability is not implemented.',
+    },
+    workflow: {
+      not_implemented: 'Workflow capability is not implemented.',
+    },
+    registry: {
+      not_implemented: 'Registry capability is not implemented.',
+    },
+    plugin: {
+      not_implemented: 'Plugin capability is not implemented.',
+    },
+    stream: {
+      not_implemented: 'Stream capability is not implemented.',
     },
   },
 }

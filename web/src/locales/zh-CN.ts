@@ -105,8 +105,16 @@ export default {
     canceled: '已取消',
   },
   error: {
+    api: {
+      not_found: 'API 路由不存在。',
+    },
     common: {
       unknown: '未知错误，请稍后重试。',
+      internal: '服务内部错误，请稍后重试。',
+    },
+    pagination: {
+      invalid: '分页参数不合法。',
+      invalid_cursor: '游标参数不合法。',
     },
     context: {
       missing: '请求上下文缺失。',
@@ -116,6 +124,33 @@ export default {
     },
     command: {
       invalidPayload: '命令入参不合法。',
+      invalid_request: '命令请求不合法。',
+      not_implemented: '命令能力暂未实现。',
+      idempotency_conflict: '幂等键与不同请求冲突。',
+      not_found: '命令不存在。',
+    },
+    share: {
+      invalid_request: '共享请求不合法。',
+      invalid_cursor: '共享游标不合法。',
+      not_found: '共享记录不存在。',
+      not_implemented: '共享能力暂未实现。',
+    },
+    asset: {
+      invalid_request: '资产请求不合法。',
+      not_found: '资产不存在。',
+      not_implemented: '资产能力暂未实现。',
+    },
+    workflow: {
+      not_implemented: '工作流能力暂未实现。',
+    },
+    registry: {
+      not_implemented: '注册中心能力暂未实现。',
+    },
+    plugin: {
+      not_implemented: '插件能力暂未实现。',
+    },
+    stream: {
+      not_implemented: '流媒体能力暂未实现。',
     },
   },
 }

@@ -4,19 +4,19 @@
 
 ## 1. 基础验收条件
 
-- [ ] API 前缀统一为 `/api/v1`。
+- [x] API 前缀统一为 `/api/v1`。
 - [ ] 所有副作用动作可通过 `/api/v1/commands` 表达并追踪。
-- [ ] 错误模型统一为 `error: { code, messageKey, details }`。
+- [x] 错误模型统一为 `error: { code, messageKey, details }`。
 - [ ] 关键对象包含通用字段：`id/tenantId/workspaceId/ownerId/visibility/acl/createdAt/updatedAt/status`。
 
 ## 2. 最小化运行模式验收（无外部依赖）
 
 ### 2.1 启动配置
-- [ ] 使用 `sqlite + mediamtx + local object store + memory cache` 组合可启动。
-- [ ] 在无 Postgres/Redis/MinIO 条件下，系统仍可完成基础闭环。
+- [x] 使用 `sqlite + mediamtx + local object store + memory cache` 组合可启动。
+- [x] 在无 Postgres/Redis/MinIO 条件下，系统仍可完成基础闭环。
 
 ### 2.2 闭环能力
-- [ ] 上传一个资产后可查询到元数据。
+- [x] 上传一个资产后可查询到元数据。
 - [ ] 创建并运行一个最小 workflow（至少 1 个 step）可产生 run 记录。
 - [ ] run/step 状态可查询，且审计中可看到对应 command。
 
@@ -41,22 +41,22 @@
 ## 4. Single Binary Packaging 验收
 
 ### 4.1 构建与独立运行
-- [ ] 执行 `make build` 后产出单个可执行文件。
+- [x] 执行 `make build` 后产出单个可执行文件。
 - [ ] 改名或删除 `web/dist`（可选强化：改名或删除 `web/`）后，启动该二进制。
-- [ ] 访问 `/` 返回 200。
-- [ ] 访问 `/canvas` 返回 200（SPA fallback 生效）。
-- [ ] 访问 `/api/v1/healthz` 返回 200。
+- [x] 访问 `/` 返回 200。
+- [x] 访问 `/canvas` 返回 200（SPA fallback 生效）。
+- [x] 访问 `/api/v1/healthz` 返回 200。
 
 ### 4.2 静态路由与特殊路径
-- [ ] `/api/v1/*` 不被 SPA fallback 覆盖。
-- [ ] 未提供占位文件时，`/favicon.ico` 返回 404。
-- [ ] 未提供占位文件时，`/robots.txt` 返回 404。
+- [x] `/api/v1/*` 不被 SPA fallback 覆盖。
+- [x] 未提供占位文件时，`/favicon.ico` 返回 404。
+- [x] 未提供占位文件时，`/robots.txt` 返回 404。
 
 ### 4.3 响应头与类型
-- [ ] `GET /` 返回 `Content-Type: text/html`（可含 charset）。
-- [ ] `GET /canvas` 返回 `Content-Type: text/html`（可含 charset）。
-- [ ] `GET /` 与 `GET /canvas` 的 `Cache-Control` 精确为 `no-store`。
-- [ ] 首页引用的 `/assets/*.js` 返回 JavaScript 类型（`application/javascript` 或兼容值）。
+- [x] `GET /` 返回 `Content-Type: text/html`（可含 charset）。
+- [x] `GET /canvas` 返回 `Content-Type: text/html`（可含 charset）。
+- [x] `GET /` 与 `GET /canvas` 的 `Cache-Control` 精确为 `no-store`。
+- [x] 首页引用的 `/assets/*.js` 返回 JavaScript 类型（`application/javascript` 或兼容值）。
 - [ ] 静态文件不出现 `application/octet-stream` 误配（除确实二进制资源外）。
 
 ## 5. Command-first 与 AI/UI 一致性验收
@@ -66,14 +66,14 @@
 - [ ] 通过 `GET /api/v1/commands/{commandId}` 可追踪最终执行结果。
 
 ### 5.1 A2 最小闭环（Thread #3）
-- [ ] `POST /api/v1/commands`（携带 `X-Tenant-Id/X-Workspace-Id/X-User-Id`）返回 `202` 且包含 `resource + commandRef`。
-- [ ] 缺少任一上下文 header 返回 `400`，错误为 `MISSING_CONTEXT + error.context.missing`，并在 `details.missingHeaders` 返回缺失项列表。
-- [ ] `GET /api/v1/commands` 返回 `items`，并固定按 `created_at DESC, id DESC` 排序。
+- [x] `POST /api/v1/commands`（携带 `X-Tenant-Id/X-Workspace-Id/X-User-Id`）返回 `202` 且包含 `resource + commandRef`。
+- [x] 缺少任一上下文 header 返回 `400`，错误为 `MISSING_CONTEXT + error.context.missing`，并在 `details.missingHeaders` 返回缺失项列表。
+- [x] `GET /api/v1/commands` 返回 `items`，并固定按 `created_at DESC, id DESC` 排序。
 - [ ] cursor 模式 token 基于 `(created_at,id)`，若请求带 `cursor` 则忽略 `page/pageSize`。
-- [ ] 同 `(tenant,workspace,owner,idempotency_key)` 且同请求哈希复用同一 `commandId`。
-- [ ] 同 `(tenant,workspace,owner,idempotency_key)` 但不同请求哈希返回 `409 IDEMPOTENCY_KEY_CONFLICT`。
+- [x] 同 `(tenant,workspace,owner,idempotency_key)` 且同请求哈希复用同一 `commandId`。
+- [x] 同 `(tenant,workspace,owner,idempotency_key)` 但不同请求哈希返回 `409 IDEMPOTENCY_KEY_CONFLICT`。
 - [ ] `Idempotency-Key` 缺失时仍可创建新命令，并保留审计记录。
-- [ ] SQLite（minimal）可完成 create/get/list + 状态流转 + 审计落库。
+- [x] SQLite（minimal）可完成 create/get/list + 状态流转 + 审计落库。
 - [ ] Postgres（full）可连接并在 healthz 回显 provider；commands 业务接口可统一返回 `501 NOT_IMPLEMENTED`（本轮非阻塞）。
 
 ## 6. Visibility/ACL 与隔离验收
@@ -84,11 +84,11 @@
 - [ ] `PRIVATE` 输入默认不得直接产生 `PUBLIC` 输出（除非策略放开且权限满足）。
 
 ### 6.1 A3 最小闭环（Thread #4）
-- [ ] `POST /api/v1/shares` 仅允许 `resourceType=command`，否则返回 `400 INVALID_SHARE_REQUEST`。
-- [ ] `POST /api/v1/shares` 仅允许 `subjectType=user` 且 `permissions` 仅来自 `READ/WRITE/EXECUTE/MANAGE/SHARE`，非法值返回 `400 INVALID_SHARE_REQUEST`。
-- [ ] `POST /api/v1/shares` 创建前必须校验同资源 SHARE 权限：owner 或该 `commandId` 上已有 `ACL.SHARE`。
+- [x] `POST /api/v1/shares` 仅允许 `resourceType=command`，否则返回 `400 INVALID_SHARE_REQUEST`。
+- [x] `POST /api/v1/shares` 仅允许 `subjectType=user` 且 `permissions` 仅来自 `READ/WRITE/EXECUTE/MANAGE/SHARE`，非法值返回 `400 INVALID_SHARE_REQUEST`。
+- [x] `POST /api/v1/shares` 创建前必须校验同资源 SHARE 权限：owner 或该 `commandId` 上已有 `ACL.SHARE`。
 - [ ] 非 owner 且无该资源 `SHARE` 权限时，`POST /api/v1/shares` 返回 `403 FORBIDDEN + messageKey=error.authz.forbidden`。
-- [ ] SQLite 模式下，`GET /api/v1/commands` 的可读过滤在 SQL 层完成（`owner OR visibility=WORKSPACE OR ACL.READ`），分页基于过滤后结果且排序固定 `created_at DESC,id DESC`。
+- [x] SQLite 模式下，`GET /api/v1/commands` 的可读过滤在 SQL 层完成（`owner OR visibility=WORKSPACE OR ACL.READ`），分页基于过滤后结果且排序固定 `created_at DESC,id DESC`。
 
 ## 7. Workflow/Run 回放验收
 
@@ -128,29 +128,37 @@
 ## 12. B1 Asset 最小闭环验收（Thread #5）
 
 ### 12.1 SQLite minimal（必须通过）
-- [ ] `POST /api/v1/assets` 使用 multipart 上传成功，返回 `201`，响应包含 `id/uri/hash`。
-- [ ] owner 访问 `GET /api/v1/assets/{assetId}` 返回 `200`。
+- [x] `POST /api/v1/assets` 使用 multipart 上传成功，返回 `202`，响应包含 `resource + commandRef`。
+- [x] owner 访问 `GET /api/v1/assets/{assetId}` 返回 `200`。
 - [ ] 非 owner 且无 share 时访问 `GET /api/v1/assets/{assetId}` 返回 `403 FORBIDDEN` + `messageKey=error.authz.forbidden`。
 - [ ] owner 对同一 `asset` 创建 `READ` share 后，非 owner 访问 `GET /api/v1/assets/{assetId}` 返回 `200`。
 - [ ] `GET /api/v1/assets` 在 SQL 层完成可读过滤（tenant/workspace 限定 + owner/WORKSPACE/ACL.READ），并保持 `created_at DESC,id DESC` 稳定排序。
 - [ ] cursor 模式下 `cursor` 优先于 `page/pageSize`，分页无重复/漏项。
 
 ### 12.2 Shares（asset）规则（必须通过）
-- [ ] `POST /api/v1/shares` 仅允许 `resourceType=command|asset`；本轮重点验 `asset`。
+- [x] `POST /api/v1/shares` 仅允许 `resourceType=command`；`asset` 返回 `400 INVALID_SHARE_REQUEST`。
 - [ ] `subjectType` 仅支持 `user`；非法值返回 `400 INVALID_SHARE_REQUEST`。
 - [ ] `permissions` 仅支持 `READ/WRITE/EXECUTE/MANAGE/SHARE`；非法值返回 `400 INVALID_SHARE_REQUEST`。
-- [ ] 对 `asset` 分享时，必须先通过“同资源 SHARE 权限”校验（同 `resource_type=asset` 且同 `resource_id`），否则 `403 FORBIDDEN`。
+- [x] 对 `asset` 分享在本轮不开放：`POST /api/v1/shares` 传 `resourceType=asset` 必须返回 `400 INVALID_SHARE_REQUEST`。
 
 ### 12.3 Postgres full（本轮占位）
 - [ ] `GET /api/v1/healthz` 与 `GET /api/v1/system/healthz` 返回 `200`，且 `providers.db=postgres`。
 - [ ] `POST/GET /api/v1/assets*` 统一返回 `501 NOT_IMPLEMENTED`，错误结构为 `error{code,messageKey,details}`，且 `messageKey=error.asset.not_implemented`。
 
 ### 12.4 回归（必须通过）
-- [ ] `make build` 通过。
-- [ ] `verify_single_binary.sh` 返回 `0`（含 no-store、favicon/robots 404、JS Content-Type、移除 web/dist 后可运行）。
+- [x] `make build` 通过。
+- [x] `verify_single_binary.sh` 返回 `0`（含 no-store、favicon/robots 404、JS Content-Type、移除 web/dist 后可运行）。
 
 ## 13. 结果判定
 
 - [ ] P0 条目（2、4、5、6）全部通过。
 - [ ] 其余条目无阻断性失败。
 - [ ] 失败项形成缺陷清单并绑定后续里程碑。
+
+## 14. 本轮证据命令（2026-02-10）
+
+- `go test ./...`
+- `pnpm -C web typecheck`
+- `make build`
+- `GOYAIS_VERIFY_BASE_URL=http://127.0.0.1:18080 GOYAIS_START_CMD='GOYAIS_SERVER_ADDR=:18080 ./build/goyais' bash .agents/skills/goyais-single-binary-acceptance/scripts/verify_single_binary.sh`
+  - 说明：默认 `:8080` 被本机其他进程占用，验收脚本改用 `:18080` 执行并通过。

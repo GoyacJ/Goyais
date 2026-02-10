@@ -36,6 +36,14 @@
 - 分享前必须校验“同资源 SHARE 权限”：`owner` 或 `acl_entries(resource_type=command, resource_id=目标commandId, permission=SHARE)` 命中。
 - 校验失败返回 `403 FORBIDDEN`，`messageKey=error.authz.forbidden`。
 
+## 0.5 Asset Domain Sugar（A/B 过渡）
+- `POST /api/v1/assets` 必须转换为 `asset.upload` command 执行（Command-first）。
+- command 执行器失败时，状态转移固定为 `running -> failed`，并回填：
+  - `error_code`
+  - `message_key`
+  - `command.failed` 事件
+- 当前 `assets` 读接口可用；`PATCH/DELETE/lineage` 为占位，统一 `501 NOT_IMPLEMENTED`。
+
 ## 1. WorkflowRun / StepRun
 
 ## 1.1 WorkflowRun 状态

@@ -320,8 +320,9 @@ paths:
       summary: List assets
       operationId: listAssets
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -332,6 +333,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AssetListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     post:
@@ -339,12 +346,14 @@ paths:
       summary: Create asset (domain sugar -> command)
       operationId: createAsset
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
               $ref: '#/components/schemas/AssetCreateRequest'
       responses:
@@ -354,6 +363,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WriteResponseAsset'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -363,8 +378,9 @@ paths:
       summary: Get asset
       operationId: getAsset
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/AssetId'
       responses:
         '200':
@@ -373,15 +389,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Asset'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     patch:
       tags: [Asset]
-      summary: Update asset (domain sugar -> command)
+      summary: Update asset (domain sugar -> command, placeholder)
       operationId: updateAsset
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/AssetId'
       requestBody:
         required: true
@@ -390,81 +415,45 @@ paths:
             schema:
               $ref: '#/components/schemas/AssetUpdateRequest'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponseAsset'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     delete:
       tags: [Asset]
-      summary: Delete asset (domain sugar -> command)
+      summary: Delete asset (domain sugar -> command, placeholder)
       operationId: deleteAsset
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/AssetId'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [resource, commandRef]
-                properties:
-                  resource:
-                    type: object
-                    required: [id, status]
-                    properties:
-                      id:
-                        type: string
-                      status:
-                        type: string
-                        example: deleting
-                  commandRef:
-                    $ref: '#/components/schemas/CommandRef'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /assets/{assetId}/lineage:
     get:
       tags: [Asset]
-      summary: Get asset lineage graph
+      summary: Get asset lineage graph (placeholder)
       operationId: getAssetLineage
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/AssetId'
       responses:
-        '200':
-          description: Lineage
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  assetId:
-                    type: string
-                  nodes:
-                    type: array
-                    items:
-                      type: object
-                      additionalProperties: true
-                  edges:
-                    type: array
-                    items:
-                      type: object
-                      additionalProperties: true
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /workflow-templates:
     get:
       tags: [WorkflowTemplate]
-      summary: List workflow templates
+      summary: List workflow templates (placeholder)
       operationId: listWorkflowTemplates
       parameters:
         - $ref: '#/components/parameters/XTenantId'
@@ -473,17 +462,13 @@ paths:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
-        '200':
-          description: Template list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkflowTemplateListResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     post:
       tags: [WorkflowTemplate]
-      summary: Create workflow template (domain sugar -> command)
+      summary: Create workflow template (placeholder)
       operationId: createWorkflowTemplate
       parameters:
         - $ref: '#/components/parameters/XTenantId'
@@ -495,38 +480,30 @@ paths:
             schema:
               $ref: '#/components/schemas/WorkflowTemplateCreateRequest'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponseWorkflowTemplate'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /workflow-templates/{templateId}:
     get:
       tags: [WorkflowTemplate]
-      summary: Get workflow template
+      summary: Get workflow template (placeholder)
       operationId: getWorkflowTemplate
       parameters:
         - $ref: '#/components/parameters/XTenantId'
         - $ref: '#/components/parameters/XWorkspaceId'
         - $ref: '#/components/parameters/TemplateId'
       responses:
-        '200':
-          description: Template detail
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkflowTemplate'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /workflow-templates/{templateId}:patch:
     post:
       tags: [WorkflowTemplate]
-      summary: Patch workflow template (domain sugar -> command)
+      summary: Patch workflow template (placeholder)
       operationId: patchWorkflowTemplate
       parameters:
         - $ref: '#/components/parameters/XTenantId'
@@ -539,38 +516,30 @@ paths:
             schema:
               $ref: '#/components/schemas/WorkflowTemplatePatchRequest'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponseWorkflowTemplate'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /workflow-templates/{templateId}:publish:
     post:
       tags: [WorkflowTemplate]
-      summary: Publish workflow template (domain sugar -> command)
+      summary: Publish workflow template (placeholder)
       operationId: publishWorkflowTemplate
       parameters:
         - $ref: '#/components/parameters/XTenantId'
         - $ref: '#/components/parameters/XWorkspaceId'
         - $ref: '#/components/parameters/TemplateId'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponseWorkflowTemplate'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /workflow-runs:
     get:
       tags: [WorkflowRun]
-      summary: List workflow runs
+      summary: List workflow runs (placeholder)
       operationId: listWorkflowRuns
       parameters:
         - $ref: '#/components/parameters/XTenantId'
@@ -579,17 +548,13 @@ paths:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
-        '200':
-          description: Run list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkflowRunListResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     post:
       tags: [WorkflowRun]
-      summary: Run workflow (domain sugar -> command)
+      summary: Run workflow (placeholder)
       operationId: createWorkflowRun
       parameters:
         - $ref: '#/components/parameters/XTenantId'
@@ -601,57 +566,45 @@ paths:
             schema:
               $ref: '#/components/schemas/WorkflowRunCreateRequest'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponseWorkflowRun'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /workflow-runs/{runId}:
     get:
       tags: [WorkflowRun]
-      summary: Get workflow run
+      summary: Get workflow run (placeholder)
       operationId: getWorkflowRun
       parameters:
         - $ref: '#/components/parameters/XTenantId'
         - $ref: '#/components/parameters/XWorkspaceId'
         - $ref: '#/components/parameters/RunId'
       responses:
-        '200':
-          description: Run detail
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkflowRun'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /workflow-runs/{runId}:cancel:
     post:
       tags: [WorkflowRun]
-      summary: Cancel run (domain sugar -> command)
+      summary: Cancel run (placeholder)
       operationId: cancelWorkflowRun
       parameters:
         - $ref: '#/components/parameters/XTenantId'
         - $ref: '#/components/parameters/XWorkspaceId'
         - $ref: '#/components/parameters/RunId'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponseWorkflowRun'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /workflow-runs/{runId}/steps:
     get:
       tags: [WorkflowRun]
-      summary: List step runs
+      summary: List step runs (placeholder)
       operationId: listStepRuns
       parameters:
         - $ref: '#/components/parameters/XTenantId'
@@ -661,19 +614,15 @@ paths:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
-        '200':
-          description: Step run list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StepRunListResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /registry/capabilities:
     get:
       tags: [Registry]
-      summary: List capabilities
+      summary: List capabilities (placeholder)
       operationId: listCapabilities
       parameters:
         - $ref: '#/components/parameters/XTenantId'
@@ -682,38 +631,30 @@ paths:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
-        '200':
-          description: Capability list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CapabilityListResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /registry/capabilities/{capabilityId}:
     get:
       tags: [Registry]
-      summary: Get capability
+      summary: Get capability (placeholder)
       operationId: getCapability
       parameters:
         - $ref: '#/components/parameters/XTenantId'
         - $ref: '#/components/parameters/XWorkspaceId'
         - $ref: '#/components/parameters/CapabilityId'
       responses:
-        '200':
-          description: Capability detail
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Capability'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /registry/algorithms:
     get:
       tags: [Registry]
-      summary: List algorithms
+      summary: List algorithms (placeholder)
       operationId: listAlgorithms
       parameters:
         - $ref: '#/components/parameters/XTenantId'
@@ -722,19 +663,15 @@ paths:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
-        '200':
-          description: Algorithm list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AlgorithmListResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /registry/providers:
     get:
       tags: [Registry]
-      summary: List capability providers
+      summary: List capability providers (placeholder)
       operationId: listProviders
       parameters:
         - $ref: '#/components/parameters/XTenantId'
@@ -743,19 +680,15 @@ paths:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
-        '200':
-          description: Provider list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProviderListResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /plugin-market/packages:
     get:
       tags: [PluginMarket]
-      summary: List plugin packages
+      summary: List plugin packages (placeholder)
       operationId: listPluginPackages
       parameters:
         - $ref: '#/components/parameters/XTenantId'
@@ -764,17 +697,13 @@ paths:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
-        '200':
-          description: Package list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PluginPackageListResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     post:
       tags: [PluginMarket]
-      summary: Upload plugin package (domain sugar -> command)
+      summary: Upload plugin package (placeholder)
       operationId: uploadPluginPackage
       parameters:
         - $ref: '#/components/parameters/XTenantId'
@@ -786,19 +715,15 @@ paths:
             schema:
               $ref: '#/components/schemas/PluginPackageUploadRequest'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponsePluginPackage'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /plugin-market/installs:
     post:
       tags: [PluginMarket]
-      summary: Install plugin package (domain sugar -> command)
+      summary: Install plugin package (placeholder)
       operationId: installPlugin
       parameters:
         - $ref: '#/components/parameters/XTenantId'
@@ -810,76 +735,60 @@ paths:
             schema:
               $ref: '#/components/schemas/PluginInstallRequest'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /plugin-market/installs/{installId}:enable:
     post:
       tags: [PluginMarket]
-      summary: Enable install (domain sugar -> command)
+      summary: Enable install (placeholder)
       operationId: enablePluginInstall
       parameters:
         - $ref: '#/components/parameters/XTenantId'
         - $ref: '#/components/parameters/XWorkspaceId'
         - $ref: '#/components/parameters/InstallId'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /plugin-market/installs/{installId}:disable:
     post:
       tags: [PluginMarket]
-      summary: Disable install (domain sugar -> command)
+      summary: Disable install (placeholder)
       operationId: disablePluginInstall
       parameters:
         - $ref: '#/components/parameters/XTenantId'
         - $ref: '#/components/parameters/XWorkspaceId'
         - $ref: '#/components/parameters/InstallId'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /plugin-market/installs/{installId}:rollback:
     post:
       tags: [PluginMarket]
-      summary: Rollback install (domain sugar -> command)
+      summary: Rollback install (placeholder)
       operationId: rollbackPluginInstall
       parameters:
         - $ref: '#/components/parameters/XTenantId'
         - $ref: '#/components/parameters/XWorkspaceId'
         - $ref: '#/components/parameters/InstallId'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /streams:
     get:
       tags: [Stream]
-      summary: List streams
+      summary: List streams (placeholder)
       operationId: listStreams
       parameters:
         - $ref: '#/components/parameters/XTenantId'
@@ -888,17 +797,13 @@ paths:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
-        '200':
-          description: Stream list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StreamListResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     post:
       tags: [Stream]
-      summary: Create stream (domain sugar -> command)
+      summary: Create stream (placeholder)
       operationId: createStream
       parameters:
         - $ref: '#/components/parameters/XTenantId'
@@ -910,88 +815,68 @@ paths:
             schema:
               $ref: '#/components/schemas/StreamCreateRequest'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponseStream'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /streams/{streamId}:
     get:
       tags: [Stream]
-      summary: Get stream
+      summary: Get stream (placeholder)
       operationId: getStream
       parameters:
         - $ref: '#/components/parameters/XTenantId'
         - $ref: '#/components/parameters/XWorkspaceId'
         - $ref: '#/components/parameters/StreamId'
       responses:
-        '200':
-          description: Stream detail
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Stream'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /streams/{streamId}:record-start:
     post:
       tags: [Stream]
-      summary: Start stream recording (domain sugar -> command)
+      summary: Start stream recording (placeholder)
       operationId: startStreamRecording
       parameters:
         - $ref: '#/components/parameters/XTenantId'
         - $ref: '#/components/parameters/XWorkspaceId'
         - $ref: '#/components/parameters/StreamId'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponseStream'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /streams/{streamId}:record-stop:
     post:
       tags: [Stream]
-      summary: Stop stream recording (domain sugar -> command)
+      summary: Stop stream recording (placeholder)
       operationId: stopStreamRecording
       parameters:
         - $ref: '#/components/parameters/XTenantId'
         - $ref: '#/components/parameters/XWorkspaceId'
         - $ref: '#/components/parameters/StreamId'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponseStream'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
   /streams/{streamId}:kick:
     post:
       tags: [Stream]
-      summary: Kick stream connection (domain sugar -> command)
+      summary: Kick stream connection (placeholder)
       operationId: kickStream
       parameters:
         - $ref: '#/components/parameters/XTenantId'
         - $ref: '#/components/parameters/XWorkspaceId'
         - $ref: '#/components/parameters/StreamId'
       responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponseStream'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -1344,13 +1229,13 @@ components:
       allOf:
         - $ref: '#/components/schemas/ResourceBase'
         - type: object
-          required: [name, assetType, mimeType]
+          required: [name, type, mime, size, hash, uri]
           properties:
             name:
               type: string
-            assetType:
+            type:
               type: string
-            mimeType:
+            mime:
               type: string
             size:
               type: integer
@@ -1364,20 +1249,19 @@ components:
 
     AssetCreateRequest:
       type: object
-      required: [name, assetType]
+      required: [file]
       properties:
+        file:
+          type: string
+          format: binary
         name:
           type: string
-        assetType:
+        type:
+          type: string
+        mime:
           type: string
         visibility:
           $ref: '#/components/schemas/Visibility'
-        metadata:
-          type: object
-          additionalProperties: true
-        dataRef:
-          type: string
-          description: 上传后引用或预签名上传引用
 
     AssetUpdateRequest:
       type: object

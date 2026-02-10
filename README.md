@@ -1,8 +1,8 @@
 # Goyais
 
-Goyais 是一个以 AI 为主入口、同时支持可视化编排的多模态执行平台。当前仓库处于 **Thread #2 工程骨架阶段**，目标是优先通过 single-binary 验收并建立 minimal/full profile 基线。
+Goyais 是一个以 AI 为主入口、同时支持可视化编排的多模态执行平台。当前仓库已合入 Thread #2/#3/#4/#5 的阶段成果，正在进行“契约收敛 + API 可达性修复”。
 
-## Thread #2 已冻结约束
+## 当前冻结约束（v0.1）
 
 - 生产发布必须是单二进制（Go embed 前端 dist）。
 - 路由优先级固定：`/api/v1/*` > 静态文件 > `favicon/robots` 缺省 404 > SPA fallback(`index.html`)。
@@ -39,6 +39,11 @@ pnpm -C web dev
 make build
 bash .agents/skills/goyais-single-binary-acceptance/scripts/verify_single_binary.sh
 ```
+
+## API 落地状态（当前）
+
+- 可用：`/api/v1/commands*`、`/api/v1/shares*`、`/api/v1/assets*`（其中写接口为 Command-first sugar）。
+- 占位：`/api/v1/workflow-*`、`/api/v1/registry-*`、`/api/v1/plugin-market-*`、`/api/v1/streams*`，统一返回 `501 NOT_IMPLEMENTED`。
 
 ## healthz
 
