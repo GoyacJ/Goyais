@@ -30,7 +30,7 @@
             type="button"
             class="ui-focus-ring ui-pressable flex w-full items-center justify-between rounded-button px-2 py-2 text-sm"
             :class="[
-              active ? 'bg-ui-hover' : '',
+              active ? 'ui-state-hovered' : '',
               item.danger ? 'ui-text-danger' : 'text-ui-fg',
               itemDisabled ? 'ui-disabled' : '',
             ]"
