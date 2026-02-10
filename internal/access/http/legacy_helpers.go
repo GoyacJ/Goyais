@@ -5,12 +5,14 @@ import (
 
 	"goyais/internal/asset"
 	"goyais/internal/command"
+	"goyais/internal/workflow"
 )
 
 // Keep the legacy receiver type so asset handlers continue to compile.
 type apiHandler struct {
-	commandService *command.Service
-	assetService   *asset.Service
+	commandService  *command.Service
+	assetService    *asset.Service
+	workflowService *workflow.Service
 }
 
 func pathID(prefix, full string) string {

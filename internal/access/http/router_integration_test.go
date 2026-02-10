@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"goyais/internal/app"
+	"goyais/internal/command"
 	"goyais/internal/config"
 )
 
@@ -35,7 +36,7 @@ func TestAPIContractRegression(t *testing.T) {
 	var commandID string
 	t.Run("commands idempotency and listing", func(t *testing.T) {
 		body := map[string]any{
-			"commandType": "workflow.run",
+			"commandType": "test.noop",
 			"payload":     map[string]any{"x": 1},
 		}
 		headers := headersWithContext("u1")
@@ -59,7 +60,7 @@ func TestAPIContractRegression(t *testing.T) {
 		}
 
 		conflictBody := map[string]any{
-			"commandType": "workflow.run",
+			"commandType": "test.noop",
 			"payload":     map[string]any{"x": 2},
 		}
 		respConflict := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headers, conflictBody)
@@ -185,6 +186,151 @@ func TestAPIContractRegression(t *testing.T) {
 		assertErrorCode(t, respPatch.Body, "NOT_IMPLEMENTED")
 	})
 
+	var templateID string
+	t.Run("workflow template create/get/patch/publish", func(t *testing.T) {
+		respCreate := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-templates", headersWithJSONContext("u1"), map[string]any{
+			"name":        "wf-smoke",
+			"description": "integration test",
+			"graph": map[string]any{
+				"nodes": []any{map[string]any{"id": "n1", "type": "noop"}},
+				"edges": []any{},
+			},
+			"schemaInputs":  map[string]any{},
+			"schemaOutputs": map[string]any{},
+			"visibility":    "PRIVATE",
+		})
+		defer respCreate.Body.Close()
+		assertStatus(t, respCreate, http.StatusAccepted)
+		templateID = readJSONPath(t, respCreate.Body, "resource.id").(string)
+		if templateID == "" {
+			t.Fatalf("expected workflow template id")
+		}
+
+		respGet := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-templates/"+templateID, headersWithContext("u1"), nil)
+		defer respGet.Body.Close()
+		assertStatus(t, respGet, http.StatusOK)
+		gotName := readJSONPath(t, respGet.Body, "name")
+		if gotName != "wf-smoke" {
+			t.Fatalf("unexpected workflow name: %v", gotName)
+		}
+
+		respPatchInvalid := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-templates/"+templateID+":patch", headersWithJSONContext("u1"), map[string]any{
+			"operations": []any{},
+		})
+		defer respPatchInvalid.Body.Close()
+		assertStatus(t, respPatchInvalid, http.StatusBadRequest)
+		assertErrorCode(t, respPatchInvalid.Body, "INVALID_WORKFLOW_REQUEST")
+
+		respPatch := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-templates/"+templateID+":patch", headersWithJSONContext("u1"), map[string]any{
+			"graph": map[string]any{
+				"nodes": []any{
+					map[string]any{"id": "n1", "type": "noop"},
+					map[string]any{"id": "n2", "type": "noop"},
+				},
+				"edges": []any{},
+			},
+		})
+		defer respPatch.Body.Close()
+		assertStatus(t, respPatch, http.StatusAccepted)
+		patchedID := readJSONPath(t, respPatch.Body, "resource.id")
+		if patchedID != templateID {
+			t.Fatalf("unexpected patched template id: %v", patchedID)
+		}
+
+		respPublish := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-templates/"+templateID+":publish", headersWithJSONContext("u1"), map[string]any{})
+		defer respPublish.Body.Close()
+		assertStatus(t, respPublish, http.StatusAccepted)
+		publishStatus := readJSONPath(t, respPublish.Body, "resource.status")
+		if publishStatus != "published" {
+			t.Fatalf("unexpected publish status: %v", publishStatus)
+		}
+	})
+
+	var runningRunID string
+	t.Run("workflow run/sync/cancel/steps/list", func(t *testing.T) {
+		respRunSync := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-runs", headersWithJSONContext("u1"), map[string]any{
+			"templateId": templateID,
+			"inputs":     map[string]any{"k": "v"},
+			"mode":       "sync",
+		})
+		defer respRunSync.Body.Close()
+		assertStatus(t, respRunSync, http.StatusAccepted)
+		runSyncID := readJSONPath(t, respRunSync.Body, "resource.id").(string)
+		if runSyncID == "" {
+			t.Fatalf("expected sync run id")
+		}
+
+		respGetSync := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+runSyncID, headersWithContext("u1"), nil)
+		defer respGetSync.Body.Close()
+		assertStatus(t, respGetSync, http.StatusOK)
+		syncStatus := readJSONPath(t, respGetSync.Body, "status")
+		if syncStatus != "succeeded" {
+			t.Fatalf("unexpected sync run status: %v", syncStatus)
+		}
+
+		respRunRunning := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-runs", headersWithJSONContext("u1"), map[string]any{
+			"templateId": templateID,
+			"inputs":     map[string]any{"mode": "running"},
+			"mode":       "running",
+		})
+		defer respRunRunning.Body.Close()
+		assertStatus(t, respRunRunning, http.StatusAccepted)
+		runningRunID = readJSONPath(t, respRunRunning.Body, "resource.id").(string)
+		if runningRunID == "" {
+			t.Fatalf("expected running run id")
+		}
+
+		respCancel := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-runs/"+runningRunID+":cancel", headersWithJSONContext("u1"), map[string]any{})
+		defer respCancel.Body.Close()
+		assertStatus(t, respCancel, http.StatusAccepted)
+		cancelStatus := readJSONPath(t, respCancel.Body, "resource.status")
+		if cancelStatus != "canceled" {
+			t.Fatalf("unexpected canceled run status: %v", cancelStatus)
+		}
+
+		respGetCanceled := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+runningRunID, headersWithContext("u1"), nil)
+		defer respGetCanceled.Body.Close()
+		assertStatus(t, respGetCanceled, http.StatusOK)
+		getCanceledStatus := readJSONPath(t, respGetCanceled.Body, "status")
+		if getCanceledStatus != "canceled" {
+			t.Fatalf("unexpected run status after cancel: %v", getCanceledStatus)
+		}
+
+		respSteps := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+runningRunID+"/steps", headersWithContext("u1"), nil)
+		defer respSteps.Body.Close()
+		assertStatus(t, respSteps, http.StatusOK)
+		var stepsPayload map[string]any
+		mustDecodeJSON(t, respSteps.Body, &stepsPayload)
+		steps, ok := stepsPayload["items"].([]any)
+		if !ok || len(steps) == 0 {
+			t.Fatalf("expected step runs")
+		}
+
+		// Cursor takes precedence over page/pageSize when provided.
+		respTemplateList := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-templates?page=1&pageSize=20", headersWithContext("u1"), nil)
+		defer respTemplateList.Body.Close()
+		assertStatus(t, respTemplateList, http.StatusOK)
+		var templateListPayload map[string]any
+		mustDecodeJSON(t, respTemplateList.Body, &templateListPayload)
+		items, ok := templateListPayload["items"].([]any)
+		if !ok || len(items) == 0 {
+			t.Fatalf("expected workflow templates for cursor test")
+		}
+		last := items[len(items)-1].(map[string]any)
+		cursor := buildCursor(t, last["createdAt"].(string), last["id"].(string))
+		respTemplateCursor := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-templates?cursor="+cursor+"&page=1&pageSize=1", headersWithContext("u1"), nil)
+		defer respTemplateCursor.Body.Close()
+		assertStatus(t, respTemplateCursor, http.StatusOK)
+		var templateCursorPayload map[string]any
+		mustDecodeJSON(t, respTemplateCursor.Body, &templateCursorPayload)
+		if _, ok := templateCursorPayload["cursorInfo"].(map[string]any); !ok {
+			t.Fatalf("expected cursorInfo for cursor template list")
+		}
+		if _, ok := templateCursorPayload["pageInfo"]; ok {
+			t.Fatalf("did not expect pageInfo when cursor is used")
+		}
+	})
+
 	t.Run("placeholder domains return 501", func(t *testing.T) {
 		checkNotImplemented := func(method, path, messageKey string) {
 			t.Helper()
@@ -193,10 +339,6 @@ func TestAPIContractRegression(t *testing.T) {
 			assertStatus(t, resp, http.StatusNotImplemented)
 			assertMessageKey(t, resp.Body, messageKey)
 		}
-
-		checkNotImplemented(http.MethodGet, "/api/v1/workflow-templates", "error.workflow.not_implemented")
-		checkNotImplemented(http.MethodPost, "/api/v1/workflow-templates/tpl_1:patch", "error.workflow.not_implemented")
-		checkNotImplemented(http.MethodGet, "/api/v1/workflow-runs/run_1/steps", "error.workflow.not_implemented")
 
 		checkNotImplemented(http.MethodGet, "/api/v1/registry/capabilities", "error.registry.not_implemented")
 		checkNotImplemented(http.MethodGet, "/api/v1/registry/capabilities/cap_1", "error.registry.not_implemented")
@@ -398,4 +540,17 @@ func mustDecodeJSON(t *testing.T, reader io.Reader, out any) {
 func extractJSPath(html string) string {
 	re := regexp.MustCompile(`/assets/[^"'\s]+\.js`)
 	return re.FindString(html)
+}
+
+func buildCursor(t *testing.T, createdAt string, id string) string {
+	t.Helper()
+	ts, err := time.Parse(time.RFC3339Nano, createdAt)
+	if err != nil {
+		t.Fatalf("parse cursor createdAt: %v", err)
+	}
+	cursor, err := command.EncodeCursor(ts, id)
+	if err != nil {
+		t.Fatalf("encode cursor: %v", err)
+	}
+	return cursor
 }

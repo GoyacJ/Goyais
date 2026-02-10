@@ -453,26 +453,39 @@ paths:
   /workflow-templates:
     get:
       tags: [WorkflowTemplate]
-      summary: List workflow templates (placeholder)
+      summary: List workflow templates
       operationId: listWorkflowTemplates
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
+        '200':
+          description: Workflow template list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowTemplateListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     post:
       tags: [WorkflowTemplate]
-      summary: Create workflow template (placeholder)
+      summary: Create workflow template (domain sugar -> command)
       operationId: createWorkflowTemplate
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -480,6 +493,16 @@ paths:
             schema:
               $ref: '#/components/schemas/WorkflowTemplateCreateRequest'
       responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowTemplate'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -488,13 +511,26 @@ paths:
   /workflow-templates/{templateId}:
     get:
       tags: [WorkflowTemplate]
-      summary: Get workflow template (placeholder)
+      summary: Get workflow template
       operationId: getWorkflowTemplate
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/TemplateId'
       responses:
+        '200':
+          description: Workflow template detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowTemplate'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -503,12 +539,14 @@ paths:
   /workflow-templates/{templateId}:patch:
     post:
       tags: [WorkflowTemplate]
-      summary: Patch workflow template (placeholder)
+      summary: Patch workflow template (domain sugar -> command)
       operationId: patchWorkflowTemplate
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/TemplateId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -516,6 +554,18 @@ paths:
             schema:
               $ref: '#/components/schemas/WorkflowTemplatePatchRequest'
       responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowTemplate'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -524,13 +574,27 @@ paths:
   /workflow-templates/{templateId}:publish:
     post:
       tags: [WorkflowTemplate]
-      summary: Publish workflow template (placeholder)
+      summary: Publish workflow template (domain sugar -> command)
       operationId: publishWorkflowTemplate
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/TemplateId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowTemplate'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -539,26 +603,39 @@ paths:
   /workflow-runs:
     get:
       tags: [WorkflowRun]
-      summary: List workflow runs (placeholder)
+      summary: List workflow runs
       operationId: listWorkflowRuns
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
+        '200':
+          description: Workflow run list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowRunListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     post:
       tags: [WorkflowRun]
-      summary: Run workflow (placeholder)
+      summary: Run workflow (domain sugar -> command)
       operationId: createWorkflowRun
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -566,6 +643,18 @@ paths:
             schema:
               $ref: '#/components/schemas/WorkflowRunCreateRequest'
       responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowRun'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -574,13 +663,26 @@ paths:
   /workflow-runs/{runId}:
     get:
       tags: [WorkflowRun]
-      summary: Get workflow run (placeholder)
+      summary: Get workflow run
       operationId: getWorkflowRun
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/RunId'
       responses:
+        '200':
+          description: Workflow run detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowRun'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -589,13 +691,27 @@ paths:
   /workflow-runs/{runId}:cancel:
     post:
       tags: [WorkflowRun]
-      summary: Cancel run (placeholder)
+      summary: Cancel run (domain sugar -> command)
       operationId: cancelWorkflowRun
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowRun'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -604,16 +720,29 @@ paths:
   /workflow-runs/{runId}/steps:
     get:
       tags: [WorkflowRun]
-      summary: List step runs (placeholder)
+      summary: List step runs
       operationId: listStepRuns
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/RunId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
+        '200':
+          description: Step run list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StepRunListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -1321,13 +1450,19 @@ components:
 
     WorkflowTemplatePatchRequest:
       type: object
-      required: [operations]
       properties:
+        graph:
+          type: object
+          additionalProperties: true
         operations:
           type: array
           items:
             type: object
             additionalProperties: true
+      description: 至少需要提供 graph 或 operations 之一。
+      anyOf:
+        - required: [graph]
+        - required: [operations]
 
     WorkflowRun:
       allOf:
@@ -1366,6 +1501,10 @@ components:
         inputs:
           type: object
           additionalProperties: true
+        mode:
+          type: string
+          enum: [sync, running, fail]
+          default: sync
         visibility:
           $ref: '#/components/schemas/Visibility'
 
@@ -1387,6 +1526,9 @@ components:
               type: object
               additionalProperties: true
             output:
+              type: object
+              additionalProperties: true
+            artifacts:
               type: object
               additionalProperties: true
             logRef:
@@ -1587,13 +1729,7 @@ components:
       required: [resource, commandRef]
       properties:
         resource:
-          type: object
-          required: [id, status]
-          properties:
-            id:
-              type: string
-            status:
-              type: string
+          $ref: '#/components/schemas/WorkflowRun'
         commandRef:
           $ref: '#/components/schemas/CommandRef'
 

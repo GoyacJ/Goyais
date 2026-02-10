@@ -9,12 +9,14 @@ import (
 	"goyais/internal/command"
 	"goyais/internal/common/errorx"
 	"goyais/internal/config"
+	"goyais/internal/workflow"
 )
 
 type RouterDeps struct {
-	CommandService *command.Service
-	AssetService   *asset.Service
-	HealthChecker  HealthChecker
+	CommandService  *command.Service
+	AssetService    *asset.Service
+	WorkflowService *workflow.Service
+	HealthChecker   HealthChecker
 }
 
 func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
@@ -28,20 +30,27 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 		apiMux.Handle("/api/v1/shares", NewShareCollectionHandler(deps.CommandService))
 		apiMux.Handle("/api/v1/shares/", NewShareItemHandler(deps.CommandService))
 	}
-	if deps.AssetService != nil {
-		assetHandler := &apiHandler{
-			commandService: deps.CommandService,
-			assetService:   deps.AssetService,
-		}
-		apiMux.Handle("/api/v1/assets", http.HandlerFunc(assetHandler.handleAssets))
-		apiMux.Handle("/api/v1/assets/", http.HandlerFunc(assetHandler.handleAssetRoutes))
+	domainHandler := &apiHandler{
+		commandService:  deps.CommandService,
+		assetService:    deps.AssetService,
+		workflowService: deps.WorkflowService,
 	}
-
-	workflowNotImplemented := NewNotImplementedHandler("error.workflow.not_implemented")
-	apiMux.Handle("/api/v1/workflow-templates", workflowNotImplemented)
-	apiMux.Handle("/api/v1/workflow-templates/", workflowNotImplemented)
-	apiMux.Handle("/api/v1/workflow-runs", workflowNotImplemented)
-	apiMux.Handle("/api/v1/workflow-runs/", workflowNotImplemented)
+	if deps.AssetService != nil {
+		apiMux.Handle("/api/v1/assets", http.HandlerFunc(domainHandler.handleAssets))
+		apiMux.Handle("/api/v1/assets/", http.HandlerFunc(domainHandler.handleAssetRoutes))
+	}
+	if deps.WorkflowService != nil {
+		apiMux.Handle("/api/v1/workflow-templates", http.HandlerFunc(domainHandler.handleWorkflowTemplates))
+		apiMux.Handle("/api/v1/workflow-templates/", http.HandlerFunc(domainHandler.handleWorkflowTemplateRoutes))
+		apiMux.Handle("/api/v1/workflow-runs", http.HandlerFunc(domainHandler.handleWorkflowRuns))
+		apiMux.Handle("/api/v1/workflow-runs/", http.HandlerFunc(domainHandler.handleWorkflowRunRoutes))
+	} else {
+		workflowNotImplemented := NewNotImplementedHandler("error.workflow.not_implemented")
+		apiMux.Handle("/api/v1/workflow-templates", workflowNotImplemented)
+		apiMux.Handle("/api/v1/workflow-templates/", workflowNotImplemented)
+		apiMux.Handle("/api/v1/workflow-runs", workflowNotImplemented)
+		apiMux.Handle("/api/v1/workflow-runs/", workflowNotImplemented)
+	}
 
 	registryNotImplemented := NewNotImplementedHandler("error.registry.not_implemented")
 	apiMux.Handle("/api/v1/registry/capabilities", registryNotImplemented)
