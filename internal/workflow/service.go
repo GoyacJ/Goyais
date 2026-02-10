@@ -13,6 +13,7 @@ const (
 	RunModeSync    = "sync"
 	RunModeRunning = "running"
 	RunModeFail    = "fail"
+	RunModeRetry   = "retry"
 )
 
 type Service struct {
@@ -242,6 +243,51 @@ func (s *Service) CreateRun(
 	})
 }
 
+func (s *Service) RetryRun(
+	ctx context.Context,
+	req command.RequestContext,
+	runID string,
+	fromStepKey string,
+	reason string,
+	mode string,
+) (WorkflowRun, error) {
+	runID = strings.TrimSpace(runID)
+	fromStepKey = strings.TrimSpace(fromStepKey)
+	reason = strings.TrimSpace(reason)
+	if runID == "" {
+		return WorkflowRun{}, ErrInvalidRequest
+	}
+
+	normalizedMode, err := normalizeRetryMode(mode)
+	if err != nil {
+		return WorkflowRun{}, err
+	}
+
+	sourceRun, err := s.repo.GetRunForAccess(ctx, req, runID)
+	if err != nil {
+		return WorkflowRun{}, err
+	}
+	allowed, reasonCode, err := s.authorizeRun(ctx, req, sourceRun, command.PermissionExecute)
+	if err != nil {
+		return WorkflowRun{}, err
+	}
+	if !allowed {
+		return WorkflowRun{}, &ForbiddenError{Reason: reasonCode}
+	}
+	if sourceRun.Status == RunStatusPending || sourceRun.Status == RunStatusRunning {
+		return WorkflowRun{}, ErrInvalidRequest
+	}
+
+	return s.repo.RetryRun(ctx, RetryRunInput{
+		Context:     req,
+		RunID:       runID,
+		FromStepKey: fromStepKey,
+		Reason:      reason,
+		Mode:        normalizedMode,
+		Now:         time.Now().UTC(),
+	})
+}
+
 func (s *Service) CancelRun(ctx context.Context, req command.RequestContext, runID string) (WorkflowRun, error) {
 	runID = strings.TrimSpace(runID)
 	if runID == "" {
@@ -399,6 +445,16 @@ func normalizeRunMode(raw string) (string, error) {
 		return RunModeRunning, nil
 	case RunModeFail:
 		return RunModeFail, nil
+	default:
+		return "", ErrInvalidRequest
+	}
+}
+
+func normalizeRetryMode(raw string) (string, error) {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	switch value {
+	case "", RunModeRetry:
+		return RunModeRetry, nil
 	default:
 		return "", ErrInvalidRequest
 	}

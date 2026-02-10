@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"goyais/internal/command"
 	"goyais/internal/common/errorx"
@@ -703,6 +704,7 @@ func toWorkflowRunPayload(item workflow.WorkflowRun) map[string]any {
 		"status":          item.Status,
 		"templateId":      item.TemplateID,
 		"templateVersion": item.TemplateVersion,
+		"attempt":         item.Attempt,
 		"inputs":          decodeJSON(item.InputsJSON, map[string]any{}),
 		"outputs":         decodeJSON(item.OutputsJSON, map[string]any{}),
 		"startedAt":       item.StartedAt.UTC().Format(timeRFC3339Nano),
@@ -712,8 +714,15 @@ func toWorkflowRunPayload(item workflow.WorkflowRun) map[string]any {
 	if item.CommandID != "" {
 		resp["commandId"] = item.CommandID
 	}
+	if item.RetryOfRunID != "" {
+		resp["retryOfRunId"] = item.RetryOfRunID
+	}
+	if item.ReplayFromStepKey != "" {
+		resp["replayFromStepKey"] = item.ReplayFromStepKey
+	}
 	if item.FinishedAt != nil {
 		resp["finishedAt"] = item.FinishedAt.UTC().Format(timeRFC3339Nano)
+		resp["durationMs"] = durationMillis(item.StartedAt, *item.FinishedAt)
 	}
 	if item.ErrorCode != "" || item.MessageKey != "" {
 		resp["error"] = map[string]any{
@@ -748,6 +757,7 @@ func toStepRunPayload(item workflow.StepRun) map[string]any {
 	}
 	if item.FinishedAt != nil {
 		resp["finishedAt"] = item.FinishedAt.UTC().Format(timeRFC3339Nano)
+		resp["durationMs"] = durationMillis(item.StartedAt, *item.FinishedAt)
 	}
 	if item.ErrorCode != "" || item.MessageKey != "" {
 		resp["error"] = map[string]any{
@@ -756,4 +766,12 @@ func toStepRunPayload(item workflow.StepRun) map[string]any {
 		}
 	}
 	return resp
+}
+
+func durationMillis(startedAt time.Time, finishedAt time.Time) int64 {
+	ms := finishedAt.UTC().Sub(startedAt.UTC()).Milliseconds()
+	if ms < 0 {
+		return 0
+	}
+	return ms
 }

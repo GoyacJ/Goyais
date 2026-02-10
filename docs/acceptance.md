@@ -95,9 +95,9 @@
 ## 7. Workflow/Run 回放验收
 
 - [x] WorkflowTemplate 支持 Draft/Published 版本。
-- [ ] WorkflowRun/StepRun 状态机符合约定（含 failed/canceled/retry）。
+- [x] WorkflowRun/StepRun 状态机符合约定（含 failed/canceled/retry）。
 - [x] 可查询 step 输入输出摘要与产物引用。
-- [ ] 回放时可叠加节点状态与耗时信息。
+- [x] 回放时可叠加节点状态与耗时信息。
 
 ## 7.1 Registry C1 Read-only 验收
 

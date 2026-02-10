@@ -400,8 +400,8 @@ func (r *SQLiteRepository) CreateRun(ctx context.Context, in CreateRunInput) (Wo
 
 	if _, err := conn.ExecContext(
 		ctx,
-		`INSERT INTO workflow_runs(id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO workflow_runs(id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		runID,
 		in.Context.TenantID,
 		in.Context.WorkspaceID,
@@ -410,6 +410,9 @@ func (r *SQLiteRepository) CreateRun(ctx context.Context, in CreateRunInput) (Wo
 		"[]",
 		tpl.ID,
 		tpl.CurrentVersion,
+		1,
+		nil,
+		nil,
 		"",
 		string(in.Inputs),
 		"{}",
@@ -458,6 +461,120 @@ func (r *SQLiteRepository) CreateRun(ctx context.Context, in CreateRunInput) (Wo
 
 	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
 		return WorkflowRun{}, fmt.Errorf("commit workflow run tx: %w", err)
+	}
+	committed = true
+
+	return r.getRunByIDFromConn(ctx, conn, in.Context, runID)
+}
+
+func (r *SQLiteRepository) RetryRun(ctx context.Context, in RetryRunInput) (WorkflowRun, error) {
+	now := in.Now.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+
+	conn, err := r.db.Conn(ctx)
+	if err != nil {
+		return WorkflowRun{}, fmt.Errorf("open sqlite conn: %w", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return WorkflowRun{}, fmt.Errorf("begin immediate tx: %w", err)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(context.Background(), "ROLLBACK")
+		}
+	}()
+
+	sourceRun, err := r.getRunByIDFromConn(ctx, conn, in.Context, in.RunID)
+	if err != nil {
+		return WorkflowRun{}, err
+	}
+
+	nextAttempt := sourceRun.Attempt + 1
+	if nextAttempt <= 1 {
+		nextAttempt = 2
+	}
+
+	replayStepKey := strings.TrimSpace(in.FromStepKey)
+	if replayStepKey == "" {
+		replayStepKey = "step-1"
+	}
+
+	runID := newID("wfr")
+	stepID := newID("srun")
+
+	if _, err := conn.ExecContext(
+		ctx,
+		`INSERT INTO workflow_runs(id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		runID,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+		in.Context.OwnerID,
+		sourceRun.Visibility,
+		string(sourceRun.ACLJSON),
+		sourceRun.TemplateID,
+		sourceRun.TemplateVersion,
+		nextAttempt,
+		sourceRun.ID,
+		replayStepKey,
+		"",
+		string(sourceRun.InputsJSON),
+		"{}",
+		RunStatusPending,
+		nil,
+		nil,
+		now.Format(time.RFC3339Nano),
+		nil,
+		now.Format(time.RFC3339Nano),
+		now.Format(time.RFC3339Nano),
+	); err != nil {
+		return WorkflowRun{}, fmt.Errorf("insert retried workflow run: %w", err)
+	}
+
+	stepInputRaw := sourceRun.InputsJSON
+	if len(stepInputRaw) == 0 {
+		stepInputRaw = json.RawMessage(`{}`)
+	}
+	if _, err := conn.ExecContext(
+		ctx,
+		`INSERT INTO step_runs(id, run_id, tenant_id, workspace_id, owner_id, visibility, step_key, step_type, attempt, input, output, artifacts, log_ref, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		stepID,
+		runID,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+		in.Context.OwnerID,
+		sourceRun.Visibility,
+		replayStepKey,
+		"noop",
+		nextAttempt,
+		string(stepInputRaw),
+		"{}",
+		"{}",
+		nil,
+		StepStatusPending,
+		nil,
+		nil,
+		now.Format(time.RFC3339Nano),
+		nil,
+		now.Format(time.RFC3339Nano),
+		now.Format(time.RFC3339Nano),
+	); err != nil {
+		return WorkflowRun{}, fmt.Errorf("insert retried step run: %w", err)
+	}
+
+	if err := applyRunMode(ctx, conn, runID, stepID, in.Mode, now); err != nil {
+		return WorkflowRun{}, err
+	}
+
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return WorkflowRun{}, fmt.Errorf("commit workflow retry tx: %w", err)
 	}
 	committed = true
 
@@ -521,7 +638,7 @@ func (r *SQLiteRepository) CancelRun(ctx context.Context, in CancelRunInput) (Wo
 func (r *SQLiteRepository) GetRunForAccess(ctx context.Context, req command.RequestContext, runID string) (WorkflowRun, error) {
 	row := r.db.QueryRowContext(
 		ctx,
-		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at
+		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at
 		 FROM workflow_runs
 		 WHERE id = ? AND tenant_id = ? AND workspace_id = ?`,
 		runID,
@@ -577,7 +694,7 @@ func (r *SQLiteRepository) ListRuns(ctx context.Context, params RunListParams) (
 		}
 		rows, err := r.db.QueryContext(
 			ctx,
-			`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.visibility, r.acl_json, r.template_id, r.template_version, r.command_id, r.inputs, r.outputs, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
+			`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.visibility, r.acl_json, r.template_id, r.template_version, r.attempt, r.retry_of_run_id, r.replay_from_step_key, r.command_id, r.inputs, r.outputs, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
 			 `+baseFilter+`
 			   AND ((r.created_at < ?) OR (r.created_at = ? AND r.id < ?))
 			 ORDER BY r.created_at DESC, r.id DESC
@@ -621,7 +738,7 @@ func (r *SQLiteRepository) ListRuns(ctx context.Context, params RunListParams) (
 	offset := (page - 1) * pageSize
 	rows, err := r.db.QueryContext(
 		ctx,
-		`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.visibility, r.acl_json, r.template_id, r.template_version, r.command_id, r.inputs, r.outputs, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
+		`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.visibility, r.acl_json, r.template_id, r.template_version, r.attempt, r.retry_of_run_id, r.replay_from_step_key, r.command_id, r.inputs, r.outputs, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
 		 `+baseFilter+`
 		 ORDER BY r.created_at DESC, r.id DESC
 		 LIMIT ? OFFSET ?`,
@@ -850,6 +967,36 @@ func applyRunMode(ctx context.Context, conn *sql.Conn, runID, stepID, mode strin
 			return fmt.Errorf("set failed step run status: %w", err)
 		}
 		return nil
+	case RunModeRetry:
+		output := `{"handled":true,"mode":"retry"}`
+		stepOutput := `{"handled":true,"mode":"retry"}`
+		if _, err := conn.ExecContext(
+			ctx,
+			`UPDATE workflow_runs
+			 SET status = ?, outputs = ?, finished_at = ?, updated_at = ?, error_code = NULL, message_key = NULL
+			 WHERE id = ?`,
+			RunStatusSucceeded,
+			output,
+			now.Format(time.RFC3339Nano),
+			now.Format(time.RFC3339Nano),
+			runID,
+		); err != nil {
+			return fmt.Errorf("set retried workflow run status: %w", err)
+		}
+		if _, err := conn.ExecContext(
+			ctx,
+			`UPDATE step_runs
+			 SET status = ?, output = ?, finished_at = ?, updated_at = ?, error_code = NULL, message_key = NULL
+			 WHERE id = ?`,
+			StepStatusSucceeded,
+			stepOutput,
+			now.Format(time.RFC3339Nano),
+			now.Format(time.RFC3339Nano),
+			stepID,
+		); err != nil {
+			return fmt.Errorf("set retried step run status: %w", err)
+		}
+		return nil
 	default:
 		output := `{"handled":true,"mode":"sync"}`
 		stepOutput := `{"handled":true}`
@@ -906,7 +1053,7 @@ func (r *SQLiteRepository) getTemplateByIDFromConn(ctx context.Context, conn *sq
 func (r *SQLiteRepository) getRunByIDFromConn(ctx context.Context, conn *sql.Conn, req command.RequestContext, runID string) (WorkflowRun, error) {
 	row := conn.QueryRowContext(
 		ctx,
-		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at
+		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at
 		 FROM workflow_runs
 		 WHERE id = ? AND tenant_id = ? AND workspace_id = ?`,
 		runID,
@@ -1024,17 +1171,19 @@ func scanRuns(rows *sql.Rows) ([]WorkflowRun, error) {
 
 func scanRun(row rowScanner) (WorkflowRun, error) {
 	var (
-		item          WorkflowRun
-		aclRaw        string
-		commandIDRaw  sql.NullString
-		inputsRaw     string
-		outputsRaw    string
-		errorCodeRaw  sql.NullString
-		messageKeyRaw sql.NullString
-		startedAtRaw  string
-		finishedAtRaw sql.NullString
-		createdAtRaw  string
-		updatedAtRaw  string
+		item                 WorkflowRun
+		aclRaw               string
+		retryOfRunIDRaw      sql.NullString
+		replayFromStepKeyRaw sql.NullString
+		commandIDRaw         sql.NullString
+		inputsRaw            string
+		outputsRaw           string
+		errorCodeRaw         sql.NullString
+		messageKeyRaw        sql.NullString
+		startedAtRaw         string
+		finishedAtRaw        sql.NullString
+		createdAtRaw         string
+		updatedAtRaw         string
 	)
 	if err := row.Scan(
 		&item.ID,
@@ -1045,6 +1194,9 @@ func scanRun(row rowScanner) (WorkflowRun, error) {
 		&aclRaw,
 		&item.TemplateID,
 		&item.TemplateVersion,
+		&item.Attempt,
+		&retryOfRunIDRaw,
+		&replayFromStepKeyRaw,
 		&commandIDRaw,
 		&inputsRaw,
 		&outputsRaw,
@@ -1070,6 +1222,15 @@ func scanRun(row rowScanner) (WorkflowRun, error) {
 	item.ACLJSON = json.RawMessage(aclRaw)
 	item.InputsJSON = json.RawMessage(inputsRaw)
 	item.OutputsJSON = json.RawMessage(outputsRaw)
+	if item.Attempt <= 0 {
+		item.Attempt = 1
+	}
+	if retryOfRunIDRaw.Valid {
+		item.RetryOfRunID = retryOfRunIDRaw.String
+	}
+	if replayFromStepKeyRaw.Valid {
+		item.ReplayFromStepKey = replayFromStepKeyRaw.String
+	}
 	if commandIDRaw.Valid {
 		item.CommandID = commandIDRaw.String
 	}

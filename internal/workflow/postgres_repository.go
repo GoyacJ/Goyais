@@ -385,8 +385,8 @@ func (r *PostgresRepository) CreateRun(ctx context.Context, in CreateRunInput) (
 
 	if _, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO workflow_runs(id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10::jsonb, $11::jsonb, $12, $13, $14, $15, $16, $17, $18)`,
+		`INSERT INTO workflow_runs(id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15, $16, $17, $18, $19, $20, $21)`,
 		runID,
 		in.Context.TenantID,
 		in.Context.WorkspaceID,
@@ -395,6 +395,9 @@ func (r *PostgresRepository) CreateRun(ctx context.Context, in CreateRunInput) (
 		"[]",
 		tpl.ID,
 		tpl.CurrentVersion,
+		1,
+		nil,
+		nil,
 		"",
 		string(in.Inputs),
 		"{}",
@@ -443,6 +446,114 @@ func (r *PostgresRepository) CreateRun(ctx context.Context, in CreateRunInput) (
 
 	if err := tx.Commit(); err != nil {
 		return WorkflowRun{}, fmt.Errorf("commit workflow run tx: %w", err)
+	}
+	committed = true
+
+	return r.GetRunForAccess(ctx, in.Context, runID)
+}
+
+func (r *PostgresRepository) RetryRun(ctx context.Context, in RetryRunInput) (WorkflowRun, error) {
+	now := in.Now.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return WorkflowRun{}, fmt.Errorf("begin workflow retry tx: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	sourceRun, err := r.getRunByIDFromTx(ctx, tx, in.Context, in.RunID)
+	if err != nil {
+		return WorkflowRun{}, err
+	}
+
+	nextAttempt := sourceRun.Attempt + 1
+	if nextAttempt <= 1 {
+		nextAttempt = 2
+	}
+
+	replayStepKey := strings.TrimSpace(in.FromStepKey)
+	if replayStepKey == "" {
+		replayStepKey = "step-1"
+	}
+
+	runID := newID("wfr")
+	stepID := newID("srun")
+	stepInput := sourceRun.InputsJSON
+	if len(stepInput) == 0 {
+		stepInput = json.RawMessage(`{}`)
+	}
+
+	if _, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO workflow_runs(id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15, $16, $17, $18, $19, $20, $21)`,
+		runID,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+		in.Context.OwnerID,
+		sourceRun.Visibility,
+		string(sourceRun.ACLJSON),
+		sourceRun.TemplateID,
+		sourceRun.TemplateVersion,
+		nextAttempt,
+		sourceRun.ID,
+		replayStepKey,
+		"",
+		string(sourceRun.InputsJSON),
+		"{}",
+		RunStatusPending,
+		nil,
+		nil,
+		now,
+		nil,
+		now,
+		now,
+	); err != nil {
+		return WorkflowRun{}, fmt.Errorf("insert retried workflow run: %w", err)
+	}
+
+	if _, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO step_runs(id, run_id, tenant_id, workspace_id, owner_id, visibility, step_key, step_type, attempt, input, output, artifacts, log_ref, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, $20)`,
+		stepID,
+		runID,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+		in.Context.OwnerID,
+		sourceRun.Visibility,
+		replayStepKey,
+		"noop",
+		nextAttempt,
+		string(stepInput),
+		"{}",
+		"{}",
+		nil,
+		StepStatusPending,
+		nil,
+		nil,
+		now,
+		nil,
+		now,
+		now,
+	); err != nil {
+		return WorkflowRun{}, fmt.Errorf("insert retried step run: %w", err)
+	}
+
+	if err := applyRunModePostgres(ctx, tx, runID, stepID, in.Mode, now); err != nil {
+		return WorkflowRun{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return WorkflowRun{}, fmt.Errorf("commit workflow retry tx: %w", err)
 	}
 	committed = true
 
@@ -506,7 +617,7 @@ func (r *PostgresRepository) CancelRun(ctx context.Context, in CancelRunInput) (
 func (r *PostgresRepository) GetRunForAccess(ctx context.Context, req command.RequestContext, runID string) (WorkflowRun, error) {
 	row := r.db.QueryRowContext(
 		ctx,
-		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json::text, template_id, template_version, command_id, inputs::text, outputs::text, status, error_code, message_key, started_at, finished_at, created_at, updated_at
+		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json::text, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs::text, outputs::text, status, error_code, message_key, started_at, finished_at, created_at, updated_at
 		 FROM workflow_runs
 		 WHERE id = $1 AND tenant_id = $2 AND workspace_id = $3`,
 		runID,
@@ -562,7 +673,7 @@ func (r *PostgresRepository) ListRuns(ctx context.Context, params RunListParams)
 		}
 		rows, err := r.db.QueryContext(
 			ctx,
-			`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.visibility, r.acl_json::text, r.template_id, r.template_version, r.command_id, r.inputs::text, r.outputs::text, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
+			`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.visibility, r.acl_json::text, r.template_id, r.template_version, r.attempt, r.retry_of_run_id, r.replay_from_step_key, r.command_id, r.inputs::text, r.outputs::text, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
 			 `+baseFilter+`
 			   AND ((r.created_at < $6) OR (r.created_at = $7 AND r.id < $8))
 			 ORDER BY r.created_at DESC, r.id DESC
@@ -606,7 +717,7 @@ func (r *PostgresRepository) ListRuns(ctx context.Context, params RunListParams)
 	offset := (page - 1) * pageSize
 	rows, err := r.db.QueryContext(
 		ctx,
-		`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.visibility, r.acl_json::text, r.template_id, r.template_version, r.command_id, r.inputs::text, r.outputs::text, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
+		`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.visibility, r.acl_json::text, r.template_id, r.template_version, r.attempt, r.retry_of_run_id, r.replay_from_step_key, r.command_id, r.inputs::text, r.outputs::text, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
 		 `+baseFilter+`
 		 ORDER BY r.created_at DESC, r.id DESC
 		 LIMIT $6 OFFSET $7`,
@@ -835,6 +946,36 @@ func applyRunModePostgres(ctx context.Context, tx *sql.Tx, runID, stepID, mode s
 			return fmt.Errorf("set failed step run status: %w", err)
 		}
 		return nil
+	case RunModeRetry:
+		output := `{"handled":true,"mode":"retry"}`
+		stepOutput := `{"handled":true,"mode":"retry"}`
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE workflow_runs
+			 SET status = $1, outputs = $2::jsonb, finished_at = $3, updated_at = $4, error_code = NULL, message_key = NULL
+			 WHERE id = $5`,
+			RunStatusSucceeded,
+			output,
+			now,
+			now,
+			runID,
+		); err != nil {
+			return fmt.Errorf("set retried workflow run status: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE step_runs
+			 SET status = $1, output = $2::jsonb, finished_at = $3, updated_at = $4, error_code = NULL, message_key = NULL
+			 WHERE id = $5`,
+			StepStatusSucceeded,
+			stepOutput,
+			now,
+			now,
+			stepID,
+		); err != nil {
+			return fmt.Errorf("set retried step run status: %w", err)
+		}
+		return nil
 	default:
 		output := `{"handled":true,"mode":"sync"}`
 		stepOutput := `{"handled":true}`
@@ -884,6 +1025,26 @@ func (r *PostgresRepository) getTemplateByIDFromTx(ctx context.Context, tx *sql.
 	}
 	if err != nil {
 		return WorkflowTemplate{}, fmt.Errorf("query workflow template from tx: %w", err)
+	}
+	return item, nil
+}
+
+func (r *PostgresRepository) getRunByIDFromTx(ctx context.Context, tx *sql.Tx, req command.RequestContext, runID string) (WorkflowRun, error) {
+	row := tx.QueryRowContext(
+		ctx,
+		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json::text, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs::text, outputs::text, status, error_code, message_key, started_at, finished_at, created_at, updated_at
+		 FROM workflow_runs
+		 WHERE id = $1 AND tenant_id = $2 AND workspace_id = $3`,
+		runID,
+		req.TenantID,
+		req.WorkspaceID,
+	)
+	item, err := scanPostgresRun(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return WorkflowRun{}, ErrRunNotFound
+	}
+	if err != nil {
+		return WorkflowRun{}, fmt.Errorf("query workflow run from tx: %w", err)
 	}
 	return item, nil
 }
@@ -977,17 +1138,19 @@ func scanPostgresRuns(rows *sql.Rows) ([]WorkflowRun, error) {
 
 func scanPostgresRun(row rowScanner) (WorkflowRun, error) {
 	var (
-		item       WorkflowRun
-		aclRaw     string
-		commandID  sql.NullString
-		inputsRaw  string
-		outputsRaw string
-		errorCode  sql.NullString
-		messageKey sql.NullString
-		startedAt  time.Time
-		finishedAt sql.NullTime
-		createdAt  time.Time
-		updatedAt  time.Time
+		item                 WorkflowRun
+		aclRaw               string
+		retryOfRunIDRaw      sql.NullString
+		replayFromStepKeyRaw sql.NullString
+		commandID            sql.NullString
+		inputsRaw            string
+		outputsRaw           string
+		errorCode            sql.NullString
+		messageKey           sql.NullString
+		startedAt            time.Time
+		finishedAt           sql.NullTime
+		createdAt            time.Time
+		updatedAt            time.Time
 	)
 	if err := row.Scan(
 		&item.ID,
@@ -998,6 +1161,9 @@ func scanPostgresRun(row rowScanner) (WorkflowRun, error) {
 		&aclRaw,
 		&item.TemplateID,
 		&item.TemplateVersion,
+		&item.Attempt,
+		&retryOfRunIDRaw,
+		&replayFromStepKeyRaw,
 		&commandID,
 		&inputsRaw,
 		&outputsRaw,
@@ -1024,6 +1190,15 @@ func scanPostgresRun(row rowScanner) (WorkflowRun, error) {
 	item.ACLJSON = json.RawMessage(aclRaw)
 	item.InputsJSON = json.RawMessage(inputsRaw)
 	item.OutputsJSON = json.RawMessage(outputsRaw)
+	if item.Attempt <= 0 {
+		item.Attempt = 1
+	}
+	if retryOfRunIDRaw.Valid {
+		item.RetryOfRunID = retryOfRunIDRaw.String
+	}
+	if replayFromStepKeyRaw.Valid {
+		item.ReplayFromStepKey = replayFromStepKeyRaw.String
+	}
 	if commandID.Valid {
 		item.CommandID = commandID.String
 	}
