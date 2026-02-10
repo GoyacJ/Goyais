@@ -83,14 +83,66 @@ paths:
                         type: string
                         example: mediamtx
 
+  /system/healthz:
+    get:
+      tags: [Health]
+      summary: Health check (alias)
+      operationId: systemHealthz
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, timestamp]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+                    description: 构建注入版本信息（tag/commit/semver）。
+                    example: v0.1.0
+                  mode:
+                    type: string
+                    description: 当前运行模式（可选），用于 minimal/full 验收。
+                    enum: [minimal, full]
+                    example: minimal
+                  providers:
+                    type: object
+                    description: 当前生效 provider 选择（可选），用于 provider 切换验收。
+                    properties:
+                      db:
+                        type: string
+                        example: sqlite
+                      cache:
+                        type: string
+                        example: memory
+                      vector:
+                        type: string
+                        example: sqlite
+                      objectStore:
+                        type: string
+                        example: local
+                      stream:
+                        type: string
+                        example: mediamtx
+
   /commands:
     get:
       tags: [Command]
       summary: List commands
+      description: 固定排序为 created_at DESC, id DESC。若提供 cursor，服务端忽略 page/pageSize，二者都使用同一排序语义。
       operationId: listCommands
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -101,6 +153,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommandListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     post:
@@ -108,8 +164,10 @@ paths:
       summary: Submit command (canonical)
       operationId: createCommand
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -129,6 +187,12 @@ paths:
                     $ref: '#/components/schemas/Command'
                   commandRef:
                     $ref: '#/components/schemas/CommandRef'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -138,8 +202,9 @@ paths:
       summary: Get command by id
       operationId: getCommand
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/CommandId'
       responses:
         '200':
@@ -148,6 +213,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Command'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -854,6 +925,34 @@ components:
       schema:
         type: string
       description: 可选工作区上下文。服务端必须校验是否属于 JWT 可访问范围。
+    RequiredXTenantId:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema:
+        type: string
+      description: 未接入 JWT 阶段必须传入。
+    RequiredXWorkspaceId:
+      name: X-Workspace-Id
+      in: header
+      required: true
+      schema:
+        type: string
+      description: 未接入 JWT 阶段必须传入。
+    RequiredXUserId:
+      name: X-User-Id
+      in: header
+      required: true
+      schema:
+        type: string
+      description: 未接入 JWT 阶段必须传入，服务端将 ownerId 映射为该值。
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 强烈建议传入。用于命令幂等去重；同 key 不同 payload 会返回冲突。
     Cursor:
       name: cursor
       in: query

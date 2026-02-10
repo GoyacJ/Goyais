@@ -255,11 +255,30 @@
 - `command_type`
 - `payload`（JSON）
 - `status`（accepted/running/succeeded/failed/canceled）
+- `visibility`（默认 `PRIVATE`，NOT NULL）
+- `acl_json`（默认 `[]`，NOT NULL）
 - `result`（JSON）
 - `error_code`
 - `message_key`
 - `accepted_at, finished_at`
 - `created_at, updated_at`
+
+建议索引：
+- `commands(tenant_id, workspace_id, created_at desc, id desc)`（list 固定排序）
+- `commands(id)`
+
+### command_idempotency
+- `tenant_id, workspace_id, owner_id`
+- `idempotency_key`
+- `request_hash`
+- `command_id`
+- `expires_at`
+- `created_at`
+
+约束与语义：
+- 唯一键：`(tenant_id, workspace_id, owner_id, idempotency_key)`。
+- 查询幂等映射时，仅 `expires_at >= now` 视为有效。
+- 过期记录视为不存在，可在事务内 upsert 覆盖。
 
 ### audit_events
 - `id`
@@ -278,6 +297,13 @@
 - `audit_events(tenant_id, workspace_id, created_at desc)`
 - `audit_events(trace_id)`
 - `audit_events(command_id)`
+
+### command_events
+- `id`
+- `command_id`
+- `event_type`
+- `payload`（JSON）
+- `created_at`
 
 ### context_bundles
 - `id`

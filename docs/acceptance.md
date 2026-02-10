@@ -65,6 +65,17 @@
 - [ ] Domain 写接口响应包含：`resource + commandRef { commandId, status, acceptedAt }`。
 - [ ] 通过 `GET /api/v1/commands/{commandId}` 可追踪最终执行结果。
 
+### 5.1 A2 最小闭环（Thread #3）
+- [ ] `POST /api/v1/commands`（携带 `X-Tenant-Id/X-Workspace-Id/X-User-Id`）返回 `202` 且包含 `resource + commandRef`。
+- [ ] 缺少任一上下文 header 返回 `400`，错误为 `MISSING_CONTEXT + error.context.missing`，并在 `details.missingHeaders` 返回缺失项列表。
+- [ ] `GET /api/v1/commands` 返回 `items`，并固定按 `created_at DESC, id DESC` 排序。
+- [ ] cursor 模式 token 基于 `(created_at,id)`，若请求带 `cursor` 则忽略 `page/pageSize`。
+- [ ] 同 `(tenant,workspace,owner,idempotency_key)` 且同请求哈希复用同一 `commandId`。
+- [ ] 同 `(tenant,workspace,owner,idempotency_key)` 但不同请求哈希返回 `409 IDEMPOTENCY_KEY_CONFLICT`。
+- [ ] `Idempotency-Key` 缺失时仍可创建新命令，并保留审计记录。
+- [ ] SQLite（minimal）可完成 create/get/list + 状态流转 + 审计落库。
+- [ ] Postgres（full）可连接并在 healthz 回显 provider；commands 业务接口可统一返回 `501 NOT_IMPLEMENTED`（本轮非阻塞）。
+
 ## 6. Visibility/ACL 与隔离验收
 
 - [ ] 资产、工作流、算法、插件、流对象均支持 `PRIVATE/WORKSPACE/TENANT/PUBLIC`。
