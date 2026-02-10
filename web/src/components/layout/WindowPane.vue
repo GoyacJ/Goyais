@@ -1,5 +1,6 @@
 <template>
   <article
+    ref="paneRef"
     class="ui-window-pane ui-surface absolute flex min-h-0 flex-col overflow-hidden"
     :style="paneStyle"
     @pointerdown="emit('focus', paneId)"
@@ -57,7 +58,7 @@ import type {
 } from '@/design-system/window-engine'
 import { NativePointerWindowEngine } from '@/design-system/window-engine-native'
 import type { WindowRect } from '@/design-system/types'
-import { computed, onBeforeUnmount } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(
@@ -83,6 +84,8 @@ const emit = defineEmits<{
 const engine = new NativePointerWindowEngine()
 const { t } = useI18n({ useScope: 'global' })
 const KEYBOARD_STEP = 16
+const AUTO_SCROLL_EDGE = 48
+const AUTO_SCROLL_MAX_STEP = 24
 
 const paneStyle = computed(() => ({
   left: `${props.rect.x}px`,
@@ -92,8 +95,95 @@ const paneStyle = computed(() => ({
   zIndex: String(props.rect.z),
 }))
 
+const paneRef = ref<HTMLElement | null>(null)
+
 let activeMoveHandler: ((event: PointerEvent) => void) | null = null
 let activeUpHandler: ((event: PointerEvent) => void) | null = null
+
+interface AutoScrollContext {
+  container: HTMLElement | null
+  startScrollTop: number
+  startScrollLeft: number
+}
+
+function isScrollableOverflow(value: string): boolean {
+  return value === 'auto' || value === 'scroll' || value === 'overlay'
+}
+
+function findScrollContainer(element: HTMLElement | null): HTMLElement | null {
+  let current = element?.parentElement ?? null
+
+  while (current) {
+    const style = window.getComputedStyle(current)
+    const canScrollY = isScrollableOverflow(style.overflowY) && current.scrollHeight > current.clientHeight
+    const canScrollX = isScrollableOverflow(style.overflowX) && current.scrollWidth > current.clientWidth
+
+    if (canScrollX || canScrollY) {
+      return current
+    }
+
+    current = current.parentElement
+  }
+
+  const pageScroll = document.scrollingElement
+  return pageScroll instanceof HTMLElement ? pageScroll : null
+}
+
+function createAutoScrollContext(): AutoScrollContext {
+  const container = findScrollContainer(paneRef.value)
+
+  return {
+    container,
+    startScrollTop: container?.scrollTop ?? 0,
+    startScrollLeft: container?.scrollLeft ?? 0,
+  }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function autoScrollIfNeeded(context: AutoScrollContext, clientX: number, clientY: number): { offsetX: number; offsetY: number } {
+  const container = context.container
+  if (!container) {
+    return { offsetX: 0, offsetY: 0 }
+  }
+
+  const rect = container.getBoundingClientRect()
+  let stepY = 0
+  let stepX = 0
+
+  if (clientY > rect.bottom - AUTO_SCROLL_EDGE) {
+    const ratio = (clientY - (rect.bottom - AUTO_SCROLL_EDGE)) / AUTO_SCROLL_EDGE
+    stepY = Math.ceil(clamp(ratio, 0, 1) * AUTO_SCROLL_MAX_STEP)
+  } else if (clientY < rect.top + AUTO_SCROLL_EDGE) {
+    const ratio = ((rect.top + AUTO_SCROLL_EDGE) - clientY) / AUTO_SCROLL_EDGE
+    stepY = -Math.ceil(clamp(ratio, 0, 1) * AUTO_SCROLL_MAX_STEP)
+  }
+
+  if (clientX > rect.right - AUTO_SCROLL_EDGE) {
+    const ratio = (clientX - (rect.right - AUTO_SCROLL_EDGE)) / AUTO_SCROLL_EDGE
+    stepX = Math.ceil(clamp(ratio, 0, 1) * AUTO_SCROLL_MAX_STEP)
+  } else if (clientX < rect.left + AUTO_SCROLL_EDGE) {
+    const ratio = ((rect.left + AUTO_SCROLL_EDGE) - clientX) / AUTO_SCROLL_EDGE
+    stepX = -Math.ceil(clamp(ratio, 0, 1) * AUTO_SCROLL_MAX_STEP)
+  }
+
+  if (stepY !== 0) {
+    const maxTop = Math.max(0, container.scrollHeight - container.clientHeight)
+    container.scrollTop = clamp(container.scrollTop + stepY, 0, maxTop)
+  }
+
+  if (stepX !== 0) {
+    const maxLeft = Math.max(0, container.scrollWidth - container.clientWidth)
+    container.scrollLeft = clamp(container.scrollLeft + stepX, 0, maxLeft)
+  }
+
+  return {
+    offsetX: container.scrollLeft - context.startScrollLeft,
+    offsetY: container.scrollTop - context.startScrollTop,
+  }
+}
 
 function cleanupPointerTracking(): void {
   if (activeMoveHandler) {
@@ -132,9 +222,15 @@ function onDragStart(event: PointerEvent): void {
     startRect: { ...props.rect },
     bounds: props.bounds,
   }
+  const autoScrollContext = createAutoScrollContext()
 
   trackPointer((moveEvent) => {
-    const next = engine.projectDrag(payload, moveEvent.clientX, moveEvent.clientY)
+    const scrollOffset = autoScrollIfNeeded(autoScrollContext, moveEvent.clientX, moveEvent.clientY)
+    const next = engine.projectDrag(
+      payload,
+      moveEvent.clientX + scrollOffset.offsetX,
+      moveEvent.clientY + scrollOffset.offsetY,
+    )
     emit('update:rect', { paneId: props.paneId, rect: next })
   })
 }
@@ -156,9 +252,15 @@ function onResizeStart(event: PointerEvent, direction: ResizeDirection): void {
     minWidth: props.minWidth,
     minHeight: props.minHeight,
   }
+  const autoScrollContext = createAutoScrollContext()
 
   trackPointer((moveEvent) => {
-    const next = engine.projectResize(payload, moveEvent.clientX, moveEvent.clientY)
+    const scrollOffset = autoScrollIfNeeded(autoScrollContext, moveEvent.clientX, moveEvent.clientY)
+    const next = engine.projectResize(
+      payload,
+      moveEvent.clientX + scrollOffset.offsetX,
+      moveEvent.clientY + scrollOffset.offsetY,
+    )
     emit('update:rect', { paneId: props.paneId, rect: next })
   })
 }
