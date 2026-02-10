@@ -392,6 +392,7 @@ payload 约定（v0.1）：
 
 补充（v0.1 provider 配置语义）：
 - `cache.redis_password` 与 `vector.redis_password` 仅作为运行时连接配置，不入库。
+- `event_bus.kafka.*` 仅作为运行时连接配置，不入库（broker/topic/group 由配置管理）。
 - 认证失败等 provider 连接错误通过 healthz `details.providers.*.error` 暴露，不写入业务表。
 
 ## 5.1 类型差异

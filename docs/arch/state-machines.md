@@ -44,6 +44,7 @@
 
 ## 0.3.1 Provider 就绪态（health gate）
 - provider 认证失败（如 Redis NOAUTH）不改变 command 状态机，但会将 healthz 状态标记为 `degraded`。
+- 事件总线 provider（`event_bus`）在 `kafka` 模式下若 broker 不可达，`details.providers.event_bus.status=degraded`，但不阻断已有 command 主交易路径。
 - 当 provider 就绪恢复后，healthz 状态回到 `ok`，不需要额外迁移。
 
 ## 0.4 Share Domain Sugar + 授权闸门（A3）

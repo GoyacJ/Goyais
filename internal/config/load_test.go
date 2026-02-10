@@ -35,6 +35,12 @@ func TestLoadDefaultsMinimal(t *testing.T) {
 	if cfg.Vector.RedisAddr == "" {
 		t.Fatalf("expected default vector redis addr")
 	}
+	if cfg.Providers.EventBus != "memory" {
+		t.Fatalf("expected default event bus provider=memory got=%s", cfg.Providers.EventBus)
+	}
+	if len(cfg.EventBus.Kafka.Brokers) == 0 {
+		t.Fatalf("expected default kafka brokers")
+	}
 }
 
 func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
@@ -57,6 +63,12 @@ func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	t.Setenv("GOYAIS_VECTOR_PROVIDER", "redis_stack")
 	t.Setenv("GOYAIS_VECTOR_REDIS_ADDR", "127.0.0.1:6380")
 	t.Setenv("GOYAIS_VECTOR_REDIS_PASSWORD", "vector-pass")
+	t.Setenv("GOYAIS_EVENT_BUS_PROVIDER", "kafka")
+	t.Setenv("GOYAIS_EVENT_BUS_KAFKA_BROKERS", "127.0.0.1:9092,127.0.0.1:9093")
+	t.Setenv("GOYAIS_EVENT_BUS_KAFKA_CLIENT_ID", "goyais-test")
+	t.Setenv("GOYAIS_EVENT_BUS_KAFKA_COMMAND_TOPIC", "goyais.command.test")
+	t.Setenv("GOYAIS_EVENT_BUS_KAFKA_STREAM_TOPIC", "goyais.stream.test")
+	t.Setenv("GOYAIS_EVENT_BUS_KAFKA_CONSUMER_GROUP", "goyais-test-group")
 
 	cfg, err := Load()
 	if err != nil {
@@ -89,6 +101,21 @@ func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	}
 	if cfg.Vector.RedisPassword != "vector-pass" {
 		t.Fatalf("unexpected vector redis password")
+	}
+	if cfg.Providers.EventBus != "kafka" {
+		t.Fatalf("expected event bus provider=kafka got=%s", cfg.Providers.EventBus)
+	}
+	if len(cfg.EventBus.Kafka.Brokers) != 2 {
+		t.Fatalf("unexpected event bus brokers: %v", cfg.EventBus.Kafka.Brokers)
+	}
+	if cfg.EventBus.Kafka.ClientID != "goyais-test" {
+		t.Fatalf("unexpected event bus client id: %s", cfg.EventBus.Kafka.ClientID)
+	}
+	if cfg.EventBus.Kafka.CommandTopic != "goyais.command.test" || cfg.EventBus.Kafka.StreamTopic != "goyais.stream.test" {
+		t.Fatalf("unexpected event bus topics: command=%s stream=%s", cfg.EventBus.Kafka.CommandTopic, cfg.EventBus.Kafka.StreamTopic)
+	}
+	if cfg.EventBus.Kafka.ConsumerGroup != "goyais-test-group" {
+		t.Fatalf("unexpected event bus consumer group: %s", cfg.EventBus.Kafka.ConsumerGroup)
 	}
 }
 

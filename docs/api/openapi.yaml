@@ -86,6 +86,9 @@ paths:
                       stream:
                         type: string
                         example: mediamtx
+                      eventBus:
+                        type: string
+                        example: memory
                   details:
                     type: object
                     description: provider 细粒度可用性（ready/degraded），异常时在 error 返回如认证失败等原因。
@@ -102,6 +105,8 @@ paths:
                           objectStore:
                             $ref: '#/components/schemas/ProviderReadiness'
                           stream:
+                            $ref: '#/components/schemas/ProviderReadiness'
+                          event_bus:
                             $ref: '#/components/schemas/ProviderReadiness'
 
   /system/healthz:
@@ -153,6 +158,9 @@ paths:
                       stream:
                         type: string
                         example: mediamtx
+                      eventBus:
+                        type: string
+                        example: memory
                   details:
                     type: object
                     description: provider 细粒度可用性（ready/degraded）。
@@ -169,6 +177,8 @@ paths:
                           objectStore:
                             $ref: '#/components/schemas/ProviderReadiness'
                           stream:
+                            $ref: '#/components/schemas/ProviderReadiness'
+                          event_bus:
                             $ref: '#/components/schemas/ProviderReadiness'
 
   /commands:
