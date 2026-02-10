@@ -40,12 +40,13 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 		apiMux.Handle("/api/v1/shares/", NewShareItemHandler(deps.CommandService))
 	}
 	domainHandler := &apiHandler{
-		commandService:  deps.CommandService,
-		assetService:    deps.AssetService,
-		workflowService: deps.WorkflowService,
-		registryService: deps.RegistryService,
-		pluginService:   deps.PluginService,
-		streamService:   deps.StreamService,
+		commandService:        deps.CommandService,
+		assetService:          deps.AssetService,
+		assetLifecycleEnabled: cfg.Feature.AssetLifecycle,
+		workflowService:       deps.WorkflowService,
+		registryService:       deps.RegistryService,
+		pluginService:         deps.PluginService,
+		streamService:         deps.StreamService,
 	}
 	if deps.AssetService != nil {
 		apiMux.Handle("/api/v1/assets", http.HandlerFunc(domainHandler.handleAssets))

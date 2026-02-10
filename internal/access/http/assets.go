@@ -60,8 +60,10 @@ func (h *apiHandler) handleAssetByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, toAssetPayload(item))
-	case http.MethodPatch, http.MethodDelete:
-		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.asset.not_implemented", nil)
+	case http.MethodPatch:
+		h.handleUpdateAsset(w, r, reqCtx, assetID)
+	case http.MethodDelete:
+		h.handleDeleteAsset(w, r, reqCtx, assetID)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
@@ -72,7 +74,7 @@ func (h *apiHandler) handleAssetLineage(w http.ResponseWriter, r *http.Request) 
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	_, ok := requireRequestContext(w, r)
+	reqCtx, ok := requireRequestContext(w, r)
 	if !ok {
 		return
 	}
@@ -82,7 +84,31 @@ func (h *apiHandler) handleAssetLineage(w http.ResponseWriter, r *http.Request) 
 		errorx.Write(w, http.StatusBadRequest, "INVALID_ASSET_REQUEST", "error.asset.invalid_request", nil)
 		return
 	}
-	errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.asset.not_implemented", nil)
+	if !h.assetLifecycleEnabled {
+		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.asset.not_implemented", nil)
+		return
+	}
+	edges, err := h.assetService.Lineage(r.Context(), reqCtx, assetID)
+	if err != nil {
+		writeAssetError(w, err)
+		return
+	}
+	items := make([]any, 0, len(edges))
+	for _, edge := range edges {
+		items = append(items, map[string]any{
+			"id":            edge.ID,
+			"sourceAssetId": edge.SourceAssetID,
+			"targetAssetId": edge.TargetAssetID,
+			"runId":         edge.RunID,
+			"stepId":        edge.StepID,
+			"relation":      edge.Relation,
+			"createdAt":     edge.CreatedAt.UTC().Format(timeRFC3339Nano),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"assetId": assetID,
+		"edges":   items,
+	})
 }
 
 func (h *apiHandler) handleCreateAsset(w http.ResponseWriter, r *http.Request, reqCtx command.RequestContext) {
@@ -173,6 +199,134 @@ func (h *apiHandler) handleCreateAsset(w http.ResponseWriter, r *http.Request, r
 	})
 }
 
+func (h *apiHandler) handleUpdateAsset(w http.ResponseWriter, r *http.Request, reqCtx command.RequestContext, assetID string) {
+	if !h.assetLifecycleEnabled || h.commandService == nil {
+		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.asset.not_implemented", nil)
+		return
+	}
+
+	var req struct {
+		Name       *string         `json:"name"`
+		Visibility *string         `json:"visibility"`
+		Metadata   json.RawMessage `json:"metadata"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		errorx.Write(w, http.StatusBadRequest, "INVALID_ASSET_REQUEST", "error.asset.invalid_request", map[string]any{"reason": "invalid_json"})
+		return
+	}
+
+	payload := map[string]any{
+		"assetId": assetID,
+	}
+	updates := 0
+	if req.Name != nil {
+		payload["name"] = *req.Name
+		updates++
+	}
+	if req.Visibility != nil {
+		payload["visibility"] = *req.Visibility
+		updates++
+	}
+	if len(req.Metadata) > 0 {
+		var metadata map[string]any
+		if err := json.Unmarshal(req.Metadata, &metadata); err != nil {
+			errorx.Write(w, http.StatusBadRequest, "INVALID_ASSET_REQUEST", "error.asset.invalid_request", map[string]any{"field": "metadata"})
+			return
+		}
+		payload["metadata"] = metadata
+		updates++
+	}
+	if updates == 0 {
+		errorx.Write(w, http.StatusBadRequest, "INVALID_ASSET_REQUEST", "error.asset.invalid_request", map[string]any{"reason": "empty_patch"})
+		return
+	}
+
+	rawPayload, err := json.Marshal(payload)
+	if err != nil {
+		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.common.internal", map[string]any{"reason": err.Error()})
+		return
+	}
+	cmd, err := h.commandService.Submit(
+		r.Context(),
+		reqCtx,
+		"asset.update",
+		rawPayload,
+		strings.TrimSpace(r.Header.Get("Idempotency-Key")),
+		"",
+	)
+	if err != nil {
+		writeAssetCommandError(w, err)
+		return
+	}
+
+	resource := map[string]any{}
+	var result map[string]any
+	if len(cmd.Result) > 0 && json.Unmarshal(cmd.Result, &result) == nil {
+		if assetPayload, ok := result["asset"].(map[string]any); ok {
+			resource = assetPayload
+		}
+	}
+	if len(resource) == 0 {
+		resource = map[string]any{
+			"id":     assetID,
+			"status": cmd.Status,
+		}
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"resource": resource,
+		"commandRef": map[string]any{
+			"commandId":  cmd.ID,
+			"status":     cmd.Status,
+			"acceptedAt": cmd.AcceptedAt.UTC().Format(timeRFC3339Nano),
+		},
+	})
+}
+
+func (h *apiHandler) handleDeleteAsset(w http.ResponseWriter, r *http.Request, reqCtx command.RequestContext, assetID string) {
+	if !h.assetLifecycleEnabled || h.commandService == nil {
+		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.asset.not_implemented", nil)
+		return
+	}
+	rawPayload, err := json.Marshal(map[string]any{"assetId": assetID})
+	if err != nil {
+		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.common.internal", map[string]any{"reason": err.Error()})
+		return
+	}
+	cmd, err := h.commandService.Submit(
+		r.Context(),
+		reqCtx,
+		"asset.delete",
+		rawPayload,
+		strings.TrimSpace(r.Header.Get("Idempotency-Key")),
+		"",
+	)
+	if err != nil {
+		writeAssetCommandError(w, err)
+		return
+	}
+	resource := map[string]any{}
+	var result map[string]any
+	if len(cmd.Result) > 0 && json.Unmarshal(cmd.Result, &result) == nil {
+		if assetPayload, ok := result["asset"].(map[string]any); ok {
+			resource = assetPayload
+		}
+	}
+	if len(resource) == 0 {
+		resource = map[string]any{
+			"id":     assetID,
+			"status": cmd.Status,
+		}
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"resource": resource,
+		"commandRef": map[string]any{
+			"commandId":  cmd.ID,
+			"status":     cmd.Status,
+			"acceptedAt": cmd.AcceptedAt.UTC().Format(timeRFC3339Nano),
+		},
+	})
+}
+
 func (h *apiHandler) handleListAssets(w http.ResponseWriter, r *http.Request, reqCtx command.RequestContext) {
 	query := r.URL.Query()
 	cursor := strings.TrimSpace(query.Get("cursor"))
@@ -242,6 +396,8 @@ func writeAssetCommandError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, command.ErrInvalidCommandRequest):
 		errorx.Write(w, http.StatusBadRequest, "INVALID_ASSET_REQUEST", "error.asset.invalid_request", nil)
+	case errors.Is(err, command.ErrNotFound):
+		errorx.Write(w, http.StatusNotFound, "ASSET_NOT_FOUND", "error.asset.not_found", nil)
 	case errors.Is(err, command.ErrNotImplemented):
 		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.asset.not_implemented", nil)
 	case errors.Is(err, command.ErrForbidden):

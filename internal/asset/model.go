@@ -44,6 +44,28 @@ type CreateInput struct {
 	Now        time.Time
 }
 
+type UpdateInput struct {
+	Context     command.RequestContext
+	AssetID     string
+	Name        *string
+	Visibility  *string
+	Metadata    json.RawMessage
+	MetadataSet bool
+	Now         time.Time
+}
+
+type LineageEdge struct {
+	ID            string
+	TenantID      string
+	WorkspaceID   string
+	SourceAssetID string
+	TargetAssetID string
+	RunID         string
+	StepID        string
+	Relation      string
+	CreatedAt     time.Time
+}
+
 type ListParams struct {
 	Context  command.RequestContext
 	Page     int

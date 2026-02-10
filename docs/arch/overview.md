@@ -211,7 +211,13 @@ Command 执行管道（必须）：
   - `shares`（`resourceType=command|asset`）：
     - `GET /shares` 直接查询
     - `POST /shares`、`DELETE /shares/{shareId}` 均为 domain sugar，转换为 `share.create/share.delete` command 执行，并返回 `resource + commandRef`
-  - `assets`：`GET /assets`、`GET /assets/{id}`、`POST /assets`（domain sugar -> `asset.upload` command）
+  - `assets`：
+    - `GET /assets`、`GET /assets/{id}`
+    - `POST /assets`（domain sugar -> `asset.upload` command）
+    - `PATCH /assets/{assetId}`（domain sugar -> `asset.update` command）
+    - `DELETE /assets/{assetId}`（domain sugar -> `asset.delete` command）
+    - `GET /assets/{assetId}/lineage`（read path）
+    - 受 `GOYAIS_FEATURE_ASSET_LIFECYCLE` 控制：开启时返回真实能力，关闭时返回 `501 NOT_IMPLEMENTED`
   - `registry`（C1 read-only）：
     - `GET /registry/capabilities`
     - `GET /registry/capabilities/{capabilityId}`
@@ -248,9 +254,8 @@ Command 执行管道（必须）：
     - `POST /algorithms/{algorithmId}:run`（domain sugar -> `algorithm.run` command）
     - `algorithm.run` 结果映射 `workflow_run_id` 并可通过 `GET /commands/{id}` 回查
     - `algo-pack` 安装会将 manifest 内算法定义写入 registry `algorithms`，支持多算法注册
-- 占位（可达但未实现）：
-  - `assets` 的 `PATCH /assets/{assetId}`、`DELETE /assets/{assetId}`、`GET /assets/{assetId}/lineage`
-  - 统一返回：`501 NOT_IMPLEMENTED` + 领域 `messageKey`
+- 仍保留的占位（按 provider 或 feature gate）：
+  - `GOYAIS_FEATURE_ASSET_LIFECYCLE=false` 时，`assets` 的 `PATCH /assets/{assetId}`、`DELETE /assets/{assetId}`、`GET /assets/{assetId}/lineage` 返回 `501 NOT_IMPLEMENTED`
 
 ## 8. 配置规范
 
@@ -289,6 +294,7 @@ Command 执行管道（必须）：
 - `GOYAIS_EVENT_BUS_KAFKA_STREAM_TOPIC=goyais.stream.events`
 - `GOYAIS_EVENT_BUS_KAFKA_CONSUMER_GROUP=goyais-stream-trigger`
 - `GOYAIS_AUTH_CONTEXT_MODE=jwt_or_header`
+- `GOYAIS_FEATURE_ASSET_LIFECYCLE=false`
 
 PostgreSQL DSN 规则（冻结）：
 - 当 `db.driver=postgres` 时，`GOYAIS_DB_DSN` 必须显式包含 `dbname`。

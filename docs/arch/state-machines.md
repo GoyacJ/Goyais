@@ -63,11 +63,14 @@
 
 ## 0.5 Asset Domain Sugar（A/B 过渡）
 - `POST /api/v1/assets` 必须转换为 `asset.upload` command 执行（Command-first）。
+- `PATCH /api/v1/assets/{assetId}` 必须转换为 `asset.update` command 执行（Command-first）。
+- `DELETE /api/v1/assets/{assetId}` 必须转换为 `asset.delete` command 执行（Command-first）。
+- `GET /api/v1/assets/{assetId}/lineage` 为 read path；写路径仍禁止绕过 command gate。
 - command 执行器失败时，状态转移固定为 `running -> failed`，并回填：
   - `error_code`
   - `message_key`
   - `command.failed` 事件
-- 当前 `assets` 读接口可用；`PATCH/DELETE/lineage` 为占位，统一 `501 NOT_IMPLEMENTED`。
+- `GOYAIS_FEATURE_ASSET_LIFECYCLE=true` 时启用 `asset.update/asset.delete/lineage`；关闭时三条路径统一返回 `501 NOT_IMPLEMENTED`。
 
 ## 0.6 Workflow Domain Sugar（M1 最小闭环）
 - `POST /api/v1/workflow-templates`、`POST /api/v1/workflow-templates/{templateId}:patch`、`POST /api/v1/workflow-templates/{templateId}:publish`、`POST /api/v1/workflow-runs`、`POST /api/v1/workflow-runs/{runId}:cancel` 必须转换为 `workflow.*` command 执行（Command-first）。

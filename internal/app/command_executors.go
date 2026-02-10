@@ -30,6 +30,17 @@ type assetUploadCommandPayload struct {
 	FileBase64 string `json:"fileBase64"`
 }
 
+type assetUpdateCommandPayload struct {
+	AssetID    string           `json:"assetId"`
+	Name       *string          `json:"name"`
+	Visibility *string          `json:"visibility"`
+	Metadata   *json.RawMessage `json:"metadata"`
+}
+
+type assetDeleteCommandPayload struct {
+	AssetID string `json:"assetId"`
+}
+
 type workflowTemplateCreateCommandPayload struct {
 	Name          string          `json:"name"`
 	Description   string          `json:"description"`
@@ -121,6 +132,7 @@ const timeRFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
 func registerCommandExecutors(
 	commandService *command.Service,
 	assetService *asset.Service,
+	assetLifecycleEnabled bool,
 	workflowService *workflow.Service,
 	pluginService *plugin.Service,
 	streamService *stream.Service,
@@ -133,6 +145,10 @@ func registerCommandExecutors(
 	commandService.SetExecutor("share.delete", newShareDeleteExecutor(commandService))
 	if assetService != nil {
 		commandService.SetExecutor("asset.upload", newAssetUploadExecutor(assetService))
+		if assetLifecycleEnabled {
+			commandService.SetExecutor("asset.update", newAssetUpdateExecutor(assetService))
+			commandService.SetExecutor("asset.delete", newAssetDeleteExecutor(assetService))
+		}
 	}
 	if workflowService != nil {
 		commandService.SetExecutor("workflow.createDraft", newWorkflowCreateDraftExecutor(workflowService))
@@ -235,6 +251,95 @@ func newAssetUploadExecutor(assetService *asset.Service) command.ExecuteFunc {
 	}
 }
 
+func newAssetUpdateExecutor(assetService *asset.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req assetUpdateCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, &command.ExecutionError{
+				Code:       "INVALID_ASSET_REQUEST",
+				MessageKey: "error.asset.invalid_request",
+				Err:        command.ErrInvalidCommandRequest,
+			}
+		}
+		assetID := strings.TrimSpace(req.AssetID)
+		if assetID == "" {
+			return nil, &command.ExecutionError{
+				Code:       "INVALID_ASSET_REQUEST",
+				MessageKey: "error.asset.invalid_request",
+				Err:        command.ErrInvalidCommandRequest,
+			}
+		}
+
+		updateInput := asset.UpdateInput{
+			Context: reqCtx,
+			AssetID: assetID,
+			Name:    req.Name,
+			Now:     time.Now().UTC(),
+		}
+		if req.Visibility != nil {
+			updateInput.Visibility = req.Visibility
+		}
+		if req.Metadata != nil {
+			rawMetadata := strings.TrimSpace(string(*req.Metadata))
+			if rawMetadata == "" || rawMetadata == "null" {
+				updateInput.Metadata = json.RawMessage(`{}`)
+			} else {
+				var metadataObj map[string]any
+				if err := json.Unmarshal(*req.Metadata, &metadataObj); err != nil {
+					return nil, &command.ExecutionError{
+						Code:       "INVALID_ASSET_REQUEST",
+						MessageKey: "error.asset.invalid_request",
+						Err:        command.ErrInvalidCommandRequest,
+					}
+				}
+				updateInput.Metadata = *req.Metadata
+			}
+			updateInput.MetadataSet = true
+		}
+
+		updated, err := assetService.Update(ctx, updateInput)
+		if err != nil {
+			return nil, mapAssetExecutionError(err)
+		}
+		result := map[string]any{
+			"asset": toAssetResultPayload(updated),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func newAssetDeleteExecutor(assetService *asset.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req assetDeleteCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, &command.ExecutionError{
+				Code:       "INVALID_ASSET_REQUEST",
+				MessageKey: "error.asset.invalid_request",
+				Err:        command.ErrInvalidCommandRequest,
+			}
+		}
+		assetID := strings.TrimSpace(req.AssetID)
+		if assetID == "" {
+			return nil, &command.ExecutionError{
+				Code:       "INVALID_ASSET_REQUEST",
+				MessageKey: "error.asset.invalid_request",
+				Err:        command.ErrInvalidCommandRequest,
+			}
+		}
+
+		deleted, err := assetService.Delete(ctx, reqCtx, assetID)
+		if err != nil {
+			return nil, mapAssetExecutionError(err)
+		}
+		result := map[string]any{
+			"asset": toAssetResultPayload(deleted),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
 func mapAssetExecutionError(err error) error {
 	switch {
 	case errors.Is(err, asset.ErrInvalidRequest):
@@ -248,6 +353,12 @@ func mapAssetExecutionError(err error) error {
 			Code:       "NOT_IMPLEMENTED",
 			MessageKey: "error.asset.not_implemented",
 			Err:        command.ErrNotImplemented,
+		}
+	case errors.Is(err, asset.ErrNotFound):
+		return &command.ExecutionError{
+			Code:       "ASSET_NOT_FOUND",
+			MessageKey: "error.asset.not_found",
+			Err:        command.ErrNotFound,
 		}
 	case errors.Is(err, asset.ErrForbidden):
 		reason := ""

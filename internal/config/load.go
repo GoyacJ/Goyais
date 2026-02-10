@@ -94,6 +94,9 @@ func defaultsForProfile(profile string) Config {
 			AllowPrivateToPublic: false,
 			ContextMode:          AuthContextModeJWTOrHeader,
 		},
+		Feature: FeatureConfig{
+			AssetLifecycle: false,
+		},
 	}
 
 	if profile == ProfileFull {
@@ -143,6 +146,9 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	}
 	if v := strings.ToLower(strings.TrimSpace(fc.Authz.ContextMode)); v != "" {
 		cfg.Authz.ContextMode = v
+	}
+	if fc.Feature.AssetLifecycle != nil {
+		cfg.Feature.AssetLifecycle = *fc.Feature.AssetLifecycle
 	}
 	if v := strings.ToLower(strings.TrimSpace(fc.Cache.Provider)); v != "" {
 		cfg.Providers.Cache = v
@@ -239,6 +245,11 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_AUTH_CONTEXT_MODE"))); v != "" {
 		cfg.Authz.ContextMode = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_ASSET_LIFECYCLE")); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			cfg.Feature.AssetLifecycle = parsed
+		}
 	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_CACHE_PROVIDER"))); v != "" {
 		cfg.Providers.Cache = v

@@ -14,6 +14,7 @@ type Config struct {
 	EventBus    EventBusConfig    `json:"eventBus"`
 	Command     CommandConfig     `json:"command"`
 	Authz       AuthzConfig       `json:"authz"`
+	Feature     FeatureConfig     `json:"feature"`
 	Paths       RuntimePathConf   `json:"paths"`
 }
 
@@ -81,6 +82,10 @@ type AuthzConfig struct {
 	ContextMode          string `json:"contextMode"`
 }
 
+type FeatureConfig struct {
+	AssetLifecycle bool `json:"assetLifecycle"`
+}
+
 type RuntimePathConf struct {
 	ConfigFile string `json:"configFile"`
 }
@@ -102,6 +107,9 @@ type fileConfig struct {
 		AllowPrivateToPublic bool `yaml:"allow_private_to_public"`
 		ContextMode          string `yaml:"context_mode"`
 	} `yaml:"authz"`
+	Feature struct {
+		AssetLifecycle *bool `yaml:"asset_lifecycle"`
+	} `yaml:"feature"`
 	Cache struct {
 		Provider      string `yaml:"provider"`
 		RedisAddr     string `yaml:"redis_addr"`
