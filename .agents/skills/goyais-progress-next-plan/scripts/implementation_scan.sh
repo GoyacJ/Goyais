@@ -209,10 +209,10 @@ domain_row \
   "plugin-market" \
   '/api/v1/plugin-market/packages|/api/v1/plugin-market/installs' \
   'error.plugin.not_implemented' \
-  '' \
-  "${REPO_ROOT}/internal/access/http/router.go" \
-  "${REPO_ROOT}/internal/app/server.go" \
-  "${REPO_ROOT}/internal" \
+  'deps.PluginService != nil' \
+  "${REPO_ROOT}/internal/access/http/plugins.go" \
+  "${REPO_ROOT}/internal/plugin/service.go" \
+  "${REPO_ROOT}/internal/plugin" \
   'plugin' \
   '/api/v1/plugin-market'
 
@@ -220,12 +220,23 @@ domain_row \
   "streams" \
   '/api/v1/streams' \
   'error.stream.not_implemented' \
-  '' \
-  "${REPO_ROOT}/internal/access/http/router.go" \
-  "${REPO_ROOT}/internal/app/server.go" \
-  "${REPO_ROOT}/internal" \
+  'deps.StreamService != nil' \
+  "${REPO_ROOT}/internal/access/http/streams.go" \
+  "${REPO_ROOT}/internal/stream/service.go" \
+  "${REPO_ROOT}/internal/stream" \
   'stream' \
   '/api/v1/streams'
+
+domain_row \
+  "algorithms-mvp" \
+  '/api/v1/algorithms/' \
+  'error.algorithm.not_implemented' \
+  '' \
+  "${REPO_ROOT}/internal/access/http/algorithms.go" \
+  "${REPO_ROOT}/internal/algorithm/service.go" \
+  "${REPO_ROOT}/internal/algorithm" \
+  'algorithm_runs|algorithms' \
+  '/api/v1/algorithms'
 
 printf '\n## Contract Drift Findings\n'
 printf -- '- source_router: %s\n' "${ROUTER_FILE}"
@@ -273,6 +284,7 @@ check_drift "workflow" '^  /workflow-' '/api/v1/workflow-templates|/api/v1/workf
 check_drift "registry" '^  /registry/' '/api/v1/registry/'
 check_drift "plugin-market" '^  /plugin-market/' '/api/v1/plugin-market/'
 check_drift "streams" '^  /streams' '/api/v1/streams'
+check_drift "algorithms-mvp" '^  /algorithms/' '/api/v1/algorithms/'
 
 if [[ "${SCAN_DEPTH}" == "deep" ]]; then
   printf '\n## Deep Evidence Commands\n'

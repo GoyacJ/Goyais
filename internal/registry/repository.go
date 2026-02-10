@@ -12,6 +12,7 @@ import (
 
 type Repository interface {
 	GetCapabilityForAccess(ctx context.Context, req command.RequestContext, capabilityID string) (Capability, error)
+	GetAlgorithmForAccess(ctx context.Context, req command.RequestContext, algorithmID string) (Algorithm, error)
 	ListCapabilities(ctx context.Context, params ListParams) (CapabilityListResult, error)
 	ListAlgorithms(ctx context.Context, params ListParams) (AlgorithmListResult, error)
 	ListProviders(ctx context.Context, params ListParams) (ProviderListResult, error)

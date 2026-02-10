@@ -11,8 +11,11 @@
 | assets | `/api/v1/assets*` | `/Users/goya/Repo/Git/Goyais/internal/access/http/assets.go` | `/Users/goya/Repo/Git/Goyais/internal/asset/service.go` | `/Users/goya/Repo/Git/Goyais/internal/asset/` | `migrations/*/*asset*.sql` | `router_integration_test.go`, `postgres_contract_test.go` |
 | workflow | `/api/v1/workflow-*` | `/Users/goya/Repo/Git/Goyais/internal/access/http/workflows.go` | `/Users/goya/Repo/Git/Goyais/internal/workflow/service.go` | `/Users/goya/Repo/Git/Goyais/internal/workflow/` | `migrations/*/*workflow*.sql` | `router_integration_test.go`, `postgres_contract_test.go` |
 | registry | `/api/v1/registry/*` | `/Users/goya/Repo/Git/Goyais/internal/access/http/registry.go` | `/Users/goya/Repo/Git/Goyais/internal/registry/service.go` | `/Users/goya/Repo/Git/Goyais/internal/registry/` | `migrations/*/*registry*.sql` | `router_integration_test.go`, `postgres_contract_test.go` |
-| plugin-market | `/api/v1/plugin-market/*` | `/Users/goya/Repo/Git/Goyais/internal/access/http/router.go` | `/Users/goya/Repo/Git/Goyais/internal/app/server.go` | `/Users/goya/Repo/Git/Goyais/internal/` | deferred in M2 | `router_integration_test.go` |
-| streams | `/api/v1/streams*` | `/Users/goya/Repo/Git/Goyais/internal/access/http/router.go` | `/Users/goya/Repo/Git/Goyais/internal/app/server.go` | `/Users/goya/Repo/Git/Goyais/internal/` | deferred in M2 | `router_integration_test.go` |
+| plugin-market | `/api/v1/plugin-market/*` | `/Users/goya/Repo/Git/Goyais/internal/access/http/plugins.go` | `/Users/goya/Repo/Git/Goyais/internal/plugin/service.go` | `/Users/goya/Repo/Git/Goyais/internal/plugin/` | `migrations/*/*plugin*.sql` | `router_integration_test.go`, `postgres_contract_test.go` |
+| streams | `/api/v1/streams*` | `/Users/goya/Repo/Git/Goyais/internal/access/http/streams.go` | `/Users/goya/Repo/Git/Goyais/internal/stream/service.go` | `/Users/goya/Repo/Git/Goyais/internal/stream/` | `migrations/*/*stream*.sql` | `router_integration_test.go`, `postgres_contract_test.go` |
+| algorithms (MVP) | `/api/v1/algorithms/*` | `/Users/goya/Repo/Git/Goyais/internal/access/http/algorithms.go` | `/Users/goya/Repo/Git/Goyais/internal/algorithm/service.go` | `/Users/goya/Repo/Git/Goyais/internal/algorithm/` | `migrations/*/*algorithm*.sql` | `router_integration_test.go` |
+
+> 说明：`algorithms (MVP)` 在 Slice A 仅建立契约与扫描映射；在 Slice B 前应被扫描为 `placeholder`。
 
 ## Status Rules
 

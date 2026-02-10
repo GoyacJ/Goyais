@@ -40,6 +40,26 @@ func (r *PostgresRepository) GetCapabilityForAccess(ctx context.Context, req com
 	return item, nil
 }
 
+func (r *PostgresRepository) GetAlgorithmForAccess(ctx context.Context, req command.RequestContext, algorithmID string) (Algorithm, error) {
+	row := r.db.QueryRowContext(
+		ctx,
+		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json::text, name, version, template_ref, defaults_json::text, constraints_json::text, dependencies_json::text, status, created_at, updated_at
+		 FROM algorithms
+		 WHERE id = $1 AND tenant_id = $2 AND workspace_id = $3`,
+		strings.TrimSpace(algorithmID),
+		req.TenantID,
+		req.WorkspaceID,
+	)
+	item, err := scanPostgresAlgorithm(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Algorithm{}, ErrAlgorithmNotFound
+	}
+	if err != nil {
+		return Algorithm{}, fmt.Errorf("query algorithm for access: %w", err)
+	}
+	return item, nil
+}
+
 func (r *PostgresRepository) ListCapabilities(ctx context.Context, params ListParams) (CapabilityListResult, error) {
 	page, pageSize := normalizeListParams(params.Page, params.PageSize)
 	now := time.Now().UTC()

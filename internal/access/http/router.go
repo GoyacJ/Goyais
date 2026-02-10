@@ -66,14 +66,19 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 		apiMux.Handle("/api/v1/registry/capabilities", http.HandlerFunc(domainHandler.handleRegistryCapabilities))
 		apiMux.Handle("/api/v1/registry/capabilities/", http.HandlerFunc(domainHandler.handleRegistryCapabilityRoutes))
 		apiMux.Handle("/api/v1/registry/algorithms", http.HandlerFunc(domainHandler.handleRegistryAlgorithms))
+		apiMux.Handle("/api/v1/registry/algorithms/", http.HandlerFunc(domainHandler.handleRegistryAlgorithmRoutes))
 		apiMux.Handle("/api/v1/registry/providers", http.HandlerFunc(domainHandler.handleRegistryProviders))
 	} else {
 		registryNotImplemented := NewNotImplementedHandler("error.registry.not_implemented")
 		apiMux.Handle("/api/v1/registry/capabilities", registryNotImplemented)
 		apiMux.Handle("/api/v1/registry/capabilities/", registryNotImplemented)
 		apiMux.Handle("/api/v1/registry/algorithms", registryNotImplemented)
+		apiMux.Handle("/api/v1/registry/algorithms/", registryNotImplemented)
 		apiMux.Handle("/api/v1/registry/providers", registryNotImplemented)
 	}
+
+	algorithmNotImplemented := NewNotImplementedHandler("error.algorithm.not_implemented")
+	apiMux.Handle("/api/v1/algorithms/", algorithmNotImplemented)
 
 	if deps.PluginService != nil {
 		apiMux.Handle("/api/v1/plugin-market/packages", http.HandlerFunc(domainHandler.handlePluginPackages))

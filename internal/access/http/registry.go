@@ -179,6 +179,35 @@ func (h *apiHandler) handleRegistryAlgorithms(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, resp)
 }
 
+func (h *apiHandler) handleRegistryAlgorithmRoutes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	algorithmID := pathID("/api/v1/registry/algorithms/", r.URL.Path)
+	if algorithmID == "" {
+		errorx.Write(w, http.StatusNotFound, "REGISTRY_NOT_FOUND", "error.registry.not_found", nil)
+		return
+	}
+
+	reqCtx, ok := requireRequestContext(w, r)
+	if !ok {
+		return
+	}
+	if h.registryService == nil {
+		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.registry.not_implemented", nil)
+		return
+	}
+
+	item, err := h.registryService.GetAlgorithm(r.Context(), reqCtx, algorithmID)
+	if err != nil {
+		writeRegistryError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toAlgorithmPayload(item))
+}
+
 func (h *apiHandler) handleRegistryProviders(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -258,6 +287,8 @@ func writeRegistryError(w http.ResponseWriter, err error) {
 		errorx.Write(w, http.StatusBadRequest, "INVALID_CURSOR", "error.pagination.invalid_cursor", nil)
 	case errors.Is(err, registry.ErrCapabilityNotFound):
 		errorx.Write(w, http.StatusNotFound, "CAPABILITY_NOT_FOUND", "error.registry.not_found", nil)
+	case errors.Is(err, registry.ErrAlgorithmNotFound):
+		errorx.Write(w, http.StatusNotFound, "ALGORITHM_NOT_FOUND", "error.registry.not_found", nil)
 	case errors.As(err, &forbidden), errors.Is(err, registry.ErrForbidden):
 		details := map[string]any{}
 		if forbidden != nil && forbidden.Reason != "" {

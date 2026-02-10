@@ -225,6 +225,24 @@ v0.1 当前实现进度：
 - `status`
 - `created_at, updated_at`
 
+### algorithm_runs（MVP 目标）
+- `id, tenant_id, workspace_id, owner_id, visibility`
+- `algorithm_id`
+- `workflow_run_id`（映射到 workflow 实际执行）
+- `command_id`（`algorithm.run`）
+- `status`（pending/running/succeeded/failed/canceled）
+- `inputs`（JSON）
+- `outputs`（JSON）
+- `asset_ids`（JSON，运行产生的资产引用）
+- `error_code`
+- `message_key`
+- `created_at, updated_at`
+
+建议索引：
+- `algorithm_runs(tenant_id, workspace_id, created_at desc, id desc)`
+- `algorithm_runs(algorithm_id, created_at desc, id desc)`
+- `algorithm_runs(workflow_run_id)`
+
 ### plugin_packages
 - `id, tenant_id, workspace_id, owner_id, visibility`
 - `name, version, package_type`
@@ -279,7 +297,7 @@ v0.1 当前实现进度：
 
 ### commands
 - `id, tenant_id, workspace_id, owner_id`
-- `command_type`（示例：`asset.upload`、`workflow.run`、`workflow.retry`、`share.create`、`share.delete`、`plugin.upload`、`plugin.install`、`plugin.enable`、`plugin.disable`、`plugin.rollback`、`stream.create`、`stream.record.start`、`stream.record.stop`、`stream.kick`）
+- `command_type`（示例：`asset.upload`、`workflow.run`、`workflow.retry`、`algorithm.run`、`share.create`、`share.delete`、`plugin.upload`、`plugin.install`、`plugin.enable`、`plugin.disable`、`plugin.rollback`、`stream.create`、`stream.record.start`、`stream.record.stop`、`stream.kick`）
 - `payload`（JSON）
 - `status`（accepted/running/succeeded/failed/canceled）
 - `visibility`（默认 `PRIVATE`，NOT NULL）
