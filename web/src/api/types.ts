@@ -1,4 +1,4 @@
-import type { Visibility } from '@/design-system/types'
+import type { CommandStatus, Visibility } from '@/design-system/types'
 
 export interface ApiError {
   code: string
@@ -37,6 +37,8 @@ export interface WriteResponse<T> {
   commandRef: CommandRef
 }
 
+export type ApiObject = Record<string, unknown>
+
 export interface ACLItem {
   subjectType: string
   subjectId: string
@@ -57,9 +59,10 @@ export interface ResourceBase {
 }
 
 export interface CommandDTO extends ResourceBase {
+  status: CommandStatus
   commandType: string
-  payload: Record<string, unknown>
-  result?: Record<string, unknown>
+  payload: ApiObject
+  result?: ApiObject
   error?: ApiError
   acceptedAt: string
   finishedAt?: string
@@ -73,7 +76,128 @@ export interface AssetDTO extends ResourceBase {
   size: number
   hash: string
   uri: string
-  metadata?: Record<string, unknown>
+  metadata?: ApiObject
+}
+
+export interface WorkflowTemplateDTO extends ResourceBase {
+  name: string
+  description?: string
+  graph: ApiObject
+  schemaInputs: ApiObject
+  schemaOutputs: ApiObject
+  uiState: ApiObject
+  currentVersion?: string
+}
+
+export interface WorkflowRunDTO extends ResourceBase {
+  templateId: string
+  templateVersion: string
+  attempt: number
+  retryOfRunId?: string
+  replayFromStepKey?: string
+  traceId?: string
+  inputs: ApiObject
+  outputs: ApiObject
+  startedAt: string
+  finishedAt?: string
+  durationMs?: number
+  error?: ApiError
+}
+
+export interface StepRunDTO extends ResourceBase {
+  runId: string
+  stepKey: string
+  stepType: string
+  attempt: number
+  traceId?: string
+  input: ApiObject
+  output: ApiObject
+  artifacts: ApiObject
+  logRef?: string
+  startedAt: string
+  finishedAt?: string
+  durationMs?: number
+  error?: ApiError
+}
+
+export interface CapabilityDTO extends ResourceBase {
+  name: string
+  kind: string
+  version: string
+  providerId: string
+  inputSchema: ApiObject
+  outputSchema: ApiObject
+  requiredPermissions: string[]
+  egressPolicy: ApiObject
+}
+
+export interface AlgorithmDTO extends ResourceBase {
+  name: string
+  version: string
+  templateRef: string
+  defaults: ApiObject
+  constraints: ApiObject
+  dependencies: ApiObject
+}
+
+export interface ProviderDTO extends ResourceBase {
+  name: string
+  providerType: string
+  endpoint: string
+  metadata: ApiObject
+}
+
+export type PluginPackageType = 'tool-provider' | 'skill-pack' | 'algo-pack' | 'mcp-provider'
+export type PluginInstallScope = 'workspace' | 'tenant'
+
+export interface PluginPackageDTO extends ResourceBase {
+  name: string
+  version: string
+  packageType: PluginPackageType | string
+  manifest: ApiObject
+}
+
+export interface PluginInstallDTO extends ResourceBase {
+  packageId: string
+  scope: PluginInstallScope | string
+  installedAt?: string
+  error?: ApiError
+}
+
+export interface StreamDTO extends ResourceBase {
+  path: string
+  protocol: string
+  source: string
+  endpoints: ApiObject
+  state: ApiObject
+}
+
+export interface StreamRecordingDTO {
+  id: string
+  streamId: string
+  tenantId: string
+  workspaceId: string
+  ownerId: string
+  visibility: Visibility
+  status: string
+  startedAt: string
+  finishedAt?: string
+  createdAt: string
+  updatedAt: string
+  assetId?: string
+  error?: ApiError
+}
+
+export interface AlgorithmRunResourceDTO {
+  id: string
+  algorithmId: string
+  workflowRunId: string
+  status: string
+  outputs?: ApiObject
+  assetIds?: string[]
+  createdAt: string
+  updatedAt: string
+  error?: ApiError
 }
 
 export interface ResourceSnapshot {
@@ -97,4 +221,59 @@ export interface AssetListParams {
   cursor?: string
   page?: number
   pageSize?: number
+}
+
+export interface WorkflowListParams {
+  cursor?: string
+  page?: number
+  pageSize?: number
+}
+
+export interface WorkflowTemplateCreateRequest {
+  name: string
+  description?: string
+  graph: ApiObject
+  schemaInputs?: ApiObject
+  schemaOutputs?: ApiObject
+  visibility?: Visibility
+}
+
+export interface WorkflowTemplatePatchRequest {
+  graph?: ApiObject
+  operations?: ApiObject[]
+}
+
+export interface WorkflowRunCreateRequest {
+  templateId: string
+  templateVersion?: string
+  inputs?: ApiObject
+  mode?: 'sync' | 'running' | 'fail'
+  visibility?: Visibility
+}
+
+export interface PluginPackageUploadRequest {
+  name: string
+  version: string
+  packageType: PluginPackageType | string
+  manifest?: ApiObject
+  visibility?: Visibility
+}
+
+export interface PluginInstallRequest {
+  packageId: string
+  scope?: PluginInstallScope
+}
+
+export interface StreamCreateRequest {
+  path: string
+  protocol: 'rtsp' | 'rtmp' | 'srt' | 'webrtc' | 'hls' | string
+  source?: 'push' | 'pull' | string
+  visibility?: Visibility
+  metadata?: ApiObject
+}
+
+export interface AlgorithmRunRequest {
+  inputs: ApiObject
+  visibility?: Visibility
+  mode?: string
 }

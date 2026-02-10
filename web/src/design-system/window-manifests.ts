@@ -28,8 +28,16 @@ const manifests: Record<string, WindowPaneManifest[]> = {
     { id: 'list', x: 24, y: 226, w: 800, h: 620 },
     { id: 'detail', x: 840, y: 226, w: 468, h: 620 },
   ],
-  canvas: [{ id: 'canvas-surface', x: 24, y: 20, w: 1284, h: 760 }],
-  plugins: [{ id: 'plugin-catalog', x: 24, y: 20, w: 1284, h: 700 }],
+  canvas: [
+    { id: 'canvas-templates', x: 24, y: 20, w: 620, h: 350 },
+    { id: 'canvas-runs', x: 660, y: 20, w: 648, h: 350 },
+    { id: 'canvas-steps', x: 24, y: 386, w: 620, h: 360 },
+    { id: 'canvas-registry', x: 660, y: 386, w: 648, h: 360 },
+  ],
+  plugins: [
+    { id: 'plugin-catalog', x: 24, y: 20, w: 860, h: 720 },
+    { id: 'plugin-activity', x: 900, y: 20, w: 408, h: 720 },
+  ],
   streams: [
     { id: 'stream-overview', x: 24, y: 20, w: 1284, h: 420 },
     { id: 'stream-logs', x: 24, y: 456, w: 1284, h: 290 },

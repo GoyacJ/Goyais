@@ -1,0 +1,40 @@
+<template>
+  <div class="space-y-2">
+    <EmptyState
+      v-if="events.length === 0"
+      variant="commands-empty"
+      :title="t('page.plugins.timelineEmptyTitle')"
+      :description="t('page.plugins.timelineEmptyDescription')"
+    />
+    <article v-for="item in events" :key="item.commandId" class="ui-surface p-3">
+      <header class="flex items-center justify-between gap-2">
+        <p class="ui-monospace text-xs text-ui-muted">{{ item.commandId }}</p>
+        <StatusBadge :status="item.status" />
+      </header>
+      <p class="mt-2 text-sm text-ui-fg">{{ item.commandType }}</p>
+      <p class="mt-1 text-xs text-ui-muted">{{ item.acceptedAt }}</p>
+      <p class="mt-2 text-sm text-ui-muted">{{ item.summary }}</p>
+    </article>
+  </div>
+</template>
+
+<script setup lang="ts">
+import EmptyState from '@/components/layout/EmptyState.vue'
+import StatusBadge from '@/components/runtime/StatusBadge.vue'
+import type { CommandStatus } from '@/design-system/types'
+import { useI18n } from 'vue-i18n'
+
+export interface PluginCommandTimelineEvent {
+  commandId: string
+  commandType: string
+  acceptedAt: string
+  status: CommandStatus
+  summary: string
+}
+
+defineProps<{
+  events: PluginCommandTimelineEvent[]
+}>()
+
+const { t } = useI18n({ useScope: 'global' })
+</script>
