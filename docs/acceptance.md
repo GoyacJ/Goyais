@@ -177,6 +177,12 @@
 - [x] `make build` 通过。
 - [x] `verify_single_binary.sh` 返回 `0`（含 no-store、favicon/robots 404、JS Content-Type、移除 web/dist 后可运行）。
 
+### 12.5 Asset 生命周期（feature gate）
+- [x] `GOYAIS_FEATURE_ASSET_LIFECYCLE=true` 时，`PATCH /api/v1/assets/{assetId}` 走 command-first，返回 `202 + resource + commandRef`。
+- [x] `GOYAIS_FEATURE_ASSET_LIFECYCLE=true` 时，`DELETE /api/v1/assets/{assetId}` 走 command-first，返回 `202 + resource + commandRef`，资源状态为 `deleted`。
+- [x] `GOYAIS_FEATURE_ASSET_LIFECYCLE=true` 时，`GET /api/v1/assets/{assetId}/lineage` 返回 `200` 与 lineage edges。
+- [x] `GOYAIS_FEATURE_ASSET_LIFECYCLE=false`（默认）时，上述三条路径返回 `501 NOT_IMPLEMENTED`，用于安全回滚。
+
 ## 13. 结果判定
 
 - [x] P0 条目（2、4、5、6）全部通过。

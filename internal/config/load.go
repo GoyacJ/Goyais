@@ -93,6 +93,9 @@ func defaultsForProfile(profile string) Config {
 		Authz: AuthzConfig{
 			AllowPrivateToPublic: false,
 		},
+		Feature: FeatureConfig{
+			AssetLifecycle: false,
+		},
 	}
 
 	if profile == ProfileFull {
@@ -139,6 +142,9 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	}
 	if fc.Authz.AllowPrivateToPublic {
 		cfg.Authz.AllowPrivateToPublic = true
+	}
+	if fc.Feature.AssetLifecycle != nil {
+		cfg.Feature.AssetLifecycle = *fc.Feature.AssetLifecycle
 	}
 	if v := strings.ToLower(strings.TrimSpace(fc.Cache.Provider)); v != "" {
 		cfg.Providers.Cache = v
@@ -231,6 +237,11 @@ func applyEnvOverrides(cfg *Config) {
 	if v := strings.TrimSpace(os.Getenv("GOYAIS_ALLOW_PRIVATE_TO_PUBLIC")); v != "" {
 		if parsed, err := strconv.ParseBool(v); err == nil {
 			cfg.Authz.AllowPrivateToPublic = parsed
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_ASSET_LIFECYCLE")); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			cfg.Feature.AssetLifecycle = parsed
 		}
 	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_CACHE_PROVIDER"))); v != "" {

@@ -297,7 +297,7 @@ v0.1 当前实现进度：
 
 ### commands
 - `id, tenant_id, workspace_id, owner_id`
-- `command_type`（示例：`asset.upload`、`workflow.run`、`workflow.retry`、`algorithm.run`、`share.create`、`share.delete`、`plugin.upload`、`plugin.install`、`plugin.enable`、`plugin.disable`、`plugin.rollback`、`stream.create`、`stream.record.start`、`stream.record.stop`、`stream.kick`）
+- `command_type`（示例：`asset.upload`、`asset.update`、`asset.delete`、`workflow.run`、`workflow.retry`、`algorithm.run`、`share.create`、`share.delete`、`plugin.upload`、`plugin.install`、`plugin.enable`、`plugin.disable`、`plugin.rollback`、`stream.create`、`stream.record.start`、`stream.record.stop`、`stream.kick`）
 - `payload`（JSON）
 - `status`（accepted/running/succeeded/failed/canceled）
 - `visibility`（默认 `PRIVATE`，NOT NULL）

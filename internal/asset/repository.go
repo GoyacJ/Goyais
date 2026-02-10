@@ -14,6 +14,9 @@ type Repository interface {
 	Create(ctx context.Context, in CreateInput) (Asset, error)
 	GetForAccess(ctx context.Context, req command.RequestContext, id string) (Asset, error)
 	List(ctx context.Context, params ListParams) (ListResult, error)
+	Update(ctx context.Context, in UpdateInput) (Asset, error)
+	Delete(ctx context.Context, req command.RequestContext, id string, now time.Time) (Asset, error)
+	ListLineage(ctx context.Context, req command.RequestContext, assetID string) ([]LineageEdge, error)
 	HasPermission(ctx context.Context, req command.RequestContext, assetID, permission string, now time.Time) (bool, error)
 }
 

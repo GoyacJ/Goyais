@@ -1364,6 +1364,10 @@ func newTestServer(t *testing.T) (string, func()) {
 }
 
 func newTestServerWithDBPath(t *testing.T) (string, string, func()) {
+	return newTestServerWithDBPathAndAssetLifecycle(t, false)
+}
+
+func newTestServerWithDBPathAndAssetLifecycle(t *testing.T, assetLifecycleEnabled bool) (string, string, func()) {
 	t.Helper()
 
 	previousWD, err := os.Getwd()
@@ -1401,6 +1405,9 @@ func newTestServerWithDBPath(t *testing.T) (string, string, func()) {
 		Authz: config.AuthzConfig{
 			AllowPrivateToPublic: false,
 		},
+		Feature: config.FeatureConfig{
+			AssetLifecycle: assetLifecycleEnabled,
+		},
 	}
 
 	srv, err := app.NewServer(cfg)
@@ -1413,6 +1420,101 @@ func newTestServerWithDBPath(t *testing.T) (string, string, func()) {
 		ts.Close()
 		_ = srv.Shutdown(context.Background())
 	}
+}
+
+func TestAPIAssetLifecycleFeatureEnabled(t *testing.T) {
+	baseURL, _, shutdown := newTestServerWithDBPathAndAssetLifecycle(t, true)
+	defer shutdown()
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "lifecycle.txt")
+	if err != nil {
+		t.Fatalf("create multipart file: %v", err)
+	}
+	if _, err := part.Write([]byte("asset-lifecycle")); err != nil {
+		t.Fatalf("write multipart payload: %v", err)
+	}
+	_ = writer.WriteField("name", "lifecycle")
+	_ = writer.Close()
+
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/assets", &body)
+	if err != nil {
+		t.Fatalf("new upload request: %v", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("X-Tenant-Id", "t1")
+	req.Header.Set("X-Workspace-Id", "w1")
+	req.Header.Set("X-User-Id", "u1")
+	uploadResp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("execute upload request: %v", err)
+	}
+	defer uploadResp.Body.Close()
+	assertStatus(t, uploadResp, http.StatusAccepted)
+	assetID := readJSONPath(t, uploadResp.Body, "resource.id").(string)
+	if assetID == "" {
+		t.Fatalf("expected asset id")
+	}
+
+	respPatch := mustRequestJSON(t, client, http.MethodPatch, baseURL+"/api/v1/assets/"+assetID, headersWithJSONContext("u1"), map[string]any{
+		"name":     "lifecycle-renamed",
+		"metadata": map[string]any{"stage": "patched"},
+	})
+	defer respPatch.Body.Close()
+	assertStatus(t, respPatch, http.StatusAccepted)
+	var patchPayload map[string]any
+	mustDecodeJSON(t, respPatch.Body, &patchPayload)
+	patchResource, _ := patchPayload["resource"].(map[string]any)
+	if got, _ := patchResource["name"].(string); got != "lifecycle-renamed" {
+		t.Fatalf("unexpected patched asset name: got=%v", patchResource["name"])
+	}
+	patchCommandRef, _ := patchPayload["commandRef"].(map[string]any)
+	patchCommandID, _ := patchCommandRef["commandId"].(string)
+	if patchCommandID == "" {
+		t.Fatalf("expected patch command id")
+	}
+	respPatchCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+patchCommandID, headersWithContext("u1"), nil)
+	defer respPatchCommand.Body.Close()
+	assertStatus(t, respPatchCommand, http.StatusOK)
+	if got := readJSONPath(t, respPatchCommand.Body, "commandType"); got != "asset.update" {
+		t.Fatalf("unexpected patch command type: %v", got)
+	}
+
+	respLineage := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets/"+assetID+"/lineage", headersWithContext("u1"), nil)
+	defer respLineage.Body.Close()
+	assertStatus(t, respLineage, http.StatusOK)
+	if got := readJSONPath(t, respLineage.Body, "assetId"); got != assetID {
+		t.Fatalf("unexpected lineage asset id: got=%v want=%s", got, assetID)
+	}
+
+	respDelete := mustRequest(t, client, http.MethodDelete, baseURL+"/api/v1/assets/"+assetID, headersWithContext("u1"), nil)
+	defer respDelete.Body.Close()
+	assertStatus(t, respDelete, http.StatusAccepted)
+	var deletePayload map[string]any
+	mustDecodeJSON(t, respDelete.Body, &deletePayload)
+	deleteResource, _ := deletePayload["resource"].(map[string]any)
+	if got, _ := deleteResource["status"].(string); got != "deleted" {
+		t.Fatalf("unexpected deleted status: %v", deleteResource["status"])
+	}
+	deleteCommandRef, _ := deletePayload["commandRef"].(map[string]any)
+	deleteCommandID, _ := deleteCommandRef["commandId"].(string)
+	if deleteCommandID == "" {
+		t.Fatalf("expected delete command id")
+	}
+	respDeleteCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+deleteCommandID, headersWithContext("u1"), nil)
+	defer respDeleteCommand.Body.Close()
+	assertStatus(t, respDeleteCommand, http.StatusOK)
+	if got := readJSONPath(t, respDeleteCommand.Body, "commandType"); got != "asset.delete" {
+		t.Fatalf("unexpected delete command type: %v", got)
+	}
+
+	respGet := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets/"+assetID, headersWithContext("u1"), nil)
+	defer respGet.Body.Close()
+	assertStatus(t, respGet, http.StatusNotFound)
+	assertErrorCode(t, respGet.Body, "ASSET_NOT_FOUND")
 }
 
 type auditEventRow struct {

@@ -41,6 +41,9 @@ func TestLoadDefaultsMinimal(t *testing.T) {
 	if len(cfg.EventBus.Kafka.Brokers) == 0 {
 		t.Fatalf("expected default kafka brokers")
 	}
+	if cfg.Feature.AssetLifecycle {
+		t.Fatalf("expected default feature.asset_lifecycle=false")
+	}
 }
 
 func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
@@ -69,6 +72,7 @@ func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	t.Setenv("GOYAIS_EVENT_BUS_KAFKA_COMMAND_TOPIC", "goyais.command.test")
 	t.Setenv("GOYAIS_EVENT_BUS_KAFKA_STREAM_TOPIC", "goyais.stream.test")
 	t.Setenv("GOYAIS_EVENT_BUS_KAFKA_CONSUMER_GROUP", "goyais-test-group")
+	t.Setenv("GOYAIS_FEATURE_ASSET_LIFECYCLE", "true")
 
 	cfg, err := Load()
 	if err != nil {
@@ -116,6 +120,9 @@ func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	}
 	if cfg.EventBus.Kafka.ConsumerGroup != "goyais-test-group" {
 		t.Fatalf("unexpected event bus consumer group: %s", cfg.EventBus.Kafka.ConsumerGroup)
+	}
+	if !cfg.Feature.AssetLifecycle {
+		t.Fatalf("expected feature.asset_lifecycle=true from env override")
 	}
 }
 

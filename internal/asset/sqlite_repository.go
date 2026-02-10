@@ -219,6 +219,95 @@ func (r *SQLiteRepository) List(ctx context.Context, params ListParams) (ListRes
 	return ListResult{Items: items, Total: total}, nil
 }
 
+func (r *SQLiteRepository) Update(ctx context.Context, in UpdateInput) (Asset, error) {
+	current, err := r.GetForAccess(ctx, in.Context, in.AssetID)
+	if err != nil {
+		return Asset{}, err
+	}
+	if current.Status == StatusDeleted {
+		return Asset{}, ErrNotFound
+	}
+
+	name := current.Name
+	if in.Name != nil {
+		name = strings.TrimSpace(*in.Name)
+	}
+	visibility := current.Visibility
+	if in.Visibility != nil {
+		visibility = strings.ToUpper(strings.TrimSpace(*in.Visibility))
+	}
+	metadata := current.MetadataJSON
+	if in.MetadataSet {
+		metadata = in.Metadata
+	}
+	now := in.Now.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+
+	_, err = r.db.ExecContext(ctx,
+		`UPDATE assets
+		 SET name = ?, visibility = ?, metadata_json = ?, updated_at = ?
+		 WHERE id = ? AND tenant_id = ? AND workspace_id = ?`,
+		name,
+		visibility,
+		string(metadata),
+		now.Format(time.RFC3339Nano),
+		in.AssetID,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+	)
+	if err != nil {
+		return Asset{}, fmt.Errorf("update asset: %w", err)
+	}
+	return r.GetForAccess(ctx, in.Context, in.AssetID)
+}
+
+func (r *SQLiteRepository) Delete(ctx context.Context, req command.RequestContext, id string, now time.Time) (Asset, error) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE assets
+		 SET status = ?, updated_at = ?
+		 WHERE id = ? AND tenant_id = ? AND workspace_id = ?`,
+		StatusDeleted,
+		now.Format(time.RFC3339Nano),
+		id,
+		req.TenantID,
+		req.WorkspaceID,
+	)
+	if err != nil {
+		return Asset{}, fmt.Errorf("delete asset: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return Asset{}, fmt.Errorf("delete asset rows affected: %w", err)
+	}
+	if affected == 0 {
+		return Asset{}, ErrNotFound
+	}
+	return r.GetForAccess(ctx, req, id)
+}
+
+func (r *SQLiteRepository) ListLineage(ctx context.Context, req command.RequestContext, assetID string) ([]LineageEdge, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, tenant_id, workspace_id, source_asset_id, target_asset_id, run_id, step_id, relation, created_at
+		 FROM asset_lineage
+		 WHERE tenant_id = ? AND workspace_id = ? AND (target_asset_id = ? OR source_asset_id = ?)
+		 ORDER BY created_at DESC, id DESC`,
+		req.TenantID,
+		req.WorkspaceID,
+		assetID,
+		assetID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list asset lineage: %w", err)
+	}
+	defer rows.Close()
+	return scanSQLiteLineageEdges(rows)
+}
+
 func (r *SQLiteRepository) HasPermission(ctx context.Context, req command.RequestContext, assetID, permission string, now time.Time) (bool, error) {
 	if strings.TrimSpace(assetID) == "" || strings.TrimSpace(permission) == "" {
 		return false, nil
@@ -338,4 +427,49 @@ func scanAsset(row rowScanner) (Asset, error) {
 	item.CreatedAt = createdAt
 	item.UpdatedAt = updatedAt
 	return item, nil
+}
+
+func scanSQLiteLineageEdges(rows *sql.Rows) ([]LineageEdge, error) {
+	edges := make([]LineageEdge, 0)
+	for rows.Next() {
+		var (
+			edge         LineageEdge
+			sourceID     sql.NullString
+			runID        sql.NullString
+			stepID       sql.NullString
+			createdAtRaw string
+		)
+		if err := rows.Scan(
+			&edge.ID,
+			&edge.TenantID,
+			&edge.WorkspaceID,
+			&sourceID,
+			&edge.TargetAssetID,
+			&runID,
+			&stepID,
+			&edge.Relation,
+			&createdAtRaw,
+		); err != nil {
+			return nil, err
+		}
+		createdAt, err := time.Parse(time.RFC3339Nano, createdAtRaw)
+		if err != nil {
+			return nil, fmt.Errorf("parse lineage created_at: %w", err)
+		}
+		edge.CreatedAt = createdAt.UTC()
+		if sourceID.Valid {
+			edge.SourceAssetID = sourceID.String
+		}
+		if runID.Valid {
+			edge.RunID = runID.String
+		}
+		if stepID.Valid {
+			edge.StepID = stepID.String
+		}
+		edges = append(edges, edge)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate asset lineage: %w", err)
+	}
+	return edges, nil
 }

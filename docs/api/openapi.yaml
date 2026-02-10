@@ -480,8 +480,9 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
     patch:
       tags: [Asset]
-      summary: Update asset (domain sugar -> command, placeholder)
+      summary: Update asset (domain sugar -> command)
       operationId: updateAsset
+      description: 受 `GOYAIS_FEATURE_ASSET_LIFECYCLE` 控制；关闭时返回 `501 NOT_IMPLEMENTED`。
       parameters:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
@@ -497,14 +498,27 @@ paths:
             schema:
               $ref: '#/components/schemas/AssetUpdateRequest'
       responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseAsset'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     delete:
       tags: [Asset]
-      summary: Delete asset (domain sugar -> command, placeholder)
+      summary: Delete asset (domain sugar -> command)
       operationId: deleteAsset
+      description: 受 `GOYAIS_FEATURE_ASSET_LIFECYCLE` 控制；关闭时返回 `501 NOT_IMPLEMENTED`。
       parameters:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
@@ -514,6 +528,18 @@ paths:
         - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/AssetId'
       responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseAsset'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -522,8 +548,9 @@ paths:
   /assets/{assetId}/lineage:
     get:
       tags: [Asset]
-      summary: Get asset lineage graph (placeholder)
+      summary: Get asset lineage graph
       operationId: getAssetLineage
+      description: 受 `GOYAIS_FEATURE_ASSET_LIFECYCLE` 控制；关闭时返回 `501 NOT_IMPLEMENTED`。
       parameters:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
@@ -533,6 +560,18 @@ paths:
         - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/AssetId'
       responses:
+        '200':
+          description: Asset lineage graph
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetLineageResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -1886,6 +1925,38 @@ components:
         metadata:
           type: object
           additionalProperties: true
+
+    AssetLineageEdge:
+      type: object
+      required: [id, targetAssetId, relation, createdAt]
+      properties:
+        id:
+          type: string
+        sourceAssetId:
+          type: string
+        targetAssetId:
+          type: string
+        runId:
+          type: string
+        stepId:
+          type: string
+        relation:
+          type: string
+          enum: [derived_from, recorded_from, transformed_from]
+        createdAt:
+          type: string
+          format: date-time
+
+    AssetLineageResponse:
+      type: object
+      required: [assetId, edges]
+      properties:
+        assetId:
+          type: string
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetLineageEdge'
 
     WorkflowTemplate:
       allOf:

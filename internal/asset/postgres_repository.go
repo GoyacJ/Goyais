@@ -229,6 +229,98 @@ func (r *PostgresRepository) List(ctx context.Context, params ListParams) (ListR
 	return ListResult{Items: items, Total: total}, nil
 }
 
+func (r *PostgresRepository) Update(ctx context.Context, in UpdateInput) (Asset, error) {
+	current, err := r.GetForAccess(ctx, in.Context, in.AssetID)
+	if err != nil {
+		return Asset{}, err
+	}
+	if current.Status == StatusDeleted {
+		return Asset{}, ErrNotFound
+	}
+
+	name := current.Name
+	if in.Name != nil {
+		name = strings.TrimSpace(*in.Name)
+	}
+	visibility := current.Visibility
+	if in.Visibility != nil {
+		visibility = strings.ToUpper(strings.TrimSpace(*in.Visibility))
+	}
+	metadata := current.MetadataJSON
+	if in.MetadataSet {
+		metadata = in.Metadata
+	}
+	now := in.Now.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+
+	_, err = r.db.ExecContext(
+		ctx,
+		`UPDATE assets
+		 SET name = $1, visibility = $2, metadata_json = $3::jsonb, updated_at = $4
+		 WHERE id = $5 AND tenant_id = $6 AND workspace_id = $7`,
+		name,
+		visibility,
+		string(metadata),
+		now,
+		in.AssetID,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+	)
+	if err != nil {
+		return Asset{}, fmt.Errorf("update asset: %w", err)
+	}
+	return r.GetForAccess(ctx, in.Context, in.AssetID)
+}
+
+func (r *PostgresRepository) Delete(ctx context.Context, req command.RequestContext, id string, now time.Time) (Asset, error) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	result, err := r.db.ExecContext(
+		ctx,
+		`UPDATE assets
+		 SET status = $1, updated_at = $2
+		 WHERE id = $3 AND tenant_id = $4 AND workspace_id = $5`,
+		StatusDeleted,
+		now,
+		id,
+		req.TenantID,
+		req.WorkspaceID,
+	)
+	if err != nil {
+		return Asset{}, fmt.Errorf("delete asset: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return Asset{}, fmt.Errorf("delete asset rows affected: %w", err)
+	}
+	if affected == 0 {
+		return Asset{}, ErrNotFound
+	}
+	return r.GetForAccess(ctx, req, id)
+}
+
+func (r *PostgresRepository) ListLineage(ctx context.Context, req command.RequestContext, assetID string) ([]LineageEdge, error) {
+	rows, err := r.db.QueryContext(
+		ctx,
+		`SELECT id, tenant_id, workspace_id, source_asset_id, target_asset_id, run_id, step_id, relation, created_at
+		 FROM asset_lineage
+		 WHERE tenant_id = $1 AND workspace_id = $2 AND (target_asset_id = $3 OR source_asset_id = $4)
+		 ORDER BY created_at DESC, id DESC`,
+		req.TenantID,
+		req.WorkspaceID,
+		assetID,
+		assetID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list asset lineage: %w", err)
+	}
+	defer rows.Close()
+	return scanPostgresLineageEdges(rows)
+}
+
 func (r *PostgresRepository) HasPermission(ctx context.Context, req command.RequestContext, assetID, permission string, now time.Time) (bool, error) {
 	if strings.TrimSpace(assetID) == "" || strings.TrimSpace(permission) == "" {
 		return false, nil
@@ -339,4 +431,45 @@ func scanPostgresAsset(row rowScanner) (Asset, error) {
 	item.CreatedAt = createdAt.UTC()
 	item.UpdatedAt = updatedAt.UTC()
 	return item, nil
+}
+
+func scanPostgresLineageEdges(rows *sql.Rows) ([]LineageEdge, error) {
+	edges := make([]LineageEdge, 0)
+	for rows.Next() {
+		var (
+			edge      LineageEdge
+			sourceID  sql.NullString
+			runID     sql.NullString
+			stepID    sql.NullString
+			createdAt time.Time
+		)
+		if err := rows.Scan(
+			&edge.ID,
+			&edge.TenantID,
+			&edge.WorkspaceID,
+			&sourceID,
+			&edge.TargetAssetID,
+			&runID,
+			&stepID,
+			&edge.Relation,
+			&createdAt,
+		); err != nil {
+			return nil, err
+		}
+		edge.CreatedAt = createdAt.UTC()
+		if sourceID.Valid {
+			edge.SourceAssetID = sourceID.String
+		}
+		if runID.Valid {
+			edge.RunID = runID.String
+		}
+		if stepID.Valid {
+			edge.StepID = stepID.String
+		}
+		edges = append(edges, edge)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate asset lineage: %w", err)
+	}
+	return edges, nil
 }

@@ -60,6 +60,9 @@ func (s *Service) Get(ctx context.Context, req command.RequestContext, id string
 	if err != nil {
 		return Asset{}, err
 	}
+	if item.Status == StatusDeleted {
+		return Asset{}, ErrNotFound
+	}
 	allowed, reason, err := s.authorize(ctx, req, item, command.PermissionRead)
 	if err != nil {
 		return Asset{}, err
@@ -72,6 +75,91 @@ func (s *Service) Get(ctx context.Context, req command.RequestContext, id string
 
 func (s *Service) List(ctx context.Context, params ListParams) (ListResult, error) {
 	return s.repo.List(ctx, params)
+}
+
+func (s *Service) Update(ctx context.Context, in UpdateInput) (Asset, error) {
+	if strings.TrimSpace(in.AssetID) == "" {
+		return Asset{}, ErrInvalidRequest
+	}
+	item, err := s.repo.GetForAccess(ctx, in.Context, in.AssetID)
+	if err != nil {
+		return Asset{}, err
+	}
+	if item.Status == StatusDeleted {
+		return Asset{}, ErrNotFound
+	}
+	allowed, reason, err := s.authorize(ctx, in.Context, item, command.PermissionWrite)
+	if err != nil {
+		return Asset{}, err
+	}
+	if !allowed {
+		return Asset{}, &ForbiddenError{Reason: reason}
+	}
+
+	if in.Name != nil {
+		name := strings.TrimSpace(*in.Name)
+		if name == "" {
+			return Asset{}, ErrInvalidRequest
+		}
+		in.Name = &name
+	}
+	if in.Visibility != nil {
+		visibility, err := s.normalizeVisibility(*in.Visibility)
+		if err != nil {
+			return Asset{}, err
+		}
+		in.Visibility = &visibility
+	}
+	if in.MetadataSet && len(in.Metadata) == 0 {
+		in.Metadata = json.RawMessage(`{}`)
+	}
+
+	return s.repo.Update(ctx, in)
+}
+
+func (s *Service) Delete(ctx context.Context, req command.RequestContext, id string) (Asset, error) {
+	if strings.TrimSpace(id) == "" {
+		return Asset{}, ErrInvalidRequest
+	}
+	item, err := s.repo.GetForAccess(ctx, req, id)
+	if err != nil {
+		return Asset{}, err
+	}
+	if item.Status == StatusDeleted {
+		return Asset{}, ErrNotFound
+	}
+	allowed, reason, err := s.authorize(ctx, req, item, command.PermissionWrite)
+	if err != nil {
+		return Asset{}, err
+	}
+	if !allowed {
+		return Asset{}, &ForbiddenError{Reason: reason}
+	}
+	if err := s.store.Delete(ctx, item.URI); err != nil {
+		return Asset{}, err
+	}
+	return s.repo.Delete(ctx, req, id, time.Now().UTC())
+}
+
+func (s *Service) Lineage(ctx context.Context, req command.RequestContext, id string) ([]LineageEdge, error) {
+	if strings.TrimSpace(id) == "" {
+		return nil, ErrInvalidRequest
+	}
+	item, err := s.repo.GetForAccess(ctx, req, id)
+	if err != nil {
+		return nil, err
+	}
+	if item.Status == StatusDeleted {
+		return nil, ErrNotFound
+	}
+	allowed, reason, err := s.authorize(ctx, req, item, command.PermissionRead)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, &ForbiddenError{Reason: reason}
+	}
+	return s.repo.ListLineage(ctx, req, id)
 }
 
 func (s *Service) authorize(ctx context.Context, req command.RequestContext, item Asset, permission string) (bool, string, error) {

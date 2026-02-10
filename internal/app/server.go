@@ -122,7 +122,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	commandService.SetEventBusProvider(eventBusProvider)
 	streamService.SetEventBusProvider(eventBusProvider)
 
-	registerCommandExecutors(commandService, assetService, workflowService, pluginService, streamService, algorithmService)
+	registerCommandExecutors(commandService, assetService, cfg.Feature.AssetLifecycle, workflowService, pluginService, streamService, algorithmService)
 	stopStreamConsumer, err := startKafkaStreamConsumer(cfg, commandService, log.Default())
 	if err != nil {
 		_ = eventBusProvider.Close()
