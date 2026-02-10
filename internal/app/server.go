@@ -14,6 +14,7 @@ import (
 	"goyais/internal/platform/cache"
 	platformdb "goyais/internal/platform/db"
 	"goyais/internal/platform/vector"
+	"goyais/internal/registry"
 	"goyais/internal/workflow"
 )
 
@@ -55,6 +56,13 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	}
 	workflowService := workflow.NewService(workflowRepo, cfg.Authz.AllowPrivateToPublic)
 
+	registryRepo, err := registry.NewRepository(cfg.Providers.DB, db)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("build registry repository: %w", err)
+	}
+	registryService := registry.NewService(registryRepo)
+
 	cacheProvider, err := cache.New(cache.Config{
 		Provider:      cfg.Providers.Cache,
 		RedisAddr:     cfg.Cache.RedisAddr,
@@ -81,6 +89,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 		CommandService:  commandService,
 		AssetService:    assetService,
 		WorkflowService: workflowService,
+		RegistryService: registryService,
 		HealthChecker:   db,
 		ProviderProbe: func(ctx context.Context) map[string]httpapi.ProviderStatus {
 			out := map[string]httpapi.ProviderStatus{

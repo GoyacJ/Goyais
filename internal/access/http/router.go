@@ -9,6 +9,7 @@ import (
 	"goyais/internal/command"
 	"goyais/internal/common/errorx"
 	"goyais/internal/config"
+	"goyais/internal/registry"
 	"goyais/internal/workflow"
 )
 
@@ -16,6 +17,7 @@ type RouterDeps struct {
 	CommandService  *command.Service
 	AssetService    *asset.Service
 	WorkflowService *workflow.Service
+	RegistryService *registry.Service
 	HealthChecker   HealthChecker
 	ProviderProbe   ProviderProbe
 }
@@ -35,6 +37,7 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 		commandService:  deps.CommandService,
 		assetService:    deps.AssetService,
 		workflowService: deps.WorkflowService,
+		registryService: deps.RegistryService,
 	}
 	if deps.AssetService != nil {
 		apiMux.Handle("/api/v1/assets", http.HandlerFunc(domainHandler.handleAssets))
@@ -53,11 +56,18 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 		apiMux.Handle("/api/v1/workflow-runs/", workflowNotImplemented)
 	}
 
-	registryNotImplemented := NewNotImplementedHandler("error.registry.not_implemented")
-	apiMux.Handle("/api/v1/registry/capabilities", registryNotImplemented)
-	apiMux.Handle("/api/v1/registry/capabilities/", registryNotImplemented)
-	apiMux.Handle("/api/v1/registry/algorithms", registryNotImplemented)
-	apiMux.Handle("/api/v1/registry/providers", registryNotImplemented)
+	if deps.RegistryService != nil {
+		apiMux.Handle("/api/v1/registry/capabilities", http.HandlerFunc(domainHandler.handleRegistryCapabilities))
+		apiMux.Handle("/api/v1/registry/capabilities/", http.HandlerFunc(domainHandler.handleRegistryCapabilityRoutes))
+		apiMux.Handle("/api/v1/registry/algorithms", http.HandlerFunc(domainHandler.handleRegistryAlgorithms))
+		apiMux.Handle("/api/v1/registry/providers", http.HandlerFunc(domainHandler.handleRegistryProviders))
+	} else {
+		registryNotImplemented := NewNotImplementedHandler("error.registry.not_implemented")
+		apiMux.Handle("/api/v1/registry/capabilities", registryNotImplemented)
+		apiMux.Handle("/api/v1/registry/capabilities/", registryNotImplemented)
+		apiMux.Handle("/api/v1/registry/algorithms", registryNotImplemented)
+		apiMux.Handle("/api/v1/registry/providers", registryNotImplemented)
+	}
 
 	pluginNotImplemented := NewNotImplementedHandler("error.plugin.not_implemented")
 	apiMux.Handle("/api/v1/plugin-market/packages", pluginNotImplemented)
