@@ -46,7 +46,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [status, timestamp, mode, providers]
+                required: [status, timestamp]
                 properties:
                   status:
                     type: string
@@ -54,15 +54,18 @@ paths:
                   timestamp:
                     type: string
                     format: date-time
+                  version:
+                    type: string
+                    description: 构建注入版本信息（tag/commit/semver）。
+                    example: v0.1.0
                   mode:
                     type: string
-                    description: 当前运行模式，用于 minimal/full 验收。
+                    description: 当前运行模式（可选），用于 minimal/full 验收。
                     enum: [minimal, full]
                     example: minimal
                   providers:
                     type: object
-                    description: 当前生效 provider 选择，用于 provider 切换验收。
-                    required: [db, cache, vector, objectStore, stream]
+                    description: 当前生效 provider 选择（可选），用于 provider 切换验收。
                     properties:
                       db:
                         type: string
