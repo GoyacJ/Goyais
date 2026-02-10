@@ -400,8 +400,8 @@ func (r *SQLiteRepository) CreateRun(ctx context.Context, in CreateRunInput) (Wo
 
 	if _, err := conn.ExecContext(
 		ctx,
-		`INSERT INTO workflow_runs(id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO workflow_runs(id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, trace_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		runID,
 		in.Context.TenantID,
 		in.Context.WorkspaceID,
@@ -414,6 +414,7 @@ func (r *SQLiteRepository) CreateRun(ctx context.Context, in CreateRunInput) (Wo
 		nil,
 		nil,
 		"",
+		in.Context.TraceID,
 		string(in.Inputs),
 		"{}",
 		RunStatusPending,
@@ -429,13 +430,14 @@ func (r *SQLiteRepository) CreateRun(ctx context.Context, in CreateRunInput) (Wo
 
 	if _, err := conn.ExecContext(
 		ctx,
-		`INSERT INTO step_runs(id, run_id, tenant_id, workspace_id, owner_id, visibility, step_key, step_type, attempt, input, output, artifacts, log_ref, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO step_runs(id, run_id, tenant_id, workspace_id, owner_id, trace_id, visibility, step_key, step_type, attempt, input, output, artifacts, log_ref, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		stepID,
 		runID,
 		in.Context.TenantID,
 		in.Context.WorkspaceID,
 		in.Context.OwnerID,
+		in.Context.TraceID,
 		in.Visibility,
 		"step-1",
 		"noop",
@@ -510,8 +512,8 @@ func (r *SQLiteRepository) RetryRun(ctx context.Context, in RetryRunInput) (Work
 
 	if _, err := conn.ExecContext(
 		ctx,
-		`INSERT INTO workflow_runs(id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO workflow_runs(id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, trace_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		runID,
 		in.Context.TenantID,
 		in.Context.WorkspaceID,
@@ -524,6 +526,7 @@ func (r *SQLiteRepository) RetryRun(ctx context.Context, in RetryRunInput) (Work
 		sourceRun.ID,
 		replayStepKey,
 		"",
+		in.Context.TraceID,
 		string(sourceRun.InputsJSON),
 		"{}",
 		RunStatusPending,
@@ -543,13 +546,14 @@ func (r *SQLiteRepository) RetryRun(ctx context.Context, in RetryRunInput) (Work
 	}
 	if _, err := conn.ExecContext(
 		ctx,
-		`INSERT INTO step_runs(id, run_id, tenant_id, workspace_id, owner_id, visibility, step_key, step_type, attempt, input, output, artifacts, log_ref, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO step_runs(id, run_id, tenant_id, workspace_id, owner_id, trace_id, visibility, step_key, step_type, attempt, input, output, artifacts, log_ref, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		stepID,
 		runID,
 		in.Context.TenantID,
 		in.Context.WorkspaceID,
 		in.Context.OwnerID,
+		in.Context.TraceID,
 		sourceRun.Visibility,
 		replayStepKey,
 		"noop",
@@ -638,7 +642,7 @@ func (r *SQLiteRepository) CancelRun(ctx context.Context, in CancelRunInput) (Wo
 func (r *SQLiteRepository) GetRunForAccess(ctx context.Context, req command.RequestContext, runID string) (WorkflowRun, error) {
 	row := r.db.QueryRowContext(
 		ctx,
-		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at
+		`SELECT id, tenant_id, workspace_id, owner_id, trace_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at
 		 FROM workflow_runs
 		 WHERE id = ? AND tenant_id = ? AND workspace_id = ?`,
 		runID,
@@ -694,7 +698,7 @@ func (r *SQLiteRepository) ListRuns(ctx context.Context, params RunListParams) (
 		}
 		rows, err := r.db.QueryContext(
 			ctx,
-			`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.visibility, r.acl_json, r.template_id, r.template_version, r.attempt, r.retry_of_run_id, r.replay_from_step_key, r.command_id, r.inputs, r.outputs, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
+			`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.trace_id, r.visibility, r.acl_json, r.template_id, r.template_version, r.attempt, r.retry_of_run_id, r.replay_from_step_key, r.command_id, r.inputs, r.outputs, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
 			 `+baseFilter+`
 			   AND ((r.created_at < ?) OR (r.created_at = ? AND r.id < ?))
 			 ORDER BY r.created_at DESC, r.id DESC
@@ -738,7 +742,7 @@ func (r *SQLiteRepository) ListRuns(ctx context.Context, params RunListParams) (
 	offset := (page - 1) * pageSize
 	rows, err := r.db.QueryContext(
 		ctx,
-		`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.visibility, r.acl_json, r.template_id, r.template_version, r.attempt, r.retry_of_run_id, r.replay_from_step_key, r.command_id, r.inputs, r.outputs, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
+		`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.trace_id, r.visibility, r.acl_json, r.template_id, r.template_version, r.attempt, r.retry_of_run_id, r.replay_from_step_key, r.command_id, r.inputs, r.outputs, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
 		 `+baseFilter+`
 		 ORDER BY r.created_at DESC, r.id DESC
 		 LIMIT ? OFFSET ?`,
@@ -833,7 +837,7 @@ func (r *SQLiteRepository) ListStepRuns(ctx context.Context, params StepListPara
 		}
 		rows, err := r.db.QueryContext(
 			ctx,
-			`SELECT s.id, s.run_id, s.tenant_id, s.workspace_id, s.owner_id, s.visibility, s.step_key, s.step_type, s.attempt, s.input, s.output, s.artifacts, s.log_ref, s.status, s.error_code, s.message_key, s.started_at, s.finished_at, s.created_at, s.updated_at
+			`SELECT s.id, s.run_id, s.tenant_id, s.workspace_id, s.owner_id, s.trace_id, s.visibility, s.step_key, s.step_type, s.attempt, s.input, s.output, s.artifacts, s.log_ref, s.status, s.error_code, s.message_key, s.started_at, s.finished_at, s.created_at, s.updated_at
 			 FROM step_runs s
 			 WHERE s.tenant_id = ? AND s.workspace_id = ? AND s.run_id = ?
 			   AND ((s.created_at < ?) OR (s.created_at = ? AND s.id < ?))
@@ -875,7 +879,7 @@ func (r *SQLiteRepository) ListStepRuns(ctx context.Context, params StepListPara
 	offset := (page - 1) * pageSize
 	rows, err := r.db.QueryContext(
 		ctx,
-		`SELECT s.id, s.run_id, s.tenant_id, s.workspace_id, s.owner_id, s.visibility, s.step_key, s.step_type, s.attempt, s.input, s.output, s.artifacts, s.log_ref, s.status, s.error_code, s.message_key, s.started_at, s.finished_at, s.created_at, s.updated_at
+		`SELECT s.id, s.run_id, s.tenant_id, s.workspace_id, s.owner_id, s.trace_id, s.visibility, s.step_key, s.step_type, s.attempt, s.input, s.output, s.artifacts, s.log_ref, s.status, s.error_code, s.message_key, s.started_at, s.finished_at, s.created_at, s.updated_at
 		 FROM step_runs s
 		 WHERE s.tenant_id = ? AND s.workspace_id = ? AND s.run_id = ?
 		 ORDER BY s.created_at DESC, s.id DESC
@@ -1053,7 +1057,7 @@ func (r *SQLiteRepository) getTemplateByIDFromConn(ctx context.Context, conn *sq
 func (r *SQLiteRepository) getRunByIDFromConn(ctx context.Context, conn *sql.Conn, req command.RequestContext, runID string) (WorkflowRun, error) {
 	row := conn.QueryRowContext(
 		ctx,
-		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at
+		`SELECT id, tenant_id, workspace_id, owner_id, trace_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at
 		 FROM workflow_runs
 		 WHERE id = ? AND tenant_id = ? AND workspace_id = ?`,
 		runID,
@@ -1190,6 +1194,7 @@ func scanRun(row rowScanner) (WorkflowRun, error) {
 		&item.TenantID,
 		&item.WorkspaceID,
 		&item.OwnerID,
+		&item.TraceID,
 		&item.Visibility,
 		&aclRaw,
 		&item.TemplateID,
@@ -1302,6 +1307,7 @@ func scanStepRun(row rowScanner) (StepRun, error) {
 		&item.TenantID,
 		&item.WorkspaceID,
 		&item.OwnerID,
+		&item.TraceID,
 		&item.Visibility,
 		&item.StepKey,
 		&item.StepType,

@@ -54,6 +54,7 @@ type WorkflowRun struct {
 	TenantID          string
 	WorkspaceID       string
 	OwnerID           string
+	TraceID           string
 	Visibility        string
 	ACLJSON           json.RawMessage
 	TemplateID        string
@@ -79,6 +80,7 @@ type StepRun struct {
 	TenantID      string
 	WorkspaceID   string
 	OwnerID       string
+	TraceID       string
 	Visibility    string
 	StepKey       string
 	StepType      string

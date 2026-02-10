@@ -154,6 +154,7 @@
 
 ### workflow_runs
 - `id, tenant_id, workspace_id, owner_id, visibility`
+- `trace_id`（用于跨 command/run/step 串联）
 - `template_id, template_version`
 - `attempt`
 - `retry_of_run_id`（可空，引用被重试 run）
@@ -171,6 +172,7 @@
 - `id`
 - `run_id`
 - `tenant_id, workspace_id, owner_id, visibility`
+- `trace_id`（与所属 run 对齐）
 - `step_key, step_type`
 - `attempt`
 - `input`（JSON）

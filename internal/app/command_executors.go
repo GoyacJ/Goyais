@@ -909,6 +909,7 @@ func toWorkflowRunResultPayload(item workflow.WorkflowRun) map[string]any {
 		"tenantId":        item.TenantID,
 		"workspaceId":     item.WorkspaceID,
 		"ownerId":         item.OwnerID,
+		"traceId":         item.TraceID,
 		"visibility":      item.Visibility,
 		"acl":             decodeJSON(item.ACLJSON, []any{}),
 		"status":          item.Status,

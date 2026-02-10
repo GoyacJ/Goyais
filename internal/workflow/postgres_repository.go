@@ -385,8 +385,8 @@ func (r *PostgresRepository) CreateRun(ctx context.Context, in CreateRunInput) (
 
 	if _, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO workflow_runs(id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15, $16, $17, $18, $19, $20, $21)`,
+		`INSERT INTO workflow_runs(id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, trace_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16, $17, $18, $19, $20, $21, $22)`,
 		runID,
 		in.Context.TenantID,
 		in.Context.WorkspaceID,
@@ -399,6 +399,7 @@ func (r *PostgresRepository) CreateRun(ctx context.Context, in CreateRunInput) (
 		nil,
 		nil,
 		"",
+		in.Context.TraceID,
 		string(in.Inputs),
 		"{}",
 		RunStatusPending,
@@ -414,13 +415,14 @@ func (r *PostgresRepository) CreateRun(ctx context.Context, in CreateRunInput) (
 
 	if _, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO step_runs(id, run_id, tenant_id, workspace_id, owner_id, visibility, step_key, step_type, attempt, input, output, artifacts, log_ref, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, $20)`,
+		`INSERT INTO step_runs(id, run_id, tenant_id, workspace_id, owner_id, trace_id, visibility, step_key, step_type, attempt, input, output, artifacts, log_ref, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::jsonb, $14, $15, $16, $17, $18, $19, $20, $21)`,
 		stepID,
 		runID,
 		in.Context.TenantID,
 		in.Context.WorkspaceID,
 		in.Context.OwnerID,
+		in.Context.TraceID,
 		in.Visibility,
 		"step-1",
 		"noop",
@@ -493,8 +495,8 @@ func (r *PostgresRepository) RetryRun(ctx context.Context, in RetryRunInput) (Wo
 
 	if _, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO workflow_runs(id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb, $15, $16, $17, $18, $19, $20, $21)`,
+		`INSERT INTO workflow_runs(id, tenant_id, workspace_id, owner_id, visibility, acl_json, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, trace_id, inputs, outputs, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16, $17, $18, $19, $20, $21, $22)`,
 		runID,
 		in.Context.TenantID,
 		in.Context.WorkspaceID,
@@ -507,6 +509,7 @@ func (r *PostgresRepository) RetryRun(ctx context.Context, in RetryRunInput) (Wo
 		sourceRun.ID,
 		replayStepKey,
 		"",
+		in.Context.TraceID,
 		string(sourceRun.InputsJSON),
 		"{}",
 		RunStatusPending,
@@ -522,13 +525,14 @@ func (r *PostgresRepository) RetryRun(ctx context.Context, in RetryRunInput) (Wo
 
 	if _, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO step_runs(id, run_id, tenant_id, workspace_id, owner_id, visibility, step_key, step_type, attempt, input, output, artifacts, log_ref, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, $20)`,
+		`INSERT INTO step_runs(id, run_id, tenant_id, workspace_id, owner_id, trace_id, visibility, step_key, step_type, attempt, input, output, artifacts, log_ref, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::jsonb, $14, $15, $16, $17, $18, $19, $20, $21)`,
 		stepID,
 		runID,
 		in.Context.TenantID,
 		in.Context.WorkspaceID,
 		in.Context.OwnerID,
+		in.Context.TraceID,
 		sourceRun.Visibility,
 		replayStepKey,
 		"noop",
@@ -617,7 +621,7 @@ func (r *PostgresRepository) CancelRun(ctx context.Context, in CancelRunInput) (
 func (r *PostgresRepository) GetRunForAccess(ctx context.Context, req command.RequestContext, runID string) (WorkflowRun, error) {
 	row := r.db.QueryRowContext(
 		ctx,
-		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json::text, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs::text, outputs::text, status, error_code, message_key, started_at, finished_at, created_at, updated_at
+		`SELECT id, tenant_id, workspace_id, owner_id, trace_id, visibility, acl_json::text, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs::text, outputs::text, status, error_code, message_key, started_at, finished_at, created_at, updated_at
 		 FROM workflow_runs
 		 WHERE id = $1 AND tenant_id = $2 AND workspace_id = $3`,
 		runID,
@@ -673,7 +677,7 @@ func (r *PostgresRepository) ListRuns(ctx context.Context, params RunListParams)
 		}
 		rows, err := r.db.QueryContext(
 			ctx,
-			`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.visibility, r.acl_json::text, r.template_id, r.template_version, r.attempt, r.retry_of_run_id, r.replay_from_step_key, r.command_id, r.inputs::text, r.outputs::text, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
+			`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.trace_id, r.visibility, r.acl_json::text, r.template_id, r.template_version, r.attempt, r.retry_of_run_id, r.replay_from_step_key, r.command_id, r.inputs::text, r.outputs::text, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
 			 `+baseFilter+`
 			   AND ((r.created_at < $6) OR (r.created_at = $7 AND r.id < $8))
 			 ORDER BY r.created_at DESC, r.id DESC
@@ -717,7 +721,7 @@ func (r *PostgresRepository) ListRuns(ctx context.Context, params RunListParams)
 	offset := (page - 1) * pageSize
 	rows, err := r.db.QueryContext(
 		ctx,
-		`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.visibility, r.acl_json::text, r.template_id, r.template_version, r.attempt, r.retry_of_run_id, r.replay_from_step_key, r.command_id, r.inputs::text, r.outputs::text, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
+		`SELECT r.id, r.tenant_id, r.workspace_id, r.owner_id, r.trace_id, r.visibility, r.acl_json::text, r.template_id, r.template_version, r.attempt, r.retry_of_run_id, r.replay_from_step_key, r.command_id, r.inputs::text, r.outputs::text, r.status, r.error_code, r.message_key, r.started_at, r.finished_at, r.created_at, r.updated_at
 		 `+baseFilter+`
 		 ORDER BY r.created_at DESC, r.id DESC
 		 LIMIT $6 OFFSET $7`,
@@ -812,7 +816,7 @@ func (r *PostgresRepository) ListStepRuns(ctx context.Context, params StepListPa
 		}
 		rows, err := r.db.QueryContext(
 			ctx,
-			`SELECT s.id, s.run_id, s.tenant_id, s.workspace_id, s.owner_id, s.visibility, s.step_key, s.step_type, s.attempt, s.input::text, s.output::text, s.artifacts::text, s.log_ref, s.status, s.error_code, s.message_key, s.started_at, s.finished_at, s.created_at, s.updated_at
+			`SELECT s.id, s.run_id, s.tenant_id, s.workspace_id, s.owner_id, s.trace_id, s.visibility, s.step_key, s.step_type, s.attempt, s.input::text, s.output::text, s.artifacts::text, s.log_ref, s.status, s.error_code, s.message_key, s.started_at, s.finished_at, s.created_at, s.updated_at
 			 FROM step_runs s
 			 WHERE s.tenant_id = $1 AND s.workspace_id = $2 AND s.run_id = $3
 			   AND ((s.created_at < $4) OR (s.created_at = $5 AND s.id < $6))
@@ -854,7 +858,7 @@ func (r *PostgresRepository) ListStepRuns(ctx context.Context, params StepListPa
 	offset := (page - 1) * pageSize
 	rows, err := r.db.QueryContext(
 		ctx,
-		`SELECT s.id, s.run_id, s.tenant_id, s.workspace_id, s.owner_id, s.visibility, s.step_key, s.step_type, s.attempt, s.input::text, s.output::text, s.artifacts::text, s.log_ref, s.status, s.error_code, s.message_key, s.started_at, s.finished_at, s.created_at, s.updated_at
+		`SELECT s.id, s.run_id, s.tenant_id, s.workspace_id, s.owner_id, s.trace_id, s.visibility, s.step_key, s.step_type, s.attempt, s.input::text, s.output::text, s.artifacts::text, s.log_ref, s.status, s.error_code, s.message_key, s.started_at, s.finished_at, s.created_at, s.updated_at
 		 FROM step_runs s
 		 WHERE s.tenant_id = $1 AND s.workspace_id = $2 AND s.run_id = $3
 		 ORDER BY s.created_at DESC, s.id DESC
@@ -1032,7 +1036,7 @@ func (r *PostgresRepository) getTemplateByIDFromTx(ctx context.Context, tx *sql.
 func (r *PostgresRepository) getRunByIDFromTx(ctx context.Context, tx *sql.Tx, req command.RequestContext, runID string) (WorkflowRun, error) {
 	row := tx.QueryRowContext(
 		ctx,
-		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json::text, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs::text, outputs::text, status, error_code, message_key, started_at, finished_at, created_at, updated_at
+		`SELECT id, tenant_id, workspace_id, owner_id, trace_id, visibility, acl_json::text, template_id, template_version, attempt, retry_of_run_id, replay_from_step_key, command_id, inputs::text, outputs::text, status, error_code, message_key, started_at, finished_at, created_at, updated_at
 		 FROM workflow_runs
 		 WHERE id = $1 AND tenant_id = $2 AND workspace_id = $3`,
 		runID,
@@ -1157,6 +1161,7 @@ func scanPostgresRun(row rowScanner) (WorkflowRun, error) {
 		&item.TenantID,
 		&item.WorkspaceID,
 		&item.OwnerID,
+		&item.TraceID,
 		&item.Visibility,
 		&aclRaw,
 		&item.TemplateID,
@@ -1253,6 +1258,7 @@ func scanPostgresStepRun(row rowScanner) (StepRun, error) {
 		&item.TenantID,
 		&item.WorkspaceID,
 		&item.OwnerID,
+		&item.TraceID,
 		&item.Visibility,
 		&item.StepKey,
 		&item.StepType,

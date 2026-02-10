@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -19,10 +20,12 @@ import (
 	"goyais/internal/app"
 	"goyais/internal/command"
 	"goyais/internal/config"
+
+	_ "modernc.org/sqlite"
 )
 
 func TestAPIContractRegression(t *testing.T) {
-	baseURL, shutdown := newTestServer(t)
+	baseURL, dbPath, shutdown := newTestServerWithDBPath(t)
 	defer shutdown()
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -147,6 +150,104 @@ func TestAPIContractRegression(t *testing.T) {
 		}
 
 		commandID = commandID1
+	})
+
+	t.Run("command audit captures initiator/context/authz/resource impact and egress summary", func(t *testing.T) {
+		events := loadAuditEventsForCommand(t, dbPath, commandID)
+		if len(events) == 0 {
+			t.Fatalf("expected audit events for command=%s", commandID)
+		}
+
+		required := []string{"command.authorize", "command.execute", "command.egress"}
+		byType := make(map[string]auditEventRow, len(events))
+		for _, event := range events {
+			if _, ok := byType[event.EventType]; !ok {
+				byType[event.EventType] = event
+			}
+		}
+		for _, eventType := range required {
+			if _, ok := byType[eventType]; !ok {
+				t.Fatalf("missing audit event type=%s for command=%s", eventType, commandID)
+			}
+		}
+
+		authorize := byType["command.authorize"]
+		if authorize.Decision != "allow" {
+			t.Fatalf("expected authorize decision allow, got=%s", authorize.Decision)
+		}
+		if authorize.TraceID == "" {
+			t.Fatalf("expected trace id on command.authorize audit event")
+		}
+
+		initiator := asObject(t, authorize.Payload["initiator"], "initiator")
+		if initiator["userId"] != "u1" {
+			t.Fatalf("unexpected initiator.userId: %v", initiator["userId"])
+		}
+		if initiator["tenantId"] != "t1" {
+			t.Fatalf("unexpected initiator.tenantId: %v", initiator["tenantId"])
+		}
+		if initiator["workspaceId"] != "w1" {
+			t.Fatalf("unexpected initiator.workspaceId: %v", initiator["workspaceId"])
+		}
+
+		contextPayload := asObject(t, authorize.Payload["context"], "context")
+		if contextPayload["policyVersion"] != "v0.1" {
+			t.Fatalf("unexpected context.policyVersion: %v", contextPayload["policyVersion"])
+		}
+		if contextTraceID, _ := contextPayload["traceId"].(string); contextTraceID != authorize.TraceID {
+			t.Fatalf("expected context.traceId=%s got=%v", authorize.TraceID, contextPayload["traceId"])
+		}
+		roles := asStringSlice(t, contextPayload["roles"], "context.roles")
+		if !containsString(roles, "member") {
+			t.Fatalf("expected default role member in context.roles: %v", roles)
+		}
+
+		authzResult := asObject(t, authorize.Payload["authzResult"], "authzResult")
+		if authzResult["eventType"] != "command.authorize" {
+			t.Fatalf("unexpected authzResult.eventType: %v", authzResult["eventType"])
+		}
+		if authzResult["decision"] != "allow" {
+			t.Fatalf("unexpected authzResult.decision: %v", authzResult["decision"])
+		}
+
+		resourceImpact := asObject(t, authorize.Payload["resourceImpact"], "resourceImpact")
+		if resourceImpact["resourceType"] != "command" {
+			t.Fatalf("unexpected resourceImpact.resourceType: %v", resourceImpact["resourceType"])
+		}
+		if resourceImpact["resourceId"] != commandID {
+			t.Fatalf("unexpected resourceImpact.resourceId: %v", resourceImpact["resourceId"])
+		}
+
+		egress := byType["command.egress"]
+		if egress.Decision != "allow" {
+			t.Fatalf("expected egress decision allow, got=%s", egress.Decision)
+		}
+		if egress.TraceID != authorize.TraceID {
+			t.Fatalf("expected egress trace id=%s got=%s", authorize.TraceID, egress.TraceID)
+		}
+		egressData := asObject(t, egress.Payload["data"], "data")
+		if egressData["destination"] != "local://command-executor" {
+			t.Fatalf("unexpected egress destination: %v", egressData["destination"])
+		}
+		if egressData["policyResult"] != "allow" {
+			t.Fatalf("unexpected egress policyResult: %v", egressData["policyResult"])
+		}
+		if _, exists := egressData["request"]; exists {
+			t.Fatalf("unexpected raw request payload in egress audit")
+		}
+		if _, exists := egressData["response"]; exists {
+			t.Fatalf("unexpected raw response payload in egress audit")
+		}
+		summary := asObject(t, egressData["summary"], "summary")
+		if summary["commandType"] != "test.noop" {
+			t.Fatalf("unexpected egress summary.commandType: %v", summary["commandType"])
+		}
+		if digest, _ := summary["requestDigest"].(string); digest == "" {
+			t.Fatalf("expected egress summary.requestDigest")
+		}
+		if _, ok := summary["requestBytes"].(float64); !ok {
+			t.Fatalf("expected numeric egress summary.requestBytes, got=%T", summary["requestBytes"])
+		}
 	})
 
 	var commandShareID string
@@ -664,6 +765,68 @@ func TestAPIContractRegression(t *testing.T) {
 		if !reflect.DeepEqual(domainCommandPayload["payload"], canonicalCommandPayload["payload"]) {
 			t.Fatalf("workflow.run payload mismatch: domain=%v canonical=%v", domainCommandPayload["payload"], canonicalCommandPayload["payload"])
 		}
+
+		traceHeaderValue := "trace_workflow_it"
+		traceHeaders := headersWithJSONContext("u1")
+		traceHeaders.Set("X-Trace-Id", traceHeaderValue)
+		respRunTrace := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-runs", traceHeaders, map[string]any{
+			"templateId": templateID,
+			"inputs":     map[string]any{"trace": true},
+			"mode":       "sync",
+		})
+		defer respRunTrace.Body.Close()
+		assertStatus(t, respRunTrace, http.StatusAccepted)
+		var traceRunPayload map[string]any
+		mustDecodeJSON(t, respRunTrace.Body, &traceRunPayload)
+		traceRunResource, _ := traceRunPayload["resource"].(map[string]any)
+		traceRunID, _ := traceRunResource["id"].(string)
+		if traceRunID == "" {
+			t.Fatalf("expected trace workflow run id")
+		}
+		if gotTraceID, _ := traceRunResource["traceId"].(string); gotTraceID != traceHeaderValue {
+			t.Fatalf("unexpected traceId in workflow run create response: got=%v want=%s", gotTraceID, traceHeaderValue)
+		}
+
+		respTraceRun := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+traceRunID, headersWithContext("u1"), nil)
+		defer respTraceRun.Body.Close()
+		assertStatus(t, respTraceRun, http.StatusOK)
+		var traceRunGetPayload map[string]any
+		mustDecodeJSON(t, respTraceRun.Body, &traceRunGetPayload)
+		if gotTraceID, _ := traceRunGetPayload["traceId"].(string); gotTraceID != traceHeaderValue {
+			t.Fatalf("unexpected traceId in workflow run get response: got=%v want=%s", gotTraceID, traceHeaderValue)
+		}
+
+		respTraceSteps := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+traceRunID+"/steps", headersWithContext("u1"), nil)
+		defer respTraceSteps.Body.Close()
+		assertStatus(t, respTraceSteps, http.StatusOK)
+		var traceStepsPayload map[string]any
+		mustDecodeJSON(t, respTraceSteps.Body, &traceStepsPayload)
+		traceSteps, ok := traceStepsPayload["items"].([]any)
+		if !ok || len(traceSteps) == 0 {
+			t.Fatalf("expected trace workflow steps")
+		}
+		for _, raw := range traceSteps {
+			step, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			if gotTraceID, _ := step["traceId"].(string); gotTraceID != traceHeaderValue {
+				t.Fatalf("unexpected step traceId: got=%v want=%s", gotTraceID, traceHeaderValue)
+			}
+		}
+
+		dbRunTraceID, dbStepTraceIDs := loadWorkflowTraceIDs(t, dbPath, traceRunID)
+		if dbRunTraceID != traceHeaderValue {
+			t.Fatalf("unexpected workflow_runs.trace_id: got=%s want=%s", dbRunTraceID, traceHeaderValue)
+		}
+		if len(dbStepTraceIDs) == 0 {
+			t.Fatalf("expected persisted step_runs trace ids")
+		}
+		for _, stepTraceID := range dbStepTraceIDs {
+			if stepTraceID != traceHeaderValue {
+				t.Fatalf("unexpected persisted step trace id: got=%s want=%s", stepTraceID, traceHeaderValue)
+			}
+		}
 	})
 
 	t.Run("registry read routes available", func(t *testing.T) {
@@ -999,6 +1162,12 @@ func TestAPIContractRegression(t *testing.T) {
 
 func newTestServer(t *testing.T) (string, func()) {
 	t.Helper()
+	baseURL, _, shutdown := newTestServerWithDBPath(t)
+	return baseURL, shutdown
+}
+
+func newTestServerWithDBPath(t *testing.T) (string, string, func()) {
+	t.Helper()
 
 	previousWD, err := os.Getwd()
 	if err != nil {
@@ -1012,6 +1181,7 @@ func newTestServer(t *testing.T) (string, func()) {
 		_ = os.Chdir(previousWD)
 	})
 
+	dbPath := filepath.Join(t.TempDir(), "integration.sqlite")
 	cfg := config.Config{
 		Profile: config.ProfileMinimal,
 		Server: config.ServerConfig{
@@ -1025,7 +1195,7 @@ func newTestServer(t *testing.T) (string, func()) {
 			Stream:      "mediamtx",
 		},
 		DB: config.DBConfig{
-			DSN: "file:" + filepath.Join(t.TempDir(), "integration.sqlite"),
+			DSN: "file:" + dbPath,
 		},
 		Command: config.CommandConfig{
 			IdempotencyTTL: 300 * time.Second,
@@ -1042,10 +1212,111 @@ func newTestServer(t *testing.T) (string, func()) {
 	}
 
 	ts := httptest.NewServer(srv.Handler)
-	return ts.URL, func() {
+	return ts.URL, dbPath, func() {
 		ts.Close()
 		_ = srv.Shutdown(context.Background())
 	}
+}
+
+type auditEventRow struct {
+	EventType string
+	Decision  string
+	Reason    string
+	TraceID   string
+	Payload   map[string]any
+}
+
+func loadAuditEventsForCommand(t *testing.T, dbPath string, commandID string) []auditEventRow {
+	t.Helper()
+
+	db, err := sql.Open("sqlite", "file:"+dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite db for audit assertions: %v", err)
+	}
+	defer db.Close()
+
+	rows, err := db.Query(
+		`SELECT event_type, decision, reason, trace_id, payload
+		 FROM audit_events
+		 WHERE command_id = ?
+		 ORDER BY created_at ASC`,
+		commandID,
+	)
+	if err != nil {
+		t.Fatalf("query audit events: %v", err)
+	}
+	defer rows.Close()
+
+	events := make([]auditEventRow, 0)
+	for rows.Next() {
+		var (
+			item     auditEventRow
+			traceID  sql.NullString
+			payload  string
+			reason   sql.NullString
+			decision string
+		)
+		if err := rows.Scan(&item.EventType, &decision, &reason, &traceID, &payload); err != nil {
+			t.Fatalf("scan audit row: %v", err)
+		}
+		item.Decision = decision
+		if reason.Valid {
+			item.Reason = reason.String
+		}
+		if traceID.Valid {
+			item.TraceID = traceID.String
+		}
+		if strings.TrimSpace(payload) == "" {
+			payload = "{}"
+		}
+		if err := json.Unmarshal([]byte(payload), &item.Payload); err != nil {
+			t.Fatalf("decode audit payload: %v", err)
+		}
+		events = append(events, item)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate audit rows: %v", err)
+	}
+	return events
+}
+
+func loadWorkflowTraceIDs(t *testing.T, dbPath string, runID string) (string, []string) {
+	t.Helper()
+
+	db, err := sql.Open("sqlite", "file:"+dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite db for workflow trace assertions: %v", err)
+	}
+	defer db.Close()
+
+	var runTraceID sql.NullString
+	if err := db.QueryRow(`SELECT trace_id FROM workflow_runs WHERE id = ?`, runID).Scan(&runTraceID); err != nil {
+		t.Fatalf("query workflow_runs trace_id: %v", err)
+	}
+
+	rows, err := db.Query(`SELECT trace_id FROM step_runs WHERE run_id = ? ORDER BY created_at ASC`, runID)
+	if err != nil {
+		t.Fatalf("query step_runs trace_id: %v", err)
+	}
+	defer rows.Close()
+
+	stepTraceIDs := make([]string, 0)
+	for rows.Next() {
+		var traceID sql.NullString
+		if err := rows.Scan(&traceID); err != nil {
+			t.Fatalf("scan step trace id: %v", err)
+		}
+		if traceID.Valid {
+			stepTraceIDs = append(stepTraceIDs, traceID.String)
+		} else {
+			stepTraceIDs = append(stepTraceIDs, "")
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate step trace rows: %v", err)
+	}
+
+	return runTraceID.String, stepTraceIDs
 }
 
 func headersWithContext(userID string) http.Header {
@@ -1178,4 +1449,39 @@ func containsAssetID(items []any, assetID string) bool {
 		}
 	}
 	return false
+}
+
+func containsString(items []string, expected string) bool {
+	for _, item := range items {
+		if item == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func asObject(t *testing.T, value any, name string) map[string]any {
+	t.Helper()
+	object, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("expected object for %s, got=%T", name, value)
+	}
+	return object
+}
+
+func asStringSlice(t *testing.T, value any, name string) []string {
+	t.Helper()
+	raw, ok := value.([]any)
+	if !ok {
+		t.Fatalf("expected []any for %s, got=%T", name, value)
+	}
+	out := make([]string, 0, len(raw))
+	for _, item := range raw {
+		text, ok := item.(string)
+		if !ok {
+			t.Fatalf("expected string item in %s, got=%T", name, item)
+		}
+		out = append(out, text)
+	}
+	return out
 }

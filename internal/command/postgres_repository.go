@@ -573,7 +573,7 @@ func (r *PostgresRepository) AppendCommandEvent(ctx context.Context, req Request
 }
 
 func (r *PostgresRepository) AppendAuditEvent(ctx context.Context, req RequestContext, commandID, eventType, decision, reason string, payload []byte) error {
-	payload = buildAuditPayload(req, payload)
+	payload = buildAuditPayload(req, commandID, eventType, decision, reason, payload)
 	traceID := strings.TrimSpace(req.TraceID)
 	if traceID == "" {
 		traceID = newID("trace")

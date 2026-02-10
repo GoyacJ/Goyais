@@ -1876,6 +1876,9 @@ components:
             replayFromStepKey:
               type: string
               nullable: true
+            traceId:
+              type: string
+              nullable: true
             inputs:
               type: object
               additionalProperties: true
@@ -1928,6 +1931,9 @@ components:
               type: string
             attempt:
               type: integer
+            traceId:
+              type: string
+              nullable: true
             input:
               type: object
               additionalProperties: true
