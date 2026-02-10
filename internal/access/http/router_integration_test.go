@@ -27,6 +27,30 @@ func TestAPIContractRegression(t *testing.T) {
 
 	client := &http.Client{Timeout: 10 * time.Second}
 
+	t.Run("healthz includes provider readiness details", func(t *testing.T) {
+		resp := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/healthz", nil, nil)
+		defer resp.Body.Close()
+		assertStatus(t, resp, http.StatusOK)
+
+		var payload map[string]any
+		mustDecodeJSON(t, resp.Body, &payload)
+		details, ok := payload["details"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected healthz details object")
+		}
+		providers, ok := details["providers"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected healthz details.providers object")
+		}
+		dbProvider, ok := providers["db"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected healthz details.providers.db")
+		}
+		if dbProvider["status"] != "ready" {
+			t.Fatalf("expected db provider ready status, got=%v", dbProvider["status"])
+		}
+	})
+
 	t.Run("commands missing context", func(t *testing.T) {
 		resp := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands", nil, nil)
 		defer resp.Body.Close()
@@ -265,6 +289,26 @@ func TestAPIContractRegression(t *testing.T) {
 		respSharedRead := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets/"+assetID, headersWithContext("u2"), nil)
 		defer respSharedRead.Body.Close()
 		assertStatus(t, respSharedRead, http.StatusOK)
+
+		respListShared := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets", headersWithContext("u2"), nil)
+		defer respListShared.Body.Close()
+		assertStatus(t, respListShared, http.StatusOK)
+		var sharedListPayload map[string]any
+		mustDecodeJSON(t, respListShared.Body, &sharedListPayload)
+		sharedItems, _ := sharedListPayload["items"].([]any)
+		if !containsAssetID(sharedItems, assetID) {
+			t.Fatalf("expected shared user list to contain shared asset %s", assetID)
+		}
+
+		respListDenied := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets", headersWithContext("u3"), nil)
+		defer respListDenied.Body.Close()
+		assertStatus(t, respListDenied, http.StatusOK)
+		var deniedListPayload map[string]any
+		mustDecodeJSON(t, respListDenied.Body, &deniedListPayload)
+		deniedItems, _ := deniedListPayload["items"].([]any)
+		if containsAssetID(deniedItems, assetID) {
+			t.Fatalf("did not expect unrelated user list to contain private asset %s", assetID)
+		}
 
 		last := items[len(items)-1].(map[string]any)
 		cursor := buildCursor(t, last["createdAt"].(string), last["id"].(string))
@@ -528,6 +572,9 @@ func TestAPIContractRegression(t *testing.T) {
 		defer respJS.Body.Close()
 		assertStatus(t, respJS, http.StatusOK)
 		assertHeaderContains(t, respJS, "Content-Type", "application/javascript")
+		if strings.Contains(strings.ToLower(respJS.Header.Get("Content-Type")), "application/octet-stream") {
+			t.Fatalf("did not expect octet-stream for javascript asset")
+		}
 
 		respCanvas := mustRequest(t, client, http.MethodGet, baseURL+"/canvas", nil, nil)
 		defer respCanvas.Body.Close()
@@ -708,4 +755,18 @@ func buildCursor(t *testing.T, createdAt string, id string) string {
 		t.Fatalf("encode cursor: %v", err)
 	}
 	return cursor
+}
+
+func containsAssetID(items []any, assetID string) bool {
+	for _, raw := range items {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := item["id"].(string)
+		if id == assetID {
+			return true
+		}
+	}
+	return false
 }
