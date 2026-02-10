@@ -93,9 +93,53 @@ describe('SideNav', () => {
 
       await restoredPinButton.trigger('click')
       await nextTick()
+      expect(restoredPinButton.attributes('data-pinned')).toBe('false')
+      expect(restoredAside.classes()).toContain('w-[4.75rem]')
       expect(localStorage.getItem(PINNED_STORAGE_KEY)).toBe('false')
 
       restored.unmount()
+    } finally {
+      localStorage.removeItem(PINNED_STORAGE_KEY)
+      i18n.global.locale.value = originalLocale
+      densityMode.value = originalDensity
+    }
+  })
+
+  it('collapses when floating even under comfortable density', async () => {
+    const originalLocale = i18n.global.locale.value
+    const { densityMode } = useDensityStore()
+    const originalDensity = densityMode.value
+    localStorage.removeItem(PINNED_STORAGE_KEY)
+    i18n.global.locale.value = 'en-US'
+    densityMode.value = 'comfortable'
+
+    try {
+      const wrapper = mount(SideNav, {
+        global: {
+          plugins: [i18n],
+          stubs: {
+            RouterLink: RouterLinkStub,
+          },
+        },
+      })
+
+      const aside = wrapper.get('aside')
+      const pinButton = wrapper.get('button[data-pinned]')
+
+      expect(aside.classes()).toContain('w-[4.75rem]')
+      expect(pinButton.attributes('data-pinned')).toBe('false')
+
+      await pinButton.trigger('click')
+      await nextTick()
+      expect(aside.classes()).toContain('w-64')
+      expect(pinButton.attributes('data-pinned')).toBe('true')
+
+      await pinButton.trigger('click')
+      await nextTick()
+      expect(aside.classes()).toContain('w-[4.75rem]')
+      expect(pinButton.attributes('data-pinned')).toBe('false')
+
+      wrapper.unmount()
     } finally {
       localStorage.removeItem(PINNED_STORAGE_KEY)
       i18n.global.locale.value = originalLocale
