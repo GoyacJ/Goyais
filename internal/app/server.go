@@ -8,6 +8,7 @@ import (
 	"time"
 
 	httpapi "goyais/internal/access/http"
+	"goyais/internal/algorithm"
 	"goyais/internal/asset"
 	"goyais/internal/command"
 	"goyais/internal/config"
@@ -79,6 +80,13 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	}
 	streamService := stream.NewService(streamRepo, assetService, cfg.Authz.AllowPrivateToPublic)
 
+	algorithmRepo, err := algorithm.NewRepository(cfg.Providers.DB, db)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("build algorithm repository: %w", err)
+	}
+	algorithmService := algorithm.NewService(algorithmRepo, registryService, workflowService, assetService)
+
 	cacheProvider, err := cache.New(cache.Config{
 		Provider:      cfg.Providers.Cache,
 		RedisAddr:     cfg.Cache.RedisAddr,
@@ -99,7 +107,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 		return nil, fmt.Errorf("build vector provider: %w", err)
 	}
 
-	registerCommandExecutors(commandService, assetService, workflowService, pluginService, streamService)
+	registerCommandExecutors(commandService, assetService, workflowService, pluginService, streamService, algorithmService)
 
 	h, err := httpapi.NewRouter(cfg, httpapi.RouterDeps{
 		CommandService:  commandService,

@@ -491,6 +491,7 @@ func TestAPIContractRegression(t *testing.T) {
 	})
 
 	var templateID string
+	var algorithmID string
 	t.Run("workflow template create/get/patch/publish", func(t *testing.T) {
 		respCreate := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-templates", headersWithJSONContext("u1"), map[string]any{
 			"name":        "wf-smoke",
@@ -548,6 +549,9 @@ func TestAPIContractRegression(t *testing.T) {
 		if publishStatus != "published" {
 			t.Fatalf("unexpected publish status: %v", publishStatus)
 		}
+
+		algorithmID = "algo_smoke_" + strings.ReplaceAll(templateID, "tpl_", "")
+		insertAlgorithmFixture(t, dbPath, algorithmID, templateID)
 	})
 
 	var runningRunID string
@@ -827,6 +831,79 @@ func TestAPIContractRegression(t *testing.T) {
 				t.Fatalf("unexpected persisted step trace id: got=%s want=%s", stepTraceID, traceHeaderValue)
 			}
 		}
+	})
+
+	t.Run("algorithm run command-first sugar", func(t *testing.T) {
+		if algorithmID == "" || templateID == "" {
+			t.Fatalf("expected algorithm/template fixture")
+		}
+
+		respAlgorithm := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/registry/algorithms/"+algorithmID, headersWithContext("u1"), nil)
+		defer respAlgorithm.Body.Close()
+		assertStatus(t, respAlgorithm, http.StatusOK)
+		if gotTemplateRef := readJSONPath(t, respAlgorithm.Body, "templateRef"); gotTemplateRef != templateID {
+			t.Fatalf("unexpected algorithm templateRef: got=%v want=%s", gotTemplateRef, templateID)
+		}
+
+		respRun := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/algorithms/"+algorithmID+":run", headersWithJSONContext("u1"), map[string]any{
+			"inputs": map[string]any{
+				"prompt": "integration-smoke",
+			},
+			"mode": "sync",
+		})
+		defer respRun.Body.Close()
+		assertStatus(t, respRun, http.StatusAccepted)
+		var runPayload map[string]any
+		mustDecodeJSON(t, respRun.Body, &runPayload)
+
+		resource, _ := runPayload["resource"].(map[string]any)
+		runID, _ := resource["id"].(string)
+		workflowRunID, _ := resource["workflowRunId"].(string)
+		if runID == "" || workflowRunID == "" {
+			t.Fatalf("expected algorithm run id and workflowRunId")
+		}
+		if gotAlgorithmID, _ := resource["algorithmId"].(string); gotAlgorithmID != algorithmID {
+			t.Fatalf("unexpected algorithmId in resource: got=%v want=%s", gotAlgorithmID, algorithmID)
+		}
+
+		assetIDs := extractStringSlice(resource["assetIds"])
+		if len(assetIDs) == 0 {
+			t.Fatalf("expected algorithm run to produce at least one asset")
+		}
+
+		commandRef, _ := runPayload["commandRef"].(map[string]any)
+		commandID, _ := commandRef["commandId"].(string)
+		if commandID == "" {
+			t.Fatalf("expected commandRef.commandId for algorithm run")
+		}
+
+		respCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+commandID, headersWithContext("u1"), nil)
+		defer respCommand.Body.Close()
+		assertStatus(t, respCommand, http.StatusOK)
+		var commandPayload map[string]any
+		mustDecodeJSON(t, respCommand.Body, &commandPayload)
+		if commandType, _ := commandPayload["commandType"].(string); commandType != "algorithm.run" {
+			t.Fatalf("unexpected algorithm command type: %v", commandType)
+		}
+		result, _ := commandPayload["result"].(map[string]any)
+		resultRun, _ := result["run"].(map[string]any)
+		if gotRunID, _ := resultRun["id"].(string); gotRunID != runID {
+			t.Fatalf("unexpected run id in command result: got=%v want=%s", gotRunID, runID)
+		}
+		if gotWorkflowRunID, _ := resultRun["workflowRunId"].(string); gotWorkflowRunID != workflowRunID {
+			t.Fatalf("unexpected workflowRunId in command result: got=%v want=%s", gotWorkflowRunID, workflowRunID)
+		}
+
+		respAsset := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets/"+assetIDs[0], headersWithContext("u1"), nil)
+		defer respAsset.Body.Close()
+		assertStatus(t, respAsset, http.StatusOK)
+
+		respMissing := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/algorithms/algo_missing:run", headersWithJSONContext("u1"), map[string]any{
+			"inputs": map[string]any{},
+		})
+		defer respMissing.Body.Close()
+		assertStatus(t, respMissing, http.StatusNotFound)
+		assertMessageKey(t, respMissing.Body, "error.algorithm.not_found")
 	})
 
 	t.Run("registry read routes available", func(t *testing.T) {
@@ -1458,6 +1535,58 @@ func containsString(items []string, expected string) bool {
 		}
 	}
 	return false
+}
+
+func extractStringSlice(raw any) []string {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		value, ok := item.(string)
+		if !ok || strings.TrimSpace(value) == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
+}
+
+func insertAlgorithmFixture(t *testing.T, dbPath string, algorithmID string, templateID string) {
+	t.Helper()
+
+	db, err := sql.Open("sqlite", "file:"+dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite db for algorithm fixture: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = db.Exec(
+		`INSERT INTO algorithms(
+			id, tenant_id, workspace_id, owner_id, visibility, acl_json,
+			name, version, template_ref, defaults_json, constraints_json, dependencies_json, status, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		algorithmID,
+		"t1",
+		"w1",
+		"u1",
+		"PRIVATE",
+		"[]",
+		"integration algorithm",
+		"1.0.0",
+		templateID,
+		"{}",
+		"{}",
+		"{}",
+		"active",
+		now,
+		now,
+	)
+	if err != nil {
+		t.Fatalf("insert algorithm fixture: %v", err)
+	}
 }
 
 func asObject(t *testing.T, value any, name string) map[string]any {

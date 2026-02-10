@@ -145,6 +145,8 @@ func materializeOpenAPIPath(path string) string {
 			return "ins_1"
 		case "streamId":
 			return "stream_1"
+		case "algorithmId":
+			return "algo_1"
 		default:
 			return "id_1"
 		}

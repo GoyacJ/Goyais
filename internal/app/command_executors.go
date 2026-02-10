@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"goyais/internal/algorithm"
 	"goyais/internal/asset"
 	"goyais/internal/command"
 	"goyais/internal/plugin"
@@ -66,6 +67,13 @@ type workflowCancelCommandPayload struct {
 	RunID string `json:"runId"`
 }
 
+type algorithmRunCommandPayload struct {
+	AlgorithmID string          `json:"algorithmId"`
+	Inputs      json.RawMessage `json:"inputs"`
+	Visibility  string          `json:"visibility"`
+	Mode        string          `json:"mode"`
+}
+
 type shareCreateCommandPayload struct {
 	ResourceType string   `json:"resourceType"`
 	ResourceID   string   `json:"resourceId"`
@@ -116,6 +124,7 @@ func registerCommandExecutors(
 	workflowService *workflow.Service,
 	pluginService *plugin.Service,
 	streamService *stream.Service,
+	algorithmService *algorithm.Service,
 ) {
 	if commandService == nil {
 		return
@@ -145,6 +154,9 @@ func registerCommandExecutors(
 		commandService.SetExecutor("stream.record.start", newStreamRecordStartExecutor(commandService, streamService))
 		commandService.SetExecutor("stream.record.stop", newStreamRecordStopExecutor(streamService))
 		commandService.SetExecutor("stream.kick", newStreamKickExecutor(streamService))
+	}
+	if algorithmService != nil {
+		commandService.SetExecutor("algorithm.run", newAlgorithmRunExecutor(algorithmService))
 	}
 }
 
@@ -435,6 +447,71 @@ func mapWorkflowExecutionError(err error) error {
 			Code:       "INTERNAL_ERROR",
 			MessageKey: "error.common.internal",
 			Err:        fmt.Errorf("workflow executor: %w", err),
+		}
+	}
+}
+
+func newAlgorithmRunExecutor(algorithmService *algorithm.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req algorithmRunCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapAlgorithmExecutionError(algorithm.ErrInvalidRequest)
+		}
+		run, err := algorithmService.Run(ctx, algorithm.RunInput{
+			Context:     reqCtx,
+			AlgorithmID: req.AlgorithmID,
+			Inputs:      objectOrDefault(req.Inputs),
+			Visibility:  req.Visibility,
+			Mode:        req.Mode,
+		})
+		if err != nil {
+			return nil, mapAlgorithmExecutionError(err)
+		}
+
+		result := map[string]any{
+			"run": toAlgorithmRunResultPayload(run),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func mapAlgorithmExecutionError(err error) error {
+	switch {
+	case errors.Is(err, algorithm.ErrInvalidRequest):
+		return &command.ExecutionError{
+			Code:       "INVALID_ALGORITHM_REQUEST",
+			MessageKey: "error.algorithm.invalid_request",
+			Err:        command.ErrInvalidCommandRequest,
+		}
+	case errors.Is(err, algorithm.ErrAlgorithmNotFound):
+		return &command.ExecutionError{
+			Code:       "ALGORITHM_NOT_FOUND",
+			MessageKey: "error.algorithm.not_found",
+			Err:        command.ErrInvalidCommandRequest,
+		}
+	case errors.Is(err, algorithm.ErrNotImplemented):
+		return &command.ExecutionError{
+			Code:       "NOT_IMPLEMENTED",
+			MessageKey: "error.algorithm.not_implemented",
+			Err:        command.ErrNotImplemented,
+		}
+	case errors.Is(err, algorithm.ErrForbidden):
+		reason := ""
+		var forbidden *algorithm.ForbiddenError
+		if errors.As(err, &forbidden) {
+			reason = forbidden.Reason
+		}
+		return &command.ExecutionError{
+			Code:       "FORBIDDEN",
+			MessageKey: "error.authz.forbidden",
+			Err:        &command.ForbiddenError{Reason: reason},
+		}
+	default:
+		return &command.ExecutionError{
+			Code:       "INTERNAL_ERROR",
+			MessageKey: "error.common.internal",
+			Err:        fmt.Errorf("algorithm executor: %w", err),
 		}
 	}
 }
@@ -934,6 +1011,26 @@ func toWorkflowRunResultPayload(item workflow.WorkflowRun) map[string]any {
 	if item.FinishedAt != nil {
 		result["finishedAt"] = item.FinishedAt.UTC().Format(timeRFC3339Nano)
 		result["durationMs"] = durationMillis(item.StartedAt, *item.FinishedAt)
+	}
+	if item.ErrorCode != "" || item.MessageKey != "" {
+		result["error"] = map[string]any{
+			"code":       item.ErrorCode,
+			"messageKey": item.MessageKey,
+		}
+	}
+	return result
+}
+
+func toAlgorithmRunResultPayload(item algorithm.Run) map[string]any {
+	result := map[string]any{
+		"id":            item.ID,
+		"algorithmId":   item.AlgorithmID,
+		"workflowRunId": item.WorkflowRunID,
+		"status":        item.Status,
+		"outputs":       decodeJSON(item.OutputsJSON, map[string]any{}),
+		"assetIds":      decodeJSON(item.AssetIDsJSON, []any{}),
+		"createdAt":     item.CreatedAt.UTC().Format(timeRFC3339Nano),
+		"updatedAt":     item.UpdatedAt.UTC().Format(timeRFC3339Nano),
 	}
 	if item.ErrorCode != "" || item.MessageKey != "" {
 		result["error"] = map[string]any{
