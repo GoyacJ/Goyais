@@ -23,20 +23,20 @@
 ## 3. Provider 切换验收
 
 ### 3.1 DB provider
-- [ ] `db.driver=sqlite` 时迁移与查询可用。
-- [ ] `db.driver=postgres` 时迁移与查询可用。
-- [ ] 两种模式字段语义一致（时间/状态/visibility/acl 不漂移）。
+- [x] `db.driver=sqlite` 时迁移与查询可用。
+- [x] `db.driver=postgres` 时迁移与查询可用。
+- [x] 两种模式字段语义一致（时间/状态/visibility/acl 不漂移）。
 
 ### 3.2 Object store provider
-- [ ] `object_store.provider=local` 可上传/读取/删除。
+- [x] `object_store.provider=local` 可上传/读取/删除。
 - [ ] `object_store.provider=minio` 可上传/读取/删除。
 - [ ] `object_store.provider=s3` 可上传/读取/删除。
 
 ### 3.3 Cache + Vector provider
-- [ ] `cache.provider=memory` 下系统可运行。
-- [ ] `cache.provider=redis` 下缓存命中与过期符合预期。
-- [ ] `vector.provider=redis_stack` 可写入并检索向量。
-- [ ] 无 Redis 时 `vector.provider=sqlite` fallback 可检索。
+- [x] `cache.provider=memory` 下系统可运行。
+- [x] `cache.provider=redis` 下缓存命中与过期符合预期。
+- [x] `vector.provider=redis_stack` 可写入并检索向量。
+- [x] 无 Redis 时 `vector.provider=sqlite` fallback 可检索。
 
 ## 4. Single Binary Packaging 验收
 
@@ -57,7 +57,7 @@
 - [x] `GET /canvas` 返回 `Content-Type: text/html`（可含 charset）。
 - [x] `GET /` 与 `GET /canvas` 的 `Cache-Control` 精确为 `no-store`。
 - [x] 首页引用的 `/assets/*.js` 返回 JavaScript 类型（`application/javascript` 或兼容值）。
-- [ ] 静态文件不出现 `application/octet-stream` 误配（除确实二进制资源外）。
+- [x] 静态文件不出现 `application/octet-stream` 误配（除确实二进制资源外）。
 
 ## 5. Command-first 与 AI/UI 一致性验收
 
@@ -74,11 +74,12 @@
 - [x] 同 `(tenant,workspace,owner,idempotency_key)` 但不同请求哈希返回 `409 IDEMPOTENCY_KEY_CONFLICT`。
 - [x] `Idempotency-Key` 缺失时仍可创建新命令，并保留审计记录。
 - [x] SQLite（minimal）可完成 create/get/list + 状态流转 + 审计落库。
-- [ ] Postgres（full）可连接并在 healthz 回显 provider；commands 业务接口可统一返回 `501 NOT_IMPLEMENTED`（本轮非阻塞）。
+- [x] Postgres（full）可连接并在 healthz 回显 provider；commands 业务接口与 sqlite 语义等价（非 `501` 占位）。
 
 ## 6. Visibility/ACL 与隔离验收
 
-- [ ] 资产、工作流、算法、插件、流对象均支持 `PRIVATE/WORKSPACE/TENANT/PUBLIC`。
+- [x] 已实现对象（commands/assets/workflow/shares）支持 `PRIVATE/WORKSPACE/TENANT/PUBLIC`。
+- [ ] 未实现对象（algorithm/plugin/stream）visibility/ACL 延后到 M2。
 - [ ] ACL 可赋予 `READ/WRITE/EXECUTE/MANAGE/SHARE`。
 - [ ] 无权限用户访问资源返回拒绝，并包含明确 `messageKey`。
 - [ ] `PRIVATE` 输入默认不得直接产生 `PUBLIC` 输出（除非策略放开且权限满足）。
@@ -141,9 +142,9 @@
 - [x] `permissions` 仅支持 `READ/WRITE/EXECUTE/MANAGE/SHARE`；非法值返回 `400 INVALID_SHARE_REQUEST`。
 - [x] 非 owner 且无 `asset` 的 `SHARE` 权限时，`POST /api/v1/shares` 返回 `403 FORBIDDEN + messageKey=error.authz.forbidden`。
 
-### 12.3 Postgres full（本轮占位）
-- [ ] `GET /api/v1/healthz` 与 `GET /api/v1/system/healthz` 返回 `200`，且 `providers.db=postgres`。
-- [ ] `POST/GET /api/v1/assets*` 统一返回 `501 NOT_IMPLEMENTED`，错误结构为 `error{code,messageKey,details}`，且 `messageKey=error.asset.not_implemented`。
+### 12.3 Postgres full（本轮收口）
+- [x] `GET /api/v1/healthz` 与 `GET /api/v1/system/healthz` 返回 `200`，且 `providers.db=postgres`。
+- [x] `POST/GET /api/v1/assets*`、`/commands*`、`/workflow*`、`/shares*` 与 sqlite 语义等价（非 `501` 占位）。
 
 ### 12.4 回归（必须通过）
 - [x] `make build` 通过。

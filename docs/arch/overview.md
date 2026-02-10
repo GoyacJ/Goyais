@@ -88,17 +88,19 @@ flowchart TB
 ### 4.2 CacheProvider
 - 目标：统一 memory/Redis 缓存。
 - 必需能力：`get/set/del`、TTL、简单分布式锁（可选）。
+- v0.1 当前实现：`memory` 与 `redis` provider 可用（最小接口：`get/set/del/ttl`）。
 
 ### 4.3 VectorProvider
 - 目标：统一 Redis Stack 向量检索与 SQLite fallback。
 - 必需能力：索引写入、相似度查询、按租户/工作区过滤。
+- v0.1 当前实现：`sqlite` fallback 与 `redis_stack` provider 可用（最小接口：`upsert/search`）。
 
 ### 4.4 ObjectStoreProvider
 - 目标：统一 local/MinIO/S3 文件对象读写。
 - 必需能力：put/get/delete、预签名 URL（可选）、元数据标签。
 - v0.1 当前实现：
   - `local`：已实现（最小闭环）
-  - `minio/s3`：接口与配置占位，业务接口返回 `NOT_IMPLEMENTED`
+  - `minio/s3`：已实现 provider 级 `put/get/delete/ping`，可与 full profile 组合验证
 
 ### 4.5 StreamProvider
 - 目标：统一 MediaMTX 控制面交互。
@@ -185,6 +187,9 @@ Command 执行管道（必须）：
 - 服务端映射：`ownerId = X-User-Id`。
 - 缺任一 header 返回：`400 MISSING_CONTEXT + error.context.missing`，并在 `details.missingHeaders` 返回缺失列表。
 - `GET /api/v1/system/healthz` 作为 `GET /api/v1/healthz` 的别名端点，返回结构一致。
+- `GET /api/v1/healthz` 与 `GET /api/v1/system/healthz` 返回：
+  - `providers`（当前生效 provider 选择）
+  - `details.providers.*.status`（`ready/degraded`）与可选 `error`
 
 ### 7.3 当前接口落地状态（2026-02）
 - 已落地（可用）：
@@ -218,8 +223,19 @@ Command 执行管道（必须）：
 
 示例：
 - `GOYAIS_DB_DRIVER=sqlite`
+- `GOYAIS_DB_DSN=file:goyais.db`
+- `GOYAIS_CACHE_PROVIDER=memory`
+- `GOYAIS_CACHE_REDIS_ADDR=127.0.0.1:6379`
+- `GOYAIS_VECTOR_PROVIDER=sqlite`
+- `GOYAIS_VECTOR_REDIS_ADDR=127.0.0.1:6379`
 - `GOYAIS_OBJECT_STORE_PROVIDER=local`
 - `GOYAIS_OBJECT_STORE_LOCAL_ROOT=./data/objects`
+- `GOYAIS_OBJECT_STORE_BUCKET=goyais-local`
+- `GOYAIS_OBJECT_STORE_ENDPOINT=127.0.0.1:9000`
+- `GOYAIS_OBJECT_STORE_ACCESS_KEY=<access-key>`
+- `GOYAIS_OBJECT_STORE_SECRET_KEY=<secret-key>`
+- `GOYAIS_OBJECT_STORE_REGION=us-east-1`
+- `GOYAIS_OBJECT_STORE_USE_SSL=false`
 - `GOYAIS_STREAM_PROVIDER=mediamtx`
 
 PostgreSQL DSN 规则（冻结）：
