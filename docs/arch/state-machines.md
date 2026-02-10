@@ -136,3 +136,19 @@
 - 状态枚举必须与 `docs/api/openapi.yaml`、`docs/arch/data-model.md` 完全一致。
 - 任意状态拒绝时，返回错误结构：`error { code, messageKey, details }`。
 - 所有转换需关联 `tenantId/workspaceId/ownerId` 上下文并可审计。
+
+---
+
+## 5. Share 授权判定点（A3/B1）
+
+`POST /api/v1/shares` 在写入 ACL 前必须按固定顺序执行：
+1. 请求字段校验（`resourceType`、`subjectType`、`permissions`）。
+2. 目标资源存在性与租户/工作区一致性校验。
+3. 分享者权限校验：
+   - owner 直接允许；
+   - 或该资源上已有 `SHARE` 权限（仅同一资源生效，禁止全局 SHARE）。
+4. `permissions` 归一化（大写/去重/排序）并落库。
+
+拒绝语义：
+- 权限不足返回 `403 FORBIDDEN` + `messageKey=error.authz.forbidden`。
+- 非法入参返回 `400 INVALID_SHARE_REQUEST`。

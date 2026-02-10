@@ -1,6 +1,6 @@
 # Goyais v0.1 验收清单
 
-> 说明：本清单用于 v0.1 文档到实现阶段的统一验收。所有条目默认在同一租户内执行，且必须保留审计记录。
+> 说明：本清单用于 v0.1 文档到实现阶段的统一验收。所有条目默认在同一租户内执行。
 
 ## 1. 基础验收条件
 
@@ -107,7 +107,31 @@
 - [ ] 外发调用记录目的地、策略结果、摘要信息（不泄露敏感原文）。
 - [ ] run/step 关联 traceId 可串联查询。
 
-## 12. 结果判定
+## 12. B1 Asset 最小闭环验收（Thread #5）
+
+### 12.1 SQLite minimal（必须通过）
+- [ ] `POST /api/v1/assets` 使用 multipart 上传成功，返回 `201`，响应包含 `id/uri/hash`。
+- [ ] owner 访问 `GET /api/v1/assets/{assetId}` 返回 `200`。
+- [ ] 非 owner 且无 share 时访问 `GET /api/v1/assets/{assetId}` 返回 `403 FORBIDDEN` + `messageKey=error.authz.forbidden`。
+- [ ] owner 对同一 `asset` 创建 `READ` share 后，非 owner 访问 `GET /api/v1/assets/{assetId}` 返回 `200`。
+- [ ] `GET /api/v1/assets` 在 SQL 层完成可读过滤（tenant/workspace 限定 + owner/WORKSPACE/ACL.READ），并保持 `created_at DESC,id DESC` 稳定排序。
+- [ ] cursor 模式下 `cursor` 优先于 `page/pageSize`，分页无重复/漏项。
+
+### 12.2 Shares（asset）规则（必须通过）
+- [ ] `POST /api/v1/shares` 仅允许 `resourceType=command|asset`；本轮重点验 `asset`。
+- [ ] `subjectType` 仅支持 `user`；非法值返回 `400 INVALID_SHARE_REQUEST`。
+- [ ] `permissions` 仅支持 `READ/WRITE/EXECUTE/MANAGE/SHARE`；非法值返回 `400 INVALID_SHARE_REQUEST`。
+- [ ] 对 `asset` 分享时，必须先通过“同资源 SHARE 权限”校验（owner 或该 asset 上已有 SHARE），否则 `403 FORBIDDEN`。
+
+### 12.3 Postgres full（本轮占位）
+- [ ] `GET /api/v1/healthz` 与 `GET /api/v1/system/healthz` 返回 `200`，且 `providers.db=postgres`。
+- [ ] `POST/GET /api/v1/assets*` 统一返回 `501 NOT_IMPLEMENTED`，错误结构为 `error{code,messageKey,details}`。
+
+### 12.4 回归（必须通过）
+- [ ] `make build` 通过。
+- [ ] `verify_single_binary.sh` 返回 `0`（含 no-store、favicon/robots 404、JS Content-Type、移除 web/dist 后可运行）。
+
+## 13. 结果判定
 
 - [ ] P0 条目（2、4、5、6）全部通过。
 - [ ] 其余条目无阻断性失败。

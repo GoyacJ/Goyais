@@ -46,7 +46,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [status, timestamp, mode, providers]
+                required: [status, timestamp]
                 properties:
                   status:
                     type: string
@@ -54,15 +54,18 @@ paths:
                   timestamp:
                     type: string
                     format: date-time
+                  version:
+                    type: string
+                    description: 构建注入版本号（可选，默认推荐返回）。
+                    example: v0.1.0+dev
                   mode:
                     type: string
-                    description: 当前运行模式，用于 minimal/full 验收。
+                    description: 当前运行模式（可选，推荐返回，用于 minimal/full 验收）。
                     enum: [minimal, full]
                     example: minimal
                   providers:
                     type: object
-                    description: 当前生效 provider 选择，用于 provider 切换验收。
-                    required: [db, cache, vector, objectStore, stream]
+                    description: 当前生效 provider 选择（可选，推荐返回，用于 provider 切换验收）。
                     properties:
                       db:
                         type: string
@@ -80,14 +83,29 @@ paths:
                         type: string
                         example: mediamtx
 
+  /system/healthz:
+    get:
+      tags: [Health]
+      summary: Health check alias
+      operationId: systemHealthz
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthzResponse'
+
   /commands:
     get:
       tags: [Command]
       summary: List commands
       operationId: listCommands
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -98,6 +116,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommandListResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: INVALID_SHARE_REQUEST
+                  messageKey: error.share.invalid_request
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FORBIDDEN
+                  messageKey: error.authz.forbidden
+                  details:
+                    reason: permission_denied
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     post:
@@ -105,8 +147,10 @@ paths:
       summary: Submit command (canonical)
       operationId: createCommand
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -126,6 +170,14 @@ paths:
                     $ref: '#/components/schemas/Command'
                   commandRef:
                     $ref: '#/components/schemas/CommandRef'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -135,8 +187,9 @@ paths:
       summary: Get command by id
       operationId: getCommand
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/CommandId'
       responses:
         '200':
@@ -145,6 +198,97 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Command'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /shares:
+    post:
+      tags: [Command]
+      summary: Create share
+      operationId: createShare
+      description: |
+        校验顺序固定：
+        1) 请求字段校验
+        2) 目标资源必须存在且同 tenant/workspace
+        3) 分享者必须是 owner 或在该资源上已有 SHARE 权限
+        4) permissions 归一化（大写/去重/排序）后落库
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareCreateRequest'
+      responses:
+        '201':
+          description: Share created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    get:
+      tags: [Command]
+      summary: List shares
+      operationId: listShares
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Share list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /shares/{shareId}:
+    delete:
+      tags: [Command]
+      summary: Delete share
+      operationId: deleteShare
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/ShareId'
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -153,9 +297,14 @@ paths:
       tags: [Asset]
       summary: List assets
       operationId: listAssets
+      description: |
+        固定排序：created_at DESC, id DESC。
+        过滤在 SQL 层完成：tenant/workspace 限定后，仅返回 owner 或 visibility=WORKSPACE 或 ACL.READ 命中的资产。
+        若存在 cursor，请忽略 page/pageSize。
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -166,28 +315,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AssetListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     post:
       tags: [Asset]
-      summary: Create asset (domain sugar -> command)
+      summary: Upload asset (multipart)
       operationId: createAsset
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: '#/components/schemas/AssetCreateRequest'
+              $ref: '#/components/schemas/AssetUploadRequest'
       responses:
-        '202':
-          description: Accepted
+        '201':
+          description: Created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WriteResponseAsset'
+                $ref: '#/components/schemas/Asset'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -197,8 +359,9 @@ paths:
       summary: Get asset
       operationId: getAsset
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
         - $ref: '#/components/parameters/AssetId'
       responses:
         '200':
@@ -207,91 +370,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Asset'
-        default:
+        '400':
           $ref: '#/components/responses/ErrorResponse'
-    patch:
-      tags: [Asset]
-      summary: Update asset (domain sugar -> command)
-      operationId: updateAsset
-      parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
-        - $ref: '#/components/parameters/AssetId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AssetUpdateRequest'
-      responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WriteResponseAsset'
-        default:
+        '403':
           $ref: '#/components/responses/ErrorResponse'
-    delete:
-      tags: [Asset]
-      summary: Delete asset (domain sugar -> command)
-      operationId: deleteAsset
-      parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
-        - $ref: '#/components/parameters/AssetId'
-      responses:
-        '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [resource, commandRef]
-                properties:
-                  resource:
-                    type: object
-                    required: [id, status]
-                    properties:
-                      id:
-                        type: string
-                      status:
-                        type: string
-                        example: deleting
-                  commandRef:
-                    $ref: '#/components/schemas/CommandRef'
-        default:
+        '404':
           $ref: '#/components/responses/ErrorResponse'
-
-  /assets/{assetId}/lineage:
-    get:
-      tags: [Asset]
-      summary: Get asset lineage graph
-      operationId: getAssetLineage
-      parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
-        - $ref: '#/components/parameters/AssetId'
-      responses:
-        '200':
-          description: Lineage
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  assetId:
-                    type: string
-                  nodes:
-                    type: array
-                    items:
-                      type: object
-                      additionalProperties: true
-                  edges:
-                    type: array
-                    items:
-                      type: object
-                      additionalProperties: true
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -837,6 +923,27 @@ components:
       bearerFormat: JWT
 
   parameters:
+    RequiredXTenantId:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema:
+        type: string
+      description: 未接入 JWT 阶段必填租户上下文。
+    RequiredXWorkspaceId:
+      name: X-Workspace-Id
+      in: header
+      required: true
+      schema:
+        type: string
+      description: 未接入 JWT 阶段必填工作区上下文。
+    RequiredXUserId:
+      name: X-User-Id
+      in: header
+      required: true
+      schema:
+        type: string
+      description: 未接入 JWT 阶段必填用户上下文；服务端映射为 ownerId。
     XTenantId:
       name: X-Tenant-Id
       in: header
@@ -851,6 +958,13 @@ components:
       schema:
         type: string
       description: 可选工作区上下文。服务端必须校验是否属于 JWT 可访问范围。
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 强烈建议提供；同一 tenant/workspace/user 下用于幂等复用和冲突检测。
     Cursor:
       name: cursor
       in: query
@@ -883,6 +997,12 @@ components:
         type: string
     AssetId:
       name: assetId
+      in: path
+      required: true
+      schema:
+        type: string
+    ShareId:
+      name: shareId
       in: path
       required: true
       schema:
@@ -1023,6 +1143,35 @@ components:
         error:
           $ref: '#/components/schemas/Error'
 
+    HealthzResponse:
+      type: object
+      required: [status, timestamp]
+      properties:
+        status:
+          type: string
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+        mode:
+          type: string
+          enum: [minimal, full]
+        providers:
+          type: object
+          properties:
+            db:
+              type: string
+            cache:
+              type: string
+            vector:
+              type: string
+            objectStore:
+              type: string
+            stream:
+              type: string
+
     PageInfo:
       type: object
       required: [page, pageSize, total]
@@ -1073,16 +1222,17 @@ components:
       allOf:
         - $ref: '#/components/schemas/ResourceBase'
         - type: object
-          required: [name, assetType, mimeType]
+          required: [name, type, mime, size, uri, hash, metadata]
           properties:
             name:
               type: string
-            assetType:
+            type:
               type: string
-            mimeType:
+            mime:
               type: string
             size:
               type: integer
+              format: int64
             hash:
               type: string
             uri:
@@ -1091,33 +1241,76 @@ components:
               type: object
               additionalProperties: true
 
-    AssetCreateRequest:
+    AssetUploadRequest:
       type: object
-      required: [name, assetType]
+      required: [file]
       properties:
+        file:
+          type: string
+          format: binary
         name:
           type: string
-        assetType:
+        type:
           type: string
         visibility:
           $ref: '#/components/schemas/Visibility'
-        metadata:
-          type: object
-          additionalProperties: true
-        dataRef:
-          type: string
-          description: 上传后引用或预签名上传引用
 
-    AssetUpdateRequest:
+    Share:
       type: object
+      required: [id, tenantId, workspaceId, resourceType, resourceId, subjectType, subjectId, permissions, createdBy, createdAt]
       properties:
-        name:
+        id:
           type: string
-        visibility:
-          $ref: '#/components/schemas/Visibility'
-        metadata:
-          type: object
-          additionalProperties: true
+        tenantId:
+          type: string
+        workspaceId:
+          type: string
+        resourceType:
+          type: string
+          enum: [command, asset]
+        resourceId:
+          type: string
+        subjectType:
+          type: string
+          enum: [user]
+        subjectId:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ShareCreateRequest:
+      type: object
+      required: [resourceType, resourceId, subjectType, subjectId, permissions]
+      properties:
+        resourceType:
+          type: string
+          enum: [command, asset]
+        resourceId:
+          type: string
+        subjectType:
+          type: string
+          enum: [user]
+        subjectId:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
 
     WorkflowTemplate:
       allOf:
@@ -1502,6 +1695,19 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Asset'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    ShareListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Share'
         pageInfo:
           $ref: '#/components/schemas/PageInfo'
         cursorInfo:
