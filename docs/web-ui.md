@@ -15,6 +15,7 @@
 - 圆角：卡片 `10-12px`，按钮 `8px`，画布节点 `6-8px`。
 - 分层：边框主导；阴影仅用于浮层（Dialog/Dropdown/Toast）。
 - 动效：仅状态过渡与必要的进入/退出，不做大面积动效。
+- 必须支持 `prefers-reduced-motion: reduce`，自动降低非必要动效。
 
 ## 2. Design Tokens
 
@@ -60,8 +61,8 @@
 | Tabs | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | N/A | 选中态使用 primary token |
 | Dialog | N/A | N/A | 焦点陷阱 + `ui-focus-ring` | N/A | confirm 按钮可 loading | 遮罩/浮层使用 overlay token |
 | Dropdown(Menu) | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | trigger 可 loading | ESC 关闭、键盘可进入菜单 |
-| Table | 行 hover 可选 | 行按压可选 | 行 focus 可选 | N/A | `loading` skeleton | `ready/loading/empty/error` 四态 |
-| Toast | 可关闭按钮 hover | 按压关闭按钮 | `ui-focus-ring` | N/A | N/A | `info/success/warn/error` 级别 |
+| Table | 行 hover 可选 | 行按压可选 | 行 focus 可选 | N/A | `loading` skeleton | `ready/loading/empty/error` 四态，交互行必须支持 Enter + Space |
+| Toast | 可关闭按钮 hover | 按压关闭按钮 | `ui-focus-ring` | N/A | N/A | `info/success/warn/error` 级别，容器 `aria-live=polite` |
 
 ## 5. Theme / Density / i18n
 
@@ -109,6 +110,7 @@
 - 三种模式都支持窗口化拖拽/缩放（仅 desktop，mobile 降级为单列卡片流）。
 - 页面结构统一：`PageHeader(固定) + WindowBoard(可拖拽窗口区)`。
 - 窗口能力：拖拽、右/下/右下缩放、点击置顶、允许重叠。
+- 键盘等价能力：`Alt + Arrow` 移动窗口，`Alt + Shift + Arrow` 调整窗口宽高（步进 16px）。
 - 每页提供“重置窗口布局”动作。
 
 ### 6.4 窗口状态持久化
@@ -134,7 +136,7 @@
 - [ ] 是否接入 `ui-focus-ring`/`ui-pressable`/`ui-disabled`/`ui-loading`。
 - [ ] 是否在 light/dark 下保持对比可读。
 - [ ] 是否在 compact/comfortable 下尺寸一致。
-- [ ] 是否具备键盘路径（Tab、ESC、Enter）与 aria 语义。
+- [ ] 是否具备键盘路径（Tab、ESC、Enter、Space）与 aria 语义。
 - [ ] 文案是否走 i18n key。
 
 新增页面前：
@@ -148,6 +150,8 @@
 - 主题/语言/密度切换刷新后保持。
 - `focus ring` 在 light/dark 可见。
 - Dialog/Dropdown 键盘路径通过（focus 进入、ESC 关闭、Tab 路径正确）。
+- 窗口键盘路径通过（`Alt+Arrow` 移动、`Alt+Shift+Arrow` 缩放）。
+- 系统启用 `reduced-motion` 时动效显著降低。
 - `/commands` 与 `/assets` 双栏交互可用。
 
 ## 9. 图标与素材规范（Thread 7）

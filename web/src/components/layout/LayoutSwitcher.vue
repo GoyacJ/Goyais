@@ -1,16 +1,14 @@
 <template>
   <label class="flex items-center gap-2 text-xs text-ui-muted">
     <span>{{ t('common.layout') }}</span>
-    <select v-model="layoutModel" class="ui-control ui-focus-ring ui-pressable min-w-32 bg-ui-panel text-sm">
-      <option value="auto">{{ t('common.layoutAuto') }}</option>
-      <option value="console">{{ t('common.layoutConsole') }}</option>
-      <option value="topnav">{{ t('common.layoutTopnav') }}</option>
-      <option value="focus">{{ t('common.layoutFocus') }}</option>
-    </select>
+    <div class="min-w-36">
+      <Select v-model="layoutModel" :options="layoutOptions" />
+    </div>
   </label>
 </template>
 
 <script setup lang="ts">
+import Select from '@/components/ui/Select.vue'
 import { useLayoutStore } from '@/design-system/layout'
 import type { LayoutPreference } from '@/design-system/types'
 import { computed } from 'vue'
@@ -25,4 +23,11 @@ const layoutModel = computed<LayoutPreference>({
     setLayoutPreference(value)
   },
 })
+
+const layoutOptions = computed(() => [
+  { value: 'auto', label: t('common.layoutAuto') },
+  { value: 'console', label: t('common.layoutConsole') },
+  { value: 'topnav', label: t('common.layoutTopnav') },
+  { value: 'focus', label: t('common.layoutFocus') },
+])
 </script>

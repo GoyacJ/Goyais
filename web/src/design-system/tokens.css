@@ -51,6 +51,8 @@
   --ui-window-min-w: 18rem;
   --ui-window-min-h: 12rem;
   --ui-shell-content-pad: 1rem;
+  --ui-topbar-controls-gap: 0.5rem;
+  --ui-window-flow-gap: 1rem;
 }
 
 .dark {
@@ -107,4 +109,6 @@ html[data-density='comfortable'] {
   --ui-window-header-h: 2.25rem;
   --ui-window-min-w: 19rem;
   --ui-window-min-h: 13rem;
+  --ui-topbar-controls-gap: 0.625rem;
+  --ui-window-flow-gap: 1.25rem;
 }

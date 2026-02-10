@@ -7,7 +7,7 @@
   >
     <div class="flex items-center justify-between border-b border-ui-border px-3 py-3">
       <div class="min-w-0" :class="collapsed ? 'opacity-0' : 'opacity-100 transition-opacity'">
-        <p class="text-[11px] uppercase tracking-[0.14em] text-ui-muted">Workspace</p>
+        <p class="text-[11px] uppercase tracking-[0.14em] text-ui-muted">{{ t('common.workspaceLabel') }}</p>
         <p class="truncate text-sm font-semibold text-ui-fg">{{ t('common.workspace') }}</p>
       </div>
       <button
@@ -16,7 +16,7 @@
         :aria-label="pinned ? t('common.unpinNav') : t('common.pinNav')"
         @click="pinned = !pinned"
       >
-        {{ pinned ? 'PIN' : 'UNP' }}
+        {{ pinned ? t('common.pinShort') : t('common.unpinShort') }}
       </button>
     </div>
 

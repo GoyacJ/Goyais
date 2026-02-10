@@ -4,7 +4,7 @@
 
     <WindowBoard route-key="settings" :panes="windowPanes">
       <template #preferences>
-        <SectionCard title="Theme / Density / Locale" subtitle="Persisted in localStorage">
+        <SectionCard :title="t('page.settings.sections.preferences.title')" :subtitle="t('page.settings.sections.preferences.subtitle')">
           <div class="grid gap-3 md:grid-cols-3">
             <label class="text-xs text-ui-muted">
               {{ t('common.theme') }}
@@ -29,29 +29,29 @@
       </template>
 
       <template #component-matrix>
-        <SectionCard title="Component Matrix" subtitle="State semantics and focus behavior">
-          <Tabs v-model="activeTab" :tabs="tabItems" aria-label="settings tabs" />
+        <SectionCard :title="t('page.settings.sections.matrix.title')" :subtitle="t('page.settings.sections.matrix.subtitle')">
+          <Tabs v-model="activeTab" :tabs="tabItems" :aria-label="t('page.settings.sections.matrix.ariaLabel')" />
 
           <div class="mt-3">
             <template v-if="activeTab === 'controls'">
               <div class="grid gap-3 md:grid-cols-2">
-                <Input v-model="textValue" placeholder="Input tokenized control" />
-                <Textarea v-model="areaValue" placeholder="Textarea tokenized control" />
+                <Input v-model="textValue" :placeholder="t('page.settings.controls.inputPlaceholder')" />
+                <Textarea v-model="areaValue" :placeholder="t('page.settings.controls.textareaPlaceholder')" />
               </div>
               <div class="mt-3 flex flex-wrap gap-2">
-                <Button>Primary</Button>
-                <Button variant="secondary">Secondary</Button>
-                <Button variant="ghost">Ghost</Button>
-                <Button variant="destructive">Destructive</Button>
-                <Button loading>Loading</Button>
-                <Button disabled>Disabled</Button>
+                <Button>{{ t('common.primary') }}</Button>
+                <Button variant="secondary">{{ t('common.secondary') }}</Button>
+                <Button variant="ghost">{{ t('common.ghost') }}</Button>
+                <Button variant="destructive">{{ t('common.destructive') }}</Button>
+                <Button loading>{{ t('common.loading') }}</Button>
+                <Button disabled>{{ t('common.disabled') }}</Button>
               </div>
             </template>
 
             <template v-else-if="activeTab === 'overlay'">
               <div class="flex flex-wrap gap-2">
-                <Button ref="dialogTriggerRef" @click="openDialog">Open Dialog</Button>
-                <Dropdown :items="menuItems" label="Open Dropdown" @select="onSelectMenu" />
+                <Button ref="dialogTriggerRef" @click="openDialog">{{ t('page.settings.dialog.open') }}</Button>
+                <Dropdown :items="menuItems" :label="t('page.settings.menu.openDropdown')" @select="onSelectMenu" />
               </div>
               <p class="mt-3 text-sm text-ui-muted">{{ lastMenuAction }}</p>
             </template>
@@ -66,16 +66,16 @@
 
     <Dialog
       :open="dialogOpen"
-      title="Keyboard A11y Check"
-      description="Use Tab and Shift+Tab to verify focus loop, ESC to close."
+      :title="t('page.settings.dialog.title')"
+      :description="t('page.settings.dialog.description')"
       :cancel-label="t('common.close')"
       :confirm-label="t('common.confirm')"
       @close="closeDialog"
       @confirm="onConfirmDialog"
     >
       <div class="space-y-3">
-        <Input v-model="dialogInput" placeholder="Focusable input in dialog" />
-        <Button variant="secondary">Focusable action</Button>
+        <Input v-model="dialogInput" :placeholder="t('page.settings.dialog.inputPlaceholder')" />
+        <Button variant="secondary">{{ t('page.settings.dialog.focusableAction') }}</Button>
       </div>
     </Dialog>
   </section>
@@ -110,19 +110,19 @@ const areaValue = ref('')
 const dialogInput = ref('')
 const dialogOpen = ref(false)
 const activeTab = ref('controls')
-const lastMenuAction = ref('No action')
+const lastMenuAction = ref(t('page.settings.menu.noAction'))
 const dialogTriggerRef = ref<{ focus: () => void } | null>(null)
 
 const windowPanes = computed(() => [
-  { id: 'preferences', title: 'Theme / Density / Locale' },
-  { id: 'component-matrix', title: 'Component Matrix' },
+  { id: 'preferences', title: t('page.settings.sections.preferences.title') },
+  { id: 'component-matrix', title: t('page.settings.sections.matrix.title') },
 ])
 
-const tabItems = [
-  { id: 'controls', label: 'Controls' },
-  { id: 'overlay', label: 'Dialog/Dropdown' },
-  { id: 'loading', label: 'Skeleton' },
-]
+const tabItems = computed(() => [
+  { id: 'controls', label: t('page.settings.tabs.controls') },
+  { id: 'overlay', label: t('page.settings.tabs.overlay') },
+  { id: 'loading', label: t('page.settings.tabs.loading') },
+])
 
 const themeModeModel = computed<ThemeMode>({
   get: () => themeMode.value,
@@ -157,15 +157,15 @@ const localeOptions = [
   { value: 'en-US', label: 'en-US' },
 ]
 
-const menuItems: DropdownItem[] = [
-  { label: 'Run Audit', value: 'audit', hint: 'A' },
-  { label: 'Clear Cache', value: 'clear', hint: 'C' },
-  { label: 'Delete', value: 'delete', danger: true },
-]
+const menuItems = computed<DropdownItem[]>(() => [
+  { label: t('page.settings.menu.runAudit'), value: 'audit', hint: 'A' },
+  { label: t('page.settings.menu.clearCache'), value: 'clear', hint: 'C' },
+  { label: t('page.settings.menu.delete'), value: 'delete', danger: true },
+])
 
 function onSelectMenu(action: string): void {
-  lastMenuAction.value = `Selected action: ${action}`
-  pushToast({ title: 'Action', message: action, tone: 'info' })
+  lastMenuAction.value = t('page.settings.menu.selectedAction', { action })
+  pushToast({ title: t('page.settings.menu.toastTitle'), message: action, tone: 'info' })
 }
 
 function openDialog(): void {
@@ -181,6 +181,6 @@ function closeDialog(): void {
 
 function onConfirmDialog(): void {
   closeDialog()
-  pushToast({ title: 'Dialog', message: 'Confirmed', tone: 'success' })
+  pushToast({ title: t('page.settings.dialog.toastTitle'), message: t('page.settings.dialog.toastMessage'), tone: 'success' })
 }
 </script>
