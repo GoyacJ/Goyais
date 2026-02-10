@@ -99,6 +99,14 @@ const paneRef = ref<HTMLElement | null>(null)
 
 let activeMoveHandler: ((event: PointerEvent) => void) | null = null
 let activeUpHandler: ((event: PointerEvent) => void) | null = null
+let activeFrameId: number | null = null
+
+interface PointerTrackingSession {
+  autoScrollContext: AutoScrollContext
+  latestClientX: number
+  latestClientY: number
+  projectRect: (clientX: number, clientY: number) => WindowRect
+}
 
 interface AutoScrollContext {
   container: HTMLElement | null
@@ -143,10 +151,16 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
-function autoScrollIfNeeded(context: AutoScrollContext, clientX: number, clientY: number): { offsetX: number; offsetY: number } {
+interface AutoScrollResult {
+  offsetX: number
+  offsetY: number
+  keepTicking: boolean
+}
+
+function autoScrollIfNeeded(context: AutoScrollContext, clientX: number, clientY: number): AutoScrollResult {
   const container = context.container
   if (!container) {
-    return { offsetX: 0, offsetY: 0 }
+    return { offsetX: 0, offsetY: 0, keepTicking: false }
   }
 
   const rect = container.getBoundingClientRect()
@@ -179,13 +193,79 @@ function autoScrollIfNeeded(context: AutoScrollContext, clientX: number, clientY
     container.scrollLeft = clamp(container.scrollLeft + stepX, 0, maxLeft)
   }
 
+  const maxTop = Math.max(0, container.scrollHeight - container.clientHeight)
+  const maxLeft = Math.max(0, container.scrollWidth - container.clientWidth)
+  const keepTicking =
+    (stepY > 0 && container.scrollTop < maxTop) ||
+    (stepY < 0 && container.scrollTop > 0) ||
+    (stepX > 0 && container.scrollLeft < maxLeft) ||
+    (stepX < 0 && container.scrollLeft > 0)
+
   return {
     offsetX: container.scrollLeft - context.startScrollLeft,
     offsetY: container.scrollTop - context.startScrollTop,
+    keepTicking,
   }
 }
 
+function requestFrame(callback: FrameRequestCallback): number {
+  if (typeof window.requestAnimationFrame === 'function') {
+    return window.requestAnimationFrame(callback)
+  }
+  return window.setTimeout(() => callback(Date.now()), 16)
+}
+
+function cancelFrame(frameId: number): void {
+  if (typeof window.cancelAnimationFrame === 'function') {
+    window.cancelAnimationFrame(frameId)
+    return
+  }
+  window.clearTimeout(frameId)
+}
+
+function applyPointerProjection(session: PointerTrackingSession): boolean {
+  const scrollOffset = autoScrollIfNeeded(session.autoScrollContext, session.latestClientX, session.latestClientY)
+  const next = session.projectRect(
+    session.latestClientX + scrollOffset.offsetX,
+    session.latestClientY + scrollOffset.offsetY,
+  )
+  emit('update:rect', { paneId: props.paneId, rect: next })
+  return scrollOffset.keepTicking
+}
+
+function stopAutoScrollLoop(): void {
+  if (activeFrameId !== null) {
+    cancelFrame(activeFrameId)
+    activeFrameId = null
+  }
+}
+
+function startAutoScrollLoop(session: PointerTrackingSession): void {
+  if (activeFrameId !== null) {
+    return
+  }
+
+  const tick = () => {
+    if (activeMoveHandler === null) {
+      activeFrameId = null
+      return
+    }
+
+    const keepTicking = applyPointerProjection(session)
+    if (keepTicking) {
+      activeFrameId = requestFrame(tick)
+      return
+    }
+
+    activeFrameId = null
+  }
+
+  activeFrameId = requestFrame(tick)
+}
+
 function cleanupPointerTracking(): void {
+  stopAutoScrollLoop()
+
   if (activeMoveHandler) {
     window.removeEventListener('pointermove', activeMoveHandler)
     activeMoveHandler = null
@@ -197,9 +277,19 @@ function cleanupPointerTracking(): void {
   }
 }
 
-function trackPointer(onMove: (event: PointerEvent) => void): void {
+function trackPointer(session: PointerTrackingSession): void {
   cleanupPointerTracking()
-  activeMoveHandler = onMove
+  activeMoveHandler = (event) => {
+    session.latestClientX = event.clientX
+    session.latestClientY = event.clientY
+
+    const keepTicking = applyPointerProjection(session)
+    if (keepTicking) {
+      startAutoScrollLoop(session)
+    } else {
+      stopAutoScrollLoop()
+    }
+  }
   activeUpHandler = () => {
     cleanupPointerTracking()
   }
@@ -222,16 +312,19 @@ function onDragStart(event: PointerEvent): void {
     startRect: { ...props.rect },
     bounds: props.bounds,
   }
-  const autoScrollContext = createAutoScrollContext()
-
-  trackPointer((moveEvent) => {
-    const scrollOffset = autoScrollIfNeeded(autoScrollContext, moveEvent.clientX, moveEvent.clientY)
-    const next = engine.projectDrag(
-      payload,
-      moveEvent.clientX + scrollOffset.offsetX,
-      moveEvent.clientY + scrollOffset.offsetY,
-    )
-    emit('update:rect', { paneId: props.paneId, rect: next })
+  trackPointer({
+    autoScrollContext: createAutoScrollContext(),
+    latestClientX: event.clientX,
+    latestClientY: event.clientY,
+    projectRect: (clientX, clientY) =>
+      engine.projectDrag(
+        {
+          ...payload,
+          bounds: props.bounds,
+        },
+        clientX,
+        clientY,
+      ),
   })
 }
 
@@ -252,16 +345,19 @@ function onResizeStart(event: PointerEvent, direction: ResizeDirection): void {
     minWidth: props.minWidth,
     minHeight: props.minHeight,
   }
-  const autoScrollContext = createAutoScrollContext()
-
-  trackPointer((moveEvent) => {
-    const scrollOffset = autoScrollIfNeeded(autoScrollContext, moveEvent.clientX, moveEvent.clientY)
-    const next = engine.projectResize(
-      payload,
-      moveEvent.clientX + scrollOffset.offsetX,
-      moveEvent.clientY + scrollOffset.offsetY,
-    )
-    emit('update:rect', { paneId: props.paneId, rect: next })
+  trackPointer({
+    autoScrollContext: createAutoScrollContext(),
+    latestClientX: event.clientX,
+    latestClientY: event.clientY,
+    projectRect: (clientX, clientY) =>
+      engine.projectResize(
+        {
+          ...payload,
+          bounds: props.bounds,
+        },
+        clientX,
+        clientY,
+      ),
   })
 }
 

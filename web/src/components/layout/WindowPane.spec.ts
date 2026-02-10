@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import WindowPane from '@/components/layout/WindowPane.vue'
 import i18n from '@/i18n'
+import { vi } from 'vitest'
 
 function baseProps() {
   return {
@@ -134,6 +135,88 @@ describe('WindowPane', () => {
 
     wrapper.unmount()
     host.remove()
+  })
+
+  it('keeps auto-scrolling while pointer stays near the edge until pointerup', async () => {
+    const rafQueue: FrameRequestCallback[] = []
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
+      rafQueue.push(callback)
+      return rafQueue.length
+    })
+    const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {})
+
+    const host = document.createElement('div')
+    host.style.position = 'relative'
+    host.style.overflowY = 'auto'
+    host.style.overflowX = 'hidden'
+    document.body.appendChild(host)
+
+    let scrollTop = 0
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 120 })
+    Object.defineProperty(host, 'scrollHeight', { configurable: true, value: 1000 })
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 320 })
+    Object.defineProperty(host, 'scrollWidth', { configurable: true, value: 320 })
+    Object.defineProperty(host, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = value
+      },
+    })
+    Object.defineProperty(host, 'scrollLeft', {
+      configurable: true,
+      get: () => 0,
+      set: () => {},
+    })
+    host.getBoundingClientRect = () =>
+      ({
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 320,
+        bottom: 120,
+        width: 320,
+        height: 120,
+        toJSON: () => ({}),
+      }) as DOMRect
+
+    const wrapper = mount(WindowPane, {
+      attachTo: host,
+      props: baseProps(),
+      slots: { default: '<div>content</div>' },
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    await wrapper.find('.ui-window-pane-header').trigger('pointerdown', {
+      button: 0,
+      clientX: 120,
+      clientY: 40,
+    })
+
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: 120, clientY: 118 }))
+    const firstScroll = scrollTop
+    expect(firstScroll).toBeGreaterThan(0)
+    expect(rafQueue.length).toBeGreaterThan(0)
+
+    const firstTick = rafQueue.shift()
+    firstTick?.(0)
+    const secondScroll = scrollTop
+    expect(secondScroll).toBeGreaterThan(firstScroll)
+
+    const secondTick = rafQueue.shift()
+    secondTick?.(16)
+    expect(scrollTop).toBeGreaterThan(secondScroll)
+
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 120, clientY: 118 }))
+    expect(cancelSpy).toHaveBeenCalled()
+
+    wrapper.unmount()
+    host.remove()
+    rafSpy.mockRestore()
+    cancelSpy.mockRestore()
   })
 
   it('supports keyboard move and resize shortcuts from the pane header', async () => {
