@@ -5,7 +5,11 @@
       <h1 class="truncate text-lg font-semibold">{{ t('common.appName') }}</h1>
     </div>
 
-    <div class="flex flex-wrap items-center gap-2">
+    <div class="flex min-w-0 flex-wrap items-center gap-2">
+      <span class="ui-control ui-monospace h-8 min-h-0 bg-ui-hover px-2 py-1 text-xs text-ui-muted">
+        {{ t('common.workspace') }}
+      </span>
+
       <button type="button" class="ui-control ui-focus-ring ui-pressable text-sm text-ui-muted">
         {{ t('common.searchPlaceholder') }}
       </button>
@@ -26,11 +30,19 @@
           <option value="en-US">en-US</option>
         </select>
       </label>
+
+      <Dropdown
+        :label="t('common.userMenu')"
+        :items="userMenuItems"
+        @select="onUserMenuAction"
+      />
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
+import Dropdown, { type DropdownItem } from '@/components/ui/Dropdown.vue'
+import { useToast } from '@/composables/useToast'
 import type { SupportedLocale, ThemeMode } from '@/design-system/types'
 import { useThemeStore } from '@/design-system/theme'
 import { computed } from 'vue'
@@ -38,6 +50,13 @@ import { useI18n } from 'vue-i18n'
 
 const { t, locale } = useI18n({ useScope: 'global' })
 const { themeMode, setThemeMode } = useThemeStore()
+const { pushToast } = useToast()
+
+const userMenuItems = computed<DropdownItem[]>(() => [
+  { label: t('common.profile'), value: 'profile', hint: 'P' },
+  { label: t('common.preferences'), value: 'preferences', hint: 'S' },
+  { label: t('common.signOut'), value: 'signOut', danger: true },
+])
 
 const themeModel = computed<ThemeMode>({
   get: () => themeMode.value,
@@ -52,4 +71,12 @@ const localeModel = computed<SupportedLocale>({
     locale.value = value
   },
 })
+
+function onUserMenuAction(value: string): void {
+  pushToast({
+    title: t('common.userMenu'),
+    message: `${value} (placeholder)`,
+    tone: 'info',
+  })
+}
 </script>

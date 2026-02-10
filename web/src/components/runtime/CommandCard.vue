@@ -1,5 +1,15 @@
 <template>
-  <article class="ui-card">
+  <article
+    class="ui-card"
+    :class="[
+      interactive ? 'ui-pressable cursor-pointer' : '',
+      selected ? '!border-primary-500 bg-primary-500/10' : '',
+    ]"
+    :role="interactive ? 'button' : undefined"
+    :tabindex="interactive ? 0 : undefined"
+    @click="interactive && emit('select', command.commandId)"
+    @keydown.enter="interactive && emit('select', command.commandId)"
+  >
     <header class="flex flex-wrap items-center justify-between gap-2">
       <div>
         <p class="ui-monospace text-xs text-ui-muted">{{ command.commandId }}</p>
@@ -14,12 +24,12 @@
         <dd class="ui-monospace mt-1 text-ui-fg">{{ command.acceptedAt }}</dd>
       </div>
       <div>
-        <dt>startedAt</dt>
-        <dd class="ui-monospace mt-1 text-ui-fg">{{ command.startedAt }}</dd>
+        <dt>owner</dt>
+        <dd class="ui-monospace mt-1 text-ui-fg">{{ command.owner }}</dd>
       </div>
       <div>
-        <dt>finishedAt</dt>
-        <dd class="ui-monospace mt-1 text-ui-fg">{{ command.finishedAt ?? '-' }}</dd>
+        <dt>traceId</dt>
+        <dd class="ui-monospace mt-1 text-ui-fg">{{ command.traceId }}</dd>
       </div>
     </dl>
 
@@ -31,7 +41,19 @@
 import StatusBadge from '@/components/runtime/StatusBadge.vue'
 import type { MockCommand } from '@/mocks/commands'
 
-defineProps<{
-  command: MockCommand
+withDefaults(
+  defineProps<{
+    command: MockCommand
+    selected?: boolean
+    interactive?: boolean
+  }>(),
+  {
+    selected: false,
+    interactive: false,
+  },
+)
+
+const emit = defineEmits<{
+  (e: 'select', commandId: string): void
 }>()
 </script>

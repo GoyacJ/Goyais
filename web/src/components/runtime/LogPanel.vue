@@ -6,7 +6,7 @@
         class="ui-control ui-focus-ring ui-pressable text-sm"
         @click="expanded = !expanded"
       >
-        {{ expanded ? 'Hide logs' : 'Show logs' }}
+        {{ expanded ? t('common.hideLogs') : t('common.showLogs') }}
       </button>
       <button
         type="button"
@@ -19,7 +19,7 @@
 
     <pre
       v-if="expanded"
-      class="ui-monospace ui-scrollbar mt-3 max-h-64 overflow-auto rounded-button border border-ui-border bg-slate-950 p-3 text-xs leading-relaxed text-slate-100"
+      class="ui-log-surface ui-monospace ui-scrollbar mt-3 max-h-64 overflow-auto p-3 text-xs leading-relaxed"
     ><code>{{ lines.join('\n') }}</code></pre>
   </section>
 </template>

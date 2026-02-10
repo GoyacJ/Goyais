@@ -3,6 +3,7 @@
     :value="modelValue"
     :placeholder="placeholder"
     :disabled="disabled"
+    :aria-busy="loading || undefined"
     :rows="rows"
     :class="classes"
     @input="onInput"
@@ -19,12 +20,14 @@ const props = withDefaults(
     placeholder?: string
     rows?: number
     disabled?: boolean
+    loading?: boolean
   }>(),
   {
     modelValue: '',
     placeholder: '',
     rows: 4,
     disabled: false,
+    loading: false,
   },
 )
 
@@ -42,6 +45,7 @@ const classes = computed(() =>
     'ui-focus-ring ui-pressable w-full rounded-button border border-ui-border bg-ui-panel px-[var(--ui-control-px)] py-[var(--ui-control-py)] text-sm',
     'min-h-[calc(var(--ui-control-h)*2.2)]',
     props.disabled && 'ui-disabled',
+    props.loading && 'ui-loading',
   ),
 )
 </script>

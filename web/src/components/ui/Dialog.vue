@@ -10,7 +10,7 @@
         leave-from="opacity-100"
         leave-to="opacity-0"
       >
-        <div class="fixed inset-0 bg-slate-950/55" aria-hidden="true" />
+        <div class="ui-overlay-backdrop fixed inset-0" aria-hidden="true" />
       </TransitionChild>
 
       <div class="fixed inset-0 flex items-center justify-center p-4">

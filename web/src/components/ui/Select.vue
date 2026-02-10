@@ -1,7 +1,7 @@
 <template>
-  <Listbox :model-value="modelValue" :disabled="disabled" @update:model-value="onUpdate">
+  <Listbox :model-value="modelValue" :disabled="disabled || loading" @update:model-value="onUpdate">
     <div class="relative">
-      <ListboxButton :class="buttonClasses">
+      <ListboxButton :class="buttonClasses" :aria-busy="loading || undefined">
         <span class="truncate text-sm">{{ selectedLabel }}</span>
         <span class="ui-monospace text-xs text-ui-muted">v</span>
       </ListboxButton>
@@ -53,9 +53,11 @@ const props = withDefaults(
     modelValue: string
     options: SelectOption[]
     disabled?: boolean
+    loading?: boolean
   }>(),
   {
     disabled: false,
+    loading: false,
   },
 )
 
@@ -76,6 +78,7 @@ const buttonClasses = computed(() =>
   cn(
     'ui-control ui-focus-ring ui-pressable flex w-full items-center justify-between text-left',
     props.disabled && 'ui-disabled',
+    props.loading && 'ui-loading',
   ),
 )
 </script>
