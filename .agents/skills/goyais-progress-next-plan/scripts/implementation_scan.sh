@@ -231,7 +231,7 @@ domain_row \
   "algorithms-mvp" \
   '/api/v1/algorithms/' \
   'error.algorithm.not_implemented' \
-  '' \
+  'deps.CommandService != nil' \
   "${REPO_ROOT}/internal/access/http/algorithms.go" \
   "${REPO_ROOT}/internal/algorithm/service.go" \
   "${REPO_ROOT}/internal/algorithm" \

@@ -139,7 +139,7 @@
 - [x] 三布局在 desktop 下都支持窗口拖拽/缩放/置顶；mobile 自动降级为单列卡片。
 - [x] 窗口布局按 `route+layout` 独立持久化；切换布局或路由不会污染彼此状态。
 - [x] `pnpm -C web test --run` 通过（包含 layout/window 核心用例）。
-- [ ] 若本轮有素材变更，`bash .agents/skills/goyais-web-asset-governance/scripts/validate-assets.sh` 必须通过。
+- [x] 本轮执行 `bash .agents/skills/goyais-web-asset-governance/scripts/validate-assets.sh` 并通过（若有素材变更同样适用）。
 
 ## 11. 审计与可观测性验收
 
@@ -185,6 +185,7 @@
 - `GOYAIS_IT_REDIS_ADDR='<host:port>' GOYAIS_IT_REDIS_PASSWORD='<password>' go test ./internal/platform/cache -run TestRedisProviderIntegration -v`
 - `pnpm -C web typecheck`
 - `pnpm -C web test:run`
+- `bash .agents/skills/goyais-web-asset-governance/scripts/validate-assets.sh`
 - `make build`
 - `GOYAIS_VERIFY_BASE_URL=http://127.0.0.1:18080 GOYAIS_START_CMD='GOYAIS_SERVER_ADDR=:18080 ./build/goyais' bash .agents/skills/goyais-single-binary-acceptance/scripts/verify_single_binary.sh`
   - 说明：默认 `:8080` 被本机其他进程占用，验收脚本改用 `:18080` 执行并通过。
