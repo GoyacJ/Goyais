@@ -1,6 +1,9 @@
 <template>
-  <div class="ui-card ui-tone-surface-error">
-    <p class="text-sm font-semibold">{{ translated }}</p>
+  <div class="ui-card border-ui-borderSubtle">
+    <p class="text-sm font-semibold text-ui-fg">
+      <span class="ui-empty-tone-dot ui-empty-tone-dot--error" />
+      {{ translated }}
+    </p>
     <p class="ui-monospace mt-1 text-xs">{{ error.code }} · {{ error.messageKey }}</p>
   </div>
 </template>

@@ -1,7 +1,10 @@
 <template>
   <section class="ui-card border-dashed text-center">
-    <div class="mx-auto mb-4 max-w-[24rem]" :class="[illustrationTone, '[&_svg]:h-auto [&_svg]:w-full']" v-html="illustration" />
-    <h3 v-if="title" class="text-sm font-semibold text-ui-fg">{{ title }}</h3>
+    <div class="ui-empty-tone mx-auto mb-4 max-w-[24rem] [&_svg]:h-auto [&_svg]:w-full" v-html="illustration" />
+    <h3 v-if="title" class="text-sm font-semibold text-ui-fg">
+      <span class="ui-empty-tone-dot" :class="illustrationToneDot" />
+      {{ title }}
+    </h3>
     <p v-if="description" class="mt-1 text-sm text-ui-muted">{{ description }}</p>
     <div v-if="$slots.actions" class="mt-3 flex justify-center">
       <slot name="actions" />
@@ -51,15 +54,15 @@ const illustrations: Record<EmptyStateVariant, string> = {
 }
 
 const toneClasses: Record<EmptyStateVariant, string> = {
-  generic: 'text-ui-muted',
-  'commands-empty': 'ui-tone-text-primary',
-  'assets-empty': 'ui-tone-text-info',
-  'forbidden-403': 'ui-tone-text-error',
-  'not-found-404': 'ui-tone-text-warn',
-  loading: 'ui-tone-text-primary',
-  error: 'ui-tone-text-error',
+  generic: '',
+  'commands-empty': 'ui-empty-tone-dot--primary',
+  'assets-empty': 'ui-empty-tone-dot--info',
+  'forbidden-403': 'ui-empty-tone-dot--error',
+  'not-found-404': 'ui-empty-tone-dot--warn',
+  loading: 'ui-empty-tone-dot--primary',
+  error: 'ui-empty-tone-dot--error',
 }
 
 const illustration = computed(() => illustrations[props.variant])
-const illustrationTone = computed(() => toneClasses[props.variant])
+const illustrationToneDot = computed(() => toneClasses[props.variant])
 </script>

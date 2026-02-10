@@ -20,6 +20,7 @@ describe('Table', () => {
         rows,
         interactiveRows: true,
         selectedRowIndex: 1,
+        rowKey: 'name',
       },
       global: {
         plugins: [i18n],
@@ -32,10 +33,32 @@ describe('Table', () => {
 
     const emissions = wrapper.emitted('rowClick')
     expect(emissions?.length).toBe(2)
-    expect(emissions?.[0]?.[0]).toMatchObject({ index: 0 })
-    expect(emissions?.[1]?.[0]).toMatchObject({ index: 0 })
+    expect(emissions?.[0]?.[0]).toMatchObject({ index: 0, rowKey: 'row-a' })
+    expect(emissions?.[1]?.[0]).toMatchObject({ index: 0, rowKey: 'row-a' })
 
     const selected = wrapper.findAll('tbody tr')[1]
     expect(selected.attributes('aria-selected')).toBe('true')
+  })
+
+  it('supports selectedRowKey and cell slots without breaking default rendering', async () => {
+    const wrapper = mount(Table, {
+      props: {
+        columns,
+        rows,
+        interactiveRows: true,
+        rowKey: 'name',
+        selectedRowKey: 'row-b',
+      },
+      slots: {
+        'cell-status': '<template #cell-status="{ value }"><span data-testid="status-cell">{{ value }}</span></template>',
+      },
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    const allRows = wrapper.findAll('tbody tr')
+    expect(allRows[1]?.attributes('aria-selected')).toBe('true')
+    expect(wrapper.find('[data-testid="status-cell"]').text()).toBe('ok')
   })
 })

@@ -7,7 +7,9 @@
           <th
             v-for="column in columns"
             :key="column.key"
-            class="border-b border-ui-borderSubtle px-3 py-2 font-semibold"
+            class="border-b border-ui-borderSubtle px-[var(--ui-list-row-px)] py-2 font-semibold"
+            :class="resolveAlignClass(column.align)"
+            :style="column.width ? { width: column.width } : undefined"
           >
             {{ column.label }}
           </th>
@@ -17,15 +19,16 @@
       <tbody v-if="state === 'ready' && rows.length > 0">
         <tr
           v-for="(row, index) in rows"
-          :key="index"
-          class="ui-table-row border-b border-ui-borderSubtle last:border-b-0"
+          :key="resolveRowKey(row, index)"
+          class="ui-table-row ui-list-row"
           :class="[
-            interactiveRows ? 'ui-pressable ui-table-row--interactive' : '',
-            selectedRowIndex === index ? 'ui-table-row--selected' : '',
+            interactiveRows ? 'ui-pressable ui-list-row--interactive ui-table-row--interactive' : '',
+            isRowSelected(row, index) ? 'ui-list-row--selected ui-table-row--selected' : '',
+            interactiveRows ? 'ui-list-row--focus' : '',
           ]"
           :role="interactiveRows ? 'button' : undefined"
           :tabindex="interactiveRows ? 0 : undefined"
-          :aria-selected="interactiveRows ? selectedRowIndex === index : undefined"
+          :aria-selected="interactiveRows ? isRowSelected(row, index) : undefined"
           @click="onRowActivate(row, index)"
           @keydown.enter.prevent="onRowActivate(row, index)"
           @keydown.space.prevent="onRowActivate(row, index)"
@@ -33,10 +36,19 @@
           <td
             v-for="column in columns"
             :key="column.key"
-            class="px-3 align-middle"
-            :class="column.mono ? 'ui-monospace text-[13px]' : ''"
+            class="align-middle"
+            :class="[column.mono ? 'ui-monospace text-[13px]' : '', resolveAlignClass(column.align), column.cellClass ?? '']"
           >
-            {{ row[column.key] ?? '-' }}
+            <slot
+              :name="`cell-${column.key}`"
+              :row="row"
+              :value="row[column.key]"
+              :column="column"
+              :index="index"
+              :selected="isRowSelected(row, index)"
+            >
+              {{ row[column.key] ?? '-' }}
+            </slot>
           </td>
         </tr>
       </tbody>
@@ -45,10 +57,10 @@
         <tr
           v-for="index in loadingRows"
           :key="`loading-${index}`"
-          class="ui-table-row border-b border-ui-borderSubtle last:border-b-0"
+          class="ui-table-row ui-list-row"
         >
-          <td v-for="column in columns" :key="`${column.key}-${index}`" class="px-3 align-middle">
-            <div class="h-2.5 w-2/3 animate-pulse rounded bg-ui-border-subtle" />
+          <td v-for="column in columns" :key="`${column.key}-${index}`" class="align-middle">
+            <div class="h-2.5 w-2/3 animate-pulse rounded bg-ui-borderSubtle" />
           </td>
         </tr>
       </tbody>
@@ -70,26 +82,32 @@ import type { TableState } from '@/design-system/types'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+type TableRow = Record<string, unknown>
+
 export interface TableColumn {
   key: string
   label: string
   mono?: boolean
+  align?: 'left' | 'center' | 'right'
+  width?: string
+  cellClass?: string
 }
 
 const emit = defineEmits<{
-  (e: 'rowClick', payload: { row: Record<string, string | number>; index: number }): void
+  (e: 'rowClick', payload: { row: TableRow; index: number; rowKey: string }): void
 }>()
 
-function onRowActivate(row: Record<string, string | number>, index: number): void {
+function onRowActivate(row: TableRow, index: number): void {
   if (!props.interactiveRows) {
     return
   }
-  emit('rowClick', { row, index })
+  emit('rowClick', { row, index, rowKey: resolveRowKey(row, index) })
 }
+
 const props = withDefaults(
   defineProps<{
     columns: TableColumn[]
-    rows: Array<Record<string, string | number>>
+    rows: TableRow[]
     state?: TableState
     loadingRows?: number
     emptyMessage?: string
@@ -97,6 +115,8 @@ const props = withDefaults(
     caption?: string
     interactiveRows?: boolean
     selectedRowIndex?: number
+    rowKey?: string | ((row: TableRow, index: number) => string)
+    selectedRowKey?: string | null
   }>(),
   {
     state: 'ready',
@@ -106,6 +126,8 @@ const props = withDefaults(
     caption: '',
     interactiveRows: false,
     selectedRowIndex: -1,
+    rowKey: '',
+    selectedRowKey: null,
   },
 )
 
@@ -113,4 +135,39 @@ const { t } = useI18n({ useScope: 'global' })
 
 const resolvedEmptyMessage = computed(() => props.emptyMessage || t('common.empty'))
 const resolvedErrorMessage = computed(() => props.errorMessage || t('error.common.internal'))
+
+function resolveAlignClass(align?: 'left' | 'center' | 'right'): string {
+  if (align === 'center') {
+    return 'text-center'
+  }
+
+  if (align === 'right') {
+    return 'text-right'
+  }
+
+  return 'text-left'
+}
+
+function resolveRowKey(row: TableRow, index: number): string {
+  if (typeof props.rowKey === 'function') {
+    return String(props.rowKey(row, index))
+  }
+
+  if (typeof props.rowKey === 'string' && props.rowKey.length > 0) {
+    const fromRow = row[props.rowKey]
+    if (typeof fromRow === 'string' || typeof fromRow === 'number') {
+      return String(fromRow)
+    }
+  }
+
+  return String(index)
+}
+
+function isRowSelected(row: TableRow, index: number): boolean {
+  if (props.selectedRowKey !== null && props.selectedRowKey !== undefined && props.selectedRowKey !== '') {
+    return resolveRowKey(row, index) === props.selectedRowKey
+  }
+
+  return props.selectedRowIndex === index
+}
 </script>

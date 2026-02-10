@@ -119,6 +119,7 @@ export default {
       fieldType: '类型',
       fieldStatus: '状态',
       fieldAcceptedAt: 'acceptedAt',
+      fieldCommandId: 'commandId',
       fieldOwner: 'owner',
       fieldTraceId: 'traceId',
       fieldResult: '结果摘要',

@@ -38,20 +38,32 @@
             :rows="tableRows"
             :caption="t('page.assets.listTitle')"
             interactive-rows
-            :selected-row-index="selectedRowIndex"
+            row-key="assetId"
+            :selected-row-key="selectedAssetId"
             @row-click="onRowClick"
-          />
+          >
+            <template #cell-name="{ row }">
+              <div class="flex flex-col gap-0.5 leading-tight">
+                <span class="text-sm text-ui-fg">{{ String(row.name) }}</span>
+                <span class="ui-monospace text-[11px] text-ui-muted">{{ String(row.assetId) }}</span>
+              </div>
+            </template>
+          </Table>
         </SectionCard>
       </template>
 
       <template #detail>
         <SectionCard :title="t('page.assets.detailTitle')" :subtitle="selectedAsset?.assetId ?? '-'">
-          <div v-if="selectedAsset" class="ui-surface border-ui-borderSubtle bg-ui-surface2 p-3">
-            <dl class="grid gap-3 text-xs text-ui-muted md:grid-cols-2">
-              <div>
-                <dt>{{ t('page.assets.fieldName') }}</dt>
-                <dd class="mt-1 text-sm text-ui-fg">{{ selectedAsset.name }}</dd>
+          <div v-if="selectedAsset" class="ui-detail-block">
+            <header class="ui-detail-header">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-semibold text-ui-fg">{{ selectedAsset.name }}</p>
+                <p class="mt-1 text-xs text-ui-muted">{{ selectedAsset.assetId }}</p>
               </div>
+              <span class="ui-monospace text-xs text-ui-muted">{{ selectedAsset.visibility }}</span>
+            </header>
+
+            <dl class="ui-detail-meta text-xs text-ui-muted md:grid-cols-2">
               <div>
                 <dt>{{ t('page.assets.fieldType') }}</dt>
                 <dd class="mt-1 text-sm text-ui-fg">{{ selectedAsset.type }}</dd>
@@ -68,11 +80,11 @@
                 <dt>{{ t('page.assets.fieldCreatedAt') }}</dt>
                 <dd class="ui-monospace mt-1 text-ui-fg">{{ selectedAsset.createdAt }}</dd>
               </div>
-              <div class="md:col-span-2">
+              <div class="md:col-span-2 ui-detail-mono">
                 <dt>{{ t('page.assets.fieldUri') }}</dt>
                 <dd class="ui-monospace mt-1 break-all text-ui-fg">{{ selectedAsset.uri }}</dd>
               </div>
-              <div class="md:col-span-2">
+              <div class="md:col-span-2 ui-detail-mono">
                 <dt>{{ t('page.assets.fieldHash') }}</dt>
                 <dd class="ui-monospace mt-1 break-all text-ui-fg">{{ selectedAsset.hash }}</dd>
               </div>
@@ -126,9 +138,9 @@ const windowPanes = computed(() => [
 const columns = computed<TableColumn[]>(() => [
   { key: 'name', label: t('page.assets.fieldName') },
   { key: 'type', label: t('page.assets.fieldType') },
-  { key: 'size', label: t('page.assets.fieldSize') },
-  { key: 'visibility', label: t('page.assets.fieldVisibility') },
-  { key: 'createdAt', label: t('page.assets.fieldCreatedAt'), mono: true },
+  { key: 'size', label: t('page.assets.fieldSize'), align: 'right', width: '8rem' },
+  { key: 'visibility', label: t('page.assets.fieldVisibility'), align: 'center', width: '9rem' },
+  { key: 'createdAt', label: t('page.assets.fieldCreatedAt'), mono: true, width: '13rem' },
 ])
 
 const typeOptions = computed(() => [
@@ -176,12 +188,9 @@ const selectedAsset = computed(() =>
   filteredAssets.value.find((item) => item.assetId === selectedAssetId.value),
 )
 
-const selectedRowIndex = computed(() =>
-  filteredAssets.value.findIndex((item) => item.assetId === selectedAssetId.value),
-)
-
 const tableRows = computed(() =>
   filteredAssets.value.map((item) => ({
+    assetId: item.assetId,
     name: item.name,
     type: item.type,
     size: item.size,
@@ -190,11 +199,8 @@ const tableRows = computed(() =>
   })),
 )
 
-function onRowClick(payload: { index: number }): void {
-  const target = filteredAssets.value[payload.index]
-  if (target) {
-    selectedAssetId.value = target.assetId
-  }
+function onRowClick(payload: { rowKey: string }): void {
+  selectedAssetId.value = payload.rowKey
 }
 
 function onUploadPlaceholder(): void {

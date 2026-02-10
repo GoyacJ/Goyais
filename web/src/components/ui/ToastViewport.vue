@@ -8,11 +8,13 @@
       <article
         v-for="item in items"
         :key="item.id"
-        class="ui-overlay-panel pointer-events-auto border-l-4 p-3"
-        :class="toneBorderClass[item.tone]"
+        class="ui-overlay-panel pointer-events-auto p-3"
       >
         <header class="flex items-center justify-between gap-2">
-          <p class="text-sm font-semibold" :class="toneTextClass[item.tone]">{{ item.title }}</p>
+          <p class="flex items-center gap-2 text-sm font-semibold text-ui-fg">
+            <span class="ui-empty-tone-dot" :class="toneDotClass[item.tone]" />
+            <span>{{ item.title }}</span>
+          </p>
           <button
             type="button"
             class="ui-focus-ring ui-pressable rounded-button px-1 text-xs text-ui-muted"
@@ -35,18 +37,11 @@ import { useI18n } from 'vue-i18n'
 const { items, removeToast } = useToast()
 const { t } = useI18n({ useScope: 'global' })
 
-const toneTextClass = {
-  info: 'ui-tone-text-info',
-  success: 'ui-tone-text-success',
-  warn: 'ui-tone-text-warn',
-  error: 'ui-tone-text-error',
-}
-
-const toneBorderClass = {
-  info: 'ui-tone-border-info',
-  success: 'ui-tone-border-success',
-  warn: 'ui-tone-border-warn',
-  error: 'ui-tone-border-error',
+const toneDotClass = {
+  info: 'ui-empty-tone-dot--info',
+  success: 'ui-empty-tone-dot--success',
+  warn: 'ui-empty-tone-dot--warn',
+  error: 'ui-empty-tone-dot--error',
 }
 </script>
 

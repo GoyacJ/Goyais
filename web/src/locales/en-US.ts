@@ -119,6 +119,7 @@ export default {
       fieldType: 'Type',
       fieldStatus: 'Status',
       fieldAcceptedAt: 'acceptedAt',
+      fieldCommandId: 'commandId',
       fieldOwner: 'owner',
       fieldTraceId: 'traceId',
       fieldResult: 'Result summary',
