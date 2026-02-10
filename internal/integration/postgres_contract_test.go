@@ -279,7 +279,7 @@ func TestPostgresCommandAssetWorkflowContract(t *testing.T) {
 	}
 
 	respStreamCreate := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams", headers, map[string]any{
-		"path":       "pg/live-main",
+		"path":       "pg/live-main-" + algoSuffix,
 		"protocol":   "rtmp",
 		"source":     "push",
 		"visibility": "PRIVATE",
