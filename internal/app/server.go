@@ -12,6 +12,7 @@ import (
 	"goyais/internal/command"
 	"goyais/internal/config"
 	platformdb "goyais/internal/platform/db"
+	"goyais/internal/workflow"
 )
 
 func NewServer(cfg config.Config) (*http.Server, error) {
@@ -36,12 +37,20 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	objectStore := asset.NewObjectStore(cfg.Providers.ObjectStore, "")
 	assetService := asset.NewService(assetRepo, objectStore, cfg.Authz.AllowPrivateToPublic)
 
-	registerCommandExecutors(commandService, assetService)
+	workflowRepo, err := workflow.NewRepository(cfg.Providers.DB, db)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("build workflow repository: %w", err)
+	}
+	workflowService := workflow.NewService(workflowRepo, cfg.Authz.AllowPrivateToPublic)
+
+	registerCommandExecutors(commandService, assetService, workflowService)
 
 	h, err := httpapi.NewRouter(cfg, httpapi.RouterDeps{
-		CommandService: commandService,
-		AssetService:   assetService,
-		HealthChecker:  db,
+		CommandService:  commandService,
+		AssetService:    assetService,
+		WorkflowService: workflowService,
+		HealthChecker:   db,
 	})
 	if err != nil {
 		_ = db.Close()

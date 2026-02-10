@@ -42,8 +42,8 @@ bash .agents/skills/goyais-single-binary-acceptance/scripts/verify_single_binary
 
 ## API 落地状态（当前）
 
-- 可用：`/api/v1/commands*`、`/api/v1/shares*`、`/api/v1/assets*`（其中写接口为 Command-first sugar）。
-- 占位：`/api/v1/workflow-*`、`/api/v1/registry-*`、`/api/v1/plugin-market-*`、`/api/v1/streams*`，统一返回 `501 NOT_IMPLEMENTED`。
+- 可用：`/api/v1/commands*`、`/api/v1/shares*`、`/api/v1/assets*`、`/api/v1/workflow-*`（写接口为 Command-first sugar）。
+- 占位：`/api/v1/registry-*`、`/api/v1/plugin-market-*`、`/api/v1/streams*`，统一返回 `501 NOT_IMPLEMENTED`。
 
 ## healthz
 

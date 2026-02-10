@@ -141,6 +141,10 @@ export default {
       not_implemented: 'Asset capability is not implemented.',
     },
     workflow: {
+      invalid_request: 'Workflow request is invalid.',
+      not_found: 'Workflow resource does not exist.',
+      run_failed: 'Workflow run failed.',
+      step_failed: 'Workflow step failed.',
       not_implemented: 'Workflow capability is not implemented.',
     },
     registry: {

@@ -44,6 +44,14 @@
   - `command.failed` 事件
 - 当前 `assets` 读接口可用；`PATCH/DELETE/lineage` 为占位，统一 `501 NOT_IMPLEMENTED`。
 
+## 0.6 Workflow Domain Sugar（M1 最小闭环）
+- `POST /api/v1/workflow-templates`、`POST /api/v1/workflow-templates/{templateId}:patch`、`POST /api/v1/workflow-templates/{templateId}:publish`、`POST /api/v1/workflow-runs`、`POST /api/v1/workflow-runs/{runId}:cancel` 必须转换为 `workflow.*` command 执行（Command-first）。
+- run 执行模式（v0.1 最小实现）：
+  - `mode=sync`：`pending -> succeeded`，并创建 1 条 `step_run(succeeded)`。
+  - `mode=running`：`pending -> running`，并创建 1 条 `step_run(running)`。
+  - `mode=fail`：`pending -> failed`，并创建 1 条 `step_run(failed)`，且回填 `error_code/message_key`。
+- cancel 语义：`pending/running -> canceled`，并将同 run 下 `pending/running` step 收敛到 `canceled`。
+
 ## 1. WorkflowRun / StepRun
 
 ## 1.1 WorkflowRun 状态

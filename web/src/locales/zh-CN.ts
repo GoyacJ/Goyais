@@ -141,6 +141,10 @@ export default {
       not_implemented: '资产能力暂未实现。',
     },
     workflow: {
+      invalid_request: '工作流请求不合法。',
+      not_found: '工作流资源不存在。',
+      run_failed: '工作流运行失败。',
+      step_failed: '工作流步骤失败。',
       not_implemented: '工作流能力暂未实现。',
     },
     registry: {

@@ -17,8 +17,8 @@
 
 ### 2.2 闭环能力
 - [x] 上传一个资产后可查询到元数据。
-- [ ] 创建并运行一个最小 workflow（至少 1 个 step）可产生 run 记录。
-- [ ] run/step 状态可查询，且审计中可看到对应 command。
+- [x] 创建并运行一个最小 workflow（至少 1 个 step）可产生 run 记录。
+- [x] run/step 状态可查询，且审计中可看到对应 command。
 
 ## 3. Provider 切换验收
 
@@ -62,8 +62,8 @@
 ## 5. Command-first 与 AI/UI 一致性验收
 
 - [ ] UI 触发 `workflow.run` 与 AI 触发同动作时，落库 command 形态一致。
-- [ ] Domain 写接口响应包含：`resource + commandRef { commandId, status, acceptedAt }`。
-- [ ] 通过 `GET /api/v1/commands/{commandId}` 可追踪最终执行结果。
+- [x] Domain 写接口响应包含：`resource + commandRef { commandId, status, acceptedAt }`。
+- [x] 通过 `GET /api/v1/commands/{commandId}` 可追踪最终执行结果。
 
 ### 5.1 A2 最小闭环（Thread #3）
 - [x] `POST /api/v1/commands`（携带 `X-Tenant-Id/X-Workspace-Id/X-User-Id`）返回 `202` 且包含 `resource + commandRef`。
@@ -92,9 +92,9 @@
 
 ## 7. Workflow/Run 回放验收
 
-- [ ] WorkflowTemplate 支持 Draft/Published 版本。
+- [x] WorkflowTemplate 支持 Draft/Published 版本。
 - [ ] WorkflowRun/StepRun 状态机符合约定（含 failed/canceled/retry）。
-- [ ] 可查询 step 输入输出摘要与产物引用。
+- [x] 可查询 step 输入输出摘要与产物引用。
 - [ ] 回放时可叠加节点状态与耗时信息。
 
 ## 8. Plugin Market 验收

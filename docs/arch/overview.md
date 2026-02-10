@@ -173,8 +173,8 @@ Command 执行管道（必须）：
   - `ownerId = X-User-Id`；
   - 缺失任一 header 返回 `400 MISSING_CONTEXT` + `error.context.missing`。
 
-### 7.2 Thread #3 过渡模式（未接 JWT）
-- 在 JWT 尚未接入前，`/api/v1/commands*` 请求必须携带：
+### 7.2 过渡模式（未接 JWT）
+- 在 JWT 尚未接入前，`/api/v1/commands*`、`/api/v1/workflow-*`、`/api/v1/assets*` 请求必须携带：
   - `X-Tenant-Id`
   - `X-Workspace-Id`
   - `X-User-Id`
@@ -186,8 +186,18 @@ Command 执行管道（必须）：
 - 已落地（可用）：
   - `commands`、`shares`
   - `assets`：`GET /assets`、`GET /assets/{id}`、`POST /assets`（domain sugar -> `asset.upload` command）
+  - `workflow`：
+    - `GET/POST /workflow-templates`
+    - `GET /workflow-templates/{templateId}`
+    - `POST /workflow-templates/{templateId}:patch`
+    - `POST /workflow-templates/{templateId}:publish`
+    - `GET/POST /workflow-runs`
+    - `GET /workflow-runs/{runId}`
+    - `POST /workflow-runs/{runId}:cancel`
+    - `GET /workflow-runs/{runId}/steps`
+    - 写接口全部走 command-first（domain sugar -> `workflow.*` command）
 - 占位（可达但未实现）：
-  - `workflow-*`、`registry-*`、`plugin-market-*`、`streams-*`
+  - `registry-*`、`plugin-market-*`、`streams-*`
   - 统一返回：`501 NOT_IMPLEMENTED` + 领域 `messageKey`
 
 ## 8. 配置规范
