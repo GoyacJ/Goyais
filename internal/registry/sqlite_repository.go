@@ -449,6 +449,11 @@ func scanSQLiteCapabilities(rows *sql.Rows) ([]Capability, error) {
 func scanSQLiteCapability(row interface{ Scan(dest ...any) error }) (Capability, error) {
 	var item Capability
 	var providerID sql.NullString
+	var aclRaw string
+	var inputSchemaRaw string
+	var outputSchemaRaw string
+	var requiredPermissionsRaw string
+	var egressPolicyRaw string
 	var createdAt string
 	var updatedAt string
 	if err := row.Scan(
@@ -457,15 +462,15 @@ func scanSQLiteCapability(row interface{ Scan(dest ...any) error }) (Capability,
 		&item.WorkspaceID,
 		&item.OwnerID,
 		&item.Visibility,
-		&item.ACLJSON,
+		&aclRaw,
 		&providerID,
 		&item.Name,
 		&item.Kind,
 		&item.Version,
-		&item.InputSchemaJSON,
-		&item.OutputSchemaJSON,
-		&item.RequiredPermissionsJSON,
-		&item.EgressPolicyJSON,
+		&inputSchemaRaw,
+		&outputSchemaRaw,
+		&requiredPermissionsRaw,
+		&egressPolicyRaw,
 		&item.Status,
 		&createdAt,
 		&updatedAt,
@@ -475,6 +480,11 @@ func scanSQLiteCapability(row interface{ Scan(dest ...any) error }) (Capability,
 	if providerID.Valid {
 		item.ProviderID = providerID.String
 	}
+	item.ACLJSON = decodeJSONOrDefault(json.RawMessage(strings.TrimSpace(aclRaw)), "[]")
+	item.InputSchemaJSON = decodeJSONOrDefault(json.RawMessage(strings.TrimSpace(inputSchemaRaw)), "{}")
+	item.OutputSchemaJSON = decodeJSONOrDefault(json.RawMessage(strings.TrimSpace(outputSchemaRaw)), "{}")
+	item.RequiredPermissionsJSON = decodeJSONOrDefault(json.RawMessage(strings.TrimSpace(requiredPermissionsRaw)), "[]")
+	item.EgressPolicyJSON = decodeJSONOrDefault(json.RawMessage(strings.TrimSpace(egressPolicyRaw)), "{}")
 	createdAtParsed, err := time.Parse(time.RFC3339Nano, createdAt)
 	if err != nil {
 		return Capability{}, fmt.Errorf("parse capability created_at: %w", err)
@@ -505,6 +515,10 @@ func scanSQLiteAlgorithms(rows *sql.Rows) ([]Algorithm, error) {
 
 func scanSQLiteAlgorithm(row interface{ Scan(dest ...any) error }) (Algorithm, error) {
 	var item Algorithm
+	var aclRaw string
+	var defaultsRaw string
+	var constraintsRaw string
+	var dependenciesRaw string
 	var createdAt string
 	var updatedAt string
 	if err := row.Scan(
@@ -513,19 +527,23 @@ func scanSQLiteAlgorithm(row interface{ Scan(dest ...any) error }) (Algorithm, e
 		&item.WorkspaceID,
 		&item.OwnerID,
 		&item.Visibility,
-		&item.ACLJSON,
+		&aclRaw,
 		&item.Name,
 		&item.Version,
 		&item.TemplateRef,
-		&item.DefaultsJSON,
-		&item.ConstraintsJSON,
-		&item.DependenciesJSON,
+		&defaultsRaw,
+		&constraintsRaw,
+		&dependenciesRaw,
 		&item.Status,
 		&createdAt,
 		&updatedAt,
 	); err != nil {
 		return Algorithm{}, err
 	}
+	item.ACLJSON = decodeJSONOrDefault(json.RawMessage(strings.TrimSpace(aclRaw)), "[]")
+	item.DefaultsJSON = decodeJSONOrDefault(json.RawMessage(strings.TrimSpace(defaultsRaw)), "{}")
+	item.ConstraintsJSON = decodeJSONOrDefault(json.RawMessage(strings.TrimSpace(constraintsRaw)), "{}")
+	item.DependenciesJSON = decodeJSONOrDefault(json.RawMessage(strings.TrimSpace(dependenciesRaw)), "{}")
 	createdAtParsed, err := time.Parse(time.RFC3339Nano, createdAt)
 	if err != nil {
 		return Algorithm{}, fmt.Errorf("parse algorithm created_at: %w", err)
@@ -556,6 +574,8 @@ func scanSQLiteProviders(rows *sql.Rows) ([]CapabilityProvider, error) {
 
 func scanSQLiteProvider(row interface{ Scan(dest ...any) error }) (CapabilityProvider, error) {
 	var item CapabilityProvider
+	var aclRaw string
+	var metadataRaw string
 	var createdAt string
 	var updatedAt string
 	if err := row.Scan(
@@ -564,17 +584,19 @@ func scanSQLiteProvider(row interface{ Scan(dest ...any) error }) (CapabilityPro
 		&item.WorkspaceID,
 		&item.OwnerID,
 		&item.Visibility,
-		&item.ACLJSON,
+		&aclRaw,
 		&item.Name,
 		&item.ProviderType,
 		&item.Endpoint,
-		&item.MetadataJSON,
+		&metadataRaw,
 		&item.Status,
 		&createdAt,
 		&updatedAt,
 	); err != nil {
 		return CapabilityProvider{}, err
 	}
+	item.ACLJSON = decodeJSONOrDefault(json.RawMessage(strings.TrimSpace(aclRaw)), "[]")
+	item.MetadataJSON = decodeJSONOrDefault(json.RawMessage(strings.TrimSpace(metadataRaw)), "{}")
 	createdAtParsed, err := time.Parse(time.RFC3339Nano, createdAt)
 	if err != nil {
 		return CapabilityProvider{}, fmt.Errorf("parse provider created_at: %w", err)

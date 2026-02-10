@@ -77,8 +77,12 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 		apiMux.Handle("/api/v1/registry/providers", registryNotImplemented)
 	}
 
-	algorithmNotImplemented := NewNotImplementedHandler("error.algorithm.not_implemented")
-	apiMux.Handle("/api/v1/algorithms/", algorithmNotImplemented)
+	if deps.CommandService != nil {
+		apiMux.Handle("/api/v1/algorithms/", http.HandlerFunc(domainHandler.handleAlgorithmRoutes))
+	} else {
+		algorithmNotImplemented := NewNotImplementedHandler("error.algorithm.not_implemented")
+		apiMux.Handle("/api/v1/algorithms/", algorithmNotImplemented)
+	}
 
 	if deps.PluginService != nil {
 		apiMux.Handle("/api/v1/plugin-market/packages", http.HandlerFunc(domainHandler.handlePluginPackages))
