@@ -25,8 +25,9 @@
             <li
               :class="[
                 'ui-focus-ring ui-pressable cursor-pointer rounded-button border border-transparent px-2 py-2 text-sm',
-                active ? 'bg-ui-hover' : '',
-                selected ? 'ui-state-selected ui-tone-text-primary' : 'text-ui-fg',
+                active ? 'ui-state-hovered' : '',
+                selected ? 'ui-state-selected' : '',
+                'text-ui-fg',
               ]"
             >
               {{ option.label }}

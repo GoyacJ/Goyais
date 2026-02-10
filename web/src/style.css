@@ -143,15 +143,26 @@
     color: rgb(var(--ui-primary-on) / 1);
   }
 
-  .ui-btn-primary.ui-pressable:hover,
-  .ui-btn-primary.ui-pressable:active,
-  .ui-btn-primary.ui-pressable[data-pressed='true'] {
+  .ui-btn-primary.ui-pressable:hover {
     border-color: rgb(var(--ui-primary-700) / 1);
     background:
       linear-gradient(
         0deg,
         rgb(var(--ui-state-layer) / var(--ui-state-hover-opacity)),
         rgb(var(--ui-state-layer) / var(--ui-state-hover-opacity))
+      ),
+      rgb(var(--ui-primary-600) / 1);
+    color: rgb(var(--ui-primary-on) / 1);
+  }
+
+  .ui-btn-primary.ui-pressable:active,
+  .ui-btn-primary.ui-pressable[data-pressed='true'] {
+    border-color: rgb(var(--ui-primary-700) / 1);
+    background:
+      linear-gradient(
+        0deg,
+        rgb(var(--ui-state-layer) / var(--ui-state-pressed-opacity)),
+        rgb(var(--ui-state-layer) / var(--ui-state-pressed-opacity))
       ),
       rgb(var(--ui-primary-600) / 1);
     color: rgb(var(--ui-primary-on) / 1);
@@ -169,14 +180,24 @@
     color: rgb(var(--ui-neutral-fg) / 1);
   }
 
-  .ui-btn-ghost.ui-pressable:hover,
-  .ui-btn-ghost.ui-pressable:active,
-  .ui-btn-ghost.ui-pressable[data-pressed='true'] {
+  .ui-btn-ghost.ui-pressable:hover {
     background:
       linear-gradient(
         0deg,
         rgb(var(--ui-state-layer) / var(--ui-state-hover-opacity)),
         rgb(var(--ui-state-layer) / var(--ui-state-hover-opacity))
+      ),
+      transparent;
+    border-color: transparent;
+  }
+
+  .ui-btn-ghost.ui-pressable:active,
+  .ui-btn-ghost.ui-pressable[data-pressed='true'] {
+    background:
+      linear-gradient(
+        0deg,
+        rgb(var(--ui-state-layer) / var(--ui-state-pressed-opacity)),
+        rgb(var(--ui-state-layer) / var(--ui-state-pressed-opacity))
       ),
       transparent;
     border-color: transparent;
@@ -188,15 +209,26 @@
     color: rgb(var(--ui-on-error) / 1);
   }
 
-  .ui-btn-destructive.ui-pressable:hover,
-  .ui-btn-destructive.ui-pressable:active,
-  .ui-btn-destructive.ui-pressable[data-pressed='true'] {
+  .ui-btn-destructive.ui-pressable:hover {
     border-color: rgb(var(--ui-error) / 0.92);
     background:
       linear-gradient(
         0deg,
         rgb(var(--ui-state-layer) / var(--ui-state-hover-opacity)),
         rgb(var(--ui-state-layer) / var(--ui-state-hover-opacity))
+      ),
+      rgb(var(--ui-error) / 0.92);
+    color: rgb(var(--ui-on-error) / 1);
+  }
+
+  .ui-btn-destructive.ui-pressable:active,
+  .ui-btn-destructive.ui-pressable[data-pressed='true'] {
+    border-color: rgb(var(--ui-error) / 0.95);
+    background:
+      linear-gradient(
+        0deg,
+        rgb(var(--ui-state-layer) / var(--ui-state-pressed-opacity)),
+        rgb(var(--ui-state-layer) / var(--ui-state-pressed-opacity))
       ),
       rgb(var(--ui-error) / 0.92);
     color: rgb(var(--ui-on-error) / 1);
@@ -476,8 +508,36 @@
   }
 
   .ui-state-selected {
-    border-color: rgb(var(--ui-primary-500) / 0.45) !important;
-    background: rgb(var(--ui-primary-500) / 0.12) !important;
+    border-color: rgb(var(--ui-neutral-border-strong) / 0.72) !important;
+    background:
+      linear-gradient(
+        0deg,
+        rgb(var(--ui-state-layer) / var(--ui-list-selected-opacity)),
+        rgb(var(--ui-state-layer) / var(--ui-list-selected-opacity))
+      ),
+      rgb(var(--ui-neutral-surface-2) / 1) !important;
+  }
+
+  .ui-state-hovered {
+    border-color: rgb(var(--ui-neutral-border) / var(--ui-state-hover-border));
+    background:
+      linear-gradient(
+        0deg,
+        rgb(var(--ui-state-layer) / var(--ui-state-hover-opacity)),
+        rgb(var(--ui-state-layer) / var(--ui-state-hover-opacity))
+      ),
+      rgb(var(--ui-neutral-surface-2) / 1);
+  }
+
+  .ui-state-pressed {
+    border-color: rgb(var(--ui-neutral-border-strong) / var(--ui-state-pressed-border));
+    background:
+      linear-gradient(
+        0deg,
+        rgb(var(--ui-state-layer) / var(--ui-state-pressed-opacity)),
+        rgb(var(--ui-state-layer) / var(--ui-state-pressed-opacity))
+      ),
+      rgb(var(--ui-neutral-surface-2) / 1);
   }
 
   .ui-tab-active {
