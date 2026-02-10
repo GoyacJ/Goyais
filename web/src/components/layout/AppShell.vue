@@ -1,6 +1,6 @@
 <template>
   <div class="ui-shell-root ui-bg-host flex h-full bg-ui-bg text-ui-fg" :class="shellClass">
-    <MobileNavDrawer :open="mobileNavOpen" @close="mobileNavOpen = false" />
+    <MobileNavDrawer :open="mobileNavOpen" @close="closeMobileNav" />
 
     <SideNav
       v-if="showSideNav"
@@ -11,7 +11,7 @@
       <TopBar
         :show-mobile-nav-button="!isDesktop"
         :focus-mode="effectiveLayout === 'focus'"
-        @toggle-mobile-nav="mobileNavOpen = true"
+        @toggle-mobile-nav="openMobileNav"
       />
 
       <TopNavBar v-if="showTopNav" />
@@ -32,12 +32,13 @@ import TopBar from '@/components/layout/TopBar.vue'
 import TopNavBar from '@/components/layout/TopNavBar.vue'
 import ToastViewport from '@/components/ui/ToastViewport.vue'
 import { useLayoutStore } from '@/design-system/layout'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterView } from 'vue-router'
 
 const { effectiveLayout } = useLayoutStore()
 
 const mobileNavOpen = ref(false)
+const lastFocusedBeforeDrawer = ref<HTMLElement | null>(null)
 const isDesktop = ref(true)
 let mediaQuery: MediaQueryList | null = null
 
@@ -61,6 +62,23 @@ function syncDesktopState(): void {
   if (isDesktop.value) {
     mobileNavOpen.value = false
   }
+}
+
+function openMobileNav(): void {
+  lastFocusedBeforeDrawer.value = document.activeElement as HTMLElement | null
+  mobileNavOpen.value = true
+}
+
+function closeMobileNav(): void {
+  mobileNavOpen.value = false
+  const target = lastFocusedBeforeDrawer.value
+  lastFocusedBeforeDrawer.value = null
+  if (!target) {
+    return
+  }
+  nextTick(() => {
+    target.focus()
+  })
 }
 
 onMounted(() => {

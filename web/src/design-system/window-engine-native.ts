@@ -1,4 +1,10 @@
-import type { WindowEngine, DragStartPayload, ResizeStartPayload } from '@/design-system/window-engine'
+import type {
+  WindowEngine,
+  DragStartPayload,
+  KeyboardMovePayload,
+  KeyboardResizePayload,
+  ResizeStartPayload,
+} from '@/design-system/window-engine'
 import type { WindowRect } from '@/design-system/types'
 
 function clamp(value: number, min: number, max: number): number {
@@ -59,5 +65,55 @@ export class NativePointerWindowEngine implements WindowEngine {
 
     next = clampPosition(next, boardWidth, boardHeight)
     return next
+  }
+
+  projectKeyboardMove(payload: KeyboardMovePayload): WindowRect {
+    const boardWidth = sanitizeBounds(payload.bounds.width, payload.startRect.w)
+    const boardHeight = sanitizeBounds(payload.bounds.height, payload.startRect.h)
+
+    let deltaX = 0
+    let deltaY = 0
+    if (payload.direction === 'left') {
+      deltaX = -payload.step
+    }
+    if (payload.direction === 'right') {
+      deltaX = payload.step
+    }
+    if (payload.direction === 'up') {
+      deltaY = -payload.step
+    }
+    if (payload.direction === 'down') {
+      deltaY = payload.step
+    }
+
+    return clampPosition(
+      {
+        ...payload.startRect,
+        x: payload.startRect.x + deltaX,
+        y: payload.startRect.y + deltaY,
+      },
+      boardWidth,
+      boardHeight,
+    )
+  }
+
+  projectKeyboardResize(payload: KeyboardResizePayload): WindowRect {
+    const boardWidth = sanitizeBounds(payload.bounds.width, payload.startRect.w)
+    const boardHeight = sanitizeBounds(payload.bounds.height, payload.startRect.h)
+    let next = { ...payload.startRect }
+
+    if (payload.direction === 'left' || payload.direction === 'right') {
+      const maxWidth = Math.max(payload.minWidth, boardWidth - payload.startRect.x)
+      const sign = payload.direction === 'right' ? 1 : -1
+      next.w = clamp(payload.startRect.w + sign * payload.step, payload.minWidth, maxWidth)
+    }
+
+    if (payload.direction === 'up' || payload.direction === 'down') {
+      const maxHeight = Math.max(payload.minHeight, boardHeight - payload.startRect.y)
+      const sign = payload.direction === 'down' ? 1 : -1
+      next.h = clamp(payload.startRect.h + sign * payload.step, payload.minHeight, maxHeight)
+    }
+
+    return clampPosition(next, boardWidth, boardHeight)
   }
 }

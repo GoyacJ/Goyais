@@ -29,9 +29,6 @@ func (s *Service) SetRBACHook(hook AuthzHook)   { s.rbacHook = hook }
 func (s *Service) SetEgressHook(hook AuthzHook) { s.egressHook = hook }
 
 func (s *Service) Create(ctx context.Context, in CreateInput, fileData []byte) (Asset, error) {
-	if _, isPostgresStub := s.repo.(*PostgresRepository); isPostgresStub {
-		return Asset{}, ErrNotImplemented
-	}
 	if len(fileData) == 0 {
 		return Asset{}, ErrInvalidRequest
 	}

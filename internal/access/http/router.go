@@ -17,11 +17,12 @@ type RouterDeps struct {
 	AssetService    *asset.Service
 	WorkflowService *workflow.Service
 	HealthChecker   HealthChecker
+	ProviderProbe   ProviderProbe
 }
 
 func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 	apiMux := http.NewServeMux()
-	healthzHandler := NewHealthzHandler(cfg, deps.HealthChecker)
+	healthzHandler := NewHealthzHandler(cfg, deps.HealthChecker, deps.ProviderProbe)
 	apiMux.Handle("/api/v1/healthz", healthzHandler)
 	apiMux.Handle("/api/v1/system/healthz", healthzHandler)
 	if deps.CommandService != nil {

@@ -11,7 +11,7 @@
       v-if="open"
       class="ui-overlay-backdrop fixed inset-0 z-40 lg:hidden"
       role="presentation"
-      @click="$emit('close')"
+      @click="emitClose"
     />
   </transition>
 
@@ -25,15 +25,18 @@
   >
     <aside
       v-if="open"
+      ref="drawerRef"
       class="ui-surface fixed inset-y-0 left-0 z-50 flex w-72 flex-col rounded-none border-y-0 border-l-0 lg:hidden"
       aria-label="mobile-navigation"
+      tabindex="-1"
+      @keydown.esc.prevent.stop="emitClose"
     >
       <header class="flex items-center justify-between border-b border-ui-border px-4 py-3">
         <p class="text-sm font-semibold">{{ t('common.appName') }}</p>
         <button
           type="button"
           class="ui-control ui-focus-ring ui-pressable h-8 min-h-0 px-2 py-1 text-xs"
-          @click="$emit('close')"
+          @click="emitClose"
         >
           {{ t('common.close') }}
         </button>
@@ -46,7 +49,7 @@
           :to="item.to"
           class="ui-control ui-focus-ring ui-pressable flex items-center justify-between border-transparent text-sm"
           active-class="!border-primary-500 !bg-primary-500/10 !text-primary-700 dark:!text-primary-500"
-          @click="$emit('close')"
+          @click="emitClose"
         >
           <span class="flex min-w-0 items-center gap-2">
             <Icon :name="item.icon" :size="16" decorative />
@@ -62,16 +65,46 @@
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
 import { NAV_ITEMS } from '@/design-system/navigation'
+import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
-defineProps<{
+const props = defineProps<{
   open: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
 const { t } = useI18n({ useScope: 'global' })
+const drawerRef = ref<HTMLElement | null>(null)
+
+function emitClose(): void {
+  emit('close')
+}
+
+function focusDrawerEntry(): void {
+  const root = drawerRef.value
+  if (!root) {
+    return
+  }
+
+  const firstFocusable = root.querySelector<HTMLElement>(
+    'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"]), input, select, textarea',
+  )
+  firstFocusable?.focus()
+}
+
+watch(
+  () => props.open,
+  async (value) => {
+    if (!value) {
+      return
+    }
+    await nextTick()
+    focusDrawerEntry()
+  },
+  { flush: 'post' },
+)
 </script>
