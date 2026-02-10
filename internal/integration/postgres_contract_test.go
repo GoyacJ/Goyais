@@ -84,6 +84,41 @@ func TestPostgresCommandAssetWorkflowContract(t *testing.T) {
 		t.Fatalf("expected run id")
 	}
 
+	respRunFail := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-runs", headers, map[string]any{
+		"templateId": templateID,
+		"inputs":     map[string]any{"x": 2},
+		"mode":       "fail",
+	})
+	defer respRunFail.Body.Close()
+	mustStatus(t, respRunFail, http.StatusAccepted)
+	failedRunID := readPath(t, respRunFail.Body, "resource.id").(string)
+	if failedRunID == "" {
+		t.Fatalf("expected failed run id")
+	}
+
+	respRetry := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headers, map[string]any{
+		"commandType": "workflow.retry",
+		"payload": map[string]any{
+			"runId":       failedRunID,
+			"fromStepKey": "step-1",
+			"mode":        "retry",
+		},
+	})
+	defer respRetry.Body.Close()
+	mustStatus(t, respRetry, http.StatusAccepted)
+	retryCommandID := readPath(t, respRetry.Body, "commandRef.commandId").(string)
+	if retryCommandID == "" {
+		t.Fatalf("expected retry command id")
+	}
+
+	respRetryCmd := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+retryCommandID, contextHeaders("u1"), nil)
+	defer respRetryCmd.Body.Close()
+	mustStatus(t, respRetryCmd, http.StatusOK)
+	retryAttempt := readPath(t, respRetryCmd.Body, "result.run.attempt")
+	if retryAttempt != float64(2) {
+		t.Fatalf("expected retry attempt=2 got=%v", retryAttempt)
+	}
+
 	respSteps := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+runID+"/steps", contextHeaders("u1"), nil)
 	defer respSteps.Body.Close()
 	mustStatus(t, respSteps, http.StatusOK)

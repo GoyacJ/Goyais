@@ -468,6 +468,9 @@ func TestAPIContractRegression(t *testing.T) {
 		if runSyncID == "" {
 			t.Fatalf("expected sync run id")
 		}
+		if attempt, ok := runSyncResource["attempt"].(float64); !ok || int(attempt) != 1 {
+			t.Fatalf("expected sync run attempt=1 got=%v", runSyncResource["attempt"])
+		}
 		commandRef, ok := runSyncPayload["commandRef"].(map[string]any)
 		if !ok {
 			t.Fatalf("expected commandRef in workflow run response")
@@ -480,9 +483,84 @@ func TestAPIContractRegression(t *testing.T) {
 		respGetSync := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+runSyncID, headersWithContext("u1"), nil)
 		defer respGetSync.Body.Close()
 		assertStatus(t, respGetSync, http.StatusOK)
-		syncStatus := readJSONPath(t, respGetSync.Body, "status")
+		var syncRunPayload map[string]any
+		mustDecodeJSON(t, respGetSync.Body, &syncRunPayload)
+		syncStatus := syncRunPayload["status"]
 		if syncStatus != "succeeded" {
 			t.Fatalf("unexpected sync run status: %v", syncStatus)
+		}
+		if _, ok := syncRunPayload["durationMs"].(float64); !ok {
+			t.Fatalf("expected durationMs on finished sync run")
+		}
+
+		respRunFail := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-runs", headersWithJSONContext("u1"), map[string]any{
+			"templateId": templateID,
+			"inputs":     map[string]any{"mode": "fail"},
+			"mode":       "fail",
+		})
+		defer respRunFail.Body.Close()
+		assertStatus(t, respRunFail, http.StatusAccepted)
+		failedRunID := readJSONPath(t, respRunFail.Body, "resource.id").(string)
+		if failedRunID == "" {
+			t.Fatalf("expected failed run id")
+		}
+
+		respRetry := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headersWithJSONContext("u1"), map[string]any{
+			"commandType": "workflow.retry",
+			"payload": map[string]any{
+				"runId":       failedRunID,
+				"fromStepKey": "step-1",
+				"reason":      "integration retry",
+				"mode":        "retry",
+			},
+		})
+		defer respRetry.Body.Close()
+		assertStatus(t, respRetry, http.StatusAccepted)
+		retryCommandID := readJSONPath(t, respRetry.Body, "commandRef.commandId").(string)
+		if retryCommandID == "" {
+			t.Fatalf("expected workflow.retry command id")
+		}
+
+		respRetryCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+retryCommandID, headersWithContext("u1"), nil)
+		defer respRetryCommand.Body.Close()
+		assertStatus(t, respRetryCommand, http.StatusOK)
+		var retryCommandPayload map[string]any
+		mustDecodeJSON(t, respRetryCommand.Body, &retryCommandPayload)
+		resultRaw, ok := retryCommandPayload["result"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected command result for workflow.retry")
+		}
+		retryRunRaw, ok := resultRaw["run"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected run result in workflow.retry command")
+		}
+		retryRunID, _ := retryRunRaw["id"].(string)
+		if retryRunID == "" {
+			t.Fatalf("expected retry run id")
+		}
+		if attempt, ok := retryRunRaw["attempt"].(float64); !ok || int(attempt) != 2 {
+			t.Fatalf("expected retry run attempt=2 got=%v", retryRunRaw["attempt"])
+		}
+		if retryOfRunID, _ := retryRunRaw["retryOfRunId"].(string); retryOfRunID != failedRunID {
+			t.Fatalf("unexpected retryOfRunId got=%v want=%s", retryOfRunID, failedRunID)
+		}
+		if replayFromStepKey, _ := retryRunRaw["replayFromStepKey"].(string); replayFromStepKey != "step-1" {
+			t.Fatalf("unexpected replayFromStepKey: %v", replayFromStepKey)
+		}
+
+		respRetryRun := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+retryRunID, headersWithContext("u1"), nil)
+		defer respRetryRun.Body.Close()
+		assertStatus(t, respRetryRun, http.StatusOK)
+		var retryRunPayload map[string]any
+		mustDecodeJSON(t, respRetryRun.Body, &retryRunPayload)
+		if retryStatus, _ := retryRunPayload["status"].(string); retryStatus != "succeeded" {
+			t.Fatalf("unexpected retry run status: %v", retryStatus)
+		}
+		if attempt, ok := retryRunPayload["attempt"].(float64); !ok || int(attempt) != 2 {
+			t.Fatalf("expected retry run attempt=2 in GET payload, got=%v", retryRunPayload["attempt"])
+		}
+		if _, ok := retryRunPayload["durationMs"].(float64); !ok {
+			t.Fatalf("expected durationMs on retried run")
 		}
 
 		respRunRunning := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-runs", headersWithJSONContext("u1"), map[string]any{
@@ -521,6 +599,10 @@ func TestAPIContractRegression(t *testing.T) {
 		steps, ok := stepsPayload["items"].([]any)
 		if !ok || len(steps) == 0 {
 			t.Fatalf("expected step runs")
+		}
+		firstStep, _ := steps[0].(map[string]any)
+		if _, ok := firstStep["durationMs"].(float64); !ok {
+			t.Fatalf("expected durationMs on finished step")
 		}
 
 		// Cursor takes precedence over page/pageSize when provided.

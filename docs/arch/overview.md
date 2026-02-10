@@ -213,6 +213,7 @@ Command 执行管道（必须）：
     - `GET /workflow-runs/{runId}`
     - `POST /workflow-runs/{runId}:cancel`
     - `GET /workflow-runs/{runId}/steps`
+    - `POST /commands` with `commandType=workflow.retry`（仅命令入口，不新增 domain retry 路由）
     - 写接口全部走 command-first（domain sugar -> `workflow.*` command）
 - 占位（可达但未实现）：
   - `plugin-market-*`、`streams-*`

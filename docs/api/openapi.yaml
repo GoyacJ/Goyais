@@ -1476,6 +1476,11 @@ components:
       properties:
         commandType:
           type: string
+          description: |
+            支持的关键 commandType（v0.1）包括：
+            `asset.upload`、`share.create`、`share.delete`、
+            `workflow.createDraft`、`workflow.patch`、`workflow.publish`、
+            `workflow.run`、`workflow.retry`、`workflow.cancel`。
         payload:
           type: object
           additionalProperties: true
@@ -1671,6 +1676,14 @@ components:
               type: string
             templateVersion:
               type: string
+            attempt:
+              type: integer
+            retryOfRunId:
+              type: string
+              nullable: true
+            replayFromStepKey:
+              type: string
+              nullable: true
             inputs:
               type: object
               additionalProperties: true
@@ -1684,6 +1697,10 @@ components:
               type: string
               format: date-time
               nullable: true
+            durationMs:
+              type: integer
+              nullable: true
+              readOnly: true
             error:
               $ref: '#/components/schemas/Error'
 
@@ -1737,6 +1754,10 @@ components:
               type: string
               format: date-time
               nullable: true
+            durationMs:
+              type: integer
+              nullable: true
+              readOnly: true
             error:
               $ref: '#/components/schemas/Error'
 

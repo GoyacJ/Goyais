@@ -19,6 +19,7 @@ type Repository interface {
 	HasTemplatePermission(ctx context.Context, req command.RequestContext, templateID, permission string, now time.Time) (bool, error)
 
 	CreateRun(ctx context.Context, in CreateRunInput) (WorkflowRun, error)
+	RetryRun(ctx context.Context, in RetryRunInput) (WorkflowRun, error)
 	CancelRun(ctx context.Context, in CancelRunInput) (WorkflowRun, error)
 	GetRunForAccess(ctx context.Context, req command.RequestContext, runID string) (WorkflowRun, error)
 	ListRuns(ctx context.Context, params RunListParams) (RunListResult, error)

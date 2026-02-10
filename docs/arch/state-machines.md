@@ -54,11 +54,17 @@
 
 ## 0.6 Workflow Domain Sugar（M1 最小闭环）
 - `POST /api/v1/workflow-templates`、`POST /api/v1/workflow-templates/{templateId}:patch`、`POST /api/v1/workflow-templates/{templateId}:publish`、`POST /api/v1/workflow-runs`、`POST /api/v1/workflow-runs/{runId}:cancel` 必须转换为 `workflow.*` command 执行（Command-first）。
+- `workflow.retry` 仅通过 `POST /api/v1/commands` 暴露（`commandType=workflow.retry`），不新增 domain retry 路由。
 - run 执行模式（v0.1 最小实现）：
   - `mode=sync`：`pending -> succeeded`，并创建 1 条 `step_run(succeeded)`。
   - `mode=running`：`pending -> running`，并创建 1 条 `step_run(running)`。
   - `mode=fail`：`pending -> failed`，并创建 1 条 `step_run(failed)`，且回填 `error_code/message_key`。
+  - `mode=retry`：用于 `workflow.retry`，新建 run/step 并收敛为 `succeeded`，结果标记 `mode=retry`。
 - cancel 语义：`pending/running -> canceled`，并将同 run 下 `pending/running` step 收敛到 `canceled`。
+- retry 语义：对终态 run 执行 `workflow.retry` 时必须新建 run：
+  - `attempt = source.attempt + 1`（最小值 2）；
+  - `retry_of_run_id = source_run_id`；
+  - `replay_from_step_key` 来源于 payload（缺省 `step-1`）。
 
 ## 0.7 Registry C1 Read Path（M2 启动）
 - `GET /api/v1/registry/capabilities`、`GET /api/v1/registry/capabilities/{capabilityId}`、`GET /api/v1/registry/algorithms`、`GET /api/v1/registry/providers` 在 v0.1 作为 read-only 能力落地。

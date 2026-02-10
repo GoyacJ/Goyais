@@ -50,24 +50,27 @@ type WorkflowTemplate struct {
 }
 
 type WorkflowRun struct {
-	ID              string
-	TenantID        string
-	WorkspaceID     string
-	OwnerID         string
-	Visibility      string
-	ACLJSON         json.RawMessage
-	TemplateID      string
-	TemplateVersion int
-	CommandID       string
-	InputsJSON      json.RawMessage
-	OutputsJSON     json.RawMessage
-	Status          string
-	ErrorCode       string
-	MessageKey      string
-	StartedAt       time.Time
-	FinishedAt      *time.Time
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID                string
+	TenantID          string
+	WorkspaceID       string
+	OwnerID           string
+	Visibility        string
+	ACLJSON           json.RawMessage
+	TemplateID        string
+	TemplateVersion   int
+	Attempt           int
+	RetryOfRunID      string
+	ReplayFromStepKey string
+	CommandID         string
+	InputsJSON        json.RawMessage
+	OutputsJSON       json.RawMessage
+	Status            string
+	ErrorCode         string
+	MessageKey        string
+	StartedAt         time.Time
+	FinishedAt        *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 type StepRun struct {
@@ -140,6 +143,15 @@ type CreateRunInput struct {
 	Inputs     json.RawMessage
 	Mode       string
 	Now        time.Time
+}
+
+type RetryRunInput struct {
+	Context     command.RequestContext
+	RunID       string
+	FromStepKey string
+	Reason      string
+	Mode        string
+	Now         time.Time
 }
 
 type CancelRunInput struct {

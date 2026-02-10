@@ -155,6 +155,9 @@
 ### workflow_runs
 - `id, tenant_id, workspace_id, owner_id, visibility`
 - `template_id, template_version`
+- `attempt`
+- `retry_of_run_id`（可空，引用被重试 run）
+- `replay_from_step_key`（可空，记录从哪个 step 重放）
 - `command_id`
 - `inputs`（JSON）
 - `outputs`（JSON）
@@ -182,6 +185,7 @@
 
 建议索引：
 - `workflow_runs(tenant_id, workspace_id, status, created_at desc)`
+- `workflow_runs(retry_of_run_id)`
 - `step_runs(run_id, step_key, attempt)`
 
 ## 3.5 能力注册与插件
@@ -265,7 +269,7 @@ v0.1 当前实现进度：
 
 ### commands
 - `id, tenant_id, workspace_id, owner_id`
-- `command_type`（示例：`asset.upload`、`workflow.run`、`share.create`、`share.delete`）
+- `command_type`（示例：`asset.upload`、`workflow.run`、`workflow.retry`、`share.create`、`share.delete`）
 - `payload`（JSON）
 - `status`（accepted/running/succeeded/failed/canceled）
 - `visibility`（默认 `PRIVATE`，NOT NULL）

@@ -53,6 +53,13 @@ type workflowRunCommandPayload struct {
 	Mode       string          `json:"mode"`
 }
 
+type workflowRetryCommandPayload struct {
+	RunID       string `json:"runId"`
+	FromStepKey string `json:"fromStepKey"`
+	Reason      string `json:"reason"`
+	Mode        string `json:"mode"`
+}
+
 type workflowCancelCommandPayload struct {
 	RunID string `json:"runId"`
 }
@@ -90,6 +97,7 @@ func registerCommandExecutors(
 		commandService.SetExecutor("workflow.patch", newWorkflowPatchExecutor(workflowService))
 		commandService.SetExecutor("workflow.publish", newWorkflowPublishExecutor(workflowService))
 		commandService.SetExecutor("workflow.run", newWorkflowRunExecutor(workflowService))
+		commandService.SetExecutor("workflow.retry", newWorkflowRetryExecutor(workflowService))
 		commandService.SetExecutor("workflow.cancel", newWorkflowCancelExecutor(workflowService))
 	}
 }
@@ -324,6 +332,33 @@ func newWorkflowCancelExecutor(workflowService *workflow.Service) command.Execut
 	}
 }
 
+func newWorkflowRetryExecutor(workflowService *workflow.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req workflowRetryCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapWorkflowExecutionError(workflow.ErrInvalidRequest)
+		}
+
+		run, err := workflowService.RetryRun(
+			ctx,
+			reqCtx,
+			req.RunID,
+			req.FromStepKey,
+			req.Reason,
+			req.Mode,
+		)
+		if err != nil {
+			return nil, mapWorkflowExecutionError(err)
+		}
+
+		result := map[string]any{
+			"run": toWorkflowRunResultPayload(run),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
 func mapWorkflowExecutionError(err error) error {
 	switch {
 	case errors.Is(err, workflow.ErrInvalidRequest), errors.Is(err, workflow.ErrTemplateNotFound), errors.Is(err, workflow.ErrRunNotFound):
@@ -514,6 +549,7 @@ func toWorkflowRunResultPayload(item workflow.WorkflowRun) map[string]any {
 		"status":          item.Status,
 		"templateId":      item.TemplateID,
 		"templateVersion": item.TemplateVersion,
+		"attempt":         item.Attempt,
 		"inputs":          decodeJSON(item.InputsJSON, map[string]any{}),
 		"outputs":         decodeJSON(item.OutputsJSON, map[string]any{}),
 		"startedAt":       item.StartedAt.UTC().Format(timeRFC3339Nano),
@@ -523,8 +559,15 @@ func toWorkflowRunResultPayload(item workflow.WorkflowRun) map[string]any {
 	if item.CommandID != "" {
 		result["commandId"] = item.CommandID
 	}
+	if item.RetryOfRunID != "" {
+		result["retryOfRunId"] = item.RetryOfRunID
+	}
+	if item.ReplayFromStepKey != "" {
+		result["replayFromStepKey"] = item.ReplayFromStepKey
+	}
 	if item.FinishedAt != nil {
 		result["finishedAt"] = item.FinishedAt.UTC().Format(timeRFC3339Nano)
+		result["durationMs"] = durationMillis(item.StartedAt, *item.FinishedAt)
 	}
 	if item.ErrorCode != "" || item.MessageKey != "" {
 		result["error"] = map[string]any{
@@ -577,4 +620,12 @@ func decodeJSON[T any](raw json.RawMessage, fallback T) T {
 		return fallback
 	}
 	return out
+}
+
+func durationMillis(startedAt time.Time, finishedAt time.Time) int64 {
+	ms := finishedAt.UTC().Sub(startedAt.UTC()).Milliseconds()
+	if ms < 0 {
+		return 0
+	}
+	return ms
 }
