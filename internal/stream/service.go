@@ -12,12 +12,14 @@ import (
 
 	"goyais/internal/asset"
 	"goyais/internal/command"
+	"goyais/internal/platform/eventbus"
 )
 
 type Service struct {
 	repo                 Repository
 	assetService         *asset.Service
 	allowPrivateToPublic bool
+	eventBus             eventbus.Provider
 }
 
 func NewService(repo Repository, assetService *asset.Service, allowPrivateToPublic bool) *Service {
@@ -26,6 +28,10 @@ func NewService(repo Repository, assetService *asset.Service, allowPrivateToPubl
 		assetService:         assetService,
 		allowPrivateToPublic: allowPrivateToPublic,
 	}
+}
+
+func (s *Service) SetEventBusProvider(provider eventbus.Provider) {
+	s.eventBus = provider
 }
 
 func (s *Service) CreateStream(
@@ -115,9 +121,11 @@ func (s *Service) StartRecording(ctx context.Context, req command.RequestContext
 		active, err := s.repo.GetActiveRecording(ctx, req, streamID)
 		if err == nil {
 			return StartRecordingResult{
-				Stream:              item,
-				Recording:           active,
-				OnPublishTemplateID: "",
+				Stream:               item,
+				Recording:            active,
+				OnPublishTemplateID:  "",
+				OnPublishEventStatus: "",
+				OnPublishEventError:  "",
 			}, nil
 		}
 		if !errors.Is(err, ErrRecordingNotFound) {
@@ -145,10 +153,14 @@ func (s *Service) StartRecording(ctx context.Context, req command.RequestContext
 		return StartRecordingResult{}, err
 	}
 
+	templateID := extractOnPublishTemplateID(updatedStream.StateJSON)
+	eventStatus, eventError := s.publishOnPublishEvent(ctx, req, updatedStream, rec, templateID)
 	return StartRecordingResult{
-		Stream:              updatedStream,
-		Recording:           rec,
-		OnPublishTemplateID: extractOnPublishTemplateID(updatedStream.StateJSON),
+		Stream:               updatedStream,
+		Recording:            rec,
+		OnPublishTemplateID:  templateID,
+		OnPublishEventStatus: eventStatus,
+		OnPublishEventError:  eventError,
 	}, nil
 }
 
@@ -350,6 +362,51 @@ func extractOnPublishTemplateID(raw json.RawMessage) string {
 	}
 	value, _ := state["onPublishTemplateId"].(string)
 	return strings.TrimSpace(value)
+}
+
+func (s *Service) publishOnPublishEvent(
+	ctx context.Context,
+	req command.RequestContext,
+	streamItem Stream,
+	recording Recording,
+	templateID string,
+) (string, string) {
+	templateID = strings.TrimSpace(templateID)
+	if templateID == "" {
+		return "", ""
+	}
+	if s.eventBus == nil {
+		return "skipped", "event bus provider not configured"
+	}
+	envelope := map[string]any{
+		"eventType":   "stream.on_publish",
+		"tenantId":    req.TenantID,
+		"workspaceId": req.WorkspaceID,
+		"userId":      req.UserID,
+		"traceId":     req.TraceID,
+		"streamId":    streamItem.ID,
+		"recordingId": recording.ID,
+		"templateId":  templateID,
+		"trigger":     "stream.onPublish",
+		"emittedAt":   time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	raw, err := json.Marshal(envelope)
+	if err != nil {
+		return "failed", err.Error()
+	}
+	err = s.eventBus.Publish(ctx, eventbus.ChannelStream, eventbus.Message{
+		Key:   streamItem.ID + ":" + recording.ID,
+		Value: raw,
+		Headers: map[string]string{
+			"eventType":   "stream.on_publish",
+			"tenantId":    req.TenantID,
+			"workspaceId": req.WorkspaceID,
+		},
+	})
+	if err != nil {
+		return "failed", err.Error()
+	}
+	return "published", ""
 }
 
 func mergeStreamState(raw json.RawMessage, patch map[string]any) json.RawMessage {

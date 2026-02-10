@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"goyais/internal/config"
 	"goyais/internal/platform/cache"
 	platformdb "goyais/internal/platform/db"
+	"goyais/internal/platform/eventbus"
 	"goyais/internal/platform/vector"
 	"goyais/internal/plugin"
 	"goyais/internal/registry"
@@ -108,6 +108,20 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 		return nil, fmt.Errorf("build vector provider: %w", err)
 	}
 
+	eventBusProvider, err := eventbus.New(eventbus.Config{
+		Provider:      cfg.Providers.EventBus,
+		KafkaBrokers:  cfg.EventBus.Kafka.Brokers,
+		KafkaClientID: cfg.EventBus.Kafka.ClientID,
+		CommandTopic:  cfg.EventBus.Kafka.CommandTopic,
+		StreamTopic:   cfg.EventBus.Kafka.StreamTopic,
+	})
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("build event bus provider: %w", err)
+	}
+	commandService.SetEventBusProvider(eventBusProvider)
+	streamService.SetEventBusProvider(eventBusProvider)
+
 	registerCommandExecutors(commandService, assetService, workflowService, pluginService, streamService, algorithmService)
 
 	h, err := httpapi.NewRouter(cfg, httpapi.RouterDeps{
@@ -125,7 +139,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 				"vector":      readinessFromErr(vectorProvider.Ping(ctx)),
 				"objectStore": readinessFromErr(objectStore.Ping(ctx)),
 				"stream":      {Status: "ready"},
-				"event_bus":   eventBusReadiness(ctx, cfg),
+				"event_bus":   readinessFromErr(eventBusProvider.Ping(ctx)),
 			}
 			return out
 		},
@@ -142,6 +156,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	}
 
 	srv.RegisterOnShutdown(func() {
+		_ = eventBusProvider.Close()
 		_ = db.Close()
 	})
 
@@ -156,25 +171,4 @@ func readinessFromErr(err error) httpapi.ProviderStatus {
 		}
 	}
 	return httpapi.ProviderStatus{Status: "ready"}
-}
-
-func eventBusReadiness(ctx context.Context, cfg config.Config) httpapi.ProviderStatus {
-	switch cfg.Providers.EventBus {
-	case "memory":
-		return httpapi.ProviderStatus{Status: "ready"}
-	case "kafka":
-		if len(cfg.EventBus.Kafka.Brokers) == 0 {
-			return httpapi.ProviderStatus{Status: "degraded", Error: "missing kafka broker"}
-		}
-		broker := cfg.EventBus.Kafka.Brokers[0]
-		dialer := &net.Dialer{Timeout: 1 * time.Second}
-		conn, err := dialer.DialContext(ctx, "tcp", broker)
-		if err != nil {
-			return httpapi.ProviderStatus{Status: "degraded", Error: err.Error()}
-		}
-		_ = conn.Close()
-		return httpapi.ProviderStatus{Status: "ready"}
-	default:
-		return httpapi.ProviderStatus{Status: "degraded", Error: "unsupported event bus provider"}
-	}
 }

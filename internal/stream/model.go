@@ -36,12 +36,12 @@ type Stream struct {
 	Visibility  string
 	ACLJSON     json.RawMessage
 
-	Path      string
-	Protocol  string
-	Source    string
+	Path          string
+	Protocol      string
+	Source        string
 	EndpointsJSON json.RawMessage
-	StateJSON json.RawMessage
-	Status    string
+	StateJSON     json.RawMessage
+	Status        string
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -114,17 +114,19 @@ type UpdateStreamStatusInput struct {
 }
 
 type CreateLineageInput struct {
-	Context      command.RequestContext
+	Context       command.RequestContext
 	TargetAssetID string
-	StepID       string
-	Relation     string
-	Now          time.Time
+	StepID        string
+	Relation      string
+	Now           time.Time
 }
 
 type StartRecordingResult struct {
-	Stream             Stream
-	Recording          Recording
-	OnPublishTemplateID string
+	Stream               Stream
+	Recording            Recording
+	OnPublishTemplateID  string
+	OnPublishEventStatus string
+	OnPublishEventError  string
 }
 
 type StopRecordingResult struct {
