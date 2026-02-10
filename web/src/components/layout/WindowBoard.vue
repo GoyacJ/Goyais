@@ -115,7 +115,7 @@ const manifestForStore = computed<WindowPaneManifest[]>(() =>
   })),
 )
 
-const { panes, bringToFront, updatePaneRect, resetLayout } = useWindowLayout(
+const { panes, bringToFront, updatePaneRect, resetLayout, flushPersist } = useWindowLayout(
   computed(() => props.routeKey),
   effectiveLayout,
   manifestForStore,
@@ -174,6 +174,10 @@ function measureBoard(): void {
   boardWidth.value = boardRef.value?.clientWidth ?? 1200
 }
 
+function onBeforeUnload(): void {
+  flushPersist(true)
+}
+
 onMounted(() => {
   mediaQuery = window.matchMedia('(min-width: 1024px)')
   mediaQuery.addEventListener('change', updateDesktopFlag)
@@ -188,11 +192,14 @@ onMounted(() => {
   } else {
     window.addEventListener('resize', measureBoard)
   }
+  window.addEventListener('beforeunload', onBeforeUnload)
 })
 
 onBeforeUnmount(() => {
+  flushPersist(true)
   mediaQuery?.removeEventListener('change', updateDesktopFlag)
   resizeObserver?.disconnect()
   window.removeEventListener('resize', measureBoard)
+  window.removeEventListener('beforeunload', onBeforeUnload)
 })
 </script>

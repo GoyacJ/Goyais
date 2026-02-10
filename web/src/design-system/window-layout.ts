@@ -3,6 +3,11 @@ import type { LayoutMode, WindowRect, WindowState } from '@/design-system/types'
 import type { WindowPaneManifest } from '@/design-system/window-manifests'
 
 const STORAGE_PREFIX = 'goyais.ui.windows'
+const DEFAULT_PERSIST_DEBOUNCE_MS = 120
+
+export interface WindowLayoutOptions {
+  persistDebounceMs?: number
+}
 
 function resolveMaybeRef<T>(value: MaybeRef<T>): T {
   return typeof value === 'object' && value !== null && 'value' in value
@@ -26,16 +31,6 @@ function isWindowRect(value: unknown): value is WindowRect {
     isNumber(candidate.h) &&
     isNumber(candidate.z)
   )
-}
-
-function fallbackRect(index: number): WindowRect {
-  return {
-    x: 24 + (index % 2) * 520,
-    y: 24 + Math.floor(index / 2) * 280,
-    w: 500,
-    h: 260,
-    z: index + 1,
-  }
 }
 
 function createStateFromManifest(manifest: WindowPaneManifest[]): WindowState {
@@ -80,7 +75,15 @@ function mergeWithManifest(state: WindowState, manifest: WindowPaneManifest[]): 
 
   manifest.forEach((pane, index) => {
     const existing = state.panes[pane.id]
-    const rect = existing && isWindowRect(existing) ? existing : fallbackRect(index)
+    const rect = existing && isWindowRect(existing)
+      ? existing
+      : {
+          x: pane.x,
+          y: pane.y,
+          w: pane.w,
+          h: pane.h,
+          z: index + 1,
+        }
 
     nextPanes[pane.id] = {
       x: rect.x,
@@ -102,10 +105,27 @@ export function windowStorageKey(routeKey: string, mode: LayoutMode): string {
   return `${STORAGE_PREFIX}.${mode}.${routeKey}.v1`
 }
 
+function safeReadStorage(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function safeWriteStorage(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    // Ignore persistence failures (private mode/quota exceeded).
+  }
+}
+
 export function useWindowLayout(
   routeKeyInput: MaybeRef<string>,
   modeInput: MaybeRef<LayoutMode>,
   manifestInput: MaybeRef<WindowPaneManifest[]>,
+  options: WindowLayoutOptions = {},
 ) {
   const state = ref<WindowState>({ panes: {}, nextZ: 1 })
 
@@ -113,16 +133,66 @@ export function useWindowLayout(
   const mode = computed(() => resolveMaybeRef(modeInput))
   const manifest = computed(() => resolveMaybeRef(manifestInput))
   const storageKey = computed(() => windowStorageKey(routeKey.value, mode.value))
+  const persistDebounceMs = Math.max(0, options.persistDebounceMs ?? DEFAULT_PERSIST_DEBOUNCE_MS)
+
+  let persistTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingPersist: { key: string; payload: string } | null = null
+
+  function clearPersistTimer(): void {
+    if (!persistTimer) {
+      return
+    }
+    clearTimeout(persistTimer)
+    persistTimer = null
+  }
+
+  function buildPersistSnapshot(): { key: string; payload: string } {
+    return {
+      key: storageKey.value,
+      payload: JSON.stringify(state.value),
+    }
+  }
+
+  function persistSnapshot(snapshot: { key: string; payload: string }): void {
+    safeWriteStorage(snapshot.key, snapshot.payload)
+  }
 
   function load(): void {
     const defaultState = createStateFromManifest(manifest.value)
-    const persisted = parseState(localStorage.getItem(storageKey.value))
+    const persisted = parseState(safeReadStorage(storageKey.value))
     const merged = persisted ? mergeWithManifest(persisted, manifest.value) : defaultState
     state.value = merged
   }
 
-  function persist(): void {
-    localStorage.setItem(storageKey.value, JSON.stringify(state.value))
+  function schedulePersist(): void {
+    const snapshot = buildPersistSnapshot()
+    if (persistDebounceMs === 0) {
+      persistSnapshot(snapshot)
+      return
+    }
+
+    pendingPersist = snapshot
+    clearPersistTimer()
+    persistTimer = setTimeout(() => {
+      persistTimer = null
+      if (!pendingPersist) {
+        return
+      }
+      persistSnapshot(pendingPersist)
+      pendingPersist = null
+    }, persistDebounceMs)
+  }
+
+  function flushPersist(forceCurrent = false): void {
+    clearPersistTimer()
+    if (pendingPersist) {
+      persistSnapshot(pendingPersist)
+      pendingPersist = null
+      return
+    }
+    if (forceCurrent) {
+      persistSnapshot(buildPersistSnapshot())
+    }
   }
 
   function bringToFront(paneId: string): void {
@@ -146,13 +216,14 @@ export function useWindowLayout(
   }
 
   watch([storageKey, manifest], () => {
+    flushPersist(false)
     load()
   }, { immediate: true, deep: true })
 
   watch(
     state,
     () => {
-      persist()
+      schedulePersist()
     },
     { deep: true },
   )
@@ -164,5 +235,6 @@ export function useWindowLayout(
     updatePaneRect,
     resetLayout,
     storageKey,
+    flushPersist,
   }
 }
