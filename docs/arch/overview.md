@@ -106,6 +106,11 @@ flowchart TB
 - 目标：统一 MediaMTX 控制面交互。
 - 必需能力：创建/更新/删除流、鉴权、录制控制、状态采集、事件桥接。
 
+### 4.6 EventBusProvider
+- 目标：统一内存队列与 Kafka 事件总线。
+- 必需能力：发布 command/stream 事件、消费者组订阅、最小健康探测。
+- v0.2 预研约束：外部写路径不新增，事件触发仍回到 command gate。
+
 ## 5. 运行拓扑
 
 ### 5.1 最小化运行拓扑（v0.1 必须闭环）
@@ -125,6 +130,7 @@ flowchart LR
 - `vector.provider=sqlite`
 - `object_store.provider=local`
 - `stream.provider=mediamtx`
+- `event_bus.provider=memory`
 
 ### 5.2 完整模式拓扑（推荐）
 
@@ -195,6 +201,7 @@ Command 执行管道（必须）：
 - `GET /api/v1/healthz` 与 `GET /api/v1/system/healthz` 返回：
   - `providers`（当前生效 provider 选择）
   - `details.providers.*.status`（`ready/degraded`）与可选 `error`
+  - 新增 `details.providers.event_bus`（事件总线就绪态）
 
 ### 7.3 当前接口落地状态（2026-02）
 - 已落地（可用）：
@@ -273,6 +280,12 @@ Command 执行管道（必须）：
 - `GOYAIS_OBJECT_STORE_REGION=us-east-1`
 - `GOYAIS_OBJECT_STORE_USE_SSL=false`
 - `GOYAIS_STREAM_PROVIDER=mediamtx`
+- `GOYAIS_EVENT_BUS_PROVIDER=memory`
+- `GOYAIS_EVENT_BUS_KAFKA_BROKERS=127.0.0.1:9092`
+- `GOYAIS_EVENT_BUS_KAFKA_CLIENT_ID=goyais-api`
+- `GOYAIS_EVENT_BUS_KAFKA_COMMAND_TOPIC=goyais.command.events`
+- `GOYAIS_EVENT_BUS_KAFKA_STREAM_TOPIC=goyais.stream.events`
+- `GOYAIS_EVENT_BUS_KAFKA_CONSUMER_GROUP=goyais-stream-trigger`
 
 PostgreSQL DSN 规则（冻结）：
 - 当 `db.driver=postgres` 时，`GOYAIS_DB_DSN` 必须显式包含 `dbname`。
