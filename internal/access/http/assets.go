@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 
 	"goyais/internal/asset"
@@ -173,9 +174,30 @@ func (h *apiHandler) handleCreateAsset(w http.ResponseWriter, r *http.Request, r
 }
 
 func (h *apiHandler) handleListAssets(w http.ResponseWriter, r *http.Request, reqCtx command.RequestContext) {
-	page := parsePositiveInt(r.URL.Query().Get("page"), 1)
-	pageSize := parsePositiveInt(r.URL.Query().Get("pageSize"), 20)
-	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+	query := r.URL.Query()
+	cursor := strings.TrimSpace(query.Get("cursor"))
+	page := 1
+	pageSize := 20
+
+	if cursor == "" {
+		if rawPage := strings.TrimSpace(query.Get("page")); rawPage != "" {
+			parsed, err := strconv.Atoi(rawPage)
+			if err != nil || parsed <= 0 {
+				errorx.Write(w, http.StatusBadRequest, "INVALID_PAGINATION", "error.pagination.invalid", map[string]any{"page": rawPage})
+				return
+			}
+			page = parsed
+		}
+		if rawPageSize := strings.TrimSpace(query.Get("pageSize")); rawPageSize != "" {
+			parsed, err := strconv.Atoi(rawPageSize)
+			if err != nil || parsed <= 0 {
+				errorx.Write(w, http.StatusBadRequest, "INVALID_PAGINATION", "error.pagination.invalid", map[string]any{"pageSize": rawPageSize})
+				return
+			}
+			pageSize = parsed
+		}
+	}
+
 	result, err := h.assetService.List(r.Context(), asset.ListParams{Context: reqCtx, Page: page, PageSize: pageSize, Cursor: cursor})
 	if err != nil {
 		writeAssetError(w, err)
