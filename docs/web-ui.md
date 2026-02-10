@@ -3,163 +3,133 @@
 ## 1. 风格原则
 
 ### 1.1 Console-first
-- 视觉定位是高密度控制台，而不是营销站点。
-- 信息组织优先级：状态与结构 > 装饰。
-- 页面默认 `compact` 密度，保持高信息吞吐。
+- UI 面向控制台工作流，优先保证信息密度与状态可读性。
+- 默认密度为 `compact`，通过 `comfortable` 提供可读性增强。
+- 页面结构优先遵循“筛选 -> 列表 -> 详情/日志”的操作路径。
 
 ### 1.2 Material 3 状态语义
-- 全局交互状态统一为：`hover` / `pressed` / `focus` / `disabled` / `loading`。
-- 不允许组件自行拼接零散 utility 来实现状态语义，必须复用全局 hook 类。
+- 交互组件必须覆盖：`hover` / `pressed` / `focus-visible` / `disabled` / `loading`。
+- 禁止在组件内散落状态 utility；状态统一通过全局 hook 类注入。
 
 ### 1.3 视觉边界
-- 圆角克制：
-  - 卡片：10-12px（`--ui-radius-card`）
-  - 按钮：8px（`--ui-radius-button`）
-  - 画布节点：6-8px（`--ui-radius-canvas-node`）
-- 分层策略：边框优先；阴影仅用于浮层（Dialog/Dropdown）。
-- 动效仅用于状态变化和小范围过渡，不使用大面积炫技动画。
+- 圆角：卡片 `10-12px`，按钮 `8px`，画布节点 `6-8px`。
+- 分层：边框主导；阴影仅用于浮层（Dialog/Dropdown/Toast）。
+- 动效：仅状态过渡与必要的进入/退出，不做大面积动效。
 
 ## 2. Design Tokens
 
-Tokens 定义文件：`/Users/goya/Repo/Git/Goyais/web/src/design-system/tokens.css`
+主文件：`web/src/design-system/tokens.css`
 
-### 2.1 颜色体系
-- `neutral`：背景/边框/文本（`--ui-neutral-*`）
-- `primary`：选中/主按钮/主交互（`--ui-primary-*`）
-- `semantic`：`--ui-success` / `--ui-warn` / `--ui-error` / `--ui-info`
+### 2.1 命名规范
+- 颜色：`--ui-neutral-*` / `--ui-primary-*` / `--ui-success|warn|error|info`
+- 字体：`--ui-font-*`
+- 圆角：`--ui-radius-*`
+- 阴影：`--ui-shadow-*`
+- 状态：`--ui-focus-*` / `--ui-disabled-*` / `--ui-loading-*`
+- 密度：`--ui-control-*` / `--ui-page-gap` / `--ui-table-row-h`
 
-### 2.2 排版与字体
-- 主字体：`--ui-font-sans`
-- 等宽字体：`--ui-font-mono`
-- 日志/ID/技术标识必须使用 `ui-monospace`
+### 2.2 新增 token 流程
+1. 在 `tokens.css` 中新增变量，并同时补齐 light/dark 值。
+2. 若需在 Tailwind 使用，同步映射到 `tailwind.config.ts`。
+3. 在组件中通过 `var(...)` 或已映射的 Tailwind token 消费。
+4. 在本文件记录 token 用途与约束，避免语义漂移。
 
-### 2.3 间距与形状
-- 页面节奏：`--ui-page-gap`
-- 控件高度与内边距统一由密度变量控制（见第 4 节）
-- 阴影变量：`--ui-shadow-overlay`（仅浮层使用）
-
-### 2.4 Tailwind 映射
-- 文件：`/Users/goya/Repo/Git/Goyais/web/tailwind.config.ts`
-- 所有颜色/圆角/阴影/字体通过 CSS variables 映射。
-- `plugins` 固定为空，不引入会改写样式语义的插件。
+### 2.3 硬规则
+- 不允许在组件中写死语义颜色（例如直接写固定 hex 作为状态色）。
+- 状态色只能来自 tokens。
 
 ## 3. 全局状态 Hook 类（强制）
 
-定义文件：`/Users/goya/Repo/Git/Goyais/web/src/style.css`
+文件：`web/src/style.css`
 
-- `ui-focus-ring`
-  - 仅在 `:focus-visible` 显示。
-  - light/dark 下均需高对比可见。
-- `ui-pressable`
-  - 统一 hover/pressed 反馈与轻量 transition。
-- `ui-disabled`
-  - 统一禁用视觉和交互阻断。
-- `ui-loading`
-  - 统一 loading 态光标/可交互策略。
+- `ui-focus-ring`：只在 `:focus-visible` 显示高对比 ring。
+- `ui-pressable`：统一 hover/pressed 反馈与过渡。
+- `ui-disabled`：统一禁用态可视与交互阻断。
+- `ui-loading`：统一 loading 光标与透明度反馈。
 
-约束：所有交互组件根元素必须组合上述 hook 类。
+约束：交互组件根元素必须组合这四类，禁止自行实现平行状态体系。
 
-## 4. Theme / Density / i18n 规范
+## 4. 组件状态矩阵
 
-### 4.1 Theme
+| 组件 | hover | pressed | focus-visible | disabled | loading | 备注 |
+|---|---|---|---|---|---|---|
+| Button | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | `ui-loading` | `loading` 与 `disabled` 分离，`blockWhileLoading` 默认阻断 |
+| Input | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | `ui-loading` | 保持可读 placeholder |
+| Textarea | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | `ui-loading` | 多行输入同一控制高度语义 |
+| Select(Listbox) | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | `ui-loading` | 选项高亮只用 token |
+| Tabs | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | N/A | 选中态使用 primary token |
+| Dialog | N/A | N/A | 焦点陷阱 + `ui-focus-ring` | N/A | confirm 按钮可 loading | 遮罩/浮层使用 overlay token |
+| Dropdown(Menu) | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | trigger 可 loading | ESC 关闭、键盘可进入菜单 |
+| Table | 行 hover 可选 | 行按压可选 | 行 focus 可选 | N/A | `loading` skeleton | `ready/loading/empty/error` 四态 |
+| Toast | 可关闭按钮 hover | 按压关闭按钮 | `ui-focus-ring` | N/A | N/A | `info/success/warn/error` 级别 |
+
+## 5. Theme / Density / i18n
+
+### 5.1 Theme
 - 模式：`system | light | dark`
 - 存储键：`goyais.ui.theme`
-- 兼容旧键迁移：`goyais.theme`
-- `system` 模式跟随 `prefers-color-scheme` 实时变更。
-- 初始化先应用主题再挂载应用，避免闪烁。
+- 兼容旧键：`goyais.theme`
+- `system` 跟随 `prefers-color-scheme`。
 
-### 4.2 Density
-- 全局入口：`html[data-density='compact|comfortable']`
-- 仅允许以下统一变量：
+### 5.2 Density
+- 根入口：`html[data-density='compact|comfortable']`
+- 仅允许密度变量：
   - `--ui-control-h`
   - `--ui-control-px`
   - `--ui-control-py`
   - `--ui-page-gap`
   - `--ui-table-row-h`
-- 组件必须通过 `var(...)` 消费；禁止组件私有密度变量。
-- 默认：`compact`
-- 存储键：`goyais.ui.density`
+- 组件必须用 `var(...)` 消费，不得定义组件私有密度体系。
 
-### 4.3 i18n
-- 语言：`zh-CN` 与 `en-US`
-- key 命名：
-  - `nav.*`
-  - `common.*`
-  - `page.*`
-  - `status.*`
-  - `error.*`
-- fallback 链路（固定）：`当前 locale -> en-US -> key`
+### 5.3 i18n
+- 语言：`zh-CN` / `en-US`
+- key 命名空间：`nav.*` / `common.*` / `page.*` / `status.*` / `error.*`
+- 缺失策略固定：`当前 locale -> en-US -> key`
 - 开发态开启 missing warn。
-- locale 存储键：`goyais.ui.locale`
-- 兼容旧键迁移：`goyais.locale`
 
-### 4.4 后端 messageKey 对齐
-- 错误结构：`error: { code, messageKey, details }`
-- 前端通过统一翻译入口将 `error.messageKey` 映射为 i18n key。
-- 建议统一展示组件：`ErrorBanner`。
+### 5.4 messageKey 对齐
+- 后端错误结构：`error: { code, messageKey, details }`
+- 前端通过统一翻译入口映射 `messageKey`，并由 `ErrorBanner` 渲染。
 
-## 5. 基础布局规范
+## 6. 布局规范
 
-### 5.1 AppShell
-- 结构：`TopBar + SideNav + Content`
-- 侧边导航固定承载 `/` `/canvas` `/commands` `/assets` `/plugins` `/streams` `/settings`
-- 路由模式固定 `createWebHistory`，不启用 hash/SSR。
+### 6.1 Shell
+- `AppShell = TopBar + SideNav + Content`
+- 路由保持 `createWebHistory`（兼容 single-binary SPA fallback）。
 
-### 5.2 页面模板
-- 列表页：`PageHeader + SectionCard(Table + Pagination)`
-- 详情页：`PageHeader + 多 SectionCard`（状态优先）
-- 画布页：`PageHeader + Canvas Surface`（节点圆角 6-8px）
+### 6.2 SideNav 折叠策略
+- `compact` 下默认折叠。
+- 鼠标 hover 临时展开。
+- 支持 pin 按钮固定展开/折叠。
 
-### 5.3 反馈组件
-- 空态：`EmptyState`
-- 加载：`SkeletonBlock`
-- 错误：`ErrorBanner`
+### 6.3 控制台页骨架
+- 列表页：`PageHeader` + `Filters` + `List` + `Detail`
+- 详情页：状态区 + 元数据区 + 日志区
+- 画布页：画布容器 + 节点信息层
 
-## 6. 组件规范（状态矩阵）
+### 6.4 当前标准页面
+- `/commands`：筛选条 + 左列表 + 右详情/日志
+- `/assets`：筛选条 + 上传按钮（UI 占位）+ 左列表 + 右详情
 
-基础组件清单：
-- `Button`
-- `Input`
-- `Textarea`
-- `Select`
-- `Dialog`
-- `Dropdown`
-- `Tabs`
-- `Badge`
-- `ToastViewport`
-- `Table`
-- `Pagination`
+## 7. 新增组件 Checklist
 
-状态矩阵要求：
-- Hover：使用 `ui-pressable`
-- Pressed：使用 `ui-pressable`
-- Focus：使用 `ui-focus-ring`
-- Disabled：使用 `ui-disabled`
-- Loading：使用 `ui-loading`（适用于可加载组件）
+新增组件前：
+- [ ] 是否复用 tokens 而非硬编码颜色/间距。
+- [ ] 是否接入 `ui-focus-ring`/`ui-pressable`/`ui-disabled`/`ui-loading`。
+- [ ] 是否在 light/dark 下保持对比可读。
+- [ ] 是否在 compact/comfortable 下尺寸一致。
+- [ ] 是否具备键盘路径（Tab、ESC、Enter）与 aria 语义。
+- [ ] 文案是否走 i18n key。
 
-## 7. 新增页面/组件 Checklist
+新增页面前：
+- [ ] 是否遵循控制台信息架构（筛选->列表->详情）。
+- [ ] 是否定义空态/加载态/错误态。
+- [ ] 是否保持 mock 数据与真实接口契约字段同构。
 
-新增页面时：
-- [ ] 使用 `PageHeader` + `SectionCard` 组合。
-- [ ] 颜色/间距/圆角全部来自 tokens。
-- [ ] 交互元素使用四个全局状态 hook 类。
-- [ ] 文字 key 落在规范命名空间。
-- [ ] 深浅色对比可读。
-- [ ] compact/comfortable 两档密度可读。
+## 8. 验收要点（Thread B）
 
-新增组件时：
-- [ ] `var(...)` 消费统一 density 变量。
-- [ ] 不新增样式语义型 Tailwind 插件。
-- [ ] 无障碍键盘路径可用（focus-visible、ESC、Tab 顺序）。
-- [ ] 错误与状态文案使用 i18n key，不写死业务中文。
-
-## 8. 验收项（Thread B）
-
-- `pnpm -C web dev` 可启动。
-- 主题 `system/light/dark` 切换生效且刷新后保持。
-- `zh-CN/en-US` 切换生效。
-- `compact/comfortable` 至少影响按钮、输入、表格行高、页面间距。
-- focus ring 在 light/dark 均清晰可见。
-- Dialog/Dropdown 键盘可访问性通过：
-  - Dialog：焦点进入、`ESC` 关闭、`Tab/Shift+Tab` 循环。
-  - Dropdown：键盘打开、焦点进入菜单、`ESC` 关闭、`Tab` 行为可预期。
+- `pnpm -C web typecheck` 与 `pnpm -C web build` 必须通过。
+- 主题/语言/密度切换刷新后保持。
+- `focus ring` 在 light/dark 可见。
+- Dialog/Dropdown 键盘路径通过（focus 进入、ESC 关闭、Tab 路径正确）。
+- `/commands` 与 `/assets` 双栏交互可用。
