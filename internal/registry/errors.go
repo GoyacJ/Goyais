@@ -7,6 +7,7 @@ var (
 	ErrInvalidRequest     = errors.New("invalid registry request")
 	ErrInvalidCursor      = errors.New("invalid cursor")
 	ErrCapabilityNotFound = errors.New("capability not found")
+	ErrAlgorithmNotFound  = errors.New("algorithm not found")
 	ErrForbidden          = errors.New("forbidden")
 )
 

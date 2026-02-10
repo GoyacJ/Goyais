@@ -24,6 +24,8 @@ tags:
     description: DAG 模板
   - name: WorkflowRun
     description: 运行与回放
+  - name: Algorithm
+    description: 算法运行（domain sugar -> command）
   - name: Registry
     description: 能力与算法注册中心
   - name: PluginMarket
@@ -854,6 +856,44 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /algorithms/{algorithmId}:run:
+    post:
+      tags: [Algorithm]
+      summary: Run algorithm (domain sugar -> command)
+      operationId: runAlgorithm
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/AlgorithmId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlgorithmRunRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseAlgorithmRun'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /registry/capabilities:
     get:
       tags: [Registry]
@@ -941,6 +981,35 @@ paths:
         '400':
           $ref: '#/components/responses/ErrorResponse'
         '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /registry/algorithms/{algorithmId}:
+    get:
+      tags: [Registry]
+      summary: Get algorithm
+      operationId: getAlgorithm
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/AlgorithmId'
+      responses:
+        '200':
+          description: Algorithm detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Algorithm'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
           $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
@@ -1494,6 +1563,12 @@ components:
       required: true
       schema:
         type: string
+    AlgorithmId:
+      name: algorithmId
+      in: path
+      required: true
+      schema:
+        type: string
     InstallId:
       name: installId
       in: path
@@ -1669,7 +1744,7 @@ components:
             支持的关键 commandType（v0.1）包括：
             `asset.upload`、`share.create`、`share.delete`、
             `workflow.createDraft`、`workflow.patch`、`workflow.publish`、
-            `workflow.run`、`workflow.retry`、`workflow.cancel`、
+            `workflow.run`、`workflow.retry`、`workflow.cancel`、`algorithm.run`、
             `plugin.upload`、`plugin.install`、`plugin.enable`、
             `plugin.disable`、`plugin.rollback`、
             `stream.create`、`stream.record.start`、`stream.record.stop`、`stream.kick`。
@@ -2010,6 +2085,47 @@ components:
               type: object
               additionalProperties: true
 
+    AlgorithmRunRequest:
+      type: object
+      required: [inputs]
+      properties:
+        inputs:
+          type: object
+          additionalProperties: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        mode:
+          type: string
+          description: 运行模式，默认 `sync`。
+          example: sync
+
+    AlgorithmRunResource:
+      type: object
+      required: [id, algorithmId, workflowRunId, status]
+      properties:
+        id:
+          type: string
+        algorithmId:
+          type: string
+        workflowRunId:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, succeeded, failed, canceled]
+        outputs:
+          type: object
+          additionalProperties: true
+        assetIds:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
     CapabilityProvider:
       allOf:
         - $ref: '#/components/schemas/ResourceBase'
@@ -2146,6 +2262,15 @@ components:
       properties:
         resource:
           $ref: '#/components/schemas/WorkflowRun'
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponseAlgorithmRun:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          $ref: '#/components/schemas/AlgorithmRunResource'
         commandRef:
           $ref: '#/components/schemas/CommandRef'
 

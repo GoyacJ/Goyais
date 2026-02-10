@@ -40,6 +40,26 @@ func (r *SQLiteRepository) GetCapabilityForAccess(ctx context.Context, req comma
 	return item, nil
 }
 
+func (r *SQLiteRepository) GetAlgorithmForAccess(ctx context.Context, req command.RequestContext, algorithmID string) (Algorithm, error) {
+	row := r.db.QueryRowContext(
+		ctx,
+		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json, name, version, template_ref, defaults_json, constraints_json, dependencies_json, status, created_at, updated_at
+		 FROM algorithms
+		 WHERE id = ? AND tenant_id = ? AND workspace_id = ?`,
+		strings.TrimSpace(algorithmID),
+		req.TenantID,
+		req.WorkspaceID,
+	)
+	item, err := scanSQLiteAlgorithm(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Algorithm{}, ErrAlgorithmNotFound
+	}
+	if err != nil {
+		return Algorithm{}, fmt.Errorf("query algorithm for access: %w", err)
+	}
+	return item, nil
+}
+
 func (r *SQLiteRepository) ListCapabilities(ctx context.Context, params ListParams) (CapabilityListResult, error) {
 	page, pageSize := normalizeListParams(params.Page, params.PageSize)
 	now := time.Now().UTC().Format(time.RFC3339Nano)

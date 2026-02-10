@@ -45,6 +45,27 @@ func (s *Service) ListAlgorithms(ctx context.Context, params ListParams) (Algori
 	return s.repo.ListAlgorithms(ctx, params)
 }
 
+func (s *Service) GetAlgorithm(ctx context.Context, req command.RequestContext, algorithmID string) (Algorithm, error) {
+	algorithmID = strings.TrimSpace(algorithmID)
+	if algorithmID == "" {
+		return Algorithm{}, ErrInvalidRequest
+	}
+
+	item, err := s.repo.GetAlgorithmForAccess(ctx, req, algorithmID)
+	if err != nil {
+		return Algorithm{}, err
+	}
+
+	allowed, reason, err := s.authorize(ctx, req, item.TenantID, item.WorkspaceID, item.OwnerID, item.Visibility, ResourceTypeAlgorithm, item.ID, command.PermissionRead)
+	if err != nil {
+		return Algorithm{}, err
+	}
+	if !allowed {
+		return Algorithm{}, &ForbiddenError{Reason: reason}
+	}
+	return item, nil
+}
+
 func (s *Service) ListProviders(ctx context.Context, params ListParams) (ProviderListResult, error) {
 	return s.repo.ListProviders(ctx, params)
 }
