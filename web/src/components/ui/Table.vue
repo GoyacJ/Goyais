@@ -25,8 +25,10 @@
           ]"
           :role="interactiveRows ? 'button' : undefined"
           :tabindex="interactiveRows ? 0 : undefined"
-          @click="interactiveRows && emit('rowClick', { row, index })"
-          @keydown.enter="interactiveRows && emit('rowClick', { row, index })"
+          :aria-selected="interactiveRows ? selectedRowIndex === index : undefined"
+          @click="onRowActivate(row, index)"
+          @keydown.enter.prevent="onRowActivate(row, index)"
+          @keydown.space.prevent="onRowActivate(row, index)"
         >
           <td
             v-for="column in columns"
@@ -76,7 +78,13 @@ const emit = defineEmits<{
   (e: 'rowClick', payload: { row: Record<string, string | number>; index: number }): void
 }>()
 
-withDefaults(
+function onRowActivate(row: Record<string, string | number>, index: number): void {
+  if (!props.interactiveRows) {
+    return
+  }
+  emit('rowClick', { row, index })
+}
+const props = withDefaults(
   defineProps<{
     columns: TableColumn[]
     rows: Array<Record<string, string | number>>

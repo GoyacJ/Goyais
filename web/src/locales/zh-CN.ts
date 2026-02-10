@@ -48,6 +48,11 @@ export default {
     layoutTopnav: '顶栏',
     layoutFocus: '专注',
     resetWindowLayout: '重置窗口布局',
+    dismissNotification: '关闭通知',
+    windowMoveHandle: '移动窗口：{title}',
+    windowResizeRight: '向右调整窗口：{title}',
+    windowResizeBottom: '向下调整窗口：{title}',
+    windowResizeCorner: '同时调整窗口宽高：{title}',
   },
   page: {
     home: {
