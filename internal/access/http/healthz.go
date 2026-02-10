@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -17,15 +18,28 @@ type HealthzResponse struct {
 	Providers config.ProviderConfig `json:"providers"`
 }
 
-func NewHealthzHandler(cfg config.Config) http.Handler {
+type HealthChecker interface {
+	PingContext(ctx context.Context) error
+}
+
+func NewHealthzHandler(cfg config.Config, checker HealthChecker) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
 
+		status := "ok"
+		if checker != nil {
+			ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+			defer cancel()
+			if err := checker.PingContext(ctx); err != nil {
+				status = "degraded"
+			}
+		}
+
 		resp := HealthzResponse{
-			Status:    "ok",
+			Status:    status,
 			Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 			Version:   buildinfo.Version,
 			Mode:      cfg.Profile,

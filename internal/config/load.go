@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -58,6 +60,13 @@ func defaultsForProfile(profile string) Config {
 			ObjectStore: "local",
 			Stream:      "mediamtx",
 		},
+		DB: DBConfig{
+			DSN: "file:goyais.db",
+		},
+		Command: CommandConfig{
+			IdempotencyTTL: 300 * time.Second,
+			MaxConcurrency: 32,
+		},
 	}
 
 	if profile == ProfileFull {
@@ -69,6 +78,7 @@ func defaultsForProfile(profile string) Config {
 			ObjectStore: "minio",
 			Stream:      "mediamtx",
 		}
+		cfg.DB.DSN = "postgres://goyais:goyais@127.0.0.1:5432/goyais?sslmode=disable"
 	}
 
 	return cfg
@@ -83,6 +93,17 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	}
 	if v := strings.ToLower(strings.TrimSpace(fc.DB.Driver)); v != "" {
 		cfg.Providers.DB = v
+	}
+	if v := strings.TrimSpace(fc.DB.DSN); v != "" {
+		cfg.DB.DSN = v
+	}
+	if v := strings.TrimSpace(fc.Command.IdempotencyTTL); v != "" {
+		if dur, err := time.ParseDuration(v); err == nil {
+			cfg.Command.IdempotencyTTL = dur
+		}
+	}
+	if fc.Command.MaxConcurrency > 0 {
+		cfg.Command.MaxConcurrency = fc.Command.MaxConcurrency
 	}
 	if v := strings.ToLower(strings.TrimSpace(fc.Cache.Provider)); v != "" {
 		cfg.Providers.Cache = v
@@ -107,6 +128,19 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_DB_DRIVER"))); v != "" {
 		cfg.Providers.DB = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_DB_DSN")); v != "" {
+		cfg.DB.DSN = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_COMMAND_IDEMPOTENCY_TTL")); v != "" {
+		if dur, err := time.ParseDuration(v); err == nil {
+			cfg.Command.IdempotencyTTL = dur
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_COMMAND_MAX_CONCURRENCY")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.Command.MaxConcurrency = n
+		}
 	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_CACHE_PROVIDER"))); v != "" {
 		cfg.Providers.Cache = v
@@ -180,6 +214,15 @@ func validate(cfg Config) error {
 	}
 	if strings.TrimSpace(cfg.Server.Addr) == "" {
 		return errors.New("server.addr cannot be empty")
+	}
+	if strings.TrimSpace(cfg.DB.DSN) == "" {
+		return errors.New("db.dsn cannot be empty")
+	}
+	if cfg.Command.IdempotencyTTL <= 0 {
+		return errors.New("command.idempotency_ttl must be positive")
+	}
+	if cfg.Command.MaxConcurrency <= 0 {
+		return errors.New("command.max_concurrency must be positive")
 	}
 
 	return nil

@@ -1,10 +1,14 @@
 package config
 
+import "time"
+
 // Config is the effective runtime configuration after applying defaults, YAML, and ENV.
 type Config struct {
 	Profile   string          `json:"profile"`
 	Server    ServerConfig    `json:"server"`
 	Providers ProviderConfig  `json:"providers"`
+	DB        DBConfig        `json:"db"`
+	Command   CommandConfig   `json:"command"`
 	Paths     RuntimePathConf `json:"paths"`
 }
 
@@ -20,6 +24,15 @@ type ProviderConfig struct {
 	Stream      string `json:"stream"`
 }
 
+type DBConfig struct {
+	DSN string `json:"dsn"`
+}
+
+type CommandConfig struct {
+	IdempotencyTTL time.Duration `json:"idempotencyTtl"`
+	MaxConcurrency int           `json:"maxConcurrency"`
+}
+
 type RuntimePathConf struct {
 	ConfigFile string `json:"configFile"`
 }
@@ -31,7 +44,12 @@ type fileConfig struct {
 	} `yaml:"server"`
 	DB struct {
 		Driver string `yaml:"driver"`
+		DSN    string `yaml:"dsn"`
 	} `yaml:"db"`
+	Command struct {
+		IdempotencyTTL string `yaml:"idempotency_ttl"`
+		MaxConcurrency int    `yaml:"max_concurrency"`
+	} `yaml:"command"`
 	Cache struct {
 		Provider string `yaml:"provider"`
 	} `yaml:"cache"`
