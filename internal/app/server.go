@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"time"
 
@@ -124,6 +125,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 				"vector":      readinessFromErr(vectorProvider.Ping(ctx)),
 				"objectStore": readinessFromErr(objectStore.Ping(ctx)),
 				"stream":      {Status: "ready"},
+				"event_bus":   eventBusReadiness(ctx, cfg),
 			}
 			return out
 		},
@@ -154,4 +156,25 @@ func readinessFromErr(err error) httpapi.ProviderStatus {
 		}
 	}
 	return httpapi.ProviderStatus{Status: "ready"}
+}
+
+func eventBusReadiness(ctx context.Context, cfg config.Config) httpapi.ProviderStatus {
+	switch cfg.Providers.EventBus {
+	case "memory":
+		return httpapi.ProviderStatus{Status: "ready"}
+	case "kafka":
+		if len(cfg.EventBus.Kafka.Brokers) == 0 {
+			return httpapi.ProviderStatus{Status: "degraded", Error: "missing kafka broker"}
+		}
+		broker := cfg.EventBus.Kafka.Brokers[0]
+		dialer := &net.Dialer{Timeout: 1 * time.Second}
+		conn, err := dialer.DialContext(ctx, "tcp", broker)
+		if err != nil {
+			return httpapi.ProviderStatus{Status: "degraded", Error: err.Error()}
+		}
+		_ = conn.Close()
+		return httpapi.ProviderStatus{Status: "ready"}
+	default:
+		return httpapi.ProviderStatus{Status: "degraded", Error: "unsupported event bus provider"}
+	}
 }

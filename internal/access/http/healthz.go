@@ -49,6 +49,7 @@ func NewHealthzHandler(cfg config.Config, checker HealthChecker, providerProbe P
 				"vector":      {Status: "ready"},
 				"objectStore": {Status: "ready"},
 				"stream":      {Status: "ready"},
+				"event_bus":   {Status: "ready"},
 			},
 		}
 		if checker != nil {
