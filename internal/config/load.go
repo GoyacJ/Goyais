@@ -39,6 +39,7 @@ func Load() (Config, error) {
 
 	mergeFileConfig(&cfg, yamlCfg)
 	applyEnvOverrides(&cfg)
+	applyDerivedDefaults(&cfg)
 
 	if err := validate(cfg); err != nil {
 		return Config{}, err
@@ -63,6 +64,18 @@ func defaultsForProfile(profile string) Config {
 		DB: DBConfig{
 			DSN: "file:goyais.db",
 		},
+		ObjectStore: ObjectStoreConfig{
+			LocalRoot: "./data/objects",
+			Bucket:    "goyais-local",
+			Region:    "us-east-1",
+			UseSSL:    false,
+		},
+		Cache: CacheConfig{
+			RedisAddr: "127.0.0.1:6379",
+		},
+		Vector: VectorConfig{
+			RedisAddr: "127.0.0.1:6379",
+		},
 		Command: CommandConfig{
 			IdempotencyTTL: 300 * time.Second,
 			MaxConcurrency: 32,
@@ -82,6 +95,11 @@ func defaultsForProfile(profile string) Config {
 			Stream:      "mediamtx",
 		}
 		cfg.DB.DSN = "postgres://goyais:goyais@127.0.0.1:5432/goyais?sslmode=disable"
+		cfg.ObjectStore.Bucket = "goyais"
+		cfg.ObjectStore.Endpoint = "127.0.0.1:9000"
+		cfg.ObjectStore.AccessKey = "minioadmin"
+		cfg.ObjectStore.SecretKey = "minioadmin"
+		cfg.ObjectStore.UseSSL = false
 	}
 
 	return cfg
@@ -114,11 +132,38 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	if v := strings.ToLower(strings.TrimSpace(fc.Cache.Provider)); v != "" {
 		cfg.Providers.Cache = v
 	}
+	if v := strings.TrimSpace(fc.Cache.RedisAddr); v != "" {
+		cfg.Cache.RedisAddr = v
+	}
 	if v := strings.ToLower(strings.TrimSpace(fc.Vector.Provider)); v != "" {
 		cfg.Providers.Vector = v
 	}
+	if v := strings.TrimSpace(fc.Vector.RedisAddr); v != "" {
+		cfg.Vector.RedisAddr = v
+	}
 	if v := strings.ToLower(strings.TrimSpace(fc.ObjectStore.Provider)); v != "" {
 		cfg.Providers.ObjectStore = v
+	}
+	if v := strings.TrimSpace(fc.ObjectStore.LocalRoot); v != "" {
+		cfg.ObjectStore.LocalRoot = v
+	}
+	if v := strings.TrimSpace(fc.ObjectStore.Bucket); v != "" {
+		cfg.ObjectStore.Bucket = v
+	}
+	if v := strings.TrimSpace(fc.ObjectStore.Endpoint); v != "" {
+		cfg.ObjectStore.Endpoint = v
+	}
+	if v := strings.TrimSpace(fc.ObjectStore.AccessKey); v != "" {
+		cfg.ObjectStore.AccessKey = v
+	}
+	if v := strings.TrimSpace(fc.ObjectStore.SecretKey); v != "" {
+		cfg.ObjectStore.SecretKey = v
+	}
+	if v := strings.TrimSpace(fc.ObjectStore.Region); v != "" {
+		cfg.ObjectStore.Region = v
+	}
+	if fc.ObjectStore.UseSSL != nil {
+		cfg.ObjectStore.UseSSL = *fc.ObjectStore.UseSSL
 	}
 	if v := strings.ToLower(strings.TrimSpace(fc.Stream.Provider)); v != "" {
 		cfg.Providers.Stream = v
@@ -156,14 +201,67 @@ func applyEnvOverrides(cfg *Config) {
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_CACHE_PROVIDER"))); v != "" {
 		cfg.Providers.Cache = v
 	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_CACHE_REDIS_ADDR")); v != "" {
+		cfg.Cache.RedisAddr = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_REDIS_ADDR")); v != "" {
+		cfg.Cache.RedisAddr = v
+	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_VECTOR_PROVIDER"))); v != "" {
 		cfg.Providers.Vector = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_VECTOR_REDIS_ADDR")); v != "" {
+		cfg.Vector.RedisAddr = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_REDIS_ADDR")); v != "" {
+		cfg.Vector.RedisAddr = v
 	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_OBJECT_STORE_PROVIDER"))); v != "" {
 		cfg.Providers.ObjectStore = v
 	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_OBJECT_STORE_LOCAL_ROOT")); v != "" {
+		cfg.ObjectStore.LocalRoot = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_OBJECT_STORE_BUCKET")); v != "" {
+		cfg.ObjectStore.Bucket = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_OBJECT_STORE_ENDPOINT")); v != "" {
+		cfg.ObjectStore.Endpoint = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_OBJECT_STORE_ACCESS_KEY")); v != "" {
+		cfg.ObjectStore.AccessKey = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_OBJECT_STORE_SECRET_KEY")); v != "" {
+		cfg.ObjectStore.SecretKey = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_OBJECT_STORE_REGION")); v != "" {
+		cfg.ObjectStore.Region = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_OBJECT_STORE_USE_SSL")); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			cfg.ObjectStore.UseSSL = parsed
+		}
+	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_STREAM_PROVIDER"))); v != "" {
 		cfg.Providers.Stream = v
+	}
+}
+
+func applyDerivedDefaults(cfg *Config) {
+	if strings.TrimSpace(cfg.Cache.RedisAddr) == "" {
+		cfg.Cache.RedisAddr = "127.0.0.1:6379"
+	}
+	if strings.TrimSpace(cfg.Vector.RedisAddr) == "" {
+		cfg.Vector.RedisAddr = cfg.Cache.RedisAddr
+	}
+	if strings.TrimSpace(cfg.ObjectStore.LocalRoot) == "" {
+		cfg.ObjectStore.LocalRoot = "./data/objects"
+	}
+	if strings.TrimSpace(cfg.ObjectStore.Bucket) == "" {
+		cfg.ObjectStore.Bucket = "goyais-local"
+	}
+	if strings.TrimSpace(cfg.ObjectStore.Region) == "" {
+		cfg.ObjectStore.Region = "us-east-1"
 	}
 }
 
@@ -223,6 +321,40 @@ func validate(cfg Config) error {
 	if !contains([]string{"mediamtx"}, cfg.Providers.Stream) {
 		return fmt.Errorf("invalid stream provider: %s", cfg.Providers.Stream)
 	}
+
+	if cfg.Providers.Cache == "redis" && strings.TrimSpace(cfg.Cache.RedisAddr) == "" {
+		return errors.New("cache.redis_addr cannot be empty when cache.provider=redis")
+	}
+	if cfg.Providers.Vector == "redis_stack" && strings.TrimSpace(cfg.Vector.RedisAddr) == "" {
+		return errors.New("vector.redis_addr cannot be empty when vector.provider=redis_stack")
+	}
+	switch cfg.Providers.ObjectStore {
+	case "local":
+		if strings.TrimSpace(cfg.ObjectStore.LocalRoot) == "" {
+			return errors.New("object_store.local_root cannot be empty when object_store.provider=local")
+		}
+	case "minio":
+		if strings.TrimSpace(cfg.ObjectStore.Endpoint) == "" {
+			return errors.New("object_store.endpoint cannot be empty when object_store.provider=minio")
+		}
+		if strings.TrimSpace(cfg.ObjectStore.AccessKey) == "" || strings.TrimSpace(cfg.ObjectStore.SecretKey) == "" {
+			return errors.New("object_store access_key/secret_key cannot be empty when object_store.provider=minio")
+		}
+		if strings.TrimSpace(cfg.ObjectStore.Bucket) == "" {
+			return errors.New("object_store.bucket cannot be empty when object_store.provider=minio")
+		}
+	case "s3":
+		if strings.TrimSpace(cfg.ObjectStore.Endpoint) == "" {
+			return errors.New("object_store.endpoint cannot be empty when object_store.provider=s3")
+		}
+		if strings.TrimSpace(cfg.ObjectStore.AccessKey) == "" || strings.TrimSpace(cfg.ObjectStore.SecretKey) == "" {
+			return errors.New("object_store access_key/secret_key cannot be empty when object_store.provider=s3")
+		}
+		if strings.TrimSpace(cfg.ObjectStore.Bucket) == "" {
+			return errors.New("object_store.bucket cannot be empty when object_store.provider=s3")
+		}
+	}
+
 	if strings.TrimSpace(cfg.Server.Addr) == "" {
 		return errors.New("server.addr cannot be empty")
 	}

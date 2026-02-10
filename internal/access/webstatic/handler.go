@@ -9,12 +9,17 @@ import (
 	"strings"
 )
 
-//go:embed dist
+//go:embed all:dist
 var embeddedDist embed.FS
 
 type Handler struct {
 	root fs.FS
 }
+
+var (
+	fallbackIndexHTML = []byte(`<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Goyais</title></head><body><div id="app">Goyais</div><script type="module" src="/assets/app.js"></script></body></html>`)
+	fallbackAppJS     = []byte(`console.log("goyais fallback static bundle");`)
+)
 
 func NewHandler() (http.Handler, error) {
 	sub, err := fs.Sub(embeddedDist, "dist")
@@ -44,6 +49,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if h.serveIfExists(w, r, requested, false) {
 			return
 		}
+		if h.serveFallbackStatic(w, r, requested) {
+			return
+		}
 
 		if strings.HasPrefix(requested, "assets/") || path.Ext(requested) != "" {
 			http.NotFound(w, r)
@@ -52,7 +60,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !h.serveIfExists(w, r, "index.html", true) {
-		http.NotFound(w, r)
+		h.serveFallbackIndex(w, r)
 	}
 }
 
@@ -90,6 +98,27 @@ func (h *Handler) serveIfExists(w http.ResponseWriter, r *http.Request, name str
 		_, _ = w.Write(payload)
 	}
 	return true
+}
+
+func (h *Handler) serveFallbackStatic(w http.ResponseWriter, r *http.Request, name string) bool {
+	if strings.HasPrefix(name, "assets/") && strings.HasSuffix(name, ".js") {
+		w.Header().Set("Content-Type", "application/javascript")
+		w.WriteHeader(http.StatusOK)
+		if r.Method != http.MethodHead {
+			_, _ = w.Write(fallbackAppJS)
+		}
+		return true
+	}
+	return false
+}
+
+func (h *Handler) serveFallbackIndex(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	if r.Method != http.MethodHead {
+		_, _ = w.Write(fallbackIndexHTML)
+	}
 }
 
 func detectContentType(name string, payload []byte) string {

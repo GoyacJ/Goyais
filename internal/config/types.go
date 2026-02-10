@@ -4,13 +4,16 @@ import "time"
 
 // Config is the effective runtime configuration after applying defaults, YAML, and ENV.
 type Config struct {
-	Profile   string          `json:"profile"`
-	Server    ServerConfig    `json:"server"`
-	Providers ProviderConfig  `json:"providers"`
-	DB        DBConfig        `json:"db"`
-	Command   CommandConfig   `json:"command"`
-	Authz     AuthzConfig     `json:"authz"`
-	Paths     RuntimePathConf `json:"paths"`
+	Profile     string            `json:"profile"`
+	Server      ServerConfig      `json:"server"`
+	Providers   ProviderConfig    `json:"providers"`
+	DB          DBConfig          `json:"db"`
+	ObjectStore ObjectStoreConfig `json:"objectStore"`
+	Cache       CacheConfig       `json:"cache"`
+	Vector      VectorConfig      `json:"vector"`
+	Command     CommandConfig     `json:"command"`
+	Authz       AuthzConfig       `json:"authz"`
+	Paths       RuntimePathConf   `json:"paths"`
 }
 
 type ServerConfig struct {
@@ -27,6 +30,24 @@ type ProviderConfig struct {
 
 type DBConfig struct {
 	DSN string `json:"dsn"`
+}
+
+type ObjectStoreConfig struct {
+	LocalRoot string `json:"localRoot"`
+	Bucket    string `json:"bucket"`
+	Endpoint  string `json:"endpoint"`
+	AccessKey string `json:"accessKey"`
+	SecretKey string `json:"secretKey"`
+	Region    string `json:"region"`
+	UseSSL    bool   `json:"useSsl"`
+}
+
+type CacheConfig struct {
+	RedisAddr string `json:"redisAddr"`
+}
+
+type VectorConfig struct {
+	RedisAddr string `json:"redisAddr"`
 }
 
 type CommandConfig struct {
@@ -59,13 +80,22 @@ type fileConfig struct {
 		AllowPrivateToPublic bool `yaml:"allow_private_to_public"`
 	} `yaml:"authz"`
 	Cache struct {
-		Provider string `yaml:"provider"`
+		Provider  string `yaml:"provider"`
+		RedisAddr string `yaml:"redis_addr"`
 	} `yaml:"cache"`
 	Vector struct {
-		Provider string `yaml:"provider"`
+		Provider  string `yaml:"provider"`
+		RedisAddr string `yaml:"redis_addr"`
 	} `yaml:"vector"`
 	ObjectStore struct {
-		Provider string `yaml:"provider"`
+		Provider  string `yaml:"provider"`
+		LocalRoot string `yaml:"local_root"`
+		Bucket    string `yaml:"bucket"`
+		Endpoint  string `yaml:"endpoint"`
+		AccessKey string `yaml:"access_key"`
+		SecretKey string `yaml:"secret_key"`
+		Region    string `yaml:"region"`
+		UseSSL    *bool  `yaml:"use_ssl"`
 	} `yaml:"object_store"`
 	Stream struct {
 		Provider string `yaml:"provider"`
