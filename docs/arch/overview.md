@@ -191,6 +191,10 @@ Command 执行管道（必须）：
 - `GOYAIS_OBJECT_STORE_LOCAL_ROOT=./data/objects`
 - `GOYAIS_STREAM_PROVIDER=mediamtx`
 
+PostgreSQL DSN 规则（冻结）：
+- 当 `db.driver=postgres` 时，`GOYAIS_DB_DSN` 必须显式包含 `dbname`。
+- 示例（无敏感信息）：`GOYAIS_DB_DSN='dbname=postgres sslmode=disable'`
+
 Asset 本地对象路径（冻结）：
 - `object_store.local_root` 默认 `./data/objects`
 - 相对路径固定：`tenant/workspace/YYYY/MM/DD/<sha256>`
