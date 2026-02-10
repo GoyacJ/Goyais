@@ -1,6 +1,6 @@
 <template>
-  <section class="ui-card">
-    <header class="flex flex-wrap items-center justify-between gap-2">
+  <section class="ui-detail-block">
+    <header class="ui-detail-header">
       <button
         type="button"
         class="ui-control ui-focus-ring ui-pressable text-sm"
@@ -19,7 +19,7 @@
 
     <pre
       v-if="expanded"
-      class="ui-log-surface ui-monospace ui-scrollbar mt-3 max-h-64 overflow-auto p-3 text-xs leading-relaxed"
+      class="ui-log-surface ui-monospace ui-scrollbar max-h-64 overflow-auto p-3 text-xs leading-relaxed"
     ><code>{{ lines.join('\n') }}</code></pre>
   </section>
 </template>
