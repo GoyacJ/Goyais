@@ -17,6 +17,7 @@ import (
 func Open(ctx context.Context, cfg config.Config) (*sql.DB, error) {
 	driver := strings.ToLower(strings.TrimSpace(cfg.Providers.DB))
 	var sqlDriver string
+
 	switch driver {
 	case "sqlite":
 		sqlDriver = "sqlite"
@@ -30,6 +31,7 @@ func Open(ctx context.Context, cfg config.Config) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
+
 	if driver == "sqlite" {
 		db.SetMaxOpenConns(1)
 	}

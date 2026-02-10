@@ -173,6 +173,15 @@ Command 执行管道（必须）：
   - `ownerId = X-User-Id`；
   - 缺失任一 header 返回 `400 MISSING_CONTEXT` + `error.context.missing`。
 
+### 7.2 Thread #3 过渡模式（未接 JWT）
+- 在 JWT 尚未接入前，`/api/v1/commands*` 请求必须携带：
+  - `X-Tenant-Id`
+  - `X-Workspace-Id`
+  - `X-User-Id`
+- 服务端映射：`ownerId = X-User-Id`。
+- 缺任一 header 返回：`400 MISSING_CONTEXT + error.context.missing`，并在 `details.missingHeaders` 返回缺失列表。
+- `GET /api/v1/system/healthz` 作为 `GET /api/v1/healthz` 的别名端点，返回结构一致。
+
 ## 8. 配置规范
 
 ### 8.1 命名

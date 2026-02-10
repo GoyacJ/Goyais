@@ -84,11 +84,11 @@
 - `id`
 - `tenant_id`
 - `workspace_id`
-- `resource_type`（v0.1 已实现：`command`、`asset`）
+- `resource_type`（asset/workflow_template/workflow_run/plugin/...）
 - `resource_id`
-- `subject_type`（v0.1 API 限制为 `user`）
+- `subject_type`（user/role/workspace）
 - `subject_id`
-- `permissions`（JSON 数组：READ/WRITE/EXECUTE/MANAGE/SHARE，写入时大写/去重/排序）
+- `permissions`（JSON 数组：READ/WRITE/EXECUTE/MANAGE/SHARE）
 - `expires_at`（可空）
 - `created_by`
 - `created_at`
@@ -96,40 +96,17 @@
 建议索引：
 - `(tenant_id, resource_type, resource_id)`
 - `(tenant_id, subject_type, subject_id)`
-- `(tenant_id, workspace_id)`
-
-权限包含查询口径（冻结）：
-- SQLite：`EXISTS (SELECT 1 FROM json_each(a.permissions) p WHERE p.value = 'READ')`
-- PostgreSQL：`a.permissions @> '["READ"]'::jsonb`
 
 ## 3.3 资产与血缘
 
 ### assets
-- `id`（TEXT/UUID）
-- `tenant_id`（NOT NULL）
-- `workspace_id`（NOT NULL）
-- `owner_id`（NOT NULL）
-- `visibility`（`PRIVATE/WORKSPACE/TENANT/PUBLIC`，NOT NULL，默认 `PRIVATE`）
-- `acl_json`（NOT NULL，默认 `[]`，禁止 NULL）
-  - SQLite：`TEXT NOT NULL DEFAULT '[]'`
-  - PostgreSQL：`JSONB NOT NULL DEFAULT '[]'::jsonb`
-- `name`
-- `type`（string，本轮不做硬枚举校验）
-- `mime`
-- `size`
-- `uri`（NOT NULL，本轮固定 `local://<relative_path>`）
-- `hash`（sha256，NOT NULL）
-- `metadata_json`（NOT NULL，默认 `{}`，禁止 NULL）
-  - SQLite：`TEXT NOT NULL DEFAULT '{}'`
-  - PostgreSQL：`JSONB NOT NULL DEFAULT '{}'::jsonb`
-- `status`（本轮最小 `ready/deleted`，默认 `ready`）
-- `created_at`（NOT NULL）
-- `updated_at`（NOT NULL）
-
-local object store 路径规范（冻结）：
-- 不包含原始文件名；
-- 路径结构：`tenant/workspace/YYYY/MM/DD/<sha256>`；
-- `uri` 示例：`local://tenant_a/ws_1/2026/02/10/84ba...`
+- `id, tenant_id, workspace_id, owner_id, visibility`
+- `name, asset_type, mime_type, size_bytes`
+- `uri`（对象存储路径）
+- `hash`（sha256）
+- `metadata`（JSON）
+- `status`（active/archived/deleted）
+- `created_at, updated_at`
 
 ### asset_lineage
 - `id`
@@ -275,28 +252,33 @@ local object store 路径规范（冻结）：
 
 ### commands
 - `id, tenant_id, workspace_id, owner_id`
-- `visibility`（默认 `PRIVATE`）
-- `acl_json`（默认 `[]`，禁止 NULL）
 - `command_type`
 - `payload`（JSON）
 - `status`（accepted/running/succeeded/failed/canceled）
+- `visibility`（默认 `PRIVATE`，NOT NULL）
+- `acl_json`（默认 `[]`，NOT NULL）
 - `result`（JSON）
 - `error_code`
 - `message_key`
 - `accepted_at, finished_at`
 - `created_at, updated_at`
 
+建议索引：
+- `commands(tenant_id, workspace_id, created_at desc, id desc)`（list 固定排序）
+- `commands(id)`
+
 ### command_idempotency
-- `tenant_id, workspace_id, owner_id, idempotency_key`（联合主键）
+- `tenant_id, workspace_id, owner_id`
+- `idempotency_key`
 - `request_hash`
 - `command_id`
 - `expires_at`
 - `created_at`
 
-语义：
-- 查询时仅认为 `expires_at >= now` 的记录有效；
-- 过期记录视为不存在；
-- 创建命令时按“查有效 -> 同 hash 复用 / 异 hash 冲突 -> 不存在或仅过期则 upsert”执行。
+约束与语义：
+- 唯一键：`(tenant_id, workspace_id, owner_id, idempotency_key)`。
+- 查询幂等映射时，仅 `expires_at >= now` 视为有效。
+- 过期记录视为不存在，可在事务内 upsert 覆盖。
 
 ### audit_events
 - `id`
@@ -315,6 +297,13 @@ local object store 路径规范（冻结）：
 - `audit_events(tenant_id, workspace_id, created_at desc)`
 - `audit_events(trace_id)`
 - `audit_events(command_id)`
+
+### command_events
+- `id`
+- `command_id`
+- `event_type`
+- `payload`（JSON）
+- `created_at`
 
 ### context_bundles
 - `id`
@@ -354,9 +343,6 @@ local object store 路径规范（冻结）：
 - JSON：
   - PostgreSQL 使用 `JSONB`。
   - SQLite 使用 `TEXT` 存 JSON 字符串。
-- `assets` 表冻结口径：
-  - SQLite：`acl_json TEXT NOT NULL DEFAULT '[]'`，`metadata_json TEXT NOT NULL DEFAULT '{}'`
-  - PostgreSQL：`acl_json JSONB NOT NULL DEFAULT '[]'::jsonb`，`metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb`
 - 时间：
   - PostgreSQL 使用 `TIMESTAMPTZ`。
   - SQLite 使用 ISO8601 字符串（UTC）。

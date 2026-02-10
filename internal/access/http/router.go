@@ -5,13 +5,25 @@ import (
 	"strings"
 
 	"goyais/internal/access/webstatic"
+	"goyais/internal/command"
 	"goyais/internal/common/errorx"
 	"goyais/internal/config"
 )
 
-func NewRouter(cfg config.Config) (http.Handler, error) {
+type RouterDeps struct {
+	CommandService *command.Service
+	HealthChecker  HealthChecker
+}
+
+func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 	apiMux := http.NewServeMux()
-	apiMux.Handle("/api/v1/healthz", NewHealthzHandler(cfg))
+	healthzHandler := NewHealthzHandler(cfg, deps.HealthChecker)
+	apiMux.Handle("/api/v1/healthz", healthzHandler)
+	apiMux.Handle("/api/v1/system/healthz", healthzHandler)
+	if deps.CommandService != nil {
+		apiMux.Handle("/api/v1/commands", NewCommandCollectionHandler(deps.CommandService))
+		apiMux.Handle("/api/v1/commands/", NewCommandItemHandler(deps.CommandService))
+	}
 
 	staticHandler, err := webstatic.NewHandler()
 	if err != nil {

@@ -7,6 +7,29 @@
 
 所有状态转换必须产生审计事件（`audit_events`）。
 
+## 0. Command Gate
+
+## 0.1 Command 状态
+- `accepted`
+- `running`
+- `succeeded`
+- `failed`
+- `canceled`
+
+## 0.2 Command 转换
+
+| From | Trigger | Guard | To | 审计事件 |
+|---|---|---|---|---|
+| accepted | authorize.allow | Authorize hook 放行 | running | `command.running` |
+| accepted/running | execute.success | 执行结果写入成功 | succeeded | `command.succeeded` |
+| accepted/running | execute.error | 执行失败 | failed | `command.failed` |
+| accepted/running | command.cancel | 具备取消权限 | canceled | `command.canceled` |
+
+## 0.3 幂等约束
+- 若存在 `Idempotency-Key`，必须在同一事务内执行：查有效映射 -> 同 hash 复用/异 hash 冲突 -> 无有效映射则创建并 upsert。
+- 有效映射判定：`expires_at >= now`；过期映射视为不存在。
+- `GET /api/v1/commands` 固定排序 `created_at DESC, id DESC`，cursor 基于 `(created_at,id)` 生成不透明 token。
+
 ## 1. WorkflowRun / StepRun
 
 ## 1.1 WorkflowRun 状态

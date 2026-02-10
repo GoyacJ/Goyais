@@ -11,174 +11,274 @@ import (
 	"goyais/internal/common/errorx"
 )
 
-type commandCreateRequest struct {
-	CommandType string          `json:"commandType"`
-	Payload     json.RawMessage `json:"payload"`
-	Visibility  string          `json:"visibility,omitempty"`
+type commandCollectionHandler struct {
+	service *command.Service
 }
 
-type commandRef struct {
-	CommandID  string `json:"commandId"`
-	Status     string `json:"status"`
-	AcceptedAt string `json:"acceptedAt"`
+type commandItemHandler struct {
+	service *command.Service
 }
 
-func (h *apiHandler) handleCommands(w http.ResponseWriter, r *http.Request) {
-	reqCtx, ok := requireRequestContext(w, r)
-	if !ok {
-		return
-	}
+func NewCommandCollectionHandler(service *command.Service) http.Handler {
+	return &commandCollectionHandler{service: service}
+}
 
+func NewCommandItemHandler(service *command.Service) http.Handler {
+	return &commandItemHandler{service: service}
+}
+
+func (h *commandCollectionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		h.handleCreateCommand(w, r, reqCtx)
+		h.handleCreate(w, r)
 	case http.MethodGet:
-		h.handleListCommands(w, r, reqCtx)
+		h.handleList(w, r)
 	default:
-		http.NotFound(w, r)
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
-func (h *apiHandler) handleCommandByID(w http.ResponseWriter, r *http.Request) {
+func (h *commandItemHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.NotFound(w, r)
+		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	reqCtx, ok := requireRequestContext(w, r)
+
+	prefix := "/api/v1/commands/"
+	if !strings.HasPrefix(r.URL.Path, prefix) {
+		errorx.Write(w, http.StatusNotFound, "COMMAND_NOT_FOUND", "error.command.not_found", map[string]any{"path": r.URL.Path})
+		return
+	}
+
+	commandID := strings.TrimPrefix(r.URL.Path, prefix)
+	if strings.TrimSpace(commandID) == "" || strings.Contains(commandID, "/") {
+		errorx.Write(w, http.StatusNotFound, "COMMAND_NOT_FOUND", "error.command.not_found", map[string]any{"path": r.URL.Path})
+		return
+	}
+
+	reqCtx, ok := extractRequestContext(w, r)
 	if !ok {
 		return
 	}
-	id := pathID("/api/v1/commands/", r.URL.Path)
-	if id == "" {
-		errorx.Write(w, http.StatusBadRequest, "INVALID_COMMAND_REQUEST", "error.command.invalid_request", nil)
-		return
-	}
-	item, err := h.commandService.Get(r.Context(), reqCtx, id)
+
+	cmd, err := h.service.Get(r.Context(), reqCtx, commandID)
 	if err != nil {
 		writeCommandError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, toCommandPayload(item))
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(toCommandResource(cmd))
 }
 
-func (h *apiHandler) handleCreateCommand(w http.ResponseWriter, r *http.Request, reqCtx command.RequestContext) {
-	var req commandCreateRequest
+func (h *commandCollectionHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
+	reqCtx, ok := extractRequestContext(w, r)
+	if !ok {
+		return
+	}
+
+	var req struct {
+		CommandType string          `json:"commandType"`
+		Payload     json.RawMessage `json:"payload"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		errorx.Write(w, http.StatusBadRequest, "INVALID_COMMAND_REQUEST", "error.command.invalid_request", nil)
+		errorx.Write(w, http.StatusBadRequest, "INVALID_JSON", "error.request.invalid_json", map[string]any{"reason": err.Error()})
 		return
 	}
-	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-	item, err := h.commandService.Submit(r.Context(), reqCtx, req.CommandType, req.Payload, idempotencyKey, req.Visibility)
+
+	cmd, err := h.service.Submit(
+		r.Context(),
+		reqCtx,
+		req.CommandType,
+		req.Payload,
+		strings.TrimSpace(r.Header.Get("Idempotency-Key")),
+	)
 	if err != nil {
 		writeCommandError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]any{
-		"resource": toCommandPayload(item),
-		"commandRef": commandRef{
-			CommandID:  item.ID,
-			Status:     item.Status,
-			AcceptedAt: item.AcceptedAt.UTC().Format(timeRFC3339Nano),
+
+	resp := map[string]any{
+		"resource": toCommandResource(cmd),
+		"commandRef": map[string]any{
+			"commandId":  cmd.ID,
+			"status":     cmd.Status,
+			"acceptedAt": cmd.AcceptedAt.UTC().Format(timeRFC3339Nano),
 		},
-	})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
-func (h *apiHandler) handleListCommands(w http.ResponseWriter, r *http.Request, reqCtx command.RequestContext) {
-	page := parsePositiveInt(r.URL.Query().Get("page"), 1)
-	pageSize := parsePositiveInt(r.URL.Query().Get("pageSize"), 20)
-	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
-	result, err := h.commandService.List(r.Context(), command.ListParams{Context: reqCtx, Page: page, PageSize: pageSize, Cursor: cursor})
+func (h *commandCollectionHandler) handleList(w http.ResponseWriter, r *http.Request) {
+	reqCtx, ok := extractRequestContext(w, r)
+	if !ok {
+		return
+	}
+
+	query := r.URL.Query()
+	cursor := strings.TrimSpace(query.Get("cursor"))
+	page := 1
+	pageSize := 20
+
+	if cursor == "" {
+		if rawPage := strings.TrimSpace(query.Get("page")); rawPage != "" {
+			parsed, err := strconv.Atoi(rawPage)
+			if err != nil || parsed <= 0 {
+				errorx.Write(w, http.StatusBadRequest, "INVALID_PAGINATION", "error.pagination.invalid", map[string]any{"page": rawPage})
+				return
+			}
+			page = parsed
+		}
+		if rawPageSize := strings.TrimSpace(query.Get("pageSize")); rawPageSize != "" {
+			parsed, err := strconv.Atoi(rawPageSize)
+			if err != nil || parsed <= 0 {
+				errorx.Write(w, http.StatusBadRequest, "INVALID_PAGINATION", "error.pagination.invalid", map[string]any{"pageSize": rawPageSize})
+				return
+			}
+			pageSize = parsed
+		}
+	}
+
+	result, err := h.service.List(r.Context(), command.ListParams{
+		Context:  reqCtx,
+		Page:     page,
+		PageSize: pageSize,
+		Cursor:   cursor,
+	})
 	if err != nil {
 		writeCommandError(w, err)
 		return
 	}
-	items := make([]any, 0, len(result.Items))
+
+	items := make([]map[string]any, 0, len(result.Items))
 	for _, item := range result.Items {
-		items = append(items, toCommandPayload(item))
+		items = append(items, toCommandResource(item))
 	}
-	response := map[string]any{"items": items}
+
+	resp := map[string]any{
+		"items": items,
+	}
+
 	if result.UsedCursor {
-		response["cursorInfo"] = cursorInfo{NextCursor: result.NextCursor}
+		cursorInfo := map[string]any{"nextCursor": nil}
+		if result.NextCursor != "" {
+			cursorInfo["nextCursor"] = result.NextCursor
+		}
+		resp["cursorInfo"] = cursorInfo
 	} else {
-		response["pageInfo"] = pageInfo{Page: page, PageSize: pageSize, Total: result.Total}
+		resp["pageInfo"] = map[string]any{
+			"page":     page,
+			"pageSize": pageSize,
+			"total":    result.Total,
+		}
 	}
-	writeJSON(w, http.StatusOK, response)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func extractRequestContext(w http.ResponseWriter, r *http.Request) (command.RequestContext, bool) {
+	tenantID := strings.TrimSpace(r.Header.Get("X-Tenant-Id"))
+	workspaceID := strings.TrimSpace(r.Header.Get("X-Workspace-Id"))
+	userID := strings.TrimSpace(r.Header.Get("X-User-Id"))
+
+	missing := make([]string, 0, 3)
+	if tenantID == "" {
+		missing = append(missing, "X-Tenant-Id")
+	}
+	if workspaceID == "" {
+		missing = append(missing, "X-Workspace-Id")
+	}
+	if userID == "" {
+		missing = append(missing, "X-User-Id")
+	}
+
+	if len(missing) > 0 {
+		errorx.Write(w, http.StatusBadRequest, "MISSING_CONTEXT", "error.context.missing", map[string]any{
+			"missingHeaders": missing,
+		})
+		return command.RequestContext{}, false
+	}
+
+	return command.RequestContext{
+		TenantID:    tenantID,
+		WorkspaceID: workspaceID,
+		UserID:      userID,
+		OwnerID:     userID,
+	}, true
 }
 
 func writeCommandError(w http.ResponseWriter, err error) {
-	var conflict *command.IdempotencyConflictError
-	var forbidden *command.ForbiddenError
 	switch {
-	case errors.As(err, &conflict):
-		errorx.Write(w, http.StatusConflict, "IDEMPOTENCY_KEY_CONFLICT", "error.command.idempotency_conflict", map[string]any{"existingCommandId": conflict.ExistingCommandID})
-	case errors.Is(err, command.ErrInvalidCommandRequest):
-		errorx.Write(w, http.StatusBadRequest, "INVALID_COMMAND_REQUEST", "error.command.invalid_request", nil)
-	case errors.Is(err, command.ErrInvalidCursor):
-		errorx.Write(w, http.StatusBadRequest, "INVALID_CURSOR", "error.pagination.invalid_cursor", nil)
-	case errors.Is(err, command.ErrNotFound):
-		errorx.Write(w, http.StatusNotFound, "COMMAND_NOT_FOUND", "error.command.not_found", nil)
 	case errors.Is(err, command.ErrNotImplemented):
 		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.command.not_implemented", nil)
-	case errors.As(err, &forbidden), errors.Is(err, command.ErrForbidden):
-		details := map[string]any{}
-		if forbidden != nil && forbidden.Reason != "" {
-			details["reason"] = forbidden.Reason
-		}
-		errorx.Write(w, http.StatusForbidden, "FORBIDDEN", "error.authz.forbidden", details)
+	case errors.Is(err, command.ErrInvalidCursor):
+		errorx.Write(w, http.StatusBadRequest, "INVALID_CURSOR", "error.command.invalid_cursor", nil)
+	case errors.Is(err, command.ErrInvalidCommandRequest):
+		errorx.Write(w, http.StatusBadRequest, "INVALID_COMMAND_REQUEST", "error.command.invalid_request", nil)
+	case errors.Is(err, command.ErrNotFound):
+		errorx.Write(w, http.StatusNotFound, "COMMAND_NOT_FOUND", "error.command.not_found", nil)
 	default:
-		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.common.internal", nil)
+		var idemErr *command.IdempotencyConflictError
+		if errors.As(err, &idemErr) {
+			details := map[string]any{}
+			if idemErr.ExistingCommandID != "" {
+				details["existingCommandId"] = idemErr.ExistingCommandID
+			}
+			errorx.Write(w, http.StatusConflict, "IDEMPOTENCY_KEY_CONFLICT", "error.command.idempotency_conflict", details)
+			return
+		}
+		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.internal", map[string]any{"reason": err.Error()})
 	}
 }
 
-func toCommandPayload(item command.Command) map[string]any {
-	payload := decodeJSON(item.Payload, map[string]any{})
-	result := decodeJSON(item.Result, map[string]any{})
-	acl := decodeJSON(item.ACLJSON, []any{})
-	out := map[string]any{
-		"id":          item.ID,
-		"tenantId":    item.TenantID,
-		"workspaceId": item.WorkspaceID,
-		"ownerId":     item.OwnerID,
-		"visibility":  item.Visibility,
+func toCommandResource(cmd command.Command) map[string]any {
+	acl := make([]any, 0)
+	if len(cmd.ACLJSON) > 0 {
+		_ = json.Unmarshal(cmd.ACLJSON, &acl)
+	}
+
+	var payload any = map[string]any{}
+	if len(cmd.Payload) > 0 {
+		_ = json.Unmarshal(cmd.Payload, &payload)
+	}
+
+	resource := map[string]any{
+		"id":          cmd.ID,
+		"tenantId":    cmd.TenantID,
+		"workspaceId": cmd.WorkspaceID,
+		"ownerId":     cmd.OwnerID,
+		"visibility":  cmd.Visibility,
 		"acl":         acl,
-		"commandType": item.CommandType,
+		"status":      cmd.Status,
+		"createdAt":   cmd.CreatedAt.UTC().Format(timeRFC3339Nano),
+		"updatedAt":   cmd.UpdatedAt.UTC().Format(timeRFC3339Nano),
+		"commandType": cmd.CommandType,
 		"payload":     payload,
-		"status":      item.Status,
-		"createdAt":   item.CreatedAt.UTC().Format(timeRFC3339Nano),
-		"updatedAt":   item.UpdatedAt.UTC().Format(timeRFC3339Nano),
 	}
-	if !item.AcceptedAt.IsZero() {
-		out["acceptedAt"] = item.AcceptedAt.UTC().Format(timeRFC3339Nano)
-	}
-	if item.FinishedAt != nil {
-		out["finishedAt"] = item.FinishedAt.UTC().Format(timeRFC3339Nano)
-	}
-	if len(item.Result) > 0 {
-		out["result"] = result
-	}
-	if strings.TrimSpace(item.ErrorCode) != "" || strings.TrimSpace(item.MessageKey) != "" {
-		out["error"] = map[string]any{"code": item.ErrorCode, "messageKey": item.MessageKey}
-	}
-	return out
-}
 
-func parsePositiveInt(raw string, fallback int) int {
-	value, err := strconv.Atoi(strings.TrimSpace(raw))
-	if err != nil || value <= 0 {
-		return fallback
+	if len(cmd.Result) > 0 {
+		var result any
+		if err := json.Unmarshal(cmd.Result, &result); err == nil {
+			resource["result"] = result
+		}
 	}
-	return value
-}
 
-func decodeJSON[T any](raw json.RawMessage, fallback T) T {
-	if len(raw) == 0 {
-		return fallback
+	if cmd.ErrorCode != "" || cmd.MessageKey != "" {
+		resource["error"] = map[string]any{
+			"code":       cmd.ErrorCode,
+			"messageKey": cmd.MessageKey,
+		}
 	}
-	var out T
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return fallback
+
+	if cmd.FinishedAt != nil {
+		resource["finishedAt"] = cmd.FinishedAt.UTC().Format(timeRFC3339Nano)
 	}
-	return out
+
+	return resource
 }
 
 const timeRFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
