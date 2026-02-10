@@ -86,7 +86,7 @@ paths:
                         example: mediamtx
                   details:
                     type: object
-                    description: provider 细粒度可用性（ready/degraded）。
+                    description: provider 细粒度可用性（ready/degraded），异常时在 error 返回如认证失败等原因。
                     properties:
                       providers:
                         type: object

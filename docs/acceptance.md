@@ -34,8 +34,8 @@
 
 ### 3.3 Cache + Vector provider
 - [x] `cache.provider=memory` 下系统可运行。
-- [x] `cache.provider=redis` 下缓存命中与过期符合预期。
-- [x] `vector.provider=redis_stack` 可写入并检索向量。
+- [x] `cache.provider=redis`（含 `cache.redis_password`）下缓存命中与过期符合预期。
+- [x] `vector.provider=redis_stack`（含 `vector.redis_password`）可写入并检索向量。
 - [x] 无 Redis 时 `vector.provider=sqlite` fallback 可检索。
 
 ## 4. Single Binary Packaging 验收

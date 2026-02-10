@@ -351,6 +351,10 @@ payload 约定（v0.1）：
 
 ## 5. PostgreSQL / SQLite 差异与兼容策略
 
+补充（v0.1 provider 配置语义）：
+- `cache.redis_password` 与 `vector.redis_password` 仅作为运行时连接配置，不入库。
+- 认证失败等 provider 连接错误通过 healthz `details.providers.*.error` 暴露，不写入业务表。
+
 ## 5.1 类型差异
 - JSON：
   - PostgreSQL 使用 `JSONB`。
