@@ -84,9 +84,9 @@
 - `id`
 - `tenant_id`
 - `workspace_id`
-- `resource_type`（asset/workflow_template/workflow_run/plugin/...）
+- `resource_type`（v0.1 固定 `command`）
 - `resource_id`
-- `subject_type`（user/role/workspace）
+- `subject_type`（v0.1 固定 `user`）
 - `subject_id`
 - `permissions`（JSON 数组：READ/WRITE/EXECUTE/MANAGE/SHARE）
 - `expires_at`（可空）
@@ -94,8 +94,14 @@
 - `created_at`
 
 建议索引：
-- `(tenant_id, resource_type, resource_id)`
-- `(tenant_id, subject_type, subject_id)`
+- `(resource_type, resource_id)`
+- `(subject_type, subject_id)`
+- `(tenant_id, workspace_id)`
+
+存储与查询口径（冻结）：
+- SQLite：`permissions` 使用 `TEXT` 存 JSON 数组；权限包含判断使用 `json_each`（示例：`EXISTS (SELECT 1 FROM json_each(a.permissions) p WHERE p.value='READ')`）。
+- PostgreSQL：`permissions` 使用 `JSONB`；权限包含判断使用 `@>`（示例：`a.permissions @> '["READ"]'::jsonb`）。
+- 过期判定统一：`expires_at < now` 视为无效 ACL。
 
 ## 3.3 资产与血缘
 

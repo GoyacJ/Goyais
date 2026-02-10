@@ -30,6 +30,12 @@
 - 有效映射判定：`expires_at >= now`；过期映射视为不存在。
 - `GET /api/v1/commands` 固定排序 `created_at DESC, id DESC`，cursor 基于 `(created_at,id)` 生成不透明 token。
 
+## 0.4 Share 创建授权闸门（A3）
+- `POST /api/v1/shares` 执行顺序固定：`Tenant -> Visibility -> ACL -> RBAC -> Egress`。
+- v0.1 仅支持 `resource_type=command` 且 `subject_type=user`。
+- 分享前必须校验“同资源 SHARE 权限”：`owner` 或 `acl_entries(resource_type=command, resource_id=目标commandId, permission=SHARE)` 命中。
+- 校验失败返回 `403 FORBIDDEN`，`messageKey=error.authz.forbidden`。
+
 ## 1. WorkflowRun / StepRun
 
 ## 1.1 WorkflowRun 状态
