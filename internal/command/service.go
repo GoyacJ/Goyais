@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"goyais/internal/platform/eventbus"
 )
 
 type AuthzHook interface {
@@ -26,6 +28,7 @@ type Service struct {
 	logger               *log.Logger
 	rbacHook             AuthzHook
 	egressHook           AuthzHook
+	eventBus             eventbus.Provider
 	executorsMu          sync.RWMutex
 	executors            map[string]ExecuteFunc
 }
@@ -49,6 +52,10 @@ func (s *Service) SetRBACHook(hook AuthzHook) {
 
 func (s *Service) SetEgressHook(hook AuthzHook) {
 	s.egressHook = hook
+}
+
+func (s *Service) SetEventBusProvider(provider eventbus.Provider) {
+	s.eventBus = provider
 }
 
 func (s *Service) SetExecutor(commandType string, executor ExecuteFunc) {
@@ -99,6 +106,7 @@ func (s *Service) Submit(ctx context.Context, reqCtx RequestContext, commandType
 	}
 
 	_ = s.repo.AppendCommandEvent(ctx, reqCtx, created.Command.ID, "command.accepted", payload)
+	s.publishCommandEvent(ctx, reqCtx, created.Command.ID, "command.accepted", payload)
 	_ = s.repo.AppendAuditEvent(ctx, reqCtx, created.Command.ID, "command.authorize", "allow", "stub_authorizer", payload)
 
 	running, err := s.repo.SetStatus(ctx, reqCtx, created.Command.ID, StatusRunning, nil, "", "", nil)
@@ -123,6 +131,7 @@ func (s *Service) Submit(ctx context.Context, reqCtx RequestContext, commandType
 	}
 
 	_ = s.repo.AppendCommandEvent(ctx, reqCtx, final.ID, "command.succeeded", resultBytes)
+	s.publishCommandEvent(ctx, reqCtx, final.ID, "command.succeeded", resultBytes)
 	_ = s.repo.AppendAuditEvent(ctx, reqCtx, final.ID, "command.execute", "allow", "stub_execute", resultBytes)
 	_ = s.repo.AppendAuditEvent(
 		ctx,
@@ -197,6 +206,7 @@ func (s *Service) markCommandFailed(
 	}
 
 	_ = s.repo.AppendCommandEvent(ctx, reqCtx, failed.ID, "command.failed", eventPayload)
+	s.publishCommandEvent(ctx, reqCtx, failed.ID, "command.failed", eventPayload)
 	_ = s.repo.AppendAuditEvent(ctx, reqCtx, failed.ID, "command.execute", "deny", reason, eventPayload)
 	_ = s.repo.AppendAuditEvent(
 		ctx,
@@ -208,6 +218,51 @@ func (s *Service) markCommandFailed(
 		buildEgressAuditPayload(commandType, commandPayload, eventPayload, "deny"),
 	)
 	return failed, nil
+}
+
+func (s *Service) publishCommandEvent(ctx context.Context, reqCtx RequestContext, commandID, eventType string, payload []byte) {
+	if s.eventBus == nil {
+		return
+	}
+	envelope := map[string]any{
+		"eventType":   eventType,
+		"commandId":   commandID,
+		"tenantId":    reqCtx.TenantID,
+		"workspaceId": reqCtx.WorkspaceID,
+		"userId":      reqCtx.UserID,
+		"traceId":     reqCtx.TraceID,
+		"emittedAt":   time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	if len(payload) > 0 {
+		var parsed any
+		if err := json.Unmarshal(payload, &parsed); err == nil {
+			envelope["payload"] = parsed
+		} else {
+			envelope["payloadRaw"] = string(payload)
+		}
+	}
+	raw, err := json.Marshal(envelope)
+	if err != nil {
+		return
+	}
+	err = s.eventBus.Publish(ctx, eventbus.ChannelCommand, eventbus.Message{
+		Key:   commandID,
+		Value: raw,
+		Headers: map[string]string{
+			"eventType":   eventType,
+			"tenantId":    reqCtx.TenantID,
+			"workspaceId": reqCtx.WorkspaceID,
+		},
+	})
+	auditPayload, _ := json.Marshal(map[string]any{
+		"channel":   eventbus.ChannelCommand,
+		"eventType": eventType,
+	})
+	if err != nil {
+		_ = s.repo.AppendAuditEvent(ctx, reqCtx, commandID, "command.eventbus", "deny", err.Error(), auditPayload)
+		return
+	}
+	_ = s.repo.AppendAuditEvent(ctx, reqCtx, commandID, "command.eventbus", "allow", "published", auditPayload)
 }
 
 func buildEgressAuditPayload(commandType string, requestPayload json.RawMessage, responsePayload []byte, policyResult string) []byte {

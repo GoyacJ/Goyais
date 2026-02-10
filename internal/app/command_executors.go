@@ -714,6 +714,15 @@ func newStreamRecordStartExecutor(commandService *command.Service, streamService
 			"stream":    toStreamResultPayload(started.Stream),
 			"recording": toStreamRecordingResultPayload(started.Recording),
 		}
+		if status := strings.TrimSpace(started.OnPublishEventStatus); status != "" {
+			eventBus := map[string]any{
+				"status": status,
+			}
+			if errText := strings.TrimSpace(started.OnPublishEventError); errText != "" {
+				eventBus["error"] = errText
+			}
+			result["eventBus"] = eventBus
+		}
 
 		if templateID := strings.TrimSpace(started.OnPublishTemplateID); templateID != "" && commandService != nil {
 			workflowPayload, _ := json.Marshal(map[string]any{
