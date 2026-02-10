@@ -14,11 +14,13 @@
    - 按 GitHub Flow 和 Conventional Commits 落地分支、提交与 PR 评审。
 5. `goyais-parallel-threads`
    - 并行 thread 场景下执行“一线程一 worktree”隔离、提交防呆与 master 集成通道。
-6. `goyais-thread2-bootstrap`
+6. `goyais-fixflow`
+   - 修复 bug 时默认先创建独立 worktree，确认后 no-ff 合并 `master` 并自动回收 thread。
+7. `goyais-thread2-bootstrap`
    - 启动 Thread #2 工程骨架，优先跑通 single-binary 静态服务验收。
-7. `goyais-vertical-slice`
+8. `goyais-vertical-slice`
    - 对后续模块重复使用垂直切片模板，确保产出一致可审查。
-8. `goyais-single-binary-acceptance`
+9. `goyais-single-binary-acceptance`
    - 对单二进制与静态路由/缓存头/Content-Type 做脚本化回归。
 
 ## 快速映射
@@ -28,6 +30,7 @@
 - 需要规划里程碑、切片和 DoD：`goyais-project-management`
 - 需要发分支、写 commit、提 PR、准备回滚：`goyais-git`
 - 需要并行启动多个 thread 且隔离工作区：`goyais-parallel-threads`
+- 需要修复 bug 且默认新建 worktree、确认后合并 master：`goyais-fixflow`
 - 需要进入 Thread #2 基建落地：`goyais-thread2-bootstrap`
 - 需要为某个模块写标准化切片提示词：`goyais-vertical-slice`
 - 需要验证 single binary 发布闭环：`goyais-single-binary-acceptance`
