@@ -283,6 +283,7 @@ paths:
         - subjectType 必须为 user
         - permissions 必须来自固定枚举
         创建前服务端会校验分享者对同一资源的 SHARE 权限（owner 或已有 ACL.SHARE）。
+        该接口为 domain sugar，服务端内部转换为 `share.create` command 执行。
       operationId: createShare
       parameters:
         - $ref: '#/components/parameters/RequiredXTenantId'
@@ -298,8 +299,8 @@ paths:
             schema:
               $ref: '#/components/schemas/ShareCreateRequest'
       responses:
-        '201':
-          description: Created
+        '202':
+          description: Accepted
           content:
             application/json:
               schema:
@@ -345,6 +346,7 @@ paths:
     delete:
       tags: [Share]
       summary: Delete share entry
+      description: 该接口为 domain sugar，服务端内部转换为 `share.delete` command 执行。
       operationId: deleteShare
       parameters:
         - $ref: '#/components/parameters/RequiredXTenantId'
@@ -355,8 +357,12 @@ paths:
         - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/ShareId'
       responses:
-        '204':
-          description: Deleted
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseShare'
         '400':
           $ref: '#/components/responses/ErrorResponse'
         '404':
@@ -1906,10 +1912,24 @@ components:
 
     WriteResponseShare:
       type: object
-      required: [resource]
+      required: [resource, commandRef]
       properties:
         resource:
-          $ref: '#/components/schemas/Share'
+          oneOf:
+            - $ref: '#/components/schemas/Share'
+            - $ref: '#/components/schemas/ShareDeleteResult'
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    ShareDeleteResult:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [deleted]
 
     CommandListResponse:
       type: object
