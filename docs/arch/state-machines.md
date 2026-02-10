@@ -29,6 +29,11 @@
 - 若存在 `Idempotency-Key`，必须在同一事务内执行：查有效映射 -> 同 hash 复用/异 hash 冲突 -> 无有效映射则创建并 upsert。
 - 有效映射判定：`expires_at >= now`；过期映射视为不存在。
 - `GET /api/v1/commands` 固定排序 `created_at DESC, id DESC`，cursor 基于 `(created_at,id)` 生成不透明 token。
+- SQLite / PostgreSQL 在上述语义上保持等价（冲突码、排序、cursor 语义一致）。
+
+## 0.3.1 Provider 就绪态（health gate）
+- provider 认证失败（如 Redis NOAUTH）不改变 command 状态机，但会将 healthz 状态标记为 `degraded`。
+- 当 provider 就绪恢复后，healthz 状态回到 `ok`，不需要额外迁移。
 
 ## 0.4 Share 创建授权闸门（A3）
 - `POST /api/v1/shares` 执行顺序固定：`Tenant -> Visibility -> ACL -> RBAC -> Egress`。
