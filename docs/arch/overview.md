@@ -198,6 +198,12 @@ Command 执行管道（必须）：
     - `GET /shares` 直接查询
     - `POST /shares`、`DELETE /shares/{shareId}` 均为 domain sugar，转换为 `share.create/share.delete` command 执行，并返回 `resource + commandRef`
   - `assets`：`GET /assets`、`GET /assets/{id}`、`POST /assets`（domain sugar -> `asset.upload` command）
+  - `registry`（C1 read-only）：
+    - `GET /registry/capabilities`
+    - `GET /registry/capabilities/{capabilityId}`
+    - `GET /registry/algorithms`
+    - `GET /registry/providers`
+    - 列表统一支持 `cursor` 优先于 `page/pageSize`
   - `workflow`：
     - `GET/POST /workflow-templates`
     - `GET /workflow-templates/{templateId}`
@@ -209,7 +215,7 @@ Command 执行管道（必须）：
     - `GET /workflow-runs/{runId}/steps`
     - 写接口全部走 command-first（domain sugar -> `workflow.*` command）
 - 占位（可达但未实现）：
-  - `registry-*`、`plugin-market-*`、`streams-*`
+  - `plugin-market-*`、`streams-*`
   - 统一返回：`501 NOT_IMPLEMENTED` + 领域 `messageKey`
 
 ## 8. 配置规范

@@ -84,7 +84,7 @@
 - `id`
 - `tenant_id`
 - `workspace_id`
-- `resource_type`（v0.1 share API 支持 `command/asset`；查询判定可覆盖 `workflow_template/workflow_run`）
+- `resource_type`（v0.1 share API 支持 `command/asset`；查询判定可覆盖 `workflow_template/workflow_run/capability/capability_provider/algorithm`）
 - `resource_id`
 - `subject_type`（v0.1 固定 `user`）
 - `subject_id`
@@ -185,6 +185,10 @@
 - `step_runs(run_id, step_key, attempt)`
 
 ## 3.5 能力注册与插件
+
+v0.1 当前实现进度：
+- C1 read-only 已落地：`capability_providers/capabilities/algorithms` 支持租户+工作区隔离查询与 ACL.READ 判定。
+- C2 plugin market 仍为占位（API 可达但返回 501）。
 
 ### capability_providers
 - `id, tenant_id, workspace_id, owner_id, visibility`

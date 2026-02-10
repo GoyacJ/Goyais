@@ -60,6 +60,15 @@
   - `mode=fail`：`pending -> failed`，并创建 1 条 `step_run(failed)`，且回填 `error_code/message_key`。
 - cancel 语义：`pending/running -> canceled`，并将同 run 下 `pending/running` step 收敛到 `canceled`。
 
+## 0.7 Registry C1 Read Path（M2 启动）
+- `GET /api/v1/registry/capabilities`、`GET /api/v1/registry/capabilities/{capabilityId}`、`GET /api/v1/registry/algorithms`、`GET /api/v1/registry/providers` 在 v0.1 作为 read-only 能力落地。
+- 读路径授权判定：
+  - 同 tenant/workspace；
+  - `owner` 直接可读；
+  - `visibility=WORKSPACE` 可读；
+  - 或命中 `acl_entries(resource_type in capability/capability_provider/algorithm, permission=READ)`。
+- 列表固定排序：`created_at DESC, id DESC`；`cursor` 优先于 `page/pageSize`。
+
 ## 1. WorkflowRun / StepRun
 
 ## 1.1 WorkflowRun 状态

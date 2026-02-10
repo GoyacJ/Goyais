@@ -857,15 +857,30 @@ paths:
   /registry/capabilities:
     get:
       tags: [Registry]
-      summary: List capabilities (placeholder)
+      summary: List capabilities
+      description: 固定排序为 created_at DESC, id DESC。若提供 cursor，服务端忽略 page/pageSize。
       operationId: listCapabilities
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
+        '200':
+          description: Capability list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -874,13 +889,27 @@ paths:
   /registry/capabilities/{capabilityId}:
     get:
       tags: [Registry]
-      summary: Get capability (placeholder)
+      summary: Get capability
       operationId: getCapability
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/CapabilityId'
       responses:
+        '200':
+          description: Capability detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Capability'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -889,15 +918,30 @@ paths:
   /registry/algorithms:
     get:
       tags: [Registry]
-      summary: List algorithms (placeholder)
+      summary: List algorithms
+      description: 固定排序为 created_at DESC, id DESC。若提供 cursor，服务端忽略 page/pageSize。
       operationId: listAlgorithms
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
+        '200':
+          description: Algorithm list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlgorithmListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -906,15 +950,30 @@ paths:
   /registry/providers:
     get:
       tags: [Registry]
-      summary: List capability providers (placeholder)
+      summary: List capability providers
+      description: 固定排序为 created_at DESC, id DESC。若提供 cursor，服务端忽略 page/pageSize。
       operationId: listProviders
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
+        '200':
+          description: Provider list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:

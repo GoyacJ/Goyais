@@ -41,6 +41,10 @@ func TestPostgresCommandAssetWorkflowContract(t *testing.T) {
 		t.Fatalf("expected providers.db=postgres got=%v", providers["db"])
 	}
 
+	respRegistry := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/registry/capabilities", contextHeaders("u1"), nil)
+	defer respRegistry.Body.Close()
+	mustStatus(t, respRegistry, http.StatusOK)
+
 	respCommand := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headers, map[string]any{
 		"commandType": "test.noop",
 		"payload":     map[string]any{"k": "v"},
