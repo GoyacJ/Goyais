@@ -1,7 +1,10 @@
 import { mount, RouterLinkStub } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import SideNav from '@/components/layout/SideNav.vue'
+import { useDensityStore } from '@/design-system/density'
 import i18n from '@/i18n'
+
+const PINNED_STORAGE_KEY = 'goyais.ui.sidenav.pinned'
 
 describe('SideNav', () => {
   it('keeps header and menu region dimensions stable across locale switches', async () => {
@@ -35,5 +38,68 @@ describe('SideNav', () => {
 
     i18n.global.locale.value = originalLocale
     wrapper.unmount()
+  })
+
+  it('toggles pinned floating state and restores it from storage', async () => {
+    const originalLocale = i18n.global.locale.value
+    const { densityMode } = useDensityStore()
+    const originalDensity = densityMode.value
+    localStorage.removeItem(PINNED_STORAGE_KEY)
+    i18n.global.locale.value = 'en-US'
+    densityMode.value = 'compact'
+
+    try {
+      const wrapper = mount(SideNav, {
+        global: {
+          plugins: [i18n],
+          stubs: {
+            RouterLink: RouterLinkStub,
+          },
+        },
+      })
+
+      const aside = wrapper.get('aside')
+      const pinButton = wrapper.get(`button[data-pinned]`)
+
+      expect(aside.classes()).toContain('w-[4.75rem]')
+      expect(pinButton.text()).toBe('PIN')
+
+      await pinButton.trigger('click')
+      await nextTick()
+
+      expect(pinButton.attributes('data-pinned')).toBe('true')
+      expect(pinButton.text()).toBe('UNP')
+      expect(aside.classes()).toContain('w-64')
+      expect(localStorage.getItem(PINNED_STORAGE_KEY)).toBe('true')
+
+      wrapper.unmount()
+
+      const restored = mount(SideNav, {
+        global: {
+          plugins: [i18n],
+          stubs: {
+            RouterLink: RouterLinkStub,
+          },
+        },
+      })
+      await nextTick()
+
+      const restoredAside = restored.get('aside')
+      const restoredPinButton = restored.get('button[data-pinned]')
+
+      expect(restoredPinButton.attributes('data-pinned')).toBe('true')
+      expect(restoredPinButton.text()).toBe('UNP')
+      expect(restoredAside.classes()).toContain('w-64')
+
+      await restoredPinButton.trigger('click')
+      await nextTick()
+      expect(localStorage.getItem(PINNED_STORAGE_KEY)).toBe('false')
+
+      restored.unmount()
+    } finally {
+      localStorage.removeItem(PINNED_STORAGE_KEY)
+      i18n.global.locale.value = originalLocale
+      densityMode.value = originalDensity
+    }
   })
 })
