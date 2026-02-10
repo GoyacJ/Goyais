@@ -197,3 +197,10 @@
 - `make build`
 - `GOYAIS_VERIFY_BASE_URL=http://127.0.0.1:18080 GOYAIS_START_CMD='GOYAIS_SERVER_ADDR=:18080 ./build/goyais' bash .agents/skills/goyais-single-binary-acceptance/scripts/verify_single_binary.sh`
   - 说明：默认 `:8080` 被本机其他进程占用，验收脚本改用 `:18080` 执行并通过。
+
+## 15. 自动化回归与 Git 护栏验收
+
+- [x] 存在统一回归脚本 `scripts/ci/contract_regression.sh`，串行执行 `go test ./...`、`pnpm -C web typecheck`、`pnpm -C web test:run`、`make build`、single-binary verify。
+- [x] 存在提交前防呆脚本 `scripts/git/precommit_guard.sh`，阻断 `data/objects/`、`*.db`、`build/`、`web/dist/`、`web/node_modules/`、`.agents/` 被 staged。
+- [x] 存在 worktree 审计脚本 `scripts/git/worktree_audit.sh`，阻断 detached worktree 与重复分支绑定。
+- [x] CI workflow `.github/workflows/contract-regression.yml` 调用统一回归脚本，作为 PR/master 门禁入口。
