@@ -2,11 +2,11 @@
   <section class="ui-page">
     <PageHeader :title="t('page.commands.title')" :subtitle="t('page.commands.subtitle')">
       <template #actions>
-        <Button variant="secondary">
+        <Button variant="secondary" :disabled="isRefreshing" @click="onRefresh">
           <Icon name="refresh" :size="14" decorative />
           {{ t('common.refresh') }}
         </Button>
-        <Button>
+        <Button :disabled="isSubmitting" @click="onRunCommand">
           <Icon name="commands" :size="14" decorative />
           {{ t('page.commands.actionRun') }}
         </Button>
@@ -25,8 +25,8 @@
       </template>
 
       <template #list>
-        <SectionCard :title="t('page.commands.listTitle')" :subtitle="`${filteredCommands.length}`">
-          <div v-if="filteredCommands.length === 0">
+        <SectionCard :title="t('page.commands.listTitle')" :subtitle="listSubtitle">
+          <div v-if="tableState === 'ready' && filteredCommands.length === 0">
             <EmptyState
               variant="commands-empty"
               :title="t('empty_state.commands.title')"
@@ -37,6 +37,8 @@
             v-else
             :columns="columns"
             :rows="tableRows"
+            :state="tableState"
+            :error-message="tableErrorMessage"
             :caption="t('page.commands.listTitle')"
             interactive-rows
             row-key="commandId"
@@ -101,30 +103,53 @@
 </template>
 
 <script setup lang="ts">
+import { createCommand, listCommands } from '@/api/commands'
+import { ApiHttpError, isMockEnabled } from '@/api/http'
+import type { ApiError, CommandDTO } from '@/api/types'
 import EmptyState from '@/components/layout/EmptyState.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import SectionCard from '@/components/layout/SectionCard.vue'
 import WindowBoard from '@/components/layout/WindowBoard.vue'
-import StatusBadge from '@/components/runtime/StatusBadge.vue'
 import LogPanel from '@/components/runtime/LogPanel.vue'
+import StatusBadge from '@/components/runtime/StatusBadge.vue'
 import Button from '@/components/ui/Button.vue'
 import Icon from '@/components/ui/Icon.vue'
 import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
 import Table, { type TableColumn } from '@/components/ui/Table.vue'
 import Tabs from '@/components/ui/Tabs.vue'
-import type { CommandStatus } from '@/design-system/types'
-import { mockCommands } from '@/mocks/commands'
-import { computed, ref, watch } from 'vue'
+import { useToast } from '@/composables/useToast'
+import type { CommandStatus, TableState } from '@/design-system/types'
+import { mockCommands, type MockCommand } from '@/mocks/commands'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+interface CommandViewItem {
+  commandId: string
+  commandType: string
+  status: CommandStatus
+  acceptedAt: string
+  resultSummary: string
+  owner: string
+  traceId: string
+  logs: string[]
+}
+
 const { t } = useI18n({ useScope: 'global' })
+const { pushToast } = useToast()
 
 const searchQuery = ref('')
 const statusFilter = ref('all')
 const ownerFilter = ref('all')
-const selectedCommandId = ref<string | null>(mockCommands[0]?.commandId ?? null)
+const selectedCommandId = ref<string | null>(null)
 const detailTab = ref('summary')
+const tableState = ref<TableState>('loading')
+const commands = ref<CommandViewItem[]>([])
+const apiError = ref<ApiError | null>(null)
+const isSubmitting = ref(false)
+const useMock = isMockEnabled()
+
+const isRefreshing = computed(() => tableState.value === 'loading')
 
 const windowPanes = computed(() => [
   { id: 'filters', title: t('page.commands.filtersTitle') },
@@ -143,14 +168,14 @@ const statusOptions = computed(() => [
 
 const ownerOptions = computed(() => [
   { value: 'all', label: t('common.all') },
-  ...Array.from(new Set(mockCommands.map((item) => item.owner))).map((owner) => ({
+  ...Array.from(new Set(commands.value.map((item) => item.owner))).map((owner) => ({
     value: owner,
     label: owner,
   })),
 ])
 
 const filteredCommands = computed(() =>
-  mockCommands.filter((item) => {
+  commands.value.filter((item) => {
     const matchStatus = statusFilter.value === 'all' || item.status === statusFilter.value
     const matchOwner = ownerFilter.value === 'all' || item.owner === ownerFilter.value
     const q = searchQuery.value.trim().toLowerCase()
@@ -162,16 +187,6 @@ const filteredCommands = computed(() =>
 
     return matchStatus && matchOwner && matchQuery
   }),
-)
-
-watch(
-  filteredCommands,
-  (items) => {
-    if (!items.some((item) => item.commandId === selectedCommandId.value)) {
-      selectedCommandId.value = items[0]?.commandId ?? null
-    }
-  },
-  { immediate: true },
 )
 
 const selectedCommand = computed(() =>
@@ -200,8 +215,176 @@ const detailTabs = computed(() => [
   { id: 'logs', label: t('page.commands.tabLogs') },
 ])
 
+const listSubtitle = computed(() => {
+  if (tableState.value === 'loading') {
+    return t('common.loading')
+  }
+
+  return String(filteredCommands.value.length)
+})
+
+const tableErrorMessage = computed(() => {
+  if (!apiError.value) {
+    return t('error.common.internal')
+  }
+
+  return t(apiError.value.messageKey || 'error.common.internal', apiError.value.details ?? {})
+})
+
+watch(
+  filteredCommands,
+  (items) => {
+    if (!items.some((item) => item.commandId === selectedCommandId.value)) {
+      selectedCommandId.value = items[0]?.commandId ?? null
+    }
+  },
+  { immediate: true },
+)
+
+onMounted(() => {
+  void loadCommands()
+})
+
+async function loadCommands(): Promise<void> {
+  tableState.value = 'loading'
+  apiError.value = null
+
+  try {
+    if (useMock) {
+      commands.value = mockCommands.map(toCommandViewFromMock)
+    } else {
+      const response = await listCommands({ page: 1, pageSize: 200 })
+      commands.value = response.items.map(toCommandViewFromApi)
+    }
+
+    tableState.value = 'ready'
+  } catch (error) {
+    apiError.value = asApiError(error)
+    commands.value = []
+    tableState.value = 'error'
+  }
+}
+
+async function onRefresh(): Promise<void> {
+  await loadCommands()
+}
+
+async function onRunCommand(): Promise<void> {
+  if (isSubmitting.value) {
+    return
+  }
+
+  if (useMock) {
+    pushToast({
+      title: t('page.commands.actionRun'),
+      message: t('common.placeholderAction', { value: t('page.commands.actionRun') }),
+      tone: 'info',
+    })
+    return
+  }
+
+  isSubmitting.value = true
+  try {
+    const response = await createCommand({
+      commandType: 'ui.ping',
+      payload: {
+        source: 'web.commands',
+        submittedAt: new Date().toISOString(),
+      },
+    })
+
+    pushToast({
+      title: t('page.commands.actionRun'),
+      message: `${t('page.commands.fieldCommandId')}: ${response.commandRef.commandId}`,
+      tone: 'success',
+    })
+
+    await loadCommands()
+    selectedCommandId.value = response.commandRef.commandId
+  } catch (error) {
+    const apiErr = asApiError(error)
+    pushToast({
+      title: t('page.commands.actionRun'),
+      message: t(apiErr.messageKey || 'error.common.internal', apiErr.details ?? {}),
+      tone: 'error',
+    })
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
 function onCommandRowClick(payload: { rowKey: string }): void {
   selectedCommandId.value = payload.rowKey
+}
+
+function asApiError(value: unknown): ApiError {
+  if (value instanceof ApiHttpError) {
+    return value.error
+  }
+
+  return {
+    code: 'INTERNAL_ERROR',
+    messageKey: 'error.common.internal',
+  }
+}
+
+function toCommandViewFromApi(item: CommandDTO): CommandViewItem {
+  const status = asCommandStatus(item.status)
+  return {
+    commandId: item.id,
+    commandType: item.commandType,
+    status,
+    acceptedAt: item.acceptedAt || item.createdAt,
+    resultSummary: buildResultSummary(item),
+    owner: item.ownerId,
+    traceId: item.traceId || '-',
+    logs: buildCommandLogs(item),
+  }
+}
+
+function toCommandViewFromMock(item: MockCommand): CommandViewItem {
+  return {
+    commandId: item.commandId,
+    commandType: item.commandType,
+    status: item.status,
+    acceptedAt: item.acceptedAt,
+    resultSummary: item.resultSummary,
+    owner: item.owner,
+    traceId: item.traceId,
+    logs: item.logs,
+  }
+}
+
+function buildResultSummary(item: CommandDTO): string {
+  if (item.error?.messageKey) {
+    return t(item.error.messageKey, item.error.details ?? {})
+  }
+
+  if (item.result && Object.keys(item.result).length > 0) {
+    const compact = JSON.stringify(item.result)
+    return compact.length > 120 ? `${compact.slice(0, 117)}...` : compact
+  }
+
+  return t('common.empty')
+}
+
+function buildCommandLogs(item: CommandDTO): string[] {
+  const lines: string[] = []
+  lines.push(`[commandType] ${item.commandType}`)
+  lines.push(`[status] ${item.status}`)
+  lines.push(`[acceptedAt] ${item.acceptedAt || item.createdAt}`)
+  lines.push(`[traceId] ${item.traceId || '-'}`)
+  lines.push(`[payload] ${JSON.stringify(item.payload ?? {}, null, 2)}`)
+
+  if (item.result) {
+    lines.push(`[result] ${JSON.stringify(item.result, null, 2)}`)
+  }
+
+  if (item.error) {
+    lines.push(`[error] ${JSON.stringify(item.error, null, 2)}`)
+  }
+
+  return lines
 }
 
 function asCommandStatus(value: unknown): CommandStatus {

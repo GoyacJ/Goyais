@@ -35,6 +35,7 @@
   - `resourceImpact`（`resourceType/resourceId/eventType`）
   - `data`（业务数据或摘要）
 - `command.egress` 的 `data` 必须最小化为 `destination/policyResult/summary`，其中 `summary` 仅保留 digest 与 bytes，不记录原始敏感内容。
+- `GET /api/v1/commands*` 读模型至少包含 `acceptedAt` 与 `traceId`，其中 `traceId` 必须可与审计链路关联。
 
 ## 0.3 幂等约束
 - 若存在 `Idempotency-Key`，必须在同一事务内执行：查有效映射 -> 同 hash 复用/异 hash 冲突 -> 无有效映射则创建并 upsert。

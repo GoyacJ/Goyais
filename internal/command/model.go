@@ -54,6 +54,7 @@ type Command struct {
 	ErrorCode   string
 	MessageKey  string
 	AcceptedAt  time.Time
+	TraceID     string
 	FinishedAt  *time.Time
 	CreatedAt   time.Time
 	UpdatedAt   time.Time

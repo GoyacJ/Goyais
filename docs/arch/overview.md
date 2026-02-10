@@ -206,6 +206,7 @@ Command 执行管道（必须）：
 ### 7.3 当前接口落地状态（2026-02）
 - 已落地（可用）：
   - `commands`
+    - `GET /commands`、`GET /commands/{commandId}` 返回 `acceptedAt` 与 `traceId`（`traceId` 来自同 command 审计链路聚合）
   - `shares`（`resourceType=command|asset`）：
     - `GET /shares` 直接查询
     - `POST /shares`、`DELETE /shares/{shareId}` 均为 domain sugar，转换为 `share.create/share.delete` command 执行，并返回 `resource + commandRef`

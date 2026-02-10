@@ -82,9 +82,19 @@ func TestAPIContractRegression(t *testing.T) {
 		resp1 := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headers, body)
 		defer resp1.Body.Close()
 		assertStatus(t, resp1, http.StatusAccepted)
-		commandID1 := readJSONPath(t, resp1.Body, "commandRef.commandId").(string)
+		var createPayload map[string]any
+		mustDecodeJSON(t, resp1.Body, &createPayload)
+		commandRef, _ := createPayload["commandRef"].(map[string]any)
+		commandID1, _ := commandRef["commandId"].(string)
 		if commandID1 == "" {
 			t.Fatalf("expected command id")
+		}
+		resource, _ := createPayload["resource"].(map[string]any)
+		if got, _ := resource["acceptedAt"].(string); got == "" {
+			t.Fatalf("expected resource.acceptedAt in command create response")
+		}
+		if got, _ := resource["traceId"].(string); got == "" {
+			t.Fatalf("expected resource.traceId in command create response")
 		}
 
 		resp2 := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headers, body)
@@ -158,6 +168,17 @@ func TestAPIContractRegression(t *testing.T) {
 		}
 
 		commandID = commandID1
+		getResp := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+commandID, headersWithContext("u1"), nil)
+		defer getResp.Body.Close()
+		assertStatus(t, getResp, http.StatusOK)
+		var getPayload map[string]any
+		mustDecodeJSON(t, getResp.Body, &getPayload)
+		if got, _ := getPayload["acceptedAt"].(string); got == "" {
+			t.Fatalf("expected acceptedAt in command get response")
+		}
+		if got, _ := getPayload["traceId"].(string); got == "" {
+			t.Fatalf("expected traceId in command get response")
+		}
 	})
 
 	t.Run("command audit captures initiator/context/authz/resource impact and egress summary", func(t *testing.T) {

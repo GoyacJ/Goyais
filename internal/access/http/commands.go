@@ -323,6 +323,8 @@ func toCommandResource(cmd command.Command) map[string]any {
 		"visibility":  cmd.Visibility,
 		"acl":         acl,
 		"status":      cmd.Status,
+		"acceptedAt":  cmd.AcceptedAt.UTC().Format(timeRFC3339Nano),
+		"traceId":     cmd.TraceID,
 		"createdAt":   cmd.CreatedAt.UTC().Format(timeRFC3339Nano),
 		"updatedAt":   cmd.UpdatedAt.UTC().Format(timeRFC3339Nano),
 		"commandType": cmd.CommandType,

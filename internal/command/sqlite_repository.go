@@ -94,9 +94,10 @@ func (r *SQLiteRepository) Get(ctx context.Context, req RequestContext, id strin
 func (r *SQLiteRepository) GetForAccess(ctx context.Context, req RequestContext, id string) (Command, error) {
 	row := r.db.QueryRowContext(
 		ctx,
-		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json, command_type, payload, status, result, error_code, message_key, accepted_at, finished_at, created_at, updated_at
-		 FROM commands
-		 WHERE id = ? AND tenant_id = ? AND workspace_id = ?`,
+		`SELECT c.id, c.tenant_id, c.workspace_id, c.owner_id, c.visibility, c.acl_json, c.command_type, c.payload, c.status, c.result, c.error_code, c.message_key, c.accepted_at, c.finished_at, c.created_at, c.updated_at,
+		        COALESCE((SELECT ae.trace_id FROM audit_events ae WHERE ae.command_id = c.id ORDER BY ae.created_at DESC LIMIT 1), '') AS trace_id
+		 FROM commands c
+		 WHERE c.id = ? AND c.tenant_id = ? AND c.workspace_id = ?`,
 		id,
 		req.TenantID,
 		req.WorkspaceID,
@@ -136,7 +137,8 @@ func (r *SQLiteRepository) List(ctx context.Context, params ListParams) (ListRes
 
 		rows, err := r.db.QueryContext(
 			ctx,
-			`SELECT c.id, c.tenant_id, c.workspace_id, c.owner_id, c.visibility, c.acl_json, c.command_type, c.payload, c.status, c.result, c.error_code, c.message_key, c.accepted_at, c.finished_at, c.created_at, c.updated_at
+			`SELECT c.id, c.tenant_id, c.workspace_id, c.owner_id, c.visibility, c.acl_json, c.command_type, c.payload, c.status, c.result, c.error_code, c.message_key, c.accepted_at, c.finished_at, c.created_at, c.updated_at,
+			        COALESCE((SELECT ae.trace_id FROM audit_events ae WHERE ae.command_id = c.id ORDER BY ae.created_at DESC LIMIT 1), '') AS trace_id
 			 FROM commands c
 			 WHERE c.tenant_id = ? AND c.workspace_id = ?
 			   AND (
@@ -200,7 +202,8 @@ func (r *SQLiteRepository) List(ctx context.Context, params ListParams) (ListRes
 	offset := (page - 1) * pageSize
 	rows, err := r.db.QueryContext(
 		ctx,
-		`SELECT c.id, c.tenant_id, c.workspace_id, c.owner_id, c.visibility, c.acl_json, c.command_type, c.payload, c.status, c.result, c.error_code, c.message_key, c.accepted_at, c.finished_at, c.created_at, c.updated_at
+		`SELECT c.id, c.tenant_id, c.workspace_id, c.owner_id, c.visibility, c.acl_json, c.command_type, c.payload, c.status, c.result, c.error_code, c.message_key, c.accepted_at, c.finished_at, c.created_at, c.updated_at,
+		        COALESCE((SELECT ae.trace_id FROM audit_events ae WHERE ae.command_id = c.id ORDER BY ae.created_at DESC LIMIT 1), '') AS trace_id
 		 FROM commands c
 		 WHERE c.tenant_id = ? AND c.workspace_id = ?
 		   AND (
@@ -830,9 +833,10 @@ func (r *SQLiteRepository) insertCommandFromConn(ctx context.Context, conn *sql.
 func (r *SQLiteRepository) getByID(ctx context.Context, req RequestContext, id string) (Command, error) {
 	row := r.db.QueryRowContext(
 		ctx,
-		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json, command_type, payload, status, result, error_code, message_key, accepted_at, finished_at, created_at, updated_at
-		 FROM commands
-		 WHERE id = ? AND tenant_id = ? AND workspace_id = ? AND owner_id = ?`,
+		`SELECT c.id, c.tenant_id, c.workspace_id, c.owner_id, c.visibility, c.acl_json, c.command_type, c.payload, c.status, c.result, c.error_code, c.message_key, c.accepted_at, c.finished_at, c.created_at, c.updated_at,
+		        COALESCE((SELECT ae.trace_id FROM audit_events ae WHERE ae.command_id = c.id ORDER BY ae.created_at DESC LIMIT 1), '') AS trace_id
+		 FROM commands c
+		 WHERE c.id = ? AND c.tenant_id = ? AND c.workspace_id = ? AND c.owner_id = ?`,
 		id,
 		req.TenantID,
 		req.WorkspaceID,
@@ -852,9 +856,10 @@ func (r *SQLiteRepository) getByID(ctx context.Context, req RequestContext, id s
 func (r *SQLiteRepository) getByIDFromConn(ctx context.Context, conn *sql.Conn, req RequestContext, id string) (Command, error) {
 	row := conn.QueryRowContext(
 		ctx,
-		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json, command_type, payload, status, result, error_code, message_key, accepted_at, finished_at, created_at, updated_at
-		 FROM commands
-		 WHERE id = ? AND tenant_id = ? AND workspace_id = ? AND owner_id = ?`,
+		`SELECT c.id, c.tenant_id, c.workspace_id, c.owner_id, c.visibility, c.acl_json, c.command_type, c.payload, c.status, c.result, c.error_code, c.message_key, c.accepted_at, c.finished_at, c.created_at, c.updated_at,
+		        COALESCE((SELECT ae.trace_id FROM audit_events ae WHERE ae.command_id = c.id ORDER BY ae.created_at DESC LIMIT 1), '') AS trace_id
+		 FROM commands c
+		 WHERE c.id = ? AND c.tenant_id = ? AND c.workspace_id = ? AND c.owner_id = ?`,
 		id,
 		req.TenantID,
 		req.WorkspaceID,
@@ -923,6 +928,7 @@ func scanCommand(row rowScanner) (Command, error) {
 		finishedAtRaw sql.NullString
 		createdAtRaw  string
 		updatedAtRaw  string
+		traceIDRaw    string
 	)
 
 	if err := row.Scan(
@@ -942,6 +948,7 @@ func scanCommand(row rowScanner) (Command, error) {
 		&finishedAtRaw,
 		&createdAtRaw,
 		&updatedAtRaw,
+		&traceIDRaw,
 	); err != nil {
 		return Command{}, err
 	}
@@ -973,6 +980,7 @@ func scanCommand(row rowScanner) (Command, error) {
 	cmd.AcceptedAt = acceptedAt
 	cmd.CreatedAt = createdAt
 	cmd.UpdatedAt = updatedAt
+	cmd.TraceID = strings.TrimSpace(traceIDRaw)
 
 	if finishedAtRaw.Valid {
 		v, err := time.Parse(time.RFC3339Nano, finishedAtRaw.String)

@@ -67,6 +67,7 @@
 
 - [x] UI 触发 `workflow.run` 与 AI 触发同动作时，落库 command 形态一致。
 - [x] Domain 写接口响应包含：`resource + commandRef { commandId, status, acceptedAt }`。
+- [x] `GET /api/v1/commands` 与 `GET /api/v1/commands/{commandId}` 返回 `acceptedAt` 与可追踪的 `traceId`。
 - [x] 通过 `GET /api/v1/commands/{commandId}` 可追踪最终执行结果。
 
 ### 5.1 A2 最小闭环（Thread #3）

@@ -41,12 +41,22 @@
 
 <script setup lang="ts">
 import StatusBadge from '@/components/runtime/StatusBadge.vue'
-import type { MockCommand } from '@/mocks/commands'
+import type { CommandStatus } from '@/design-system/types'
 import { useI18n } from 'vue-i18n'
+
+interface CommandCardModel {
+  commandId: string
+  commandType: string
+  status: CommandStatus
+  acceptedAt: string
+  owner: string
+  traceId: string
+  resultSummary: string
+}
 
 const props = withDefaults(
   defineProps<{
-    command: MockCommand
+    command: CommandCardModel
     selected?: boolean
     interactive?: boolean
   }>(),

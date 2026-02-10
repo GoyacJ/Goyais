@@ -307,6 +307,7 @@ v0.1 当前实现进度：
 - `message_key`
 - `accepted_at, finished_at`
 - `created_at, updated_at`
+- `trace_id`（API 读模型字段，来源 `audit_events` 中同 `command_id` 的聚合投影；`commands` 主表可不落该列）
 
 建议索引：
 - `commands(tenant_id, workspace_id, created_at desc, id desc)`（list 固定排序）

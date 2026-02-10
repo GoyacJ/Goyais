@@ -1730,7 +1730,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/ResourceBase'
         - type: object
-          required: [commandType, payload]
+          required: [commandType, payload, acceptedAt, traceId]
           properties:
             commandType:
               type: string
@@ -1738,6 +1738,11 @@ components:
             payload:
               type: object
               additionalProperties: true
+            acceptedAt:
+              type: string
+              format: date-time
+            traceId:
+              type: string
             result:
               type: object
               additionalProperties: true

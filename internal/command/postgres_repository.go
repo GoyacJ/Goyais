@@ -86,9 +86,10 @@ func (r *PostgresRepository) Get(ctx context.Context, req RequestContext, id str
 func (r *PostgresRepository) GetForAccess(ctx context.Context, req RequestContext, id string) (Command, error) {
 	row := r.db.QueryRowContext(
 		ctx,
-		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json::text, command_type, payload::text, status, result::text, error_code, message_key, accepted_at, finished_at, created_at, updated_at
-		 FROM commands
-		 WHERE id = $1 AND tenant_id = $2 AND workspace_id = $3`,
+		`SELECT c.id, c.tenant_id, c.workspace_id, c.owner_id, c.visibility, c.acl_json::text, c.command_type, c.payload::text, c.status, c.result::text, c.error_code, c.message_key, c.accepted_at, c.finished_at, c.created_at, c.updated_at,
+		        COALESCE((SELECT ae.trace_id FROM audit_events ae WHERE ae.command_id = c.id ORDER BY ae.created_at DESC LIMIT 1), '') AS trace_id
+		 FROM commands c
+		 WHERE c.id = $1 AND c.tenant_id = $2 AND c.workspace_id = $3`,
 		id,
 		req.TenantID,
 		req.WorkspaceID,
@@ -126,7 +127,8 @@ func (r *PostgresRepository) List(ctx context.Context, params ListParams) (ListR
 
 		rows, err := r.db.QueryContext(
 			ctx,
-			`SELECT c.id, c.tenant_id, c.workspace_id, c.owner_id, c.visibility, c.acl_json::text, c.command_type, c.payload::text, c.status, c.result::text, c.error_code, c.message_key, c.accepted_at, c.finished_at, c.created_at, c.updated_at
+			`SELECT c.id, c.tenant_id, c.workspace_id, c.owner_id, c.visibility, c.acl_json::text, c.command_type, c.payload::text, c.status, c.result::text, c.error_code, c.message_key, c.accepted_at, c.finished_at, c.created_at, c.updated_at,
+			        COALESCE((SELECT ae.trace_id FROM audit_events ae WHERE ae.command_id = c.id ORDER BY ae.created_at DESC LIMIT 1), '') AS trace_id
 			 FROM commands c
 			 WHERE c.tenant_id = $1 AND c.workspace_id = $2
 			   AND (
@@ -187,7 +189,8 @@ func (r *PostgresRepository) List(ctx context.Context, params ListParams) (ListR
 	offset := (page - 1) * pageSize
 	rows, err := r.db.QueryContext(
 		ctx,
-		`SELECT c.id, c.tenant_id, c.workspace_id, c.owner_id, c.visibility, c.acl_json::text, c.command_type, c.payload::text, c.status, c.result::text, c.error_code, c.message_key, c.accepted_at, c.finished_at, c.created_at, c.updated_at
+		`SELECT c.id, c.tenant_id, c.workspace_id, c.owner_id, c.visibility, c.acl_json::text, c.command_type, c.payload::text, c.status, c.result::text, c.error_code, c.message_key, c.accepted_at, c.finished_at, c.created_at, c.updated_at,
+		        COALESCE((SELECT ae.trace_id FROM audit_events ae WHERE ae.command_id = c.id ORDER BY ae.created_at DESC LIMIT 1), '') AS trace_id
 		 FROM commands c
 		 WHERE c.tenant_id = $1 AND c.workspace_id = $2
 		   AND (
@@ -753,9 +756,10 @@ func (r *PostgresRepository) insertCommandFromTx(ctx context.Context, tx *sql.Tx
 func (r *PostgresRepository) getByID(ctx context.Context, req RequestContext, id string) (Command, error) {
 	row := r.db.QueryRowContext(
 		ctx,
-		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json::text, command_type, payload::text, status, result::text, error_code, message_key, accepted_at, finished_at, created_at, updated_at
-		 FROM commands
-		 WHERE id = $1 AND tenant_id = $2 AND workspace_id = $3 AND owner_id = $4`,
+		`SELECT c.id, c.tenant_id, c.workspace_id, c.owner_id, c.visibility, c.acl_json::text, c.command_type, c.payload::text, c.status, c.result::text, c.error_code, c.message_key, c.accepted_at, c.finished_at, c.created_at, c.updated_at,
+		        COALESCE((SELECT ae.trace_id FROM audit_events ae WHERE ae.command_id = c.id ORDER BY ae.created_at DESC LIMIT 1), '') AS trace_id
+		 FROM commands c
+		 WHERE c.id = $1 AND c.tenant_id = $2 AND c.workspace_id = $3 AND c.owner_id = $4`,
 		id,
 		req.TenantID,
 		req.WorkspaceID,
@@ -774,9 +778,10 @@ func (r *PostgresRepository) getByID(ctx context.Context, req RequestContext, id
 func (r *PostgresRepository) getByIDFromTx(ctx context.Context, tx *sql.Tx, req RequestContext, id string) (Command, error) {
 	row := tx.QueryRowContext(
 		ctx,
-		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json::text, command_type, payload::text, status, result::text, error_code, message_key, accepted_at, finished_at, created_at, updated_at
-		 FROM commands
-		 WHERE id = $1 AND tenant_id = $2 AND workspace_id = $3 AND owner_id = $4`,
+		`SELECT c.id, c.tenant_id, c.workspace_id, c.owner_id, c.visibility, c.acl_json::text, c.command_type, c.payload::text, c.status, c.result::text, c.error_code, c.message_key, c.accepted_at, c.finished_at, c.created_at, c.updated_at,
+		        COALESCE((SELECT ae.trace_id FROM audit_events ae WHERE ae.command_id = c.id ORDER BY ae.created_at DESC LIMIT 1), '') AS trace_id
+		 FROM commands c
+		 WHERE c.id = $1 AND c.tenant_id = $2 AND c.workspace_id = $3 AND c.owner_id = $4`,
 		id,
 		req.TenantID,
 		req.WorkspaceID,
@@ -836,6 +841,7 @@ func scanPostgresCommand(row rowScanner) (Command, error) {
 		errorCodeRaw  sql.NullString
 		messageKeyRaw sql.NullString
 		finishedAtRaw sql.NullTime
+		traceIDRaw    string
 	)
 
 	if err := row.Scan(
@@ -855,6 +861,7 @@ func scanPostgresCommand(row rowScanner) (Command, error) {
 		&finishedAtRaw,
 		&cmd.CreatedAt,
 		&cmd.UpdatedAt,
+		&traceIDRaw,
 	); err != nil {
 		return Command{}, err
 	}
@@ -884,6 +891,7 @@ func scanPostgresCommand(row rowScanner) (Command, error) {
 	cmd.AcceptedAt = cmd.AcceptedAt.UTC()
 	cmd.CreatedAt = cmd.CreatedAt.UTC()
 	cmd.UpdatedAt = cmd.UpdatedAt.UTC()
+	cmd.TraceID = strings.TrimSpace(traceIDRaw)
 	return cmd, nil
 }
 
