@@ -80,6 +80,11 @@
   - 或命中 `acl_entries(resource_type in capability/capability_provider/algorithm, permission=READ)`。
 - 列表固定排序：`created_at DESC, id DESC`；`cursor` 优先于 `page/pageSize`。
 
+## 0.9 Stream Domain Sugar（D1 MVP）
+- `POST /api/v1/streams` 必须转换为 `stream.create` command 执行（Command-first）。
+- `POST /api/v1/streams/{streamId}:record-start`、`POST /api/v1/streams/{streamId}:record-stop`、`POST /api/v1/streams/{streamId}:kick` 必须转换为 `stream.record.start`、`stream.record.stop`、`stream.kick` command 执行。
+- 当流 `state.onPublishTemplateId` 存在时，`stream.record.start` 必须通过 command gate 追加一次 `workflow.run` command（禁止绕过 command service 直调 workflow 写路径）。
+
 ## 1. WorkflowRun / StepRun
 
 ## 1.1 WorkflowRun 状态
@@ -172,10 +177,9 @@
 
 | From | Trigger | Guard | To | 审计事件 |
 |---|---|---|---|---|
-| offline | mediamtx.onPublish | path 授权通过 | online | `stream.online` |
-| online | command.record_start | 用户有 EXECUTE 权限 | recording | `stream.record.start` |
-| recording | command.record_stop | 录制任务存在 | online | `stream.record.stop` |
-| online/recording | mediamtx.disconnect | 连接断开 | offline | `stream.offline` |
+| online | command.stream.record.start | 用户有 EXECUTE 权限 | recording | `stream.record.start` |
+| recording | command.stream.record.stop | 录制任务存在 | online | `stream.record.stop` |
+| online/recording | command.stream.kick | 用户有 MANAGE 权限 | offline | `stream.kick` |
 | any | provider.error | 控制面异常 | error | `stream.error` |
 
 ## 3.2 StreamRecording 状态
@@ -190,12 +194,9 @@
 
 | From | Trigger | Guard | To | 审计事件 |
 |---|---|---|---|---|
-| starting | provider.ack | MediaMTX 返回成功 | recording | `stream.recording` |
-| starting | provider.error | 启动失败 | failed | `stream.record.failed` |
-| recording | command.record_stop | 调用者有权限 | stopping | `stream.record.stopping` |
-| stopping | provider.file_ready | 录制文件落盘并入 asset | succeeded | `stream.record.succeeded` |
-| stopping | provider.error | 停止失败或文件缺失 | failed | `stream.record.failed` |
-| starting/recording | command.cancel | 调用者有权限 | canceled | `stream.record.canceled` |
+| recording | command.stream.record.stop | 调用者有 EXECUTE 权限，资产写入成功 | succeeded | `stream.record.succeeded` |
+| recording | provider.error | 停止失败或文件缺失 | failed | `stream.record.failed` |
+| starting/recording | command.stream.kick | 调用者有 MANAGE 权限 | canceled | `stream.record.canceled` |
 
 ## 3.3 约束
 - `succeeded` 时必须回填 `asset_id` 并写入 `asset_lineage`。

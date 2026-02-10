@@ -11,6 +11,7 @@ import (
 	"goyais/internal/config"
 	"goyais/internal/plugin"
 	"goyais/internal/registry"
+	"goyais/internal/stream"
 	"goyais/internal/workflow"
 )
 
@@ -20,6 +21,7 @@ type RouterDeps struct {
 	WorkflowService *workflow.Service
 	RegistryService *registry.Service
 	PluginService   *plugin.Service
+	StreamService   *stream.Service
 	HealthChecker   HealthChecker
 	ProviderProbe   ProviderProbe
 }
@@ -41,6 +43,7 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 		workflowService: deps.WorkflowService,
 		registryService: deps.RegistryService,
 		pluginService:   deps.PluginService,
+		streamService:   deps.StreamService,
 	}
 	if deps.AssetService != nil {
 		apiMux.Handle("/api/v1/assets", http.HandlerFunc(domainHandler.handleAssets))
@@ -83,9 +86,14 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 		apiMux.Handle("/api/v1/plugin-market/installs/", pluginNotImplemented)
 	}
 
-	streamNotImplemented := NewNotImplementedHandler("error.stream.not_implemented")
-	apiMux.Handle("/api/v1/streams", streamNotImplemented)
-	apiMux.Handle("/api/v1/streams/", streamNotImplemented)
+	if deps.StreamService != nil {
+		apiMux.Handle("/api/v1/streams", http.HandlerFunc(domainHandler.handleStreams))
+		apiMux.Handle("/api/v1/streams/", http.HandlerFunc(domainHandler.handleStreamRoutes))
+	} else {
+		streamNotImplemented := NewNotImplementedHandler("error.stream.not_implemented")
+		apiMux.Handle("/api/v1/streams", streamNotImplemented)
+		apiMux.Handle("/api/v1/streams/", streamNotImplemented)
+	}
 
 	staticHandler, err := webstatic.NewHandler()
 	if err != nil {

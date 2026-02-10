@@ -79,7 +79,7 @@
 ## 6. Visibility/ACL 与隔离验收
 
 - [x] 已实现对象（commands/assets/workflow/shares）支持 `PRIVATE/WORKSPACE/TENANT/PUBLIC`。
-- [x] 未实现对象（stream）visibility/ACL 延后到 M2；registry 与 plugin 对象已支持当前阶段 ACL 判定。
+- [x] 已实现对象（commands/assets/workflow/shares/registry/plugin/stream）按当前阶段支持 visibility/ACL 判定。
 - [x] ACL 可赋予 `READ/WRITE/EXECUTE/MANAGE/SHARE`。
 - [x] 无权限用户访问资源返回拒绝，并包含明确 `messageKey`。
 - [x] `PRIVATE` 输入默认不得直接产生 `PUBLIC` 输出（除非策略放开且权限满足）。
@@ -115,10 +115,10 @@
 
 ## 9. Stream + MediaMTX 验收
 
-- [ ] 可创建/更新/删除 StreamingAsset/path。
-- [ ] 可执行录制开始与停止，录制结果资产化并建立 lineage。
-- [ ] `onPublish` 事件能触发一次 workflow run。
-- [ ] 流对象的 visibility/ACL 判定与其他对象一致。
+- [x] 可创建并查询 StreamingAsset/path（`POST /streams`、`GET /streams*`）。
+- [x] 可执行录制开始与停止，录制结果资产化并建立 lineage。
+- [x] `onPublish` 事件能触发一次 workflow run（经 command gate）。
+- [x] 流对象的 visibility/ACL 判定与其他对象一致（owner/ACL.READ；当策略允许提升可见性时支持 WORKSPACE 读，写动作受 EXECUTE/MANAGE 约束）。
 
 ## 10. 前端主题与国际化验收
 

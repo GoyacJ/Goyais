@@ -202,6 +202,57 @@ func TestPostgresCommandAssetWorkflowContract(t *testing.T) {
 	respPluginDisable := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/"+installID+":disable", headers, map[string]any{})
 	defer respPluginDisable.Body.Close()
 	mustStatus(t, respPluginDisable, http.StatusAccepted)
+
+	respStreamCreate := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams", headers, map[string]any{
+		"path":       "pg/live-main",
+		"protocol":   "rtmp",
+		"source":     "push",
+		"visibility": "PRIVATE",
+		"metadata": map[string]any{
+			"onPublishTemplateId": templateID,
+		},
+	})
+	defer respStreamCreate.Body.Close()
+	mustStatus(t, respStreamCreate, http.StatusAccepted)
+	streamID, _ := readPath(t, respStreamCreate.Body, "resource.id").(string)
+	if streamID == "" {
+		t.Fatalf("expected stream id")
+	}
+
+	respStreamStart := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams/"+streamID+":record-start", headers, map[string]any{})
+	defer respStreamStart.Body.Close()
+	mustStatus(t, respStreamStart, http.StatusAccepted)
+	streamStartCommandID, _ := readPath(t, respStreamStart.Body, "commandRef.commandId").(string)
+	if streamStartCommandID == "" {
+		t.Fatalf("expected stream start command id")
+	}
+
+	respStreamStartCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+streamStartCommandID, contextHeaders("u1"), nil)
+	defer respStreamStartCommand.Body.Close()
+	mustStatus(t, respStreamStartCommand, http.StatusOK)
+	onPublishCommandID, _ := readPath(t, respStreamStartCommand.Body, "result.onPublish.commandId").(string)
+	if onPublishCommandID == "" {
+		t.Fatalf("expected onPublish workflow.run command id")
+	}
+
+	respOnPublish := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+onPublishCommandID, contextHeaders("u1"), nil)
+	defer respOnPublish.Body.Close()
+	mustStatus(t, respOnPublish, http.StatusOK)
+	if onPublishType := readPath(t, respOnPublish.Body, "commandType"); onPublishType != "workflow.run" {
+		t.Fatalf("expected onPublish commandType=workflow.run got=%v", onPublishType)
+	}
+
+	respStreamStop := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams/"+streamID+":record-stop", headers, map[string]any{})
+	defer respStreamStop.Body.Close()
+	mustStatus(t, respStreamStop, http.StatusAccepted)
+	recordedAssetID, _ := readPath(t, respStreamStop.Body, "resource.state.lastRecordingAssetId").(string)
+	if recordedAssetID == "" {
+		t.Fatalf("expected recorded asset id in stream state")
+	}
+
+	respRecordedAsset := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets/"+recordedAssetID, contextHeaders("u1"), nil)
+	defer respRecordedAsset.Body.Close()
+	mustStatus(t, respRecordedAsset, http.StatusOK)
 }
 
 func newPostgresTestServer(t *testing.T, dsn string) (string, func()) {
