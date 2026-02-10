@@ -11,6 +11,7 @@ type Config struct {
 	ObjectStore ObjectStoreConfig `json:"objectStore"`
 	Cache       CacheConfig       `json:"cache"`
 	Vector      VectorConfig      `json:"vector"`
+	EventBus    EventBusConfig    `json:"eventBus"`
 	Command     CommandConfig     `json:"command"`
 	Authz       AuthzConfig       `json:"authz"`
 	Paths       RuntimePathConf   `json:"paths"`
@@ -26,6 +27,7 @@ type ProviderConfig struct {
 	Vector      string `json:"vector"`
 	ObjectStore string `json:"objectStore"`
 	Stream      string `json:"stream"`
+	EventBus    string `json:"eventBus"`
 }
 
 type DBConfig struct {
@@ -50,6 +52,18 @@ type CacheConfig struct {
 type VectorConfig struct {
 	RedisAddr     string `json:"redisAddr"`
 	RedisPassword string `json:"redisPassword"`
+}
+
+type EventBusConfig struct {
+	Kafka EventBusKafkaConfig `json:"kafka"`
+}
+
+type EventBusKafkaConfig struct {
+	Brokers       []string `json:"brokers"`
+	ClientID      string   `json:"clientId"`
+	CommandTopic  string   `json:"commandTopic"`
+	StreamTopic   string   `json:"streamTopic"`
+	ConsumerGroup string   `json:"consumerGroup"`
 }
 
 type CommandConfig struct {
@@ -104,4 +118,14 @@ type fileConfig struct {
 	Stream struct {
 		Provider string `yaml:"provider"`
 	} `yaml:"stream"`
+	EventBus struct {
+		Provider string `yaml:"provider"`
+		Kafka    struct {
+			Brokers       []string `yaml:"brokers"`
+			ClientID      string   `yaml:"client_id"`
+			CommandTopic  string   `yaml:"command_topic"`
+			StreamTopic   string   `yaml:"stream_topic"`
+			ConsumerGroup string   `yaml:"consumer_group"`
+		} `yaml:"kafka"`
+	} `yaml:"event_bus"`
 }

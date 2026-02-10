@@ -60,6 +60,7 @@ func defaultsForProfile(profile string) Config {
 			Vector:      "sqlite",
 			ObjectStore: "local",
 			Stream:      "mediamtx",
+			EventBus:    "memory",
 		},
 		DB: DBConfig{
 			DSN: "file:goyais.db",
@@ -75,6 +76,15 @@ func defaultsForProfile(profile string) Config {
 		},
 		Vector: VectorConfig{
 			RedisAddr: "127.0.0.1:6379",
+		},
+		EventBus: EventBusConfig{
+			Kafka: EventBusKafkaConfig{
+				Brokers:       []string{"127.0.0.1:9092"},
+				ClientID:      "goyais-api",
+				CommandTopic:  "goyais.command.events",
+				StreamTopic:   "goyais.stream.events",
+				ConsumerGroup: "goyais-stream-trigger",
+			},
 		},
 		Command: CommandConfig{
 			IdempotencyTTL: 300 * time.Second,
@@ -93,6 +103,7 @@ func defaultsForProfile(profile string) Config {
 			Vector:      "redis_stack",
 			ObjectStore: "minio",
 			Stream:      "mediamtx",
+			EventBus:    "memory",
 		}
 		cfg.DB.DSN = "postgres://goyais:goyais@127.0.0.1:5432/goyais?sslmode=disable"
 		cfg.ObjectStore.Bucket = "goyais"
@@ -173,6 +184,24 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	}
 	if v := strings.ToLower(strings.TrimSpace(fc.Stream.Provider)); v != "" {
 		cfg.Providers.Stream = v
+	}
+	if v := strings.ToLower(strings.TrimSpace(fc.EventBus.Provider)); v != "" {
+		cfg.Providers.EventBus = v
+	}
+	if len(fc.EventBus.Kafka.Brokers) > 0 {
+		cfg.EventBus.Kafka.Brokers = normalizeList(fc.EventBus.Kafka.Brokers)
+	}
+	if v := strings.TrimSpace(fc.EventBus.Kafka.ClientID); v != "" {
+		cfg.EventBus.Kafka.ClientID = v
+	}
+	if v := strings.TrimSpace(fc.EventBus.Kafka.CommandTopic); v != "" {
+		cfg.EventBus.Kafka.CommandTopic = v
+	}
+	if v := strings.TrimSpace(fc.EventBus.Kafka.StreamTopic); v != "" {
+		cfg.EventBus.Kafka.StreamTopic = v
+	}
+	if v := strings.TrimSpace(fc.EventBus.Kafka.ConsumerGroup); v != "" {
+		cfg.EventBus.Kafka.ConsumerGroup = v
 	}
 }
 
@@ -263,6 +292,24 @@ func applyEnvOverrides(cfg *Config) {
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_STREAM_PROVIDER"))); v != "" {
 		cfg.Providers.Stream = v
 	}
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_EVENT_BUS_PROVIDER"))); v != "" {
+		cfg.Providers.EventBus = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_EVENT_BUS_KAFKA_BROKERS")); v != "" {
+		cfg.EventBus.Kafka.Brokers = splitCSV(v)
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_EVENT_BUS_KAFKA_CLIENT_ID")); v != "" {
+		cfg.EventBus.Kafka.ClientID = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_EVENT_BUS_KAFKA_COMMAND_TOPIC")); v != "" {
+		cfg.EventBus.Kafka.CommandTopic = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_EVENT_BUS_KAFKA_STREAM_TOPIC")); v != "" {
+		cfg.EventBus.Kafka.StreamTopic = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_EVENT_BUS_KAFKA_CONSUMER_GROUP")); v != "" {
+		cfg.EventBus.Kafka.ConsumerGroup = v
+	}
 }
 
 func applyDerivedDefaults(cfg *Config) {
@@ -283,6 +330,21 @@ func applyDerivedDefaults(cfg *Config) {
 	}
 	if strings.TrimSpace(cfg.ObjectStore.Region) == "" {
 		cfg.ObjectStore.Region = "us-east-1"
+	}
+	if len(cfg.EventBus.Kafka.Brokers) == 0 {
+		cfg.EventBus.Kafka.Brokers = []string{"127.0.0.1:9092"}
+	}
+	if strings.TrimSpace(cfg.EventBus.Kafka.ClientID) == "" {
+		cfg.EventBus.Kafka.ClientID = "goyais-api"
+	}
+	if strings.TrimSpace(cfg.EventBus.Kafka.CommandTopic) == "" {
+		cfg.EventBus.Kafka.CommandTopic = "goyais.command.events"
+	}
+	if strings.TrimSpace(cfg.EventBus.Kafka.StreamTopic) == "" {
+		cfg.EventBus.Kafka.StreamTopic = "goyais.stream.events"
+	}
+	if strings.TrimSpace(cfg.EventBus.Kafka.ConsumerGroup) == "" {
+		cfg.EventBus.Kafka.ConsumerGroup = "goyais-stream-trigger"
 	}
 }
 
@@ -342,12 +404,18 @@ func validate(cfg Config) error {
 	if !contains([]string{"mediamtx"}, cfg.Providers.Stream) {
 		return fmt.Errorf("invalid stream provider: %s", cfg.Providers.Stream)
 	}
+	if !contains([]string{"memory", "kafka"}, cfg.Providers.EventBus) {
+		return fmt.Errorf("invalid event_bus provider: %s", cfg.Providers.EventBus)
+	}
 
 	if cfg.Providers.Cache == "redis" && strings.TrimSpace(cfg.Cache.RedisAddr) == "" {
 		return errors.New("cache.redis_addr cannot be empty when cache.provider=redis")
 	}
 	if cfg.Providers.Vector == "redis_stack" && strings.TrimSpace(cfg.Vector.RedisAddr) == "" {
 		return errors.New("vector.redis_addr cannot be empty when vector.provider=redis_stack")
+	}
+	if cfg.Providers.EventBus == "kafka" && len(normalizeList(cfg.EventBus.Kafka.Brokers)) == 0 {
+		return errors.New("event_bus.kafka.brokers cannot be empty when event_bus.provider=kafka")
 	}
 	switch cfg.Providers.ObjectStore {
 	case "local":
@@ -408,4 +476,20 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func splitCSV(raw string) []string {
+	return normalizeList(strings.Split(raw, ","))
+}
+
+func normalizeList(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	return out
 }

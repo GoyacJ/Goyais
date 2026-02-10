@@ -52,6 +52,14 @@ func TestAPIContractRegression(t *testing.T) {
 		if dbProvider["status"] != "ready" {
 			t.Fatalf("expected db provider ready status, got=%v", dbProvider["status"])
 		}
+		eventBusProvider, ok := providers["event_bus"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected healthz details.providers.event_bus")
+		}
+		status, _ := eventBusProvider["status"].(string)
+		if status != "ready" && status != "degraded" {
+			t.Fatalf("expected event_bus provider status ready/degraded, got=%v", eventBusProvider["status"])
+		}
 	})
 
 	t.Run("commands missing context", func(t *testing.T) {

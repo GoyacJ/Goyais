@@ -38,6 +38,10 @@
 - [x] `vector.provider=redis_stack`（含 `vector.redis_password`）可写入并检索向量。
 - [x] 无 Redis 时 `vector.provider=sqlite` fallback 可检索。
 
+### 3.4 Event Bus provider
+- [x] `event_bus.provider=memory|kafka` 配置可解析，且遵循 `ENV > YAML > 默认值`。
+- [x] `GET /api/v1/healthz` / `GET /api/v1/system/healthz` 返回 `details.providers.event_bus.status`（`ready/degraded`）。
+
 ## 4. Single Binary Packaging 验收
 
 ### 4.1 构建与独立运行
@@ -183,6 +187,7 @@
 - `GOYAIS_IT_POSTGRES_DSN='<dsn>' go test ./internal/integration -run TestPostgresCommandAssetWorkflowContract -v`
 - `GOYAIS_IT_OBJECT_STORE_ENDPOINT=<endpoint> GOYAIS_IT_OBJECT_STORE_ACCESS_KEY=<ak> GOYAIS_IT_OBJECT_STORE_SECRET_KEY=<sk> GOYAIS_IT_OBJECT_STORE_BUCKET=<bucket> GOYAIS_IT_OBJECT_STORE_USE_SSL=false go test ./internal/asset -run TestS3CompatibleStoreIntegration -v`
 - `GOYAIS_IT_REDIS_ADDR='<host:port>' GOYAIS_IT_REDIS_PASSWORD='<password>' go test ./internal/platform/cache -run TestRedisProviderIntegration -v`
+- `go test ./internal/config ./internal/access/http -v`
 - `pnpm -C web typecheck`
 - `pnpm -C web test:run`
 - `make build`

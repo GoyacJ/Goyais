@@ -14,6 +14,7 @@ import (
 	"goyais/internal/config"
 	"goyais/internal/platform/cache"
 	platformdb "goyais/internal/platform/db"
+	"goyais/internal/platform/eventbus"
 	"goyais/internal/platform/vector"
 	"goyais/internal/plugin"
 	"goyais/internal/registry"
@@ -107,6 +108,20 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 		return nil, fmt.Errorf("build vector provider: %w", err)
 	}
 
+	eventBusProvider, err := eventbus.New(eventbus.Config{
+		Provider:      cfg.Providers.EventBus,
+		KafkaBrokers:  cfg.EventBus.Kafka.Brokers,
+		KafkaClientID: cfg.EventBus.Kafka.ClientID,
+		CommandTopic:  cfg.EventBus.Kafka.CommandTopic,
+		StreamTopic:   cfg.EventBus.Kafka.StreamTopic,
+	})
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("build event bus provider: %w", err)
+	}
+	commandService.SetEventBusProvider(eventBusProvider)
+	streamService.SetEventBusProvider(eventBusProvider)
+
 	registerCommandExecutors(commandService, assetService, workflowService, pluginService, streamService, algorithmService)
 
 	h, err := httpapi.NewRouter(cfg, httpapi.RouterDeps{
@@ -124,6 +139,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 				"vector":      readinessFromErr(vectorProvider.Ping(ctx)),
 				"objectStore": readinessFromErr(objectStore.Ping(ctx)),
 				"stream":      {Status: "ready"},
+				"event_bus":   readinessFromErr(eventBusProvider.Ping(ctx)),
 			}
 			return out
 		},
@@ -140,6 +156,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	}
 
 	srv.RegisterOnShutdown(func() {
+		_ = eventBusProvider.Close()
 		_ = db.Close()
 	})
 
