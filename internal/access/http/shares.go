@@ -62,12 +62,31 @@ func (h *shareItemHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.DeleteShare(r.Context(), reqCtx, shareID); err != nil {
-		writeShareError(w, err)
+	payload, err := json.Marshal(map[string]any{
+		"shareId": shareID,
+	})
+	if err != nil {
+		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.common.internal", map[string]any{"reason": err.Error()})
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	cmd, err := h.service.Submit(
+		r.Context(),
+		reqCtx,
+		"share.delete",
+		payload,
+		strings.TrimSpace(r.Header.Get("Idempotency-Key")),
+		"",
+	)
+	if err != nil {
+		writeShareCommandError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"resource":   readShareResourceFromResult(cmd.Result, map[string]any{"id": shareID, "status": "deleted"}),
+		"commandRef": toCommandRefPayload(cmd),
+	})
 }
 
 func (h *shareCollectionHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
@@ -102,25 +121,39 @@ func (h *shareCollectionHandler) handleCreate(w http.ResponseWriter, r *http.Req
 		expiresAt = &value
 	}
 
-	created, err := h.service.CreateShare(
-		r.Context(),
-		reqCtx,
-		req.ResourceType,
-		req.ResourceID,
-		req.SubjectType,
-		req.SubjectID,
-		req.Permissions,
-		expiresAt,
-	)
+	payloadObj := map[string]any{
+		"resourceType": req.ResourceType,
+		"resourceId":   req.ResourceID,
+		"subjectType":  req.SubjectType,
+		"subjectId":    req.SubjectID,
+		"permissions":  req.Permissions,
+	}
+	if expiresAt != nil {
+		payloadObj["expiresAt"] = expiresAt.UTC().Format(timeRFC3339Nano)
+	}
+
+	payload, err := json.Marshal(payloadObj)
 	if err != nil {
-		writeShareError(w, err)
+		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.common.internal", map[string]any{"reason": err.Error()})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"resource": toShareResource(created),
+	cmd, err := h.service.Submit(
+		r.Context(),
+		reqCtx,
+		"share.create",
+		payload,
+		strings.TrimSpace(r.Header.Get("Idempotency-Key")),
+		"",
+	)
+	if err != nil {
+		writeShareCommandError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"resource":   readShareResourceFromResult(cmd.Result, map[string]any{}),
+		"commandRef": toCommandRefPayload(cmd),
 	})
 }
 
@@ -212,6 +245,59 @@ func writeShareError(w http.ResponseWriter, err error) {
 	default:
 		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.common.internal", map[string]any{"reason": err.Error()})
 	}
+}
+
+func writeShareCommandError(w http.ResponseWriter, err error) {
+	var execErr *command.ExecutionError
+	if errors.As(err, &execErr) && strings.TrimSpace(execErr.Code) != "" && strings.TrimSpace(execErr.MessageKey) != "" {
+		status := http.StatusInternalServerError
+		switch strings.ToUpper(strings.TrimSpace(execErr.Code)) {
+		case "INVALID_SHARE_REQUEST":
+			status = http.StatusBadRequest
+		case "NOT_IMPLEMENTED":
+			status = http.StatusNotImplemented
+		case "FORBIDDEN":
+			status = http.StatusForbidden
+		case "SHARE_NOT_FOUND":
+			status = http.StatusNotFound
+		}
+		errorx.Write(w, status, strings.ToUpper(strings.TrimSpace(execErr.Code)), strings.TrimSpace(execErr.MessageKey), nil)
+		return
+	}
+
+	switch {
+	case errors.Is(err, command.ErrInvalidCommandRequest):
+		errorx.Write(w, http.StatusBadRequest, "INVALID_SHARE_REQUEST", "error.share.invalid_request", nil)
+	case errors.Is(err, command.ErrNotImplemented):
+		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.share.not_implemented", nil)
+	case errors.Is(err, command.ErrForbidden):
+		details := map[string]any{}
+		var forbiddenErr *command.ForbiddenError
+		if errors.As(err, &forbiddenErr) && forbiddenErr.Reason != "" {
+			details["reason"] = forbiddenErr.Reason
+		}
+		errorx.Write(w, http.StatusForbidden, "FORBIDDEN", "error.authz.forbidden", details)
+	case errors.Is(err, command.ErrShareNotFound):
+		errorx.Write(w, http.StatusNotFound, "SHARE_NOT_FOUND", "error.share.not_found", nil)
+	default:
+		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.common.internal", map[string]any{"reason": err.Error()})
+	}
+}
+
+func readShareResourceFromResult(resultRaw json.RawMessage, fallback map[string]any) map[string]any {
+	resource := map[string]any{}
+	if len(resultRaw) > 0 {
+		var parsed map[string]any
+		if json.Unmarshal(resultRaw, &parsed) == nil {
+			if candidate, ok := parsed["share"].(map[string]any); ok {
+				resource = candidate
+			}
+		}
+	}
+	if len(resource) == 0 {
+		return fallback
+	}
+	return resource
 }
 
 func toShareResource(item command.Share) map[string]any {

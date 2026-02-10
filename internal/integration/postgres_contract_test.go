@@ -127,7 +127,10 @@ func TestPostgresCommandAssetWorkflowContract(t *testing.T) {
 		"permissions":  []string{"READ"},
 	})
 	defer respShare.Body.Close()
-	mustStatus(t, respShare, http.StatusCreated)
+	mustStatus(t, respShare, http.StatusAccepted)
+	if cmdID, _ := readPath(t, respShare.Body, "commandRef.commandId").(string); cmdID == "" {
+		t.Fatalf("expected share commandRef.commandId")
+	}
 
 	respAssetShared := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets/"+assetID, contextHeaders("u2"), nil)
 	defer respAssetShared.Body.Close()
