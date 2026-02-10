@@ -27,9 +27,13 @@
         :to="item.to"
         class="ui-control ui-focus-ring ui-pressable flex items-center border-transparent text-sm font-medium"
         :class="collapsed ? 'justify-center px-1' : 'justify-between'"
+        :title="collapsed ? t(item.label) : undefined"
         active-class="!border-primary-500 !bg-primary-500/10 !text-primary-700 dark:!text-primary-500"
       >
-        <span>{{ collapsed ? item.shortcut : t(item.label) }}</span>
+        <span class="flex min-w-0 items-center gap-2">
+          <Icon :name="item.icon" :size="16" decorative class="opacity-90" />
+          <span v-if="!collapsed" class="truncate">{{ t(item.label) }}</span>
+        </span>
         <span v-if="!collapsed" class="ui-monospace text-xs text-ui-muted">{{ item.shortcut }}</span>
       </RouterLink>
     </nav>
@@ -37,7 +41,9 @@
 </template>
 
 <script setup lang="ts">
+import Icon from '@/components/ui/Icon.vue'
 import { useDensityStore } from '@/design-system/density'
+import type { IconName } from '@/design-system/icon-registry'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
@@ -50,13 +56,13 @@ const hovering = ref(false)
 
 const collapsed = computed(() => densityMode.value === 'compact' && !pinned.value && !hovering.value)
 
-const navItems = [
-  { to: '/', label: 'nav.home', shortcut: '01' },
-  { to: '/canvas', label: 'nav.canvas', shortcut: '02' },
-  { to: '/commands', label: 'nav.commands', shortcut: '03' },
-  { to: '/assets', label: 'nav.assets', shortcut: '04' },
-  { to: '/plugins', label: 'nav.plugins', shortcut: '05' },
-  { to: '/streams', label: 'nav.streams', shortcut: '06' },
-  { to: '/settings', label: 'nav.settings', shortcut: '07' },
+const navItems: Array<{ to: string; label: string; shortcut: string; icon: IconName }> = [
+  { to: '/', label: 'nav.home', shortcut: '01', icon: 'home' },
+  { to: '/canvas', label: 'nav.canvas', shortcut: '02', icon: 'canvas' },
+  { to: '/commands', label: 'nav.commands', shortcut: '03', icon: 'commands' },
+  { to: '/assets', label: 'nav.assets', shortcut: '04', icon: 'assets' },
+  { to: '/plugins', label: 'nav.plugins', shortcut: '05', icon: 'plugins' },
+  { to: '/streams', label: 'nav.streams', shortcut: '06', icon: 'streams' },
+  { to: '/settings', label: 'nav.settings', shortcut: '07', icon: 'settings' },
 ]
 </script>

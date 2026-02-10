@@ -2,8 +2,14 @@
   <section class="ui-page">
     <PageHeader :title="t('page.assets.title')" :subtitle="t('page.assets.subtitle')">
       <template #actions>
-        <Button variant="secondary">{{ t('common.refresh') }}</Button>
-        <Button @click="onUploadPlaceholder">{{ t('page.assets.actionUpload') }}</Button>
+        <Button variant="secondary">
+          <Icon name="refresh" :size="14" decorative />
+          {{ t('common.refresh') }}
+        </Button>
+        <Button @click="onUploadPlaceholder">
+          <Icon name="upload" :size="14" decorative />
+          {{ t('page.assets.actionUpload') }}
+        </Button>
       </template>
     </PageHeader>
 
@@ -17,12 +23,16 @@
 
     <div class="grid gap-[var(--ui-page-gap)] xl:grid-cols-[1.35fr_1fr]">
       <SectionCard :title="t('page.assets.listTitle')" :subtitle="`${filteredAssets.length}`">
+        <EmptyState
+          v-if="filteredAssets.length === 0"
+          variant="assets-empty"
+          :title="t('empty_state.assets.title')"
+          :description="t('empty_state.assets.description')"
+        />
         <Table
+          v-else
           :columns="columns"
           :rows="tableRows"
-          :state="tableState"
-          :empty-message="t('common.empty')"
-          :error-message="t('error.common.unknown')"
           :caption="t('page.assets.listTitle')"
           interactive-rows
           :selected-row-index="selectedRowIndex"
@@ -67,7 +77,12 @@
             </div>
           </dl>
         </div>
-        <EmptyState v-else :description="t('common.empty')" />
+        <EmptyState
+          v-else
+          variant="assets-empty"
+          :title="t('empty_state.assets.detailTitle')"
+          :description="t('empty_state.assets.detailDescription')"
+        />
       </SectionCard>
     </div>
   </section>
@@ -78,11 +93,11 @@ import EmptyState from '@/components/layout/EmptyState.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import SectionCard from '@/components/layout/SectionCard.vue'
 import Button from '@/components/ui/Button.vue'
+import Icon from '@/components/ui/Icon.vue'
 import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
 import Table, { type TableColumn } from '@/components/ui/Table.vue'
 import { useToast } from '@/composables/useToast'
-import type { TableState } from '@/design-system/types'
 import { mockAssets } from '@/mocks/assets'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -161,8 +176,6 @@ const tableRows = computed(() =>
     createdAt: item.createdAt,
   })),
 )
-
-const tableState = computed<TableState>(() => (filteredAssets.value.length === 0 ? 'empty' : 'ready'))
 
 function onRowClick(payload: { index: number }): void {
   const target = filteredAssets.value[payload.index]

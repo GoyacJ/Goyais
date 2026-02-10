@@ -10,8 +10,9 @@
         {{ t('common.workspace') }}
       </span>
 
-      <button type="button" class="ui-control ui-focus-ring ui-pressable text-sm text-ui-muted">
-        {{ t('common.searchPlaceholder') }}
+      <button type="button" class="ui-control ui-focus-ring ui-pressable inline-flex items-center gap-2 text-sm text-ui-muted">
+        <Icon name="search" :size="14" decorative />
+        <span>{{ t('common.searchPlaceholder') }}</span>
       </button>
 
       <label class="flex items-center gap-2 text-xs text-ui-muted">
@@ -31,20 +32,17 @@
         </select>
       </label>
 
-      <Dropdown
-        :label="t('common.userMenu')"
-        :items="userMenuItems"
-        @select="onUserMenuAction"
-      />
+      <Dropdown :label="t('common.userMenu')" :items="userMenuItems" @select="onUserMenuAction" />
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
 import Dropdown, { type DropdownItem } from '@/components/ui/Dropdown.vue'
+import Icon from '@/components/ui/Icon.vue'
 import { useToast } from '@/composables/useToast'
-import type { SupportedLocale, ThemeMode } from '@/design-system/types'
 import { useThemeStore } from '@/design-system/theme'
+import type { SupportedLocale, ThemeMode } from '@/design-system/types'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 

@@ -40,6 +40,7 @@ export default {
     previous: 'Previous',
     next: 'Next',
     all: 'All',
+    backHome: 'Back to Home',
   },
   page: {
     home: {
@@ -95,6 +96,44 @@ export default {
     settings: {
       title: 'Settings Placeholder',
       subtitle: 'Centralized controls for theme, language, and density.',
+    },
+    forbidden: {
+      title: 'Forbidden',
+      subtitle: 'The current user context cannot access this workspace resource.',
+    },
+    notFound: {
+      title: 'Page Not Found',
+      subtitle: 'The route does not exist or has been moved.',
+    },
+  },
+  empty_state: {
+    commands: {
+      title: 'No commands yet',
+      description: 'No command matches the current filters. Try broadening your query.',
+      detailTitle: 'Select a command to inspect',
+      detailDescription: 'Command summary and logs appear here after selection.',
+    },
+    assets: {
+      title: 'No assets yet',
+      description: 'No assets are visible in this scope. Upload a file or adjust filters.',
+      detailTitle: 'Select an asset to inspect',
+      detailDescription: 'Asset metadata and URI will appear here.',
+    },
+    forbidden: {
+      title: '403 Forbidden',
+      description: 'You do not have permission to view this content in the active context.',
+    },
+    notFound: {
+      title: '404 Not Found',
+      description: 'The requested page could not be found. Check the URL or navigate home.',
+    },
+    loading: {
+      title: 'Loading',
+      description: 'Data is being prepared. This view will refresh automatically.',
+    },
+    error: {
+      title: 'Something went wrong',
+      description: 'An unexpected issue occurred. Retry the action or check logs.',
     },
   },
   status: {

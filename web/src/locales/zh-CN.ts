@@ -40,6 +40,7 @@ export default {
     previous: '上一页',
     next: '下一页',
     all: '全部',
+    backHome: '返回首页',
   },
   page: {
     home: {
@@ -95,6 +96,44 @@ export default {
     settings: {
       title: 'Settings 占位页',
       subtitle: '集中展示主题、语言与密度切换。',
+    },
+    forbidden: {
+      title: '禁止访问',
+      subtitle: '当前用户上下文无权访问该工作区资源。',
+    },
+    notFound: {
+      title: '页面不存在',
+      subtitle: '请求的路由不存在或已迁移。',
+    },
+  },
+  empty_state: {
+    commands: {
+      title: '暂无命令数据',
+      description: '当前筛选条件下没有命令记录，请调整筛选后重试。',
+      detailTitle: '请选择命令查看详情',
+      detailDescription: '命令概要与日志将在此区域展示。',
+    },
+    assets: {
+      title: '暂无资源数据',
+      description: '当前范围内没有资源，请上传或调整筛选条件。',
+      detailTitle: '请选择资源查看详情',
+      detailDescription: '资源元数据与 URI 将在此显示。',
+    },
+    forbidden: {
+      title: '403 无权限',
+      description: '你没有权限访问当前内容，请联系管理员或切换上下文。',
+    },
+    notFound: {
+      title: '404 页面不存在',
+      description: '未找到该页面，请检查地址或返回首页。',
+    },
+    loading: {
+      title: '正在加载',
+      description: '数据处理中，完成后会自动刷新显示。',
+    },
+    error: {
+      title: '发生错误',
+      description: '系统出现异常，请稍后重试或查看日志。',
     },
   },
   status: {
