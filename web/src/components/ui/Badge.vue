@@ -28,7 +28,7 @@ const toneClass: Record<NonNullable<typeof props.tone>, string> = {
 
 const classes = computed(() =>
   cn(
-    'inline-flex h-6 items-center rounded-button border px-2 text-xs font-semibold uppercase tracking-[0.05em]',
+    'inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-button border px-2 text-xs font-semibold uppercase tracking-[0.05em]',
     toneClass[props.tone],
   ),
 )
