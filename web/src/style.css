@@ -272,6 +272,12 @@
     position: relative;
     isolation: isolate;
     overflow: hidden;
+    background:
+      linear-gradient(
+        180deg,
+        rgb(var(--ui-bg-shell-top) / 1) 0%,
+        rgb(var(--ui-bg-shell-bottom) / 1) 100%
+      );
   }
 
   .ui-bg-content {
@@ -286,81 +292,125 @@
     pointer-events: none;
     position: absolute;
     z-index: 0;
+    transition: opacity 180ms ease;
   }
 
   .ui-bg-grid::before {
-    background-color: rgb(var(--ui-bg-grid-tint) / 0.24);
-    -webkit-mask-image: url('./assets/bg/grid-soft.svg');
-    mask-image: url('./assets/bg/grid-soft.svg');
-    -webkit-mask-position: center;
-    mask-position: center;
-    -webkit-mask-repeat: repeat;
-    mask-repeat: repeat;
-    -webkit-mask-size: 24px 24px;
-    mask-size: 24px 24px;
-    opacity: 0.46;
+    background:
+      radial-gradient(
+        110% 85% at 100% -12%,
+        rgb(var(--ui-bg-accent-1) / 0.12),
+        transparent 60%
+      ),
+      radial-gradient(
+        120% 90% at -12% 2%,
+        rgb(var(--ui-bg-accent-2) / 0.1),
+        transparent 62%
+      ),
+      linear-gradient(
+        180deg,
+        rgb(var(--ui-bg-shell-top) / 0.5) 0%,
+        rgb(var(--ui-bg-shell-bottom) / 0.2) 100%
+      );
+    opacity: var(--ui-bg-wash-opacity);
+  }
+
+  .ui-bg-grid::after {
+    background-image:
+      linear-gradient(to right, rgb(var(--ui-bg-grid-tint) / 0.11) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(var(--ui-bg-grid-tint) / 0.11) 1px, transparent 1px);
+    background-position: center;
+    background-size: 26px 26px;
+    opacity: var(--ui-bg-grid-opacity);
   }
 
   .ui-bg-gradient::before {
-    background: linear-gradient(
-      125deg,
-      rgb(var(--ui-bg-gradient-a) / 0.2),
-      rgb(var(--ui-bg-gradient-b) / 0.14),
-      rgb(var(--ui-bg-gradient-c) / 0.17)
-    );
-    -webkit-mask-image: url('./assets/bg/gradient-mesh.svg');
-    mask-image: url('./assets/bg/gradient-mesh.svg');
-    -webkit-mask-position: center;
-    mask-position: center;
-    -webkit-mask-repeat: no-repeat;
-    mask-repeat: no-repeat;
-    -webkit-mask-size: cover;
-    mask-size: cover;
-    opacity: 0.54;
+    background:
+      radial-gradient(
+        68% 62% at 52% 0%,
+        rgb(var(--ui-bg-gradient-b) / 0.22),
+        transparent 72%
+      ),
+      radial-gradient(
+        46% 42% at 15% 18%,
+        rgb(var(--ui-bg-gradient-a) / 0.18),
+        transparent 72%
+      ),
+      radial-gradient(
+        52% 48% at 84% 20%,
+        rgb(var(--ui-bg-gradient-c) / 0.16),
+        transparent 74%
+      ),
+      linear-gradient(
+        180deg,
+        rgb(var(--ui-bg-shell-top) / 0.3) 0%,
+        rgb(var(--ui-bg-vignette) / 0.08) 100%
+      );
+    opacity: var(--ui-bg-gradient-opacity);
+  }
+
+  .ui-bg-gradient::after {
+    background-image: radial-gradient(circle, rgb(var(--ui-bg-dots-tint) / 0.35) 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-position: center;
+    opacity: calc(var(--ui-bg-dots-opacity) * 0.75);
+  }
+
+  .ui-bg-dots::before {
+    background:
+      radial-gradient(
+        120% 92% at 100% -10%,
+        rgb(var(--ui-bg-accent-3) / 0.12),
+        transparent 60%
+      ),
+      linear-gradient(
+        180deg,
+        rgb(var(--ui-bg-shell-top) / 0.45) 0%,
+        rgb(var(--ui-bg-shell-bottom) / 0.25) 100%
+      );
+    opacity: var(--ui-bg-wash-opacity);
   }
 
   .ui-bg-dots::after {
-    background-color: rgb(var(--ui-bg-dots-tint) / 0.22);
-    -webkit-mask-image: url('./assets/bg/dots-noise.svg');
-    mask-image: url('./assets/bg/dots-noise.svg');
-    -webkit-mask-position: center;
-    mask-position: center;
-    -webkit-mask-repeat: repeat;
-    mask-repeat: repeat;
-    -webkit-mask-size: 180px 180px;
-    mask-size: 180px 180px;
-    opacity: 0.3;
+    background-image: radial-gradient(circle, rgb(var(--ui-bg-dots-tint) / 0.34) 1px, transparent 1px);
+    background-size: 16px 16px;
+    background-position: 0 0;
+    opacity: var(--ui-bg-dots-opacity);
   }
 
   .ui-bg-stack-console::before {
     background: linear-gradient(
-      128deg,
-      rgb(var(--ui-bg-gradient-a) / 0.17),
-      rgb(var(--ui-bg-gradient-b) / 0.12),
-      rgb(var(--ui-bg-gradient-c) / 0.15)
+      180deg,
+      rgb(var(--ui-bg-shell-top) / 0.58) 0%,
+      rgb(var(--ui-bg-shell-bottom) / 0.28) 100%
+    ),
+    radial-gradient(
+      95% 74% at 100% 0%,
+      rgb(var(--ui-bg-accent-1) / 0.1),
+      transparent 74%
+    ),
+    radial-gradient(
+      120% 92% at -12% -8%,
+      rgb(var(--ui-bg-accent-2) / 0.09),
+      transparent 74%
     );
-    -webkit-mask-image: url('./assets/bg/gradient-mesh.svg');
-    mask-image: url('./assets/bg/gradient-mesh.svg');
-    -webkit-mask-position: center;
-    mask-position: center;
-    -webkit-mask-repeat: no-repeat;
-    mask-repeat: no-repeat;
-    -webkit-mask-size: cover;
-    mask-size: cover;
-    opacity: 0.48;
+    opacity: var(--ui-bg-wash-opacity);
   }
 
   .ui-bg-stack-console::after {
-    background-color: rgb(var(--ui-bg-dots-tint) / 0.2);
-    -webkit-mask-image: url('./assets/bg/dots-noise.svg');
-    mask-image: url('./assets/bg/dots-noise.svg');
-    -webkit-mask-position: center;
-    mask-position: center;
-    -webkit-mask-repeat: repeat;
-    mask-repeat: repeat;
-    -webkit-mask-size: 210px 210px;
-    mask-size: 210px 210px;
-    opacity: 0.26;
+    background-image:
+      linear-gradient(to right, rgb(var(--ui-bg-grid-tint) / 0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(var(--ui-bg-grid-tint) / 0.08) 1px, transparent 1px),
+      radial-gradient(circle, rgb(var(--ui-bg-dots-tint) / 0.28) 1px, transparent 1px);
+    background-size:
+      28px 28px,
+      28px 28px,
+      14px 14px;
+    background-position:
+      center,
+      center,
+      6px 8px;
+    opacity: calc(var(--ui-bg-grid-opacity) + 0.02);
   }
 
   .ui-shell-main {

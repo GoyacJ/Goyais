@@ -34,11 +34,21 @@
   --ui-focus-ring: 14 165 233;
   --ui-focus-ring-offset: 245 247 250;
   --ui-focus-ring-contrast: 30 64 175;
-  --ui-bg-grid-tint: 148 163 184;
-  --ui-bg-dots-tint: 100 116 139;
-  --ui-bg-gradient-a: 14 116 144;
+  --ui-bg-grid-tint: 100 116 139;
+  --ui-bg-dots-tint: 148 163 184;
+  --ui-bg-gradient-a: 15 76 129;
   --ui-bg-gradient-b: 37 99 235;
-  --ui-bg-gradient-c: 22 163 74;
+  --ui-bg-gradient-c: 13 148 136;
+  --ui-bg-shell-top: 250 252 255;
+  --ui-bg-shell-bottom: 242 246 250;
+  --ui-bg-accent-1: 56 189 248;
+  --ui-bg-accent-2: 20 184 166;
+  --ui-bg-accent-3: 99 102 241;
+  --ui-bg-vignette: 15 23 42;
+  --ui-bg-grid-opacity: 0.22;
+  --ui-bg-dots-opacity: 0.16;
+  --ui-bg-gradient-opacity: 0.42;
+  --ui-bg-wash-opacity: 0.5;
 
   --ui-overlay-backdrop: 15 23 42;
   --ui-log-bg: 248 250 252;
@@ -103,7 +113,17 @@
   --ui-bg-dots-tint: 100 116 139;
   --ui-bg-gradient-a: 34 211 238;
   --ui-bg-gradient-b: 96 165 250;
-  --ui-bg-gradient-c: 74 222 128;
+  --ui-bg-gradient-c: 45 212 191;
+  --ui-bg-shell-top: 10 14 20;
+  --ui-bg-shell-bottom: 12 18 26;
+  --ui-bg-accent-1: 56 189 248;
+  --ui-bg-accent-2: 74 222 128;
+  --ui-bg-accent-3: 129 140 248;
+  --ui-bg-vignette: 2 6 23;
+  --ui-bg-grid-opacity: 0.28;
+  --ui-bg-dots-opacity: 0.2;
+  --ui-bg-gradient-opacity: 0.52;
+  --ui-bg-wash-opacity: 0.6;
 
   --ui-overlay-backdrop: 2 6 23;
   --ui-log-bg: 15 23 42;
