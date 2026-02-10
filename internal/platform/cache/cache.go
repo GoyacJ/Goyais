@@ -17,8 +17,9 @@ type Provider interface {
 }
 
 type Config struct {
-	Provider  string
-	RedisAddr string
+	Provider      string
+	RedisAddr     string
+	RedisPassword string
 }
 
 func New(cfg Config) (Provider, error) {
@@ -26,7 +27,7 @@ func New(cfg Config) (Provider, error) {
 	case "", "memory":
 		return NewMemoryProvider(), nil
 	case "redis":
-		return NewRedisProvider(strings.TrimSpace(cfg.RedisAddr)), nil
+		return NewRedisProvider(strings.TrimSpace(cfg.RedisAddr), strings.TrimSpace(cfg.RedisPassword)), nil
 	default:
 		return nil, errors.New("unsupported cache provider: " + cfg.Provider)
 	}

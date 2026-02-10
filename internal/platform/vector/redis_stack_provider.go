@@ -18,12 +18,13 @@ type RedisStackProvider struct {
 	client *redis.Client
 }
 
-func NewRedisStackProvider(addr string) *RedisStackProvider {
+func NewRedisStackProvider(addr, password string) *RedisStackProvider {
 	if strings.TrimSpace(addr) == "" {
 		addr = "127.0.0.1:6379"
 	}
 	client := redis.NewClient(&redis.Options{
-		Addr: strings.TrimSpace(addr),
+		Addr:     strings.TrimSpace(addr),
+		Password: strings.TrimSpace(password),
 	})
 	return &RedisStackProvider{client: client}
 }

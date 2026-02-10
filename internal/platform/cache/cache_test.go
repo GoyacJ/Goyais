@@ -55,7 +55,7 @@ func TestMemoryProviderTTL(t *testing.T) {
 
 func TestRedisProviderSetGetDel(t *testing.T) {
 	redisServer := miniredis.RunT(t)
-	p := NewRedisProvider(redisServer.Addr())
+	p := NewRedisProvider(redisServer.Addr(), "")
 	ctx := context.Background()
 
 	if err := p.Ping(ctx); err != nil {

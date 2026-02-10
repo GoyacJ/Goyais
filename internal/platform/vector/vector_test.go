@@ -35,7 +35,7 @@ func TestSQLiteProviderUpsertAndSearch(t *testing.T) {
 
 func TestRedisStackProviderUpsertAndSearch(t *testing.T) {
 	redisServer := miniredis.RunT(t)
-	p := NewRedisStackProvider(redisServer.Addr())
+	p := NewRedisStackProvider(redisServer.Addr(), "")
 	ctx := context.Background()
 
 	if err := p.Ping(ctx); err != nil {

@@ -135,11 +135,17 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	if v := strings.TrimSpace(fc.Cache.RedisAddr); v != "" {
 		cfg.Cache.RedisAddr = v
 	}
+	if v := strings.TrimSpace(fc.Cache.RedisPassword); v != "" {
+		cfg.Cache.RedisPassword = v
+	}
 	if v := strings.ToLower(strings.TrimSpace(fc.Vector.Provider)); v != "" {
 		cfg.Providers.Vector = v
 	}
 	if v := strings.TrimSpace(fc.Vector.RedisAddr); v != "" {
 		cfg.Vector.RedisAddr = v
+	}
+	if v := strings.TrimSpace(fc.Vector.RedisPassword); v != "" {
+		cfg.Vector.RedisPassword = v
 	}
 	if v := strings.ToLower(strings.TrimSpace(fc.ObjectStore.Provider)); v != "" {
 		cfg.Providers.ObjectStore = v
@@ -207,6 +213,12 @@ func applyEnvOverrides(cfg *Config) {
 	if v := strings.TrimSpace(os.Getenv("GOYAIS_REDIS_ADDR")); v != "" {
 		cfg.Cache.RedisAddr = v
 	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_CACHE_REDIS_PASSWORD")); v != "" {
+		cfg.Cache.RedisPassword = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_REDIS_PASSWORD")); v != "" {
+		cfg.Cache.RedisPassword = v
+	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_VECTOR_PROVIDER"))); v != "" {
 		cfg.Providers.Vector = v
 	}
@@ -215,6 +227,12 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := strings.TrimSpace(os.Getenv("GOYAIS_REDIS_ADDR")); v != "" {
 		cfg.Vector.RedisAddr = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_VECTOR_REDIS_PASSWORD")); v != "" {
+		cfg.Vector.RedisPassword = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_REDIS_PASSWORD")); v != "" {
+		cfg.Vector.RedisPassword = v
 	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_OBJECT_STORE_PROVIDER"))); v != "" {
 		cfg.Providers.ObjectStore = v
@@ -253,6 +271,9 @@ func applyDerivedDefaults(cfg *Config) {
 	}
 	if strings.TrimSpace(cfg.Vector.RedisAddr) == "" {
 		cfg.Vector.RedisAddr = cfg.Cache.RedisAddr
+	}
+	if strings.TrimSpace(cfg.Vector.RedisPassword) == "" {
+		cfg.Vector.RedisPassword = cfg.Cache.RedisPassword
 	}
 	if strings.TrimSpace(cfg.ObjectStore.LocalRoot) == "" {
 		cfg.ObjectStore.LocalRoot = "./data/objects"

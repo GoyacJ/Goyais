@@ -53,8 +53,10 @@ func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	t.Setenv("GOYAIS_OBJECT_STORE_USE_SSL", "true")
 	t.Setenv("GOYAIS_CACHE_PROVIDER", "redis")
 	t.Setenv("GOYAIS_CACHE_REDIS_ADDR", "127.0.0.1:6379")
+	t.Setenv("GOYAIS_CACHE_REDIS_PASSWORD", "cache-pass")
 	t.Setenv("GOYAIS_VECTOR_PROVIDER", "redis_stack")
 	t.Setenv("GOYAIS_VECTOR_REDIS_ADDR", "127.0.0.1:6380")
+	t.Setenv("GOYAIS_VECTOR_REDIS_PASSWORD", "vector-pass")
 
 	cfg, err := Load()
 	if err != nil {
@@ -79,8 +81,14 @@ func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	if cfg.Providers.Cache != "redis" || cfg.Cache.RedisAddr != "127.0.0.1:6379" {
 		t.Fatalf("unexpected cache config: provider=%s addr=%s", cfg.Providers.Cache, cfg.Cache.RedisAddr)
 	}
+	if cfg.Cache.RedisPassword != "cache-pass" {
+		t.Fatalf("unexpected cache redis password")
+	}
 	if cfg.Providers.Vector != "redis_stack" || cfg.Vector.RedisAddr != "127.0.0.1:6380" {
 		t.Fatalf("unexpected vector config: provider=%s addr=%s", cfg.Providers.Vector, cfg.Vector.RedisAddr)
+	}
+	if cfg.Vector.RedisPassword != "vector-pass" {
+		t.Fatalf("unexpected vector redis password")
 	}
 }
 

@@ -56,8 +56,9 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	workflowService := workflow.NewService(workflowRepo, cfg.Authz.AllowPrivateToPublic)
 
 	cacheProvider, err := cache.New(cache.Config{
-		Provider:  cfg.Providers.Cache,
-		RedisAddr: cfg.Cache.RedisAddr,
+		Provider:      cfg.Providers.Cache,
+		RedisAddr:     cfg.Cache.RedisAddr,
+		RedisPassword: cfg.Cache.RedisPassword,
 	})
 	if err != nil {
 		_ = db.Close()
@@ -65,8 +66,9 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	}
 
 	vectorProvider, err := vector.New(vector.Config{
-		Provider:  cfg.Providers.Vector,
-		RedisAddr: cfg.Vector.RedisAddr,
+		Provider:      cfg.Providers.Vector,
+		RedisAddr:     cfg.Vector.RedisAddr,
+		RedisPassword: cfg.Vector.RedisPassword,
 	})
 	if err != nil {
 		_ = db.Close()

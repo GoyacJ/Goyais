@@ -43,11 +43,13 @@ type ObjectStoreConfig struct {
 }
 
 type CacheConfig struct {
-	RedisAddr string `json:"redisAddr"`
+	RedisAddr     string `json:"redisAddr"`
+	RedisPassword string `json:"redisPassword"`
 }
 
 type VectorConfig struct {
-	RedisAddr string `json:"redisAddr"`
+	RedisAddr     string `json:"redisAddr"`
+	RedisPassword string `json:"redisPassword"`
 }
 
 type CommandConfig struct {
@@ -80,12 +82,14 @@ type fileConfig struct {
 		AllowPrivateToPublic bool `yaml:"allow_private_to_public"`
 	} `yaml:"authz"`
 	Cache struct {
-		Provider  string `yaml:"provider"`
-		RedisAddr string `yaml:"redis_addr"`
+		Provider      string `yaml:"provider"`
+		RedisAddr     string `yaml:"redis_addr"`
+		RedisPassword string `yaml:"redis_password"`
 	} `yaml:"cache"`
 	Vector struct {
-		Provider  string `yaml:"provider"`
-		RedisAddr string `yaml:"redis_addr"`
+		Provider      string `yaml:"provider"`
+		RedisAddr     string `yaml:"redis_addr"`
+		RedisPassword string `yaml:"redis_password"`
 	} `yaml:"vector"`
 	ObjectStore struct {
 		Provider  string `yaml:"provider"`

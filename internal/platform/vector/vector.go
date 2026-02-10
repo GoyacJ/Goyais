@@ -21,8 +21,9 @@ type Provider interface {
 }
 
 type Config struct {
-	Provider  string
-	RedisAddr string
+	Provider      string
+	RedisAddr     string
+	RedisPassword string
 }
 
 func New(cfg Config) (Provider, error) {
@@ -30,7 +31,7 @@ func New(cfg Config) (Provider, error) {
 	case "", "sqlite":
 		return NewSQLiteProvider(), nil
 	case "redis_stack":
-		return NewRedisStackProvider(strings.TrimSpace(cfg.RedisAddr)), nil
+		return NewRedisStackProvider(strings.TrimSpace(cfg.RedisAddr), strings.TrimSpace(cfg.RedisPassword)), nil
 	default:
 		return nil, errors.New("unsupported vector provider: " + cfg.Provider)
 	}
