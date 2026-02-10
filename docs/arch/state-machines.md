@@ -95,7 +95,8 @@
 ## 0.9 Stream Domain Sugar（D1 MVP）
 - `POST /api/v1/streams` 必须转换为 `stream.create` command 执行（Command-first）。
 - `POST /api/v1/streams/{streamId}:record-start`、`POST /api/v1/streams/{streamId}:record-stop`、`POST /api/v1/streams/{streamId}:kick` 必须转换为 `stream.record.start`、`stream.record.stop`、`stream.kick` command 执行。
-- 当流 `state.onPublishTemplateId` 存在时，`stream.record.start` 必须通过 command gate 追加一次 `workflow.run` command（禁止绕过 command service 直调 workflow 写路径）。
+- 当流 `state.onPublishTemplateId` 存在时，`stream.record.start` 必须发布 `stream.on_publish` 事件；事件消费者收到后必须通过 command gate 提交 `workflow.run` command（禁止绕过 command service 直调 workflow 写路径）。
+- 事件触发的幂等键固定：`stream-onpublish-<recordingId>`；重复投递不应创建重复 run。
 
 ## 0.10 Algorithm Domain Sugar（MVP）
 - `POST /api/v1/algorithms/{algorithmId}:run` 必须转换为 `algorithm.run` command 执行（Command-first）。

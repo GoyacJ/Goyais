@@ -380,6 +380,7 @@ func (s *Service) publishOnPublishEvent(
 	}
 	envelope := map[string]any{
 		"eventType":   "stream.on_publish",
+		"eventId":     recording.ID,
 		"tenantId":    req.TenantID,
 		"workspaceId": req.WorkspaceID,
 		"userId":      req.UserID,
@@ -387,6 +388,7 @@ func (s *Service) publishOnPublishEvent(
 		"streamId":    streamItem.ID,
 		"recordingId": recording.ID,
 		"templateId":  templateID,
+		"visibility":  streamItem.Visibility,
 		"trigger":     "stream.onPublish",
 		"emittedAt":   time.Now().UTC().Format(time.RFC3339Nano),
 	}
@@ -395,7 +397,7 @@ func (s *Service) publishOnPublishEvent(
 		return "failed", err.Error()
 	}
 	err = s.eventBus.Publish(ctx, eventbus.ChannelStream, eventbus.Message{
-		Key:   streamItem.ID + ":" + recording.ID,
+		Key:   recording.ID,
 		Value: raw,
 		Headers: map[string]string{
 			"eventType":   "stream.on_publish",

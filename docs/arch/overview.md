@@ -241,7 +241,7 @@ Command 执行管道（必须）：
     - `POST /streams/{streamId}:record-stop`（domain sugar -> `stream.record.stop` command）
     - `POST /streams/{streamId}:kick`（domain sugar -> `stream.kick` command）
     - `record-stop` 成功后写入 `asset_lineage`（`relation=recorded_from`）
-    - `onPublishTemplateId` 存在时，通过 command gate 触发一次 `workflow.run`
+    - `onPublishTemplateId` 存在时，发布 `stream.on_publish` 事件；Kafka consumer 收到后通过 command gate 触发一次 `workflow.run`（幂等键 `stream-onpublish-<recordingId>`）
   - `algorithms`（MVP 已落地）：
     - `POST /algorithms/{algorithmId}:run`（domain sugar -> `algorithm.run` command）
     - `algorithm.run` 结果映射 `workflow_run_id` 并可通过 `GET /commands/{id}` 回查

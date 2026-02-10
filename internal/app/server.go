@@ -123,6 +123,12 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	streamService.SetEventBusProvider(eventBusProvider)
 
 	registerCommandExecutors(commandService, assetService, workflowService, pluginService, streamService, algorithmService)
+	stopStreamConsumer, err := startKafkaStreamConsumer(cfg, commandService, log.Default())
+	if err != nil {
+		_ = eventBusProvider.Close()
+		_ = db.Close()
+		return nil, fmt.Errorf("start stream event consumer: %w", err)
+	}
 
 	h, err := httpapi.NewRouter(cfg, httpapi.RouterDeps{
 		CommandService:  commandService,
@@ -156,6 +162,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	}
 
 	srv.RegisterOnShutdown(func() {
+		stopStreamConsumer()
 		_ = eventBusProvider.Close()
 		_ = db.Close()
 	})

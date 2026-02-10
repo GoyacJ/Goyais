@@ -130,6 +130,7 @@
 - [x] 可创建并查询 StreamingAsset/path（`POST /streams`、`GET /streams*`）。
 - [x] 可执行录制开始与停止，录制结果资产化并建立 lineage。
 - [x] `onPublish` 事件能触发一次 workflow run（经 command gate）。
+- [x] 在 `event_bus.provider=kafka` 下，`stream.on_publish` 消费链路通过 command gate 触发 `workflow.run`，重复事件按 `stream-onpublish-<recordingId>` 幂等收敛。
 - [x] 流对象的 visibility/ACL 判定与其他对象一致（owner/ACL.READ；当策略允许提升可见性时支持 WORKSPACE 读，写动作受 EXECUTE/MANAGE 约束）。
 
 ## 10. 前端主题与国际化验收
@@ -187,6 +188,7 @@
 - `GOYAIS_IT_POSTGRES_DSN='<dsn>' go test ./internal/integration -run TestPostgresCommandAssetWorkflowContract -v`
 - `GOYAIS_IT_OBJECT_STORE_ENDPOINT=<endpoint> GOYAIS_IT_OBJECT_STORE_ACCESS_KEY=<ak> GOYAIS_IT_OBJECT_STORE_SECRET_KEY=<sk> GOYAIS_IT_OBJECT_STORE_BUCKET=<bucket> GOYAIS_IT_OBJECT_STORE_USE_SSL=false go test ./internal/asset -run TestS3CompatibleStoreIntegration -v`
 - `GOYAIS_IT_REDIS_ADDR='<host:port>' GOYAIS_IT_REDIS_PASSWORD='<password>' go test ./internal/platform/cache -run TestRedisProviderIntegration -v`
+- `GOYAIS_IT_POSTGRES_DSN='<dsn>' GOYAIS_IT_KAFKA_BROKERS='<host:port>' go test ./internal/integration -run KafkaStreamTrigger -v`
 - `go test ./internal/config ./internal/access/http -v`
 - `pnpm -C web typecheck`
 - `pnpm -C web test:run`
