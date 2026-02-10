@@ -23,6 +23,8 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 	if deps.CommandService != nil {
 		apiMux.Handle("/api/v1/commands", NewCommandCollectionHandler(deps.CommandService))
 		apiMux.Handle("/api/v1/commands/", NewCommandItemHandler(deps.CommandService))
+		apiMux.Handle("/api/v1/shares", NewShareCollectionHandler(deps.CommandService))
+		apiMux.Handle("/api/v1/shares/", NewShareItemHandler(deps.CommandService))
 	}
 
 	staticHandler, err := webstatic.NewHandler()

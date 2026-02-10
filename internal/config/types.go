@@ -9,6 +9,7 @@ type Config struct {
 	Providers ProviderConfig  `json:"providers"`
 	DB        DBConfig        `json:"db"`
 	Command   CommandConfig   `json:"command"`
+	Authz     AuthzConfig     `json:"authz"`
 	Paths     RuntimePathConf `json:"paths"`
 }
 
@@ -33,6 +34,10 @@ type CommandConfig struct {
 	MaxConcurrency int           `json:"maxConcurrency"`
 }
 
+type AuthzConfig struct {
+	AllowPrivateToPublic bool `json:"allowPrivateToPublic"`
+}
+
 type RuntimePathConf struct {
 	ConfigFile string `json:"configFile"`
 }
@@ -50,6 +55,9 @@ type fileConfig struct {
 		IdempotencyTTL string `yaml:"idempotency_ttl"`
 		MaxConcurrency int    `yaml:"max_concurrency"`
 	} `yaml:"command"`
+	Authz struct {
+		AllowPrivateToPublic bool `yaml:"allow_private_to_public"`
+	} `yaml:"authz"`
 	Cache struct {
 		Provider string `yaml:"provider"`
 	} `yaml:"cache"`

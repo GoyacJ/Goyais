@@ -83,6 +83,13 @@
 - [ ] 无权限用户访问资源返回拒绝，并包含明确 `messageKey`。
 - [ ] `PRIVATE` 输入默认不得直接产生 `PUBLIC` 输出（除非策略放开且权限满足）。
 
+### 6.1 A3 最小闭环（Thread #4）
+- [ ] `POST /api/v1/shares` 仅允许 `resourceType=command`，否则返回 `400 INVALID_SHARE_REQUEST`。
+- [ ] `POST /api/v1/shares` 仅允许 `subjectType=user` 且 `permissions` 仅来自 `READ/WRITE/EXECUTE/MANAGE/SHARE`，非法值返回 `400 INVALID_SHARE_REQUEST`。
+- [ ] `POST /api/v1/shares` 创建前必须校验同资源 SHARE 权限：owner 或该 `commandId` 上已有 `ACL.SHARE`。
+- [ ] 非 owner 且无该资源 `SHARE` 权限时，`POST /api/v1/shares` 返回 `403 FORBIDDEN + messageKey=error.authz.forbidden`。
+- [ ] SQLite 模式下，`GET /api/v1/commands` 的可读过滤在 SQL 层完成（`owner OR visibility=WORKSPACE OR ACL.READ`），分页基于过滤后结果且排序固定 `created_at DESC,id DESC`。
+
 ## 7. Workflow/Run 回放验收
 
 - [ ] WorkflowTemplate 支持 Draft/Published 版本。

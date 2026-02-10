@@ -20,7 +20,6 @@ Thumbs.db
 .env.*
 !.env.example
 goyais.db
-*.db
 
 # ------------------------------------------------------------
 # Logs / Temp / Cache
@@ -56,10 +55,6 @@ mem.out
 bin/
 build/
 dist/
-data/objects/
-!internal/access/webstatic/dist/
-internal/access/webstatic/dist/*
-!internal/access/webstatic/dist/.keep
 
 # Go workspace file (useful for local multi-module dev)
 go.work

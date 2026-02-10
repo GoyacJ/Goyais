@@ -67,6 +67,9 @@ func defaultsForProfile(profile string) Config {
 			IdempotencyTTL: 300 * time.Second,
 			MaxConcurrency: 32,
 		},
+		Authz: AuthzConfig{
+			AllowPrivateToPublic: false,
+		},
 	}
 
 	if profile == ProfileFull {
@@ -105,6 +108,9 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	if fc.Command.MaxConcurrency > 0 {
 		cfg.Command.MaxConcurrency = fc.Command.MaxConcurrency
 	}
+	if fc.Authz.AllowPrivateToPublic {
+		cfg.Authz.AllowPrivateToPublic = true
+	}
 	if v := strings.ToLower(strings.TrimSpace(fc.Cache.Provider)); v != "" {
 		cfg.Providers.Cache = v
 	}
@@ -140,6 +146,11 @@ func applyEnvOverrides(cfg *Config) {
 	if v := strings.TrimSpace(os.Getenv("GOYAIS_COMMAND_MAX_CONCURRENCY")); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.Command.MaxConcurrency = n
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_ALLOW_PRIVATE_TO_PUBLIC")); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			cfg.Authz.AllowPrivateToPublic = parsed
 		}
 	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_CACHE_PROVIDER"))); v != "" {

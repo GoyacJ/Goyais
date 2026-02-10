@@ -15,6 +15,21 @@ const (
 	StatusCanceled  = "canceled"
 )
 
+const (
+	VisibilityPrivate   = "PRIVATE"
+	VisibilityWorkspace = "WORKSPACE"
+	VisibilityTenant    = "TENANT"
+	VisibilityPublic    = "PUBLIC"
+)
+
+const (
+	PermissionRead    = "READ"
+	PermissionWrite   = "WRITE"
+	PermissionExecute = "EXECUTE"
+	PermissionManage  = "MANAGE"
+	PermissionShare   = "SHARE"
+)
+
 type RequestContext struct {
 	TenantID    string
 	WorkspaceID string
@@ -45,6 +60,7 @@ type CreateInput struct {
 	Context        RequestContext
 	CommandType    string
 	Payload        json.RawMessage
+	Visibility     string
 	IdempotencyKey string
 	RequestHash    string
 	Now            time.Time
@@ -65,6 +81,45 @@ type ListParams struct {
 
 type ListResult struct {
 	Items      []Command
+	Total      int64
+	NextCursor string
+	UsedCursor bool
+}
+
+type Share struct {
+	ID           string
+	TenantID     string
+	WorkspaceID  string
+	ResourceType string
+	ResourceID   string
+	SubjectType  string
+	SubjectID    string
+	Permissions  []string
+	ExpiresAt    *time.Time
+	CreatedBy    string
+	CreatedAt    time.Time
+}
+
+type ShareCreateInput struct {
+	Context      RequestContext
+	ResourceType string
+	ResourceID   string
+	SubjectType  string
+	SubjectID    string
+	Permissions  []string
+	ExpiresAt    *time.Time
+	Now          time.Time
+}
+
+type ShareListParams struct {
+	Context  RequestContext
+	Page     int
+	PageSize int
+	Cursor   string
+}
+
+type ShareListResult struct {
+	Items      []Share
 	Total      int64
 	NextCursor string
 	UsedCursor bool

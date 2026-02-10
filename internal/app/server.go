@@ -25,7 +25,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 		return nil, fmt.Errorf("build command repository: %w", err)
 	}
 
-	commandService := command.NewService(repo, cfg.Command.IdempotencyTTL, log.Default())
+	commandService := command.NewService(repo, cfg.Command.IdempotencyTTL, cfg.Authz.AllowPrivateToPublic, log.Default())
 
 	h, err := httpapi.NewRouter(cfg, httpapi.RouterDeps{
 		CommandService: commandService,

@@ -13,8 +13,10 @@ CREATE TABLE IF NOT EXISTS acl_entries (
 );
 
 CREATE INDEX IF NOT EXISTS idx_acl_entries_resource
-  ON acl_entries(resource_type, resource_id);
+  ON acl_entries (resource_type, resource_id);
+
 CREATE INDEX IF NOT EXISTS idx_acl_entries_subject
-  ON acl_entries(subject_type, subject_id);
+  ON acl_entries (subject_type, subject_id);
+
 CREATE INDEX IF NOT EXISTS idx_acl_entries_tenant_workspace
-  ON acl_entries(tenant_id, workspace_id);
+  ON acl_entries (tenant_id, workspace_id);
