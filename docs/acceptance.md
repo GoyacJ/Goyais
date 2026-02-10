@@ -121,11 +121,11 @@
 - [ ] `POST /api/v1/shares` 仅允许 `resourceType=command|asset`；本轮重点验 `asset`。
 - [ ] `subjectType` 仅支持 `user`；非法值返回 `400 INVALID_SHARE_REQUEST`。
 - [ ] `permissions` 仅支持 `READ/WRITE/EXECUTE/MANAGE/SHARE`；非法值返回 `400 INVALID_SHARE_REQUEST`。
-- [ ] 对 `asset` 分享时，必须先通过“同资源 SHARE 权限”校验（owner 或该 asset 上已有 SHARE），否则 `403 FORBIDDEN`。
+- [ ] 对 `asset` 分享时，必须先通过“同资源 SHARE 权限”校验（同 `resource_type=asset` 且同 `resource_id`），否则 `403 FORBIDDEN`。
 
 ### 12.3 Postgres full（本轮占位）
 - [ ] `GET /api/v1/healthz` 与 `GET /api/v1/system/healthz` 返回 `200`，且 `providers.db=postgres`。
-- [ ] `POST/GET /api/v1/assets*` 统一返回 `501 NOT_IMPLEMENTED`，错误结构为 `error{code,messageKey,details}`。
+- [ ] `POST/GET /api/v1/assets*` 统一返回 `501 NOT_IMPLEMENTED`，错误结构为 `error{code,messageKey,details}`，且 `messageKey=error.asset.not_implemented`。
 
 ### 12.4 回归（必须通过）
 - [ ] `make build` 通过。

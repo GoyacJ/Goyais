@@ -195,6 +195,7 @@ Asset 本地对象路径（冻结）：
 - `object_store.local_root` 默认 `./data/objects`
 - 相对路径固定：`tenant/workspace/YYYY/MM/DD/<sha256>`
 - 资源 URI 固定：`local://<relative_path>`
+- `uri` 与 `hash` 在资产模型中均为必填（NOT NULL），禁止写入空值或 `NULL`
 
 ## 9. 前端约束
 

@@ -124,8 +124,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 error:
-                  code: INVALID_SHARE_REQUEST
-                  messageKey: error.share.invalid_request
+                  code: MISSING_CONTEXT
+                  messageKey: error.context.missing
+                  details:
+                    missingHeaders: [X-Tenant-Id, X-Workspace-Id, X-User-Id]
         '403':
           description: Forbidden
           content:
@@ -173,7 +175,17 @@ paths:
         '400':
           $ref: '#/components/responses/ErrorResponse'
         '403':
-          $ref: '#/components/responses/ErrorResponse'
+          description: Forbidden (not owner and no same-resource SHARE permission)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FORBIDDEN
+                  messageKey: error.authz.forbidden
+                  details:
+                    reason: permission_denied
         '409':
           $ref: '#/components/responses/ErrorResponse'
         '501':
@@ -238,11 +250,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/Share'
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          description: Invalid request (missing context or invalid multipart/form field)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: INVALID_ASSET_REQUEST
+                  messageKey: error.asset.invalid_request
+                  details:
+                    field: file
         '403':
-          $ref: '#/components/responses/ErrorResponse'
+          description: Forbidden (visibility escalation or authorization denied)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FORBIDDEN
+                  messageKey: error.authz.forbidden
+                  details:
+                    reason: visibility_escalation_not_allowed
         '501':
-          $ref: '#/components/responses/ErrorResponse'
+          description: Not implemented in current provider mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_IMPLEMENTED
+                  messageKey: error.asset.not_implemented
         default:
           $ref: '#/components/responses/ErrorResponse'
     get:
@@ -373,11 +413,37 @@ paths:
         '400':
           $ref: '#/components/responses/ErrorResponse'
         '403':
-          $ref: '#/components/responses/ErrorResponse'
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: FORBIDDEN
+                  messageKey: error.authz.forbidden
+                  details:
+                    reason: permission_denied
         '404':
-          $ref: '#/components/responses/ErrorResponse'
+          description: Asset not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: ASSET_NOT_FOUND
+                  messageKey: error.asset.not_found
         '501':
-          $ref: '#/components/responses/ErrorResponse'
+          description: Not implemented in current provider mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: NOT_IMPLEMENTED
+                  messageKey: error.asset.not_implemented
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -1237,6 +1303,7 @@ components:
               type: string
             uri:
               type: string
+              description: local object store URI, fixed as local://<relative_path_under_local_root> in v0.1
             metadata:
               type: object
               additionalProperties: true

@@ -106,21 +106,25 @@
 
 ### assets
 - `id`（TEXT/UUID）
-- `tenant_id`
-- `workspace_id`
-- `owner_id`
-- `visibility`（`PRIVATE/WORKSPACE/TENANT/PUBLIC`，默认 `PRIVATE`）
-- `acl_json`（JSON；默认 `[]`，禁止 NULL）
+- `tenant_id`（NOT NULL）
+- `workspace_id`（NOT NULL）
+- `owner_id`（NOT NULL）
+- `visibility`（`PRIVATE/WORKSPACE/TENANT/PUBLIC`，NOT NULL，默认 `PRIVATE`）
+- `acl_json`（NOT NULL，默认 `[]`，禁止 NULL）
+  - SQLite：`TEXT NOT NULL DEFAULT '[]'`
+  - PostgreSQL：`JSONB NOT NULL DEFAULT '[]'::jsonb`
 - `name`
 - `type`（string，本轮不做硬枚举校验）
 - `mime`
 - `size`
-- `uri`（本轮固定 `local://<relative_path>`）
-- `hash`（sha256）
-- `metadata_json`（JSON；默认 `{}`，禁止 NULL）
+- `uri`（NOT NULL，本轮固定 `local://<relative_path>`）
+- `hash`（sha256，NOT NULL）
+- `metadata_json`（NOT NULL，默认 `{}`，禁止 NULL）
+  - SQLite：`TEXT NOT NULL DEFAULT '{}'`
+  - PostgreSQL：`JSONB NOT NULL DEFAULT '{}'::jsonb`
 - `status`（本轮最小 `ready/deleted`，默认 `ready`）
-- `created_at`
-- `updated_at`
+- `created_at`（NOT NULL）
+- `updated_at`（NOT NULL）
 
 local object store 路径规范（冻结）：
 - 不包含原始文件名；
