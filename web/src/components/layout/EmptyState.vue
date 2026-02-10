@@ -52,12 +52,12 @@ const illustrations: Record<EmptyStateVariant, string> = {
 
 const toneClasses: Record<EmptyStateVariant, string> = {
   generic: 'text-ui-muted',
-  'commands-empty': 'text-primary-600',
-  'assets-empty': 'text-info',
-  'forbidden-403': 'text-error',
-  'not-found-404': 'text-warn',
-  loading: 'text-primary-600',
-  error: 'text-error',
+  'commands-empty': 'ui-tone-text-primary',
+  'assets-empty': 'ui-tone-text-info',
+  'forbidden-403': 'ui-tone-text-error',
+  'not-found-404': 'ui-tone-text-warn',
+  loading: 'ui-tone-text-primary',
+  error: 'ui-tone-text-error',
 }
 
 const illustration = computed(() => illustrations[props.variant])

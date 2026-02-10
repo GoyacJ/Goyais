@@ -15,8 +15,8 @@
           <div class="grid grid-cols-4 gap-2">
             <span class="h-8 rounded-button border border-ui-border bg-ui-bg" />
             <span class="h-8 rounded-button border border-ui-border bg-ui-panel" />
-            <span class="h-8 rounded-button bg-primary-600" />
-            <span class="h-8 rounded-button bg-success" />
+            <span class="ui-tone-surface-primary h-8 rounded-button border" />
+            <span class="ui-tone-surface-success h-8 rounded-button border" />
           </div>
         </SectionCard>
       </template>

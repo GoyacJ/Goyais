@@ -46,7 +46,7 @@
 
       <template #detail>
         <SectionCard :title="t('page.assets.detailTitle')" :subtitle="selectedAsset?.assetId ?? '-'">
-          <div v-if="selectedAsset" class="space-y-3">
+          <div v-if="selectedAsset" class="ui-surface border-ui-borderSubtle bg-ui-surface2 p-3">
             <dl class="grid gap-3 text-xs text-ui-muted md:grid-cols-2">
               <div>
                 <dt>{{ t('page.assets.fieldName') }}</dt>
@@ -69,11 +69,11 @@
                 <dd class="ui-monospace mt-1 text-ui-fg">{{ selectedAsset.createdAt }}</dd>
               </div>
               <div class="md:col-span-2">
-                <dt>URI</dt>
+                <dt>{{ t('page.assets.fieldUri') }}</dt>
                 <dd class="ui-monospace mt-1 break-all text-ui-fg">{{ selectedAsset.uri }}</dd>
               </div>
               <div class="md:col-span-2">
-                <dt>Hash</dt>
+                <dt>{{ t('page.assets.fieldHash') }}</dt>
                 <dd class="ui-monospace mt-1 break-all text-ui-fg">{{ selectedAsset.hash }}</dd>
               </div>
               <div>

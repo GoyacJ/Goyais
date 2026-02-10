@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import Table, { type TableColumn } from '@/components/ui/Table.vue'
+import i18n from '@/i18n'
 
 const columns: TableColumn[] = [
   { key: 'name', label: 'Name' },
@@ -19,6 +20,9 @@ describe('Table', () => {
         rows,
         interactiveRows: true,
         selectedRowIndex: 1,
+      },
+      global: {
+        plugins: [i18n],
       },
     })
 

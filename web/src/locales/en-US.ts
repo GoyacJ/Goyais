@@ -120,6 +120,7 @@ export default {
       fieldStatus: 'Status',
       fieldAcceptedAt: 'acceptedAt',
       fieldOwner: 'owner',
+      fieldTraceId: 'traceId',
       fieldResult: 'Result summary',
     },
     assets: {
@@ -138,6 +139,8 @@ export default {
       fieldVisibility: 'Visibility',
       fieldCreatedAt: 'createdAt',
       fieldOwner: 'owner',
+      fieldUri: 'URI',
+      fieldHash: 'Hash',
     },
     plugins: {
       title: 'Plugins Placeholder',

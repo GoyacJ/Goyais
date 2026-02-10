@@ -26,6 +26,17 @@ if (!window.PointerEvent) {
   ;(window as any).PointerEvent = MouseEvent
 }
 
+if (typeof window.ResizeObserver === 'undefined') {
+  class ResizeObserverStub implements ResizeObserver {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(window as any).ResizeObserver = ResizeObserverStub
+}
+
 afterEach(() => {
   localStorage.clear()
   document.documentElement.removeAttribute('data-layout')

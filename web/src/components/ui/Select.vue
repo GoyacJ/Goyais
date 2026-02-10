@@ -14,7 +14,7 @@
         leave-from-class="opacity-100 scale-100"
         leave-to-class="opacity-0 scale-95"
       >
-        <ListboxOptions class="ui-overlay-panel absolute z-30 mt-1 max-h-60 w-full overflow-auto p-1">
+        <ListboxOptions class="ui-overlay-panel ui-scrollbar absolute z-30 mt-1 max-h-60 w-full overflow-auto p-1">
           <ListboxOption
             v-for="option in options"
             :key="String(option.value)"
@@ -24,9 +24,9 @@
           >
             <li
               :class="[
-                'ui-focus-ring ui-pressable cursor-pointer rounded-button px-2 py-2 text-sm',
+                'ui-focus-ring ui-pressable cursor-pointer rounded-button border border-transparent px-2 py-2 text-sm',
                 active ? 'bg-ui-hover' : '',
-                selected ? 'text-primary-700 dark:text-primary-500' : 'text-ui-fg',
+                selected ? 'ui-state-selected ui-tone-text-primary' : 'text-ui-fg',
               ]"
             >
               {{ option.label }}

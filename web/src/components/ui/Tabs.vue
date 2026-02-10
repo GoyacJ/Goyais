@@ -9,7 +9,7 @@
       :aria-disabled="tab.disabled || undefined"
       :class="[
         'ui-control ui-focus-ring ui-pressable min-w-20 border-transparent px-3 text-sm',
-        modelValue === tab.id ? 'bg-primary-500/15 text-primary-700 dark:text-primary-500' : '',
+        modelValue === tab.id ? 'ui-tab-active' : '',
         tab.disabled ? 'ui-disabled' : '',
       ]"
       :disabled="tab.disabled"

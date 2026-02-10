@@ -24,7 +24,7 @@
           leave-to="scale-95 opacity-0"
         >
           <DialogPanel class="ui-overlay-panel w-full max-w-lg p-5">
-            <DialogTitle class="text-lg font-semibold">{{ title }}</DialogTitle>
+            <DialogTitle class="ui-title font-semibold">{{ title }}</DialogTitle>
             <DialogDescription v-if="description" class="mt-2 text-sm text-ui-muted">
               {{ description }}
             </DialogDescription>
@@ -34,8 +34,8 @@
             </div>
 
             <footer v-if="showFooter" class="mt-5 flex items-center justify-end gap-2">
-              <Button variant="ghost" @click="emit('close')">{{ cancelLabel }}</Button>
-              <Button :loading="confirmLoading" @click="emit('confirm')">{{ confirmLabel }}</Button>
+              <Button variant="ghost" @click="emit('close')">{{ resolvedCancelLabel }}</Button>
+              <Button :loading="confirmLoading" @click="emit('confirm')">{{ resolvedConfirmLabel }}</Button>
             </footer>
           </DialogPanel>
         </TransitionChild>
@@ -54,8 +54,10 @@ import {
   TransitionRoot,
 } from '@headlessui/vue'
 import Button from '@/components/ui/Button.vue'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     open: boolean
     title: string
@@ -67,8 +69,8 @@ withDefaults(
   }>(),
   {
     description: '',
-    cancelLabel: 'Cancel',
-    confirmLabel: 'Confirm',
+    cancelLabel: '',
+    confirmLabel: '',
     confirmLoading: false,
     showFooter: true,
   },
@@ -78,4 +80,9 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'confirm'): void
 }>()
+
+const { t } = useI18n({ useScope: 'global' })
+
+const resolvedCancelLabel = computed(() => props.cancelLabel || t('common.cancel'))
+const resolvedConfirmLabel = computed(() => props.confirmLabel || t('common.confirm'))
 </script>

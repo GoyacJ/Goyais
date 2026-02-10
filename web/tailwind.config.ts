@@ -9,11 +9,16 @@ export default {
         ui: {
           bg: 'rgb(var(--ui-neutral-bg) / <alpha-value>)',
           fg: 'rgb(var(--ui-neutral-fg) / <alpha-value>)',
+          fgSubtle: 'rgb(var(--ui-neutral-fg-subtle) / <alpha-value>)',
           muted: 'rgb(var(--ui-neutral-muted) / <alpha-value>)',
+          borderSubtle: 'rgb(var(--ui-neutral-border-subtle) / <alpha-value>)',
           border: 'rgb(var(--ui-neutral-border) / <alpha-value>)',
+          borderStrong: 'rgb(var(--ui-neutral-border-strong) / <alpha-value>)',
           hover: 'rgb(var(--ui-neutral-hover) / <alpha-value>)',
           pressed: 'rgb(var(--ui-neutral-pressed) / <alpha-value>)',
           panel: 'rgb(var(--ui-neutral-panel) / <alpha-value>)',
+          surface2: 'rgb(var(--ui-neutral-surface-2) / <alpha-value>)',
+          stateLayer: 'rgb(var(--ui-state-layer) / <alpha-value>)',
         },
         primary: {
           500: 'rgb(var(--ui-primary-500) / <alpha-value>)',

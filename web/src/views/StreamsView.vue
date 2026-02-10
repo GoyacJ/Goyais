@@ -23,7 +23,7 @@
 
       <template #stream-logs>
         <SectionCard :title="t('page.streams.logsTitle')" :subtitle="t('page.streams.logsSubtitle')">
-          <pre class="ui-monospace rounded-button border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted">[10:44:01] stream connected
+          <pre class="ui-log-surface ui-monospace rounded-button p-3 text-xs">[10:44:01] stream connected
 [10:44:04] recording started
 [10:44:20] segment flushed</pre>
         </SectionCard>

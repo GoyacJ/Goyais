@@ -3,7 +3,7 @@
     class="ui-card"
     :class="[
       interactive ? 'ui-pressable cursor-pointer' : '',
-      selected ? '!border-primary-500 bg-primary-500/10' : '',
+      selected ? 'ui-state-selected' : '',
     ]"
     :role="interactive ? 'button' : undefined"
     :tabindex="interactive ? 0 : undefined"
@@ -22,15 +22,15 @@
 
     <dl class="mt-3 grid gap-2 text-xs text-ui-muted md:grid-cols-3">
       <div>
-        <dt>acceptedAt</dt>
+        <dt>{{ t('page.commands.fieldAcceptedAt') }}</dt>
         <dd class="ui-monospace mt-1 text-ui-fg">{{ command.acceptedAt }}</dd>
       </div>
       <div>
-        <dt>owner</dt>
+        <dt>{{ t('page.commands.fieldOwner') }}</dt>
         <dd class="ui-monospace mt-1 text-ui-fg">{{ command.owner }}</dd>
       </div>
       <div>
-        <dt>traceId</dt>
+        <dt>{{ t('page.commands.fieldTraceId') }}</dt>
         <dd class="ui-monospace mt-1 text-ui-fg">{{ command.traceId }}</dd>
       </div>
     </dl>
@@ -42,6 +42,7 @@
 <script setup lang="ts">
 import StatusBadge from '@/components/runtime/StatusBadge.vue'
 import type { MockCommand } from '@/mocks/commands'
+import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(
   defineProps<{
@@ -58,6 +59,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'select', commandId: string): void
 }>()
+
+const { t } = useI18n({ useScope: 'global' })
 
 function onActivate(): void {
   if (!props.interactive) {

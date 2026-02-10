@@ -120,6 +120,7 @@ export default {
       fieldStatus: '状态',
       fieldAcceptedAt: 'acceptedAt',
       fieldOwner: 'owner',
+      fieldTraceId: 'traceId',
       fieldResult: '结果摘要',
     },
     assets: {
@@ -138,6 +139,8 @@ export default {
       fieldVisibility: '可见性',
       fieldCreatedAt: 'createdAt',
       fieldOwner: 'owner',
+      fieldUri: 'URI',
+      fieldHash: 'Hash',
     },
     plugins: {
       title: 'Plugins 占位页',

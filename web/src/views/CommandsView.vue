@@ -33,7 +33,7 @@
               :description="t('empty_state.commands.description')"
             />
           </div>
-          <div v-else class="space-y-3">
+          <div v-else class="space-y-2">
             <CommandCard
               v-for="item in filteredCommands"
               :key="item.commandId"
@@ -51,7 +51,7 @@
           <div v-if="selectedCommand" class="space-y-3">
             <Tabs v-model="detailTab" :tabs="detailTabs" :aria-label="t('page.commands.detailTitle')" />
 
-            <div v-if="detailTab === 'summary'" class="ui-surface p-3">
+            <div v-if="detailTab === 'summary'" class="ui-surface border-ui-borderSubtle bg-ui-surface2 p-3">
               <dl class="grid gap-3 text-xs text-ui-muted md:grid-cols-2">
                 <div>
                   <dt>{{ t('page.commands.fieldType') }}</dt>

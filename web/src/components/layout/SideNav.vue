@@ -33,7 +33,7 @@
         class="ui-control ui-focus-ring ui-pressable flex items-center border-transparent text-sm font-medium"
         :class="collapsed ? 'justify-center px-1' : 'justify-between'"
         :title="collapsed ? t(item.label) : undefined"
-        active-class="!border-primary-500 !bg-primary-500/10 !text-primary-700 dark:!text-primary-500"
+        active-class="ui-nav-link-active"
       >
         <span class="flex min-w-0 items-center gap-2">
           <Icon :name="item.icon" :size="16" decorative class="opacity-90" />

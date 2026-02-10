@@ -36,17 +36,17 @@ const { items, removeToast } = useToast()
 const { t } = useI18n({ useScope: 'global' })
 
 const toneTextClass = {
-  info: 'text-info',
-  success: 'text-success',
-  warn: 'text-warn',
-  error: 'text-error',
+  info: 'ui-tone-text-info',
+  success: 'ui-tone-text-success',
+  warn: 'ui-tone-text-warn',
+  error: 'ui-tone-text-error',
 }
 
 const toneBorderClass = {
-  info: 'border-info/80',
-  success: 'border-success/80',
-  warn: 'border-warn/80',
-  error: 'border-error/80',
+  info: 'ui-tone-border-info',
+  success: 'ui-tone-border-success',
+  warn: 'ui-tone-border-warn',
+  error: 'ui-tone-border-error',
 }
 </script>
 
