@@ -22,8 +22,28 @@ func (r *PostgresRepository) Get(context.Context, RequestContext, string) (Comma
 	return Command{}, ErrNotImplemented
 }
 
+func (r *PostgresRepository) GetForAccess(context.Context, RequestContext, string) (Command, error) {
+	return Command{}, ErrNotImplemented
+}
+
 func (r *PostgresRepository) List(context.Context, ListParams) (ListResult, error) {
 	return ListResult{}, ErrNotImplemented
+}
+
+func (r *PostgresRepository) HasCommandPermission(context.Context, RequestContext, string, string, time.Time) (bool, error) {
+	return false, ErrNotImplemented
+}
+
+func (r *PostgresRepository) CreateShare(context.Context, ShareCreateInput) (Share, error) {
+	return Share{}, ErrNotImplemented
+}
+
+func (r *PostgresRepository) ListShares(context.Context, ShareListParams) (ShareListResult, error) {
+	return ShareListResult{}, ErrNotImplemented
+}
+
+func (r *PostgresRepository) DeleteShare(context.Context, RequestContext, string) error {
+	return ErrNotImplemented
 }
 
 func (r *PostgresRepository) AppendCommandEvent(context.Context, RequestContext, string, string, []byte) error {

@@ -80,6 +80,7 @@ func (h *commandCollectionHandler) handleCreate(w http.ResponseWriter, r *http.R
 	var req struct {
 		CommandType string          `json:"commandType"`
 		Payload     json.RawMessage `json:"payload"`
+		Visibility  string          `json:"visibility"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		errorx.Write(w, http.StatusBadRequest, "INVALID_JSON", "error.request.invalid_json", map[string]any{"reason": err.Error()})
@@ -92,6 +93,7 @@ func (h *commandCollectionHandler) handleCreate(w http.ResponseWriter, r *http.R
 		req.CommandType,
 		req.Payload,
 		strings.TrimSpace(r.Header.Get("Idempotency-Key")),
+		req.Visibility,
 	)
 	if err != nil {
 		writeCommandError(w, err)
@@ -219,6 +221,13 @@ func writeCommandError(w http.ResponseWriter, err error) {
 		errorx.Write(w, http.StatusBadRequest, "INVALID_CURSOR", "error.command.invalid_cursor", nil)
 	case errors.Is(err, command.ErrInvalidCommandRequest):
 		errorx.Write(w, http.StatusBadRequest, "INVALID_COMMAND_REQUEST", "error.command.invalid_request", nil)
+	case errors.Is(err, command.ErrForbidden):
+		details := map[string]any{}
+		var forbiddenErr *command.ForbiddenError
+		if errors.As(err, &forbiddenErr) && forbiddenErr.Reason != "" {
+			details["reason"] = forbiddenErr.Reason
+		}
+		errorx.Write(w, http.StatusForbidden, "FORBIDDEN", "error.authz.forbidden", details)
 	case errors.Is(err, command.ErrNotFound):
 		errorx.Write(w, http.StatusNotFound, "COMMAND_NOT_FOUND", "error.command.not_found", nil)
 	default:
