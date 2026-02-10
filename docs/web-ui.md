@@ -1,183 +1,164 @@
-# Web UI Standards (Thread B)
+# Web UI Standards (v2)
 
-## 1. 风格原则
+## 1. 目标与边界
 
-### 1.1 Console-first
-- UI 面向控制台工作流，优先保证信息密度与状态可读性。
-- 默认密度为 `compact`，通过 `comfortable` 提供可读性增强。
-- 页面结构优先遵循“筛选 -> 列表 -> 详情/日志”的操作路径。
+### 1.1 风格目标
+- Console-first：优先信息密度与扫描效率，遵循“筛选 -> 列表 -> 详情/日志”主路径。
+- Material 3 状态语义：hover / pressed / focus-visible / disabled / loading 统一口径。
+- Notion/GitHub 克制层级：边框与轻底色主导分层，阴影仅用于浮层。
 
-### 1.2 Material 3 状态语义
-- 交互组件必须覆盖：`hover` / `pressed` / `focus-visible` / `disabled` / `loading`。
-- 禁止在组件内散落状态 utility；状态统一通过全局 hook 类注入。
+### 1.2 硬约束
+- 禁止在组件内硬编码语义色或状态色（hex、固定 Tailwind 色阶）。
+- 状态语义必须通过全局 hook 类注入：
+  - `ui-focus-ring`
+  - `ui-pressable`
+  - `ui-disabled`
+  - `ui-loading`
+- 必须保留并兼容：
+  - Theme 三态：`system | light | dark`
+  - Density 双态：`compact | comfortable`
+  - i18n 缺失回退：`当前 locale -> en-US -> key`
 
-### 1.3 视觉边界
-- 圆角：卡片 `10-12px`，按钮 `8px`，画布节点 `6-8px`。
-- 分层：边框主导；阴影仅用于浮层（Dialog/Dropdown/Toast）。
-- 动效：仅状态过渡与必要的进入/退出，不做大面积动效。
-- 必须支持 `prefers-reduced-motion: reduce`，自动降低非必要动效。
+## 2. 克制层级（Notion/GitHub 风格）规则
 
-## 2. Design Tokens
+### 2.1 背景与分层
+- 页面背景使用 neutral bg；主容器与控件表面使用 panel/surface-2。
+- 内容分层优先顺序：
+  1. 边框（subtle / default / strong）
+  2. 轻底色（surface-2 / state layer）
+  3. 阴影（仅浮层）
+
+### 2.2 阴影与浮层
+- `Dialog / Dropdown / Toast` 使用统一 `ui-overlay-panel` 与 `--ui-shadow-overlay`。
+- 常规卡片、列表行、表格区域禁止使用投影做层级。
+
+### 2.3 字体层级
+- 仅四档：
+  - 标题：`--ui-type-title-size`
+  - 正文：`--ui-type-body-size`
+  - 说明：`--ui-type-caption-size`
+  - mono：`--ui-type-mono-size`
+- 禁止在页面内继续扩展无语义字号层级。
+
+### 2.4 Mono 区域
+- 日志/代码统一使用 `ui-log-surface + ui-monospace`。
+- 禁止自定义“高饱和代码块”背景；保持克制对比可读。
+
+## 3. 状态语义实现细则（Material 3）
+
+### 3.1 Hover / Pressed（state-layer）
+- 统一使用 `ui-pressable`：
+  - hover：`--ui-state-layer + --ui-state-hover-opacity`
+  - pressed：`--ui-state-layer + --ui-state-pressed-opacity`
+  - 边框微调：`--ui-state-hover-border / --ui-state-pressed-border`
+- 禁止组件自行拼接状态颜色。
+
+### 3.2 Focus-visible
+- 统一使用 `ui-focus-ring`，采用 offset + ring + contrast 三层高对比口径。
+- 要求在 light/dark 以及纹理背景上都可见。
+
+### 3.3 Disabled vs Loading
+- `ui-disabled`：不可交互（`pointer-events: none`、`cursor: not-allowed`、opacity）。
+- `ui-loading`：表示处理中（cursor + opacity），默认不强制阻断。
+- Button 特例：
+  - `blockWhileLoading=true`：追加阻断（`ui-loading-block` 或等效语义）。
+  - `blockWhileLoading=false`：允许继续交互。
+
+### 3.4 Reduced Motion
+- `prefers-reduced-motion: reduce` 下，禁用非必要动画，仅保留必要状态过渡。
+
+## 4. Token 契约（新增/变更）
 
 主文件：`web/src/design-system/tokens.css`
 
-### 2.1 命名规范
-- 颜色：`--ui-neutral-*` / `--ui-primary-*` / `--ui-success|warn|error|info`
-- 字体：`--ui-font-*`
-- 圆角：`--ui-radius-*`
-- 阴影：`--ui-shadow-*`
-- 状态：`--ui-focus-*` / `--ui-disabled-*` / `--ui-loading-*`
-- 密度：`--ui-control-*` / `--ui-page-gap` / `--ui-table-row-h`
+### 4.1 Neutral 分层（新增/强化）
+| Token | 用途 | 说明 |
+|---|---|---|
+| `--ui-neutral-surface-2` | 次级表面底色 | 用于卡片/控件轻分层 |
+| `--ui-neutral-fg-subtle` | 次级文字 | 用于说明性文案 |
+| `--ui-neutral-border-subtle` | 轻分割线 | 表格行、卡片内分隔 |
+| `--ui-neutral-border-strong` | 强边界 | pressed 或强调边界 |
 
-### 2.2 新增 token 流程
-1. 在 `tokens.css` 中新增变量，并同时补齐 light/dark 值。
-2. 若需在 Tailwind 使用，同步映射到 `tailwind.config.ts`。
-3. 在组件中通过 `var(...)` 或已映射的 Tailwind token 消费。
-4. 在本文件记录 token 用途与约束，避免语义漂移。
+### 4.2 State-layer（新增）
+| Token | 用途 | 说明 |
+|---|---|---|
+| `--ui-state-layer` | 状态叠层基色 | hover/pressed 叠层 |
+| `--ui-state-hover-opacity` | hover 透明度 | 轻反馈 |
+| `--ui-state-pressed-opacity` | pressed 透明度 | 明显反馈但克制 |
+| `--ui-state-hover-border` | hover 边框强度 | 边框微调 |
+| `--ui-state-pressed-border` | pressed 边框强度 | 边框增强 |
 
-### 2.3 硬规则
-- 不允许在组件中写死语义颜色（例如直接写固定 hex 作为状态色）。
-- 状态色只能来自 tokens。
+### 4.3 Focus 与可读性（新增/变更）
+| Token | 用途 | 说明 |
+|---|---|---|
+| `--ui-focus-ring` | focus 主色 | 跨主题统一 |
+| `--ui-focus-ring-offset` | focus 偏移底色 | 与背景隔离 |
+| `--ui-focus-ring-contrast` | focus 对比外圈 | 防背景纹理吞焦点 |
 
-## 3. 全局状态 Hook 类（强制）
+### 4.4 日志与浮层（新增/变更）
+| Token | 用途 | 说明 |
+|---|---|---|
+| `--ui-shadow-overlay` | 浮层阴影 | Dialog/Dropdown/Toast 专用 |
+| `--ui-log-bg` | 日志背景 | mono 区域 |
+| `--ui-log-fg` | 日志文字 | mono 区域 |
+| `--ui-log-border` | 日志边框 | mono 区域 |
 
-文件：`web/src/style.css`
+### 4.5 交互状态（调整）
+| Token | 用途 | 说明 |
+|---|---|---|
+| `--ui-disabled-opacity` | 禁用透明度 | 与 loading 区分 |
+| `--ui-loading-opacity` | 加载透明度 | 可与阻断策略解耦 |
+| `--ui-loading-cursor` | 加载光标 | 统一 `progress` |
 
-- `ui-focus-ring`：只在 `:focus-visible` 显示高对比 ring。
-- `ui-pressable`：统一 hover/pressed 反馈与过渡。
-- `ui-disabled`：统一禁用态可视与交互阻断。
-- `ui-loading`：统一 loading 光标与透明度反馈。
+### 4.6 字号层级（新增）
+| Token | 用途 | 说明 |
+|---|---|---|
+| `--ui-type-title-size` | 标题字号 | 组件标题 |
+| `--ui-type-body-size` | 正文字号 | 默认阅读 |
+| `--ui-type-caption-size` | 说明字号 | 次信息 |
+| `--ui-type-mono-size` | mono 字号 | 日志/代码 |
 
-约束：交互组件根元素必须组合这四类，禁止自行实现平行状态体系。
+## 5. 禁止用法（必须遵守）
+- 禁止在组件模板写入：
+  - `bg-primary-500/10`
+  - `text-primary-700`
+  - `text-error`（直接拼语义状态）
+  - 任何 hex 颜色或固定 Tailwind 色阶作为状态色
+- 禁止复制独立状态系统（平行于四个全局 hook）。
+- 禁止在非浮层组件添加阴影做层级。
 
-## 4. 组件状态矩阵
+## 6. 组件与页面落地口径
 
-| 组件 | hover | pressed | focus-visible | disabled | loading | 备注 |
-|---|---|---|---|---|---|---|
-| Button | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | `ui-loading` | `loading` 与 `disabled` 分离，`blockWhileLoading` 默认阻断 |
-| Input | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | `ui-loading` | 保持可读 placeholder |
-| Textarea | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | `ui-loading` | 多行输入同一控制高度语义 |
-| Select(Listbox) | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | `ui-loading` | 选项高亮只用 token |
-| Tabs | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | N/A | 选中态使用 primary token |
-| Dialog | N/A | N/A | 焦点陷阱 + `ui-focus-ring` | N/A | confirm 按钮可 loading | 遮罩/浮层使用 overlay token |
-| Dropdown(Menu) | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | trigger 可 loading | ESC 关闭、键盘可进入菜单 |
-| Table | 行 hover 可选 | 行按压可选 | 行 focus 可选 | N/A | `loading` skeleton | `ready/loading/empty/error` 四态，交互行必须支持 Enter + Space |
-| Toast | 可关闭按钮 hover | 按压关闭按钮 | `ui-focus-ring` | N/A | N/A | `info/success/warn/error` 级别，容器 `aria-live=polite` |
+### 6.1 组件
+- `Button/Input/Textarea/Select/Tabs/Dialog/Dropdown/Table/Toast` 必须统一 token + hook。
+- 表格与列表扫描性要求：
+  - 行高受 density token 驱动
+  - 行分隔线使用 subtle border
+  - hover 与 selected 使用统一状态语义
 
-## 5. Theme / Density / i18n
+### 6.2 页面
+- `/commands` 与 `/assets` 双栏：
+  - 左栏：筛选 + 列表扫描优先
+  - 右栏：详情/日志分层清晰
+  - 空态/错误态使用克制语义，不使用大色块
 
-### 5.1 Theme
-- 模式：`system | light | dark`
-- 存储键：`goyais.ui.theme`
-- 兼容旧键：`goyais.theme`
-- `system` 跟随 `prefers-color-scheme`。
+## 7. Theme / Density / i18n（保持不变）
+- Theme：`system | light | dark`
+- Density：`compact | comfortable`
+- i18n 缺失策略：`当前 locale -> en-US -> key`
+- 开发态仍开启 missing warn。
 
-### 5.2 Density
-- 根入口：`html[data-density='compact|comfortable']`
-- 仅允许密度变量：
-  - `--ui-control-h`
-  - `--ui-control-px`
-  - `--ui-control-py`
-  - `--ui-page-gap`
-  - `--ui-table-row-h`
-- 组件必须用 `var(...)` 消费，不得定义组件私有密度体系。
+## 8. 验收清单
 
-### 5.3 i18n
-- 语言：`zh-CN` / `en-US`
-- key 命名空间：`nav.*` / `common.*` / `page.*` / `status.*` / `error.*`
-- 缺失策略固定：`当前 locale -> en-US -> key`
-- 开发态开启 missing warn。
+### 8.1 自动化
+- `pnpm -C web typecheck`
+- `pnpm -C web test:run`
+- `pnpm -C web build`
 
-### 5.4 messageKey 对齐
-- 后端错误结构：`error: { code, messageKey, details }`
-- 前端通过统一翻译入口映射 `messageKey`，并由 `ErrorBanner` 渲染。
-
-## 6. 布局规范
-
-### 6.1 Shell 模式
-- 模式枚举：`console | topnav | focus`。
-- 偏好存储：`goyais.ui.layout`，值域：`auto | console | topnav | focus`。
-- `auto` 按路由 `meta.layoutDefault` 生效；手动选择后全局覆盖直到切回 `auto`。
-- 路由仍使用 `createWebHistory`（兼容 single-binary SPA fallback）。
-
-### 6.2 结构规则
-- `console`：`TopBar + SideNav + Content`。
-- `topnav`：`TopBar + TopNavBar + Content`。
-- `focus`：`TopBar + Content`（无常驻导航）。
-- `compact` 下 SideNav 默认折叠；hover 临时展开；支持 pin 固定。
-
-### 6.3 窗口化布局（Desktop）
-- 三种模式都支持窗口化拖拽/缩放（仅 desktop，mobile 降级为单列卡片流）。
-- 页面结构统一：`PageHeader(固定) + WindowBoard(可拖拽窗口区)`。
-- 窗口能力：拖拽、右/下/右下缩放、点击置顶、允许重叠。
-- 键盘等价能力：`Alt + Arrow` 移动窗口，`Alt + Shift + Arrow` 调整窗口宽高（步进 16px）。
-- 每页提供“重置窗口布局”动作。
-
-### 6.4 窗口状态持久化
-- 存储键格式：`goyais.ui.windows.<layoutMode>.<routeKey>.v1`。
-- 同一路由在不同布局模式下独立持久化，互不污染。
-- 路由窗口清单由 `web/src/design-system/window-manifests.ts` 维护。
-
-### 6.5 页面白名单窗口单元（首版）
-- `/`：`design-tokens`、`state-hooks`、`status`、`backgrounds`、`empty-states`
-- `/commands`：`filters`、`list`、`detail`
-- `/assets`：`filters`、`list`、`detail`
-- `/canvas`：`canvas-surface`
-- `/plugins`：`plugin-catalog`
-- `/streams`：`stream-overview`、`stream-logs`
-- `/settings`：`preferences`、`component-matrix`
-- `/forbidden`：`forbidden-state`
-- `not-found`：`not-found-state`
-
-## 7. 新增组件 Checklist
-
-新增组件前：
-- [ ] 是否复用 tokens 而非硬编码颜色/间距。
-- [ ] 是否接入 `ui-focus-ring`/`ui-pressable`/`ui-disabled`/`ui-loading`。
-- [ ] 是否在 light/dark 下保持对比可读。
-- [ ] 是否在 compact/comfortable 下尺寸一致。
-- [ ] 是否具备键盘路径（Tab、ESC、Enter、Space）与 aria 语义。
-- [ ] 文案是否走 i18n key。
-
-新增页面前：
-- [ ] 是否遵循控制台信息架构（筛选->列表->详情）。
-- [ ] 是否定义空态/加载态/错误态。
-- [ ] 是否保持 mock 数据与真实接口契约字段同构。
-
-## 8. 验收要点（Thread B）
-
-- `pnpm -C web typecheck` 与 `pnpm -C web build` 必须通过。
-- 主题/语言/密度切换刷新后保持。
-- `focus ring` 在 light/dark 可见。
-- Dialog/Dropdown 键盘路径通过（focus 进入、ESC 关闭、Tab 路径正确）。
-- 窗口键盘路径通过（`Alt+Arrow` 移动、`Alt+Shift+Arrow` 缩放）。
-- 系统启用 `reduced-motion` 时动效显著降低。
-- `/commands` 与 `/assets` 双栏交互可用。
-
-## 9. 图标与素材规范（Thread 7）
-
-### 9.1 图标体系
-- 采用 Heroicons（MIT）并统一封装为 `web/src/components/ui/Icon.vue`。
-- 运行时图标名称由 `web/src/design-system/icon-registry.ts` 管理，禁止页面自行拼接路径。
-- 已使用图标必须同步落库到 `web/src/assets/icons/heroicons/24/outline/`，便于分发与审计。
-- 图标必须保持统一描边与尺寸语义（24 基准，UI 中按 size 缩放）。
-
-### 9.2 空状态插画
-- 运行时空状态插画位于 `web/src/assets/illustrations/states/`。
-- 必须通过 `EmptyState` 组件使用，不允许页面散落自定义空态样式。
-- 插画颜色需与 token 对齐，禁止硬编码 hex 语义色。
-- unDraw 原始素材仅作为来源归档，放置于 `web/src/assets/illustrations/undraw/raw/`。
-
-### 9.3 背景资源
-- 背景 SVG 资源放在 `web/src/assets/bg/`。
-- 可切换类名：
-  - `ui-bg-grid`
-  - `ui-bg-gradient`
-  - `ui-bg-dots`
-  - `ui-bg-stack-console`
-- 背景层必须使用 `ui-bg-host` + `ui-bg-content` 结构，确保 focus ring 可见且不受遮挡。
-
-### 9.4 资源索引与许可审计
-- 资源索引：`web/src/assets/RESOURCE_CATALOG.yaml`
-- 许可记录：`web/src/assets/THIRD_PARTY_NOTICES.md`
-- 新增第三方素材时，两者必须同一提交更新。
+### 8.2 手测
+- 主题三态切换与持久化
+- 密度双态切换与间距节奏
+- locale 切换与 fallback 行为
+- focus ring 在 light/dark + 背景纹理下可见
+- Dialog/Dropdown/Tabs/Select 键盘路径与 aria 语义
+- `/commands` 与 `/assets` 双栏交互完整
