@@ -19,15 +19,15 @@
     </div>
 
     <div class="ui-topbar-controls flex min-w-0 flex-wrap items-center gap-2">
-      <span v-if="focusMode" class="ui-control ui-monospace inline-flex h-8 min-h-0 items-center bg-primary-500/15 px-2 py-0 text-xs leading-none text-primary-700 dark:text-primary-500">
+      <span v-if="focusMode" class="ui-control ui-tone-surface-primary ui-monospace inline-flex h-8 min-h-0 items-center px-2 py-0 text-xs leading-none">
         {{ t('common.layoutFocus') }}
       </span>
 
-      <span class="ui-control ui-monospace inline-flex h-8 min-h-0 items-center bg-ui-hover px-2 py-0 text-xs leading-none text-ui-muted">
+      <span class="ui-control ui-monospace inline-flex h-8 min-h-0 items-center bg-ui-surface2 px-2 py-0 text-xs leading-none text-ui-muted">
         {{ t('common.workspace') }}
       </span>
 
-      <button type="button" class="ui-control ui-focus-ring ui-pressable inline-flex items-center gap-2 text-sm text-ui-muted">
+      <button type="button" class="ui-control ui-focus-ring ui-pressable inline-flex items-center gap-2 text-sm text-ui-fgSubtle">
         <Icon name="search" :size="14" decorative />
         <span>{{ t('common.searchPlaceholder') }}</span>
       </button>

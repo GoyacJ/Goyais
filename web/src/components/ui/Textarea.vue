@@ -42,7 +42,7 @@ function onInput(event: Event): void {
 
 const classes = computed(() =>
   cn(
-    'ui-focus-ring ui-pressable w-full rounded-button border border-ui-border bg-ui-panel px-[var(--ui-control-px)] py-[var(--ui-control-py)] text-sm',
+    'ui-control ui-focus-ring ui-pressable w-full text-sm',
     'min-h-[calc(var(--ui-control-h)*2.2)]',
     props.disabled && 'ui-disabled',
     props.loading && 'ui-loading',

@@ -2,7 +2,7 @@
   <Menu as="div" class="relative inline-block text-left" v-slot="{ close, open }">
     <MenuButton :class="buttonClasses" :aria-busy="loading || undefined">
       <slot name="trigger">
-        <span>{{ label }}</span>
+        <span>{{ resolvedLabel }}</span>
       </slot>
     </MenuButton>
 
@@ -31,7 +31,7 @@
             class="ui-focus-ring ui-pressable flex w-full items-center justify-between rounded-button px-2 py-2 text-sm"
             :class="[
               active ? 'bg-ui-hover' : '',
-              item.danger ? 'text-error' : 'text-ui-fg',
+              item.danger ? 'ui-text-danger' : 'text-ui-fg',
               itemDisabled ? 'ui-disabled' : '',
             ]"
             @click="emit('select', item.value)"
@@ -49,6 +49,7 @@
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { computed } from 'vue'
 import { cn } from '@/utils/cn'
+import { useI18n } from 'vue-i18n'
 
 export interface DropdownItem {
   label: string
@@ -66,7 +67,7 @@ const props = withDefaults(
     loading?: boolean
   }>(),
   {
-    label: 'Actions',
+    label: '',
     disabled: false,
     loading: false,
   },
@@ -75,6 +76,10 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'select', value: string): void
 }>()
+
+const { t } = useI18n({ useScope: 'global' })
+
+const resolvedLabel = computed(() => props.label || t('common.userMenu'))
 
 const buttonClasses = computed(() =>
   cn(

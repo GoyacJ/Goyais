@@ -1,7 +1,7 @@
 <template>
-  <div class="ui-card border-error/60 bg-error/10 text-error">
+  <div class="ui-card ui-tone-surface-error">
     <p class="text-sm font-semibold">{{ translated }}</p>
-    <p class="ui-monospace mt-1 text-xs text-error/90">{{ error.code }} · {{ error.messageKey }}</p>
+    <p class="ui-monospace mt-1 text-xs">{{ error.code }} · {{ error.messageKey }}</p>
   </div>
 </template>
 

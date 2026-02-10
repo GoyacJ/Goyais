@@ -4,6 +4,7 @@
     :type="type"
     :disabled="isDisabled"
     :aria-busy="loading || undefined"
+    :data-block-loading="loading && blockWhileLoading ? 'true' : 'false'"
     :class="classes"
   >
     <span
@@ -53,6 +54,7 @@ const classes = computed(() =>
     variantClasses[props.variant],
     isDisabled.value && 'ui-disabled',
     props.loading && 'ui-loading',
+    props.loading && props.blockWhileLoading && 'ui-loading-block',
   ),
 )
 

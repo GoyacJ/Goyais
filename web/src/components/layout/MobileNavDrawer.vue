@@ -27,7 +27,7 @@
       v-if="open"
       ref="drawerRef"
       class="ui-surface fixed inset-y-0 left-0 z-50 flex w-72 flex-col rounded-none border-y-0 border-l-0 lg:hidden"
-      aria-label="mobile-navigation"
+      :aria-label="t('common.openNavigation')"
       tabindex="-1"
       @keydown.esc.prevent.stop="emitClose"
     >
@@ -48,7 +48,7 @@
           :key="item.to"
           :to="item.to"
           class="ui-control ui-focus-ring ui-pressable flex items-center justify-between border-transparent text-sm"
-          active-class="!border-primary-500 !bg-primary-500/10 !text-primary-700 dark:!text-primary-500"
+          active-class="ui-nav-link-active"
           @click="emitClose"
         >
           <span class="flex min-w-0 items-center gap-2">

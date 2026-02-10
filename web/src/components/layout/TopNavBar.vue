@@ -5,7 +5,7 @@
       :key="item.to"
       :to="item.to"
       class="ui-control ui-focus-ring ui-pressable inline-flex shrink-0 items-center gap-2 border-transparent text-sm"
-      active-class="!border-primary-500 !bg-primary-500/10 !text-primary-700 dark:!text-primary-500"
+      active-class="ui-nav-link-active"
     >
       <Icon :name="item.icon" :size="16" decorative />
       <span>{{ t(item.label) }}</span>
