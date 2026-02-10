@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 240" fill="none" aria-hidden="true">
+  <path d="M240 44L352 92V134C352 174 324 206 240 222C156 206 128 174 128 134V92L240 44Z" stroke="currentColor" stroke-width="6" opacity="0.2" />
+  <circle cx="240" cy="128" r="42" stroke="currentColor" stroke-width="8" />
+  <path d="M210 98L270 158" stroke="currentColor" stroke-width="10" stroke-linecap="round" />
+  <path d="M270 98L210 158" stroke="currentColor" stroke-width="10" stroke-linecap="round" />
+  <path d="M172 58L146 84" stroke="currentColor" stroke-width="6" stroke-linecap="round" opacity="0.3" />
+  <path d="M334 58L308 84" stroke="currentColor" stroke-width="6" stroke-linecap="round" opacity="0.3" />
+</svg>

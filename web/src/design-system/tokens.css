@@ -29,6 +29,11 @@
 
   --ui-focus-ring: 6 182 212;
   --ui-focus-ring-offset: 246 248 251;
+  --ui-bg-grid-tint: 148 163 184;
+  --ui-bg-dots-tint: 100 116 139;
+  --ui-bg-gradient-a: 14 116 144;
+  --ui-bg-gradient-b: 37 99 235;
+  --ui-bg-gradient-c: 22 163 74;
 
   --ui-overlay-backdrop: 2 6 23;
   --ui-log-bg: 15 23 42;
@@ -66,6 +71,11 @@
 
   --ui-focus-ring: 34 211 238;
   --ui-focus-ring-offset: 8 13 23;
+  --ui-bg-grid-tint: 71 85 105;
+  --ui-bg-dots-tint: 100 116 139;
+  --ui-bg-gradient-a: 34 211 238;
+  --ui-bg-gradient-b: 96 165 250;
+  --ui-bg-gradient-c: 74 222 128;
 
   --ui-overlay-backdrop: 2 6 23;
   --ui-log-bg: 2 6 23;

@@ -133,3 +133,31 @@
 - `focus ring` 在 light/dark 可见。
 - Dialog/Dropdown 键盘路径通过（focus 进入、ESC 关闭、Tab 路径正确）。
 - `/commands` 与 `/assets` 双栏交互可用。
+
+## 9. 图标与素材规范（Thread 7）
+
+### 9.1 图标体系
+- 采用 Heroicons（MIT）并统一封装为 `web/src/components/ui/Icon.vue`。
+- 运行时图标名称由 `web/src/design-system/icon-registry.ts` 管理，禁止页面自行拼接路径。
+- 已使用图标必须同步落库到 `web/src/assets/icons/heroicons/24/outline/`，便于分发与审计。
+- 图标必须保持统一描边与尺寸语义（24 基准，UI 中按 size 缩放）。
+
+### 9.2 空状态插画
+- 运行时空状态插画位于 `web/src/assets/illustrations/states/`。
+- 必须通过 `EmptyState` 组件使用，不允许页面散落自定义空态样式。
+- 插画颜色需与 token 对齐，禁止硬编码 hex 语义色。
+- unDraw 原始素材仅作为来源归档，放置于 `web/src/assets/illustrations/undraw/raw/`。
+
+### 9.3 背景资源
+- 背景 SVG 资源放在 `web/src/assets/bg/`。
+- 可切换类名：
+  - `ui-bg-grid`
+  - `ui-bg-gradient`
+  - `ui-bg-dots`
+  - `ui-bg-stack-console`
+- 背景层必须使用 `ui-bg-host` + `ui-bg-content` 结构，确保 focus ring 可见且不受遮挡。
+
+### 9.4 资源索引与许可审计
+- 资源索引：`web/src/assets/RESOURCE_CATALOG.yaml`
+- 许可记录：`web/src/assets/THIRD_PARTY_NOTICES.md`
+- 新增第三方素材时，两者必须同一提交更新。

@@ -190,4 +190,109 @@
     border-radius: 999px;
     background: rgb(var(--ui-neutral-border) / 0.9);
   }
+
+  .ui-icon {
+    display: block;
+    height: 1em;
+    width: 1em;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .ui-bg-host {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .ui-bg-content {
+    position: relative;
+    z-index: 1;
+  }
+
+  .ui-bg-host::before,
+  .ui-bg-host::after {
+    content: '';
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+    z-index: 0;
+  }
+
+  .ui-bg-grid::before {
+    background-color: rgb(var(--ui-bg-grid-tint) / 0.42);
+    -webkit-mask-image: url('./assets/bg/grid-soft.svg');
+    mask-image: url('./assets/bg/grid-soft.svg');
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-repeat: repeat;
+    mask-repeat: repeat;
+    -webkit-mask-size: 24px 24px;
+    mask-size: 24px 24px;
+    opacity: 0.72;
+  }
+
+  .ui-bg-gradient::before {
+    background: linear-gradient(
+      125deg,
+      rgb(var(--ui-bg-gradient-a) / 0.28),
+      rgb(var(--ui-bg-gradient-b) / 0.2),
+      rgb(var(--ui-bg-gradient-c) / 0.24)
+    );
+    -webkit-mask-image: url('./assets/bg/gradient-mesh.svg');
+    mask-image: url('./assets/bg/gradient-mesh.svg');
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: cover;
+    mask-size: cover;
+    opacity: 0.8;
+  }
+
+  .ui-bg-dots::after {
+    background-color: rgb(var(--ui-bg-dots-tint) / 0.38);
+    -webkit-mask-image: url('./assets/bg/dots-noise.svg');
+    mask-image: url('./assets/bg/dots-noise.svg');
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-repeat: repeat;
+    mask-repeat: repeat;
+    -webkit-mask-size: 180px 180px;
+    mask-size: 180px 180px;
+    opacity: 0.48;
+  }
+
+  .ui-bg-stack-console::before {
+    background: linear-gradient(
+      128deg,
+      rgb(var(--ui-bg-gradient-a) / 0.24),
+      rgb(var(--ui-bg-gradient-b) / 0.16),
+      rgb(var(--ui-bg-gradient-c) / 0.2)
+    );
+    -webkit-mask-image: url('./assets/bg/gradient-mesh.svg');
+    mask-image: url('./assets/bg/gradient-mesh.svg');
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: cover;
+    mask-size: cover;
+    opacity: 0.76;
+  }
+
+  .ui-bg-stack-console::after {
+    background-color: rgb(var(--ui-bg-dots-tint) / 0.32);
+    -webkit-mask-image: url('./assets/bg/dots-noise.svg');
+    mask-image: url('./assets/bg/dots-noise.svg');
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-repeat: repeat;
+    mask-repeat: repeat;
+    -webkit-mask-size: 210px 210px;
+    mask-size: 210px 210px;
+    opacity: 0.34;
+  }
 }

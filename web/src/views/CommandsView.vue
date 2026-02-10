@@ -2,8 +2,14 @@
   <section class="ui-page">
     <PageHeader :title="t('page.commands.title')" :subtitle="t('page.commands.subtitle')">
       <template #actions>
-        <Button variant="secondary">{{ t('common.refresh') }}</Button>
-        <Button>{{ t('page.commands.actionRun') }}</Button>
+        <Button variant="secondary">
+          <Icon name="refresh" :size="14" decorative />
+          {{ t('common.refresh') }}
+        </Button>
+        <Button>
+          <Icon name="commands" :size="14" decorative />
+          {{ t('page.commands.actionRun') }}
+        </Button>
       </template>
     </PageHeader>
 
@@ -18,7 +24,11 @@
     <div class="grid gap-[var(--ui-page-gap)] xl:grid-cols-[1.25fr_1fr]">
       <SectionCard :title="t('page.commands.listTitle')" :subtitle="`${filteredCommands.length}`">
         <div v-if="filteredCommands.length === 0">
-          <EmptyState :description="t('common.empty')" />
+          <EmptyState
+            variant="commands-empty"
+            :title="t('empty_state.commands.title')"
+            :description="t('empty_state.commands.description')"
+          />
         </div>
         <div v-else class="space-y-3">
           <CommandCard
@@ -63,7 +73,12 @@
 
           <LogPanel v-else :lines="selectedCommand.logs" />
         </div>
-        <EmptyState v-else :description="t('common.empty')" />
+        <EmptyState
+          v-else
+          variant="commands-empty"
+          :title="t('empty_state.commands.detailTitle')"
+          :description="t('empty_state.commands.detailDescription')"
+        />
       </SectionCard>
     </div>
   </section>
@@ -77,6 +92,7 @@ import CommandCard from '@/components/runtime/CommandCard.vue'
 import StatusBadge from '@/components/runtime/StatusBadge.vue'
 import LogPanel from '@/components/runtime/LogPanel.vue'
 import Button from '@/components/ui/Button.vue'
+import Icon from '@/components/ui/Icon.vue'
 import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
 import Tabs from '@/components/ui/Tabs.vue'

@@ -2,7 +2,9 @@ import { createRouter, createWebHistory } from 'vue-router'
 import AssetsView from '@/views/AssetsView.vue'
 import CanvasView from '@/views/CanvasView.vue'
 import CommandsView from '@/views/CommandsView.vue'
+import ForbiddenView from '@/views/ForbiddenView.vue'
 import HomeView from '@/views/HomeView.vue'
+import NotFoundView from '@/views/NotFoundView.vue'
 import PluginsView from '@/views/PluginsView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import StreamsView from '@/views/StreamsView.vue'
@@ -17,6 +19,8 @@ const router = createRouter({
     { path: '/plugins', name: 'plugins', component: PluginsView },
     { path: '/streams', name: 'streams', component: StreamsView },
     { path: '/settings', name: 'settings', component: SettingsView },
+    { path: '/forbidden', name: 'forbidden', component: ForbiddenView },
+    { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView },
   ],
 })
 
