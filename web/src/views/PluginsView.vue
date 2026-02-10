@@ -4,7 +4,7 @@
 
     <WindowBoard route-key="plugins" :panes="windowPanes">
       <template #plugin-catalog>
-        <SectionCard title="Plugin Catalog" subtitle="Card layout + semantic tags">
+        <SectionCard :title="t('page.plugins.catalogTitle')" :subtitle="t('page.plugins.catalogSubtitle')">
           <div class="grid gap-[var(--ui-page-gap)] md:grid-cols-2">
             <article
               v-for="plugin in plugins"
@@ -17,14 +17,14 @@
                   <p class="ui-monospace mt-1 text-xs text-ui-muted">{{ plugin.version }}</p>
                 </div>
                 <Badge :tone="plugin.enabled ? 'success' : 'warn'">
-                  {{ plugin.enabled ? 'enabled' : 'disabled' }}
+                  {{ plugin.enabled ? t('common.enabled') : t('common.disabled') }}
                 </Badge>
               </header>
 
               <p class="mt-3 text-sm text-ui-muted">{{ plugin.description }}</p>
               <div class="mt-3 flex gap-2">
-                <Button variant="secondary">Enable</Button>
-                <Button variant="ghost">Disable</Button>
+                <Button variant="secondary">{{ t('common.enable') }}</Button>
+                <Button variant="ghost">{{ t('common.disable') }}</Button>
               </div>
             </article>
           </div>
@@ -45,7 +45,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n({ useScope: 'global' })
 
-const windowPanes = computed(() => [{ id: 'plugin-catalog', title: 'Plugin Catalog' }])
+const windowPanes = computed(() => [{ id: 'plugin-catalog', title: t('page.plugins.catalogTitle') }])
 
 const plugins = [
   {

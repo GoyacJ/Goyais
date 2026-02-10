@@ -1,6 +1,6 @@
 <template>
-  <header class="ui-surface flex flex-wrap items-center justify-between gap-3 rounded-none border-x-0 border-t-0 px-4 py-3">
-    <div class="flex min-w-0 items-center gap-2">
+  <header class="ui-topbar ui-surface flex flex-wrap items-center justify-between gap-3 rounded-none border-x-0 border-t-0 px-4 py-3">
+    <div class="ui-topbar-brand flex min-w-0 items-center gap-2">
       <button
         v-if="showMobileNavButton"
         type="button"
@@ -9,16 +9,16 @@
         @click="emit('toggleMobileNav')"
       >
         <Icon name="canvas" :size="14" decorative />
-        <span>NAV</span>
+        <span>{{ t('common.navShort') }}</span>
       </button>
 
       <div class="min-w-0">
-        <p class="ui-monospace text-[11px] uppercase tracking-[0.15em] text-ui-muted">Console-first</p>
+        <p class="ui-monospace text-[11px] uppercase tracking-[0.15em] text-ui-muted">{{ t('common.consoleFirst') }}</p>
         <h1 class="truncate text-lg font-semibold">{{ t('common.appName') }}</h1>
       </div>
     </div>
 
-    <div class="flex min-w-0 flex-wrap items-center gap-2">
+    <div class="ui-topbar-controls flex min-w-0 flex-wrap items-center gap-2">
       <span v-if="focusMode" class="ui-control ui-monospace h-8 min-h-0 bg-primary-500/15 px-2 py-1 text-xs text-primary-700 dark:text-primary-500">
         {{ t('common.layoutFocus') }}
       </span>
@@ -36,19 +36,16 @@
 
       <label class="flex items-center gap-2 text-xs text-ui-muted">
         <span>{{ t('common.theme') }}</span>
-        <select v-model="themeModel" class="ui-control ui-focus-ring ui-pressable min-w-28 bg-ui-panel text-sm">
-          <option value="system">{{ t('common.system') }}</option>
-          <option value="light">{{ t('common.light') }}</option>
-          <option value="dark">{{ t('common.dark') }}</option>
-        </select>
+        <div class="min-w-28">
+          <Select v-model="themeModel" :options="themeOptions" />
+        </div>
       </label>
 
       <label class="flex items-center gap-2 text-xs text-ui-muted">
         <span>{{ t('common.language') }}</span>
-        <select v-model="localeModel" class="ui-control ui-focus-ring ui-pressable min-w-24 bg-ui-panel text-sm">
-          <option value="zh-CN">zh-CN</option>
-          <option value="en-US">en-US</option>
-        </select>
+        <div class="min-w-28">
+          <Select v-model="localeModel" :options="localeOptions" />
+        </div>
       </label>
 
       <Dropdown :label="t('common.userMenu')" :items="userMenuItems" @select="onUserMenuAction" />
@@ -60,6 +57,7 @@
 import Dropdown, { type DropdownItem } from '@/components/ui/Dropdown.vue'
 import Icon from '@/components/ui/Icon.vue'
 import LayoutSwitcher from '@/components/layout/LayoutSwitcher.vue'
+import Select from '@/components/ui/Select.vue'
 import { useToast } from '@/composables/useToast'
 import { useThemeStore } from '@/design-system/theme'
 import type { SupportedLocale, ThemeMode } from '@/design-system/types'
@@ -105,10 +103,21 @@ const localeModel = computed<SupportedLocale>({
   },
 })
 
+const themeOptions = computed(() => [
+  { value: 'system', label: t('common.system') },
+  { value: 'light', label: t('common.light') },
+  { value: 'dark', label: t('common.dark') },
+])
+
+const localeOptions = computed(() => [
+  { value: 'zh-CN', label: t('common.localeZhCN') },
+  { value: 'en-US', label: t('common.localeEnUS') },
+])
+
 function onUserMenuAction(value: string): void {
   pushToast({
     title: t('common.userMenu'),
-    message: `${value} (placeholder)`,
+    message: t('common.placeholderAction', { value }),
     tone: 'info',
   })
 }

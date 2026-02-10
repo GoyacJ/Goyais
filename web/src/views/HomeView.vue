@@ -11,7 +11,7 @@
 
     <WindowBoard route-key="home" :panes="windowPanes">
       <template #design-tokens>
-        <SectionCard title="Design Tokens" subtitle="neutral / primary / semantic">
+        <SectionCard :title="t('page.home.sections.designTokens.title')" :subtitle="t('page.home.sections.designTokens.subtitle')">
           <div class="grid grid-cols-4 gap-2">
             <span class="h-8 rounded-button border border-ui-border bg-ui-bg" />
             <span class="h-8 rounded-button border border-ui-border bg-ui-panel" />
@@ -22,7 +22,7 @@
       </template>
 
       <template #state-hooks>
-        <SectionCard title="State Hooks" subtitle="Material 3 semantics">
+        <SectionCard :title="t('page.home.sections.stateHooks.title')" :subtitle="t('page.home.sections.stateHooks.subtitle')">
           <div class="flex flex-wrap gap-2">
             <Button variant="secondary">ui-focus-ring</Button>
             <Button variant="secondary" loading>ui-loading</Button>
@@ -32,7 +32,7 @@
       </template>
 
       <template #status>
-        <SectionCard title="Status" subtitle="AI runtime states">
+        <SectionCard :title="t('page.home.sections.status.title')" :subtitle="t('page.home.sections.status.subtitle')">
           <div class="flex flex-wrap gap-2">
             <StatusBadge status="accepted" />
             <StatusBadge status="running" />
@@ -44,7 +44,7 @@
       </template>
 
       <template #backgrounds>
-        <SectionCard title="Background Presets" subtitle="SVG-based reusable patterns for light/dark">
+        <SectionCard :title="t('page.home.sections.backgrounds.title')" :subtitle="t('page.home.sections.backgrounds.subtitle')">
           <div class="grid gap-3 lg:grid-cols-3">
             <div class="ui-bg-host ui-bg-grid rounded-card border border-ui-border p-4">
               <div class="ui-bg-content text-sm font-medium">ui-bg-grid</div>
@@ -60,7 +60,7 @@
       </template>
 
       <template #empty-states>
-        <SectionCard title="Empty States" subtitle="commands/assets/403/404/loading/error showcase">
+        <SectionCard :title="t('page.home.sections.emptyStates.title')" :subtitle="t('page.home.sections.emptyStates.subtitle')">
           <div class="grid gap-3 xl:grid-cols-2">
             <EmptyState
               variant="commands-empty"
@@ -113,10 +113,10 @@ import { useI18n } from 'vue-i18n'
 const { t } = useI18n({ useScope: 'global' })
 
 const windowPanes = computed(() => [
-  { id: 'design-tokens', title: 'Design Tokens' },
-  { id: 'state-hooks', title: 'State Hooks' },
-  { id: 'status', title: 'Status' },
-  { id: 'backgrounds', title: 'Background Presets' },
-  { id: 'empty-states', title: 'Empty States' },
+  { id: 'design-tokens', title: t('page.home.sections.designTokens.title') },
+  { id: 'state-hooks', title: t('page.home.sections.stateHooks.title') },
+  { id: 'status', title: t('page.home.sections.status.title') },
+  { id: 'backgrounds', title: t('page.home.sections.backgrounds.title') },
+  { id: 'empty-states', title: t('page.home.sections.emptyStates.title') },
 ])
 </script>

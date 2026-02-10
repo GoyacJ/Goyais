@@ -4,7 +4,7 @@
 
     <WindowBoard route-key="streams" :panes="windowPanes">
       <template #stream-overview>
-        <SectionCard title="Stream Overview" subtitle="State-focused shell only">
+        <SectionCard :title="t('page.streams.overviewTitle')" :subtitle="t('page.streams.overviewSubtitle')">
           <div class="grid gap-[var(--ui-page-gap)] lg:grid-cols-3">
             <article
               v-for="stream in streams"
@@ -22,7 +22,7 @@
       </template>
 
       <template #stream-logs>
-        <SectionCard title="Stream Logs" subtitle="Monospace readability baseline">
+        <SectionCard :title="t('page.streams.logsTitle')" :subtitle="t('page.streams.logsSubtitle')">
           <pre class="ui-monospace rounded-button border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted">[10:44:01] stream connected
 [10:44:04] recording started
 [10:44:20] segment flushed</pre>
@@ -44,8 +44,8 @@ import { useI18n } from 'vue-i18n'
 const { t } = useI18n({ useScope: 'global' })
 
 const windowPanes = computed(() => [
-  { id: 'stream-overview', title: 'Stream Overview' },
-  { id: 'stream-logs', title: 'Stream Logs' },
+  { id: 'stream-overview', title: t('page.streams.overviewTitle') },
+  { id: 'stream-logs', title: t('page.streams.logsTitle') },
 ])
 
 const streams: Array<{ id: string; path: string; status: CommandStatus }> = [
