@@ -96,6 +96,9 @@ flowchart TB
 ### 4.4 ObjectStoreProvider
 - 目标：统一 local/MinIO/S3 文件对象读写。
 - 必需能力：put/get/delete、预签名 URL（可选）、元数据标签。
+- v0.1 当前实现：
+  - `local`：已实现（最小闭环）
+  - `minio/s3`：接口与配置占位，业务接口返回 `NOT_IMPLEMENTED`
 
 ### 4.5 StreamProvider
 - 目标：统一 MediaMTX 控制面交互。
@@ -165,6 +168,10 @@ Command 执行管道（必须）：
 - 默认使用 JWT claims 中的 `tenantId/workspaceId/userId/roles`。
 - 可通过 `X-Workspace-Id`（可选 `X-Tenant-Id`）切换。
 - 服务端必须验证 header 目标在 JWT 可访问范围内。
+- v0.1 当前阶段（JWT 未接入）：
+  - `X-Tenant-Id`、`X-Workspace-Id`、`X-User-Id` 必填；
+  - `ownerId = X-User-Id`；
+  - 缺失任一 header 返回 `400 MISSING_CONTEXT` + `error.context.missing`。
 
 ## 8. 配置规范
 
@@ -181,7 +188,18 @@ Command 执行管道（必须）：
 示例：
 - `GOYAIS_DB_DRIVER=sqlite`
 - `GOYAIS_OBJECT_STORE_PROVIDER=local`
+- `GOYAIS_OBJECT_STORE_LOCAL_ROOT=./data/objects`
 - `GOYAIS_STREAM_PROVIDER=mediamtx`
+
+PostgreSQL DSN 规则（冻结）：
+- 当 `db.driver=postgres` 时，`GOYAIS_DB_DSN` 必须显式包含 `dbname`。
+- 示例（无敏感信息）：`GOYAIS_DB_DSN='dbname=postgres sslmode=disable'`
+
+Asset 本地对象路径（冻结）：
+- `object_store.local_root` 默认 `./data/objects`
+- 相对路径固定：`tenant/workspace/YYYY/MM/DD/<sha256>`
+- 资源 URI 固定：`local://<relative_path>`
+- `uri` 与 `hash` 在资产模型中均为必填（NOT NULL），禁止写入空值或 `NULL`
 
 ## 9. 前端约束
 
