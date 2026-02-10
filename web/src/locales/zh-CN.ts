@@ -1,12 +1,12 @@
 export default {
   nav: {
-    home: 'Home',
-    canvas: 'Canvas',
-    commands: 'Commands',
-    assets: 'Assets',
-    plugins: 'Plugins',
-    streams: 'Streams',
-    settings: 'Settings',
+    home: '首页',
+    canvas: '画布',
+    commands: '命令',
+    assets: '资源',
+    plugins: '插件',
+    streams: '流媒体',
+    settings: '设置',
   },
   common: {
     appName: 'Goyais Console',
