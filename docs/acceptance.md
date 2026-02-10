@@ -113,13 +113,13 @@
 - [x] 依赖缺失时返回可理解错误（含 `messageKey`）。
 - [x] 权限 ceiling 生效，超界安装/启用会被拒绝并审计。
 
-## 8.1 Algorithm Library MVP 验收（下一阶段）
+## 8.1 Algorithm Library MVP 验收
 
-- [ ] `GET /api/v1/registry/algorithms/{algorithmId}` 可查询算法详情（非 501）。
-- [ ] `POST /api/v1/algorithms/{algorithmId}:run` 走 command-first，返回 `202 + resource + commandRef`。
-- [ ] `commandType=algorithm.run` 可通过 `GET /api/v1/commands/{commandId}` 完整回查。
-- [ ] 至少 2 个 `algo-pack` 安装后可运行，且每次运行输出结构化结果 + 至少 1 个资产。
-- [ ] `algorithm.run` 结果与 workflow 执行链路一致，包含 `workflowRunId` 追踪关联。
+- [x] `GET /api/v1/registry/algorithms/{algorithmId}` 可查询算法详情（非 501）。
+- [x] `POST /api/v1/algorithms/{algorithmId}:run` 走 command-first，返回 `202 + resource + commandRef`。
+- [x] `commandType=algorithm.run` 可通过 `GET /api/v1/commands/{commandId}` 完整回查。
+- [x] 至少 2 个 `algo-pack` 安装后可运行，且每次运行输出结构化结果 + 至少 1 个资产。
+- [x] `algorithm.run` 结果与 workflow 执行链路一致，包含 `workflowRunId` 追踪关联。
 
 ## 9. Stream + MediaMTX 验收
 

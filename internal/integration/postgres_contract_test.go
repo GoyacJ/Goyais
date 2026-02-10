@@ -203,6 +203,81 @@ func TestPostgresCommandAssetWorkflowContract(t *testing.T) {
 	defer respPluginDisable.Body.Close()
 	mustStatus(t, respPluginDisable, http.StatusAccepted)
 
+	algoSuffix := time.Now().UTC().Format("20060102150405")
+	algoOneID := "algo_pg_one_" + algoSuffix
+	algoTwoID := "algo_pg_two_" + algoSuffix
+	respAlgoPackUpload := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/packages", headers, map[string]any{
+		"name":        "pg-algo-pack",
+		"version":     "1.0.0",
+		"packageType": "algo-pack",
+		"manifest": map[string]any{
+			"algorithms": []any{
+				map[string]any{
+					"id":          algoOneID,
+					"name":        "Postgres Algo One",
+					"templateRef": templateID,
+					"defaults":    map[string]any{"source": "postgres-it"},
+				},
+				map[string]any{
+					"id":          algoTwoID,
+					"name":        "Postgres Algo Two",
+					"templateRef": templateID,
+					"defaults":    map[string]any{"source": "postgres-it"},
+				},
+			},
+		},
+	})
+	defer respAlgoPackUpload.Body.Close()
+	mustStatus(t, respAlgoPackUpload, http.StatusAccepted)
+	algoPackID := readPath(t, respAlgoPackUpload.Body, "resource.id").(string)
+	if algoPackID == "" {
+		t.Fatalf("expected algo-pack id")
+	}
+
+	respAlgoPackInstall := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs", headers, map[string]any{
+		"packageId": algoPackID,
+		"scope":     "workspace",
+	})
+	defer respAlgoPackInstall.Body.Close()
+	mustStatus(t, respAlgoPackInstall, http.StatusAccepted)
+
+	for _, algorithmID := range []string{algoOneID, algoTwoID} {
+		respAlgorithm := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/registry/algorithms/"+algorithmID, contextHeaders("u1"), nil)
+		defer respAlgorithm.Body.Close()
+		mustStatus(t, respAlgorithm, http.StatusOK)
+
+		respAlgorithmRun := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/algorithms/"+algorithmID+":run", headers, map[string]any{
+			"inputs": map[string]any{
+				"source": "postgres-it",
+			},
+			"mode": "sync",
+		})
+		defer respAlgorithmRun.Body.Close()
+		mustStatus(t, respAlgorithmRun, http.StatusAccepted)
+		var algorithmRunPayload map[string]any
+		mustDecode(t, respAlgorithmRun.Body, &algorithmRunPayload)
+		resource, _ := algorithmRunPayload["resource"].(map[string]any)
+		if workflowRunID, _ := resource["workflowRunId"].(string); workflowRunID == "" {
+			t.Fatalf("expected workflowRunId for algorithm run")
+		}
+		assetIDs := stringSliceFromAny(resource["assetIds"])
+		if len(assetIDs) == 0 {
+			t.Fatalf("expected algorithm run assets")
+		}
+		commandRef, _ := algorithmRunPayload["commandRef"].(map[string]any)
+		algorithmCommandID, _ := commandRef["commandId"].(string)
+		if algorithmCommandID == "" {
+			t.Fatalf("expected algorithm run command id")
+		}
+
+		respAlgorithmCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+algorithmCommandID, contextHeaders("u1"), nil)
+		defer respAlgorithmCommand.Body.Close()
+		mustStatus(t, respAlgorithmCommand, http.StatusOK)
+		if commandType := readPath(t, respAlgorithmCommand.Body, "commandType"); commandType != "algorithm.run" {
+			t.Fatalf("expected algorithm commandType=algorithm.run got=%v", commandType)
+		}
+	}
+
 	respStreamCreate := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams", headers, map[string]any{
 		"path":       "pg/live-main",
 		"protocol":   "rtmp",
@@ -374,4 +449,20 @@ func readPath(t *testing.T, reader io.Reader, path string) any {
 		current = asMap[part]
 	}
 	return current
+}
+
+func stringSliceFromAny(raw any) []string {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		value, ok := item.(string)
+		if !ok || strings.TrimSpace(value) == "" {
+			continue
+		}
+		result = append(result, value)
+	}
+	return result
 }

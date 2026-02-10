@@ -235,12 +235,12 @@ Command 执行管道（必须）：
     - `POST /streams/{streamId}:kick`（domain sugar -> `stream.kick` command）
     - `record-stop` 成功后写入 `asset_lineage`（`relation=recorded_from`）
     - `onPublishTemplateId` 存在时，通过 command gate 触发一次 `workflow.run`
-  - `algorithms`（MVP 契约已冻结，实装在下一阶段）：
+  - `algorithms`（MVP 已落地）：
     - `POST /algorithms/{algorithmId}:run`（domain sugar -> `algorithm.run` command）
-    - `algorithm.run` 结果必须映射 `workflow_run_id` 并可通过 `GET /commands/{id}` 回查
+    - `algorithm.run` 结果映射 `workflow_run_id` 并可通过 `GET /commands/{id}` 回查
+    - `algo-pack` 安装会将 manifest 内算法定义写入 registry `algorithms`，支持多算法注册
 - 占位（可达但未实现）：
   - `assets` 的 `PATCH /assets/{assetId}`、`DELETE /assets/{assetId}`、`GET /assets/{assetId}/lineage`
-  - `algorithms` 运行写路径（`POST /algorithms/{algorithmId}:run`）在 Slice A 为占位，Slice B 转正
   - 统一返回：`501 NOT_IMPLEMENTED` + 领域 `messageKey`
 
 ## 8. 配置规范

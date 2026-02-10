@@ -1045,6 +1045,97 @@ func TestAPIContractRegression(t *testing.T) {
 		assertErrorCode(t, respForbiddenEnable.Body, "FORBIDDEN")
 	})
 
+	t.Run("algo-pack install registers multiple runnable algorithms", func(t *testing.T) {
+		if templateID == "" {
+			t.Fatalf("expected published workflow template for algo-pack test")
+		}
+		baseID := strings.ReplaceAll(strings.TrimPrefix(templateID, "tpl_"), "-", "")
+		algorithmOneID := "algo_pack_one_" + baseID
+		algorithmTwoID := "algo_pack_two_" + baseID
+
+		respUpload := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/packages", headersWithJSONContext("u1"), map[string]any{
+			"name":        "demo-algo-pack",
+			"version":     "1.0.0",
+			"packageType": "algo-pack",
+			"manifest": map[string]any{
+				"algorithms": []any{
+					map[string]any{
+						"id":          algorithmOneID,
+						"name":        "Algo Pack One",
+						"templateRef": templateID,
+						"defaults":    map[string]any{"source": "algo-pack", "variant": "one"},
+					},
+					map[string]any{
+						"id":          algorithmTwoID,
+						"name":        "Algo Pack Two",
+						"templateRef": templateID,
+						"defaults":    map[string]any{"source": "algo-pack", "variant": "two"},
+					},
+				},
+			},
+			"visibility": "PRIVATE",
+		})
+		defer respUpload.Body.Close()
+		assertStatus(t, respUpload, http.StatusAccepted)
+		algoPackID := readJSONPath(t, respUpload.Body, "resource.id").(string)
+		if algoPackID == "" {
+			t.Fatalf("expected algo-pack package id")
+		}
+
+		respInstall := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs", headersWithJSONContext("u1"), map[string]any{
+			"packageId": algoPackID,
+			"scope":     "workspace",
+		})
+		defer respInstall.Body.Close()
+		assertStatus(t, respInstall, http.StatusAccepted)
+
+		for _, algorithmID := range []string{algorithmOneID, algorithmTwoID} {
+			algorithmID := algorithmID
+			t.Run("algorithm="+algorithmID, func(t *testing.T) {
+				respDetail := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/registry/algorithms/"+algorithmID, headersWithContext("u1"), nil)
+				defer respDetail.Body.Close()
+				assertStatus(t, respDetail, http.StatusOK)
+				if gotTemplateRef := readJSONPath(t, respDetail.Body, "templateRef"); gotTemplateRef != templateID {
+					t.Fatalf("unexpected algorithm templateRef: got=%v want=%s", gotTemplateRef, templateID)
+				}
+
+				respRun := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/algorithms/"+algorithmID+":run", headersWithJSONContext("u1"), map[string]any{
+					"inputs": map[string]any{
+						"caller": "algo-pack",
+					},
+					"mode": "sync",
+				})
+				defer respRun.Body.Close()
+				assertStatus(t, respRun, http.StatusAccepted)
+				var runPayload map[string]any
+				mustDecodeJSON(t, respRun.Body, &runPayload)
+				resource, _ := runPayload["resource"].(map[string]any)
+				if runID, _ := resource["id"].(string); runID == "" {
+					t.Fatalf("expected algorithm run id")
+				}
+				if workflowRunID, _ := resource["workflowRunId"].(string); workflowRunID == "" {
+					t.Fatalf("expected workflowRunId for algorithm run")
+				}
+				assetIDs := extractStringSlice(resource["assetIds"])
+				if len(assetIDs) == 0 {
+					t.Fatalf("expected algorithm run assets")
+				}
+
+				commandRef, _ := runPayload["commandRef"].(map[string]any)
+				commandID, _ := commandRef["commandId"].(string)
+				if commandID == "" {
+					t.Fatalf("expected commandRef.commandId")
+				}
+				respCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+commandID, headersWithContext("u1"), nil)
+				defer respCommand.Body.Close()
+				assertStatus(t, respCommand, http.StatusOK)
+				if gotType := readJSONPath(t, respCommand.Body, "commandType"); gotType != "algorithm.run" {
+					t.Fatalf("unexpected commandType: %v", gotType)
+				}
+			})
+		}
+	})
+
 	t.Run("stream routes available", func(t *testing.T) {
 		respCreate := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams", headersWithJSONContext("u1"), map[string]any{
 			"path":       "live/demo-main",

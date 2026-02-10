@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -92,6 +93,21 @@ func (s *Service) InstallPackage(
 	}
 	if !allowed {
 		return PluginInstall{}, &ForbiddenError{Reason: reason}
+	}
+
+	if pkg.PackageType == PackageTypeAlgoPack {
+		definitions, err := parseAlgoPackDefinitions(pkg.ID, pkg.Version, pkg.ManifestJSON)
+		if err != nil {
+			return PluginInstall{}, err
+		}
+		if err := s.repo.UpsertAlgorithms(ctx, UpsertAlgorithmsInput{
+			Context:    req,
+			Visibility: pkg.Visibility,
+			Items:      definitions,
+			Now:        time.Now().UTC(),
+		}); err != nil {
+			return PluginInstall{}, err
+		}
 	}
 
 	return s.repo.CreateInstall(ctx, CreateInstallInput{
@@ -274,4 +290,110 @@ func isJSONObject(raw json.RawMessage) bool {
 	}
 	var value map[string]any
 	return json.Unmarshal(raw, &value) == nil
+}
+
+func parseAlgoPackDefinitions(packageID string, packageVersion string, manifest json.RawMessage) ([]AlgorithmDefinition, error) {
+	if len(manifest) == 0 || !isJSONObject(manifest) {
+		return nil, ErrInvalidRequest
+	}
+
+	var payload struct {
+		Algorithms []json.RawMessage `json:"algorithms"`
+	}
+	if err := json.Unmarshal(manifest, &payload); err != nil {
+		return nil, ErrInvalidRequest
+	}
+	if len(payload.Algorithms) == 0 {
+		return nil, ErrInvalidRequest
+	}
+
+	definitions := make([]AlgorithmDefinition, 0, len(payload.Algorithms))
+	for idx, raw := range payload.Algorithms {
+		var item struct {
+			ID           string          `json:"id"`
+			Name         string          `json:"name"`
+			Version      string          `json:"version"`
+			TemplateRef  string          `json:"templateRef"`
+			Defaults     json.RawMessage `json:"defaults"`
+			Constraints  json.RawMessage `json:"constraints"`
+			Dependencies json.RawMessage `json:"dependencies"`
+			Status       string          `json:"status"`
+		}
+		if err := json.Unmarshal(raw, &item); err != nil {
+			return nil, ErrInvalidRequest
+		}
+
+		algorithmID := strings.TrimSpace(item.ID)
+		if algorithmID == "" {
+			algorithmID = generatedAlgorithmID(packageID, idx)
+		}
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			name = algorithmID
+		}
+		version := strings.TrimSpace(item.Version)
+		if version == "" {
+			version = strings.TrimSpace(packageVersion)
+		}
+		if version == "" {
+			version = "1.0.0"
+		}
+		templateRef := strings.TrimSpace(item.TemplateRef)
+		if templateRef == "" {
+			return nil, ErrInvalidRequest
+		}
+
+		defaults, err := normalizeJSONObject(item.Defaults, "{}")
+		if err != nil {
+			return nil, ErrInvalidRequest
+		}
+		constraints, err := normalizeJSONObject(item.Constraints, "{}")
+		if err != nil {
+			return nil, ErrInvalidRequest
+		}
+		dependencies, err := normalizeJSONObject(item.Dependencies, "{}")
+		if err != nil {
+			return nil, ErrInvalidRequest
+		}
+
+		status := strings.ToLower(strings.TrimSpace(item.Status))
+		if status == "" {
+			status = "active"
+		}
+		switch status {
+		case "active", "disabled":
+		default:
+			return nil, ErrInvalidRequest
+		}
+
+		definitions = append(definitions, AlgorithmDefinition{
+			ID:           algorithmID,
+			Name:         name,
+			Version:      version,
+			TemplateRef:  templateRef,
+			Defaults:     defaults,
+			Constraints:  constraints,
+			Dependencies: dependencies,
+			Status:       status,
+		})
+	}
+	return definitions, nil
+}
+
+func generatedAlgorithmID(packageID string, idx int) string {
+	sanitized := strings.NewReplacer("-", "_", ".", "_", " ", "_").Replace(strings.TrimSpace(packageID))
+	if sanitized == "" {
+		sanitized = "pkg"
+	}
+	return fmt.Sprintf("algo_%s_%d", sanitized, idx+1)
+}
+
+func normalizeJSONObject(raw json.RawMessage, fallback string) (json.RawMessage, error) {
+	if len(raw) == 0 {
+		return json.RawMessage(fallback), nil
+	}
+	if !isJSONObject(raw) {
+		return nil, ErrInvalidRequest
+	}
+	return raw, nil
 }
