@@ -709,6 +709,102 @@ func TestAPIContractRegression(t *testing.T) {
 		assertStatus(t, respProviders, http.StatusOK)
 	})
 
+	t.Run("plugin market routes available", func(t *testing.T) {
+		respUpload := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/packages", headersWithJSONContext("u1"), map[string]any{
+			"name":        "demo-plugin",
+			"version":     "1.0.0",
+			"packageType": "tool-provider",
+			"manifest":    map[string]any{"entry": "main"},
+			"visibility":  "PRIVATE",
+		})
+		defer respUpload.Body.Close()
+		assertStatus(t, respUpload, http.StatusAccepted)
+		packageID := readJSONPath(t, respUpload.Body, "resource.id").(string)
+		if packageID == "" {
+			t.Fatalf("expected plugin package id")
+		}
+
+		respList := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/plugin-market/packages?page=1&pageSize=20", headersWithContext("u1"), nil)
+		defer respList.Body.Close()
+		assertStatus(t, respList, http.StatusOK)
+		var listPayload map[string]any
+		mustDecodeJSON(t, respList.Body, &listPayload)
+		if _, ok := listPayload["items"].([]any); !ok {
+			t.Fatalf("expected plugin package list items")
+		}
+		if _, ok := listPayload["pageInfo"].(map[string]any); !ok {
+			t.Fatalf("expected plugin package list pageInfo")
+		}
+		listItems, _ := listPayload["items"].([]any)
+		if len(listItems) == 0 {
+			t.Fatalf("expected plugin package list items for cursor test")
+		}
+		lastPackage, _ := listItems[len(listItems)-1].(map[string]any)
+		pluginCursor := buildCursor(t, lastPackage["createdAt"].(string), lastPackage["id"].(string))
+		respListCursor := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/plugin-market/packages?cursor="+pluginCursor+"&page=1&pageSize=1", headersWithContext("u1"), nil)
+		defer respListCursor.Body.Close()
+		assertStatus(t, respListCursor, http.StatusOK)
+		var listCursorPayload map[string]any
+		mustDecodeJSON(t, respListCursor.Body, &listCursorPayload)
+		if _, ok := listCursorPayload["cursorInfo"].(map[string]any); !ok {
+			t.Fatalf("expected plugin package list cursorInfo")
+		}
+		if _, ok := listCursorPayload["pageInfo"]; ok {
+			t.Fatalf("did not expect plugin package list pageInfo when cursor is used")
+		}
+
+		respInstallMissing := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs", headersWithJSONContext("u1"), map[string]any{
+			"packageId": "pkg_missing",
+			"scope":     "workspace",
+		})
+		defer respInstallMissing.Body.Close()
+		assertStatus(t, respInstallMissing, http.StatusNotFound)
+		assertMessageKey(t, respInstallMissing.Body, "error.plugin.not_found")
+
+		respInstall := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs", headersWithJSONContext("u1"), map[string]any{
+			"packageId": packageID,
+			"scope":     "workspace",
+		})
+		defer respInstall.Body.Close()
+		assertStatus(t, respInstall, http.StatusAccepted)
+		var installPayload map[string]any
+		mustDecodeJSON(t, respInstall.Body, &installPayload)
+		resource, _ := installPayload["resource"].(map[string]any)
+		installID, _ := resource["id"].(string)
+		if installID == "" {
+			t.Fatalf("expected plugin install id")
+		}
+		if installStatus := resource["status"]; installStatus != "enabled" {
+			t.Fatalf("unexpected plugin install status: %v", installStatus)
+		}
+
+		respDisable := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/"+installID+":disable", headersWithJSONContext("u1"), map[string]any{})
+		defer respDisable.Body.Close()
+		assertStatus(t, respDisable, http.StatusAccepted)
+		if disableStatus := readJSONPath(t, respDisable.Body, "resource.status"); disableStatus != "disabled" {
+			t.Fatalf("unexpected plugin disable status: %v", disableStatus)
+		}
+
+		respEnable := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/"+installID+":enable", headersWithJSONContext("u1"), map[string]any{})
+		defer respEnable.Body.Close()
+		assertStatus(t, respEnable, http.StatusAccepted)
+		if enableStatus := readJSONPath(t, respEnable.Body, "resource.status"); enableStatus != "enabled" {
+			t.Fatalf("unexpected plugin enable status: %v", enableStatus)
+		}
+
+		respRollback := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/"+installID+":rollback", headersWithJSONContext("u1"), map[string]any{})
+		defer respRollback.Body.Close()
+		assertStatus(t, respRollback, http.StatusAccepted)
+		if rollbackStatus := readJSONPath(t, respRollback.Body, "resource.status"); rollbackStatus != "rolled_back" {
+			t.Fatalf("unexpected plugin rollback status: %v", rollbackStatus)
+		}
+
+		respForbiddenEnable := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/"+installID+":enable", headersWithJSONContext("u2"), map[string]any{})
+		defer respForbiddenEnable.Body.Close()
+		assertStatus(t, respForbiddenEnable, http.StatusForbidden)
+		assertErrorCode(t, respForbiddenEnable.Body, "FORBIDDEN")
+	})
+
 	t.Run("placeholder domains return 501", func(t *testing.T) {
 		checkNotImplemented := func(method, path, messageKey string) {
 			t.Helper()
@@ -717,10 +813,6 @@ func TestAPIContractRegression(t *testing.T) {
 			assertStatus(t, resp, http.StatusNotImplemented)
 			assertMessageKey(t, resp.Body, messageKey)
 		}
-
-		checkNotImplemented(http.MethodGet, "/api/v1/plugin-market/packages", "error.plugin.not_implemented")
-		checkNotImplemented(http.MethodPost, "/api/v1/plugin-market/installs", "error.plugin.not_implemented")
-		checkNotImplemented(http.MethodPost, "/api/v1/plugin-market/installs/ins_1:enable", "error.plugin.not_implemented")
 
 		checkNotImplemented(http.MethodGet, "/api/v1/streams", "error.stream.not_implemented")
 		checkNotImplemented(http.MethodGet, "/api/v1/streams/stream_1", "error.stream.not_implemented")

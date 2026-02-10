@@ -9,6 +9,7 @@ import (
 	"goyais/internal/command"
 	"goyais/internal/common/errorx"
 	"goyais/internal/config"
+	"goyais/internal/plugin"
 	"goyais/internal/registry"
 	"goyais/internal/workflow"
 )
@@ -18,6 +19,7 @@ type RouterDeps struct {
 	AssetService    *asset.Service
 	WorkflowService *workflow.Service
 	RegistryService *registry.Service
+	PluginService   *plugin.Service
 	HealthChecker   HealthChecker
 	ProviderProbe   ProviderProbe
 }
@@ -38,6 +40,7 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 		assetService:    deps.AssetService,
 		workflowService: deps.WorkflowService,
 		registryService: deps.RegistryService,
+		pluginService:   deps.PluginService,
 	}
 	if deps.AssetService != nil {
 		apiMux.Handle("/api/v1/assets", http.HandlerFunc(domainHandler.handleAssets))
@@ -69,10 +72,16 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 		apiMux.Handle("/api/v1/registry/providers", registryNotImplemented)
 	}
 
-	pluginNotImplemented := NewNotImplementedHandler("error.plugin.not_implemented")
-	apiMux.Handle("/api/v1/plugin-market/packages", pluginNotImplemented)
-	apiMux.Handle("/api/v1/plugin-market/installs", pluginNotImplemented)
-	apiMux.Handle("/api/v1/plugin-market/installs/", pluginNotImplemented)
+	if deps.PluginService != nil {
+		apiMux.Handle("/api/v1/plugin-market/packages", http.HandlerFunc(domainHandler.handlePluginPackages))
+		apiMux.Handle("/api/v1/plugin-market/installs", http.HandlerFunc(domainHandler.handlePluginInstalls))
+		apiMux.Handle("/api/v1/plugin-market/installs/", http.HandlerFunc(domainHandler.handlePluginInstallRoutes))
+	} else {
+		pluginNotImplemented := NewNotImplementedHandler("error.plugin.not_implemented")
+		apiMux.Handle("/api/v1/plugin-market/packages", pluginNotImplemented)
+		apiMux.Handle("/api/v1/plugin-market/installs", pluginNotImplemented)
+		apiMux.Handle("/api/v1/plugin-market/installs/", pluginNotImplemented)
+	}
 
 	streamNotImplemented := NewNotImplementedHandler("error.stream.not_implemented")
 	apiMux.Handle("/api/v1/streams", streamNotImplemented)

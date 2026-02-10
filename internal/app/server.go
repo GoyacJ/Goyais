@@ -14,6 +14,7 @@ import (
 	"goyais/internal/platform/cache"
 	platformdb "goyais/internal/platform/db"
 	"goyais/internal/platform/vector"
+	"goyais/internal/plugin"
 	"goyais/internal/registry"
 	"goyais/internal/workflow"
 )
@@ -63,6 +64,13 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	}
 	registryService := registry.NewService(registryRepo)
 
+	pluginRepo, err := plugin.NewRepository(cfg.Providers.DB, db)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("build plugin repository: %w", err)
+	}
+	pluginService := plugin.NewService(pluginRepo, cfg.Authz.AllowPrivateToPublic)
+
 	cacheProvider, err := cache.New(cache.Config{
 		Provider:      cfg.Providers.Cache,
 		RedisAddr:     cfg.Cache.RedisAddr,
@@ -83,13 +91,14 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 		return nil, fmt.Errorf("build vector provider: %w", err)
 	}
 
-	registerCommandExecutors(commandService, assetService, workflowService)
+	registerCommandExecutors(commandService, assetService, workflowService, pluginService)
 
 	h, err := httpapi.NewRouter(cfg, httpapi.RouterDeps{
 		CommandService:  commandService,
 		AssetService:    assetService,
 		WorkflowService: workflowService,
 		RegistryService: registryService,
+		PluginService:   pluginService,
 		HealthChecker:   db,
 		ProviderProbe: func(ctx context.Context) map[string]httpapi.ProviderStatus {
 			out := map[string]httpapi.ProviderStatus{

@@ -174,6 +174,34 @@ func TestPostgresCommandAssetWorkflowContract(t *testing.T) {
 	respAssetShared := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets/"+assetID, contextHeaders("u2"), nil)
 	defer respAssetShared.Body.Close()
 	mustStatus(t, respAssetShared, http.StatusOK)
+
+	respPluginUpload := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/packages", headers, map[string]any{
+		"name":        "pg-plugin",
+		"version":     "1.0.0",
+		"packageType": "tool-provider",
+		"manifest":    map[string]any{"entry": "main"},
+	})
+	defer respPluginUpload.Body.Close()
+	mustStatus(t, respPluginUpload, http.StatusAccepted)
+	packageID := readPath(t, respPluginUpload.Body, "resource.id").(string)
+	if packageID == "" {
+		t.Fatalf("expected plugin package id")
+	}
+
+	respPluginInstall := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs", headers, map[string]any{
+		"packageId": packageID,
+		"scope":     "workspace",
+	})
+	defer respPluginInstall.Body.Close()
+	mustStatus(t, respPluginInstall, http.StatusAccepted)
+	installID := readPath(t, respPluginInstall.Body, "resource.id").(string)
+	if installID == "" {
+		t.Fatalf("expected plugin install id")
+	}
+
+	respPluginDisable := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/"+installID+":disable", headers, map[string]any{})
+	defer respPluginDisable.Body.Close()
+	mustStatus(t, respPluginDisable, http.StatusAccepted)
 }
 
 func newPostgresTestServer(t *testing.T, dsn string) (string, func()) {

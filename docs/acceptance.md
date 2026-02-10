@@ -79,7 +79,7 @@
 ## 6. Visibility/ACL 与隔离验收
 
 - [x] 已实现对象（commands/assets/workflow/shares）支持 `PRIVATE/WORKSPACE/TENANT/PUBLIC`。
-- [x] 未实现对象（plugin/stream）visibility/ACL 延后到 M2；registry 对象（capability/algorithm/provider）已支持读路径 ACL.READ 判定。
+- [x] 未实现对象（stream）visibility/ACL 延后到 M2；registry 与 plugin 对象已支持当前阶段 ACL 判定。
 - [x] ACL 可赋予 `READ/WRITE/EXECUTE/MANAGE/SHARE`。
 - [x] 无权限用户访问资源返回拒绝，并包含明确 `messageKey`。
 - [x] `PRIVATE` 输入默认不得直接产生 `PUBLIC` 输出（除非策略放开且权限满足）。
@@ -108,10 +108,10 @@
 
 ## 8. Plugin Market 验收
 
-- [ ] 插件包可上传、安装、启用、禁用。
-- [ ] 升级与回滚路径可执行。
-- [ ] 依赖缺失时返回可理解错误（含 `messageKey`）。
-- [ ] 权限 ceiling 生效，超界安装/启用会被拒绝并审计。
+- [x] 插件包可上传、安装、启用、禁用。
+- [x] 升级与回滚路径可执行。
+- [x] 依赖缺失时返回可理解错误（含 `messageKey`）。
+- [x] 权限 ceiling 生效，超界安装/启用会被拒绝并审计。
 
 ## 9. Stream + MediaMTX 验收
 
