@@ -1,4 +1,4 @@
-# Web UI Standards (v3)
+# Web UI Standards (v4)
 
 ## 1. Goals and Guardrails
 
@@ -74,6 +74,16 @@
 | `loading` | dimmed + progress cursor | default non-blocking |
 | `loading + blockWhileLoading` | same as loading | blocked for Button only |
 
+### 5.1 Shared State Utility Classes
+- `ui-state-hovered`: shared hover state-layer for option-like controls (`Select`, `Dropdown`).
+- `ui-state-pressed`: shared pressed state-layer for explicit pressed projection.
+- `ui-state-selected`: restrained selected state for compact option/list contexts.
+
+### 5.2 Variant Button Rules
+- `ui-btn-primary`, `ui-btn-ghost`, `ui-btn-destructive` must split hover and pressed visual states.
+- Pressed visual must use `--ui-state-pressed-opacity` (not hover opacity reuse).
+- Button loading behavior remains configurable by `blockWhileLoading`.
+
 ## 6. Token Contract (Small-Step Only)
 
 ### 6.1 Alias Tokens (non-breaking)
@@ -96,6 +106,7 @@
 ### 7.1 Required
 - `Button/Input/Textarea/Select/Tabs/Dialog/Dropdown/Table/Toast` must follow token + hook semantics.
 - Overlay shadow only for overlay components.
+- `Select` and `Dropdown` active options must use shared state utility classes (no local ad-hoc background class).
 
 ### 7.2 Keyboard and A11y
 - Tabs: roving tabindex + Arrow/Home/End.
