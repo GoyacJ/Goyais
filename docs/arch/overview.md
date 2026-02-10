@@ -166,6 +166,11 @@ Command 执行管道（必须）：
 4. Audit：记录 `allow/deny`、原因与影响资源。
 5. Event：向 UI 推送 run/step 状态。
 
+审计与追踪补充约束（v0.1 当前实现）：
+- 每次 command 至少产生 `command.authorize`、`command.execute` 与 `command.egress` 审计记录。
+- 审计 payload 统一包含 `initiator/context/authzResult/resourceImpact`；`command.egress` 仅记录摘要（digest/bytes），不落敏感原文。
+- `X-Trace-Id`（缺省由服务端生成）写入 command 审计，并透传到 `workflow_runs.trace_id` 与 `step_runs.trace_id`，对外返回 `traceId` 字段用于串联查询。
+
 ### 7.1 上下文选择
 - 默认使用 JWT claims 中的 `tenantId/workspaceId/userId/roles`。
 - 可通过 `X-Workspace-Id`（可选 `X-Tenant-Id`）切换。

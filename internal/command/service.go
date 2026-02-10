@@ -109,7 +109,7 @@ func (s *Service) Submit(ctx context.Context, reqCtx RequestContext, commandType
 
 	resultBytes, err := s.executeCommand(ctx, reqCtx, commandType, payload)
 	if err != nil {
-		failed, markErr := s.markCommandFailed(ctx, reqCtx, running.ID, resultBytes, err)
+		failed, markErr := s.markCommandFailed(ctx, reqCtx, running.ID, commandType, payload, resultBytes, err)
 		if markErr != nil {
 			return Command{}, markErr
 		}
@@ -124,6 +124,15 @@ func (s *Service) Submit(ctx context.Context, reqCtx RequestContext, commandType
 
 	_ = s.repo.AppendCommandEvent(ctx, reqCtx, final.ID, "command.succeeded", resultBytes)
 	_ = s.repo.AppendAuditEvent(ctx, reqCtx, final.ID, "command.execute", "allow", "stub_execute", resultBytes)
+	_ = s.repo.AppendAuditEvent(
+		ctx,
+		reqCtx,
+		final.ID,
+		"command.egress",
+		"allow",
+		"policy.default_allow",
+		buildEgressAuditPayload(commandType, payload, resultBytes, "allow"),
+	)
 
 	return final, nil
 }
@@ -151,6 +160,8 @@ func (s *Service) markCommandFailed(
 	ctx context.Context,
 	reqCtx RequestContext,
 	commandID string,
+	commandType string,
+	commandPayload json.RawMessage,
 	result []byte,
 	execErr error,
 ) (Command, error) {
@@ -187,7 +198,44 @@ func (s *Service) markCommandFailed(
 
 	_ = s.repo.AppendCommandEvent(ctx, reqCtx, failed.ID, "command.failed", eventPayload)
 	_ = s.repo.AppendAuditEvent(ctx, reqCtx, failed.ID, "command.execute", "deny", reason, eventPayload)
+	_ = s.repo.AppendAuditEvent(
+		ctx,
+		reqCtx,
+		failed.ID,
+		"command.egress",
+		"deny",
+		reason,
+		buildEgressAuditPayload(commandType, commandPayload, eventPayload, "deny"),
+	)
 	return failed, nil
+}
+
+func buildEgressAuditPayload(commandType string, requestPayload json.RawMessage, responsePayload []byte, policyResult string) []byte {
+	policyResult = strings.ToLower(strings.TrimSpace(policyResult))
+	if policyResult == "" {
+		policyResult = "unknown"
+	}
+	summary := map[string]any{
+		"commandType":   strings.TrimSpace(commandType),
+		"requestBytes":  len(requestPayload),
+		"requestDigest": hashRequest(commandType, requestPayload),
+	}
+	if len(responsePayload) > 0 {
+		hash := sha256.Sum256(responsePayload)
+		summary["responseBytes"] = len(responsePayload)
+		summary["responseDigest"] = hex.EncodeToString(hash[:])
+	}
+
+	payload := map[string]any{
+		"destination":  "local://command-executor",
+		"policyResult": policyResult,
+		"summary":      summary,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return []byte(`{"destination":"local://command-executor","policyResult":"unknown","summary":{}}`)
+	}
+	return raw
 }
 
 func defaultCommandResult(commandType string) []byte {

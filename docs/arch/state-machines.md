@@ -25,6 +25,17 @@
 | accepted/running | execute.error | 执行失败 | failed | `command.failed` |
 | accepted/running | command.cancel | 具备取消权限 | canceled | `command.canceled` |
 
+### 0.2.1 审计补充约束
+- `execute.success` 路径必须追加审计：`command.execute(decision=allow)` 与 `command.egress(policyResult=allow)`。
+- `execute.error` 路径必须追加审计：`command.execute(decision=deny)` 与 `command.egress(policyResult=deny)`。
+- 审计 payload 必须包含：
+  - `initiator`（`userId/tenantId/workspaceId`）
+  - `context`（`roles/policyVersion/traceId`）
+  - `authzResult`（`eventType/decision/reason`）
+  - `resourceImpact`（`resourceType/resourceId/eventType`）
+  - `data`（业务数据或摘要）
+- `command.egress` 的 `data` 必须最小化为 `destination/policyResult/summary`，其中 `summary` 仅保留 digest 与 bytes，不记录原始敏感内容。
+
 ## 0.3 幂等约束
 - 若存在 `Idempotency-Key`，必须在同一事务内执行：查有效映射 -> 同 hash 复用/异 hash 冲突 -> 无有效映射则创建并 upsert。
 - 有效映射判定：`expires_at >= now`；过期映射视为不存在。

@@ -601,7 +601,7 @@ func (r *SQLiteRepository) AppendCommandEvent(ctx context.Context, req RequestCo
 }
 
 func (r *SQLiteRepository) AppendAuditEvent(ctx context.Context, req RequestContext, commandID, eventType, decision, reason string, payload []byte) error {
-	payload = buildAuditPayload(req, payload)
+	payload = buildAuditPayload(req, commandID, eventType, decision, reason, payload)
 	traceID := strings.TrimSpace(req.TraceID)
 	if traceID == "" {
 		traceID = newID("trace")
@@ -630,7 +630,7 @@ func (r *SQLiteRepository) AppendAuditEvent(ctx context.Context, req RequestCont
 	return nil
 }
 
-func buildAuditPayload(req RequestContext, payload []byte) []byte {
+func buildAuditPayload(req RequestContext, commandID, eventType, decision, reason string, payload []byte) []byte {
 	var base any
 	if len(payload) > 0 {
 		_ = json.Unmarshal(payload, &base)
@@ -648,8 +648,23 @@ func buildAuditPayload(req RequestContext, payload []byte) []byte {
 	}
 
 	out := map[string]any{
+		"initiator": map[string]any{
+			"userId":      req.UserID,
+			"tenantId":    req.TenantID,
+			"workspaceId": req.WorkspaceID,
+		},
 		"context": ctxPayload,
-		"data":    base,
+		"authzResult": map[string]any{
+			"eventType": eventType,
+			"decision":  decision,
+			"reason":    reason,
+		},
+		"resourceImpact": map[string]any{
+			"resourceType": "command",
+			"resourceId":   commandID,
+			"eventType":    eventType,
+		},
+		"data": base,
 	}
 	raw, err := json.Marshal(out)
 	if err != nil {
