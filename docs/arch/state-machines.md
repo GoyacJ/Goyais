@@ -66,7 +66,12 @@
   - `retry_of_run_id = source_run_id`；
   - `replay_from_step_key` 来源于 payload（缺省 `step-1`）。
 
-## 0.7 Registry C1 Read Path（M2 启动）
+## 0.7 Plugin Domain Sugar（C2 MVP）
+- `POST /api/v1/plugin-market/packages`、`POST /api/v1/plugin-market/installs`、`POST /api/v1/plugin-market/installs/{installId}:enable|:disable|:rollback` 必须转换为 `plugin.*` command 执行（Command-first）。
+- `plugin.install` 最小语义：创建 install 记录并收敛为 `enabled`。
+- `plugin.enable|plugin.disable|plugin.rollback` 必须在 install 状态机允许的转换上执行，不允许非法跃迁。
+
+## 0.8 Registry C1 Read Path（M2 启动）
 - `GET /api/v1/registry/capabilities`、`GET /api/v1/registry/capabilities/{capabilityId}`、`GET /api/v1/registry/algorithms`、`GET /api/v1/registry/providers` 在 v0.1 作为 read-only 能力落地。
 - 读路径授权判定：
   - 同 tenant/workspace；

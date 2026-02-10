@@ -5,6 +5,7 @@ import (
 
 	"goyais/internal/asset"
 	"goyais/internal/command"
+	"goyais/internal/plugin"
 	"goyais/internal/registry"
 	"goyais/internal/workflow"
 )
@@ -15,6 +16,7 @@ type apiHandler struct {
 	assetService    *asset.Service
 	workflowService *workflow.Service
 	registryService *registry.Service
+	pluginService   *plugin.Service
 }
 
 func pathID(prefix, full string) string {

@@ -261,8 +261,10 @@ func writeCommandError(w http.ResponseWriter, err error) {
 	if errors.As(err, &execErr) && strings.TrimSpace(execErr.Code) != "" && strings.TrimSpace(execErr.MessageKey) != "" {
 		status := http.StatusInternalServerError
 		switch strings.ToUpper(strings.TrimSpace(execErr.Code)) {
-		case "INVALID_COMMAND_REQUEST", "INVALID_ASSET_REQUEST", "INVALID_SHARE_REQUEST", "INVALID_WORKFLOW_REQUEST":
+		case "INVALID_COMMAND_REQUEST", "INVALID_ASSET_REQUEST", "INVALID_SHARE_REQUEST", "INVALID_WORKFLOW_REQUEST", "INVALID_PLUGIN_REQUEST":
 			status = http.StatusBadRequest
+		case "PLUGIN_NOT_FOUND":
+			status = http.StatusNotFound
 		case "NOT_IMPLEMENTED":
 			status = http.StatusNotImplemented
 		case "FORBIDDEN":

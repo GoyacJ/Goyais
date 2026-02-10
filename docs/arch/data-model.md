@@ -192,7 +192,7 @@
 
 v0.1 当前实现进度：
 - C1 read-only 已落地：`capability_providers/capabilities/algorithms` 支持租户+工作区隔离查询与 ACL.READ 判定。
-- C2 plugin market 仍为占位（API 可达但返回 501）。
+- C2 plugin market MVP 已落地：`plugin_packages/plugin_installs` 支持上传、安装、启停、回滚与状态回查。
 
 ### capability_providers
 - `id, tenant_id, workspace_id, owner_id, visibility`
@@ -269,7 +269,7 @@ v0.1 当前实现进度：
 
 ### commands
 - `id, tenant_id, workspace_id, owner_id`
-- `command_type`（示例：`asset.upload`、`workflow.run`、`workflow.retry`、`share.create`、`share.delete`）
+- `command_type`（示例：`asset.upload`、`workflow.run`、`workflow.retry`、`share.create`、`share.delete`、`plugin.upload`、`plugin.install`、`plugin.enable`、`plugin.disable`、`plugin.rollback`）
 - `payload`（JSON）
 - `status`（accepted/running/succeeded/failed/canceled）
 - `visibility`（默认 `PRIVATE`，NOT NULL）

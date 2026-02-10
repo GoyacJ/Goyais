@@ -982,26 +982,45 @@ paths:
   /plugin-market/packages:
     get:
       tags: [PluginMarket]
-      summary: List plugin packages (placeholder)
+      summary: List plugin packages
       operationId: listPluginPackages
+      description: 固定排序为 created_at DESC, id DESC。若提供 cursor，服务端忽略 page/pageSize。
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
+        '200':
+          description: Plugin package list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginPackageListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     post:
       tags: [PluginMarket]
-      summary: Upload plugin package (placeholder)
+      summary: Upload plugin package
       operationId: uploadPluginPackage
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
       requestBody:
         required: true
         content:
@@ -1009,6 +1028,16 @@ paths:
             schema:
               $ref: '#/components/schemas/PluginPackageUploadRequest'
       responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginPackage'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -1017,11 +1046,15 @@ paths:
   /plugin-market/installs:
     post:
       tags: [PluginMarket]
-      summary: Install plugin package (placeholder)
+      summary: Install plugin package
       operationId: installPlugin
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
       requestBody:
         required: true
         content:
@@ -1029,6 +1062,18 @@ paths:
             schema:
               $ref: '#/components/schemas/PluginInstallRequest'
       responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -1037,13 +1082,29 @@ paths:
   /plugin-market/installs/{installId}:enable:
     post:
       tags: [PluginMarket]
-      summary: Enable install (placeholder)
+      summary: Enable install
       operationId: enablePluginInstall
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/InstallId'
       responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -1052,13 +1113,29 @@ paths:
   /plugin-market/installs/{installId}:disable:
     post:
       tags: [PluginMarket]
-      summary: Disable install (placeholder)
+      summary: Disable install
       operationId: disablePluginInstall
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/InstallId'
       responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -1067,13 +1144,29 @@ paths:
   /plugin-market/installs/{installId}:rollback:
     post:
       tags: [PluginMarket]
-      summary: Rollback install (placeholder)
+      summary: Rollback install
       operationId: rollbackPluginInstall
       parameters:
-        - $ref: '#/components/parameters/XTenantId'
-        - $ref: '#/components/parameters/XWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/InstallId'
       responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -1480,7 +1573,9 @@ components:
             支持的关键 commandType（v0.1）包括：
             `asset.upload`、`share.create`、`share.delete`、
             `workflow.createDraft`、`workflow.patch`、`workflow.publish`、
-            `workflow.run`、`workflow.retry`、`workflow.cancel`。
+            `workflow.run`、`workflow.retry`、`workflow.cancel`、
+            `plugin.upload`、`plugin.install`、`plugin.enable`、
+            `plugin.disable`、`plugin.rollback`。
         payload:
           type: object
           additionalProperties: true

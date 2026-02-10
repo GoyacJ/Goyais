@@ -14,6 +14,7 @@ import (
 
 	"goyais/internal/asset"
 	"goyais/internal/command"
+	"goyais/internal/plugin"
 	"goyais/internal/workflow"
 )
 
@@ -77,12 +78,30 @@ type shareDeleteCommandPayload struct {
 	ShareID string `json:"shareId"`
 }
 
+type pluginUploadCommandPayload struct {
+	Name        string          `json:"name"`
+	Version     string          `json:"version"`
+	PackageType string          `json:"packageType"`
+	Manifest    json.RawMessage `json:"manifest"`
+	Visibility  string          `json:"visibility"`
+}
+
+type pluginInstallCommandPayload struct {
+	PackageID string `json:"packageId"`
+	Scope     string `json:"scope"`
+}
+
+type pluginInstallActionCommandPayload struct {
+	InstallID string `json:"installId"`
+}
+
 const timeRFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
 
 func registerCommandExecutors(
 	commandService *command.Service,
 	assetService *asset.Service,
 	workflowService *workflow.Service,
+	pluginService *plugin.Service,
 ) {
 	if commandService == nil {
 		return
@@ -99,6 +118,13 @@ func registerCommandExecutors(
 		commandService.SetExecutor("workflow.run", newWorkflowRunExecutor(workflowService))
 		commandService.SetExecutor("workflow.retry", newWorkflowRetryExecutor(workflowService))
 		commandService.SetExecutor("workflow.cancel", newWorkflowCancelExecutor(workflowService))
+	}
+	if pluginService != nil {
+		commandService.SetExecutor("plugin.upload", newPluginUploadExecutor(pluginService))
+		commandService.SetExecutor("plugin.install", newPluginInstallExecutor(pluginService))
+		commandService.SetExecutor("plugin.enable", newPluginEnableExecutor(pluginService))
+		commandService.SetExecutor("plugin.disable", newPluginDisableExecutor(pluginService))
+		commandService.SetExecutor("plugin.rollback", newPluginRollbackExecutor(pluginService))
 	}
 }
 
@@ -393,6 +419,157 @@ func mapWorkflowExecutionError(err error) error {
 	}
 }
 
+func newPluginUploadExecutor(pluginService *plugin.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req pluginUploadCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapPluginExecutionError(plugin.ErrInvalidRequest)
+		}
+		if len(req.Manifest) == 0 {
+			req.Manifest = json.RawMessage(`{}`)
+		}
+
+		pkg, err := pluginService.UploadPackage(
+			ctx,
+			reqCtx,
+			req.Name,
+			req.Version,
+			req.PackageType,
+			req.Manifest,
+			req.Visibility,
+		)
+		if err != nil {
+			return nil, mapPluginExecutionError(err)
+		}
+
+		result := map[string]any{
+			"package": toPluginPackageResultPayload(pkg),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func newPluginInstallExecutor(pluginService *plugin.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req pluginInstallCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapPluginExecutionError(plugin.ErrInvalidRequest)
+		}
+
+		ins, err := pluginService.InstallPackage(ctx, reqCtx, req.PackageID, req.Scope)
+		if err != nil {
+			return nil, mapPluginExecutionError(err)
+		}
+
+		result := map[string]any{
+			"install": toPluginInstallResultPayload(ins),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func newPluginEnableExecutor(pluginService *plugin.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req pluginInstallActionCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapPluginExecutionError(plugin.ErrInvalidRequest)
+		}
+
+		ins, err := pluginService.EnableInstall(ctx, reqCtx, req.InstallID)
+		if err != nil {
+			return nil, mapPluginExecutionError(err)
+		}
+
+		result := map[string]any{
+			"install": toPluginInstallResultPayload(ins),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func newPluginDisableExecutor(pluginService *plugin.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req pluginInstallActionCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapPluginExecutionError(plugin.ErrInvalidRequest)
+		}
+
+		ins, err := pluginService.DisableInstall(ctx, reqCtx, req.InstallID)
+		if err != nil {
+			return nil, mapPluginExecutionError(err)
+		}
+
+		result := map[string]any{
+			"install": toPluginInstallResultPayload(ins),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func newPluginRollbackExecutor(pluginService *plugin.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req pluginInstallActionCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapPluginExecutionError(plugin.ErrInvalidRequest)
+		}
+
+		ins, err := pluginService.RollbackInstall(ctx, reqCtx, req.InstallID)
+		if err != nil {
+			return nil, mapPluginExecutionError(err)
+		}
+
+		result := map[string]any{
+			"install": toPluginInstallResultPayload(ins),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func mapPluginExecutionError(err error) error {
+	switch {
+	case errors.Is(err, plugin.ErrInvalidRequest):
+		return &command.ExecutionError{
+			Code:       "INVALID_PLUGIN_REQUEST",
+			MessageKey: "error.plugin.invalid_request",
+			Err:        command.ErrInvalidCommandRequest,
+		}
+	case errors.Is(err, plugin.ErrPackageNotFound), errors.Is(err, plugin.ErrInstallNotFound):
+		return &command.ExecutionError{
+			Code:       "PLUGIN_NOT_FOUND",
+			MessageKey: "error.plugin.not_found",
+			Err:        command.ErrInvalidCommandRequest,
+		}
+	case errors.Is(err, plugin.ErrNotImplemented):
+		return &command.ExecutionError{
+			Code:       "NOT_IMPLEMENTED",
+			MessageKey: "error.plugin.not_implemented",
+			Err:        command.ErrNotImplemented,
+		}
+	case errors.Is(err, plugin.ErrForbidden):
+		reason := ""
+		var forbidden *plugin.ForbiddenError
+		if errors.As(err, &forbidden) {
+			reason = forbidden.Reason
+		}
+		return &command.ExecutionError{
+			Code:       "FORBIDDEN",
+			MessageKey: "error.authz.forbidden",
+			Err:        &command.ForbiddenError{Reason: reason},
+		}
+	default:
+		return &command.ExecutionError{
+			Code:       "INTERNAL_ERROR",
+			MessageKey: "error.common.internal",
+			Err:        fmt.Errorf("plugin executor: %w", err),
+		}
+	}
+}
+
 func newShareCreateExecutor(commandService *command.Service) command.ExecuteFunc {
 	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
 		var req shareCreateCommandPayload
@@ -568,6 +745,50 @@ func toWorkflowRunResultPayload(item workflow.WorkflowRun) map[string]any {
 	if item.FinishedAt != nil {
 		result["finishedAt"] = item.FinishedAt.UTC().Format(timeRFC3339Nano)
 		result["durationMs"] = durationMillis(item.StartedAt, *item.FinishedAt)
+	}
+	if item.ErrorCode != "" || item.MessageKey != "" {
+		result["error"] = map[string]any{
+			"code":       item.ErrorCode,
+			"messageKey": item.MessageKey,
+		}
+	}
+	return result
+}
+
+func toPluginPackageResultPayload(item plugin.PluginPackage) map[string]any {
+	return map[string]any{
+		"id":          item.ID,
+		"tenantId":    item.TenantID,
+		"workspaceId": item.WorkspaceID,
+		"ownerId":     item.OwnerID,
+		"visibility":  item.Visibility,
+		"acl":         decodeJSON(item.ACLJSON, []any{}),
+		"name":        item.Name,
+		"version":     item.Version,
+		"packageType": item.PackageType,
+		"manifest":    decodeJSON(item.ManifestJSON, map[string]any{}),
+		"status":      item.Status,
+		"createdAt":   item.CreatedAt.UTC().Format(timeRFC3339Nano),
+		"updatedAt":   item.UpdatedAt.UTC().Format(timeRFC3339Nano),
+	}
+}
+
+func toPluginInstallResultPayload(item plugin.PluginInstall) map[string]any {
+	result := map[string]any{
+		"id":          item.ID,
+		"tenantId":    item.TenantID,
+		"workspaceId": item.WorkspaceID,
+		"ownerId":     item.OwnerID,
+		"visibility":  item.Visibility,
+		"acl":         decodeJSON(item.ACLJSON, []any{}),
+		"packageId":   item.PackageID,
+		"scope":       item.Scope,
+		"status":      item.Status,
+		"createdAt":   item.CreatedAt.UTC().Format(timeRFC3339Nano),
+		"updatedAt":   item.UpdatedAt.UTC().Format(timeRFC3339Nano),
+	}
+	if item.InstalledAt != nil {
+		result["installedAt"] = item.InstalledAt.UTC().Format(timeRFC3339Nano)
 	}
 	if item.ErrorCode != "" || item.MessageKey != "" {
 		result["error"] = map[string]any{

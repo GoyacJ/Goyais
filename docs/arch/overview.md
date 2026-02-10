@@ -215,8 +215,13 @@ Command 执行管道（必须）：
     - `GET /workflow-runs/{runId}/steps`
     - `POST /commands` with `commandType=workflow.retry`（仅命令入口，不新增 domain retry 路由）
     - 写接口全部走 command-first（domain sugar -> `workflow.*` command）
+  - `plugin-market`（C2 MVP）：
+    - `GET /plugin-market/packages`
+    - `POST /plugin-market/packages`（domain sugar -> `plugin.upload` command）
+    - `POST /plugin-market/installs`（domain sugar -> `plugin.install` command）
+    - `POST /plugin-market/installs/{installId}:enable|:disable|:rollback`（domain sugar -> `plugin.enable|plugin.disable|plugin.rollback` command）
 - 占位（可达但未实现）：
-  - `plugin-market-*`、`streams-*`
+  - `streams-*`
   - 统一返回：`501 NOT_IMPLEMENTED` + 领域 `messageKey`
 
 ## 8. 配置规范
