@@ -7,8 +7,10 @@
     ]"
     :role="interactive ? 'button' : undefined"
     :tabindex="interactive ? 0 : undefined"
-    @click="interactive && emit('select', command.commandId)"
-    @keydown.enter="interactive && emit('select', command.commandId)"
+    :aria-selected="interactive ? selected : undefined"
+    @click="onActivate"
+    @keydown.enter.prevent="onActivate"
+    @keydown.space.prevent="onActivate"
   >
     <header class="flex flex-wrap items-center justify-between gap-2">
       <div>
@@ -41,7 +43,7 @@
 import StatusBadge from '@/components/runtime/StatusBadge.vue'
 import type { MockCommand } from '@/mocks/commands'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     command: MockCommand
     selected?: boolean
@@ -56,4 +58,11 @@ withDefaults(
 const emit = defineEmits<{
   (e: 'select', commandId: string): void
 }>()
+
+function onActivate(): void {
+  if (!props.interactive) {
+    return
+  }
+  emit('select', props.command.commandId)
+}
 </script>

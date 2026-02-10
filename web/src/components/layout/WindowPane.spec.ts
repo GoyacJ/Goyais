@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import WindowPane from '@/components/layout/WindowPane.vue'
+import i18n from '@/i18n'
 
 function baseProps() {
   return {
@@ -17,6 +18,9 @@ describe('WindowPane', () => {
     const wrapper = mount(WindowPane, {
       props: baseProps(),
       slots: { default: '<div>content</div>' },
+      global: {
+        plugins: [i18n],
+      },
     })
 
     await wrapper.find('.ui-window-pane-header').trigger('pointerdown', {
@@ -41,6 +45,9 @@ describe('WindowPane', () => {
     const wrapper = mount(WindowPane, {
       props: baseProps(),
       slots: { default: '<div>content</div>' },
+      global: {
+        plugins: [i18n],
+      },
     })
 
     await wrapper.find('[data-testid="resize-corner"]').trigger('pointerdown', {
@@ -58,5 +65,72 @@ describe('WindowPane', () => {
     const lastPayload = updates?.[updates.length - 1]?.[0] as { rect: { w: number; h: number } }
     expect(lastPayload.rect.w).toBeGreaterThan(420)
     expect(lastPayload.rect.h).toBeGreaterThan(300)
+  })
+
+  it('supports keyboard move and resize shortcuts from the pane header', async () => {
+    const wrapper = mount(WindowPane, {
+      props: baseProps(),
+      slots: { default: '<div>content</div>' },
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    const header = wrapper.find('.ui-window-pane-header')
+
+    await header.trigger('keydown', {
+      key: 'ArrowRight',
+      altKey: true,
+    })
+
+    await header.trigger('keydown', {
+      key: 'ArrowDown',
+      altKey: true,
+      shiftKey: true,
+    })
+
+    const updates = wrapper.emitted('update:rect')
+    expect(updates?.length).toBe(2)
+
+    const moved = updates?.[0]?.[0] as { rect: { x: number; y: number } }
+    const resized = updates?.[1]?.[0] as { rect: { h: number } }
+
+    expect(moved.rect.x).toBe(36)
+    expect(moved.rect.y).toBe(30)
+    expect(resized.rect.h).toBe(316)
+  })
+
+  it('clamps keyboard operations to board bounds and min size', async () => {
+    const wrapper = mount(WindowPane, {
+      props: {
+        ...baseProps(),
+        rect: { x: 0, y: 0, w: 264, h: 184, z: 1 },
+      },
+      slots: { default: '<div>content</div>' },
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    const header = wrapper.find('.ui-window-pane-header')
+
+    await header.trigger('keydown', {
+      key: 'ArrowLeft',
+      altKey: true,
+    })
+    await header.trigger('keydown', {
+      key: 'ArrowLeft',
+      altKey: true,
+      shiftKey: true,
+    })
+
+    const updates = wrapper.emitted('update:rect')
+    expect(updates?.length).toBe(2)
+
+    const moved = updates?.[0]?.[0] as { rect: { x: number } }
+    const resized = updates?.[1]?.[0] as { rect: { w: number } }
+
+    expect(moved.rect.x).toBe(0)
+    expect(resized.rect.w).toBe(260)
   })
 })

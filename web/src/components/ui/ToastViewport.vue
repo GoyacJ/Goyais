@@ -1,5 +1,9 @@
 <template>
-  <div class="pointer-events-none fixed right-4 top-4 z-[60] flex w-80 flex-col gap-2">
+  <div
+    class="pointer-events-none fixed right-4 top-4 z-[60] flex w-80 flex-col gap-2"
+    aria-live="polite"
+    aria-atomic="true"
+  >
     <transition-group name="toast" tag="div">
       <article
         v-for="item in items"
@@ -12,9 +16,10 @@
           <button
             type="button"
             class="ui-focus-ring ui-pressable rounded-button px-1 text-xs text-ui-muted"
+            :aria-label="t('common.dismissNotification')"
             @click="removeToast(item.id)"
           >
-            x
+            ×
           </button>
         </header>
         <p class="mt-1 text-sm text-ui-muted">{{ item.message }}</p>
@@ -25,8 +30,10 @@
 
 <script setup lang="ts">
 import { useToast } from '@/composables/useToast'
+import { useI18n } from 'vue-i18n'
 
 const { items, removeToast } = useToast()
+const { t } = useI18n({ useScope: 'global' })
 
 const toneTextClass = {
   info: 'text-info',

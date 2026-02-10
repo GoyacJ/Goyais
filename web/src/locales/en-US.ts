@@ -48,6 +48,11 @@ export default {
     layoutTopnav: 'Top Navigation',
     layoutFocus: 'Focus',
     resetWindowLayout: 'Reset Window Layout',
+    dismissNotification: 'Dismiss notification',
+    windowMoveHandle: 'Move window: {title}',
+    windowResizeRight: 'Resize window width: {title}',
+    windowResizeBottom: 'Resize window height: {title}',
+    windowResizeCorner: 'Resize window width and height: {title}',
   },
   page: {
     home: {

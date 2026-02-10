@@ -6,7 +6,12 @@
   >
     <header
       class="ui-window-pane-header ui-bg-content flex h-[var(--ui-window-header-h)] cursor-move items-center justify-between border-b border-ui-border px-3"
+      tabindex="0"
+      role="button"
+      :aria-label="t('common.windowMoveHandle', { title })"
+      aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Alt+Shift+ArrowUp Alt+Shift+ArrowDown"
       @pointerdown="onDragStart"
+      @keydown="onHeaderKeydown"
     >
       <p class="truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted">{{ title }}</p>
       <span class="ui-monospace text-[11px] text-ui-muted">{{ paneId }}</span>
@@ -18,21 +23,21 @@
 
     <button
       type="button"
-      aria-label="resize-right"
+      :aria-label="t('common.windowResizeRight', { title })"
       class="ui-window-resize-right"
       data-testid="resize-right"
       @pointerdown="onResizeStart($event, 'right')"
     />
     <button
       type="button"
-      aria-label="resize-bottom"
+      :aria-label="t('common.windowResizeBottom', { title })"
       class="ui-window-resize-bottom"
       data-testid="resize-bottom"
       @pointerdown="onResizeStart($event, 'bottom')"
     />
     <button
       type="button"
-      aria-label="resize-corner"
+      :aria-label="t('common.windowResizeCorner', { title })"
       class="ui-window-resize-corner"
       data-testid="resize-corner"
       @pointerdown="onResizeStart($event, 'corner')"
@@ -43,6 +48,9 @@
 <script setup lang="ts">
 import type {
   DragStartPayload,
+  KeyboardDirection,
+  KeyboardMovePayload,
+  KeyboardResizePayload,
   ResizeDirection,
   ResizeStartPayload,
   WindowBounds,
@@ -50,6 +58,7 @@ import type {
 import { NativePointerWindowEngine } from '@/design-system/window-engine-native'
 import type { WindowRect } from '@/design-system/types'
 import { computed, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(
   defineProps<{
@@ -72,6 +81,8 @@ const emit = defineEmits<{
 }>()
 
 const engine = new NativePointerWindowEngine()
+const { t } = useI18n({ useScope: 'global' })
+const KEYBOARD_STEP = 16
 
 const paneStyle = computed(() => ({
   left: `${props.rect.x}px`,
@@ -150,6 +161,59 @@ function onResizeStart(event: PointerEvent, direction: ResizeDirection): void {
     const next = engine.projectResize(payload, moveEvent.clientX, moveEvent.clientY)
     emit('update:rect', { paneId: props.paneId, rect: next })
   })
+}
+
+function parseKeyboardDirection(key: string): KeyboardDirection | null {
+  if (key === 'ArrowLeft') {
+    return 'left'
+  }
+  if (key === 'ArrowRight') {
+    return 'right'
+  }
+  if (key === 'ArrowUp') {
+    return 'up'
+  }
+  if (key === 'ArrowDown') {
+    return 'down'
+  }
+  return null
+}
+
+function onHeaderKeydown(event: KeyboardEvent): void {
+  if (!event.altKey) {
+    return
+  }
+
+  const direction = parseKeyboardDirection(event.key)
+  if (!direction) {
+    return
+  }
+
+  event.preventDefault()
+  emit('focus', props.paneId)
+
+  if (event.shiftKey) {
+    const payload: KeyboardResizePayload = {
+      startRect: { ...props.rect },
+      bounds: props.bounds,
+      direction,
+      step: KEYBOARD_STEP,
+      minWidth: props.minWidth,
+      minHeight: props.minHeight,
+    }
+    const next = engine.projectKeyboardResize(payload)
+    emit('update:rect', { paneId: props.paneId, rect: next })
+    return
+  }
+
+  const payload: KeyboardMovePayload = {
+    startRect: { ...props.rect },
+    bounds: props.bounds,
+    direction,
+    step: KEYBOARD_STEP,
+  }
+  const next = engine.projectKeyboardMove(payload)
+  emit('update:rect', { paneId: props.paneId, rect: next })
 }
 
 onBeforeUnmount(() => {
