@@ -15,7 +15,7 @@
 | streams | `/api/v1/streams*` | `/Users/goya/Repo/Git/Goyais/internal/access/http/streams.go` | `/Users/goya/Repo/Git/Goyais/internal/stream/service.go` | `/Users/goya/Repo/Git/Goyais/internal/stream/` | `migrations/*/*stream*.sql` | `router_integration_test.go`, `postgres_contract_test.go` |
 | algorithms (MVP) | `/api/v1/algorithms/*` | `/Users/goya/Repo/Git/Goyais/internal/access/http/algorithms.go` | `/Users/goya/Repo/Git/Goyais/internal/algorithm/service.go` | `/Users/goya/Repo/Git/Goyais/internal/algorithm/` | `migrations/*/*algorithm*.sql` | `router_integration_test.go` |
 
-> 说明：`algorithms (MVP)` 在 Slice A 仅建立契约与扫描映射；在 Slice B 前应被扫描为 `placeholder`。
+> 说明：当前基线下 `algorithms (MVP)` 已实现；仅当 `deps.CommandService` 为空时才应视为 `placeholder`。
 
 ## Status Rules
 

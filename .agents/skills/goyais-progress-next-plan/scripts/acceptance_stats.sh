@@ -10,9 +10,9 @@ if [[ ! -f "${ACCEPTANCE_FILE}" ]]; then
   exit 1
 fi
 
-TOTAL_ITEMS="$(rg -n '^- \[(x| )\]' "${ACCEPTANCE_FILE}" | wc -l | tr -d ' ')"
-DONE_ITEMS="$(rg -n '^- \[x\]' "${ACCEPTANCE_FILE}" | wc -l | tr -d ' ')"
-TODO_ITEMS="$(rg -n '^- \[ \]' "${ACCEPTANCE_FILE}" | wc -l | tr -d ' ')"
+TOTAL_ITEMS="$( (rg -n '^- \[(x| )\]' "${ACCEPTANCE_FILE}" || true) | wc -l | tr -d ' ' )"
+DONE_ITEMS="$( (rg -n '^- \[x\]' "${ACCEPTANCE_FILE}" || true) | wc -l | tr -d ' ' )"
+TODO_ITEMS="$( (rg -n '^- \[ \]' "${ACCEPTANCE_FILE}" || true) | wc -l | tr -d ' ' )"
 
 if [[ "${TOTAL_ITEMS}" == "0" ]]; then
   RATIO="0.0"
