@@ -41,6 +41,9 @@ func TestLoadDefaultsMinimal(t *testing.T) {
 	if len(cfg.EventBus.Kafka.Brokers) == 0 {
 		t.Fatalf("expected default kafka brokers")
 	}
+	if cfg.Authz.ContextMode != AuthContextModeJWTOrHeader {
+		t.Fatalf("expected default auth context mode=%s got=%s", AuthContextModeJWTOrHeader, cfg.Authz.ContextMode)
+	}
 }
 
 func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
@@ -69,6 +72,7 @@ func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	t.Setenv("GOYAIS_EVENT_BUS_KAFKA_COMMAND_TOPIC", "goyais.command.test")
 	t.Setenv("GOYAIS_EVENT_BUS_KAFKA_STREAM_TOPIC", "goyais.stream.test")
 	t.Setenv("GOYAIS_EVENT_BUS_KAFKA_CONSUMER_GROUP", "goyais-test-group")
+	t.Setenv("GOYAIS_AUTH_CONTEXT_MODE", AuthContextModeHeaderOnly)
 
 	cfg, err := Load()
 	if err != nil {
@@ -117,6 +121,9 @@ func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	if cfg.EventBus.Kafka.ConsumerGroup != "goyais-test-group" {
 		t.Fatalf("unexpected event bus consumer group: %s", cfg.EventBus.Kafka.ConsumerGroup)
 	}
+	if cfg.Authz.ContextMode != AuthContextModeHeaderOnly {
+		t.Fatalf("expected auth context mode=%s got=%s", AuthContextModeHeaderOnly, cfg.Authz.ContextMode)
+	}
 }
 
 func TestLoadValidationForMinioEndpoint(t *testing.T) {
@@ -135,5 +142,20 @@ func TestLoadValidationForMinioEndpoint(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatalf("expected validation error when minio endpoint is missing")
+	}
+}
+
+func TestLoadValidationForAuthContextMode(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("profile: minimal\n"), 0o644); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+
+	t.Setenv("GOYAIS_CONFIG_FILE", configPath)
+	t.Setenv("GOYAIS_AUTH_CONTEXT_MODE", "invalid")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatalf("expected validation error when auth context mode is invalid")
 	}
 }

@@ -181,13 +181,14 @@ Command 执行管道（必须）：
 - 默认使用 JWT claims 中的 `tenantId/workspaceId/userId/roles`。
 - 可通过 `X-Workspace-Id`（可选 `X-Tenant-Id`）切换。
 - 服务端必须验证 header 目标在 JWT 可访问范围内。
-- v0.1 当前阶段（JWT 未接入）：
-  - `X-Tenant-Id`、`X-Workspace-Id`、`X-User-Id` 必填；
-  - `ownerId = X-User-Id`；
-  - 缺失任一 header 返回 `400 MISSING_CONTEXT` + `error.context.missing`。
+- 上下文模式由 `GOYAIS_AUTH_CONTEXT_MODE` 控制：
+  - `jwt_or_header`（默认）：若请求携带有效 Bearer JWT，则优先使用 JWT claims，上下文 header 仅允许在 claims 可访问范围内覆盖；若无有效 JWT，则回退为 header 必填模式。
+  - `header_only`：忽略 JWT，强制 `X-Tenant-Id/X-Workspace-Id/X-User-Id` 必填。
+- header 越权覆盖（跨 tenant/workspace 或越权角色）返回 `403 FORBIDDEN + error.authz.forbidden`。
+- Bearer token 格式或 claims 非法返回 `400 INVALID_TOKEN + error.context.invalid_token`。
 
-### 7.2 过渡模式（未接 JWT）
-- 在 JWT 尚未接入前，`/api/v1/commands*`、`/api/v1/workflow-*`、`/api/v1/assets*`、`/api/v1/shares*` 请求必须携带：
+### 7.2 Header 回退模式
+- 当 `GOYAIS_AUTH_CONTEXT_MODE=header_only` 或请求未携带有效 Bearer JWT 时，`/api/v1/commands*`、`/api/v1/workflow-*`、`/api/v1/assets*`、`/api/v1/shares*` 请求必须携带：
   - `X-Tenant-Id`
   - `X-Workspace-Id`
   - `X-User-Id`
@@ -287,6 +288,7 @@ Command 执行管道（必须）：
 - `GOYAIS_EVENT_BUS_KAFKA_COMMAND_TOPIC=goyais.command.events`
 - `GOYAIS_EVENT_BUS_KAFKA_STREAM_TOPIC=goyais.stream.events`
 - `GOYAIS_EVENT_BUS_KAFKA_CONSUMER_GROUP=goyais-stream-trigger`
+- `GOYAIS_AUTH_CONTEXT_MODE=jwt_or_header`
 
 PostgreSQL DSN 规则（冻结）：
 - 当 `db.driver=postgres` 时，`GOYAIS_DB_DSN` 必须显式包含 `dbname`。

@@ -27,6 +27,8 @@ type RouterDeps struct {
 }
 
 func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
+	configureAuthContext(cfg)
+
 	apiMux := http.NewServeMux()
 	healthzHandler := NewHealthzHandler(cfg, deps.HealthChecker, deps.ProviderProbe)
 	apiMux.Handle("/api/v1/healthz", healthzHandler)

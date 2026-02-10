@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -67,6 +68,99 @@ func TestAPIContractRegression(t *testing.T) {
 		defer resp.Body.Close()
 		assertStatus(t, resp, http.StatusBadRequest)
 		assertErrorCode(t, resp.Body, "MISSING_CONTEXT")
+	})
+
+	t.Run("commands jwt context without explicit headers", func(t *testing.T) {
+		token := newTestJWT(t, map[string]any{
+			"tenantId":    "t1",
+			"workspaceId": "w1",
+			"userId":      "u1",
+			"roles":       []any{"member"},
+		})
+		headers := make(http.Header)
+		headers.Set("Authorization", "Bearer "+token)
+		headers.Set("Content-Type", "application/json")
+
+		resp := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headers, map[string]any{
+			"commandType": "test.noop",
+			"payload":     map[string]any{"jwt": true},
+		})
+		defer resp.Body.Close()
+		assertStatus(t, resp, http.StatusAccepted)
+
+		if got := readJSONPath(t, resp.Body, "resource.tenantId"); got != "t1" {
+			t.Fatalf("unexpected tenant from jwt context: got=%v", got)
+		}
+	})
+
+	t.Run("commands jwt scoped header override allowed", func(t *testing.T) {
+		token := newTestJWT(t, map[string]any{
+			"tenantId":     "t1",
+			"workspaceId":  "w1",
+			"userId":       "u1",
+			"roles":        []any{"member", "admin"},
+			"tenantIds":    []any{"t1", "t2"},
+			"workspaceIds": []any{"w1", "w2"},
+		})
+		headers := make(http.Header)
+		headers.Set("Authorization", "Bearer "+token)
+		headers.Set("Content-Type", "application/json")
+		headers.Set("X-Tenant-Id", "t2")
+		headers.Set("X-Workspace-Id", "w2")
+		headers.Set("X-Roles", "admin")
+
+		resp := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headers, map[string]any{
+			"commandType": "test.noop",
+			"payload":     map[string]any{"override": true},
+		})
+		defer resp.Body.Close()
+		assertStatus(t, resp, http.StatusAccepted)
+		var payload map[string]any
+		mustDecodeJSON(t, resp.Body, &payload)
+		resource, _ := payload["resource"].(map[string]any)
+		if got, _ := resource["tenantId"].(string); got != "t2" {
+			t.Fatalf("unexpected overridden tenantId: got=%v", resource["tenantId"])
+		}
+		if got, _ := resource["workspaceId"].(string); got != "w2" {
+			t.Fatalf("unexpected overridden workspaceId: got=%v", resource["workspaceId"])
+		}
+	})
+
+	t.Run("commands jwt scoped header override rejected", func(t *testing.T) {
+		token := newTestJWT(t, map[string]any{
+			"tenantId":     "t1",
+			"workspaceId":  "w1",
+			"userId":       "u1",
+			"roles":        []any{"member"},
+			"tenantIds":    []any{"t1"},
+			"workspaceIds": []any{"w1"},
+		})
+		headers := make(http.Header)
+		headers.Set("Authorization", "Bearer "+token)
+		headers.Set("Content-Type", "application/json")
+		headers.Set("X-Workspace-Id", "w9")
+
+		resp := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headers, map[string]any{
+			"commandType": "test.noop",
+			"payload":     map[string]any{"override": "forbidden"},
+		})
+		defer resp.Body.Close()
+		assertStatus(t, resp, http.StatusForbidden)
+		assertMessageKey(t, resp.Body, "error.authz.forbidden")
+	})
+
+	t.Run("commands invalid jwt token", func(t *testing.T) {
+		headers := make(http.Header)
+		headers.Set("Authorization", "Bearer invalid-token")
+		headers.Set("Content-Type", "application/json")
+
+		resp := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headers, map[string]any{
+			"commandType": "test.noop",
+			"payload":     map[string]any{"bad": true},
+		})
+		defer resp.Body.Close()
+		assertStatus(t, resp, http.StatusBadRequest)
+		assertErrorCode(t, resp.Body, "INVALID_TOKEN")
 	})
 
 	var commandID string
@@ -1364,6 +1458,10 @@ func newTestServer(t *testing.T) (string, func()) {
 }
 
 func newTestServerWithDBPath(t *testing.T) (string, string, func()) {
+	return newTestServerWithDBPathAndContextMode(t, config.AuthContextModeJWTOrHeader)
+}
+
+func newTestServerWithDBPathAndContextMode(t *testing.T, contextMode string) (string, string, func()) {
 	t.Helper()
 
 	previousWD, err := os.Getwd()
@@ -1400,6 +1498,7 @@ func newTestServerWithDBPath(t *testing.T) (string, string, func()) {
 		},
 		Authz: config.AuthzConfig{
 			AllowPrivateToPublic: false,
+			ContextMode:          contextMode,
 		},
 	}
 
@@ -1413,6 +1512,30 @@ func newTestServerWithDBPath(t *testing.T) (string, string, func()) {
 		ts.Close()
 		_ = srv.Shutdown(context.Background())
 	}
+}
+
+func TestAPIContextModeHeaderOnlyRequiresHeaders(t *testing.T) {
+	baseURL, _, shutdown := newTestServerWithDBPathAndContextMode(t, config.AuthContextModeHeaderOnly)
+	defer shutdown()
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	token := newTestJWT(t, map[string]any{
+		"tenantId":    "t1",
+		"workspaceId": "w1",
+		"userId":      "u1",
+		"roles":       []any{"member"},
+	})
+	headers := make(http.Header)
+	headers.Set("Authorization", "Bearer "+token)
+	headers.Set("Content-Type", "application/json")
+
+	resp := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headers, map[string]any{
+		"commandType": "test.noop",
+		"payload":     map[string]any{"headerOnly": true},
+	})
+	defer resp.Body.Close()
+	assertStatus(t, resp, http.StatusBadRequest)
+	assertErrorCode(t, resp.Body, "MISSING_CONTEXT")
 }
 
 type auditEventRow struct {
@@ -1528,6 +1651,23 @@ func headersWithJSONContext(userID string) http.Header {
 	h := headersWithContext(userID)
 	h.Set("Content-Type", "application/json")
 	return h
+}
+
+func newTestJWT(t *testing.T, claims map[string]any) string {
+	t.Helper()
+	header := map[string]any{
+		"alg": "none",
+		"typ": "JWT",
+	}
+	headerRaw, err := json.Marshal(header)
+	if err != nil {
+		t.Fatalf("marshal jwt header: %v", err)
+	}
+	claimsRaw, err := json.Marshal(claims)
+	if err != nil {
+		t.Fatalf("marshal jwt claims: %v", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(headerRaw) + "." + base64.RawURLEncoding.EncodeToString(claimsRaw) + ".sig"
 }
 
 func mustRequestJSON(t *testing.T, client *http.Client, method, url string, headers http.Header, payload any) *http.Response {
