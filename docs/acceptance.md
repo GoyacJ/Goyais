@@ -79,7 +79,7 @@
 ## 6. Visibility/ACL 与隔离验收
 
 - [x] 已实现对象（commands/assets/workflow/shares）支持 `PRIVATE/WORKSPACE/TENANT/PUBLIC`。
-- [x] 未实现对象（algorithm/plugin/stream）visibility/ACL 延后到 M2。
+- [x] 未实现对象（plugin/stream）visibility/ACL 延后到 M2；registry 对象（capability/algorithm/provider）已支持读路径 ACL.READ 判定。
 - [x] ACL 可赋予 `READ/WRITE/EXECUTE/MANAGE/SHARE`。
 - [x] 无权限用户访问资源返回拒绝，并包含明确 `messageKey`。
 - [x] `PRIVATE` 输入默认不得直接产生 `PUBLIC` 输出（除非策略放开且权限满足）。
@@ -98,6 +98,13 @@
 - [ ] WorkflowRun/StepRun 状态机符合约定（含 failed/canceled/retry）。
 - [x] 可查询 step 输入输出摘要与产物引用。
 - [ ] 回放时可叠加节点状态与耗时信息。
+
+## 7.1 Registry C1 Read-only 验收
+
+- [x] `GET /api/v1/registry/capabilities` 不再返回 `501`，返回 `200 + items + pageInfo/cursorInfo`。
+- [x] `GET /api/v1/registry/capabilities/{capabilityId}` 对不存在资源返回 `404` + `messageKey=error.registry.not_found`。
+- [x] `GET /api/v1/registry/algorithms`、`GET /api/v1/registry/providers` 不再返回 `501`，分页语义与全局约定一致（`cursor` 优先）。
+- [x] SQLite/Postgres 下 registry 读接口均可用，且保持 tenant/workspace 隔离与 ACL.READ 过滤语义。
 
 ## 8. Plugin Market 验收
 
