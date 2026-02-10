@@ -4,6 +4,7 @@
     :type="type"
     :placeholder="placeholder"
     :disabled="disabled"
+    :aria-busy="loading || undefined"
     :class="classes"
     @input="onInput"
   />
@@ -19,12 +20,14 @@ const props = withDefaults(
     placeholder?: string
     type?: string
     disabled?: boolean
+    loading?: boolean
   }>(),
   {
     modelValue: '',
     placeholder: '',
     type: 'text',
     disabled: false,
+    loading: false,
   },
 )
 
@@ -38,6 +41,10 @@ function onInput(event: Event): void {
 }
 
 const classes = computed(() =>
-  cn('ui-control ui-focus-ring ui-pressable w-full text-sm', props.disabled && 'ui-disabled'),
+  cn(
+    'ui-control ui-focus-ring ui-pressable w-full text-sm',
+    props.disabled && 'ui-disabled',
+    props.loading && 'ui-loading',
+  ),
 )
 </script>

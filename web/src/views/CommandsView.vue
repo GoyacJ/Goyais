@@ -2,67 +2,144 @@
   <section class="ui-page">
     <PageHeader :title="t('page.commands.title')" :subtitle="t('page.commands.subtitle')">
       <template #actions>
-        <Button>{{ t('common.refresh') }}</Button>
+        <Button variant="secondary">{{ t('common.refresh') }}</Button>
+        <Button>{{ t('page.commands.actionRun') }}</Button>
       </template>
     </PageHeader>
 
-    <ErrorBanner :error="demoError" />
+    <SectionCard :title="t('page.commands.filtersTitle')" :subtitle="t('page.commands.filtersSubtitle')">
+      <div class="grid gap-3 md:grid-cols-[1.4fr_1fr_1fr]">
+        <Input v-model="searchQuery" :placeholder="t('page.commands.searchPlaceholder')" />
+        <Select v-model="statusFilter" :options="statusOptions" />
+        <Select v-model="ownerFilter" :options="ownerOptions" />
+      </div>
+    </SectionCard>
 
     <div class="grid gap-[var(--ui-page-gap)] xl:grid-cols-[1.25fr_1fr]">
-      <SectionCard title="Command Feed" subtitle="commandId / status / timestamps">
-        <div class="space-y-3">
-          <CommandCard v-for="item in mockCommands" :key="item.commandId" :command="item" />
+      <SectionCard :title="t('page.commands.listTitle')" :subtitle="`${filteredCommands.length}`">
+        <div v-if="filteredCommands.length === 0">
+          <EmptyState :description="t('common.empty')" />
+        </div>
+        <div v-else class="space-y-3">
+          <CommandCard
+            v-for="item in filteredCommands"
+            :key="item.commandId"
+            :command="item"
+            interactive
+            :selected="selectedCommand?.commandId === item.commandId"
+            @select="selectedCommandId = $event"
+          />
         </div>
       </SectionCard>
 
-      <SectionCard title="Logs" subtitle="Collapsible monospace panel">
-        <LogPanel :lines="activeLogs" />
+      <SectionCard :title="t('page.commands.detailTitle')" :subtitle="selectedCommand?.commandId ?? '-'">
+        <div v-if="selectedCommand" class="space-y-3">
+          <Tabs v-model="detailTab" :tabs="detailTabs" :aria-label="t('page.commands.detailTitle')" />
+
+          <div v-if="detailTab === 'summary'" class="ui-surface p-3">
+            <dl class="grid gap-3 text-xs text-ui-muted md:grid-cols-2">
+              <div>
+                <dt>{{ t('page.commands.fieldType') }}</dt>
+                <dd class="mt-1 text-sm text-ui-fg">{{ selectedCommand.commandType }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('page.commands.fieldStatus') }}</dt>
+                <dd class="mt-1"><StatusBadge :status="selectedCommand.status" /></dd>
+              </div>
+              <div>
+                <dt>{{ t('page.commands.fieldAcceptedAt') }}</dt>
+                <dd class="ui-monospace mt-1 text-ui-fg">{{ selectedCommand.acceptedAt }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('page.commands.fieldOwner') }}</dt>
+                <dd class="ui-monospace mt-1 text-ui-fg">{{ selectedCommand.owner }}</dd>
+              </div>
+              <div class="md:col-span-2">
+                <dt>{{ t('page.commands.fieldResult') }}</dt>
+                <dd class="mt-1 text-sm text-ui-fg">{{ selectedCommand.resultSummary }}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <LogPanel v-else :lines="selectedCommand.logs" />
+        </div>
+        <EmptyState v-else :description="t('common.empty')" />
       </SectionCard>
     </div>
-
-    <SectionCard title="List Shape" subtitle="Table + Pagination UI shell">
-      <Table :columns="columns" :rows="rows" />
-      <div class="mt-3">
-        <Pagination :page="page" :page-size="10" :total="40" @update:page="page = $event" />
-      </div>
-    </SectionCard>
   </section>
 </template>
 
 <script setup lang="ts">
-import ErrorBanner from '@/components/layout/ErrorBanner.vue'
+import EmptyState from '@/components/layout/EmptyState.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import SectionCard from '@/components/layout/SectionCard.vue'
 import CommandCard from '@/components/runtime/CommandCard.vue'
+import StatusBadge from '@/components/runtime/StatusBadge.vue'
 import LogPanel from '@/components/runtime/LogPanel.vue'
 import Button from '@/components/ui/Button.vue'
-import Pagination from '@/components/ui/Pagination.vue'
-import Table from '@/components/ui/Table.vue'
+import Input from '@/components/ui/Input.vue'
+import Select from '@/components/ui/Select.vue'
+import Tabs from '@/components/ui/Tabs.vue'
 import { mockCommands } from '@/mocks/commands'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n({ useScope: 'global' })
 
-const page = ref(1)
+const searchQuery = ref('')
+const statusFilter = ref('all')
+const ownerFilter = ref('all')
+const selectedCommandId = ref<string | null>(mockCommands[0]?.commandId ?? null)
+const detailTab = ref('summary')
 
-const demoError = {
-  code: 'FORBIDDEN',
-  messageKey: 'error.authz.forbidden',
-  details: {},
-}
+const statusOptions = computed(() => [
+  { value: 'all', label: t('common.all') },
+  { value: 'accepted', label: t('status.accepted') },
+  { value: 'running', label: t('status.running') },
+  { value: 'succeeded', label: t('status.succeeded') },
+  { value: 'failed', label: t('status.failed') },
+  { value: 'canceled', label: t('status.canceled') },
+])
 
-const columns = [
-  { key: 'commandId', label: 'commandId', mono: true },
-  { key: 'commandType', label: 'commandType' },
-  { key: 'status', label: 'status' },
-]
+const ownerOptions = computed(() => [
+  { value: 'all', label: t('common.all') },
+  ...Array.from(new Set(mockCommands.map((item) => item.owner))).map((owner) => ({
+    value: owner,
+    label: owner,
+  })),
+])
 
-const rows = mockCommands.map((item) => ({
-  commandId: item.commandId,
-  commandType: item.commandType,
-  status: item.status,
-}))
+const filteredCommands = computed(() =>
+  mockCommands.filter((item) => {
+    const matchStatus = statusFilter.value === 'all' || item.status === statusFilter.value
+    const matchOwner = ownerFilter.value === 'all' || item.owner === ownerFilter.value
+    const q = searchQuery.value.trim().toLowerCase()
+    const matchQuery =
+      q.length === 0 ||
+      item.commandId.toLowerCase().includes(q) ||
+      item.commandType.toLowerCase().includes(q) ||
+      item.traceId.toLowerCase().includes(q)
 
-const activeLogs = computed(() => mockCommands[0]?.logs ?? [])
+    return matchStatus && matchOwner && matchQuery
+  }),
+)
+
+watch(
+  filteredCommands,
+  (items) => {
+    if (!items.some((item) => item.commandId === selectedCommandId.value)) {
+      selectedCommandId.value = items[0]?.commandId ?? null
+    }
+  },
+  { immediate: true },
+)
+
+const selectedCommand = computed(() =>
+  filteredCommands.value.find((item) => item.commandId === selectedCommandId.value),
+)
+
+const detailTabs = computed(() => [
+  { id: 'summary', label: t('page.commands.tabSummary') },
+  { id: 'logs', label: t('page.commands.tabLogs') },
+])
 </script>

@@ -1,0 +1,135 @@
+# Web UI Standards (Thread B)
+
+## 1. 风格原则
+
+### 1.1 Console-first
+- UI 面向控制台工作流，优先保证信息密度与状态可读性。
+- 默认密度为 `compact`，通过 `comfortable` 提供可读性增强。
+- 页面结构优先遵循“筛选 -> 列表 -> 详情/日志”的操作路径。
+
+### 1.2 Material 3 状态语义
+- 交互组件必须覆盖：`hover` / `pressed` / `focus-visible` / `disabled` / `loading`。
+- 禁止在组件内散落状态 utility；状态统一通过全局 hook 类注入。
+
+### 1.3 视觉边界
+- 圆角：卡片 `10-12px`，按钮 `8px`，画布节点 `6-8px`。
+- 分层：边框主导；阴影仅用于浮层（Dialog/Dropdown/Toast）。
+- 动效：仅状态过渡与必要的进入/退出，不做大面积动效。
+
+## 2. Design Tokens
+
+主文件：`web/src/design-system/tokens.css`
+
+### 2.1 命名规范
+- 颜色：`--ui-neutral-*` / `--ui-primary-*` / `--ui-success|warn|error|info`
+- 字体：`--ui-font-*`
+- 圆角：`--ui-radius-*`
+- 阴影：`--ui-shadow-*`
+- 状态：`--ui-focus-*` / `--ui-disabled-*` / `--ui-loading-*`
+- 密度：`--ui-control-*` / `--ui-page-gap` / `--ui-table-row-h`
+
+### 2.2 新增 token 流程
+1. 在 `tokens.css` 中新增变量，并同时补齐 light/dark 值。
+2. 若需在 Tailwind 使用，同步映射到 `tailwind.config.ts`。
+3. 在组件中通过 `var(...)` 或已映射的 Tailwind token 消费。
+4. 在本文件记录 token 用途与约束，避免语义漂移。
+
+### 2.3 硬规则
+- 不允许在组件中写死语义颜色（例如直接写固定 hex 作为状态色）。
+- 状态色只能来自 tokens。
+
+## 3. 全局状态 Hook 类（强制）
+
+文件：`web/src/style.css`
+
+- `ui-focus-ring`：只在 `:focus-visible` 显示高对比 ring。
+- `ui-pressable`：统一 hover/pressed 反馈与过渡。
+- `ui-disabled`：统一禁用态可视与交互阻断。
+- `ui-loading`：统一 loading 光标与透明度反馈。
+
+约束：交互组件根元素必须组合这四类，禁止自行实现平行状态体系。
+
+## 4. 组件状态矩阵
+
+| 组件 | hover | pressed | focus-visible | disabled | loading | 备注 |
+|---|---|---|---|---|---|---|
+| Button | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | `ui-loading` | `loading` 与 `disabled` 分离，`blockWhileLoading` 默认阻断 |
+| Input | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | `ui-loading` | 保持可读 placeholder |
+| Textarea | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | `ui-loading` | 多行输入同一控制高度语义 |
+| Select(Listbox) | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | `ui-loading` | 选项高亮只用 token |
+| Tabs | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | N/A | 选中态使用 primary token |
+| Dialog | N/A | N/A | 焦点陷阱 + `ui-focus-ring` | N/A | confirm 按钮可 loading | 遮罩/浮层使用 overlay token |
+| Dropdown(Menu) | `ui-pressable` | `ui-pressable` | `ui-focus-ring` | `ui-disabled` | trigger 可 loading | ESC 关闭、键盘可进入菜单 |
+| Table | 行 hover 可选 | 行按压可选 | 行 focus 可选 | N/A | `loading` skeleton | `ready/loading/empty/error` 四态 |
+| Toast | 可关闭按钮 hover | 按压关闭按钮 | `ui-focus-ring` | N/A | N/A | `info/success/warn/error` 级别 |
+
+## 5. Theme / Density / i18n
+
+### 5.1 Theme
+- 模式：`system | light | dark`
+- 存储键：`goyais.ui.theme`
+- 兼容旧键：`goyais.theme`
+- `system` 跟随 `prefers-color-scheme`。
+
+### 5.2 Density
+- 根入口：`html[data-density='compact|comfortable']`
+- 仅允许密度变量：
+  - `--ui-control-h`
+  - `--ui-control-px`
+  - `--ui-control-py`
+  - `--ui-page-gap`
+  - `--ui-table-row-h`
+- 组件必须用 `var(...)` 消费，不得定义组件私有密度体系。
+
+### 5.3 i18n
+- 语言：`zh-CN` / `en-US`
+- key 命名空间：`nav.*` / `common.*` / `page.*` / `status.*` / `error.*`
+- 缺失策略固定：`当前 locale -> en-US -> key`
+- 开发态开启 missing warn。
+
+### 5.4 messageKey 对齐
+- 后端错误结构：`error: { code, messageKey, details }`
+- 前端通过统一翻译入口映射 `messageKey`，并由 `ErrorBanner` 渲染。
+
+## 6. 布局规范
+
+### 6.1 Shell
+- `AppShell = TopBar + SideNav + Content`
+- 路由保持 `createWebHistory`（兼容 single-binary SPA fallback）。
+
+### 6.2 SideNav 折叠策略
+- `compact` 下默认折叠。
+- 鼠标 hover 临时展开。
+- 支持 pin 按钮固定展开/折叠。
+
+### 6.3 控制台页骨架
+- 列表页：`PageHeader` + `Filters` + `List` + `Detail`
+- 详情页：状态区 + 元数据区 + 日志区
+- 画布页：画布容器 + 节点信息层
+
+### 6.4 当前标准页面
+- `/commands`：筛选条 + 左列表 + 右详情/日志
+- `/assets`：筛选条 + 上传按钮（UI 占位）+ 左列表 + 右详情
+
+## 7. 新增组件 Checklist
+
+新增组件前：
+- [ ] 是否复用 tokens 而非硬编码颜色/间距。
+- [ ] 是否接入 `ui-focus-ring`/`ui-pressable`/`ui-disabled`/`ui-loading`。
+- [ ] 是否在 light/dark 下保持对比可读。
+- [ ] 是否在 compact/comfortable 下尺寸一致。
+- [ ] 是否具备键盘路径（Tab、ESC、Enter）与 aria 语义。
+- [ ] 文案是否走 i18n key。
+
+新增页面前：
+- [ ] 是否遵循控制台信息架构（筛选->列表->详情）。
+- [ ] 是否定义空态/加载态/错误态。
+- [ ] 是否保持 mock 数据与真实接口契约字段同构。
+
+## 8. 验收要点（Thread B）
+
+- `pnpm -C web typecheck` 与 `pnpm -C web build` 必须通过。
+- 主题/语言/密度切换刷新后保持。
+- `focus ring` 在 light/dark 可见。
+- Dialog/Dropdown 键盘路径通过（focus 进入、ESC 关闭、Tab 路径正确）。
+- `/commands` 与 `/assets` 双栏交互可用。

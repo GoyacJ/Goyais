@@ -3,6 +3,7 @@
     ref="buttonRef"
     :type="type"
     :disabled="isDisabled"
+    :aria-busy="loading || undefined"
     :class="classes"
   >
     <span
@@ -23,24 +24,27 @@ const props = withDefaults(
     variant?: 'primary' | 'secondary' | 'ghost' | 'destructive'
     loading?: boolean
     disabled?: boolean
+    blockWhileLoading?: boolean
     type?: 'button' | 'submit' | 'reset'
   }>(),
   {
     variant: 'secondary',
     loading: false,
     disabled: false,
+    blockWhileLoading: true,
     type: 'button',
   },
 )
 
-const isDisabled = computed(() => props.disabled || props.loading)
 const buttonRef = ref<HTMLButtonElement | null>(null)
 
+const isDisabled = computed(() => props.disabled || (props.blockWhileLoading && props.loading))
+
 const variantClasses: Record<NonNullable<typeof props.variant>, string> = {
-  primary: 'border-primary-600 bg-primary-600 text-white hover:border-primary-700 hover:bg-primary-700',
-  secondary: 'border-ui-border bg-ui-panel text-ui-fg',
-  ghost: 'border-transparent bg-transparent text-ui-fg',
-  destructive: 'border-error bg-error text-white hover:bg-error/90',
+  primary: 'ui-btn-primary',
+  secondary: 'ui-btn-secondary',
+  ghost: 'ui-btn-ghost',
+  destructive: 'ui-btn-destructive',
 }
 
 const classes = computed(() =>

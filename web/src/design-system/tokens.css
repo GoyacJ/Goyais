@@ -19,12 +19,23 @@
   --ui-primary-500: 14 116 144;
   --ui-primary-600: 15 118 110;
   --ui-primary-700: 17 94 89;
+  --ui-primary-on: 248 250 252;
 
   --ui-success: 22 163 74;
   --ui-warn: 217 119 6;
   --ui-error: 220 38 38;
   --ui-info: 37 99 235;
+  --ui-on-error: 255 255 255;
+
   --ui-focus-ring: 6 182 212;
+  --ui-focus-ring-offset: 246 248 251;
+
+  --ui-overlay-backdrop: 2 6 23;
+  --ui-log-bg: 15 23 42;
+  --ui-log-fg: 226 232 240;
+
+  --ui-disabled-opacity: 0.56;
+  --ui-loading-opacity: 0.82;
 
   --ui-control-h: 2rem;
   --ui-control-px: 0.75rem;
@@ -45,12 +56,20 @@
   --ui-primary-500: 34 211 238;
   --ui-primary-600: 45 212 191;
   --ui-primary-700: 20 184 166;
+  --ui-primary-on: 8 13 23;
 
   --ui-success: 74 222 128;
   --ui-warn: 251 191 36;
   --ui-error: 248 113 113;
   --ui-info: 96 165 250;
+  --ui-on-error: 8 13 23;
+
   --ui-focus-ring: 34 211 238;
+  --ui-focus-ring-offset: 8 13 23;
+
+  --ui-overlay-backdrop: 2 6 23;
+  --ui-log-bg: 2 6 23;
+  --ui-log-fg: 226 232 240;
 
   --ui-shadow-overlay: 0 20px 42px rgba(0, 0, 0, 0.48);
 }

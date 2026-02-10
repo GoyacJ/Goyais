@@ -1,6 +1,6 @@
 <template>
-  <Menu as="div" class="relative inline-block text-left">
-    <MenuButton :class="buttonClasses">
+  <Menu as="div" class="relative inline-block text-left" v-slot="{ close, open }">
+    <MenuButton :class="buttonClasses" :aria-busy="loading || undefined">
       <slot name="trigger">
         <span>{{ label }}</span>
       </slot>
@@ -14,11 +14,15 @@
       leave-from-class="scale-100 opacity-100"
       leave-to-class="scale-95 opacity-0"
     >
-      <MenuItems class="ui-overlay-panel absolute right-0 z-40 mt-1 w-56 origin-top-right p-1">
+      <MenuItems
+        v-if="open"
+        class="ui-overlay-panel absolute right-0 z-40 mt-1 w-56 origin-top-right p-1"
+        @keydown.esc.prevent.stop="close"
+      >
         <MenuItem
           v-for="item in items"
           :key="item.value"
-          :disabled="item.disabled"
+          :disabled="item.disabled || loading"
           as="template"
           v-slot="{ active, disabled: itemDisabled }"
         >
@@ -59,10 +63,12 @@ const props = withDefaults(
     label?: string
     items: DropdownItem[]
     disabled?: boolean
+    loading?: boolean
   }>(),
   {
     label: 'Actions',
     disabled: false,
+    loading: false,
   },
 )
 
@@ -71,6 +77,10 @@ const emit = defineEmits<{
 }>()
 
 const buttonClasses = computed(() =>
-  cn('ui-control ui-focus-ring ui-pressable inline-flex items-center gap-2 text-sm', props.disabled && 'ui-disabled'),
+  cn(
+    'ui-control ui-focus-ring ui-pressable inline-flex items-center gap-2 text-sm',
+    props.disabled && 'ui-disabled',
+    props.loading && 'ui-loading',
+  ),
 )
 </script>

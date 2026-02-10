@@ -4,10 +4,11 @@
       <article
         v-for="item in items"
         :key="item.id"
-        class="ui-overlay-panel pointer-events-auto p-3"
+        class="ui-overlay-panel pointer-events-auto border-l-4 p-3"
+        :class="toneBorderClass[item.tone]"
       >
         <header class="flex items-center justify-between gap-2">
-          <p class="text-sm font-semibold" :class="toneClass[item.tone]">{{ item.title }}</p>
+          <p class="text-sm font-semibold" :class="toneTextClass[item.tone]">{{ item.title }}</p>
           <button
             type="button"
             class="ui-focus-ring ui-pressable rounded-button px-1 text-xs text-ui-muted"
@@ -27,11 +28,18 @@ import { useToast } from '@/composables/useToast'
 
 const { items, removeToast } = useToast()
 
-const toneClass = {
+const toneTextClass = {
   info: 'text-info',
   success: 'text-success',
   warn: 'text-warn',
   error: 'text-error',
+}
+
+const toneBorderClass = {
+  info: 'border-info/80',
+  success: 'border-success/80',
+  warn: 'border-warn/80',
+  error: 'border-error/80',
 }
 </script>
 
