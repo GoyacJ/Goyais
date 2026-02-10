@@ -5,14 +5,19 @@
     @mouseenter="hovering = true"
     @mouseleave="hovering = false"
   >
-    <div class="flex items-center justify-between border-b border-ui-border px-3 py-3">
-      <div class="min-w-0" :class="collapsed ? 'opacity-0' : 'opacity-100 transition-opacity'">
+    <div class="flex items-center justify-between gap-2 border-b border-ui-border px-3 py-3">
+      <div
+        class="min-w-0"
+        :class="collapsed
+          ? 'pointer-events-none max-w-0 overflow-hidden opacity-0'
+          : 'max-w-[11rem] opacity-100 transition-[opacity,max-width] duration-150'"
+      >
         <p class="text-[11px] uppercase tracking-[0.14em] text-ui-muted">{{ t('common.workspaceLabel') }}</p>
         <p class="truncate text-sm font-semibold text-ui-fg">{{ t('common.workspace') }}</p>
       </div>
       <button
         type="button"
-        class="ui-control ui-focus-ring ui-pressable h-8 min-h-0 px-2 py-1 text-xs"
+        class="ui-control ui-focus-ring ui-pressable inline-flex h-8 w-10 min-h-0 shrink-0 items-center justify-center px-1 py-1 text-xs"
         :aria-label="pinned ? t('common.unpinNav') : t('common.pinNav')"
         @click="pinned = !pinned"
       >

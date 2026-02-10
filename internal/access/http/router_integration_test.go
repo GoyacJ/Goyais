@@ -107,6 +107,15 @@ func TestAPIContractRegression(t *testing.T) {
 			t.Fatalf("expected distinct command ids when Idempotency-Key is missing")
 		}
 
+		respVisibilityForbidden := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headersWithJSONContext("u1"), map[string]any{
+			"commandType": "test.noop",
+			"payload":     map[string]any{"x": 9},
+			"visibility":  "PUBLIC",
+		})
+		defer respVisibilityForbidden.Body.Close()
+		assertStatus(t, respVisibilityForbidden, http.StatusForbidden)
+		assertMessageKey(t, respVisibilityForbidden.Body, "error.authz.forbidden")
+
 		listResp := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands?page=1&pageSize=20", headersWithContext("u1"), nil)
 		defer listResp.Body.Close()
 		assertStatus(t, listResp, http.StatusOK)
@@ -140,6 +149,7 @@ func TestAPIContractRegression(t *testing.T) {
 		commandID = commandID1
 	})
 
+	var commandShareID string
 	t.Run("shares", func(t *testing.T) {
 		resp := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/shares", headersWithJSONContext("u1"), map[string]any{
 			"resourceType": "command",
@@ -149,7 +159,26 @@ func TestAPIContractRegression(t *testing.T) {
 			"permissions":  []string{"READ"},
 		})
 		defer resp.Body.Close()
-		assertStatus(t, resp, http.StatusCreated)
+		assertStatus(t, resp, http.StatusAccepted)
+		var createPayload map[string]any
+		mustDecodeJSON(t, resp.Body, &createPayload)
+		resourcePayload, _ := createPayload["resource"].(map[string]any)
+		shareID, ok := resourcePayload["id"].(string)
+		if !ok || shareID == "" {
+			t.Fatalf("expected share resource id")
+		}
+		commandShareID = shareID
+		commandRef, _ := createPayload["commandRef"].(map[string]any)
+		commandRefID, _ := commandRef["commandId"].(string)
+		if commandRefID == "" {
+			t.Fatalf("expected commandRef.commandId")
+		}
+		respCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+commandRefID, headersWithContext("u1"), nil)
+		defer respCommand.Body.Close()
+		assertStatus(t, respCommand, http.StatusOK)
+		if got := readJSONPath(t, respCommand.Body, "commandType"); got != "share.create" {
+			t.Fatalf("unexpected command type for share create: %v", got)
+		}
 
 		respForbidden := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/shares", headersWithJSONContext("u2"), map[string]any{
 			"resourceType": "command",
@@ -183,6 +212,27 @@ func TestAPIContractRegression(t *testing.T) {
 		defer respInvalidPermission.Body.Close()
 		assertStatus(t, respInvalidPermission, http.StatusBadRequest)
 		assertErrorCode(t, respInvalidPermission.Body, "INVALID_SHARE_REQUEST")
+
+		respDelete := mustRequest(t, client, http.MethodDelete, baseURL+"/api/v1/shares/"+commandShareID, headersWithContext("u1"), nil)
+		defer respDelete.Body.Close()
+		assertStatus(t, respDelete, http.StatusAccepted)
+		var deletePayload map[string]any
+		mustDecodeJSON(t, respDelete.Body, &deletePayload)
+		deleteResource, _ := deletePayload["resource"].(map[string]any)
+		if got := deleteResource["status"]; got != "deleted" {
+			t.Fatalf("expected delete status=deleted, got=%v", got)
+		}
+		deleteCommandRef, _ := deletePayload["commandRef"].(map[string]any)
+		deleteCommandID, _ := deleteCommandRef["commandId"].(string)
+		if deleteCommandID == "" {
+			t.Fatalf("expected delete commandRef.commandId")
+		}
+		respDeleteCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+deleteCommandID, headersWithContext("u1"), nil)
+		defer respDeleteCommand.Body.Close()
+		assertStatus(t, respDeleteCommand, http.StatusOK)
+		if got := readJSONPath(t, respDeleteCommand.Body, "commandType"); got != "share.delete" {
+			t.Fatalf("unexpected command type for share delete: %v", got)
+		}
 	})
 
 	var assetID string
@@ -284,7 +334,11 @@ func TestAPIContractRegression(t *testing.T) {
 			"permissions":  []string{"READ"},
 		})
 		defer respShare.Body.Close()
-		assertStatus(t, respShare, http.StatusCreated)
+		assertStatus(t, respShare, http.StatusAccepted)
+		assetShareCommandID, _ := readJSONPath(t, respShare.Body, "commandRef.commandId").(string)
+		if assetShareCommandID == "" {
+			t.Fatalf("expected share commandRef for asset share")
+		}
 
 		respSharedRead := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/assets/"+assetID, headersWithContext("u2"), nil)
 		defer respSharedRead.Body.Close()

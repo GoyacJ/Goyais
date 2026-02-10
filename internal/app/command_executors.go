@@ -57,6 +57,19 @@ type workflowCancelCommandPayload struct {
 	RunID string `json:"runId"`
 }
 
+type shareCreateCommandPayload struct {
+	ResourceType string   `json:"resourceType"`
+	ResourceID   string   `json:"resourceId"`
+	SubjectType  string   `json:"subjectType"`
+	SubjectID    string   `json:"subjectId"`
+	Permissions  []string `json:"permissions"`
+	ExpiresAt    string   `json:"expiresAt"`
+}
+
+type shareDeleteCommandPayload struct {
+	ShareID string `json:"shareId"`
+}
+
 const timeRFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
 
 func registerCommandExecutors(
@@ -67,6 +80,8 @@ func registerCommandExecutors(
 	if commandService == nil {
 		return
 	}
+	commandService.SetExecutor("share.create", newShareCreateExecutor(commandService))
+	commandService.SetExecutor("share.delete", newShareDeleteExecutor(commandService))
 	if assetService != nil {
 		commandService.SetExecutor("asset.upload", newAssetUploadExecutor(assetService))
 	}
@@ -343,6 +358,107 @@ func mapWorkflowExecutionError(err error) error {
 	}
 }
 
+func newShareCreateExecutor(commandService *command.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req shareCreateCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapShareExecutionError(command.ErrInvalidShareRequest)
+		}
+
+		var expiresAt *time.Time
+		if rawExpires := strings.TrimSpace(req.ExpiresAt); rawExpires != "" {
+			parsed, err := time.Parse(timeRFC3339Nano, rawExpires)
+			if err != nil {
+				return nil, mapShareExecutionError(command.ErrInvalidShareRequest)
+			}
+			expiresAt = &parsed
+		}
+
+		created, err := commandService.CreateShare(
+			ctx,
+			reqCtx,
+			req.ResourceType,
+			req.ResourceID,
+			req.SubjectType,
+			req.SubjectID,
+			req.Permissions,
+			expiresAt,
+		)
+		if err != nil {
+			return nil, mapShareExecutionError(err)
+		}
+
+		result := map[string]any{
+			"share": toShareResultPayload(created),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func newShareDeleteExecutor(commandService *command.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req shareDeleteCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapShareExecutionError(command.ErrInvalidShareRequest)
+		}
+		shareID := strings.TrimSpace(req.ShareID)
+		if shareID == "" {
+			return nil, mapShareExecutionError(command.ErrInvalidShareRequest)
+		}
+
+		if err := commandService.DeleteShare(ctx, reqCtx, shareID); err != nil {
+			return nil, mapShareExecutionError(err)
+		}
+
+		result := map[string]any{
+			"share": toShareDeleteResultPayload(shareID),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func mapShareExecutionError(err error) error {
+	switch {
+	case errors.Is(err, command.ErrInvalidShareRequest):
+		return &command.ExecutionError{
+			Code:       "INVALID_SHARE_REQUEST",
+			MessageKey: "error.share.invalid_request",
+			Err:        command.ErrInvalidCommandRequest,
+		}
+	case errors.Is(err, command.ErrNotImplemented):
+		return &command.ExecutionError{
+			Code:       "NOT_IMPLEMENTED",
+			MessageKey: "error.share.not_implemented",
+			Err:        command.ErrNotImplemented,
+		}
+	case errors.Is(err, command.ErrShareNotFound):
+		return &command.ExecutionError{
+			Code:       "SHARE_NOT_FOUND",
+			MessageKey: "error.share.not_found",
+			Err:        command.ErrShareNotFound,
+		}
+	case errors.Is(err, command.ErrForbidden):
+		reason := ""
+		var forbidden *command.ForbiddenError
+		if errors.As(err, &forbidden) {
+			reason = forbidden.Reason
+		}
+		return &command.ExecutionError{
+			Code:       "FORBIDDEN",
+			MessageKey: "error.authz.forbidden",
+			Err:        &command.ForbiddenError{Reason: reason},
+		}
+	default:
+		return &command.ExecutionError{
+			Code:       "INTERNAL_ERROR",
+			MessageKey: "error.common.internal",
+			Err:        fmt.Errorf("share executor: %w", err),
+		}
+	}
+}
+
 func toAssetResultPayload(item asset.Asset) map[string]any {
 	acl := decodeJSON(item.ACLJSON, []any{})
 	metadata := decodeJSON(item.MetadataJSON, map[string]any{})
@@ -417,6 +533,32 @@ func toWorkflowRunResultPayload(item workflow.WorkflowRun) map[string]any {
 		}
 	}
 	return result
+}
+
+func toShareResultPayload(item command.Share) map[string]any {
+	resp := map[string]any{
+		"id":           item.ID,
+		"tenantId":     item.TenantID,
+		"workspaceId":  item.WorkspaceID,
+		"resourceType": item.ResourceType,
+		"resourceId":   item.ResourceID,
+		"subjectType":  item.SubjectType,
+		"subjectId":    item.SubjectID,
+		"permissions":  item.Permissions,
+		"createdBy":    item.CreatedBy,
+		"createdAt":    item.CreatedAt.UTC().Format(timeRFC3339Nano),
+	}
+	if item.ExpiresAt != nil {
+		resp["expiresAt"] = item.ExpiresAt.UTC().Format(timeRFC3339Nano)
+	}
+	return resp
+}
+
+func toShareDeleteResultPayload(shareID string) map[string]any {
+	return map[string]any{
+		"id":     shareID,
+		"status": "deleted",
+	}
 }
 
 func objectOrDefault(raw json.RawMessage) json.RawMessage {
