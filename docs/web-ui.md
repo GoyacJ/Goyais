@@ -93,23 +93,39 @@
 
 ## 6. 布局规范
 
-### 6.1 Shell
-- `AppShell = TopBar + SideNav + Content`
-- 路由保持 `createWebHistory`（兼容 single-binary SPA fallback）。
+### 6.1 Shell 模式
+- 模式枚举：`console | topnav | focus`。
+- 偏好存储：`goyais.ui.layout`，值域：`auto | console | topnav | focus`。
+- `auto` 按路由 `meta.layoutDefault` 生效；手动选择后全局覆盖直到切回 `auto`。
+- 路由仍使用 `createWebHistory`（兼容 single-binary SPA fallback）。
 
-### 6.2 SideNav 折叠策略
-- `compact` 下默认折叠。
-- 鼠标 hover 临时展开。
-- 支持 pin 按钮固定展开/折叠。
+### 6.2 结构规则
+- `console`：`TopBar + SideNav + Content`。
+- `topnav`：`TopBar + TopNavBar + Content`。
+- `focus`：`TopBar + Content`（无常驻导航）。
+- `compact` 下 SideNav 默认折叠；hover 临时展开；支持 pin 固定。
 
-### 6.3 控制台页骨架
-- 列表页：`PageHeader` + `Filters` + `List` + `Detail`
-- 详情页：状态区 + 元数据区 + 日志区
-- 画布页：画布容器 + 节点信息层
+### 6.3 窗口化布局（Desktop）
+- 三种模式都支持窗口化拖拽/缩放（仅 desktop，mobile 降级为单列卡片流）。
+- 页面结构统一：`PageHeader(固定) + WindowBoard(可拖拽窗口区)`。
+- 窗口能力：拖拽、右/下/右下缩放、点击置顶、允许重叠。
+- 每页提供“重置窗口布局”动作。
 
-### 6.4 当前标准页面
-- `/commands`：筛选条 + 左列表 + 右详情/日志
-- `/assets`：筛选条 + 上传按钮（UI 占位）+ 左列表 + 右详情
+### 6.4 窗口状态持久化
+- 存储键格式：`goyais.ui.windows.<layoutMode>.<routeKey>.v1`。
+- 同一路由在不同布局模式下独立持久化，互不污染。
+- 路由窗口清单由 `web/src/design-system/window-manifests.ts` 维护。
+
+### 6.5 页面白名单窗口单元（首版）
+- `/`：`design-tokens`、`state-hooks`、`status`、`backgrounds`、`empty-states`
+- `/commands`：`filters`、`list`、`detail`
+- `/assets`：`filters`、`list`、`detail`
+- `/canvas`：`canvas-surface`
+- `/plugins`：`plugin-catalog`
+- `/streams`：`stream-overview`、`stream-logs`
+- `/settings`：`preferences`、`component-matrix`
+- `/forbidden`：`forbidden-state`
+- `not-found`：`not-found-state`
 
 ## 7. 新增组件 Checklist
 

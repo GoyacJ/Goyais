@@ -13,78 +13,84 @@
       </template>
     </PageHeader>
 
-    <SectionCard :title="t('page.assets.filtersTitle')" :subtitle="t('page.assets.filtersSubtitle')">
-      <div class="grid gap-3 md:grid-cols-[1.4fr_1fr_1fr]">
-        <Input v-model="searchQuery" :placeholder="t('page.assets.searchPlaceholder')" />
-        <Select v-model="typeFilter" :options="typeOptions" />
-        <Select v-model="visibilityFilter" :options="visibilityOptions" />
-      </div>
-    </SectionCard>
+    <WindowBoard route-key="assets" :panes="windowPanes">
+      <template #filters>
+        <SectionCard :title="t('page.assets.filtersTitle')" :subtitle="t('page.assets.filtersSubtitle')">
+          <div class="grid gap-3 md:grid-cols-[1.4fr_1fr_1fr]">
+            <Input v-model="searchQuery" :placeholder="t('page.assets.searchPlaceholder')" />
+            <Select v-model="typeFilter" :options="typeOptions" />
+            <Select v-model="visibilityFilter" :options="visibilityOptions" />
+          </div>
+        </SectionCard>
+      </template>
 
-    <div class="grid gap-[var(--ui-page-gap)] xl:grid-cols-[1.35fr_1fr]">
-      <SectionCard :title="t('page.assets.listTitle')" :subtitle="`${filteredAssets.length}`">
-        <EmptyState
-          v-if="filteredAssets.length === 0"
-          variant="assets-empty"
-          :title="t('empty_state.assets.title')"
-          :description="t('empty_state.assets.description')"
-        />
-        <Table
-          v-else
-          :columns="columns"
-          :rows="tableRows"
-          :caption="t('page.assets.listTitle')"
-          interactive-rows
-          :selected-row-index="selectedRowIndex"
-          @row-click="onRowClick"
-        />
-      </SectionCard>
+      <template #list>
+        <SectionCard :title="t('page.assets.listTitle')" :subtitle="`${filteredAssets.length}`">
+          <EmptyState
+            v-if="filteredAssets.length === 0"
+            variant="assets-empty"
+            :title="t('empty_state.assets.title')"
+            :description="t('empty_state.assets.description')"
+          />
+          <Table
+            v-else
+            :columns="columns"
+            :rows="tableRows"
+            :caption="t('page.assets.listTitle')"
+            interactive-rows
+            :selected-row-index="selectedRowIndex"
+            @row-click="onRowClick"
+          />
+        </SectionCard>
+      </template>
 
-      <SectionCard :title="t('page.assets.detailTitle')" :subtitle="selectedAsset?.assetId ?? '-'">
-        <div v-if="selectedAsset" class="space-y-3">
-          <dl class="grid gap-3 text-xs text-ui-muted md:grid-cols-2">
-            <div>
-              <dt>{{ t('page.assets.fieldName') }}</dt>
-              <dd class="mt-1 text-sm text-ui-fg">{{ selectedAsset.name }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('page.assets.fieldType') }}</dt>
-              <dd class="mt-1 text-sm text-ui-fg">{{ selectedAsset.type }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('page.assets.fieldSize') }}</dt>
-              <dd class="mt-1 text-sm text-ui-fg">{{ selectedAsset.size }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('page.assets.fieldVisibility') }}</dt>
-              <dd class="mt-1 text-sm text-ui-fg">{{ selectedAsset.visibility }}</dd>
-            </div>
-            <div class="md:col-span-2">
-              <dt>{{ t('page.assets.fieldCreatedAt') }}</dt>
-              <dd class="ui-monospace mt-1 text-ui-fg">{{ selectedAsset.createdAt }}</dd>
-            </div>
-            <div class="md:col-span-2">
-              <dt>URI</dt>
-              <dd class="ui-monospace mt-1 break-all text-ui-fg">{{ selectedAsset.uri }}</dd>
-            </div>
-            <div class="md:col-span-2">
-              <dt>Hash</dt>
-              <dd class="ui-monospace mt-1 break-all text-ui-fg">{{ selectedAsset.hash }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('page.assets.fieldOwner') }}</dt>
-              <dd class="ui-monospace mt-1 text-ui-fg">{{ selectedAsset.owner }}</dd>
-            </div>
-          </dl>
-        </div>
-        <EmptyState
-          v-else
-          variant="assets-empty"
-          :title="t('empty_state.assets.detailTitle')"
-          :description="t('empty_state.assets.detailDescription')"
-        />
-      </SectionCard>
-    </div>
+      <template #detail>
+        <SectionCard :title="t('page.assets.detailTitle')" :subtitle="selectedAsset?.assetId ?? '-'">
+          <div v-if="selectedAsset" class="space-y-3">
+            <dl class="grid gap-3 text-xs text-ui-muted md:grid-cols-2">
+              <div>
+                <dt>{{ t('page.assets.fieldName') }}</dt>
+                <dd class="mt-1 text-sm text-ui-fg">{{ selectedAsset.name }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('page.assets.fieldType') }}</dt>
+                <dd class="mt-1 text-sm text-ui-fg">{{ selectedAsset.type }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('page.assets.fieldSize') }}</dt>
+                <dd class="mt-1 text-sm text-ui-fg">{{ selectedAsset.size }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('page.assets.fieldVisibility') }}</dt>
+                <dd class="mt-1 text-sm text-ui-fg">{{ selectedAsset.visibility }}</dd>
+              </div>
+              <div class="md:col-span-2">
+                <dt>{{ t('page.assets.fieldCreatedAt') }}</dt>
+                <dd class="ui-monospace mt-1 text-ui-fg">{{ selectedAsset.createdAt }}</dd>
+              </div>
+              <div class="md:col-span-2">
+                <dt>URI</dt>
+                <dd class="ui-monospace mt-1 break-all text-ui-fg">{{ selectedAsset.uri }}</dd>
+              </div>
+              <div class="md:col-span-2">
+                <dt>Hash</dt>
+                <dd class="ui-monospace mt-1 break-all text-ui-fg">{{ selectedAsset.hash }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('page.assets.fieldOwner') }}</dt>
+                <dd class="ui-monospace mt-1 text-ui-fg">{{ selectedAsset.owner }}</dd>
+              </div>
+            </dl>
+          </div>
+          <EmptyState
+            v-else
+            variant="assets-empty"
+            :title="t('empty_state.assets.detailTitle')"
+            :description="t('empty_state.assets.detailDescription')"
+          />
+        </SectionCard>
+      </template>
+    </WindowBoard>
   </section>
 </template>
 
@@ -92,6 +98,7 @@
 import EmptyState from '@/components/layout/EmptyState.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import SectionCard from '@/components/layout/SectionCard.vue'
+import WindowBoard from '@/components/layout/WindowBoard.vue'
 import Button from '@/components/ui/Button.vue'
 import Icon from '@/components/ui/Icon.vue'
 import Input from '@/components/ui/Input.vue'
@@ -109,6 +116,12 @@ const searchQuery = ref('')
 const typeFilter = ref('all')
 const visibilityFilter = ref('all')
 const selectedAssetId = ref<string | null>(mockAssets[0]?.assetId ?? null)
+
+const windowPanes = computed(() => [
+  { id: 'filters', title: t('page.assets.filtersTitle') },
+  { id: 'list', title: t('page.assets.listTitle') },
+  { id: 'detail', title: t('page.assets.detailTitle') },
+])
 
 const columns = computed<TableColumn[]>(() => [
   { key: 'name', label: t('page.assets.fieldName') },

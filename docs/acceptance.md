@@ -118,6 +118,11 @@
 - [ ] `vue-i18n` 至少提供 `zh-CN` 与 `en-US`。
 - [ ] 后端 `messageKey` 能正确映射到前端本地化文案。
 - [ ] 缺失翻译键时有兜底显示策略（键名或默认文案）。
+- [ ] 多布局模式 `console/topnav/focus` 可切换，且 `auto` 能按路由默认生效。
+- [ ] 三布局在 desktop 下都支持窗口拖拽/缩放/置顶；mobile 自动降级为单列卡片。
+- [ ] 窗口布局按 `route+layout` 独立持久化；切换布局或路由不会污染彼此状态。
+- [ ] `pnpm -C web test --run` 通过（包含 layout/window 核心用例）。
+- [ ] 若本轮有素材变更，`bash .agents/skills/goyais-web-asset-governance/scripts/validate-assets.sh` 必须通过。
 
 ## 11. 审计与可观测性验收
 

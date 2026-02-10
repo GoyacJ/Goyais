@@ -41,6 +41,13 @@ export default {
     next: '下一页',
     all: '全部',
     backHome: '返回首页',
+    openNavigation: '打开导航',
+    layout: '布局',
+    layoutAuto: '自动',
+    layoutConsole: '控制台',
+    layoutTopnav: '顶栏',
+    layoutFocus: '专注',
+    resetWindowLayout: '重置窗口布局',
   },
   page: {
     home: {

@@ -41,6 +41,13 @@ export default {
     next: 'Next',
     all: 'All',
     backHome: 'Back to Home',
+    openNavigation: 'Open navigation',
+    layout: 'Layout',
+    layoutAuto: 'Auto',
+    layoutConsole: 'Console',
+    layoutTopnav: 'Top Navigation',
+    layoutFocus: 'Focus',
+    resetWindowLayout: 'Reset Window Layout',
   },
   page: {
     home: {
