@@ -2,14 +2,15 @@ package httpapi
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"mime"
 	"net/http"
 	"path"
 	"strings"
-	"time"
 
 	"goyais/internal/asset"
 	"goyais/internal/command"
@@ -31,11 +32,15 @@ func (h *apiHandler) handleAssets(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *apiHandler) handleAssetByID(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.NotFound(w, r)
+func (h *apiHandler) handleAssetRoutes(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.URL.Path, "/lineage") {
+		h.handleAssetLineage(w, r)
 		return
 	}
+	h.handleAssetByID(w, r)
+}
+
+func (h *apiHandler) handleAssetByID(w http.ResponseWriter, r *http.Request) {
 	reqCtx, ok := requireRequestContext(w, r)
 	if !ok {
 		return
@@ -45,15 +50,46 @@ func (h *apiHandler) handleAssetByID(w http.ResponseWriter, r *http.Request) {
 		errorx.Write(w, http.StatusBadRequest, "INVALID_ASSET_REQUEST", "error.asset.invalid_request", nil)
 		return
 	}
-	item, err := h.assetService.Get(r.Context(), reqCtx, assetID)
-	if err != nil {
-		writeAssetError(w, err)
+
+	switch r.Method {
+	case http.MethodGet:
+		item, err := h.assetService.Get(r.Context(), reqCtx, assetID)
+		if err != nil {
+			writeAssetError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toAssetPayload(item))
+	case http.MethodPatch, http.MethodDelete:
+		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.asset.not_implemented", nil)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *apiHandler) handleAssetLineage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	writeJSON(w, http.StatusOK, toAssetPayload(item))
+	_, ok := requireRequestContext(w, r)
+	if !ok {
+		return
+	}
+	base := strings.TrimSuffix(r.URL.Path, "/lineage")
+	assetID := pathID("/api/v1/assets/", base)
+	if assetID == "" {
+		errorx.Write(w, http.StatusBadRequest, "INVALID_ASSET_REQUEST", "error.asset.invalid_request", nil)
+		return
+	}
+	errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.asset.not_implemented", nil)
 }
 
 func (h *apiHandler) handleCreateAsset(w http.ResponseWriter, r *http.Request, reqCtx command.RequestContext) {
+	if h.commandService == nil {
+		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.asset.not_implemented", nil)
+		return
+	}
+
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
 		errorx.Write(w, http.StatusBadRequest, "INVALID_ASSET_REQUEST", "error.asset.invalid_request", map[string]any{"reason": "invalid_multipart"})
 		return
@@ -85,21 +121,55 @@ func (h *apiHandler) handleCreateAsset(w http.ResponseWriter, r *http.Request, r
 	assetType := strings.TrimSpace(r.FormValue("type"))
 	mimeType := detectUploadMime(header.Filename, content)
 
-	item, err := h.assetService.Create(r.Context(), asset.CreateInput{
-		Context:    reqCtx,
-		Name:       name,
-		Type:       assetType,
-		Mime:       mimeType,
-		Size:       int64(len(content)),
-		Hash:       hashHex,
-		Visibility: visibility,
-		Now:        time.Now().UTC(),
-	}, content)
+	payload, err := json.Marshal(map[string]any{
+		"name":       name,
+		"type":       assetType,
+		"mime":       mimeType,
+		"size":       int64(len(content)),
+		"hash":       hashHex,
+		"visibility": visibility,
+		"fileBase64": base64.StdEncoding.EncodeToString(content),
+	})
 	if err != nil {
-		writeAssetError(w, err)
+		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.common.internal", map[string]any{"reason": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusCreated, toAssetPayload(item))
+
+	cmd, err := h.commandService.Submit(
+		r.Context(),
+		reqCtx,
+		"asset.upload",
+		payload,
+		strings.TrimSpace(r.Header.Get("Idempotency-Key")),
+		visibility,
+	)
+	if err != nil {
+		writeAssetCommandError(w, err)
+		return
+	}
+
+	resource := map[string]any{}
+	var result map[string]any
+	if len(cmd.Result) > 0 && json.Unmarshal(cmd.Result, &result) == nil {
+		if assetPayload, ok := result["asset"].(map[string]any); ok {
+			resource = assetPayload
+		}
+	}
+	if len(resource) == 0 {
+		resource = map[string]any{
+			"id":     "",
+			"status": cmd.Status,
+		}
+	}
+
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"resource": resource,
+		"commandRef": map[string]any{
+			"commandId":  cmd.ID,
+			"status":     cmd.Status,
+			"acceptedAt": cmd.AcceptedAt.UTC().Format(timeRFC3339Nano),
+		},
+	})
 }
 
 func (h *apiHandler) handleListAssets(w http.ResponseWriter, r *http.Request, reqCtx command.RequestContext) {
@@ -139,6 +209,24 @@ func writeAssetError(w http.ResponseWriter, err error) {
 		details := map[string]any{}
 		if forbidden != nil && forbidden.Reason != "" {
 			details["reason"] = forbidden.Reason
+		}
+		errorx.Write(w, http.StatusForbidden, "FORBIDDEN", "error.authz.forbidden", details)
+	default:
+		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.common.internal", map[string]any{"reason": err.Error()})
+	}
+}
+
+func writeAssetCommandError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, command.ErrInvalidCommandRequest):
+		errorx.Write(w, http.StatusBadRequest, "INVALID_ASSET_REQUEST", "error.asset.invalid_request", nil)
+	case errors.Is(err, command.ErrNotImplemented):
+		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.asset.not_implemented", nil)
+	case errors.Is(err, command.ErrForbidden):
+		details := map[string]any{}
+		var forbiddenErr *command.ForbiddenError
+		if errors.As(err, &forbiddenErr) && forbiddenErr.Reason != "" {
+			details["reason"] = forbiddenErr.Reason
 		}
 		errorx.Write(w, http.StatusForbidden, "FORBIDDEN", "error.authz.forbidden", details)
 	default:

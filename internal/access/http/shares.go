@@ -210,7 +210,7 @@ func writeShareError(w http.ResponseWriter, err error) {
 	case errors.Is(err, command.ErrShareNotFound):
 		errorx.Write(w, http.StatusNotFound, "SHARE_NOT_FOUND", "error.share.not_found", nil)
 	default:
-		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.internal", map[string]any{"reason": err.Error()})
+		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.common.internal", map[string]any{"reason": err.Error()})
 	}
 }
 

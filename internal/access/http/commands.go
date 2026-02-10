@@ -214,6 +214,21 @@ func extractRequestContext(w http.ResponseWriter, r *http.Request) (command.Requ
 }
 
 func writeCommandError(w http.ResponseWriter, err error) {
+	var execErr *command.ExecutionError
+	if errors.As(err, &execErr) && strings.TrimSpace(execErr.Code) != "" && strings.TrimSpace(execErr.MessageKey) != "" {
+		status := http.StatusInternalServerError
+		switch strings.ToUpper(strings.TrimSpace(execErr.Code)) {
+		case "INVALID_COMMAND_REQUEST", "INVALID_ASSET_REQUEST", "INVALID_SHARE_REQUEST":
+			status = http.StatusBadRequest
+		case "NOT_IMPLEMENTED":
+			status = http.StatusNotImplemented
+		case "FORBIDDEN":
+			status = http.StatusForbidden
+		}
+		errorx.Write(w, status, strings.ToUpper(strings.TrimSpace(execErr.Code)), strings.TrimSpace(execErr.MessageKey), nil)
+		return
+	}
+
 	switch {
 	case errors.Is(err, command.ErrNotImplemented):
 		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.command.not_implemented", nil)
@@ -240,7 +255,7 @@ func writeCommandError(w http.ResponseWriter, err error) {
 			errorx.Write(w, http.StatusConflict, "IDEMPOTENCY_KEY_CONFLICT", "error.command.idempotency_conflict", details)
 			return
 		}
-		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.internal", map[string]any{"reason": err.Error()})
+		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.common.internal", map[string]any{"reason": err.Error()})
 	}
 }
 

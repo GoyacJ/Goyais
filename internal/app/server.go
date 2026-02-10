@@ -8,6 +8,7 @@ import (
 	"time"
 
 	httpapi "goyais/internal/access/http"
+	"goyais/internal/asset"
 	"goyais/internal/command"
 	"goyais/internal/config"
 	platformdb "goyais/internal/platform/db"
@@ -27,8 +28,19 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 
 	commandService := command.NewService(repo, cfg.Command.IdempotencyTTL, cfg.Authz.AllowPrivateToPublic, log.Default())
 
+	assetRepo, err := asset.NewRepository(cfg.Providers.DB, db)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("build asset repository: %w", err)
+	}
+	objectStore := asset.NewObjectStore(cfg.Providers.ObjectStore, "")
+	assetService := asset.NewService(assetRepo, objectStore, cfg.Authz.AllowPrivateToPublic)
+
+	registerCommandExecutors(commandService, assetService)
+
 	h, err := httpapi.NewRouter(cfg, httpapi.RouterDeps{
 		CommandService: commandService,
+		AssetService:   assetService,
 		HealthChecker:  db,
 	})
 	if err != nil {

@@ -38,3 +38,28 @@ func (e *ForbiddenError) Error() string {
 func (e *ForbiddenError) Is(target error) bool {
 	return target == ErrForbidden
 }
+
+// ExecutionError carries domain-specific failure metadata from command executors.
+// It unwraps to a canonical command error so existing error matching still works.
+type ExecutionError struct {
+	Code       string
+	MessageKey string
+	Err        error
+}
+
+func (e *ExecutionError) Error() string {
+	if e == nil {
+		return ErrInvalidCommandRequest.Error()
+	}
+	if e.Err != nil {
+		return e.Err.Error()
+	}
+	return ErrInvalidCommandRequest.Error()
+}
+
+func (e *ExecutionError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}

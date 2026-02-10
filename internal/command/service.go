@@ -9,12 +9,15 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
 type AuthzHook interface {
 	Check(ctx context.Context, reqCtx RequestContext, cmd Command, permission string) (allowed bool, reason string, err error)
 }
+
+type ExecuteFunc func(ctx context.Context, reqCtx RequestContext, payload json.RawMessage) (result []byte, err error)
 
 type Service struct {
 	repo                 Repository
@@ -23,6 +26,8 @@ type Service struct {
 	logger               *log.Logger
 	rbacHook             AuthzHook
 	egressHook           AuthzHook
+	executorsMu          sync.RWMutex
+	executors            map[string]ExecuteFunc
 }
 
 func NewService(repo Repository, idempotencyTTL time.Duration, allowPrivateToPublic bool, logger *log.Logger) *Service {
@@ -34,6 +39,7 @@ func NewService(repo Repository, idempotencyTTL time.Duration, allowPrivateToPub
 		idempotencyTTL:       idempotencyTTL,
 		allowPrivateToPublic: allowPrivateToPublic,
 		logger:               logger,
+		executors:            make(map[string]ExecuteFunc),
 	}
 }
 
@@ -43,6 +49,17 @@ func (s *Service) SetRBACHook(hook AuthzHook) {
 
 func (s *Service) SetEgressHook(hook AuthzHook) {
 	s.egressHook = hook
+}
+
+func (s *Service) SetExecutor(commandType string, executor ExecuteFunc) {
+	key := strings.TrimSpace(commandType)
+	if key == "" || executor == nil {
+		return
+	}
+
+	s.executorsMu.Lock()
+	defer s.executorsMu.Unlock()
+	s.executors[key] = executor
 }
 
 func (s *Service) Submit(ctx context.Context, reqCtx RequestContext, commandType string, payload json.RawMessage, idempotencyKey, requestedVisibility string) (Command, error) {
@@ -90,12 +107,15 @@ func (s *Service) Submit(ctx context.Context, reqCtx RequestContext, commandType
 	}
 	_ = s.repo.AppendCommandEvent(ctx, reqCtx, running.ID, "command.running", payload)
 
-	result := map[string]any{
-		"handled":     true,
-		"commandType": commandType,
-		"executedAt":  time.Now().UTC().Format(time.RFC3339Nano),
+	resultBytes, err := s.executeCommand(ctx, reqCtx, commandType, payload)
+	if err != nil {
+		failed, markErr := s.markCommandFailed(ctx, reqCtx, running.ID, resultBytes, err)
+		if markErr != nil {
+			return Command{}, markErr
+		}
+		return failed, err
 	}
-	resultBytes, _ := json.Marshal(result)
+
 	finishedAt := time.Now().UTC()
 	final, err := s.repo.SetStatus(ctx, reqCtx, running.ID, StatusSucceeded, resultBytes, "", "", &finishedAt)
 	if err != nil {
@@ -106,6 +126,78 @@ func (s *Service) Submit(ctx context.Context, reqCtx RequestContext, commandType
 	_ = s.repo.AppendAuditEvent(ctx, reqCtx, final.ID, "command.execute", "allow", "stub_execute", resultBytes)
 
 	return final, nil
+}
+
+func (s *Service) executeCommand(ctx context.Context, reqCtx RequestContext, commandType string, payload json.RawMessage) ([]byte, error) {
+	s.executorsMu.RLock()
+	executor := s.executors[commandType]
+	s.executorsMu.RUnlock()
+
+	if executor == nil {
+		return defaultCommandResult(commandType), nil
+	}
+
+	result, err := executor(ctx, reqCtx, payload)
+	if err != nil {
+		return result, err
+	}
+	if len(result) == 0 {
+		return defaultCommandResult(commandType), nil
+	}
+	return result, nil
+}
+
+func (s *Service) markCommandFailed(
+	ctx context.Context,
+	reqCtx RequestContext,
+	commandID string,
+	result []byte,
+	execErr error,
+) (Command, error) {
+	errorCode := "COMMAND_EXECUTION_FAILED"
+	messageKey := "error.command.execution_failed"
+	reason := "executor_failed"
+	eventPayload := result
+
+	var execMeta *ExecutionError
+	if errors.As(execErr, &execMeta) {
+		if strings.TrimSpace(execMeta.Code) != "" {
+			errorCode = strings.TrimSpace(execMeta.Code)
+		}
+		if strings.TrimSpace(execMeta.MessageKey) != "" {
+			messageKey = strings.TrimSpace(execMeta.MessageKey)
+		}
+	}
+	if len(eventPayload) == 0 {
+		fallback, _ := json.Marshal(map[string]any{
+			"errorCode":  errorCode,
+			"messageKey": messageKey,
+		})
+		eventPayload = fallback
+	}
+	if strings.TrimSpace(execErr.Error()) != "" {
+		reason = execErr.Error()
+	}
+
+	finishedAt := time.Now().UTC()
+	failed, err := s.repo.SetStatus(ctx, reqCtx, commandID, StatusFailed, eventPayload, errorCode, messageKey, &finishedAt)
+	if err != nil {
+		return Command{}, err
+	}
+
+	_ = s.repo.AppendCommandEvent(ctx, reqCtx, failed.ID, "command.failed", eventPayload)
+	_ = s.repo.AppendAuditEvent(ctx, reqCtx, failed.ID, "command.execute", "deny", reason, eventPayload)
+	return failed, nil
+}
+
+func defaultCommandResult(commandType string) []byte {
+	result := map[string]any{
+		"handled":     true,
+		"commandType": commandType,
+		"executedAt":  time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	payload, _ := json.Marshal(result)
+	return payload
 }
 
 func (s *Service) Get(ctx context.Context, reqCtx RequestContext, id string) (Command, error) {
