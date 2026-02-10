@@ -61,7 +61,7 @@
 
 ## 5. Command-first 与 AI/UI 一致性验收
 
-- [ ] UI 触发 `workflow.run` 与 AI 触发同动作时，落库 command 形态一致。
+- [x] UI 触发 `workflow.run` 与 AI 触发同动作时，落库 command 形态一致。
 - [x] Domain 写接口响应包含：`resource + commandRef { commandId, status, acceptedAt }`。
 - [x] 通过 `GET /api/v1/commands/{commandId}` 可追踪最终执行结果。
 
@@ -69,10 +69,10 @@
 - [x] `POST /api/v1/commands`（携带 `X-Tenant-Id/X-Workspace-Id/X-User-Id`）返回 `202` 且包含 `resource + commandRef`。
 - [x] 缺少任一上下文 header 返回 `400`，错误为 `MISSING_CONTEXT + error.context.missing`，并在 `details.missingHeaders` 返回缺失项列表。
 - [x] `GET /api/v1/commands` 返回 `items`，并固定按 `created_at DESC, id DESC` 排序。
-- [ ] cursor 模式 token 基于 `(created_at,id)`，若请求带 `cursor` 则忽略 `page/pageSize`。
+- [x] cursor 模式 token 基于 `(created_at,id)`，若请求带 `cursor` 则忽略 `page/pageSize`。
 - [x] 同 `(tenant,workspace,owner,idempotency_key)` 且同请求哈希复用同一 `commandId`。
 - [x] 同 `(tenant,workspace,owner,idempotency_key)` 但不同请求哈希返回 `409 IDEMPOTENCY_KEY_CONFLICT`。
-- [ ] `Idempotency-Key` 缺失时仍可创建新命令，并保留审计记录。
+- [x] `Idempotency-Key` 缺失时仍可创建新命令，并保留审计记录。
 - [x] SQLite（minimal）可完成 create/get/list + 状态流转 + 审计落库。
 - [ ] Postgres（full）可连接并在 healthz 回显 provider；commands 业务接口可统一返回 `501 NOT_IMPLEMENTED`（本轮非阻塞）。
 
@@ -84,10 +84,10 @@
 - [ ] `PRIVATE` 输入默认不得直接产生 `PUBLIC` 输出（除非策略放开且权限满足）。
 
 ### 6.1 A3 最小闭环（Thread #4）
-- [x] `POST /api/v1/shares` 仅允许 `resourceType=command`，否则返回 `400 INVALID_SHARE_REQUEST`。
+- [x] `POST /api/v1/shares` 仅允许 `resourceType=command|asset`，其他值返回 `400 INVALID_SHARE_REQUEST`。
 - [x] `POST /api/v1/shares` 仅允许 `subjectType=user` 且 `permissions` 仅来自 `READ/WRITE/EXECUTE/MANAGE/SHARE`，非法值返回 `400 INVALID_SHARE_REQUEST`。
-- [x] `POST /api/v1/shares` 创建前必须校验同资源 SHARE 权限：owner 或该 `commandId` 上已有 `ACL.SHARE`。
-- [ ] 非 owner 且无该资源 `SHARE` 权限时，`POST /api/v1/shares` 返回 `403 FORBIDDEN + messageKey=error.authz.forbidden`。
+- [x] `POST /api/v1/shares` 创建前必须校验同资源 SHARE 权限：owner 或该资源上已有 `ACL.SHARE`。
+- [x] 非 owner 且无该资源 `SHARE` 权限时，`POST /api/v1/shares` 返回 `403 FORBIDDEN + messageKey=error.authz.forbidden`。
 - [x] SQLite 模式下，`GET /api/v1/commands` 的可读过滤在 SQL 层完成（`owner OR visibility=WORKSPACE OR ACL.READ`），分页基于过滤后结果且排序固定 `created_at DESC,id DESC`。
 
 ## 7. Workflow/Run 回放验收
@@ -130,16 +130,16 @@
 ### 12.1 SQLite minimal（必须通过）
 - [x] `POST /api/v1/assets` 使用 multipart 上传成功，返回 `202`，响应包含 `resource + commandRef`。
 - [x] owner 访问 `GET /api/v1/assets/{assetId}` 返回 `200`。
-- [ ] 非 owner 且无 share 时访问 `GET /api/v1/assets/{assetId}` 返回 `403 FORBIDDEN` + `messageKey=error.authz.forbidden`。
-- [ ] owner 对同一 `asset` 创建 `READ` share 后，非 owner 访问 `GET /api/v1/assets/{assetId}` 返回 `200`。
+- [x] 非 owner 且无 share 时访问 `GET /api/v1/assets/{assetId}` 返回 `403 FORBIDDEN` + `messageKey=error.authz.forbidden`。
+- [x] owner 对同一 `asset` 创建 `READ` share 后，非 owner 访问 `GET /api/v1/assets/{assetId}` 返回 `200`。
 - [ ] `GET /api/v1/assets` 在 SQL 层完成可读过滤（tenant/workspace 限定 + owner/WORKSPACE/ACL.READ），并保持 `created_at DESC,id DESC` 稳定排序。
-- [ ] cursor 模式下 `cursor` 优先于 `page/pageSize`，分页无重复/漏项。
+- [x] cursor 模式下 `cursor` 优先于 `page/pageSize`，分页无重复/漏项。
 
 ### 12.2 Shares（asset）规则（必须通过）
-- [x] `POST /api/v1/shares` 仅允许 `resourceType=command`；`asset` 返回 `400 INVALID_SHARE_REQUEST`。
-- [ ] `subjectType` 仅支持 `user`；非法值返回 `400 INVALID_SHARE_REQUEST`。
-- [ ] `permissions` 仅支持 `READ/WRITE/EXECUTE/MANAGE/SHARE`；非法值返回 `400 INVALID_SHARE_REQUEST`。
-- [x] 对 `asset` 分享在本轮不开放：`POST /api/v1/shares` 传 `resourceType=asset` 必须返回 `400 INVALID_SHARE_REQUEST`。
+- [x] `POST /api/v1/shares` 支持 `resourceType=asset`，并沿用同资源 `SHARE` 权限校验。
+- [x] `subjectType` 仅支持 `user`；非法值返回 `400 INVALID_SHARE_REQUEST`。
+- [x] `permissions` 仅支持 `READ/WRITE/EXECUTE/MANAGE/SHARE`；非法值返回 `400 INVALID_SHARE_REQUEST`。
+- [x] 非 owner 且无 `asset` 的 `SHARE` 权限时，`POST /api/v1/shares` 返回 `403 FORBIDDEN + messageKey=error.authz.forbidden`。
 
 ### 12.3 Postgres full（本轮占位）
 - [ ] `GET /api/v1/healthz` 与 `GET /api/v1/system/healthz` 返回 `200`，且 `providers.db=postgres`。

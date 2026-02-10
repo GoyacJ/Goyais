@@ -32,8 +32,8 @@
 
 ## 0.4 Share 创建授权闸门（A3）
 - `POST /api/v1/shares` 执行顺序固定：`Tenant -> Visibility -> ACL -> RBAC -> Egress`。
-- v0.1 仅支持 `resource_type=command` 且 `subject_type=user`。
-- 分享前必须校验“同资源 SHARE 权限”：`owner` 或 `acl_entries(resource_type=command, resource_id=目标commandId, permission=SHARE)` 命中。
+- v0.1 支持 `resource_type=command|asset`，且 `subject_type=user`。
+- 分享前必须校验“同资源 SHARE 权限”：`owner` 或 `acl_entries(resource_type=<目标资源类型>, resource_id=<目标资源ID>, permission=SHARE)` 命中。
 - 校验失败返回 `403 FORBIDDEN`，`messageKey=error.authz.forbidden`。
 
 ## 0.5 Asset Domain Sugar（A/B 过渡）

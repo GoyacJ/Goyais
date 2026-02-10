@@ -145,6 +145,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -171,6 +174,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -211,6 +217,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/CommandId'
       responses:
         '200':
@@ -236,7 +245,7 @@ paths:
       summary: Create share entry
       description: |
         v0.1 限定：
-        - resourceType 必须为 command
+        - resourceType 支持 command/asset
         - subjectType 必须为 user
         - permissions 必须来自固定枚举
         创建前服务端会校验分享者对同一资源的 SHARE 权限（owner 或已有 ACL.SHARE）。
@@ -245,6 +254,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
       requestBody:
         required: true
         content:
@@ -275,6 +287,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -301,6 +316,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/ShareId'
       responses:
         '204':
@@ -323,6 +341,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -349,6 +370,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -381,6 +405,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/AssetId'
       responses:
         '200':
@@ -407,6 +434,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/AssetId'
       requestBody:
         required: true
@@ -427,6 +457,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/AssetId'
       responses:
         '501':
@@ -443,6 +476,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/AssetId'
       responses:
         '501':
@@ -459,6 +495,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -485,6 +524,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -517,6 +559,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/TemplateId'
       responses:
         '200':
@@ -545,6 +590,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/TemplateId'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -580,6 +628,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/TemplateId'
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -609,6 +660,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -635,6 +689,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -669,6 +726,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/RunId'
       responses:
         '200':
@@ -697,6 +757,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/RunId'
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -726,6 +789,9 @@ paths:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
         - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
         - $ref: '#/components/parameters/RunId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Page'
@@ -1052,6 +1118,27 @@ components:
       schema:
         type: string
       description: 未接入 JWT 阶段必须传入，服务端将 ownerId 映射为该值。
+    XRoles:
+      name: X-Roles
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 可选。逗号分隔角色列表，未提供时默认 `member`。
+    XPolicyVersion:
+      name: X-Policy-Version
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 可选。授权策略版本，未提供时默认 `v0.1`。
+    XTraceId:
+      name: X-Trace-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 可选。链路追踪 ID，未提供时服务端自动生成。
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -1336,7 +1423,7 @@ components:
       properties:
         resourceType:
           type: string
-          enum: [command]
+          enum: [command, asset]
         resourceId:
           type: string
         subjectType:
