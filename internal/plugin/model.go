@@ -121,3 +121,21 @@ type UpdateInstallStatusInput struct {
 
 	Now time.Time
 }
+
+type AlgorithmDefinition struct {
+	ID           string
+	Name         string
+	Version      string
+	TemplateRef  string
+	Defaults     json.RawMessage
+	Constraints  json.RawMessage
+	Dependencies json.RawMessage
+	Status       string
+}
+
+type UpsertAlgorithmsInput struct {
+	Context    command.RequestContext
+	Visibility string
+	Items      []AlgorithmDefinition
+	Now        time.Time
+}

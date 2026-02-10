@@ -18,6 +18,7 @@ type Repository interface {
 	CreateInstall(ctx context.Context, in CreateInstallInput) (PluginInstall, error)
 	UpdateInstallStatus(ctx context.Context, in UpdateInstallStatusInput) (PluginInstall, error)
 	GetInstallForAccess(ctx context.Context, req command.RequestContext, installID string) (PluginInstall, error)
+	UpsertAlgorithms(ctx context.Context, in UpsertAlgorithmsInput) error
 
 	HasPermission(ctx context.Context, req command.RequestContext, resourceType, resourceID, permission string, now time.Time) (bool, error)
 }

@@ -240,6 +240,76 @@ func (r *PostgresRepository) CreateInstall(ctx context.Context, in CreateInstall
 	return r.GetInstallForAccess(ctx, in.Context, installID)
 }
 
+func (r *PostgresRepository) UpsertAlgorithms(ctx context.Context, in UpsertAlgorithmsInput) error {
+	if len(in.Items) == 0 {
+		return nil
+	}
+
+	now := in.Now.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+
+	visibility := strings.TrimSpace(in.Visibility)
+	if visibility == "" {
+		visibility = command.VisibilityPrivate
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin algorithm upsert tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	for _, item := range in.Items {
+		if _, err := tx.ExecContext(
+			ctx,
+			`INSERT INTO algorithms(
+				id, tenant_id, workspace_id, owner_id, visibility, acl_json,
+				name, version, template_ref, defaults_json, constraints_json, dependencies_json, status, created_at, updated_at
+			) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10::jsonb, $11::jsonb, $12::jsonb, $13, $14, $15)
+			ON CONFLICT(id) DO UPDATE SET
+				tenant_id=excluded.tenant_id,
+				workspace_id=excluded.workspace_id,
+				owner_id=excluded.owner_id,
+				visibility=excluded.visibility,
+				acl_json=excluded.acl_json,
+				name=excluded.name,
+				version=excluded.version,
+				template_ref=excluded.template_ref,
+				defaults_json=excluded.defaults_json,
+				constraints_json=excluded.constraints_json,
+				dependencies_json=excluded.dependencies_json,
+				status=excluded.status,
+				updated_at=excluded.updated_at`,
+			item.ID,
+			in.Context.TenantID,
+			in.Context.WorkspaceID,
+			in.Context.OwnerID,
+			visibility,
+			"[]",
+			item.Name,
+			item.Version,
+			item.TemplateRef,
+			string(item.Defaults),
+			string(item.Constraints),
+			string(item.Dependencies),
+			item.Status,
+			now,
+			now,
+		); err != nil {
+			return fmt.Errorf("upsert algorithm %s: %w", item.ID, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit algorithm upsert tx: %w", err)
+	}
+	return nil
+}
+
 func (r *PostgresRepository) UpdateInstallStatus(ctx context.Context, in UpdateInstallStatusInput) (PluginInstall, error) {
 	now := in.Now.UTC()
 	if now.IsZero() {

@@ -96,14 +96,14 @@
 - `POST /api/v1/streams/{streamId}:record-start`、`POST /api/v1/streams/{streamId}:record-stop`、`POST /api/v1/streams/{streamId}:kick` 必须转换为 `stream.record.start`、`stream.record.stop`、`stream.kick` command 执行。
 - 当流 `state.onPublishTemplateId` 存在时，`stream.record.start` 必须通过 command gate 追加一次 `workflow.run` command（禁止绕过 command service 直调 workflow 写路径）。
 
-## 0.10 Algorithm Domain Sugar（MVP 目标）
+## 0.10 Algorithm Domain Sugar（MVP）
 - `POST /api/v1/algorithms/{algorithmId}:run` 必须转换为 `algorithm.run` command 执行（Command-first）。
 - v0.1 约束：算法执行应复用 workflow 引擎，`algorithm.run` 结果至少包含：
   - `algorithmId`
   - `workflowRunId`
   - `status`
 - 错误语义保持统一：`error { code, messageKey, details }`。
-- Slice A 状态：路由占位可达（501）；Slice B 状态：路由转正并返回 `202 + resource + commandRef`。
+- 当前状态：路由已转正并返回 `202 + resource + commandRef`，`algorithm.run` 结果包含 `workflowRunId` 追踪。
 
 ## 1. WorkflowRun / StepRun
 

@@ -225,7 +225,7 @@ v0.1 当前实现进度：
 - `status`
 - `created_at, updated_at`
 
-### algorithm_runs（MVP 目标）
+### algorithm_runs
 - `id, tenant_id, workspace_id, owner_id, visibility`
 - `algorithm_id`
 - `workflow_run_id`（映射到 workflow 实际执行）
