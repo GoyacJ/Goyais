@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,33 +19,26 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
-	ctx := context.Background()
-	server, err := app.NewServer(ctx, cfg)
+	srv, err := app.NewServer(cfg)
 	if err != nil {
 		log.Fatalf("create server: %v", err)
 	}
 
-	errCh := make(chan error, 1)
 	go func() {
-		errCh <- server.Run()
+		log.Printf("goyais api listening on %s (mode=%s)", cfg.Server.Addr, cfg.Profile)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen and serve: %v", err)
+		}
 	}()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
 
-	select {
-	case sig := <-sigCh:
-		log.Printf("received signal: %s", sig)
-	case runErr := <-errCh:
-		if runErr != nil && !errors.Is(runErr, context.Canceled) {
-			log.Fatalf("run server: %v", runErr)
-		}
-		return
-	}
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
+
+	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("shutdown error: %v", err)
 	}
 }

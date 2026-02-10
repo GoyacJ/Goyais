@@ -1,35 +1,38 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
+
+	"goyais/internal/buildinfo"
+	"goyais/internal/config"
 )
 
-type healthzResponse struct {
-	Status    string            `json:"status"`
-	Timestamp string            `json:"timestamp"`
-	Version   string            `json:"version"`
-	Mode      string            `json:"mode"`
-	Providers map[string]string `json:"providers"`
+type HealthzResponse struct {
+	Status    string                `json:"status"`
+	Timestamp string                `json:"timestamp"`
+	Version   string                `json:"version"`
+	Mode      string                `json:"mode"`
+	Providers config.ProviderConfig `json:"providers"`
 }
 
-func (h *apiHandler) handleHealthz(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.NotFound(w, r)
-		return
-	}
-	resp := healthzResponse{
-		Status:    "ok",
-		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-		Version:   h.version,
-		Mode:      h.cfg.Profile,
-		Providers: map[string]string{
-			"db":          h.cfg.Providers.DB,
-			"cache":       h.cfg.Providers.Cache,
-			"vector":      h.cfg.Providers.Vector,
-			"objectStore": h.cfg.Providers.ObjectStore,
-			"stream":      h.cfg.Providers.Stream,
-		},
-	}
-	writeJSON(w, http.StatusOK, resp)
+func NewHealthzHandler(cfg config.Config) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		resp := HealthzResponse{
+			Status:    "ok",
+			Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+			Version:   buildinfo.Version,
+			Mode:      cfg.Profile,
+			Providers: cfg.Providers,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	})
 }

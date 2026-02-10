@@ -1,5 +1,3 @@
-CREATE TABLE IF NOT EXISTS system_meta (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
+-- Thread #2 placeholder migration for sqlite.
+-- Actual tables will be added in subsequent vertical slices.
+PRAGMA foreign_keys = ON;

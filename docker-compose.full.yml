@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: goyais-postgres
+    environment:
+      POSTGRES_USER: goyais
+      POSTGRES_PASSWORD: goyais
+      POSTGRES_DB: goyais
+    ports:
+      - "5432:5432"
+    volumes:
+      - goyais-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: goyais-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - goyais-redis-data:/data
+
+  minio:
+    image: minio/minio:latest
+    container_name: goyais-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - goyais-minio-data:/data
+
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: goyais-mediamtx
+    ports:
+      - "8554:8554" # RTSP
+      - "1935:1935" # RTMP
+      - "8888:8888" # HLS
+      - "8889:8889" # WebRTC
+      - "8890:8890/udp" # WebRTC UDP
+
+volumes:
+  goyais-postgres-data:
+  goyais-redis-data:
+  goyais-minio-data:
+
+# full profile placeholder connection parameters for app env:
+# GOYAIS_PROFILE=full
+# GOYAIS_DB_DRIVER=postgres
+# GOYAIS_CACHE_PROVIDER=redis
+# GOYAIS_VECTOR_PROVIDER=redis_stack
+# GOYAIS_OBJECT_STORE_PROVIDER=minio
+# GOYAIS_STREAM_PROVIDER=mediamtx
+# GOYAIS_SERVER_ADDR=:8080
+# POSTGRES_DSN=postgres://goyais:goyais@127.0.0.1:5432/goyais?sslmode=disable
+# REDIS_ADDR=127.0.0.1:6379
+# MINIO_ENDPOINT=127.0.0.1:9000
+# MINIO_ACCESS_KEY=minioadmin
+# MINIO_SECRET_KEY=minioadmin

@@ -1,72 +1,78 @@
 # Goyais
 
-Goyais 是一个以 AI 为主入口、同时支持可视化编排的多模态执行平台。当前仓库处于 **v0.1 文档初始化阶段**，本阶段只交付架构、接口、数据模型与验收规范，不包含业务实现代码。
+Goyais 是一个以 AI 为主入口、同时支持可视化编排的多模态执行平台。当前仓库处于 **Thread #2 工程骨架阶段**，目标是优先通过 single-binary 验收并建立 minimal/full profile 基线。
 
-## v0.1 目标
+## Thread #2 已冻结约束
 
-- AI 与 UI 双入口一致（Command-first）。
-- 统一权限与隔离（Agent-as-User + Visibility/ACL + Egress）。
-- 资产、工作流、插件、流媒体基础契约完整。
-- 前端约束明确：Vue + Vite + TypeScript + TailwindCSS + vue-i18n（zh-CN/en-US）+ 深浅色切换。
-- 生产发布冻结为单二进制（Go embed 前端 dist）。
+- 生产发布必须是单二进制（Go embed 前端 dist）。
+- 路由优先级固定：`/api/v1/*` > 静态文件 > `favicon/robots` 缺省 404 > SPA fallback(`index.html`)。
+- `index.html`（`/` 与 fallback）返回 `Cache-Control: no-store`。
+- `assets/*.js` 返回正确 JS Content-Type。
+- 配置优先级：`ENV > YAML > 默认值`，ENV 前缀 `GOYAIS_`，YAML `snake_case`。
 
-## 文档地图
+## 前端包管理（固定 pnpm）
 
-- 权威需求：`/Users/goya/Repo/Git/Goyais/docs/prd.md`
-- 协作规则：`/Users/goya/Repo/Git/Goyais/AGENTS.md`
-- 架构总览：`/Users/goya/Repo/Git/Goyais/docs/arch/overview.md`
-- 数据模型：`/Users/goya/Repo/Git/Goyais/docs/arch/data-model.md`
-- 状态机：`/Users/goya/Repo/Git/Goyais/docs/arch/state-machines.md`
-- API 契约：`/Users/goya/Repo/Git/Goyais/docs/api/openapi.yaml`
-- 规格拆解：`/Users/goya/Repo/Git/Goyais/docs/spec/v0.1.md`
-- 验收清单：`/Users/goya/Repo/Git/Goyais/docs/acceptance.md`
+- 本仓库前端仅使用 pnpm。
+- 锁文件：`/Users/goya/Repo/Git/Goyais/web/pnpm-lock.yaml`
+- 不使用 `package-lock.json`。
 
-## 运行模式（文档约定）
+常用命令：
 
-## 1) 最小化运行模式（v0.1 必须可闭环）
+```bash
+pnpm -C web install --frozen-lockfile
+pnpm -C web build
+pnpm -C web dev
+```
 
-组合：
-- SQLite
-- MediaMTX
-- 本地文件存储（local）
-- 本地缓存（memory）
+## 最小化模式（本次主验收）
 
-默认配置目标：
-- `db.driver=sqlite`
-- `cache.provider=memory`
-- `vector.provider=sqlite`
-- `object_store.provider=local`
-- `stream.provider=mediamtx`
+默认配置（minimal）：
+- db: `sqlite`
+- cache: `memory`
+- vector: `sqlite`
+- object_store: `local`
+- stream: `mediamtx`
 
-## 2) 完整模式（推荐）
+运行与验收：
 
-组合：
-- PostgreSQL
-- Redis（缓存）+ Redis Stack（向量）
-- MinIO（或 S3）
-- MediaMTX
+```bash
+make build
+bash .agents/skills/goyais-single-binary-acceptance/scripts/verify_single_binary.sh
+```
 
-## 单二进制发布策略（冻结）
+## healthz
 
-- 生产发布必须为单二进制：Go embed 前端 `dist`。
-- API 路径固定 `/api/v1/*`。
-- 其余前端路由走 SPA fallback 到 `index.html`。
-- `index.html` 响应头固定：`Cache-Control: no-store`。
-- 静态资源必须返回正确 `Content-Type`。
-- `/favicon.ico` 与 `/robots.txt` 在无占位文件时默认返回 404，不走 fallback。
-- 开发模式可采用 Vite dev + proxy。
+接口：`GET /api/v1/healthz`
 
-## 构建流程（文档层）
+响应包含：
+- `status`
+- `timestamp`
+- `version`
+- `mode`
+- `providers`
 
-- 标准构建入口：`make build`
-- 验收要求：构建后删除/改名 `web/dist`（甚至 `web/`）仍可运行 `/`、`/canvas`、`/api/v1/healthz`。
+其中 `version` 来自构建注入（无注入时默认 `dev`）。
 
-## 后续实现顺序（Thread #2 建议）
+## full profile（compose 占位）
 
-1. 配置加载与 provider 工厂（ENV > YAML > 默认值）。
-2. Command Gate + 统一错误模型 + 审计。
-3. Visibility/ACL + Egress 授权链。
-4. Asset + Workflow 闭环（模板、运行、回放、血缘）。
-5. Registry + Plugin Market。
-6. MediaMTX 控制面 + 录制资产化 + 事件触发。
-7. 前端基线（i18n + theme）与 single-binary 静态服务整合。
+本次新增 `docker-compose.full.yml`，用于提供 full profile 所需依赖占位：
+- postgres
+- redis
+- minio
+- mediamtx
+
+校验命令：
+
+```bash
+docker compose -f docker-compose.full.yml config
+```
+
+说明：full compose 在后续垂直切片阶段逐步完善；本次仅保证服务定义与连接参数可用，不承诺业务链路完全跑通。
+
+## 文档与契约
+
+- 需求：`/Users/goya/Repo/Git/Goyais/docs/prd.md`
+- 架构：`/Users/goya/Repo/Git/Goyais/docs/arch/overview.md`
+- API：`/Users/goya/Repo/Git/Goyais/docs/api/openapi.yaml`
+- 验收：`/Users/goya/Repo/Git/Goyais/docs/acceptance.md`
+- 仓库规则：`/Users/goya/Repo/Git/Goyais/AGENTS.md`

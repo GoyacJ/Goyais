@@ -3,65 +3,36 @@ package httpapi
 import (
 	"net/http"
 	"strings"
-	"time"
 
-	"goyais/internal/asset"
-	"goyais/internal/command"
+	"goyais/internal/access/webstatic"
+	"goyais/internal/common/errorx"
 	"goyais/internal/config"
 )
 
-type RouterDeps struct {
-	Config         config.Config
-	Version        string
-	CommandService *command.Service
-	AssetService   *asset.Service
-	StaticHandler  http.Handler
-}
+func NewRouter(cfg config.Config) (http.Handler, error) {
+	apiMux := http.NewServeMux()
+	apiMux.Handle("/api/v1/healthz", NewHealthzHandler(cfg))
 
-type apiHandler struct {
-	cfg            config.Config
-	version        string
-	commandService *command.Service
-	assetService   *asset.Service
-}
-
-func NewRouter(deps RouterDeps) http.Handler {
-	api := &apiHandler{
-		cfg:            deps.Config,
-		version:        deps.Version,
-		commandService: deps.CommandService,
-		assetService:   deps.AssetService,
+	staticHandler, err := webstatic.NewHandler()
+	if err != nil {
+		return nil, err
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/healthz", api.handleHealthz)
-	mux.HandleFunc("/api/v1/system/healthz", api.handleHealthz)
-	mux.HandleFunc("/api/v1/commands", api.handleCommands)
-	mux.HandleFunc("/api/v1/commands/", api.handleCommandByID)
-	mux.HandleFunc("/api/v1/shares", api.handleShares)
-	mux.HandleFunc("/api/v1/shares/", api.handleShareByID)
-	mux.HandleFunc("/api/v1/assets", api.handleAssets)
-	mux.HandleFunc("/api/v1/assets/", api.handleAssetByID)
-	mux.Handle("/", deps.StaticHandler)
+	root := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v1/") || r.URL.Path == "/api/v1" {
+			h, pattern := apiMux.Handler(r)
+			if pattern == "" {
+				errorx.Write(w, http.StatusNotFound, "API_NOT_FOUND", "error.api.not_found", map[string]string{
+					"path": r.URL.Path,
+				})
+				return
+			}
+			h.ServeHTTP(w, r)
+			return
+		}
 
-	return loggingMiddleware(mux)
-}
-
-func loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		next.ServeHTTP(w, r)
-		_ = start
+		staticHandler.ServeHTTP(w, r)
 	})
-}
 
-func pathID(prefix, full string) string {
-	if !strings.HasPrefix(full, prefix) {
-		return ""
-	}
-	id := strings.TrimPrefix(full, prefix)
-	if strings.Contains(id, "/") {
-		return ""
-	}
-	return strings.TrimSpace(id)
+	return root, nil
 }

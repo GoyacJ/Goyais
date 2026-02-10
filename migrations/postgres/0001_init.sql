@@ -1,5 +1,3 @@
-CREATE TABLE IF NOT EXISTS system_meta (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL
-);
+-- Thread #2 placeholder migration for postgres.
+-- Actual tables will be added in subsequent vertical slices.
+SELECT 1;

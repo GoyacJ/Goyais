@@ -18,5 +18,11 @@ type Envelope struct {
 func Write(w http.ResponseWriter, status int, code, messageKey string, details interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(Envelope{Error: APIError{Code: code, MessageKey: messageKey, Details: details}})
+	_ = json.NewEncoder(w).Encode(Envelope{
+		Error: APIError{
+			Code:       code,
+			MessageKey: messageKey,
+			Details:    details,
+		},
+	})
 }

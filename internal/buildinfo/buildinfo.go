@@ -3,5 +3,5 @@ package buildinfo
 var (
 	Version   = "dev"
 	Commit    = "unknown"
-	BuildTime = ""
+	BuildTime = "unknown"
 )

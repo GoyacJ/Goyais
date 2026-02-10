@@ -1,16 +1,11 @@
 package config
 
-import "time"
-
+// Config is the effective runtime configuration after applying defaults, YAML, and ENV.
 type Config struct {
-	Profile     string            `json:"profile"`
-	Server      ServerConfig      `json:"server"`
-	Providers   ProviderConfig    `json:"providers"`
-	ObjectStore ObjectStoreConfig `json:"objectStore"`
-	DB          DBConfig          `json:"db"`
-	Command     CommandConfig     `json:"command"`
-	Authz       AuthzConfig       `json:"authz"`
-	Paths       RuntimePathConf   `json:"paths"`
+	Profile   string          `json:"profile"`
+	Server    ServerConfig    `json:"server"`
+	Providers ProviderConfig  `json:"providers"`
+	Paths     RuntimePathConf `json:"paths"`
 }
 
 type ServerConfig struct {
@@ -25,23 +20,6 @@ type ProviderConfig struct {
 	Stream      string `json:"stream"`
 }
 
-type ObjectStoreConfig struct {
-	LocalRoot string `json:"localRoot"`
-}
-
-type DBConfig struct {
-	DSN string `json:"dsn"`
-}
-
-type CommandConfig struct {
-	IdempotencyTTL time.Duration `json:"idempotencyTtl"`
-	MaxConcurrency int           `json:"maxConcurrency"`
-}
-
-type AuthzConfig struct {
-	AllowPrivateToPublic bool `json:"allowPrivateToPublic"`
-}
-
 type RuntimePathConf struct {
 	ConfigFile string `json:"configFile"`
 }
@@ -53,15 +31,7 @@ type fileConfig struct {
 	} `yaml:"server"`
 	DB struct {
 		Driver string `yaml:"driver"`
-		DSN    string `yaml:"dsn"`
 	} `yaml:"db"`
-	Command struct {
-		IdempotencyTTL string `yaml:"idempotency_ttl"`
-		MaxConcurrency int    `yaml:"max_concurrency"`
-	} `yaml:"command"`
-	Authz struct {
-		AllowPrivateToPublic bool `yaml:"allow_private_to_public"`
-	} `yaml:"authz"`
 	Cache struct {
 		Provider string `yaml:"provider"`
 	} `yaml:"cache"`
@@ -69,8 +39,7 @@ type fileConfig struct {
 		Provider string `yaml:"provider"`
 	} `yaml:"vector"`
 	ObjectStore struct {
-		Provider  string `yaml:"provider"`
-		LocalRoot string `yaml:"local_root"`
+		Provider string `yaml:"provider"`
 	} `yaml:"object_store"`
 	Stream struct {
 		Provider string `yaml:"provider"`
