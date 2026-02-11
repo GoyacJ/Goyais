@@ -11,7 +11,7 @@
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
-    "assets:validate": "bash ../.agents/skills/goyais-web-asset-governance/scripts/validate-assets.sh"
+    "assets:validate": "bash ../.agents/skills/goyais-vue-asset-governance/scripts/validate-assets.sh"
   },
   "dependencies": {
     "@headlessui/vue": "^1.7.23",
