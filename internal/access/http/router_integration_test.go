@@ -1399,14 +1399,14 @@ func TestAPIContractRegression(t *testing.T) {
 			"name":        "demo-plugin",
 			"version":     "1.0.1",
 			"packageType": "tool-provider",
-			"manifest":    map[string]any{"entry": "main-v2"},
+			"manifest":    map[string]any{"entry": "main"},
 			"visibility":  "PRIVATE",
 		})
 		defer respUploadV2.Body.Close()
 		assertStatus(t, respUploadV2, http.StatusAccepted)
 		packageIDV2 := readJSONPath(t, respUploadV2.Body, "resource.id").(string)
 		if packageIDV2 == "" {
-			t.Fatalf("expected plugin package v2 id")
+			t.Fatalf("expected plugin package id")
 		}
 
 		respUpgrade := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/"+installID+":upgrade", headersWithJSONContext("u1"), map[string]any{})
@@ -1883,17 +1883,15 @@ func TestAPIContractRegression(t *testing.T) {
 	})
 }
 
-func TestAPIWorkflowEngineV2RunFromStepAndTestNode(t *testing.T) {
+func TestAPIWorkflowRunFromStepAndTestNode(t *testing.T) {
 	baseURL, _, shutdown := newTestServerWithDBPathWithFeatureOptions(
 		t,
 		config.AuthContextModeJWTOrHeader,
 		config.FeatureConfig{
 			AssetLifecycle:     false,
-			PluginMarketV2:     true,
 			ContextBundle:      true,
 			ACLRoleSubject:     true,
 			StreamControlPlane: true,
-			WorkflowEngineV2:   true,
 			AIWorkbench:        false,
 		},
 	)
@@ -1902,7 +1900,7 @@ func TestAPIWorkflowEngineV2RunFromStepAndTestNode(t *testing.T) {
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	respCreate := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-templates", headersWithJSONContext("u1"), map[string]any{
-		"name": "wf-v2",
+		"name": "wf",
 		"graph": map[string]any{
 			"nodes": []any{
 				map[string]any{"id": "n1", "type": "noop"},
@@ -2034,10 +2032,10 @@ func TestAPIWorkflowEngineV2RunFromStepAndTestNode(t *testing.T) {
 	}
 	eventsText := string(eventsRaw)
 	if !strings.Contains(eventsText, "event: workflow.step.retry_scheduled") {
-		t.Fatalf("expected workflow.step.retry_scheduled in v2 events")
+		t.Fatalf("expected workflow.step.retry_scheduled in workflow events")
 	}
 	if !strings.Contains(eventsText, "event: workflow.step.started") {
-		t.Fatalf("expected workflow.step.started in v2 events")
+		t.Fatalf("expected workflow.step.started in workflow events")
 	}
 }
 
@@ -2069,7 +2067,6 @@ func newTestServerWithDBPathWithOptions(
 		contextMode,
 		config.FeatureConfig{
 			AssetLifecycle:     assetLifecycleEnabled,
-			PluginMarketV2:     true,
 			ContextBundle:      true,
 			ACLRoleSubject:     true,
 			StreamControlPlane: true,
@@ -2261,7 +2258,6 @@ func TestAPIAIWorkbenchFeatureDisabled(t *testing.T) {
 		config.AuthContextModeJWTOrHeader,
 		config.FeatureConfig{
 			AssetLifecycle:     false,
-			PluginMarketV2:     true,
 			ContextBundle:      true,
 			ACLRoleSubject:     true,
 			StreamControlPlane: true,
@@ -2304,13 +2300,12 @@ func TestAPIAIWorkbenchFeatureDisabled(t *testing.T) {
 	assertMessageKey(t, respAIPlanCommand.Body, "error.ai.not_implemented")
 }
 
-func TestAPIPluginMarketV2FeatureDisabled(t *testing.T) {
+func TestAPIPluginMarketRoutesAvailable(t *testing.T) {
 	baseURL, _, shutdown := newTestServerWithDBPathWithFeatureOptions(
 		t,
 		config.AuthContextModeJWTOrHeader,
 		config.FeatureConfig{
 			AssetLifecycle:     false,
-			PluginMarketV2:     false,
 			ContextBundle:      true,
 			ACLRoleSubject:     true,
 			StreamControlPlane: true,
@@ -2322,13 +2317,15 @@ func TestAPIPluginMarketV2FeatureDisabled(t *testing.T) {
 
 	respDownload := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/plugin-market/packages/pkg_demo:download", headersWithContext("u1"), nil)
 	defer respDownload.Body.Close()
-	assertStatus(t, respDownload, http.StatusNotImplemented)
-	assertMessageKey(t, respDownload.Body, "error.plugin.not_implemented")
+	if respDownload.StatusCode == http.StatusNotImplemented {
+		t.Fatalf("expected plugin download route enabled, got 501")
+	}
 
 	respUpgrade := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/ins_demo:upgrade", headersWithJSONContext("u1"), map[string]any{})
 	defer respUpgrade.Body.Close()
-	assertStatus(t, respUpgrade, http.StatusNotImplemented)
-	assertMessageKey(t, respUpgrade.Body, "error.plugin.not_implemented")
+	if respUpgrade.StatusCode == http.StatusNotImplemented {
+		t.Fatalf("expected plugin upgrade route enabled, got 501")
+	}
 
 	respUpgradeCommand := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headersWithJSONContext("u1"), map[string]any{
 		"commandType": "plugin.upgrade",
@@ -2337,8 +2334,9 @@ func TestAPIPluginMarketV2FeatureDisabled(t *testing.T) {
 		},
 	})
 	defer respUpgradeCommand.Body.Close()
-	assertStatus(t, respUpgradeCommand, http.StatusNotImplemented)
-	assertMessageKey(t, respUpgradeCommand.Body, "error.plugin.not_implemented")
+	if respUpgradeCommand.StatusCode == http.StatusNotImplemented {
+		t.Fatalf("expected plugin.upgrade command executor enabled, got 501")
+	}
 }
 
 func TestAPIContextBundleFeatureDisabled(t *testing.T) {
@@ -2347,7 +2345,6 @@ func TestAPIContextBundleFeatureDisabled(t *testing.T) {
 		config.AuthContextModeJWTOrHeader,
 		config.FeatureConfig{
 			AssetLifecycle:     false,
-			PluginMarketV2:     true,
 			ContextBundle:      false,
 			ACLRoleSubject:     true,
 			StreamControlPlane: true,
@@ -2385,7 +2382,6 @@ func TestAPIACLRoleSubjectFeatureDisabled(t *testing.T) {
 		config.AuthContextModeJWTOrHeader,
 		config.FeatureConfig{
 			AssetLifecycle:     false,
-			PluginMarketV2:     true,
 			ContextBundle:      true,
 			ACLRoleSubject:     false,
 			StreamControlPlane: true,
@@ -2426,7 +2422,6 @@ func TestAPIStreamControlPlaneFeatureDisabled(t *testing.T) {
 		config.AuthContextModeJWTOrHeader,
 		config.FeatureConfig{
 			AssetLifecycle:     false,
-			PluginMarketV2:     true,
 			ContextBundle:      true,
 			ACLRoleSubject:     true,
 			StreamControlPlane: false,

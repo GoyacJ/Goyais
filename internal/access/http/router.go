@@ -43,7 +43,6 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 		aiWorkbenchEnabled:        cfg.Feature.AIWorkbench,
 		assetService:              deps.AssetService,
 		assetLifecycleEnabled:     cfg.Feature.AssetLifecycle,
-		pluginMarketV2Enabled:     cfg.Feature.PluginMarketV2,
 		contextBundleEnabled:      cfg.Feature.ContextBundle,
 		streamControlPlaneEnabled: cfg.Feature.StreamControlPlane,
 		workflowService:           deps.WorkflowService,

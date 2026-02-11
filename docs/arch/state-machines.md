@@ -79,7 +79,7 @@
 - `POST /api/v1/workflow-runs` 请求支持 `fromStepKey`、`testNode`：
   - `fromStepKey`：从指定节点及其下游子图执行。
   - `testNode=true`：仅执行 `fromStepKey` 指向节点（不继续下游）。
-- Workflow Engine V2 执行口径：
+- Workflow Engine 执行口径：
   - run 创建后先写入 `pending` 与 step 初始态，root step 入 `workflow_step_queue`。
   - worker 拉取队列任务后执行 step，按依赖关系推进下游入队。
   - step 失败按退避策略重入队；耗尽后 run 进入 `failed`，并跳过依赖节点。
@@ -95,7 +95,6 @@
 - `plugin.install` 状态链路固定为 `uploaded -> validating -> installing -> enabled|failed`。
 - `plugin.enable|plugin.disable|plugin.rollback|plugin.upgrade` 必须在 install 状态机允许的转换上执行，不允许非法跃迁。
 - `plugin.upgrade` 必须记录 `plugin_install_history`，并绑定当前 commandId。
-- `GOYAIS_FEATURE_PLUGIN_MARKET_V2=false` 时，`download/upgrade` 路径与 `plugin.upgrade` command 返回 `501 NOT_IMPLEMENTED`。
 
 ## 0.8 Registry C1 Read Path（M2 启动）
 - `GET /api/v1/registry/capabilities`、`GET /api/v1/registry/capabilities/{capabilityId}`、`GET /api/v1/registry/algorithms`、`GET /api/v1/registry/providers` 在 v0.1 作为 read-only 能力落地。

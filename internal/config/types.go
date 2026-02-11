@@ -97,11 +97,9 @@ type AuthzConfig struct {
 
 type FeatureConfig struct {
 	AssetLifecycle     bool `json:"assetLifecycle"`
-	PluginMarketV2     bool `json:"pluginMarketV2"`
 	ContextBundle      bool `json:"contextBundle"`
 	ACLRoleSubject     bool `json:"aclRoleSubject"`
 	StreamControlPlane bool `json:"streamControlPlane"`
-	WorkflowEngineV2   bool `json:"workflowEngineV2"`
 	AIWorkbench        bool `json:"aiWorkbench"`
 }
 
@@ -128,11 +126,9 @@ type fileConfig struct {
 	} `yaml:"authz"`
 	Feature struct {
 		AssetLifecycle     *bool `yaml:"asset_lifecycle"`
-		PluginMarketV2     *bool `yaml:"plugin_market_v2"`
 		ContextBundle      *bool `yaml:"context_bundle"`
 		ACLRoleSubject     *bool `yaml:"acl_role_subject"`
 		StreamControlPlane *bool `yaml:"stream_control_plane"`
-		WorkflowEngineV2   *bool `yaml:"workflow_engine_v2"`
 		AIWorkbench        *bool `yaml:"ai_workbench"`
 	} `yaml:"feature"`
 	Cache struct {

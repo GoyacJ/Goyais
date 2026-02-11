@@ -118,11 +118,6 @@ func (h *apiHandler) handlePluginPackageRoutes(w http.ResponseWriter, r *http.Re
 		errorx.Write(w, http.StatusNotFound, "PLUGIN_PACKAGE_NOT_FOUND", "error.plugin.not_found", map[string]any{"path": r.URL.Path})
 		return
 	}
-	if !h.pluginMarketV2Enabled {
-		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.plugin.not_implemented", nil)
-		return
-	}
-
 	item, bytes, err := h.pluginService.DownloadPackage(r.Context(), reqCtx, packageID)
 	if err != nil {
 		writePluginError(w, err)
@@ -185,10 +180,6 @@ func (h *apiHandler) handlePluginInstallRoutes(w http.ResponseWriter, r *http.Re
 		commandType = "plugin.rollback"
 	case strings.HasSuffix(route, ":upgrade"):
 		installID = strings.TrimSpace(strings.TrimSuffix(route, ":upgrade"))
-		if !h.pluginMarketV2Enabled {
-			errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.plugin.not_implemented", nil)
-			return
-		}
 		commandType = "plugin.upgrade"
 	default:
 		errorx.Write(w, http.StatusNotFound, "PLUGIN_INSTALL_NOT_FOUND", "error.plugin.not_found", map[string]any{"path": r.URL.Path})

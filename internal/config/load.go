@@ -103,11 +103,9 @@ func defaultsForProfile(profile string) Config {
 		},
 		Feature: FeatureConfig{
 			AssetLifecycle:     false,
-			PluginMarketV2:     true,
 			ContextBundle:      true,
 			ACLRoleSubject:     true,
 			StreamControlPlane: true,
-			WorkflowEngineV2:   false,
 			AIWorkbench:        false,
 		},
 	}
@@ -163,9 +161,6 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	if fc.Feature.AssetLifecycle != nil {
 		cfg.Feature.AssetLifecycle = *fc.Feature.AssetLifecycle
 	}
-	if fc.Feature.PluginMarketV2 != nil {
-		cfg.Feature.PluginMarketV2 = *fc.Feature.PluginMarketV2
-	}
 	if fc.Feature.ContextBundle != nil {
 		cfg.Feature.ContextBundle = *fc.Feature.ContextBundle
 	}
@@ -174,9 +169,6 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	}
 	if fc.Feature.StreamControlPlane != nil {
 		cfg.Feature.StreamControlPlane = *fc.Feature.StreamControlPlane
-	}
-	if fc.Feature.WorkflowEngineV2 != nil {
-		cfg.Feature.WorkflowEngineV2 = *fc.Feature.WorkflowEngineV2
 	}
 	if fc.Feature.AIWorkbench != nil {
 		cfg.Feature.AIWorkbench = *fc.Feature.AIWorkbench
@@ -299,11 +291,6 @@ func applyEnvOverrides(cfg *Config) {
 			cfg.Feature.AssetLifecycle = parsed
 		}
 	}
-	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_PLUGIN_MARKET_V2")); v != "" {
-		if parsed, err := strconv.ParseBool(v); err == nil {
-			cfg.Feature.PluginMarketV2 = parsed
-		}
-	}
 	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_CONTEXT_BUNDLE")); v != "" {
 		if parsed, err := strconv.ParseBool(v); err == nil {
 			cfg.Feature.ContextBundle = parsed
@@ -317,11 +304,6 @@ func applyEnvOverrides(cfg *Config) {
 	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_STREAM_CONTROL_PLANE")); v != "" {
 		if parsed, err := strconv.ParseBool(v); err == nil {
 			cfg.Feature.StreamControlPlane = parsed
-		}
-	}
-	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_WORKFLOW_ENGINE_V2")); v != "" {
-		if parsed, err := strconv.ParseBool(v); err == nil {
-			cfg.Feature.WorkflowEngineV2 = parsed
 		}
 	}
 	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_AI_WORKBENCH")); v != "" {

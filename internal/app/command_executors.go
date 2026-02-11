@@ -172,7 +172,6 @@ func registerCommandExecutors(
 	assetService *asset.Service,
 	assetLifecycleEnabled bool,
 	pluginService *plugin.Service,
-	pluginMarketV2Enabled bool,
 	workflowService *workflow.Service,
 	streamService *stream.Service,
 	streamControlPlaneEnabled bool,
@@ -220,9 +219,7 @@ func registerCommandExecutors(
 		commandService.SetExecutor("plugin.enable", newPluginEnableExecutor(pluginService))
 		commandService.SetExecutor("plugin.disable", newPluginDisableExecutor(pluginService))
 		commandService.SetExecutor("plugin.rollback", newPluginRollbackExecutor(pluginService))
-		if pluginMarketV2Enabled {
-			commandService.SetExecutor("plugin.upgrade", newPluginUpgradeExecutor(pluginService))
-		}
+		commandService.SetExecutor("plugin.upgrade", newPluginUpgradeExecutor(pluginService))
 	}
 	if streamService != nil {
 		commandService.SetExecutor("stream.create", newStreamCreateExecutor(streamService))

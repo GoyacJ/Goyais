@@ -91,7 +91,7 @@
 | 切片 | 优先级 | 目标 | 状态门槛 |
 |---|---|---|---|
 | S0 | P0 | 契约同步与门禁 | 完成后方可进入 S1 |
-| S1 | P0 | Workflow Engine V2 | DAG 执行链路转正 |
+| S1 | P0 | Workflow Engine | DAG 执行链路转正 |
 | S2 | P0 | Canvas 重构 | 满足 PRD 8.9 |
 | S3 | P0 | AI 工作台 | 文本 AI 闭环 |
 | S4 | P0 | MediaMTX 控制面 | 事件驱动 + 录制资产化 |
@@ -115,9 +115,8 @@
   - 路由可达性测试覆盖新增 path params。
   - 变更说明写入本计划文档与 acceptance。
 - 测试命令：见第 7 章。
-- 回滚策略：文档回退 + 保留 501 占位路由（无数据迁移副作用）。
 
-### 6.2 S1（P0）Workflow Engine V2
+### 6.2 S1（P0）Workflow Engine
 - 目标：替换最小 run mode，转为真实 DAG 执行。
 - 范围：拓扑校验、并发调度、重试退避、Tool Gate、run/step 事件输出。
 - 受影响绝对路径：
@@ -128,7 +127,6 @@
   - `/Users/goya/Repo/Git/Goyais/migrations/postgres`
 - DoD：DAG 并发与重试行为可验证，events 可回放。
 - 测试命令：见第 7 章 + workflow 专项回归。
-- 回滚策略：`GOYAIS_FEATURE_WORKFLOW_ENGINE_V2=false`。
 
 ### 6.3 S2（P0）Canvas 重构
 - 目标：落地复杂可视化编排器。
@@ -138,7 +136,6 @@
   - `/Users/goya/Repo/Git/Goyais/web/src/components/runtime`
   - `/Users/goya/Repo/Git/Goyais/web/src/api/workflow.ts`
 - DoD：满足 PRD 8.9 五条验收。
-- 回滚策略：`GOYAIS_FEATURE_CANVAS_V2=false`。
 
 ### 6.4 S3（P0）AI 工作台
 - 目标：文本 AI 会话 + Intent 计划 + Command 解释与执行反馈。
@@ -152,7 +149,6 @@
   - `/Users/goya/Repo/Git/Goyais/migrations/sqlite`
   - `/Users/goya/Repo/Git/Goyais/migrations/postgres`
 - DoD：AI/UI 同动作 command 同形，权限拒绝原因可解释。
-- 回滚策略：`GOYAIS_FEATURE_AI_WORKBENCH=false`。
 
 ### 6.5 S4（P0）MediaMTX 控制面
 - 目标：真实控制面调用与录制资产化。
@@ -162,7 +158,6 @@
   - `/Users/goya/Repo/Git/Goyais/internal/app/eventbus_stream_consumer.go`
   - `/Users/goya/Repo/Git/Goyais/internal/access/http/streams.go`
 - DoD：onPublish/onRead/onConnect/onRecordFinish 事件可驱动 workflow。
-- 回滚策略：`GOYAIS_FEATURE_STREAM_CONTROL_PLANE=false`。
 
 ### 6.6 S5（P1）插件市场完整生命周期
 - 目标：补齐 download/upgrade 与状态机中间态。
@@ -173,7 +168,6 @@
   - `/Users/goya/Repo/Git/Goyais/web/src/api/plugins.ts`
   - `/Users/goya/Repo/Git/Goyais/web/src/views/PluginsView.vue`
 - DoD：状态机与文档一致，不再直接 `install -> enabled`。
-- 回滚策略：`GOYAIS_FEATURE_PLUGIN_MARKET_V2=false`。
 
 ### 6.7 S6（P1）ContextBundle + ACL 扩面
 - 目标：补齐 ContextBundle 与 ACL role 主体。
@@ -184,7 +178,6 @@
   - `/Users/goya/Repo/Git/Goyais/internal/command`
   - `/Users/goya/Repo/Git/Goyais/internal/access/http`
 - DoD：RUN/SESSION/WORKSPACE 三层上下文可写可查。
-- 回滚策略：`GOYAIS_FEATURE_CONTEXT_BUNDLE=false`、`GOYAIS_FEATURE_ACL_ROLE_SUBJECT=false`。
 
 ## 7. 验收与回归命令（固定清单）
 

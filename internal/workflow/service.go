@@ -19,14 +19,12 @@ const (
 type Service struct {
 	repo                 Repository
 	allowPrivateToPublic bool
-	engineV2Enabled      bool
 }
 
-func NewService(repo Repository, allowPrivateToPublic bool, engineV2Enabled bool) *Service {
+func NewService(repo Repository, allowPrivateToPublic bool) *Service {
 	return &Service{
 		repo:                 repo,
 		allowPrivateToPublic: allowPrivateToPublic,
-		engineV2Enabled:      engineV2Enabled,
 	}
 }
 
@@ -246,7 +244,6 @@ func (s *Service) CreateRun(
 		Mode:        normalizedMode,
 		FromStepKey: fromStepKey,
 		TestNode:    testNode,
-		EngineV2:    s.engineV2Enabled,
 		Now:         time.Now().UTC(),
 	})
 }
@@ -292,7 +289,6 @@ func (s *Service) RetryRun(
 		FromStepKey: fromStepKey,
 		Reason:      reason,
 		Mode:        normalizedMode,
-		EngineV2:    s.engineV2Enabled,
 		Now:         time.Now().UTC(),
 	})
 }

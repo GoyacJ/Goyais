@@ -157,7 +157,6 @@ type CreateRunInput struct {
 	Mode        string
 	FromStepKey string
 	TestNode    bool
-	EngineV2    bool
 	Now         time.Time
 }
 
@@ -167,7 +166,6 @@ type RetryRunInput struct {
 	FromStepKey string
 	Reason      string
 	Mode        string
-	EngineV2    bool
 	Now         time.Time
 }
 

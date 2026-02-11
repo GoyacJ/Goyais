@@ -9,7 +9,6 @@ interface ImportMetaEnv {
   readonly VITE_GOYAIS_ROLES?: string
   readonly VITE_GOYAIS_POLICY_VERSION?: string
   readonly VITE_GOYAIS_USE_MOCK?: string
-  readonly VITE_GOYAIS_FEATURE_CANVAS_V2?: string
 }
 
 interface ImportMeta {

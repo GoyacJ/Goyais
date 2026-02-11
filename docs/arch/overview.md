@@ -279,11 +279,9 @@ Command 执行管道（必须）：
       - `GET /context-bundles/{bundleId}`
 - 仍保留的占位（按 provider 或 feature gate）：
   - `GOYAIS_FEATURE_ASSET_LIFECYCLE=false` 时，`assets` 的 `PATCH /assets/{assetId}`、`DELETE /assets/{assetId}`、`GET /assets/{assetId}/lineage` 返回 `501 NOT_IMPLEMENTED`
-  - `GOYAIS_FEATURE_PLUGIN_MARKET_V2=false` 时，`plugin-market` 的 `download/upgrade` 与 `plugin.upgrade` command 返回 `501 NOT_IMPLEMENTED`
   - `GOYAIS_FEATURE_CONTEXT_BUNDLE=false` 时，`context-bundles` 读路径与 `context.bundle.rebuild` command 返回 `501 NOT_IMPLEMENTED`
   - `GOYAIS_FEATURE_ACL_ROLE_SUBJECT=false` 时，`share.create` 仅允许 `subjectType=user`
   - `GOYAIS_FEATURE_STREAM_CONTROL_PLANE=false` 时，`streams` 的 `:update-auth` / `DELETE` 与对应 command 返回 `501 NOT_IMPLEMENTED`
-  - `GOYAIS_FEATURE_WORKFLOW_ENGINE_V2=false` 时，`workflow-runs` 保持旧执行路径（非队列 worker 语义）
   - `GOYAIS_FEATURE_AI_WORKBENCH=false` 时，`ai` 写路径返回 `501 NOT_IMPLEMENTED`
 
 ## 8. 配置规范
@@ -324,11 +322,9 @@ Command 执行管道（必须）：
 - `GOYAIS_EVENT_BUS_KAFKA_CONSUMER_GROUP=goyais-stream-trigger`
 - `GOYAIS_AUTH_CONTEXT_MODE=jwt_or_header`
 - `GOYAIS_FEATURE_ASSET_LIFECYCLE=false`
-- `GOYAIS_FEATURE_PLUGIN_MARKET_V2=true`
 - `GOYAIS_FEATURE_CONTEXT_BUNDLE=true`
 - `GOYAIS_FEATURE_ACL_ROLE_SUBJECT=true`
 - `GOYAIS_FEATURE_STREAM_CONTROL_PLANE=true`
-- `GOYAIS_FEATURE_WORKFLOW_ENGINE_V2=false`
 - `GOYAIS_FEATURE_AI_WORKBENCH=false`
 
 PostgreSQL DSN 规则（冻结）：

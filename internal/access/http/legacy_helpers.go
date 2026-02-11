@@ -20,7 +20,6 @@ type apiHandler struct {
 	aiWorkbenchEnabled        bool
 	assetService              *asset.Service
 	assetLifecycleEnabled     bool
-	pluginMarketV2Enabled     bool
 	contextBundleEnabled      bool
 	streamControlPlaneEnabled bool
 	workflowService           *workflow.Service

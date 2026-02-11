@@ -1404,7 +1404,6 @@ paths:
       operationId: downloadPluginPackage
       description: |
         优先返回已落地 artifact；若未落地 artifact，返回 manifest 序列化字节（`application/octet-stream`）。
-        当 `GOYAIS_FEATURE_PLUGIN_MARKET_V2=false` 时返回 `501 NOT_IMPLEMENTED`。
       parameters:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
@@ -1426,8 +1425,6 @@ paths:
         '403':
           $ref: '#/components/responses/ErrorResponse'
         '404':
-          $ref: '#/components/responses/ErrorResponse'
-        '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
@@ -1568,7 +1565,6 @@ paths:
       operationId: upgradePluginInstall
       description: |
         仅允许 `enabled|disabled` 状态发起升级；升级会写入 `plugin_install_history` 并绑定当前 commandId。
-        当 `GOYAIS_FEATURE_PLUGIN_MARKET_V2=false` 时返回 `501 NOT_IMPLEMENTED`。
       parameters:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
@@ -1589,8 +1585,6 @@ paths:
         '403':
           $ref: '#/components/responses/ErrorResponse'
         '404':
-          $ref: '#/components/responses/ErrorResponse'
-        '501':
           $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'

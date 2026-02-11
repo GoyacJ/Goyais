@@ -12,7 +12,7 @@ import (
 	"goyais/internal/command"
 )
 
-func (r *SQLiteRepository) createRunV2(ctx context.Context, in CreateRunInput) (WorkflowRun, error) {
+func (r *SQLiteRepository) createRunQueue(ctx context.Context, in CreateRunInput) (WorkflowRun, error) {
 	now := in.Now.UTC()
 	if now.IsZero() {
 		now = time.Now().UTC()
@@ -148,7 +148,7 @@ func (r *SQLiteRepository) createRunV2(ctx context.Context, in CreateRunInput) (
 			now.Format(time.RFC3339Nano),
 			now.Format(time.RFC3339Nano),
 		); err != nil {
-			return WorkflowRun{}, fmt.Errorf("insert v2 step run: %w", err)
+			return WorkflowRun{}, fmt.Errorf("insert queued step run: %w", err)
 		}
 	}
 
@@ -203,7 +203,7 @@ func (r *SQLiteRepository) createRunV2(ctx context.Context, in CreateRunInput) (
 	}
 
 	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
-		return WorkflowRun{}, fmt.Errorf("commit workflow v2 create tx: %w", err)
+		return WorkflowRun{}, fmt.Errorf("commit workflow create tx: %w", err)
 	}
 	committed = true
 
@@ -214,7 +214,7 @@ func (r *SQLiteRepository) createRunV2(ctx context.Context, in CreateRunInput) (
 	return run, nil
 }
 
-func (r *SQLiteRepository) retryRunV2(ctx context.Context, in RetryRunInput) (WorkflowRun, error) {
+func (r *SQLiteRepository) retryRunQueue(ctx context.Context, in RetryRunInput) (WorkflowRun, error) {
 	now := in.Now.UTC()
 	if now.IsZero() {
 		now = time.Now().UTC()
@@ -327,7 +327,7 @@ func (r *SQLiteRepository) retryRunV2(ctx context.Context, in RetryRunInput) (Wo
 		now.Format(time.RFC3339Nano),
 		now.Format(time.RFC3339Nano),
 	); err != nil {
-		return WorkflowRun{}, fmt.Errorf("insert workflow retry run v2: %w", err)
+		return WorkflowRun{}, fmt.Errorf("insert workflow retry run: %w", err)
 	}
 
 	for _, node := range selectedNodes {
@@ -357,7 +357,7 @@ func (r *SQLiteRepository) retryRunV2(ctx context.Context, in RetryRunInput) (Wo
 			now.Format(time.RFC3339Nano),
 			now.Format(time.RFC3339Nano),
 		); err != nil {
-			return WorkflowRun{}, fmt.Errorf("insert workflow retry step run v2: %w", err)
+			return WorkflowRun{}, fmt.Errorf("insert workflow retry step run: %w", err)
 		}
 	}
 
@@ -412,7 +412,7 @@ func (r *SQLiteRepository) retryRunV2(ctx context.Context, in RetryRunInput) (Wo
 	}
 
 	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
-		return WorkflowRun{}, fmt.Errorf("commit workflow retry v2 tx: %w", err)
+		return WorkflowRun{}, fmt.Errorf("commit workflow retry tx: %w", err)
 	}
 	committed = true
 
