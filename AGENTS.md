@@ -68,6 +68,9 @@
 - 每次编码改动必须在独立 `git worktree` 执行。
 - 一线程一 worktree；禁止在同一 worktree 切换多个线程分支。
 - 分支前缀固定：`goya/<thread-id>-<topic>`。
+- 线程开启必须执行：`bash .agents/skills/goyais-worktree-flow/scripts/create_worktree.sh --topic <topic>`（默认落在 `<repo>/.worktrees/`）。
+- 线程收口必须执行：`bash .agents/skills/goyais-worktree-flow/scripts/merge_thread.sh --thread-branch <goya/...>`。
+- 禁止使用手工 `git merge` / `git branch -d` / `git worktree remove` 绕过标准收口流程。
 - 主仓库工作树仅用于集成、回归、发布前检查。
 - 提交前必须执行：
   - `git diff --cached --name-only`

@@ -11,6 +11,9 @@ echo "[contract_regression] start"
 echo "[contract_regression] worktree audit"
 bash go_server/scripts/git/worktree_audit.sh
 
+echo "[contract_regression] merged thread cleanup audit (warn-only)"
+bash go_server/scripts/git/merged_thread_cleanup_audit.sh
+
 echo "[contract_regression] precommit guard"
 bash go_server/scripts/git/precommit_guard.sh
 

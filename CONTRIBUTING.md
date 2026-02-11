@@ -16,13 +16,16 @@ Thank you for contributing to Goyais. This guide defines contribution workflow a
 This repository enforces one thread per worktree.
 
 - 分支命名：`goya/<thread-id>-<topic>`
-- 必须从 `master` 创建 thread 分支
+- 必须从 `master` 通过脚本创建 thread 分支与 worktree
 - 主工作树仅用于集成与回归，不用于日常开发
+- 线程收口必须通过脚本完成 no-ff 合并与本地 cleanup（分支 + worktree）
+- 禁止使用手工 `git merge` / `git branch -d` / `git worktree remove` 绕过标准收口流程
 
 示例 | Example:
 
 ```bash
-git worktree add .worktrees/goya-thread20260211-my-topic -b goya/thread20260211-my-topic master
+bash .agents/skills/goyais-worktree-flow/scripts/create_worktree.sh --topic my-topic
+bash .agents/skills/goyais-worktree-flow/scripts/merge_thread.sh --thread-branch goya/<thread-id>-my-topic
 ```
 
 ## 3. 开发过程要求 | Development Requirements
@@ -71,6 +74,12 @@ bash go_server/scripts/ci/source_header_backfill.sh
 git diff --cached --name-only
 bash go_server/scripts/git/precommit_guard.sh
 bash go_server/scripts/ci/contract_regression.sh
+```
+
+线程收口必跑命令：
+
+```bash
+bash .agents/skills/goyais-worktree-flow/scripts/merge_thread.sh --thread-branch <goya/...>
 ```
 
 ## 5. Commit 与 PR 规范 | Commit and PR Rules

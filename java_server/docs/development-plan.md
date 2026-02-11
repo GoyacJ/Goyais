@@ -117,9 +117,12 @@
 
 - 一 story 一 worktree。
 - 分支前缀：`goya/<thread-id>-<topic>`。
+- 线程开启必须执行：`bash .agents/skills/goyais-worktree-flow/scripts/create_worktree.sh --topic <topic>`（默认落在 `<repo>/.worktrees/`）。
+- 线程收口必须执行：`bash .agents/skills/goyais-worktree-flow/scripts/merge_thread.sh --thread-branch <goya/...>`。
+- 禁止手工 `git merge` / `git branch -d` / `git worktree remove` 绕过标准收口流程。
 - 提交前执行：
   - `git diff --cached --name-only`
-  - `bash /Users/goya/Repo/Git/Goyais/go_server/scripts/git/precommit_guard.sh`
+  - `bash go_server/scripts/git/precommit_guard.sh`
 
 ## 5. 里程碑
 
