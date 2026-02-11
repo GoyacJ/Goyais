@@ -33,7 +33,7 @@
 
 | 领域 | 现状 | 证据 | 严格缺口 |
 |---|---|---|---|
-| AI planner | 已从单点解析抽离为可扩展 parser chain，并返回 explainability | `go_server/internal/ai/planner/planner.go:43`, `go_server/internal/ai/planner/planner.go:93` | 仍属 deterministic rule-based，缺少更高层 intent strategy（reject/alternative 语义仍偏模板化） |
+| AI planner | 已具备 parser chain + 自然语言 strategy + domain-aware reject reason/suggestions explainability | `go_server/internal/ai/planner/planner.go:51`, `go_server/internal/ai/planner/planner.go:97`, `go_server/internal/ai/planner/planner.go:252` | 仍属 deterministic/single-command，缺少多步规划与策略打分（tool/provider 级决策） |
 | Workflow 执行语义 | DAG/调度/重试骨架在位 | `go_server/internal/workflow/engine.go:291` | step 输出仍以 `handled/mode/stepKey` 规则化结果为主，真实 capability 语义不足 |
 | ContextBundle rebuild | 已有 run/session/workspace 聚合 | `go_server/internal/contextbundle/service.go:376`, `go_server/internal/contextbundle/service.go:497` | workspace 大规模场景下摘要质量仍偏浅层统计 |
 
@@ -53,12 +53,12 @@
 
 #### P0-2 AI 规划能力深化（Command-first 保持不变）
 - 范围：
-  - 在现有 planner chain 上扩展更强 intent strategy。
-  - 强化 reject reason 与 alternatives 的可解释性（explainability）。
+  - 在现有 parser chain + natural-language strategy 之上补充多步规划（plan decomposition）。
+  - 增加 intent/risk 评分与 alternatives 排序（而非仅模板建议）。
   - 执行仍必须经 `ai.command.execute -> command gate -> tool gate`。
 - DoD：
-  - 同输入稳定输出可解释 plan。
-  - 不支持输入返回明确拒绝原因与替代建议。
+  - 同输入稳定输出可解释 plan（含 strategy/confidence/risk）。
+  - 不支持输入返回明确拒绝原因与可排序替代建议。
 - 风险与回滚：
   - 风险：planner 误判导致 payload 过宽。
   - 回滚：`GOYAIS_FEATURE_AI_WORKBENCH=false`。

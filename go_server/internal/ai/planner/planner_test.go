@@ -96,3 +96,67 @@ func TestPlanTurnUnsupportedIntent(t *testing.T) {
 		t.Fatalf("expected suggestions")
 	}
 }
+
+func TestPlanTurnNaturalWorkflowRunChinese(t *testing.T) {
+	plan, err := PlanTurn(TurnRequest{Message: "请帮我运行工作流 tpl_demo"})
+	if err != nil {
+		t.Fatalf("PlanTurn returned error: %v", err)
+	}
+	if plan.CommandType != "workflow.run" {
+		t.Fatalf("unexpected command type: %s", plan.CommandType)
+	}
+	if plan.Reason != "matched_workflow_run_natural" {
+		t.Fatalf("unexpected reason: %s", plan.Reason)
+	}
+	if plan.Planner != "workflow.run.nl" {
+		t.Fatalf("unexpected planner: %s", plan.Planner)
+	}
+}
+
+func TestPlanTurnNaturalWorkflowMissingTemplate(t *testing.T) {
+	plan, err := PlanTurn(TurnRequest{Message: "请运行这个工作流"})
+	if err != nil {
+		t.Fatalf("PlanTurn returned error: %v", err)
+	}
+	if plan.CommandType != "" {
+		t.Fatalf("expected empty command type got=%s", plan.CommandType)
+	}
+	if plan.Reason != "missing_workflow_template_id_natural" {
+		t.Fatalf("unexpected reason: %s", plan.Reason)
+	}
+	if len(plan.Suggestions) == 0 {
+		t.Fatalf("expected suggestions")
+	}
+}
+
+func TestPlanTurnNaturalAlgorithmRun(t *testing.T) {
+	plan, err := PlanTurn(TurnRequest{Message: "执行算法 algo_face_detect"})
+	if err != nil {
+		t.Fatalf("PlanTurn returned error: %v", err)
+	}
+	if plan.CommandType != "algorithm.run" {
+		t.Fatalf("unexpected command type: %s", plan.CommandType)
+	}
+	if plan.Reason != "matched_algorithm_run_natural" {
+		t.Fatalf("unexpected reason: %s", plan.Reason)
+	}
+	if plan.Planner != "algorithm.run.nl" {
+		t.Fatalf("unexpected planner: %s", plan.Planner)
+	}
+}
+
+func TestPlanTurnAmbiguousWorkflowIntent(t *testing.T) {
+	plan, err := PlanTurn(TurnRequest{Message: "工作流怎么处理更好?"})
+	if err != nil {
+		t.Fatalf("PlanTurn returned error: %v", err)
+	}
+	if plan.CommandType != "" {
+		t.Fatalf("expected empty command type got=%s", plan.CommandType)
+	}
+	if plan.Reason != "ambiguous_workflow_intent" {
+		t.Fatalf("unexpected reason: %s", plan.Reason)
+	}
+	if len(plan.Suggestions) < 2 {
+		t.Fatalf("expected workflow suggestions")
+	}
+}
