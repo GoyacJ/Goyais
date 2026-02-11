@@ -88,6 +88,19 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 		return nil, fmt.Errorf("build stream repository: %w", err)
 	}
 	streamService := stream.NewService(streamRepo, assetService, cfg.Authz.AllowPrivateToPublic)
+	if cfg.Providers.Stream == "mediamtx" && cfg.Stream.MediaMTX.Enabled {
+		controlPlane, err := stream.NewMediaMTXControlPlane(stream.MediaMTXControlPlaneOptions{
+			BaseURL:        cfg.Stream.MediaMTX.APIBaseURL,
+			APIUser:        cfg.Stream.MediaMTX.APIUser,
+			APIPassword:    cfg.Stream.MediaMTX.APIPassword,
+			RequestTimeout: cfg.Stream.MediaMTX.RequestTimeout,
+		})
+		if err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("build stream control plane: %w", err)
+		}
+		streamService.SetControlPlane(controlPlane)
+	}
 
 	algorithmRepo, err := algorithm.NewRepository(cfg.Providers.DB, db)
 	if err != nil {

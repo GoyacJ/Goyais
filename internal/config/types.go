@@ -11,6 +11,7 @@ type Config struct {
 	ObjectStore ObjectStoreConfig `json:"objectStore"`
 	Cache       CacheConfig       `json:"cache"`
 	Vector      VectorConfig      `json:"vector"`
+	Stream      StreamConfig      `json:"stream"`
 	EventBus    EventBusConfig    `json:"eventBus"`
 	Command     CommandConfig     `json:"command"`
 	Authz       AuthzConfig       `json:"authz"`
@@ -60,6 +61,18 @@ type VectorConfig struct {
 	RedisPassword string `json:"redisPassword"`
 }
 
+type StreamConfig struct {
+	MediaMTX StreamMediaMTXConfig `json:"mediamtx"`
+}
+
+type StreamMediaMTXConfig struct {
+	Enabled        bool          `json:"enabled"`
+	APIBaseURL     string        `json:"apiBaseUrl"`
+	APIUser        string        `json:"apiUser"`
+	APIPassword    string        `json:"apiPassword"`
+	RequestTimeout time.Duration `json:"requestTimeout"`
+}
+
 type EventBusConfig struct {
 	Kafka EventBusKafkaConfig `json:"kafka"`
 }
@@ -78,7 +91,7 @@ type CommandConfig struct {
 }
 
 type AuthzConfig struct {
-	AllowPrivateToPublic bool `json:"allowPrivateToPublic"`
+	AllowPrivateToPublic bool   `json:"allowPrivateToPublic"`
 	ContextMode          string `json:"contextMode"`
 }
 
@@ -104,7 +117,7 @@ type fileConfig struct {
 		MaxConcurrency int    `yaml:"max_concurrency"`
 	} `yaml:"command"`
 	Authz struct {
-		AllowPrivateToPublic bool `yaml:"allow_private_to_public"`
+		AllowPrivateToPublic bool   `yaml:"allow_private_to_public"`
 		ContextMode          string `yaml:"context_mode"`
 	} `yaml:"authz"`
 	Feature struct {
@@ -132,6 +145,13 @@ type fileConfig struct {
 	} `yaml:"object_store"`
 	Stream struct {
 		Provider string `yaml:"provider"`
+		MediaMTX struct {
+			Enabled        *bool  `yaml:"enabled"`
+			APIBaseURL     string `yaml:"api_base_url"`
+			APIUser        string `yaml:"api_user"`
+			APIPassword    string `yaml:"api_password"`
+			RequestTimeout string `yaml:"request_timeout"`
+		} `yaml:"mediamtx"`
 	} `yaml:"stream"`
 	EventBus struct {
 		Provider string `yaml:"provider"`

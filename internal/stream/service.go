@@ -20,6 +20,7 @@ type Service struct {
 	assetService         *asset.Service
 	allowPrivateToPublic bool
 	eventBus             eventbus.Provider
+	controlPlane         ControlPlane
 }
 
 func NewService(repo Repository, assetService *asset.Service, allowPrivateToPublic bool) *Service {
@@ -32,6 +33,10 @@ func NewService(repo Repository, assetService *asset.Service, allowPrivateToPubl
 
 func (s *Service) SetEventBusProvider(provider eventbus.Provider) {
 	s.eventBus = provider
+}
+
+func (s *Service) SetControlPlane(controlPlane ControlPlane) {
+	s.controlPlane = controlPlane
 }
 
 func (s *Service) CreateStream(
@@ -64,6 +69,11 @@ func (s *Service) CreateStream(
 	}
 	if !isJSONObject(state) {
 		return Stream{}, ErrInvalidRequest
+	}
+	if s.controlPlane != nil {
+		if err := s.controlPlane.EnsurePath(ctx, path, normalizedSource, state); err != nil {
+			return Stream{}, err
+		}
 	}
 
 	return s.repo.CreateStream(ctx, CreateStreamInput{
@@ -302,6 +312,11 @@ func (s *Service) KickStream(ctx context.Context, req command.RequestContext, st
 	if !allowed {
 		return Stream{}, &ForbiddenError{Reason: reason}
 	}
+	if s.controlPlane != nil {
+		if err := s.controlPlane.KickPath(ctx, item.Path); err != nil {
+			return Stream{}, err
+		}
+	}
 
 	return s.repo.UpdateStreamStatus(ctx, UpdateStreamStatusInput{
 		Context:  req,
@@ -355,6 +370,11 @@ func (s *Service) UpdateAuthRule(
 	if err := json.Unmarshal(authRule, &parsedRule); err != nil {
 		return Stream{}, ErrInvalidRequest
 	}
+	if s.controlPlane != nil {
+		if err := s.controlPlane.PatchPathAuth(ctx, item.Path, parsedRule); err != nil {
+			return Stream{}, err
+		}
+	}
 	nextState := mergeStreamState(item.StateJSON, map[string]any{
 		"authRule":          parsedRule,
 		"authRuleUpdatedAt": now.Format(time.RFC3339Nano),
@@ -386,6 +406,11 @@ func (s *Service) DeleteStream(ctx context.Context, req command.RequestContext, 
 	}
 	if item.Status != StreamStatusOffline && item.Status != StreamStatusError {
 		return Stream{}, ErrInvalidRequest
+	}
+	if s.controlPlane != nil {
+		if err := s.controlPlane.DeletePath(ctx, item.Path); err != nil {
+			return Stream{}, err
+		}
 	}
 
 	now := time.Now().UTC()

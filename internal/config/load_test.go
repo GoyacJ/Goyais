@@ -38,6 +38,15 @@ func TestLoadDefaultsMinimal(t *testing.T) {
 	if cfg.Providers.EventBus != "memory" {
 		t.Fatalf("expected default event bus provider=memory got=%s", cfg.Providers.EventBus)
 	}
+	if cfg.Stream.MediaMTX.Enabled {
+		t.Fatalf("expected default stream.mediamtx.enabled=false")
+	}
+	if cfg.Stream.MediaMTX.APIBaseURL == "" {
+		t.Fatalf("expected default stream mediamtx api base url")
+	}
+	if cfg.Stream.MediaMTX.RequestTimeout <= 0 {
+		t.Fatalf("expected positive stream mediamtx request timeout")
+	}
 	if len(cfg.EventBus.Kafka.Brokers) == 0 {
 		t.Fatalf("expected default kafka brokers")
 	}
@@ -69,6 +78,11 @@ func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	t.Setenv("GOYAIS_VECTOR_PROVIDER", "redis_stack")
 	t.Setenv("GOYAIS_VECTOR_REDIS_ADDR", "127.0.0.1:6380")
 	t.Setenv("GOYAIS_VECTOR_REDIS_PASSWORD", "vector-pass")
+	t.Setenv("GOYAIS_STREAM_MEDIAMTX_ENABLED", "true")
+	t.Setenv("GOYAIS_STREAM_MEDIAMTX_API_BASE_URL", "http://39.105.2.5:9997")
+	t.Setenv("GOYAIS_STREAM_MEDIAMTX_API_USER", "goyavision")
+	t.Setenv("GOYAIS_STREAM_MEDIAMTX_API_PASSWORD", "goyavision-dev")
+	t.Setenv("GOYAIS_STREAM_MEDIAMTX_REQUEST_TIMEOUT", "4s")
 	t.Setenv("GOYAIS_EVENT_BUS_PROVIDER", "kafka")
 	t.Setenv("GOYAIS_EVENT_BUS_KAFKA_BROKERS", "127.0.0.1:9092,127.0.0.1:9093")
 	t.Setenv("GOYAIS_EVENT_BUS_KAFKA_CLIENT_ID", "goyais-test")
@@ -112,6 +126,18 @@ func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	}
 	if cfg.Providers.EventBus != "kafka" {
 		t.Fatalf("expected event bus provider=kafka got=%s", cfg.Providers.EventBus)
+	}
+	if !cfg.Stream.MediaMTX.Enabled {
+		t.Fatalf("expected stream.mediamtx.enabled=true")
+	}
+	if cfg.Stream.MediaMTX.APIBaseURL != "http://39.105.2.5:9997" {
+		t.Fatalf("unexpected stream mediamtx api base url: %s", cfg.Stream.MediaMTX.APIBaseURL)
+	}
+	if cfg.Stream.MediaMTX.APIUser != "goyavision" || cfg.Stream.MediaMTX.APIPassword != "goyavision-dev" {
+		t.Fatalf("unexpected stream mediamtx api credentials")
+	}
+	if cfg.Stream.MediaMTX.RequestTimeout.String() != "4s" {
+		t.Fatalf("unexpected stream mediamtx request timeout: %s", cfg.Stream.MediaMTX.RequestTimeout)
 	}
 	if len(cfg.EventBus.Kafka.Brokers) != 2 {
 		t.Fatalf("unexpected event bus brokers: %v", cfg.EventBus.Kafka.Brokers)
