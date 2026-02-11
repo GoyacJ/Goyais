@@ -23,6 +23,7 @@ This repository is organized by platform modules.
 - Compatibility entry: `.agents/AGENTS.md`
 - Stable rules: `.agents/rules/`
 - Reusable skills: `.agents/skills/`
+- Source header policy (SPDX/Author/Created/Version/Description): `go_server/scripts/ci/source_header_check.sh`
 
 ## Command Entry
 
