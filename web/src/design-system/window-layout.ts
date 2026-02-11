@@ -102,7 +102,7 @@ function mergeWithManifest(state: WindowState, manifest: WindowPaneManifest[]): 
 }
 
 export function windowStorageKey(routeKey: string, mode: LayoutMode): string {
-  return `${STORAGE_PREFIX}.${mode}.${routeKey}.v1`
+  return `${STORAGE_PREFIX}.${mode}.${routeKey}.v2`
 }
 
 function safeReadStorage(key: string): string | null {
@@ -211,8 +211,8 @@ export function useWindowLayout(
     state.value.panes[paneId] = { ...next }
   }
 
-  function resetLayout(): void {
-    state.value = createStateFromManifest(manifest.value)
+  function resetLayout(overrideManifest?: WindowPaneManifest[]): void {
+    state.value = createStateFromManifest(overrideManifest ?? manifest.value)
   }
 
   watch([storageKey, manifest], () => {

@@ -71,6 +71,10 @@ export default {
     windowResizeRight: 'Resize window width: {title}',
     windowResizeBottom: 'Resize window height: {title}',
     windowResizeCorner: 'Resize window width and height: {title}',
+    enterFullscreen: 'Fullscreen',
+    exitFullscreen: 'Exit Fullscreen',
+    openInNewPage: 'Open in New Tab',
+    returnToBoard: 'Back to Board',
   },
   page: {
     home: {

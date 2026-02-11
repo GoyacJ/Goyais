@@ -34,10 +34,9 @@ const manifests: Record<string, WindowPaneManifest[]> = {
     { id: 'detail', x: 840, y: 226, w: 468, h: 620 },
   ],
   canvas: [
-    { id: 'canvas-templates', x: 24, y: 20, w: 620, h: 350 },
-    { id: 'canvas-runs', x: 660, y: 20, w: 648, h: 350 },
-    { id: 'canvas-steps', x: 24, y: 386, w: 620, h: 360 },
-    { id: 'canvas-registry', x: 660, y: 386, w: 648, h: 360 },
+    { id: 'canvas-templates', x: 24, y: 20, w: 360, h: 760, minWidth: 320 },
+    { id: 'canvas-board', x: 400, y: 20, w: 560, h: 760, minWidth: 460 },
+    { id: 'canvas-inspector', x: 976, y: 20, w: 332, h: 760, minWidth: 300 },
   ],
   plugins: [
     { id: 'plugin-catalog', x: 24, y: 20, w: 860, h: 720 },

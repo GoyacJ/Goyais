@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import WindowPane from '@/components/layout/WindowPane.vue'
 import i18n from '@/i18n'
+import { nextTick } from 'vue'
 import { vi } from 'vitest'
 
 function baseProps() {
@@ -284,5 +285,56 @@ describe('WindowPane', () => {
 
     expect(moved.rect.x).toBe(0)
     expect(resized.rect.w).toBe(260)
+  })
+
+  it('emits open-new-page when clicking the pane action', async () => {
+    const wrapper = mount(WindowPane, {
+      props: baseProps(),
+      slots: { default: '<div>content</div>' },
+      global: {
+        plugins: [i18n],
+      },
+    })
+    await nextTick()
+
+    const actions = wrapper.findAll('.ui-window-pane-action')
+    await actions[0]?.trigger('click')
+
+    const events = wrapper.emitted('open-new-page')
+    expect(events?.length).toBe(1)
+    expect(events?.[0]?.[0]).toBe('list')
+  })
+
+  it('disables fullscreen action when fullscreen API is unavailable', async () => {
+    const originalRequestFullscreen = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'requestFullscreen')
+    const originalExitFullscreen = Object.getOwnPropertyDescriptor(document, 'exitFullscreen')
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+      configurable: true,
+      value: undefined,
+    })
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      value: undefined,
+    })
+
+    const wrapper = mount(WindowPane, {
+      props: baseProps(),
+      slots: { default: '<div>content</div>' },
+      global: {
+        plugins: [i18n],
+      },
+    })
+
+    const actions = wrapper.findAll('.ui-window-pane-action')
+    expect(actions[1]?.attributes('disabled')).toBeDefined()
+
+    if (originalRequestFullscreen) {
+      Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', originalRequestFullscreen)
+    } else {
+      delete (HTMLElement.prototype as { requestFullscreen?: unknown }).requestFullscreen
+    }
+    if (originalExitFullscreen) {
+      Object.defineProperty(document, 'exitFullscreen', originalExitFullscreen)
+    }
   })
 })

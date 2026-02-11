@@ -59,6 +59,10 @@ vi.mock('@vue-flow/controls', () => ({
 }))
 
 const stubs = {
+  WindowBoard: {
+    props: ['routeKey', 'panes'],
+    template: '<div><slot name="canvas-templates" /><slot name="canvas-board" /><slot name="canvas-inspector" /></div>',
+  },
   PageHeader: {
     props: ['title', 'subtitle'],
     template: '<header><h1>{{ title }}</h1><p>{{ subtitle }}</p><slot name="actions" /></header>',

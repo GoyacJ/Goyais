@@ -71,6 +71,10 @@ export default {
     windowResizeRight: '向右调整窗口：{title}',
     windowResizeBottom: '向下调整窗口：{title}',
     windowResizeCorner: '同时调整窗口宽高：{title}',
+    enterFullscreen: '全屏',
+    exitFullscreen: '退出全屏',
+    openInNewPage: '新页面',
+    returnToBoard: '返回工作台',
   },
   page: {
     home: {

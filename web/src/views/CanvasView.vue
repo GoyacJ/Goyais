@@ -12,9 +12,10 @@
       {{ t(apiError.messageKey || 'error.common.internal', apiError.details ?? {}) }}
     </div>
 
-    <div class="grid gap-3 xl:grid-cols-12">
-      <SectionCard class="xl:col-span-3" :title="t('page.canvas.templatesTitle')" :subtitle="String(templates.length)">
-        <div class="space-y-3">
+    <WindowBoard route-key="canvas" :panes="windowPanes">
+      <template #canvas-templates>
+        <SectionCard :title="t('page.canvas.templatesTitle')" :subtitle="String(templates.length)">
+          <div class="space-y-3">
           <div class="flex gap-2">
             <Input v-model="templateName" :placeholder="t('page.canvas.templateNamePlaceholder')" />
             <Button :disabled="isBusy || templateName.trim().length === 0" @click="onCreateTemplate">
@@ -75,11 +76,13 @@
               </button>
             </div>
           </div>
-        </div>
-      </SectionCard>
+          </div>
+        </SectionCard>
+      </template>
 
-      <SectionCard class="xl:col-span-6" :title="t('page.canvas.boardTitle')" :subtitle="selectedTemplateId ?? '-'">
-        <div class="space-y-3">
+      <template #canvas-board>
+        <SectionCard :title="t('page.canvas.boardTitle')" :subtitle="selectedTemplateId ?? '-'">
+          <div class="space-y-3">
           <div class="grid grid-cols-2 gap-2 md:grid-cols-4">
             <Button :disabled="!selectedTemplateId || isBusy" @click="onRunTemplate">
               {{ t('page.canvas.actionRunTemplate') }}
@@ -134,11 +137,13 @@
               <Controls />
             </VueFlow>
           </div>
-        </div>
-      </SectionCard>
+          </div>
+        </SectionCard>
+      </template>
 
-      <SectionCard class="xl:col-span-3" :title="t('page.canvas.inspectorTitle')" :subtitle="selectedNodeId ?? '-'">
-        <div class="space-y-3">
+      <template #canvas-inspector>
+        <SectionCard :title="t('page.canvas.inspectorTitle')" :subtitle="selectedNodeId ?? '-'">
+          <div class="space-y-3">
           <div class="rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted">
             <div>{{ t('page.canvas.connectionRule') }}</div>
             <div class="mt-1 text-ui-text">{{ t('page.canvas.connectionRuleHint') }}</div>
@@ -213,9 +218,10 @@
               <div v-if="steps.length === 0">{{ t('page.canvas.stepsEmptyDescription') }}</div>
             </div>
           </div>
-        </div>
-      </SectionCard>
-    </div>
+          </div>
+        </SectionCard>
+      </template>
+    </WindowBoard>
   </section>
 </template>
 
@@ -241,6 +247,7 @@ import { type CanvasStepRuntime, canvasStepRuntimeByKeyKey } from '@/components/
 import TypedPortNode from '@/components/canvas/TypedPortNode.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import SectionCard from '@/components/layout/SectionCard.vue'
+import WindowBoard from '@/components/layout/WindowBoard.vue'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import { useToast } from '@/composables/useToast'
@@ -316,6 +323,11 @@ const runRuntimePolling = ref(false)
 
 const canUndo = computed(() => historyIndex.value > 0)
 const canRedo = computed(() => historyIndex.value >= 0 && historyIndex.value < historyStack.value.length - 1)
+const windowPanes = computed(() => [
+  { id: 'canvas-templates', title: t('page.canvas.templatesTitle') },
+  { id: 'canvas-board', title: t('page.canvas.boardTitle') },
+  { id: 'canvas-inspector', title: t('page.canvas.inspectorTitle') },
+])
 
 const selectedNode = computed(() => graphNodes.value.find((node) => node.id === selectedNodeId.value) ?? null)
 const selectedNodeData = computed<GraphNodeData | null>(() => {

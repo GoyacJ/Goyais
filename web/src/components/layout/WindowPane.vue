@@ -15,7 +15,28 @@
       @keydown="onHeaderKeydown"
     >
       <p class="truncate text-xs font-semibold uppercase tracking-[0.08em] text-ui-muted">{{ title }}</p>
-      <span class="ui-monospace text-[11px] text-ui-muted">{{ paneId }}</span>
+      <div class="ui-window-pane-actions">
+        <button
+          type="button"
+          class="ui-window-pane-action ui-focus-ring ui-pressable"
+          :aria-label="t('common.openInNewPage')"
+          @pointerdown.stop
+          @click.stop="onOpenNewPage"
+        >
+          {{ t('common.openInNewPage') }}
+        </button>
+        <button
+          type="button"
+          class="ui-window-pane-action ui-focus-ring ui-pressable"
+          :aria-label="paneFullscreen ? t('common.exitFullscreen') : t('common.enterFullscreen')"
+          :disabled="!canToggleFullscreen"
+          @pointerdown.stop
+          @click.stop="onTogglePaneFullscreen"
+        >
+          {{ paneFullscreen ? t('common.exitFullscreen') : t('common.enterFullscreen') }}
+        </button>
+        <span class="ui-monospace text-[11px] text-ui-muted">{{ paneId }}</span>
+      </div>
     </header>
 
     <div class="ui-window-pane-body ui-scrollbar min-h-0 flex-1 overflow-auto p-1">
@@ -58,7 +79,7 @@ import type {
 } from '@/design-system/window-engine'
 import { NativePointerWindowEngine } from '@/design-system/window-engine-native'
 import type { WindowRect } from '@/design-system/types'
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(
@@ -78,6 +99,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'focus', paneId: string): void
+  (e: 'open-new-page', paneId: string): void
   (e: 'update:rect', payload: { paneId: string; rect: WindowRect }): void
 }>()
 
@@ -96,6 +118,14 @@ const paneStyle = computed(() => ({
 }))
 
 const paneRef = ref<HTMLElement | null>(null)
+const paneFullscreen = ref(false)
+const canToggleFullscreen = computed(
+  () =>
+    typeof document !== 'undefined' &&
+    typeof document.exitFullscreen === 'function' &&
+    paneRef.value !== null &&
+    typeof paneRef.value.requestFullscreen === 'function',
+)
 
 let activeMoveHandler: ((event: PointerEvent) => void) | null = null
 let activeUpHandler: ((event: PointerEvent) => void) | null = null
@@ -414,7 +444,42 @@ function onHeaderKeydown(event: KeyboardEvent): void {
   emit('update:rect', { paneId: props.paneId, rect: next })
 }
 
+function syncPaneFullscreen(): void {
+  paneFullscreen.value = document.fullscreenElement === paneRef.value
+}
+
+function onOpenNewPage(): void {
+  emit('open-new-page', props.paneId)
+}
+
+async function onTogglePaneFullscreen(): Promise<void> {
+  if (!canToggleFullscreen.value) {
+    return
+  }
+
+  try {
+    if (document.fullscreenElement === paneRef.value) {
+      await document.exitFullscreen()
+      return
+    }
+
+    const node = paneRef.value
+    if (!node || typeof node.requestFullscreen !== 'function') {
+      return
+    }
+    await node.requestFullscreen()
+  } catch {
+    // Ignore fullscreen API errors in unsupported contexts.
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('fullscreenchange', syncPaneFullscreen)
+  syncPaneFullscreen()
+})
+
 onBeforeUnmount(() => {
   cleanupPointerTracking()
+  document.removeEventListener('fullscreenchange', syncPaneFullscreen)
 })
 </script>

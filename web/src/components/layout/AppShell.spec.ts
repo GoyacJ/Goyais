@@ -1,6 +1,7 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import AppShell from '@/components/layout/AppShell.vue'
+import TopBar from '@/components/layout/TopBar.vue'
 import TopNavBar from '@/components/layout/TopNavBar.vue'
 import SideNav from '@/components/layout/SideNav.vue'
 import i18n from '@/i18n'
@@ -14,15 +15,15 @@ function createTestRouter() {
       {
         path: '/',
         component: view,
-        meta: { layoutDefault: 'console' },
+        meta: { layoutDefault: 'console', windowManifestKey: 'home' },
       },
-      { path: '/canvas', component: view },
-      { path: '/ai', component: view },
-      { path: '/commands', component: view },
-      { path: '/assets', component: view },
-      { path: '/plugins', component: view },
-      { path: '/streams', component: view },
-      { path: '/settings', component: view },
+      { path: '/canvas', component: view, meta: { layoutDefault: 'focus', windowManifestKey: 'canvas' } },
+      { path: '/ai', component: view, meta: { layoutDefault: 'console', windowManifestKey: 'ai-workbench' } },
+      { path: '/commands', component: view, meta: { layoutDefault: 'console', windowManifestKey: 'commands' } },
+      { path: '/assets', component: view, meta: { layoutDefault: 'console', windowManifestKey: 'assets' } },
+      { path: '/plugins', component: view, meta: { layoutDefault: 'topnav', windowManifestKey: 'plugins' } },
+      { path: '/streams', component: view, meta: { layoutDefault: 'topnav', windowManifestKey: 'streams' } },
+      { path: '/settings', component: view, meta: { layoutDefault: 'topnav', windowManifestKey: 'settings' } },
     ],
   })
 }
@@ -91,5 +92,27 @@ describe('AppShell layout switching', () => {
     await flushPromises()
     expect(wrapper.findComponent(SideNav).exists()).toBe(false)
     expect(wrapper.findComponent(TopNavBar).exists()).toBe(false)
+  })
+
+  it('hides shell chrome and enters immersive main mode for valid immersive query', async () => {
+    const router = createTestRouter()
+    await router.push('/commands?wbMode=immersive&wbPane=list')
+    await router.isReady()
+    initLayoutSystem(router)
+
+    const { setLayoutPreference } = useLayoutStore()
+    setLayoutPreference('console')
+
+    const wrapper = mount(AppShell, {
+      global: {
+        plugins: [router, i18n],
+      },
+    })
+
+    await flushPromises()
+    expect(wrapper.findComponent(SideNav).exists()).toBe(false)
+    expect(wrapper.findComponent(TopNavBar).exists()).toBe(false)
+    expect(wrapper.findComponent(TopBar).exists()).toBe(false)
+    expect(wrapper.find('main').classes()).toContain('ui-shell-main--immersive')
   })
 })

@@ -1,6 +1,6 @@
 <template>
   <div class="ui-shell-root ui-bg-host flex h-full bg-ui-bg text-ui-fg" :class="shellClass">
-    <MobileNavDrawer :open="mobileNavOpen" @close="closeMobileNav" />
+    <MobileNavDrawer v-if="!isImmersiveRoute" :open="mobileNavOpen" @close="closeMobileNav" />
 
     <SideNav
       v-if="showSideNav"
@@ -9,6 +9,7 @@
 
     <div class="ui-bg-content flex min-w-0 flex-1 flex-col">
       <TopBar
+        v-if="!isImmersiveRoute"
         :show-mobile-nav-button="!isDesktop"
         :focus-mode="effectiveLayout === 'focus'"
         @toggle-mobile-nav="openMobileNav"
@@ -16,7 +17,7 @@
 
       <TopNavBar v-if="showTopNav" />
 
-      <main class="ui-shell-main ui-scrollbar min-h-0 flex-1 overflow-auto p-[var(--ui-shell-content-pad)]">
+      <main :class="mainClass">
         <RouterView />
       </main>
     </div>
@@ -32,18 +33,42 @@ import TopBar from '@/components/layout/TopBar.vue'
 import TopNavBar from '@/components/layout/TopNavBar.vue'
 import ToastViewport from '@/components/ui/ToastViewport.vue'
 import { useLayoutStore } from '@/design-system/layout'
+import { windowManifestFor } from '@/design-system/window-manifests'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { RouterView } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
 
 const { effectiveLayout } = useLayoutStore()
+const route = useRoute()
 
 const mobileNavOpen = ref(false)
 const lastFocusedBeforeDrawer = ref<HTMLElement | null>(null)
 const isDesktop = ref(true)
 let mediaQuery: MediaQueryList | null = null
 
-const showSideNav = computed(() => isDesktop.value && effectiveLayout.value === 'console')
-const showTopNav = computed(() => isDesktop.value && effectiveLayout.value === 'topnav')
+const isImmersiveRoute = computed(() => {
+  const mode = readQueryString(route.query.wbMode)
+  const paneId = readQueryString(route.query.wbPane)
+  if (mode !== 'immersive' || !paneId) {
+    return false
+  }
+  const key = typeof route.meta?.windowManifestKey === 'string' ? route.meta.windowManifestKey : null
+  if (!key) {
+    return false
+  }
+  return windowManifestFor(key).some((pane) => pane.id === paneId)
+})
+
+const showSideNav = computed(
+  () => !isImmersiveRoute.value && isDesktop.value && effectiveLayout.value === 'console',
+)
+const showTopNav = computed(
+  () => !isImmersiveRoute.value && isDesktop.value && effectiveLayout.value === 'topnav',
+)
+
+const mainClass = computed(() => [
+  'ui-shell-main ui-scrollbar min-h-0 flex-1 overflow-auto',
+  isImmersiveRoute.value ? 'ui-shell-main--immersive' : 'p-[var(--ui-shell-content-pad)]',
+])
 
 const shellClass = computed(() => {
   if (effectiveLayout.value === 'focus') {
@@ -62,6 +87,21 @@ function syncDesktopState(): void {
   if (isDesktop.value) {
     mobileNavOpen.value = false
   }
+}
+
+function readQueryString(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const next = value.trim()
+    return next.length > 0 ? next : null
+  }
+  if (Array.isArray(value)) {
+    const first = value.find((item) => typeof item === 'string')
+    if (typeof first === 'string') {
+      const next = first.trim()
+      return next.length > 0 ? next : null
+    }
+  }
+  return null
 }
 
 function openMobileNav(): void {
