@@ -128,6 +128,11 @@ type streamActionCommandPayload struct {
 	StreamID string `json:"streamId"`
 }
 
+type streamUpdateAuthCommandPayload struct {
+	StreamID string          `json:"streamId"`
+	AuthRule json.RawMessage `json:"authRule"`
+}
+
 type aiSessionCreateCommandPayload struct {
 	Title       string          `json:"title"`
 	Goal        string          `json:"goal"`
@@ -194,8 +199,10 @@ func registerCommandExecutors(
 	if streamService != nil {
 		commandService.SetExecutor("stream.create", newStreamCreateExecutor(streamService))
 		commandService.SetExecutor("stream.record.start", newStreamRecordStartExecutor(commandService, streamService))
-		commandService.SetExecutor("stream.record.stop", newStreamRecordStopExecutor(streamService))
+		commandService.SetExecutor("stream.record.stop", newStreamRecordStopExecutor(commandService, streamService))
 		commandService.SetExecutor("stream.kick", newStreamKickExecutor(streamService))
+		commandService.SetExecutor("stream.updateAuth", newStreamUpdateAuthExecutor(streamService))
+		commandService.SetExecutor("stream.delete", newStreamDeleteExecutor(streamService))
 	}
 	if algorithmService != nil {
 		commandService.SetExecutor("algorithm.run", newAlgorithmRunExecutor(algorithmService))
@@ -1016,7 +1023,7 @@ func newStreamRecordStartExecutor(commandService *command.Service, streamService
 	}
 }
 
-func newStreamRecordStopExecutor(streamService *stream.Service) command.ExecuteFunc {
+func newStreamRecordStopExecutor(commandService *command.Service, streamService *stream.Service) command.ExecuteFunc {
 	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
 		var req streamActionCommandPayload
 		if err := json.Unmarshal(payload, &req); err != nil {
@@ -1033,6 +1040,47 @@ func newStreamRecordStopExecutor(streamService *stream.Service) command.ExecuteF
 			"recording": toStreamRecordingResultPayload(stopped.Recording),
 			"assetId":   stopped.AssetID,
 			"lineageId": stopped.LineageID,
+		}
+		if status := strings.TrimSpace(stopped.OnRecordFinishEventStatus); status != "" {
+			eventBus := map[string]any{
+				"status": status,
+			}
+			if errText := strings.TrimSpace(stopped.OnRecordFinishEventError); errText != "" {
+				eventBus["error"] = errText
+			}
+			result["eventBus"] = eventBus
+		}
+		if templateID := strings.TrimSpace(stopped.OnRecordFinishTemplateID); templateID != "" && commandService != nil {
+			workflowPayload, _ := json.Marshal(map[string]any{
+				"templateId": templateID,
+				"inputs": map[string]any{
+					"streamId":    stopped.Stream.ID,
+					"recordingId": stopped.Recording.ID,
+					"assetId":     stopped.AssetID,
+					"trigger":     "stream.onRecordFinish",
+				},
+				"visibility": stopped.Stream.Visibility,
+				"mode":       "sync",
+			})
+			onRecordFinish := map[string]any{
+				"templateId": templateID,
+			}
+			onRecordFinishCommand, submitErr := commandService.Submit(
+				ctx,
+				reqCtx,
+				"workflow.run",
+				workflowPayload,
+				"stream-onrecordfinish-"+stopped.Recording.ID,
+				stopped.Stream.Visibility,
+			)
+			if submitErr != nil {
+				onRecordFinish["status"] = "failed"
+				onRecordFinish["error"] = submitErr.Error()
+			} else {
+				onRecordFinish["status"] = "submitted"
+				onRecordFinish["commandId"] = onRecordFinishCommand.ID
+			}
+			result["onRecordFinish"] = onRecordFinish
 		}
 		raw, _ := json.Marshal(result)
 		return raw, nil
@@ -1051,6 +1099,47 @@ func newStreamKickExecutor(streamService *stream.Service) command.ExecuteFunc {
 			return nil, mapStreamExecutionError(err)
 		}
 
+		result := map[string]any{
+			"stream": toStreamResultPayload(item),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func newStreamUpdateAuthExecutor(streamService *stream.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req streamUpdateAuthCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapStreamExecutionError(stream.ErrInvalidRequest)
+		}
+		if len(req.AuthRule) == 0 {
+			req.AuthRule = json.RawMessage(`{}`)
+		}
+
+		item, err := streamService.UpdateAuthRule(ctx, reqCtx, req.StreamID, req.AuthRule)
+		if err != nil {
+			return nil, mapStreamExecutionError(err)
+		}
+		result := map[string]any{
+			"stream": toStreamResultPayload(item),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func newStreamDeleteExecutor(streamService *stream.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req streamActionCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapStreamExecutionError(stream.ErrInvalidRequest)
+		}
+
+		item, err := streamService.DeleteStream(ctx, reqCtx, req.StreamID)
+		if err != nil {
+			return nil, mapStreamExecutionError(err)
+		}
 		result := map[string]any{
 			"stream": toStreamResultPayload(item),
 		}

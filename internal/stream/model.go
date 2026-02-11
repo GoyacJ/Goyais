@@ -113,6 +113,14 @@ type UpdateStreamStatusInput struct {
 	Now      time.Time
 }
 
+type UpsertStreamAuthRuleInput struct {
+	Context  command.RequestContext
+	StreamID string
+	Rule     json.RawMessage
+	Status   string
+	Now      time.Time
+}
+
 type CreateLineageInput struct {
 	Context       command.RequestContext
 	TargetAssetID string
@@ -130,8 +138,11 @@ type StartRecordingResult struct {
 }
 
 type StopRecordingResult struct {
-	Stream    Stream
-	Recording Recording
-	AssetID   string
-	LineageID string
+	Stream                    Stream
+	Recording                 Recording
+	AssetID                   string
+	LineageID                 string
+	OnRecordFinishTemplateID  string
+	OnRecordFinishEventStatus string
+	OnRecordFinishEventError  string
 }

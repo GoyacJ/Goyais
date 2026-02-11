@@ -15,6 +15,7 @@ type Repository interface {
 	GetStreamForAccess(ctx context.Context, req command.RequestContext, streamID string) (Stream, error)
 	ListStreams(ctx context.Context, params StreamListParams) (StreamListResult, error)
 	UpdateStreamStatus(ctx context.Context, in UpdateStreamStatusInput) (Stream, error)
+	UpsertStreamAuthRule(ctx context.Context, in UpsertStreamAuthRuleInput) error
 
 	CreateRecording(ctx context.Context, in CreateRecordingInput) (Recording, error)
 	GetActiveRecording(ctx context.Context, req command.RequestContext, streamID string) (Recording, error)

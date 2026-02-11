@@ -142,8 +142,22 @@ func (s *Service) Submit(ctx context.Context, reqCtx RequestContext, commandType
 		"policy.default_allow",
 		buildEgressAuditPayload(commandType, payload, resultBytes, "allow"),
 	)
+	if streamEventType := resolveStreamAuditEventType(commandType); streamEventType != "" {
+		_ = s.repo.AppendAuditEvent(ctx, reqCtx, final.ID, streamEventType, "allow", "command_succeeded", resultBytes)
+	}
 
 	return final, nil
+}
+
+func resolveStreamAuditEventType(commandType string) string {
+	switch strings.TrimSpace(commandType) {
+	case "stream.updateAuth":
+		return "stream.auth.updated"
+	case "stream.delete":
+		return "stream.deleted"
+	default:
+		return ""
+	}
 }
 
 func (s *Service) executeCommand(ctx context.Context, reqCtx RequestContext, commandType string, payload json.RawMessage) ([]byte, error) {

@@ -153,8 +153,19 @@ func (s *Service) StartRecording(ctx context.Context, req command.RequestContext
 		return StartRecordingResult{}, err
 	}
 
-	templateID := extractOnPublishTemplateID(updatedStream.StateJSON)
-	eventStatus, eventError := s.publishOnPublishEvent(ctx, req, updatedStream, rec, templateID)
+	templateID := extractTriggerTemplateID(updatedStream.StateJSON, "onPublishTemplateId")
+	eventStatus, eventError := s.publishStreamTriggerEvent(
+		ctx,
+		req,
+		updatedStream,
+		"stream.on_publish",
+		rec.ID,
+		templateID,
+		map[string]any{
+			"recordingId": rec.ID,
+			"trigger":     "stream.onPublish",
+		},
+	)
 	return StartRecordingResult{
 		Stream:               updatedStream,
 		Recording:            rec,
@@ -249,11 +260,29 @@ func (s *Service) StopRecording(ctx context.Context, req command.RequestContext,
 		return StopRecordingResult{}, err
 	}
 
+	onRecordFinishTemplateID := extractTriggerTemplateID(updatedStream.StateJSON, "onRecordFinishTemplateId")
+	onRecordFinishEventStatus, onRecordFinishEventError := s.publishStreamTriggerEvent(
+		ctx,
+		req,
+		updatedStream,
+		"stream.on_record_finish",
+		completed.ID,
+		onRecordFinishTemplateID,
+		map[string]any{
+			"recordingId": completed.ID,
+			"assetId":     createdAsset.ID,
+			"trigger":     "stream.onRecordFinish",
+		},
+	)
+
 	return StopRecordingResult{
-		Stream:    updatedStream,
-		Recording: completed,
-		AssetID:   createdAsset.ID,
-		LineageID: lineageID,
+		Stream:                    updatedStream,
+		Recording:                 completed,
+		AssetID:                   createdAsset.ID,
+		LineageID:                 lineageID,
+		OnRecordFinishTemplateID:  onRecordFinishTemplateID,
+		OnRecordFinishEventStatus: onRecordFinishEventStatus,
+		OnRecordFinishEventError:  onRecordFinishEventError,
 	}, nil
 }
 
@@ -280,6 +309,97 @@ func (s *Service) KickStream(ctx context.Context, req command.RequestContext, st
 		Status:   StreamStatusOffline,
 		State:    item.StateJSON,
 		Now:      time.Now().UTC(),
+	})
+}
+
+func (s *Service) UpdateAuthRule(
+	ctx context.Context,
+	req command.RequestContext,
+	streamID string,
+	authRule json.RawMessage,
+) (Stream, error) {
+	streamID = strings.TrimSpace(streamID)
+	if streamID == "" {
+		return Stream{}, ErrInvalidRequest
+	}
+	if len(authRule) == 0 {
+		authRule = json.RawMessage(`{}`)
+	}
+	if !isJSONObject(authRule) {
+		return Stream{}, ErrInvalidRequest
+	}
+	item, err := s.repo.GetStreamForAccess(ctx, req, streamID)
+	if err != nil {
+		return Stream{}, err
+	}
+	allowed, reason, err := s.authorizeStream(ctx, req, item, command.PermissionManage)
+	if err != nil {
+		return Stream{}, err
+	}
+	if !allowed {
+		return Stream{}, &ForbiddenError{Reason: reason}
+	}
+
+	now := time.Now().UTC()
+	if err := s.repo.UpsertStreamAuthRule(ctx, UpsertStreamAuthRuleInput{
+		Context:  req,
+		StreamID: streamID,
+		Rule:     authRule,
+		Status:   "active",
+		Now:      now,
+	}); err != nil {
+		return Stream{}, err
+	}
+
+	var parsedRule map[string]any
+	if err := json.Unmarshal(authRule, &parsedRule); err != nil {
+		return Stream{}, ErrInvalidRequest
+	}
+	nextState := mergeStreamState(item.StateJSON, map[string]any{
+		"authRule":          parsedRule,
+		"authRuleUpdatedAt": now.Format(time.RFC3339Nano),
+	})
+	return s.repo.UpdateStreamStatus(ctx, UpdateStreamStatusInput{
+		Context:  req,
+		StreamID: streamID,
+		Status:   item.Status,
+		State:    nextState,
+		Now:      now,
+	})
+}
+
+func (s *Service) DeleteStream(ctx context.Context, req command.RequestContext, streamID string) (Stream, error) {
+	streamID = strings.TrimSpace(streamID)
+	if streamID == "" {
+		return Stream{}, ErrInvalidRequest
+	}
+	item, err := s.repo.GetStreamForAccess(ctx, req, streamID)
+	if err != nil {
+		return Stream{}, err
+	}
+	allowed, reason, err := s.authorizeStream(ctx, req, item, command.PermissionManage)
+	if err != nil {
+		return Stream{}, err
+	}
+	if !allowed {
+		return Stream{}, &ForbiddenError{Reason: reason}
+	}
+	if item.Status != StreamStatusOffline && item.Status != StreamStatusError {
+		return Stream{}, ErrInvalidRequest
+	}
+
+	now := time.Now().UTC()
+	nextState := mergeStreamState(item.StateJSON, map[string]any{
+		"deleted":   true,
+		"deletedAt": now.Format(time.RFC3339Nano),
+		"deletedBy": req.UserID,
+	})
+	return s.repo.UpdateStreamStatus(ctx, UpdateStreamStatusInput{
+		Context:  req,
+		StreamID: streamID,
+		Status:   item.Status,
+		State:    nextState,
+		Now:      now,
 	})
 }
 
@@ -352,55 +472,67 @@ func normalizeSource(raw string) (string, error) {
 	}
 }
 
-func extractOnPublishTemplateID(raw json.RawMessage) string {
+func extractTriggerTemplateID(raw json.RawMessage, key string) string {
 	if len(raw) == 0 {
+		return ""
+	}
+	key = strings.TrimSpace(key)
+	if key == "" {
 		return ""
 	}
 	var state map[string]any
 	if err := json.Unmarshal(raw, &state); err != nil {
 		return ""
 	}
-	value, _ := state["onPublishTemplateId"].(string)
+	value, _ := state[key].(string)
 	return strings.TrimSpace(value)
 }
 
-func (s *Service) publishOnPublishEvent(
+func (s *Service) publishStreamTriggerEvent(
 	ctx context.Context,
 	req command.RequestContext,
 	streamItem Stream,
-	recording Recording,
+	eventType string,
+	eventID string,
 	templateID string,
+	fields map[string]any,
 ) (string, string) {
+	eventType = strings.TrimSpace(eventType)
+	eventID = strings.TrimSpace(eventID)
 	templateID = strings.TrimSpace(templateID)
-	if templateID == "" {
+	if eventType == "" || eventID == "" || templateID == "" {
 		return "", ""
 	}
 	if s.eventBus == nil {
 		return "skipped", "event bus provider not configured"
 	}
 	envelope := map[string]any{
-		"eventType":   "stream.on_publish",
-		"eventId":     recording.ID,
+		"eventType":   eventType,
+		"eventId":     eventID,
 		"tenantId":    req.TenantID,
 		"workspaceId": req.WorkspaceID,
 		"userId":      req.UserID,
 		"traceId":     req.TraceID,
 		"streamId":    streamItem.ID,
-		"recordingId": recording.ID,
 		"templateId":  templateID,
 		"visibility":  streamItem.Visibility,
-		"trigger":     "stream.onPublish",
 		"emittedAt":   time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	for key, value := range fields {
+		if strings.TrimSpace(key) == "" {
+			continue
+		}
+		envelope[key] = value
 	}
 	raw, err := json.Marshal(envelope)
 	if err != nil {
 		return "failed", err.Error()
 	}
 	err = s.eventBus.Publish(ctx, eventbus.ChannelStream, eventbus.Message{
-		Key:   recording.ID,
+		Key:   eventID,
 		Value: raw,
 		Headers: map[string]string{
-			"eventType":   "stream.on_publish",
+			"eventType":   eventType,
 			"tenantId":    req.TenantID,
 			"workspaceId": req.WorkspaceID,
 		},
