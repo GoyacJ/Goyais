@@ -150,7 +150,7 @@
 - [x] 三布局在 desktop 下都支持窗口拖拽/缩放/置顶；mobile 自动降级为单列卡片。
 - [x] 窗口布局按 `route+layout` 独立持久化；切换布局或路由不会污染彼此状态。
 - [x] `pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test --run` 通过（包含 layout/window 核心用例）。
-- [x] 本轮执行 `bash .agents/skills/goyais-web-asset-governance/scripts/validate-assets.sh` 并通过（若有素材变更同样适用）。
+- [x] 本轮执行 `bash .agents/skills/goyais-vue-asset-governance/scripts/validate-assets.sh` 并通过（若有素材变更同样适用）。
 
 ## 11. 审计与可观测性验收
 
@@ -205,16 +205,16 @@
 - `go test ./internal/config ./internal/access/http -v`
 - `pnpm -C /Users/goya/Repo/Git/Goyais/vue_web typecheck`
 - `pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run`
-- `bash .agents/skills/goyais-web-asset-governance/scripts/validate-assets.sh`
+- `bash .agents/skills/goyais-vue-asset-governance/scripts/validate-assets.sh`
 - `make build`
-- `GOYAIS_VERIFY_BASE_URL=http://127.0.0.1:18080 GOYAIS_START_CMD='GOYAIS_SERVER_ADDR=:18080 ./go_server/build/goyais' bash .agents/skills/goyais-single-binary-acceptance/scripts/verify_single_binary.sh`
+- `GOYAIS_VERIFY_BASE_URL=http://127.0.0.1:18080 GOYAIS_START_CMD='GOYAIS_SERVER_ADDR=:18080 ./go_server/build/goyais' bash .agents/skills/goyais-release-regression/scripts/verify_single_binary.sh`
   - 说明：默认 `:8080` 被本机其他进程占用，验收脚本改用 `:18080` 执行并通过。
 
 ## 15. 自动化回归与 Git 护栏验收
 
 - [x] 存在统一回归脚本 `go_server/scripts/ci/contract_regression.sh`，串行执行 `go test ./...`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web typecheck`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run`、`make build`、single-binary verify。
 - [x] 存在迁移残留审计脚本 `go_server/scripts/ci/path_migration_audit.sh`，用于扫描旧路径引用是否清零。
-- [x] 存在提交前防呆脚本 `go_server/scripts/git/precommit_guard.sh`，阻断 `data/objects/`、`*.db`、`go_server/build/`、`go_server/internal/access/webstatic/dist/assets/`、`go_server/internal/access/webstatic/dist/index.html`、`vue_web/dist/`、`vue_web/node_modules/`、`.agents/` 被 staged。
+- [x] 存在提交前防呆脚本 `go_server/scripts/git/precommit_guard.sh`，阻断 `data/objects/`、`*.db`、`go_server/build/`、`go_server/internal/access/webstatic/dist/assets/`、`go_server/internal/access/webstatic/dist/index.html`、`vue_web/dist/`、`vue_web/node_modules/` 被 staged。
 - [x] 存在 worktree 审计脚本 `go_server/scripts/git/worktree_audit.sh`，阻断 detached worktree 与重复分支绑定。
 - [x] CI workflow `.github/workflows/contract-regression.yml` 调用统一回归脚本，作为 PR/master 门禁入口。
 

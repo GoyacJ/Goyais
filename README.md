@@ -17,6 +17,13 @@ This repository is organized by platform modules.
 - Go technical docs: `go_server/docs/`
 - Web technical docs: `vue_web/docs/`
 
+## Codex Governance
+
+- Root policy: `AGENTS.md`
+- Compatibility entry: `.agents/AGENTS.md`
+- Stable rules: `.agents/rules/`
+- Reusable skills: `.agents/skills/`
+
 ## Command Entry
 
 Run commands inside each module directory.
