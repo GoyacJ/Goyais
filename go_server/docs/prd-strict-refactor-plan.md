@@ -196,7 +196,7 @@
 - `pnpm -C /Users/goya/Repo/Git/Goyais/vue_web typecheck`
 - `pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run`
 - `make -C /Users/goya/Repo/Git/Goyais/go_server build`
-- `GOYAIS_VERIFY_BASE_URL=http://127.0.0.1:18080 GOYAIS_START_CMD='GOYAIS_SERVER_ADDR=:18080 ./go_server/build/goyais' bash /Users/goya/Repo/Git/Goyais/.agents/skills/goyais-single-binary-acceptance/scripts/verify_single_binary.sh`
+- `GOYAIS_VERIFY_BASE_URL=http://127.0.0.1:18080 GOYAIS_START_CMD='GOYAIS_SERVER_ADDR=:18080 ./go_server/build/goyais' bash /Users/goya/Repo/Git/Goyais/.agents/skills/goyais-release-regression/scripts/verify_single_binary.sh`
 
 ## 8. 风险与缓解（P0/P1/P2）
 
@@ -234,7 +234,7 @@
 ## 10. 执行规范（thread/worktree、契约同步）
 
 ### 10.1 Git 线程隔离
-- 每个切片必须使用独立 worktree 与分支：`codex/<thread-id>-<topic>`。
+- 每个切片必须使用独立 worktree 与分支：`goya/<thread-id>-<topic>`。
 - 主工作树仅用于 `master` 集成与回归。
 - 合并后必须移除 thread worktree 并 `git worktree prune`。
 

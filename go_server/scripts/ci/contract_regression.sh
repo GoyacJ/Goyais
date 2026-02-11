@@ -32,6 +32,6 @@ make -C "${GO_SERVER_DIR}" build
 echo "[contract_regression] single binary verify"
 GOYAIS_VERIFY_BASE_URL="${GOYAIS_VERIFY_BASE_URL:-http://127.0.0.1:18080}" \
 GOYAIS_START_CMD="${GOYAIS_START_CMD:-GOYAIS_SERVER_ADDR=:18080 ./go_server/build/goyais}" \
-  bash .agents/skills/goyais-single-binary-acceptance/scripts/verify_single_binary.sh
+  bash .agents/skills/goyais-release-regression/scripts/verify_single_binary.sh
 
 echo "[contract_regression] passed"
