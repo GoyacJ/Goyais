@@ -18,8 +18,10 @@ import com.ysmjjsy.goyais.kernel.security.AuthorizationDecision;
 import com.ysmjjsy.goyais.kernel.security.AuthorizationGate;
 import com.ysmjjsy.goyais.kernel.security.EgressGate;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 
 /**
  * Implements validate-authorize-execute-audit-event pipeline for command-first flow.
@@ -43,7 +45,9 @@ public final class CommandPipeline {
     ) {
         this.authorizationGate = authorizationGate;
         this.egressGate = egressGate;
-        this.handlers = handlers;
+        List<CommandHandler> sortedHandlers = new ArrayList<>(handlers);
+        AnnotationAwareOrderComparator.sort(sortedHandlers);
+        this.handlers = List.copyOf(sortedHandlers);
         this.eventPublisher = eventPublisher;
         this.auditEventStore = auditEventStore;
     }

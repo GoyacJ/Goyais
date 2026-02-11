@@ -29,10 +29,14 @@ public final class DefaultDataPermissionResolver implements DataPermissionResolv
                 + alias + "owner_id = #{dp.userId}"
                 + " OR " + alias + "visibility = 'WORKSPACE'"
                 + " OR EXISTS (SELECT 1 FROM acl_entries a"
-                + " WHERE a.resource_id = " + alias + "id"
+                + " WHERE a.tenant_id = " + alias + "tenant_id"
+                + " AND a.workspace_id = " + alias + "workspace_id"
+                + " AND a.resource_id = " + alias + "id"
                 + " AND a.resource_type = '" + resourceType + "'"
+                + " AND a.subject_type = 'user'"
                 + " AND a.subject_id = #{dp.userId}"
-                + " AND a.permissions::text LIKE '%" + requiredPermission + "%')"
+                + " AND (a.expires_at IS NULL OR a.expires_at >= CURRENT_TIMESTAMP)"
+                + " AND a.permissions @> jsonb_build_array('" + requiredPermission + "'))"
                 + ")) /* policyVersion=" + safePolicyVersion + " */";
     }
 

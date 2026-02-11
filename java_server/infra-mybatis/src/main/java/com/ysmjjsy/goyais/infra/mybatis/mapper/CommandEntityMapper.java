@@ -21,6 +21,23 @@ import org.apache.ibatis.annotations.Select;
 public interface CommandEntityMapper extends BaseMapper<CommandEntity> {
 
     /**
+     * Returns one command by id and tenant/workspace scope without ACL filtering.
+     */
+    @Select("""
+            SELECT *
+            FROM commands
+            WHERE id = #{commandId}
+              AND tenant_id = #{tenantId}
+              AND workspace_id = #{workspaceId}
+            LIMIT 1
+            """)
+    CommandEntity selectByIdInScope(
+            @Param("commandId") String commandId,
+            @Param("tenantId") String tenantId,
+            @Param("workspaceId") String workspaceId
+    );
+
+    /**
      * Returns one readable command entity by identifier and SQL predicate.
      */
     @Select("""

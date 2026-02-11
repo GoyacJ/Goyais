@@ -34,6 +34,10 @@
 - API Prefix：`/api/v1`。
 - 写路径：统一 command-first。
 - 错误模型：`error: { code, messageKey, details }`。
+- 已落地业务面（2026-02-11）：
+  - `commands*`
+  - `assets*`
+  - `shares*`
 - 鉴权默认：除健康检查外，`/api/v1/**` 默认要求 Bearer Token。
 - 授权顺序：Tenant -> Visibility -> ACL -> RBAC -> Egress。
 - 统一执行上下文：`tenantId/workspaceId/userId/roles/policyVersion/traceId`。
@@ -69,15 +73,23 @@
 ## 7.1 数据持久化落地（2026-02-11）
 
 - Flyway 迁移脚本：`app-api-server/src/main/resources/db/migration/V1__baseline.sql`。
+- 增量迁移脚本：`app-api-server/src/main/resources/db/migration/V2__assets_shares_schema.sql`。
 - 基线表：
   - `commands`
   - `audit_events`
   - `policies`
   - `acl_entries`
+- 本次新增：
+  - `assets`
+  - `asset_lineage`
+  - `acl_entries` 扩展字段：`tenant_id/workspace_id/subject_type/expires_at/created_by`
 - 命令与审计落地实现：
   - `MybatisCommandRepository`
   - `MybatisAuditEventStore`
   - `MybatisPolicySnapshotStore`
+- 资产与分享落地实现：
+  - `MybatisAssetRepository`
+  - `MybatisShareRepository`
 
 ## 7. 配置策略 | Configuration Strategy
 
@@ -94,6 +106,11 @@
   - `GOYAIS_DB_PASSWORD`
   - `GOYAIS_DB_FLYWAY_ENABLED`
   - `GOYAIS_RESOURCE_SERVER_JWK_SET_URI`
+  - `GOYAIS_STORAGE_PROVIDER`
+  - `GOYAIS_STORAGE_LOCAL_ROOT`
+  - `GOYAIS_STORAGE_BUCKET`
+  - `GOYAIS_FEATURE_ASSET_LIFECYCLE`
+  - `GOYAIS_FEATURE_ACL_ROLE_SUBJECT`
 
 ## 8. 质量门禁 | Quality Gates
 

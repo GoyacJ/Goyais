@@ -16,6 +16,8 @@ import com.ysmjjsy.goyais.capability.cache.policy.RedisPolicyInvalidationPublish
 import com.ysmjjsy.goyais.capability.cache.policy.RedisPolicyInvalidationSubscriber;
 import com.ysmjjsy.goyais.capability.cache.policy.RedisPolicySnapshotProvider;
 import com.ysmjjsy.goyais.capability.event.DomainEventPublisher;
+import com.ysmjjsy.goyais.capability.storage.LocalObjectStorage;
+import com.ysmjjsy.goyais.capability.storage.ObjectStorage;
 import com.ysmjjsy.goyais.contract.api.common.CommandCreateRequest;
 import com.ysmjjsy.goyais.kernel.core.ExecutionContext;
 import com.ysmjjsy.goyais.kernel.mybatis.DataPermissionResolver;
@@ -32,6 +34,7 @@ import com.ysmjjsy.goyais.kernel.security.PolicyInvalidationSubscriber;
 import com.ysmjjsy.goyais.kernel.security.PolicySnapshot;
 import com.ysmjjsy.goyais.kernel.security.PolicySnapshotProvider;
 import com.ysmjjsy.goyais.kernel.security.PolicySnapshotStore;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -159,6 +162,23 @@ public class ApiServerConfiguration {
     }
 
     /**
+     * Provides local object storage provider for minimal and bootstrap profiles.
+     */
+    @Bean
+    public ObjectStorage objectStorage(
+            @Value("${goyais.storage.provider:local}") String provider,
+            @Value("${goyais.storage.local-root:${java.io.tmpdir}/goyais-storage}") String localRoot
+    ) {
+        // v0.1 bootstrap maps all providers to local filesystem to keep runtime minimal.
+        String normalized = provider == null ? "local" : provider.trim().toLowerCase();
+        return switch (normalized) {
+            case "local" -> new LocalObjectStorage(Path.of(localRoot));
+            case "minio", "s3" -> new LocalObjectStorage(Path.of(localRoot).resolve(normalized));
+            default -> throw new IllegalStateException("unsupported object storage provider: " + provider);
+        };
+    }
+
+    /**
      * Uses in-process sink while event bus integration is still in bootstrap phase.
      */
     @Bean
@@ -179,10 +199,16 @@ public class ApiServerConfiguration {
     ) {
         return new CommandHandler() {
             /**
-             * Accepts all commands during bootstrap to preserve command-first compatibility.
+             * Accepts non-asset and non-share commands during bootstrap fallback.
              */
             @Override
             public boolean supports(String commandType) {
+                if (commandType == null || commandType.isBlank()) {
+                    return false;
+                }
+                if (commandType.startsWith("asset.") || commandType.startsWith("share.")) {
+                    return false;
+                }
                 return true;
             }
 

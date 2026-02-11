@@ -16,6 +16,13 @@ spring:
         jwt:
           jwk-set-uri: ${GOYAIS_RESOURCE_SERVER_JWK_SET_URI:http://127.0.0.1:18080/oauth2/jwks}
 goyais:
+  storage:
+    provider: ${GOYAIS_STORAGE_PROVIDER:local}
+    local-root: ${GOYAIS_STORAGE_LOCAL_ROOT:${java.io.tmpdir}/goyais-storage}
+    bucket: ${GOYAIS_STORAGE_BUCKET:assets}
+  feature:
+    asset-lifecycle-enabled: ${GOYAIS_FEATURE_ASSET_LIFECYCLE:true}
+    acl-role-subject-enabled: ${GOYAIS_FEATURE_ACL_ROLE_SUBJECT:true}
   security:
     topology-mode: ${GOYAIS_SECURITY_TOPOLOGY_MODE:single}
     dev-header-context-enabled: ${GOYAIS_SECURITY_DEV_HEADER_CONTEXT_ENABLED:false}

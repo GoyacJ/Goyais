@@ -19,7 +19,7 @@
 
 - PostgreSQL + Redis + Local file store starts successfully.
 - `GET /api/v1/healthz` and `GET /api/v1/system/healthz` return provider readiness.
-- Flyway baseline migration creates `commands/audit_events/policies/acl_entries`.
+- Flyway migration creates `commands/audit_events/policies/acl_entries/assets/asset_lineage`.
 
 ## 4. Security and Auth
 
@@ -45,6 +45,18 @@
 
 - cache/event/messaging/storage SPI are available and swappable.
 - memory/local fallback paths work when kafka/minio/s3 are unavailable.
+
+## 7.1 Assets and Shares
+
+- `assets`:
+  - `POST /api/v1/assets` returns 202 and `WriteResponseAsset` payload.
+  - `GET /api/v1/assets` returns deterministic ordering `created_at DESC, id DESC`.
+  - `PATCH/DELETE /api/v1/assets/{assetId}` obey `GOYAIS_FEATURE_ASSET_LIFECYCLE`.
+  - `GET /api/v1/assets/{assetId}/lineage` returns `assetId + edges`.
+- `shares`:
+  - `POST /api/v1/shares` returns 202 and `WriteResponseShare`.
+  - `DELETE /api/v1/shares/{shareId}` returns 202 and `status=deleted`.
+  - `GOYAIS_FEATURE_ACL_ROLE_SUBJECT=false` 时，`subjectType=role` 返回 `INVALID_SHARE_REQUEST`.
 
 ## 8. Comment and CI Gates
 

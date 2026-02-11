@@ -13,7 +13,7 @@
 2. Application Layer: Command pipeline + use cases。
 3. Domain Layer: aggregate/state machine/policy。
 4. Infrastructure Layer: MyBatis/Flyway/Redis/ObjectStorage/MessageBus。
-5. Persistence Baseline: `commands` + `audit_events` + `policies` + `acl_entries`。
+5. Persistence Baseline: `commands` + `audit_events` + `policies` + `acl_entries` + `assets` + `asset_lineage`。
 
 ## 3. Command Pipeline
 
@@ -24,6 +24,7 @@
 5. Event
 
 审计写入路径：`CommandPipeline -> AuditEventStore -> audit_events`。
+业务写路径（已落地）：`asset.*`、`share.*` 均通过 command handler 执行，不允许旁路写入。
 
 ## 4. Security Model
 

@@ -38,6 +38,11 @@
         </dependency>
         <dependency>
             <groupId>com.ysmjjsy.goyais</groupId>
+            <artifactId>capability-storage</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.ysmjjsy.goyais</groupId>
             <artifactId>kernel-mybatis</artifactId>
             <version>${project.version}</version>
         </dependency>

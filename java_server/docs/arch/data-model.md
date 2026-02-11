@@ -23,7 +23,7 @@
 
 ## 3. ACL
 
-- `acl_entries(resource_type, resource_id, subject_id, permissions, created_at)`
+- `acl_entries(id, tenant_id, workspace_id, resource_type, resource_id, subject_type, subject_id, permissions, expires_at, created_by, created_at)`
 - `permissions` 使用 jsonb 存储。
 
 ## 4. Command and Audit
@@ -69,8 +69,19 @@
 
 ## 6. Asset and Lineage
 
-- `assets`
-- `asset_lineage`
+- `assets`（已落地）
+  - `id` (PK)
+  - `tenant_id/workspace_id/owner_id`
+  - `visibility/acl_json/status`
+  - `name/type/mime/size/hash/uri`
+  - `metadata_json`
+  - `created_at/updated_at`
+- `asset_lineage`（已落地）
+  - `id` (PK)
+  - `tenant_id/workspace_id`
+  - `source_asset_id/target_asset_id`
+  - `run_id/step_id/relation`
+  - `created_at`
 
 ## 7. Workflow
 

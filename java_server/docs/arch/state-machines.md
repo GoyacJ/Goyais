@@ -23,6 +23,23 @@
 - States: `pending -> running -> succeeded|failed|canceled`
 - Retry creates new run with `retry_of_run_id`
 
+## 3.1 Asset
+
+- Asset lifecycle（v0.1）：`ready -> deleted`。
+- Write path:
+  - `asset.upload` 创建 `ready`
+  - `asset.update` 更新元数据/可见性
+  - `asset.delete` 进入 `deleted`
+- 受开关控制：`GOYAIS_FEATURE_ASSET_LIFECYCLE`（关闭时 `asset.update/delete` 返回 `NOT_IMPLEMENTED`）。
+
+## 3.2 Share
+
+- Share lifecycle（v0.1）：`active -> deleted`（删除为物理删除，API 返回 `status=deleted`）。
+- Write path:
+  - `share.create` 写入 `acl_entries`
+  - `share.delete` 删除当前创建者的 share 行
+- 受开关控制：`GOYAIS_FEATURE_ACL_ROLE_SUBJECT`（关闭时拒绝 `subjectType=role`）。
+
 ## 4. StepRun
 
 - States: `pending -> running -> succeeded|failed|canceled|skipped`

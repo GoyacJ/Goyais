@@ -8,6 +8,7 @@
  */
 package com.ysmjjsy.goyais.adapter.rest;
 
+import com.ysmjjsy.goyais.application.common.ContractException;
 import com.ysmjjsy.goyais.contract.api.common.ErrorEnvelope;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -22,6 +23,18 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  */
 @RestControllerAdvice
 public final class GlobalExceptionHandler {
+
+    /**
+     * Maps contract exceptions to declared status and error envelope fields.
+     */
+    @ExceptionHandler(ContractException.class)
+    public ResponseEntity<ErrorEnvelope> handleContractException(ContractException ex) {
+        return ResponseEntity.status(ex.statusCode()).body(ErrorEnvelope.of(
+                ex.code(),
+                ex.messageKey(),
+                ex.details()
+        ));
+    }
 
     /**
      * Maps argument validation failures to INVALID_REQUEST contract error.
