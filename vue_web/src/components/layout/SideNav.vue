@@ -5,24 +5,18 @@
     @mouseenter="hovering = true"
     @mouseleave="hovering = false"
   >
-    <div class="flex h-[4.25rem] shrink-0 items-center justify-between gap-2 border-b border-ui-border px-3 py-2">
-      <div
-        class="min-w-0 flex-1"
-        :class="collapsed
-          ? 'pointer-events-none max-w-0 overflow-hidden opacity-0'
-          : 'max-w-[11rem] opacity-100 transition-[opacity,max-width] duration-150'"
-      >
-        <p class="text-[11px] uppercase leading-none tracking-[0.14em] text-ui-muted">{{ t('common.workspaceLabel') }}</p>
-        <p class="truncate text-sm font-semibold leading-tight text-ui-fg">{{ t('common.workspace') }}</p>
+    <div class="flex h-[4.5rem] shrink-0 items-center gap-2 border-b border-ui-border px-3 py-2">
+      <div class="min-w-0 flex-1">
+        <WorkspaceAccountMenu :collapsed="collapsed" />
       </div>
       <button
         type="button"
-        class="ui-control ui-focus-ring ui-pressable inline-flex h-8 w-10 min-h-0 shrink-0 items-center justify-center px-1 py-1 text-xs"
+        class="ui-control ui-focus-ring ui-pressable inline-flex h-8 w-8 min-h-0 shrink-0 items-center justify-center p-0"
         :aria-label="pinned ? t('common.unpinNav') : t('common.pinNav')"
         :data-pinned="pinned ? 'true' : 'false'"
         @click="onTogglePinned"
       >
-        {{ pinned ? t('common.unpinShort') : t('common.pinShort') }}
+        <Icon :name="pinned ? 'sidebar-collapse' : 'sidebar-expand'" :size="14" decorative />
       </button>
     </div>
 
@@ -40,7 +34,6 @@
           <Icon :name="item.icon" :size="16" decorative class="opacity-90" />
           <span v-if="!collapsed" class="truncate">{{ t(item.label) }}</span>
         </span>
-        <span v-if="!collapsed" class="ui-monospace text-xs text-ui-muted">{{ item.shortcut }}</span>
       </RouterLink>
     </nav>
   </aside>
@@ -56,6 +49,7 @@
  * Description: Goyais source file.
  */
 import Icon from '@/components/ui/Icon.vue'
+import WorkspaceAccountMenu from '@/components/layout/WorkspaceAccountMenu.vue'
 import { NAV_ITEMS } from '@/design-system/navigation'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

@@ -20,6 +20,13 @@ import shieldExclamationIcon from '@/assets/icons/heroicons/24/outline/shield-ex
 import exclamationTriangleIcon from '@/assets/icons/heroicons/24/outline/exclamation-triangle.svg?raw'
 import magnifyingGlassIcon from '@/assets/icons/heroicons/24/outline/magnifying-glass.svg?raw'
 import chevronDownIcon from '@/assets/icons/heroicons/24/outline/chevron-down.svg?raw'
+import plusIcon from '@/assets/icons/heroicons/24/outline/plus.svg?raw'
+import xMarkIcon from '@/assets/icons/heroicons/24/outline/x-mark.svg?raw'
+import checkIcon from '@/assets/icons/heroicons/24/outline/check.svg?raw'
+import userCircleIcon from '@/assets/icons/heroicons/24/outline/user-circle.svg?raw'
+import sidebarExpandIcon from '@/assets/icons/heroicons/24/outline/sidebar-expand.svg?raw'
+import sidebarCollapseIcon from '@/assets/icons/heroicons/24/outline/sidebar-collapse.svg?raw'
+import arrowRightOnRectangleIcon from '@/assets/icons/heroicons/24/outline/arrow-right-on-rectangle.svg?raw'
 
 export type IconName =
   | 'home'
@@ -36,6 +43,13 @@ export type IconName =
   | 'not-found'
   | 'search'
   | 'chevron-down'
+  | 'plus'
+  | 'close'
+  | 'check'
+  | 'user'
+  | 'sidebar-expand'
+  | 'sidebar-collapse'
+  | 'logout'
 
 const registry: Record<IconName, string> = {
   home: homeIcon,
@@ -52,6 +66,13 @@ const registry: Record<IconName, string> = {
   'not-found': magnifyingGlassIcon,
   search: magnifyingGlassIcon,
   'chevron-down': chevronDownIcon,
+  plus: plusIcon,
+  close: xMarkIcon,
+  check: checkIcon,
+  user: userCircleIcon,
+  'sidebar-expand': sidebarExpandIcon,
+  'sidebar-collapse': sidebarCollapseIcon,
+  logout: arrowRightOnRectangleIcon,
 }
 
 export function resolveIconSvg(name: IconName): string {

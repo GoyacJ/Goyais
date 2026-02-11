@@ -13,6 +13,7 @@
         :show-mobile-nav-button="!isDesktop"
         @toggle-mobile-nav="openMobileNav"
       />
+      <RouteTabBar v-if="!isImmersiveRoute" />
 
       <main :class="mainClass">
         <RouterView />
@@ -33,6 +34,7 @@
  * Description: Goyais source file.
  */
 import MobileNavDrawer from '@/components/layout/MobileNavDrawer.vue'
+import RouteTabBar from '@/components/layout/RouteTabBar.vue'
 import SideNav from '@/components/layout/SideNav.vue'
 import TopBar from '@/components/layout/TopBar.vue'
 import ToastViewport from '@/components/ui/ToastViewport.vue'

@@ -42,6 +42,10 @@
         </button>
       </header>
 
+      <div class="border-b border-ui-border px-3 py-3">
+        <WorkspaceAccountMenu />
+      </div>
+
       <nav class="ui-page p-3">
         <RouterLink
           v-for="item in NAV_ITEMS"
@@ -55,7 +59,6 @@
             <Icon :name="item.icon" :size="16" decorative />
             <span class="truncate">{{ t(item.label) }}</span>
           </span>
-          <span class="ui-monospace text-xs text-ui-muted">{{ item.shortcut }}</span>
         </RouterLink>
       </nav>
     </aside>
@@ -72,6 +75,7 @@
  * Description: Goyais source file.
  */
 import Icon from '@/components/ui/Icon.vue'
+import WorkspaceAccountMenu from '@/components/layout/WorkspaceAccountMenu.vue'
 import { NAV_ITEMS } from '@/design-system/navigation'
 import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

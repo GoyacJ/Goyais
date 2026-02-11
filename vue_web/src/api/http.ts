@@ -26,6 +26,14 @@ export interface ApiRuntimeConfig {
   mockEnabled: boolean
 }
 
+export interface ApiRuntimeContext {
+  tenantId: string
+  workspaceId: string
+  userId: string
+  roles: string
+  policyVersion: string
+}
+
 export interface ApiRequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   query?: Record<string, string | number | undefined>
@@ -162,6 +170,23 @@ const runtimeConfig: ApiRuntimeConfig = {
 
 export function getApiRuntimeConfig(): ApiRuntimeConfig {
   return { ...runtimeConfig }
+}
+
+function resolveContextValue(value: string | undefined, fallback: string): string {
+  if (typeof value !== 'string') {
+    return fallback
+  }
+
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : fallback
+}
+
+export function setApiRuntimeContext(context: Partial<ApiRuntimeContext>): void {
+  runtimeConfig.tenantId = resolveContextValue(context.tenantId, runtimeConfig.tenantId)
+  runtimeConfig.workspaceId = resolveContextValue(context.workspaceId, runtimeConfig.workspaceId)
+  runtimeConfig.userId = resolveContextValue(context.userId, runtimeConfig.userId)
+  runtimeConfig.roles = resolveContextValue(context.roles, runtimeConfig.roles)
+  runtimeConfig.policyVersion = resolveContextValue(context.policyVersion, runtimeConfig.policyVersion)
 }
 
 export function isMockEnabled(): boolean {
