@@ -233,6 +233,7 @@ Command 执行管道（必须）：
     - `GET/POST /workflow-templates`
     - `GET /workflow-templates/{templateId}`
     - `POST /workflow-templates/{templateId}:patch`
+      - `operations` 补丁由服务端执行受控校验与应用（`add_node/update_node/remove_node/add_edge/remove_edge/annotate`）
     - `POST /workflow-templates/{templateId}:publish`
     - `GET/POST /workflow-runs`
     - `GET /workflow-runs/{runId}`

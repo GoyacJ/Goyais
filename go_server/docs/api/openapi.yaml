@@ -2669,7 +2669,15 @@ components:
           items:
             type: object
             additionalProperties: true
-      description: 至少需要提供 graph 或 operations 之一。
+      description: |
+        至少需要提供 graph 或 operations 之一。
+        当使用 operations 时，服务端会校验并应用受控补丁操作：
+        - `add_node`
+        - `update_node`
+        - `remove_node`
+        - `add_edge`
+        - `remove_edge`
+        - `annotate`（仅元数据标注，不直接修改 graph 结构）
       anyOf:
         - required: [graph]
         - required: [operations]

@@ -183,11 +183,11 @@
             <div class="mb-2 font-medium text-ui-text">{{ t('page.canvas.patchDiffTitle') }}</div>
             <div class="space-y-1 text-ui-muted">
               <div>{{ t('page.canvas.patchSource') }}: {{ patchSourceLabel }}</div>
-              <div>{{ t('page.canvas.patchAddedNodes') }}: {{ patchDiff.addedNodes.length }}</div>
-              <div>{{ t('page.canvas.patchRemovedNodes') }}: {{ patchDiff.removedNodes.length }}</div>
-              <div>{{ t('page.canvas.patchChangedNodes') }}: {{ patchDiff.changedNodes.length }}</div>
-              <div>{{ t('page.canvas.patchAddedEdges') }}: {{ patchDiff.addedEdges.length }}</div>
-              <div>{{ t('page.canvas.patchRemovedEdges') }}: {{ patchDiff.removedEdges.length }}</div>
+              <div>{{ t('page.canvas.patchAddedNodes') }}: {{ displayPatchDiff.addedNodes.length }}</div>
+              <div>{{ t('page.canvas.patchRemovedNodes') }}: {{ displayPatchDiff.removedNodes.length }}</div>
+              <div>{{ t('page.canvas.patchChangedNodes') }}: {{ displayPatchDiff.changedNodes.length }}</div>
+              <div>{{ t('page.canvas.patchAddedEdges') }}: {{ displayPatchDiff.addedEdges.length }}</div>
+              <div>{{ t('page.canvas.patchRemovedEdges') }}: {{ displayPatchDiff.removedEdges.length }}</div>
             </div>
             <Button class="mt-3" variant="secondary" :disabled="!selectedTemplateId || isBusy" @click="onApplyAIPatch">
               {{ t('page.canvas.actionApplyAIPatch') }}
@@ -259,6 +259,7 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
 import { ApiHttpError, isMockEnabled } from '@/api/http'
+import { previewAIPlan } from '@/api/ai'
 import type { ApiError, ApiObject, StepRunDTO, WorkflowRunDTO, WorkflowRunEventDTO, WorkflowTemplateDTO } from '@/api/types'
 import {
   cancelWorkflowRun,
@@ -351,6 +352,13 @@ const connectionError = ref('')
 const lastPatchSource = ref<'manual' | 'ai.intent.plan'>('manual')
 const patchValidationMessage = ref('')
 const patchValidationTone = ref<'neutral' | 'success' | 'error'>('neutral')
+const aiPatchPreviewDiff = ref<{
+  addedNodes: string[]
+  removedNodes: string[]
+  changedNodes: string[]
+  addedEdges: string[]
+  removedEdges: string[]
+} | null>(null)
 
 const historyStack = ref<string[]>([])
 const historyIndex = ref(-1)
@@ -436,6 +444,7 @@ const patchDiff = computed(() => {
 
   return { addedNodes, removedNodes, changedNodes, addedEdges, removedEdges }
 })
+const displayPatchDiff = computed(() => aiPatchPreviewDiff.value ?? patchDiff.value)
 
 watch([graphNodes, graphEdges], () => {
   if (!restoringHistory.value) {
@@ -717,8 +726,8 @@ function onRemoveSelectedNode(): void {
   selectedNodeId.value = null
 }
 
-function onApplyAIPatch(): void {
-  if (!selectedTemplateId.value || isBusy.value) {
+async function onApplyAIPatch(): Promise<void> {
+  if (!selectedTemplateId.value || isBusy.value || useMock) {
     return
   }
   const sourceNode = selectedNode.value ?? graphNodes.value[graphNodes.value.length - 1]
@@ -729,43 +738,53 @@ function onApplyAIPatch(): void {
   }
 
   const sourceData = normalizeNodeData(sourceNode.data, sourceNode.id, sourceNode.type ?? 'typed')
-  const aiPreset = nodePresets.find((item) => item.nodeType === 'control.branch') ?? nodePresets[0]
-  if (!aiPreset || !isTypeCompatible(sourceData.outputType, aiPreset.inputType)) {
+  const patchHint = inferAIPatchHint(sourceData.outputType)
+  const previewMessage = `patch workflow ${selectedTemplateId.value} from ${sourceNode.id} add ${patchHint}`
+
+  aiPatchPreviewDiff.value = null
+  isBusy.value = true
+  try {
+    const preview = await previewAIPlan({ message: previewMessage })
+    const plan = asObject(preview.plan)
+    const commandType = readString(plan, 'commandType')
+    if (commandType !== 'workflow.patch') {
+      throw new ApiHttpError(400, {
+        code: 'INVALID_WORKFLOW_REQUEST',
+        messageKey: 'error.workflow.invalid_request',
+        details: { reason: readString(plan, 'reason') || 'invalid_patch_plan' },
+      })
+    }
+    const payload = asObject(plan.payload)
+    const patch = asObject(payload.patch)
+    const operations = normalizePatchOperations(patch.operations)
+    if (operations.length === 0) {
+      throw new ApiHttpError(400, {
+        code: 'INVALID_WORKFLOW_REQUEST',
+        messageKey: 'error.workflow.invalid_request',
+        details: { reason: 'missing_patch_operations' },
+      })
+    }
+
+    aiPatchPreviewDiff.value = summarizePatchOperations(operations)
+    const patchResponse = await patchWorkflowTemplate(selectedTemplateId.value, { operations })
+    const nextGraph = normalizeGraphFromTemplate(patchResponse.resource.graph)
+    graphNodes.value = nextGraph.nodes
+    graphEdges.value = nextGraph.edges
+    baseGraph.value = cloneGraph(nextGraph)
+    selectedNodeId.value = findAddedNodeIDFromOperations(operations) ?? selectedNodeId.value
+    resetHistory()
+
+    lastPatchSource.value = 'ai.intent.plan'
+    patchValidationTone.value = 'success'
+    patchValidationMessage.value = t('page.canvas.patchApplySuccess')
+  } catch (error) {
+    const apiErr = asApiError(error)
+    apiError.value = apiErr
     patchValidationTone.value = 'error'
-    patchValidationMessage.value = t('page.canvas.patchApplyFailedTypeMismatch', {
-      sourceType: sourceData.outputType,
-      targetType: aiPreset?.inputType ?? 'unknown',
-    })
-    return
+    patchValidationMessage.value = t(apiErr.messageKey || 'error.workflow.invalid_request', apiErr.details ?? {})
+  } finally {
+    isBusy.value = false
   }
-
-  const nodeID = `ai_patch_${Date.now()}`
-  const patchNode: Node<GraphNodeData> = {
-    id: nodeID,
-    type: 'typed',
-    position: {
-      x: sourceNode.position.x + 220,
-      y: sourceNode.position.y + 40,
-    },
-    data: {
-      label: `${aiPreset.label} (AI)`,
-      inputType: aiPreset.inputType,
-      outputType: aiPreset.outputType,
-      nodeType: aiPreset.nodeType,
-    },
-  }
-  const patchEdge: Edge = {
-    id: `e_${sourceNode.id}_${nodeID}_${Date.now()}`,
-    source: sourceNode.id,
-    target: nodeID,
-  }
-
-  graphNodes.value = [...graphNodes.value, patchNode]
-  graphEdges.value = [...graphEdges.value, patchEdge]
-  selectedNodeId.value = nodeID
-  lastPatchSource.value = 'ai.intent.plan'
-  patchValidationTone.value = 'success'
-  patchValidationMessage.value = t('page.canvas.patchApplySuccess')
 }
 
 async function onCreateTemplate(): Promise<void> {
@@ -1148,8 +1167,109 @@ function cloneGraph(graph: GraphSnapshot): GraphSnapshot {
   }
 }
 
+function inferAIPatchHint(sourceOutputType: string): string {
+  if (sourceOutputType === 'text') {
+    return 'transform'
+  }
+  if (sourceOutputType === 'json') {
+    return 'control'
+  }
+  if (sourceOutputType === 'any') {
+    return 'output'
+  }
+  return 'control'
+}
+
+function normalizePatchOperations(raw: unknown): ApiObject[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  return raw
+    .map((item) => asObject(item))
+    .filter((item) => Object.keys(item).length > 0)
+}
+
+function summarizePatchOperations(operations: ApiObject[]): {
+  addedNodes: string[]
+  removedNodes: string[]
+  changedNodes: string[]
+  addedEdges: string[]
+  removedEdges: string[]
+} {
+  const addedNodes: string[] = []
+  const removedNodes: string[] = []
+  const changedNodes: string[] = []
+  const addedEdges: string[] = []
+  const removedEdges: string[] = []
+
+  for (const operation of operations) {
+    const opType = readString(operation, 'op').toLowerCase()
+    const value = asObject(operation.value)
+    const path = readString(operation, 'path')
+    if (opType === 'add_node') {
+      const id = readString(value, 'id')
+      if (id) {
+        addedNodes.push(id)
+      }
+      continue
+    }
+    if (opType === 'remove_node') {
+      const id = readString(value, 'id') || extractPathID(path, '/nodes/')
+      if (id) {
+        removedNodes.push(id)
+      }
+      continue
+    }
+    if (opType === 'update_node') {
+      const id = readString(value, 'id') || extractPathID(path, '/nodes/')
+      if (id) {
+        changedNodes.push(id)
+      }
+      continue
+    }
+    if (opType === 'add_edge') {
+      const id = readString(value, 'id')
+      if (id) {
+        addedEdges.push(id)
+      }
+      continue
+    }
+    if (opType === 'remove_edge') {
+      const id = readString(value, 'id') || extractPathID(path, '/edges/')
+      if (id) {
+        removedEdges.push(id)
+      }
+    }
+  }
+
+  return { addedNodes, removedNodes, changedNodes, addedEdges, removedEdges }
+}
+
+function findAddedNodeIDFromOperations(operations: ApiObject[]): string | null {
+  for (const operation of operations) {
+    const opType = readString(operation, 'op').toLowerCase()
+    if (opType !== 'add_node') {
+      continue
+    }
+    const value = asObject(operation.value)
+    const id = readString(value, 'id')
+    if (id) {
+      return id
+    }
+  }
+  return null
+}
+
+function extractPathID(path: string, prefix: string): string {
+  if (!path.startsWith(prefix)) {
+    return ''
+  }
+  return path.slice(prefix.length).replace(/^\/+/, '').trim()
+}
+
 function markPatchSourceManual(): void {
   lastPatchSource.value = 'manual'
+  aiPatchPreviewDiff.value = null
   patchValidationTone.value = 'neutral'
   patchValidationMessage.value = ''
 }

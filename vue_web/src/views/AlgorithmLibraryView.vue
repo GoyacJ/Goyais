@@ -55,6 +55,34 @@
                 formatJSON(selectedAlgorithm.dependencies)
               }}</pre>
             </div>
+
+            <div class="rounded-lg border border-ui-border bg-ui-panel p-3">
+              <div class="mb-2 font-medium text-ui-text">{{ t('page.algorithmLibrary.runTitle') }}</div>
+              <p class="mb-2 text-[11px] text-ui-muted">{{ t('page.algorithmLibrary.runSubtitle') }}</p>
+              <Textarea
+                v-model="runInputsRaw"
+                :rows="6"
+                :placeholder="t('page.algorithmLibrary.runInputPlaceholder')"
+              />
+              <div class="mt-2 grid gap-2 md:grid-cols-[1fr_auto]">
+                <Select v-model="runMode" :options="runModeOptions" />
+                <Button :disabled="runSubmitting" @click="onRunAlgorithm">
+                  {{ t('page.algorithmLibrary.actionRun') }}
+                </Button>
+              </div>
+            </div>
+
+            <div class="rounded-lg border border-ui-border bg-ui-panel p-3 text-ui-muted">
+              <div class="mb-2 font-medium text-ui-text">{{ t('page.algorithmLibrary.runResultTitle') }}</div>
+              <div v-if="lastRunResult" class="space-y-1">
+                <div>runId: {{ lastRunResult.id }}</div>
+                <div>{{ t('page.algorithmLibrary.runFieldStatus') }}: {{ lastRunResult.status }}</div>
+                <div>{{ t('page.algorithmLibrary.runFieldWorkflowRunId') }}: {{ lastRunResult.workflowRunId }}</div>
+                <div>{{ t('page.algorithmLibrary.runFieldAssetIds') }}: {{ lastRunResult.assetIds.join(', ') || '-' }}</div>
+                <div>{{ t('page.algorithmLibrary.runFieldCommandId') }}: {{ lastRunResult.commandId }}</div>
+              </div>
+              <div v-else class="text-sm">{{ t('page.algorithmLibrary.runResultEmpty') }}</div>
+            </div>
           </div>
 
           <div v-else class="text-sm text-ui-muted">{{ t('page.algorithmLibrary.emptyDetail') }}</div>
@@ -74,6 +102,7 @@
  * Description: Goyais source file.
  */
 import { ApiHttpError } from '@/api/http'
+import { runAlgorithm } from '@/api/algorithms'
 import { listAlgorithms } from '@/api/registry'
 import type { AlgorithmDTO, ApiError } from '@/api/types'
 import PageHeader from '@/components/layout/PageHeader.vue'
@@ -81,17 +110,31 @@ import SectionCard from '@/components/layout/SectionCard.vue'
 import WindowBoard from '@/components/layout/WindowBoard.vue'
 import Button from '@/components/ui/Button.vue'
 import Icon from '@/components/ui/Icon.vue'
+import Select from '@/components/ui/Select.vue'
 import Table, { type TableColumn } from '@/components/ui/Table.vue'
+import Textarea from '@/components/ui/Textarea.vue'
+import { useToast } from '@/composables/useToast'
 import type { TableState } from '@/design-system/types'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n({ useScope: 'global' })
+const { pushToast } = useToast()
 
 const algorithms = ref<AlgorithmDTO[]>([])
 const selectedAlgorithmId = ref<string | null>(null)
 const tableState = ref<TableState>('loading')
 const apiError = ref<ApiError | null>(null)
+const runInputsRaw = ref('{\n  \n}')
+const runMode = ref<'sync' | 'running' | 'fail'>('sync')
+const runSubmitting = ref(false)
+const lastRunResult = ref<{
+  id: string
+  status: string
+  workflowRunId: string
+  assetIds: string[]
+  commandId: string
+} | null>(null)
 
 const windowPanes = computed(() => [
   { id: 'algorithm-list', title: t('page.algorithmLibrary.listTitle') },
@@ -117,6 +160,11 @@ const rows = computed(() =>
 const selectedAlgorithm = computed(
   () => algorithms.value.find((item) => item.id === selectedAlgorithmId.value) ?? null,
 )
+const runModeOptions = computed(() => [
+  { value: 'sync', label: 'sync' },
+  { value: 'running', label: 'running' },
+  { value: 'fail', label: 'fail' },
+])
 
 const tableErrorMessage = computed(() => {
   if (!apiError.value) {
@@ -157,10 +205,62 @@ async function loadAlgorithms(): Promise<void> {
 
 function onRowClick(payload: { rowKey: string }): void {
   selectedAlgorithmId.value = payload.rowKey
+  runInputsRaw.value = '{\n  \n}'
+  lastRunResult.value = null
 }
 
 async function onRefresh(): Promise<void> {
   await loadAlgorithms()
+}
+
+async function onRunAlgorithm(): Promise<void> {
+  if (!selectedAlgorithm.value || runSubmitting.value) {
+    return
+  }
+  let inputs: Record<string, unknown>
+  try {
+    const parsed = JSON.parse(runInputsRaw.value || '{}') as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('inputs_not_object')
+    }
+    inputs = parsed as Record<string, unknown>
+  } catch {
+    pushToast({
+      tone: 'error',
+      title: t('page.algorithmLibrary.actionRun'),
+      message: t('error.request.invalid_json'),
+    })
+    return
+  }
+
+  runSubmitting.value = true
+  try {
+    const response = await runAlgorithm(selectedAlgorithm.value.id, {
+      inputs,
+      mode: runMode.value,
+    })
+    lastRunResult.value = {
+      id: response.resource.id,
+      status: response.resource.status,
+      workflowRunId: response.resource.workflowRunId,
+      assetIds: Array.isArray(response.resource.assetIds) ? response.resource.assetIds : [],
+      commandId: response.commandRef.commandId,
+    }
+    pushToast({
+      tone: 'success',
+      title: t('page.algorithmLibrary.actionRun'),
+      message: `${t('page.algorithmLibrary.runFieldCommandId')}: ${response.commandRef.commandId}`,
+    })
+  } catch (error) {
+    const apiErr = asApiError(error)
+    pushToast({
+      tone: 'error',
+      title: t('page.algorithmLibrary.actionRun'),
+      message: t(apiErr.messageKey || 'error.common.internal', apiErr.details ?? {}),
+    })
+  } finally {
+    runSubmitting.value = false
+  }
 }
 
 function asApiError(error: unknown): ApiError {
