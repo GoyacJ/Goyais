@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Command handler for workflow run create/cancel actions.
+ * <p>Command handler for workflow run create/cancel actions.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.application.workflow;
 
 import com.ysmjjsy.goyais.application.command.CommandHandler;
@@ -36,6 +35,10 @@ public final class WorkflowRunCommandHandler implements CommandHandler {
 
     /**
      * Creates handler with workflow repositories and feature gate.
+     * @param templateRepository TODO
+     * @param runRepository TODO
+     * @param workflowEnabled TODO
+     * @return TODO
      */
     public WorkflowRunCommandHandler(
             WorkflowTemplateRepository templateRepository,
@@ -49,6 +52,8 @@ public final class WorkflowRunCommandHandler implements CommandHandler {
 
     /**
      * Returns true when command type belongs to workflow run actions.
+     * @param commandType TODO
+     * @return TODO
      */
     @Override
     public boolean supports(String commandType) {
@@ -57,6 +62,9 @@ public final class WorkflowRunCommandHandler implements CommandHandler {
 
     /**
      * Executes workflow run command and returns command result payload.
+     * @param request TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public Map<String, Object> execute(CommandCreateRequest request, ExecutionContext context) {

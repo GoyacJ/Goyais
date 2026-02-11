@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Dynamic authorization gate backed by policyVersion-aware snapshots.
+ * <p>Dynamic authorization gate backed by policyVersion-aware snapshots.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.kernel.security;
 
 import com.ysmjjsy.goyais.contract.api.common.CommandCreateRequest;
@@ -22,6 +21,8 @@ public final class DynamicAuthorizationGate implements AuthorizationGate {
 
     /**
      * Creates a dynamic gate that can be disabled by runtime configuration.
+     * @param snapshotProvider TODO
+     * @param dynamicEnabled TODO
      */
     public DynamicAuthorizationGate(PolicySnapshotProvider snapshotProvider, boolean dynamicEnabled) {
         this.snapshotProvider = snapshotProvider;
@@ -30,6 +31,9 @@ public final class DynamicAuthorizationGate implements AuthorizationGate {
 
     /**
      * Evaluates one command request against the latest effective policy snapshot.
+     * @param request TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public AuthorizationDecision authorize(CommandCreateRequest request, ExecutionContext context) {

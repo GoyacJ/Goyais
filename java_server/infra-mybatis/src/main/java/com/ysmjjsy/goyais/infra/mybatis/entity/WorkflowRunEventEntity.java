@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Persisted workflow run event row mapped from workflow_run_events table.
+ * <p>Persisted workflow run event row mapped from workflow_run_events table.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.infra.mybatis.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -19,27 +18,51 @@ import java.time.Instant;
  */
 @TableName("workflow_run_events")
 public final class WorkflowRunEventEntity {
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableId(value = "id", type = IdType.INPUT)
     public String id;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("run_id")
     public String runId;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("tenant_id")
     public String tenantId;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("workspace_id")
     public String workspaceId;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("step_key")
     public String stepKey;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("event_type")
     public String eventType;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("payload")
     public String payloadJson;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("created_at")
     public Instant createdAt;
 }

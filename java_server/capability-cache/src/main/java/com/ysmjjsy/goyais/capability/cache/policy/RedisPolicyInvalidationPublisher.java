@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Redis pubsub publisher for policy invalidation events.
+ * <p>Redis pubsub publisher for policy invalidation events.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.capability.cache.policy;
 
 import com.ysmjjsy.goyais.kernel.security.PolicyInvalidationEvent;
@@ -23,6 +22,8 @@ public final class RedisPolicyInvalidationPublisher implements PolicyInvalidatio
 
     /**
      * Creates one publisher bound to a fixed Redis topic channel.
+     * @param redisTemplate TODO
+     * @param channel TODO
      */
     public RedisPolicyInvalidationPublisher(StringRedisTemplate redisTemplate, String channel) {
         this.redisTemplate = redisTemplate;
@@ -31,6 +32,7 @@ public final class RedisPolicyInvalidationPublisher implements PolicyInvalidatio
 
     /**
      * Publishes one event payload to the configured Redis channel.
+     * @param event TODO
      */
     @Override
     public void publish(PolicyInvalidationEvent event) {

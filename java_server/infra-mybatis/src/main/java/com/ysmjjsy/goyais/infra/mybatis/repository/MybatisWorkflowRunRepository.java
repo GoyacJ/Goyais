@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: MyBatisPlus implementation of workflow run repository and step/event read models.
+ * <p>MyBatisPlus implementation of workflow run repository and step/event read models.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.infra.mybatis.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -52,6 +51,11 @@ public final class MybatisWorkflowRunRepository implements WorkflowRunRepository
 
     /**
      * Creates repository with run/step/event mappers, permission resolver, and JSON codec.
+     * @param runMapper TODO
+     * @param stepMapper TODO
+     * @param eventMapper TODO
+     * @param dataPermissionResolver TODO
+     * @param objectMapper TODO
      */
     public MybatisWorkflowRunRepository(
             WorkflowRunEntityMapper runMapper,
@@ -69,6 +73,15 @@ public final class MybatisWorkflowRunRepository implements WorkflowRunRepository
 
     /**
      * Creates one run row, one initial step row, and bootstrap run events.
+     * @param context TODO
+     * @param template TODO
+     * @param visibility TODO
+     * @param mode TODO
+     * @param fromStepKey TODO
+     * @param testNode TODO
+     * @param inputs TODO
+     * @param now TODO
+     * @return TODO
      */
     @Override
     public WorkflowRun createRun(
@@ -175,6 +188,9 @@ public final class MybatisWorkflowRunRepository implements WorkflowRunRepository
 
     /**
      * Returns one run in tenant/workspace scope without ACL read filtering.
+     * @param runId TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public WorkflowRun findByIdInScope(String runId, ExecutionContext context) {
@@ -184,6 +200,9 @@ public final class MybatisWorkflowRunRepository implements WorkflowRunRepository
 
     /**
      * Returns one readable run by id, or null when inaccessible.
+     * @param runId TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public WorkflowRun findReadableById(String runId, ExecutionContext context) {
@@ -195,6 +214,10 @@ public final class MybatisWorkflowRunRepository implements WorkflowRunRepository
 
     /**
      * Returns readable run list with deterministic descending order.
+     * @param context TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     @Override
     public List<WorkflowRun> listReadable(ExecutionContext context, int page, int pageSize) {
@@ -211,6 +234,8 @@ public final class MybatisWorkflowRunRepository implements WorkflowRunRepository
 
     /**
      * Returns count of readable runs for current context.
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public long countReadable(ExecutionContext context) {
@@ -221,6 +246,11 @@ public final class MybatisWorkflowRunRepository implements WorkflowRunRepository
 
     /**
      * Returns true when user or roles have requested ACL permission on run.
+     * @param runId TODO
+     * @param context TODO
+     * @param permission TODO
+     * @param now TODO
+     * @return TODO
      */
     @Override
     public boolean hasPermission(String runId, ExecutionContext context, Permission permission, Instant now) {
@@ -260,6 +290,10 @@ public final class MybatisWorkflowRunRepository implements WorkflowRunRepository
 
     /**
      * Cancels one active run and active steps, then emits cancellation events.
+     * @param runId TODO
+     * @param context TODO
+     * @param now TODO
+     * @return TODO
      */
     @Override
     public WorkflowRun cancelRun(String runId, ExecutionContext context, Instant now) {
@@ -309,6 +343,11 @@ public final class MybatisWorkflowRunRepository implements WorkflowRunRepository
 
     /**
      * Returns step runs for one readable run with deterministic descending order.
+     * @param runId TODO
+     * @param context TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     @Override
     public List<StepRun> listSteps(String runId, ExecutionContext context, int page, int pageSize) {
@@ -327,6 +366,9 @@ public final class MybatisWorkflowRunRepository implements WorkflowRunRepository
 
     /**
      * Returns count of step runs for one readable run.
+     * @param runId TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public long countSteps(String runId, ExecutionContext context) {
@@ -338,6 +380,9 @@ public final class MybatisWorkflowRunRepository implements WorkflowRunRepository
 
     /**
      * Returns run events for one readable run ordered by created_at ASC and id ASC.
+     * @param runId TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public List<WorkflowRunEvent> listEvents(String runId, ExecutionContext context) {

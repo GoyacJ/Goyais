@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: In-process invalidation bus fallback when Redis pubsub is not configured.
+ * <p>In-process invalidation bus fallback when Redis pubsub is not configured.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.kernel.security;
 
 import java.util.List;
@@ -20,6 +19,7 @@ public final class InMemoryPolicyInvalidationBus implements PolicyInvalidationPu
 
     /**
      * Dispatches invalidation events to all local subscribers.
+     * @param event TODO
      */
     @Override
     public void publish(PolicyInvalidationEvent event) {
@@ -30,6 +30,7 @@ public final class InMemoryPolicyInvalidationBus implements PolicyInvalidationPu
 
     /**
      * Registers one callback for future invalidation events.
+     * @param callback TODO
      */
     @Override
     public void start(Consumer<PolicyInvalidationEvent> callback) {

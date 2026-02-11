@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Local filesystem object storage provider for minimal profile.
+ * <p>Local filesystem object storage provider for minimal profile.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.capability.storage;
 
 import java.io.IOException;
@@ -19,6 +18,7 @@ public final class LocalObjectStorage implements ObjectStorage {
 
     /**
      * Creates local storage provider rooted at the supplied filesystem path.
+     * @param root TODO
      */
     public LocalObjectStorage(Path root) {
         this.root = root;
@@ -26,6 +26,11 @@ public final class LocalObjectStorage implements ObjectStorage {
 
     /**
      * Writes uploaded data to local filesystem and returns descriptor metadata.
+     * @param bucket TODO
+     * @param key TODO
+     * @param data TODO
+     * @param contentType TODO
+     * @return TODO
      */
     @Override
     public StorageObject put(String bucket, String key, InputStream data, String contentType) {
@@ -41,6 +46,9 @@ public final class LocalObjectStorage implements ObjectStorage {
 
     /**
      * Reads one object stream from local filesystem.
+     * @param bucket TODO
+     * @param key TODO
+     * @return TODO
      */
     @Override
     public InputStream get(String bucket, String key) {
@@ -53,6 +61,8 @@ public final class LocalObjectStorage implements ObjectStorage {
 
     /**
      * Deletes one object from local filesystem if it exists.
+     * @param bucket TODO
+     * @param key TODO
      */
     @Override
     public void delete(String bucket, String key) {

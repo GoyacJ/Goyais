@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Asset application service for list/detail and domain-sugar command entrypoints.
+ * <p>Asset application service for list/detail and domain-sugar command entrypoints.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.application.asset;
 
 import com.ysmjjsy.goyais.application.command.CommandApplicationService;
@@ -42,6 +41,8 @@ public final class AssetApplicationService {
 
     /**
      * Creates asset application service with command and repository dependencies.
+     * @param commandService TODO
+     * @param assetRepository TODO
      */
     public AssetApplicationService(CommandApplicationService commandService, AssetRepository assetRepository) {
         this.commandService = commandService;
@@ -50,6 +51,10 @@ public final class AssetApplicationService {
 
     /**
      * Creates asset through command-first flow and returns accepted write response.
+     * @param request TODO
+     * @param file TODO
+     * @param context TODO
+     * @return TODO
      */
     public WriteResponse<Asset> create(AssetCreateRequest request, byte[] file, ExecutionContext context) {
         if (file == null || file.length == 0) {
@@ -88,6 +93,10 @@ public final class AssetApplicationService {
 
     /**
      * Updates one asset through command-first flow.
+     * @param assetId TODO
+     * @param request TODO
+     * @param context TODO
+     * @return TODO
      */
     public WriteResponse<Asset> update(String assetId, AssetUpdateRequest request, ExecutionContext context) {
         Map<String, Object> payload = new java.util.LinkedHashMap<>();
@@ -113,6 +122,9 @@ public final class AssetApplicationService {
 
     /**
      * Deletes one asset through command-first flow.
+     * @param assetId TODO
+     * @param context TODO
+     * @return TODO
      */
     public WriteResponse<Asset> delete(String assetId, ExecutionContext context) {
         WriteResponse<CommandResource> commandResponse = commandService.create(
@@ -126,6 +138,10 @@ public final class AssetApplicationService {
 
     /**
      * Lists readable assets with deterministic pagination bounds.
+     * @param context TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     public List<Asset> list(ExecutionContext context, int page, int pageSize) {
         return assetRepository.listReadable(context, normalizePage(page), normalizePageSize(pageSize));
@@ -133,6 +149,8 @@ public final class AssetApplicationService {
 
     /**
      * Returns count of readable assets for current context.
+     * @param context TODO
+     * @return TODO
      */
     public long count(ExecutionContext context) {
         return assetRepository.countReadable(context);
@@ -140,6 +158,9 @@ public final class AssetApplicationService {
 
     /**
      * Returns one readable asset by identifier.
+     * @param assetId TODO
+     * @param context TODO
+     * @return TODO
      */
     public Asset get(String assetId, ExecutionContext context) {
         return assetRepository.findReadableById(assetId, context);
@@ -147,6 +168,9 @@ public final class AssetApplicationService {
 
     /**
      * Returns lineage graph for one readable asset.
+     * @param assetId TODO
+     * @param context TODO
+     * @return TODO
      */
     public AssetLineageResponse lineage(String assetId, ExecutionContext context) {
         return new AssetLineageResponse(assetId, assetRepository.listLineage(assetId, context));

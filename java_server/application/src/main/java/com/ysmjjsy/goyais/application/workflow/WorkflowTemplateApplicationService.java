@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Workflow template application service for read APIs and command-sugar writes.
+ * <p>Workflow template application service for read APIs and command-sugar writes.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.application.workflow;
 
 import com.ysmjjsy.goyais.application.command.CommandApplicationService;
@@ -32,6 +31,8 @@ public final class WorkflowTemplateApplicationService {
 
     /**
      * Creates workflow template application service with dependencies.
+     * @param commandService TODO
+     * @param templateRepository TODO
      */
     public WorkflowTemplateApplicationService(
             CommandApplicationService commandService,
@@ -43,6 +44,9 @@ public final class WorkflowTemplateApplicationService {
 
     /**
      * Creates one draft workflow template through command-first path.
+     * @param request TODO
+     * @param context TODO
+     * @return TODO
      */
     public WriteResponse<WorkflowTemplate> create(WorkflowTemplateCreateRequest request, ExecutionContext context) {
         if (request == null) {
@@ -70,6 +74,10 @@ public final class WorkflowTemplateApplicationService {
 
     /**
      * Patches one workflow template through command-first path.
+     * @param templateId TODO
+     * @param request TODO
+     * @param context TODO
+     * @return TODO
      */
     public WriteResponse<WorkflowTemplate> patch(
             String templateId,
@@ -103,6 +111,9 @@ public final class WorkflowTemplateApplicationService {
 
     /**
      * Publishes one workflow template through command-first path.
+     * @param templateId TODO
+     * @param context TODO
+     * @return TODO
      */
     public WriteResponse<WorkflowTemplate> publish(String templateId, ExecutionContext context) {
         WriteResponse<CommandResource> commandResponse = commandService.create(
@@ -115,6 +126,9 @@ public final class WorkflowTemplateApplicationService {
 
     /**
      * Returns one readable workflow template by id.
+     * @param templateId TODO
+     * @param context TODO
+     * @return TODO
      */
     public WorkflowTemplate get(String templateId, ExecutionContext context) {
         return templateRepository.findReadableById(templateId, context);
@@ -122,6 +136,10 @@ public final class WorkflowTemplateApplicationService {
 
     /**
      * Returns readable workflow template list.
+     * @param context TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     public List<WorkflowTemplate> list(ExecutionContext context, int page, int pageSize) {
         return templateRepository.listReadable(context, normalizePage(page), normalizePageSize(pageSize));
@@ -129,6 +147,8 @@ public final class WorkflowTemplateApplicationService {
 
     /**
      * Returns count of readable workflow templates.
+     * @param context TODO
+     * @return TODO
      */
     public long count(ExecutionContext context) {
         return templateRepository.countReadable(context);

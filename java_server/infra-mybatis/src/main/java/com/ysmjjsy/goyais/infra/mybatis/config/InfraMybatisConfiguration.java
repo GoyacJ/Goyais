@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: MyBatisPlus configuration for repository mapper scanning.
+ * <p>MyBatisPlus configuration for repository mapper scanning.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.infra.mybatis.config;
 
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
@@ -22,6 +21,7 @@ public class InfraMybatisConfiguration {
 
     /**
      * Registers baseline MyBatisPlus interceptor chain.
+     * @return TODO
      */
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {

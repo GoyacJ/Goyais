@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Bootstrap implementation of validate-authorize-execute-audit-event pipeline.
+ * <p>Bootstrap implementation of validate-authorize-execute-audit-event pipeline.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.application.command;
 
 import com.ysmjjsy.goyais.application.audit.AuditEventStore;
@@ -35,6 +34,11 @@ public final class CommandPipeline {
 
     /**
      * Creates pipeline with authorization, egress, command handlers and event publisher.
+     * @param authorizationGate TODO
+     * @param egressGate TODO
+     * @param handlers TODO
+     * @param eventPublisher TODO
+     * @param auditEventStore TODO
      */
     public CommandPipeline(
             AuthorizationGate authorizationGate,
@@ -54,6 +58,9 @@ public final class CommandPipeline {
 
     /**
      * Runs the full command pipeline and returns handler execution result.
+     * @param request TODO
+     * @param context TODO
+     * @return TODO
      */
     public Map<String, Object> run(CommandCreateRequest request, ExecutionContext context) {
         validate(request);

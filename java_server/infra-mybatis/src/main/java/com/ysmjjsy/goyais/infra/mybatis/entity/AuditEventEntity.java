@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Persisted audit event row mapped from audit_events table.
+ * <p>Persisted audit event row mapped from audit_events table.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.infra.mybatis.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -54,6 +53,7 @@ public class AuditEventEntity {
 
     /**
      * Returns primary key.
+     * @return TODO
      */
     public Long getId() {
         return id;
@@ -61,6 +61,7 @@ public class AuditEventEntity {
 
     /**
      * Sets primary key.
+     * @param id TODO
      */
     public void setId(Long id) {
         this.id = id;
@@ -68,6 +69,7 @@ public class AuditEventEntity {
 
     /**
      * Returns tenant identifier.
+     * @return TODO
      */
     public String getTenantId() {
         return tenantId;
@@ -75,6 +77,7 @@ public class AuditEventEntity {
 
     /**
      * Sets tenant identifier.
+     * @param tenantId TODO
      */
     public void setTenantId(String tenantId) {
         this.tenantId = tenantId;
@@ -82,6 +85,7 @@ public class AuditEventEntity {
 
     /**
      * Returns workspace identifier.
+     * @return TODO
      */
     public String getWorkspaceId() {
         return workspaceId;
@@ -89,6 +93,7 @@ public class AuditEventEntity {
 
     /**
      * Sets workspace identifier.
+     * @param workspaceId TODO
      */
     public void setWorkspaceId(String workspaceId) {
         this.workspaceId = workspaceId;
@@ -96,6 +101,7 @@ public class AuditEventEntity {
 
     /**
      * Returns user identifier.
+     * @return TODO
      */
     public String getUserId() {
         return userId;
@@ -103,6 +109,7 @@ public class AuditEventEntity {
 
     /**
      * Sets user identifier.
+     * @param userId TODO
      */
     public void setUserId(String userId) {
         this.userId = userId;
@@ -110,6 +117,7 @@ public class AuditEventEntity {
 
     /**
      * Returns trace identifier.
+     * @return TODO
      */
     public String getTraceId() {
         return traceId;
@@ -117,6 +125,7 @@ public class AuditEventEntity {
 
     /**
      * Sets trace identifier.
+     * @param traceId TODO
      */
     public void setTraceId(String traceId) {
         this.traceId = traceId;
@@ -124,6 +133,7 @@ public class AuditEventEntity {
 
     /**
      * Returns event type.
+     * @return TODO
      */
     public String getEventType() {
         return eventType;
@@ -131,6 +141,7 @@ public class AuditEventEntity {
 
     /**
      * Sets event type.
+     * @param eventType TODO
      */
     public void setEventType(String eventType) {
         this.eventType = eventType;
@@ -138,6 +149,7 @@ public class AuditEventEntity {
 
     /**
      * Returns command type.
+     * @return TODO
      */
     public String getCommandType() {
         return commandType;
@@ -145,6 +157,7 @@ public class AuditEventEntity {
 
     /**
      * Sets command type.
+     * @param commandType TODO
      */
     public void setCommandType(String commandType) {
         this.commandType = commandType;
@@ -152,6 +165,7 @@ public class AuditEventEntity {
 
     /**
      * Returns allow/deny decision string.
+     * @return TODO
      */
     public String getDecision() {
         return decision;
@@ -159,6 +173,7 @@ public class AuditEventEntity {
 
     /**
      * Sets allow/deny decision string.
+     * @param decision TODO
      */
     public void setDecision(String decision) {
         this.decision = decision;
@@ -166,6 +181,7 @@ public class AuditEventEntity {
 
     /**
      * Returns reason string.
+     * @return TODO
      */
     public String getReason() {
         return reason;
@@ -173,6 +189,7 @@ public class AuditEventEntity {
 
     /**
      * Sets reason string.
+     * @param reason TODO
      */
     public void setReason(String reason) {
         this.reason = reason;
@@ -180,6 +197,7 @@ public class AuditEventEntity {
 
     /**
      * Returns JSON payload.
+     * @return TODO
      */
     public String getPayloadJson() {
         return payloadJson;
@@ -187,6 +205,7 @@ public class AuditEventEntity {
 
     /**
      * Sets JSON payload.
+     * @param payloadJson TODO
      */
     public void setPayloadJson(String payloadJson) {
         this.payloadJson = payloadJson;
@@ -194,6 +213,7 @@ public class AuditEventEntity {
 
     /**
      * Returns occurrence timestamp.
+     * @return TODO
      */
     public Instant getOccurredAt() {
         return occurredAt;
@@ -201,6 +221,7 @@ public class AuditEventEntity {
 
     /**
      * Sets occurrence timestamp.
+     * @param occurredAt TODO
      */
     public void setOccurredAt(Instant occurredAt) {
         this.occurredAt = occurredAt;

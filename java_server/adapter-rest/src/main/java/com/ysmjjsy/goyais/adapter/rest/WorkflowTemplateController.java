@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Workflow template REST controller aligned with Go-compatible /api/v1/workflow-templates routes.
+ * <p>Workflow template REST controller aligned with Go-compatible /api/v1/workflow-templates routes.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.adapter.rest;
 
 import com.ysmjjsy.goyais.application.common.ContractException;
@@ -42,6 +41,10 @@ public final class WorkflowTemplateController {
 
     /**
      * Creates controller with template service and execution-context resolver.
+     * @param templateService TODO
+     * @param executionContextFactory TODO
+     * @param workflowEnabled TODO
+     * @return TODO
      */
     public WorkflowTemplateController(
             WorkflowTemplateApplicationService templateService,
@@ -55,6 +58,11 @@ public final class WorkflowTemplateController {
 
     /**
      * Returns readable workflow template list response with pageInfo envelope.
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     @GetMapping
     public Map<String, Object> list(
@@ -79,6 +87,10 @@ public final class WorkflowTemplateController {
 
     /**
      * Creates one workflow template through command-first domain sugar endpoint.
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @param request TODO
+     * @return TODO
      */
     @PostMapping
     public ResponseEntity<WriteResponse<WorkflowTemplate>> create(
@@ -93,6 +105,10 @@ public final class WorkflowTemplateController {
 
     /**
      * Returns one readable workflow template or not-found contract envelope.
+     * @param templateId TODO
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @return TODO
      */
     @GetMapping("/{templateId}")
     public ResponseEntity<?> get(
@@ -114,6 +130,11 @@ public final class WorkflowTemplateController {
 
     /**
      * Patches one workflow template through command-first domain sugar endpoint.
+     * @param templateId TODO
+     * @param request TODO
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @return TODO
      */
     @PostMapping("/{templateId}:patch")
     public ResponseEntity<WriteResponse<WorkflowTemplate>> patch(
@@ -129,6 +150,10 @@ public final class WorkflowTemplateController {
 
     /**
      * Publishes one workflow template through command-first domain sugar endpoint.
+     * @param templateId TODO
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @return TODO
      */
     @PostMapping("/{templateId}:publish")
     public ResponseEntity<WriteResponse<WorkflowTemplate>> publish(

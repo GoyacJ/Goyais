@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Share application service for domain-sugar APIs and read queries.
+ * <p>Share application service for domain-sugar APIs and read queries.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.application.share;
 
 import com.ysmjjsy.goyais.application.command.CommandApplicationService;
@@ -36,6 +35,8 @@ public final class ShareApplicationService {
 
     /**
      * Creates share application service with command and repository dependencies.
+     * @param commandService TODO
+     * @param shareRepository TODO
      */
     public ShareApplicationService(CommandApplicationService commandService, ShareRepository shareRepository) {
         this.commandService = commandService;
@@ -44,6 +45,9 @@ public final class ShareApplicationService {
 
     /**
      * Creates one share through command-first flow.
+     * @param request TODO
+     * @param context TODO
+     * @return TODO
      */
     public WriteResponse<Share> create(ShareCreateRequest request, ExecutionContext context) {
         if (request == null) {
@@ -80,6 +84,9 @@ public final class ShareApplicationService {
 
     /**
      * Deletes one share through command-first flow.
+     * @param shareId TODO
+     * @param context TODO
+     * @return TODO
      */
     public WriteResponse<ShareDeleteResult> delete(String shareId, ExecutionContext context) {
         WriteResponse<CommandResource> commandResponse = commandService.create(
@@ -93,6 +100,10 @@ public final class ShareApplicationService {
 
     /**
      * Lists shares with deterministic pagination bounds.
+     * @param context TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     public List<Share> list(ExecutionContext context, int page, int pageSize) {
         return shareRepository.list(context, normalizePage(page), normalizePageSize(pageSize));
@@ -100,6 +111,8 @@ public final class ShareApplicationService {
 
     /**
      * Returns share count in current tenant/workspace scope.
+     * @param context TODO
+     * @return TODO
      */
     public long count(ExecutionContext context) {
         return shareRepository.count(context);

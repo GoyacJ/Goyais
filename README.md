@@ -115,7 +115,7 @@ bash go_server/scripts/ci/contract_regression.sh
 - worktree 审计
 - precommit 防呆检查
 - 路径迁移审计
-- 源码头校验（SPDX/Author/Created/Version/Description）
+- 源码头校验（Java: `SPDX + <p> + @author + @since`；非 Java: `SPDX/Author/Created/Version/Description`）
 - Go/Vue 测试与类型检查
 - 单二进制构建与验证
 

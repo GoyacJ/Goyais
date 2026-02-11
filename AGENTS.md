@@ -117,13 +117,18 @@
 
 ## 13. Source Header 与注释规范（MUST）
 
-- 每个源码文件必须包含文件头注释，字段顺序固定：
+- 非 Java 源码文件必须包含文件头注释，字段顺序固定：
   - `SPDX-License-Identifier: Apache-2.0`
   - `Copyright (c) 2026 Goya`
   - `Author: Goya`
   - `Created: 2026-02-11`
   - `Version: v1.0.0`
   - `Description: <一句话职责>`
+- Java 源码文件必须使用如下文件头模板（字段顺序固定）：
+  - `SPDX-License-Identifier: Apache-2.0`
+  - `<p>...</p>`
+  - `@author Goya`
+  - `@since YYYY-MM-DD HH:MM:SS`
 - 语言注释风格：
   - Go/Dart 使用 `//`
   - TS/JS/Java/Vue script 使用 `/** ... */`
@@ -131,4 +136,5 @@
 - 代码内注释必须解释“为什么”（边界、权限、兼容、性能/安全取舍），禁止低价值逐行翻译式注释。
 - Java 代码额外要求：
   - `public class/interface/enum/record` 必须有 JavaDoc
-  - `public` 方法与构造器必须有 JavaDoc
+  - `public/protected` 方法、构造器、字段必须有 JavaDoc
+  - 方法与构造器遵循 JDK/Javadoc 标准：`@param`、非 `void` 的 `@return`、`throws` 对应 `@throws`

@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: MyBatisPlus implementation of command repository with SQL-layer data permission.
+ * <p>MyBatisPlus implementation of command repository with SQL-layer data permission.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.infra.mybatis.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -37,6 +36,9 @@ public final class MybatisCommandRepository implements CommandRepository {
 
     /**
      * Creates repository with mapper, data-permission resolver, and JSON codec.
+     * @param mapper TODO
+     * @param dataPermissionResolver TODO
+     * @param objectMapper TODO
      */
     public MybatisCommandRepository(
             CommandEntityMapper mapper,
@@ -50,6 +52,7 @@ public final class MybatisCommandRepository implements CommandRepository {
 
     /**
      * Persists one command resource into commands table.
+     * @param resource TODO
      */
     @Override
     public void save(CommandResource resource) {
@@ -78,6 +81,9 @@ public final class MybatisCommandRepository implements CommandRepository {
 
     /**
      * Returns readable command resources ordered by created_at DESC and id DESC.
+     * @param context TODO
+     * @param limit TODO
+     * @return TODO
      */
     @Override
     public List<CommandResource> listReadable(ExecutionContext context, int limit) {
@@ -88,6 +94,9 @@ public final class MybatisCommandRepository implements CommandRepository {
 
     /**
      * Returns one readable command resource by identifier, or null.
+     * @param commandId TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public CommandResource findReadableById(String commandId, ExecutionContext context) {

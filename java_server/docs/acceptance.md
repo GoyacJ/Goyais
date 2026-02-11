@@ -78,8 +78,8 @@
 
 ## 8. Comment and CI Gates
 
-- `bash go_server/scripts/ci/source_header_check.sh` 通过。
-- `bash java_server/scripts/ci/java_javadoc_check.sh` 通过。
+- `bash go_server/scripts/ci/source_header_check.sh` 通过（Java 头模板：`SPDX + <p> + @author + @since`）。
+- `bash java_server/scripts/ci/java_javadoc_check.sh` 通过（`public/protected` type/method/ctor/field，方法标签符合 JDK/Javadoc）。
 - `bash go_server/scripts/ci/contract_regression.sh` 通过。
 - `mvn -f java_server/pom.xml test` 通过（含 `DynamicAuthorizationGateTest`、`CommandPipelineTest`、`RequestExecutionContextFactoryTest`）。
 

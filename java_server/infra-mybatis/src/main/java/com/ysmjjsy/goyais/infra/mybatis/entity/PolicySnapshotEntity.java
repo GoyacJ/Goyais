@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Persisted policy snapshot row mapped from policies table.
+ * <p>Persisted policy snapshot row mapped from policies table.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.infra.mybatis.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -45,6 +44,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Returns primary key.
+     * @return TODO
      */
     public Long getId() {
         return id;
@@ -52,6 +52,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Sets primary key.
+     * @param id TODO
      */
     public void setId(Long id) {
         this.id = id;
@@ -59,6 +60,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Returns tenant identifier.
+     * @return TODO
      */
     public String getTenantId() {
         return tenantId;
@@ -66,6 +68,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Sets tenant identifier.
+     * @param tenantId TODO
      */
     public void setTenantId(String tenantId) {
         this.tenantId = tenantId;
@@ -73,6 +76,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Returns workspace identifier.
+     * @return TODO
      */
     public String getWorkspaceId() {
         return workspaceId;
@@ -80,6 +84,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Sets workspace identifier.
+     * @param workspaceId TODO
      */
     public void setWorkspaceId(String workspaceId) {
         this.workspaceId = workspaceId;
@@ -87,6 +92,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Returns user identifier.
+     * @return TODO
      */
     public String getUserId() {
         return userId;
@@ -94,6 +100,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Sets user identifier.
+     * @param userId TODO
      */
     public void setUserId(String userId) {
         this.userId = userId;
@@ -101,6 +108,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Returns policy version.
+     * @return TODO
      */
     public String getPolicyVersion() {
         return policyVersion;
@@ -108,6 +116,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Sets policy version.
+     * @param policyVersion TODO
      */
     public void setPolicyVersion(String policyVersion) {
         this.policyVersion = policyVersion;
@@ -115,6 +124,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Returns serialized roles payload.
+     * @return TODO
      */
     public String getRolesJson() {
         return rolesJson;
@@ -122,6 +132,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Sets serialized roles payload.
+     * @param rolesJson TODO
      */
     public void setRolesJson(String rolesJson) {
         this.rolesJson = rolesJson;
@@ -129,6 +140,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Returns serialized denied-command payload.
+     * @return TODO
      */
     public String getDeniedCommandTypesJson() {
         return deniedCommandTypesJson;
@@ -136,6 +148,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Sets serialized denied-command payload.
+     * @param deniedCommandTypesJson TODO
      */
     public void setDeniedCommandTypesJson(String deniedCommandTypesJson) {
         this.deniedCommandTypesJson = deniedCommandTypesJson;
@@ -143,6 +156,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Returns update timestamp.
+     * @return TODO
      */
     public Instant getUpdatedAt() {
         return updatedAt;
@@ -150,6 +164,7 @@ public class PolicySnapshotEntity {
 
     /**
      * Sets update timestamp.
+     * @param updatedAt TODO
      */
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;

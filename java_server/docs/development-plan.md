@@ -108,7 +108,7 @@
 ## 3. 固定 DoD
 
 - API/数据模型/状态机文档与实现同变更同步。
-- JavaDoc 与文件头门禁通过。
+- JavaDoc 与文件头门禁通过（Java 头模板：`SPDX + <p> + @author + @since`）。
 - 单测+集成测试通过。
 - Vue 联调通过且无契约破坏。
 - 审计可回查 command/authz/egress/policyVersion。

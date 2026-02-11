@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Unit tests for workflow run command constraints and permission checks.
+ * <p>Unit tests for workflow run command constraints and permission checks.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.application.workflow;
 
 import com.ysmjjsy.goyais.application.common.ContractException;
@@ -174,6 +173,16 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Not used in this test suite.
+         * @param context TODO
+         * @param name TODO
+         * @param description TODO
+         * @param visibility TODO
+         * @param graph TODO
+         * @param schemaInputs TODO
+         * @param schemaOutputs TODO
+         * @param uiState TODO
+         * @param now TODO
+         * @return TODO
          */
         @Override
         public WorkflowTemplate createDraft(
@@ -192,6 +201,9 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Returns stubbed template for access checks.
+         * @param templateId TODO
+         * @param context TODO
+         * @return TODO
          */
         @Override
         public WorkflowTemplate findByIdInScope(String templateId, ExecutionContext context) {
@@ -200,6 +212,9 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Not used in this test suite.
+         * @param templateId TODO
+         * @param context TODO
+         * @return TODO
          */
         @Override
         public WorkflowTemplate findReadableById(String templateId, ExecutionContext context) {
@@ -208,6 +223,10 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Not used in this test suite.
+         * @param context TODO
+         * @param page TODO
+         * @param pageSize TODO
+         * @return TODO
          */
         @Override
         public List<WorkflowTemplate> listReadable(ExecutionContext context, int page, int pageSize) {
@@ -216,6 +235,8 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Not used in this test suite.
+         * @param context TODO
+         * @return TODO
          */
         @Override
         public long countReadable(ExecutionContext context) {
@@ -224,6 +245,12 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Not used in this test suite.
+         * @param templateId TODO
+         * @param context TODO
+         * @param graph TODO
+         * @param uiState TODO
+         * @param now TODO
+         * @return TODO
          */
         @Override
         public WorkflowTemplate patch(
@@ -238,6 +265,10 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Not used in this test suite.
+         * @param templateId TODO
+         * @param context TODO
+         * @param now TODO
+         * @return TODO
          */
         @Override
         public WorkflowTemplate publish(String templateId, ExecutionContext context, Instant now) {
@@ -246,6 +277,11 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Returns configured permission decision for execute checks.
+         * @param templateId TODO
+         * @param context TODO
+         * @param permission TODO
+         * @param now TODO
+         * @return TODO
          */
         @Override
         public boolean hasPermission(String templateId, ExecutionContext context, Permission permission, Instant now) {
@@ -260,6 +296,15 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Creates deterministic run result and records requested mode.
+         * @param context TODO
+         * @param template TODO
+         * @param visibility TODO
+         * @param mode TODO
+         * @param fromStepKey TODO
+         * @param testNode TODO
+         * @param inputs TODO
+         * @param now TODO
+         * @return TODO
          */
         @Override
         public WorkflowRun createRun(
@@ -303,6 +348,9 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Returns stubbed run for cancel and access checks.
+         * @param runId TODO
+         * @param context TODO
+         * @return TODO
          */
         @Override
         public WorkflowRun findByIdInScope(String runId, ExecutionContext context) {
@@ -311,6 +359,9 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Not used in this test suite.
+         * @param runId TODO
+         * @param context TODO
+         * @return TODO
          */
         @Override
         public WorkflowRun findReadableById(String runId, ExecutionContext context) {
@@ -319,6 +370,10 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Not used in this test suite.
+         * @param context TODO
+         * @param page TODO
+         * @param pageSize TODO
+         * @return TODO
          */
         @Override
         public List<WorkflowRun> listReadable(ExecutionContext context, int page, int pageSize) {
@@ -327,6 +382,8 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Not used in this test suite.
+         * @param context TODO
+         * @return TODO
          */
         @Override
         public long countReadable(ExecutionContext context) {
@@ -335,6 +392,11 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Returns configured permission decision for execute checks.
+         * @param runId TODO
+         * @param context TODO
+         * @param permission TODO
+         * @param now TODO
+         * @return TODO
          */
         @Override
         public boolean hasPermission(String runId, ExecutionContext context, Permission permission, Instant now) {
@@ -343,6 +405,10 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Returns canceled run snapshot.
+         * @param runId TODO
+         * @param context TODO
+         * @param now TODO
+         * @return TODO
          */
         @Override
         public WorkflowRun cancelRun(String runId, ExecutionContext context, Instant now) {
@@ -376,6 +442,11 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Not used in this test suite.
+         * @param runId TODO
+         * @param context TODO
+         * @param page TODO
+         * @param pageSize TODO
+         * @return TODO
          */
         @Override
         public List<StepRun> listSteps(String runId, ExecutionContext context, int page, int pageSize) {
@@ -384,6 +455,9 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Not used in this test suite.
+         * @param runId TODO
+         * @param context TODO
+         * @return TODO
          */
         @Override
         public long countSteps(String runId, ExecutionContext context) {
@@ -392,6 +466,9 @@ class WorkflowRunCommandHandlerTest {
 
         /**
          * Not used in this test suite.
+         * @param runId TODO
+         * @param context TODO
+         * @return TODO
          */
         @Override
         public List<WorkflowRunEvent> listEvents(String runId, ExecutionContext context) {

@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Redis pubsub subscriber for policy invalidation events.
+ * <p>Redis pubsub subscriber for policy invalidation events.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.capability.cache.policy;
 
 import com.ysmjjsy.goyais.kernel.security.PolicyInvalidationEvent;
@@ -28,6 +27,8 @@ public final class RedisPolicyInvalidationSubscriber implements PolicyInvalidati
 
     /**
      * Creates one subscriber bound to a fixed Redis topic channel.
+     * @param listenerContainer TODO
+     * @param channel TODO
      */
     public RedisPolicyInvalidationSubscriber(
             RedisMessageListenerContainer listenerContainer,
@@ -39,12 +40,15 @@ public final class RedisPolicyInvalidationSubscriber implements PolicyInvalidati
 
     /**
      * Starts asynchronous event forwarding from Redis pubsub to callback consumer.
+     * @param callback TODO
      */
     @Override
     public void start(Consumer<PolicyInvalidationEvent> callback) {
         listenerContainer.addMessageListener(new MessageListener() {
             /**
              * Parses Redis payload and forwards valid events to the callback.
+             * @param message TODO
+             * @param pattern TODO
              */
             @Override
             public void onMessage(Message message, byte[] pattern) {

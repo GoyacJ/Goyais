@@ -10,6 +10,7 @@ readonly AUTHOR_LINE="Author: Goya"
 readonly CREATED_LINE="Created: 2026-02-11"
 readonly VERSION_LINE="Version: v1.0.0"
 readonly DESCRIPTION_LINE="Description: Goyais source file."
+readonly JAVA_AUTHOR_LINE="@author Goya"
 
 collect_files() {
   rg --files \
@@ -86,6 +87,24 @@ prepend_block_comment_header() {
   mv "${tmp}" "${file}"
 }
 
+prepend_java_comment_header() {
+  local file="$1"
+  local since_now="$2"
+  local tmp
+  tmp="$(mktemp)"
+  {
+    echo "/**"
+    echo " * ${SPDX_LINE}"
+    echo " * <p>Goyais source file.</p>"
+    echo " * ${JAVA_AUTHOR_LINE}"
+    echo " * @since ${since_now}"
+    echo " */"
+    echo
+    cat "${file}"
+  } >"${tmp}"
+  mv "${tmp}" "${file}"
+}
+
 prepend_vue_html_comment_header() {
   local file="$1"
   local tmp
@@ -145,6 +164,8 @@ insert_vue_script_header() {
 main() {
   local total=0
   local updated=0
+  local since_now
+  since_now="$(date '+%Y-%m-%d %H:%M:%S')"
 
   while IFS= read -r file; do
     [[ -n "${file}" ]] || continue
@@ -161,8 +182,11 @@ main() {
       *.py)
         prepend_hash_comment_header "${file}"
         ;;
-      *.ts|*.js|*.java)
+      *.ts|*.js)
         prepend_block_comment_header "${file}"
+        ;;
+      *.java)
+        prepend_java_comment_header "${file}" "${since_now}"
         ;;
       *.vue)
         if rg -n -m1 '^[[:space:]]*<script([[:space:]>]|$)' "${file}" >/dev/null 2>&1; then

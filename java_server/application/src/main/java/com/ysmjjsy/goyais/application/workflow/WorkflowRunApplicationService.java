@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Workflow run application service for read APIs and command-sugar writes.
+ * <p>Workflow run application service for read APIs and command-sugar writes.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.application.workflow;
 
 import com.ysmjjsy.goyais.application.command.CommandApplicationService;
@@ -33,6 +32,8 @@ public final class WorkflowRunApplicationService {
 
     /**
      * Creates workflow run application service with dependencies.
+     * @param commandService TODO
+     * @param runRepository TODO
      */
     public WorkflowRunApplicationService(
             CommandApplicationService commandService,
@@ -44,6 +45,9 @@ public final class WorkflowRunApplicationService {
 
     /**
      * Creates one workflow run through command-first path.
+     * @param request TODO
+     * @param context TODO
+     * @return TODO
      */
     public WriteResponse<WorkflowRun> create(WorkflowRunCreateRequest request, ExecutionContext context) {
         if (request == null) {
@@ -82,6 +86,9 @@ public final class WorkflowRunApplicationService {
 
     /**
      * Cancels one workflow run through command-first path.
+     * @param runId TODO
+     * @param context TODO
+     * @return TODO
      */
     public WriteResponse<WorkflowRun> cancel(String runId, ExecutionContext context) {
         WriteResponse<CommandResource> commandResponse = commandService.create(
@@ -94,6 +101,9 @@ public final class WorkflowRunApplicationService {
 
     /**
      * Returns one readable workflow run by id.
+     * @param runId TODO
+     * @param context TODO
+     * @return TODO
      */
     public WorkflowRun get(String runId, ExecutionContext context) {
         return runRepository.findReadableById(runId, context);
@@ -101,6 +111,10 @@ public final class WorkflowRunApplicationService {
 
     /**
      * Returns readable workflow run list.
+     * @param context TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     public List<WorkflowRun> list(ExecutionContext context, int page, int pageSize) {
         return runRepository.listReadable(context, normalizePage(page), normalizePageSize(pageSize));
@@ -108,6 +122,8 @@ public final class WorkflowRunApplicationService {
 
     /**
      * Returns count of readable workflow runs.
+     * @param context TODO
+     * @return TODO
      */
     public long count(ExecutionContext context) {
         return runRepository.countReadable(context);
@@ -115,6 +131,11 @@ public final class WorkflowRunApplicationService {
 
     /**
      * Returns readable step runs for one workflow run.
+     * @param runId TODO
+     * @param context TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     public List<StepRun> listSteps(String runId, ExecutionContext context, int page, int pageSize) {
         return runRepository.listSteps(runId, context, normalizePage(page), normalizePageSize(pageSize));
@@ -122,6 +143,9 @@ public final class WorkflowRunApplicationService {
 
     /**
      * Returns count of step runs for one workflow run.
+     * @param runId TODO
+     * @param context TODO
+     * @return TODO
      */
     public long countSteps(String runId, ExecutionContext context) {
         return runRepository.countSteps(runId, context);
@@ -129,6 +153,9 @@ public final class WorkflowRunApplicationService {
 
     /**
      * Returns workflow run events for one workflow run.
+     * @param runId TODO
+     * @param context TODO
+     * @return TODO
      */
     public List<WorkflowRunEvent> listEvents(String runId, ExecutionContext context) {
         return runRepository.listEvents(runId, context);
