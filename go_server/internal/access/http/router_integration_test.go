@@ -895,6 +895,68 @@ func TestAPIContractRegression(t *testing.T) {
 			t.Fatalf("unexpected patched template id: %v", patchedID)
 		}
 
+		respPatchOps := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-templates/"+templateID+":patch", headersWithJSONContext("u1"), map[string]any{
+			"operations": []any{
+				map[string]any{
+					"op": "add_node",
+					"value": map[string]any{
+						"id":   "n3",
+						"type": "control.branch",
+						"position": map[string]any{
+							"x": 480,
+							"y": 180,
+						},
+						"data": map[string]any{
+							"label":      "Control · Branch (AI)",
+							"nodeType":   "control.branch",
+							"inputType":  "json",
+							"outputType": "json",
+						},
+					},
+				},
+				map[string]any{
+					"op": "add_edge",
+					"value": map[string]any{
+						"id":     "e_n2_n3",
+						"source": "n2",
+						"target": "n3",
+					},
+				},
+				map[string]any{
+					"op":   "annotate",
+					"path": "/ui_state/ai_patch",
+					"value": map[string]any{
+						"source": "ai.intent.plan",
+					},
+				},
+			},
+		})
+		defer respPatchOps.Body.Close()
+		assertStatus(t, respPatchOps, http.StatusAccepted)
+		var patchOpsPayload map[string]any
+		mustDecodeJSON(t, respPatchOps.Body, &patchOpsPayload)
+		patchOpsResource, _ := patchOpsPayload["resource"].(map[string]any)
+		patchGraph, _ := patchOpsResource["graph"].(map[string]any)
+		patchNodes, _ := patchGraph["nodes"].([]any)
+		patchEdges, _ := patchGraph["edges"].([]any)
+		if !containsAssetID(patchNodes, "n3") {
+			t.Fatalf("expected patched graph to contain node n3")
+		}
+		if !containsAssetID(patchEdges, "e_n2_n3") {
+			t.Fatalf("expected patched graph to contain edge e_n2_n3")
+		}
+
+		respPatchOpsInvalid := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-templates/"+templateID+":patch", headersWithJSONContext("u1"), map[string]any{
+			"operations": []any{
+				map[string]any{
+					"op": "unknown_op",
+				},
+			},
+		})
+		defer respPatchOpsInvalid.Body.Close()
+		assertStatus(t, respPatchOpsInvalid, http.StatusBadRequest)
+		assertErrorCode(t, respPatchOpsInvalid.Body, "INVALID_WORKFLOW_REQUEST")
+
 		respPublish := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-templates/"+templateID+":publish", headersWithJSONContext("u1"), map[string]any{})
 		defer respPublish.Body.Close()
 		assertStatus(t, respPublish, http.StatusAccepted)

@@ -23,6 +23,8 @@
 | 页面路由覆盖（Run Center / Algorithm Library / Permission Management / ContextBundle） | 已存在独立路由 | `vue_web/src/router/index.ts:48`, `vue_web/src/router/index.ts:72`, `vue_web/src/router/index.ts:84`, `vue_web/src/router/index.ts:90` |
 | Stream 前端控制面对齐（update-auth / delete） | 已有 API + UI 入口 | `vue_web/src/api/streams.ts:84`, `vue_web/src/api/streams.ts:96`, `vue_web/src/views/StreamsView.vue:266`, `vue_web/src/views/StreamsView.vue:300` |
 | AI 计划预览链路（preview-only） | 已新增后端路由、前端 API、工作台接入 | `go_server/internal/access/http/router.go:66`, `go_server/internal/access/http/ai_context.go:68`, `vue_web/src/api/ai.ts:87`, `vue_web/src/views/AIWorkbenchView.vue:395` |
+| Canvas AI patch 闭环（server-validated） | 已支持“preview -> workflow.patch(operations) -> 服务端校验应用 -> 前端差异/失败反馈” | `go_server/internal/workflow/service.go:81`, `vue_web/src/views/CanvasView.vue:726`, `go_server/internal/access/http/router_integration_test.go:898` |
+| 算法库页面运行闭环 | 已支持输入 JSON、触发 `algorithm.run`、展示 run 结果与 commandId | `vue_web/src/views/AlgorithmLibraryView.vue:73`, `vue_web/src/api/algorithms.ts:13`, `vue_web/src/views/AlgorithmLibraryView.spec.ts:122` |
 | 统一回归健康 | 本轮复核通过 | `go_server/scripts/ci/contract_regression.sh` |
 
 ### 2.2 部分完成（Partially Completed）
@@ -37,9 +39,7 @@
 
 | 领域 | 现状 | 证据 | 目标 |
 |---|---|---|---|
-| Canvas AI patch 闭环 | 仍是前端本地注入节点/连线 | `vue_web/src/views/CanvasView.vue:720`, `vue_web/src/views/CanvasView.vue:763` | 改为后端产出 `workflow.patch` + 服务端校验 + 前端差异可视化/失败解释 |
 | 权限管理页面语义 | 当前以 share command 审计视图为主 | `vue_web/src/views/PermissionManagementView.vue:146` | 补齐用户/角色/策略最小管理闭环 |
-| 算法库页面语义 | 当前以 list/detail 展示为主 | `vue_web/src/views/AlgorithmLibraryView.vue:77` | 补输入面板、`algorithm.run` 入口与结果回显 |
 | Run Center 操作深度 | 当前以 events/steps 基础浏览为主 | `vue_web/src/views/RunCenterView.vue:129` | 补日志与产物可操作视图（引用/跳转/下载） |
 
 ## 3. 下一步未完成项（Next Steps）
@@ -65,18 +65,6 @@
   - 风险：planner 误判导致 payload 过宽。
   - 回滚：`GOYAIS_FEATURE_AI_WORKBENCH=false`。
 
-#### P0-3 Canvas AI patch 闭环（Server-validated）
-- 范围：
-  - 后端生成/验证受控 `workflow.patch`。
-  - 前端展示 patch diff（来源、增删改、失败原因）并一键应用。
-- DoD：
-  - AI patch 必须经过服务端校验后才能落图。
-  - 校验失败可见具体拒绝原因（messageKey/details）。
-- 验收命令：
-  - `pnpm -C vue_web typecheck`
-  - `pnpm -C vue_web test:run`
-  - `go test ./internal/workflow ./internal/access/http`
-
 #### P0-4 Workflow 语义深化（Execution Semantics）
 - 范围：
   - step 输出从占位结构升级为真实执行上下文（input/output/artifacts/error metadata）。
@@ -90,7 +78,6 @@
 
 #### P1-2 页面能力补齐
 - 权限管理：用户/角色/策略最小闭环。
-- 算法库：输入 -> `algorithm.run` -> 结果/产物回显。
 - Run Center：日志与产物操作入口。
 
 ## 4. 接口与兼容性（Interfaces）

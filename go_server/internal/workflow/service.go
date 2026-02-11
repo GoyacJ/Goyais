@@ -10,6 +10,7 @@ package workflow
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -126,6 +127,11 @@ func (s *Service) PatchTemplate(
 		if err := json.Unmarshal(opsRaw, &ops); err != nil || len(ops) == 0 {
 			return WorkflowTemplate{}, ErrInvalidRequest
 		}
+		patchedGraph, err := applyPatchOperationsToGraph(tpl.GraphJSON, opsRaw)
+		if err != nil {
+			return WorkflowTemplate{}, ErrInvalidRequest
+		}
+		nextGraph = patchedGraph
 	}
 
 	// Keep patch metadata in ui_state so clients can inspect the last patch payload.
@@ -498,4 +504,255 @@ func isJSONObject(raw json.RawMessage) bool {
 	}
 	var value map[string]any
 	return json.Unmarshal(raw, &value) == nil
+}
+
+func applyPatchOperationsToGraph(baseGraph json.RawMessage, opsRaw json.RawMessage) (json.RawMessage, error) {
+	graph := map[string]any{}
+	if len(baseGraph) > 0 {
+		if err := json.Unmarshal(baseGraph, &graph); err != nil {
+			return nil, err
+		}
+	}
+
+	nodes := readObjectArray(graph["nodes"])
+	edges := readObjectArray(graph["edges"])
+
+	var operations []map[string]any
+	if err := json.Unmarshal(opsRaw, &operations); err != nil {
+		return nil, err
+	}
+	if len(operations) == 0 {
+		return nil, ErrInvalidRequest
+	}
+
+	for _, op := range operations {
+		if err := applySinglePatchOperation(&nodes, &edges, op); err != nil {
+			return nil, err
+		}
+	}
+
+	graph["nodes"] = nodes
+	graph["edges"] = edges
+	return json.Marshal(graph)
+}
+
+func applySinglePatchOperation(nodes *[]map[string]any, edges *[]map[string]any, op map[string]any) error {
+	opType := strings.ToLower(strings.TrimSpace(readPatchString(op, "op")))
+	if opType == "" {
+		return ErrInvalidRequest
+	}
+	path := strings.TrimSpace(readPatchString(op, "path"))
+	value := readPatchObject(op, "value")
+
+	switch opType {
+	case "add_node":
+		if value == nil {
+			return ErrInvalidRequest
+		}
+		nodeID := strings.TrimSpace(readPatchString(value, "id"))
+		if nodeID == "" || findNodeIndexByID(*nodes, nodeID) >= 0 {
+			return ErrInvalidRequest
+		}
+		*nodes = append(*nodes, value)
+		return nil
+	case "update_node":
+		nodeID := strings.TrimSpace(readPatchString(value, "id"))
+		if nodeID == "" {
+			nodeID = extractPatchPathID(path, "/nodes/")
+		}
+		if nodeID == "" || value == nil {
+			return ErrInvalidRequest
+		}
+		idx := findNodeIndexByID(*nodes, nodeID)
+		if idx < 0 {
+			return ErrInvalidRequest
+		}
+		merged := mergePatchObject((*nodes)[idx], value)
+		merged["id"] = nodeID
+		(*nodes)[idx] = merged
+		return nil
+	case "remove_node":
+		nodeID := strings.TrimSpace(readPatchString(value, "id"))
+		if nodeID == "" {
+			nodeID = extractPatchPathID(path, "/nodes/")
+		}
+		if nodeID == "" {
+			return ErrInvalidRequest
+		}
+		idx := findNodeIndexByID(*nodes, nodeID)
+		if idx < 0 {
+			return ErrInvalidRequest
+		}
+		*nodes = append((*nodes)[:idx], (*nodes)[idx+1:]...)
+		filteredEdges := make([]map[string]any, 0, len(*edges))
+		for _, edge := range *edges {
+			source := strings.TrimSpace(readPatchString(edge, "source"))
+			if source == "" {
+				source = strings.TrimSpace(readPatchString(edge, "from"))
+			}
+			target := strings.TrimSpace(readPatchString(edge, "target"))
+			if target == "" {
+				target = strings.TrimSpace(readPatchString(edge, "to"))
+			}
+			if source == nodeID || target == nodeID {
+				continue
+			}
+			filteredEdges = append(filteredEdges, edge)
+		}
+		*edges = filteredEdges
+		return nil
+	case "add_edge":
+		if value == nil {
+			return ErrInvalidRequest
+		}
+		source := strings.TrimSpace(readPatchString(value, "source"))
+		if source == "" {
+			source = strings.TrimSpace(readPatchString(value, "from"))
+		}
+		target := strings.TrimSpace(readPatchString(value, "target"))
+		if target == "" {
+			target = strings.TrimSpace(readPatchString(value, "to"))
+		}
+		if source == "" || target == "" {
+			return ErrInvalidRequest
+		}
+		if findNodeIndexByID(*nodes, source) < 0 || findNodeIndexByID(*nodes, target) < 0 {
+			return ErrInvalidRequest
+		}
+		edgeID := strings.TrimSpace(readPatchString(value, "id"))
+		if edgeID == "" {
+			edgeID = fmt.Sprintf("e_%s_%s", source, target)
+			value["id"] = edgeID
+		}
+		if findEdgeIndexByID(*edges, edgeID) >= 0 {
+			return ErrInvalidRequest
+		}
+		*edges = append(*edges, value)
+		return nil
+	case "remove_edge":
+		edgeID := strings.TrimSpace(readPatchString(value, "id"))
+		if edgeID == "" {
+			edgeID = extractPatchPathID(path, "/edges/")
+		}
+		if edgeID != "" {
+			idx := findEdgeIndexByID(*edges, edgeID)
+			if idx < 0 {
+				return ErrInvalidRequest
+			}
+			*edges = append((*edges)[:idx], (*edges)[idx+1:]...)
+			return nil
+		}
+		source := strings.TrimSpace(readPatchString(value, "source"))
+		if source == "" {
+			source = strings.TrimSpace(readPatchString(value, "from"))
+		}
+		target := strings.TrimSpace(readPatchString(value, "target"))
+		if target == "" {
+			target = strings.TrimSpace(readPatchString(value, "to"))
+		}
+		if source == "" || target == "" {
+			return ErrInvalidRequest
+		}
+		idx := findEdgeIndexByEndpoints(*edges, source, target)
+		if idx < 0 {
+			return ErrInvalidRequest
+		}
+		*edges = append((*edges)[:idx], (*edges)[idx+1:]...)
+		return nil
+	case "annotate":
+		// annotate updates metadata only; graph remains unchanged.
+		return nil
+	default:
+		return ErrInvalidRequest
+	}
+}
+
+func readObjectArray(raw any) []map[string]any {
+	items, ok := raw.([]any)
+	if !ok {
+		return []map[string]any{}
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		obj, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		out = append(out, obj)
+	}
+	return out
+}
+
+func readPatchString(raw map[string]any, key string) string {
+	if raw == nil {
+		return ""
+	}
+	value, _ := raw[key].(string)
+	return strings.TrimSpace(value)
+}
+
+func readPatchObject(raw map[string]any, key string) map[string]any {
+	if raw == nil {
+		return nil
+	}
+	value, _ := raw[key].(map[string]any)
+	return value
+}
+
+func extractPatchPathID(path string, prefix string) string {
+	normalized := strings.TrimSpace(path)
+	if normalized == "" || !strings.HasPrefix(normalized, prefix) {
+		return ""
+	}
+	return strings.Trim(strings.TrimPrefix(normalized, prefix), "/")
+}
+
+func findNodeIndexByID(nodes []map[string]any, nodeID string) int {
+	target := strings.TrimSpace(nodeID)
+	for idx, node := range nodes {
+		if strings.TrimSpace(readPatchString(node, "id")) == target {
+			return idx
+		}
+	}
+	return -1
+}
+
+func findEdgeIndexByID(edges []map[string]any, edgeID string) int {
+	target := strings.TrimSpace(edgeID)
+	for idx, edge := range edges {
+		if strings.TrimSpace(readPatchString(edge, "id")) == target {
+			return idx
+		}
+	}
+	return -1
+}
+
+func findEdgeIndexByEndpoints(edges []map[string]any, source string, target string) int {
+	src := strings.TrimSpace(source)
+	dst := strings.TrimSpace(target)
+	for idx, edge := range edges {
+		edgeSource := strings.TrimSpace(readPatchString(edge, "source"))
+		if edgeSource == "" {
+			edgeSource = strings.TrimSpace(readPatchString(edge, "from"))
+		}
+		edgeTarget := strings.TrimSpace(readPatchString(edge, "target"))
+		if edgeTarget == "" {
+			edgeTarget = strings.TrimSpace(readPatchString(edge, "to"))
+		}
+		if edgeSource == src && edgeTarget == dst {
+			return idx
+		}
+	}
+	return -1
+}
+
+func mergePatchObject(base map[string]any, patch map[string]any) map[string]any {
+	merged := make(map[string]any, len(base)+len(patch))
+	for key, value := range base {
+		merged[key] = value
+	}
+	for key, value := range patch {
+		merged[key] = value
+	}
+	return merged
 }

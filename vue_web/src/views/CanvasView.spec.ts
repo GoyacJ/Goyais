@@ -21,6 +21,8 @@ const getWorkflowRunMock = vi.fn()
 const listWorkflowStepRunsMock = vi.fn()
 const getWorkflowRunEventsMock = vi.fn()
 const getWorkflowTemplateMock = vi.fn()
+const patchWorkflowTemplateMock = vi.fn()
+const previewAIPlanMock = vi.fn()
 
 vi.mock('@/api/http', () => ({
   isMockEnabled: () => false,
@@ -46,8 +48,12 @@ vi.mock('@/api/workflow', () => ({
   cancelWorkflowRun: vi.fn(),
   createWorkflowRun: vi.fn(),
   createWorkflowTemplate: vi.fn(),
-  patchWorkflowTemplate: vi.fn(),
+  patchWorkflowTemplate: (...args: unknown[]) => patchWorkflowTemplateMock(...args),
   publishWorkflowTemplate: vi.fn(),
+}))
+
+vi.mock('@/api/ai', () => ({
+  previewAIPlan: (...args: unknown[]) => previewAIPlanMock(...args),
 }))
 
 vi.mock('@vue-flow/core', () => ({
@@ -192,6 +198,8 @@ describe('CanvasView', () => {
     listWorkflowStepRunsMock.mockReset()
     getWorkflowRunEventsMock.mockReset()
     getWorkflowTemplateMock.mockReset()
+    patchWorkflowTemplateMock.mockReset()
+    previewAIPlanMock.mockReset()
 
     const tpl = buildTemplate()
     const run = buildRun()
@@ -217,6 +225,80 @@ describe('CanvasView', () => {
         data: { runId: run.id, stepKey: 'step_1', createdAt: '2026-02-11T10:00:01Z' },
       },
     ])
+    previewAIPlanMock.mockResolvedValue({
+      plan: {
+        commandType: 'workflow.patch',
+        payload: {
+          templateId: 'tpl_1',
+          patch: {
+            operations: [
+              {
+                op: 'add_node',
+                value: {
+                  id: 'ai_patch_1',
+                  type: 'transform.json',
+                  position: { x: 360, y: 180 },
+                  data: {
+                    label: 'Transform · JSON (AI)',
+                    nodeType: 'transform.json',
+                    inputType: 'text',
+                    outputType: 'json',
+                  },
+                },
+              },
+              {
+                op: 'add_edge',
+                value: {
+                  id: 'e_step_1_ai_patch_1',
+                  source: 'step_1',
+                  target: 'ai_patch_1',
+                },
+              },
+              {
+                op: 'annotate',
+                path: '/ui_state/ai_patch',
+                value: {
+                  source: 'ai.intent.plan',
+                },
+              },
+            ],
+          },
+        },
+        planner: 'workflow.patch',
+        reason: 'matched_workflow_patch_generated',
+        suggestions: [],
+      },
+    })
+    patchWorkflowTemplateMock.mockResolvedValue({
+      resource: {
+        ...tpl,
+        graph: {
+          nodes: [
+            ...((tpl.graph.nodes as unknown[]) ?? []),
+            {
+              id: 'ai_patch_1',
+              type: 'transform.json',
+              position: { x: 360, y: 180 },
+              data: {
+                label: 'Transform · JSON (AI)',
+                nodeType: 'transform.json',
+                inputType: 'text',
+                outputType: 'json',
+              },
+            },
+          ],
+          edges: [
+            ...((tpl.graph.edges as unknown[]) ?? []),
+            {
+              id: 'e_step_1_ai_patch_1',
+              source: 'step_1',
+              target: 'ai_patch_1',
+            },
+          ],
+        },
+      },
+      commandRef: { commandId: 'cmd_patch_1', status: 'succeeded', acceptedAt: '2026-02-11T10:00:04Z' },
+    })
   })
 
   it('renders node runtime details after selecting a run', async () => {
@@ -239,5 +321,27 @@ describe('CanvasView', () => {
     expect(runtimeCard.text()).toContain('120')
     expect(runtimeCard.text()).toContain('2')
     expect(runtimeCard.text()).toContain('E_STEP')
+  })
+
+  it('applies AI patch through preview + workflow.patch', async () => {
+    const wrapper = mount(CanvasView, {
+      global: {
+        plugins: [i18n],
+        stubs,
+      },
+    })
+    await flushAll()
+
+    const aiPatchButton = wrapper
+      .findAll('button')
+      .find((item) => item.text().includes('应用 AI Patch') || item.text().includes('Apply AI Patch'))
+    expect(aiPatchButton).toBeDefined()
+    await aiPatchButton!.trigger('click')
+    await flushAll()
+
+    expect(previewAIPlanMock).toHaveBeenCalledTimes(1)
+    expect(patchWorkflowTemplateMock).toHaveBeenCalledTimes(1)
+    expect(patchWorkflowTemplateMock.mock.calls[0]?.[0]).toBe('tpl_1')
+    expect((patchWorkflowTemplateMock.mock.calls[0]?.[1] as { operations?: unknown[] })?.operations?.length).toBeGreaterThan(0)
   })
 })

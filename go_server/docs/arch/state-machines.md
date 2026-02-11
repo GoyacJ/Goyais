@@ -177,6 +177,7 @@
 - run/step 的 `error_code/message_key` 必须在失败态填写。
 - step 进入 `running` 前必须通过 Tool Gate（再次授权）。
 - `failed`/`canceled`/`succeeded` 为终态，不可回退。
+- `workflow.patch` 的 `operations` 必须经服务端受控校验后应用；未知操作或引用不存在节点/边时返回 `400 INVALID_WORKFLOW_REQUEST`。
 
 ---
 
