@@ -782,6 +782,12 @@
     position: relative;
   }
 
+  .ui-window-board-frame {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
   .ui-window-immersive {
     position: relative;
     display: flex;
@@ -828,8 +834,9 @@
   }
 
   .ui-window-board-toolbar {
-    display: inline-flex;
+    display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 0.5rem;
   }
 
