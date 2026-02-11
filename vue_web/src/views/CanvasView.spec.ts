@@ -19,6 +19,7 @@ const listWorkflowTemplatesMock = vi.fn()
 const listWorkflowRunsMock = vi.fn()
 const getWorkflowRunMock = vi.fn()
 const listWorkflowStepRunsMock = vi.fn()
+const getWorkflowRunEventsMock = vi.fn()
 const getWorkflowTemplateMock = vi.fn()
 
 vi.mock('@/api/http', () => ({
@@ -40,6 +41,7 @@ vi.mock('@/api/workflow', () => ({
   listWorkflowRuns: (...args: unknown[]) => listWorkflowRunsMock(...args),
   getWorkflowRun: (...args: unknown[]) => getWorkflowRunMock(...args),
   listWorkflowStepRuns: (...args: unknown[]) => listWorkflowStepRunsMock(...args),
+  getWorkflowRunEvents: (...args: unknown[]) => getWorkflowRunEventsMock(...args),
   getWorkflowTemplate: (...args: unknown[]) => getWorkflowTemplateMock(...args),
   cancelWorkflowRun: vi.fn(),
   createWorkflowRun: vi.fn(),
@@ -188,6 +190,7 @@ describe('CanvasView', () => {
     listWorkflowRunsMock.mockReset()
     getWorkflowRunMock.mockReset()
     listWorkflowStepRunsMock.mockReset()
+    getWorkflowRunEventsMock.mockReset()
     getWorkflowTemplateMock.mockReset()
 
     const tpl = buildTemplate()
@@ -207,6 +210,13 @@ describe('CanvasView', () => {
       items: [step],
       pageInfo: { page: 1, pageSize: 20, total: 1 },
     })
+    getWorkflowRunEventsMock.mockResolvedValue([
+      {
+        id: 'evt_1',
+        event: 'workflow.step.running',
+        data: { runId: run.id, stepKey: 'step_1', createdAt: '2026-02-11T10:00:01Z' },
+      },
+    ])
   })
 
   it('renders node runtime details after selecting a run', async () => {

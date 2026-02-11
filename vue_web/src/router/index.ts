@@ -10,12 +10,16 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AssetsView from '@/views/AssetsView.vue'
 import AIWorkbenchView from '@/views/AIWorkbenchView.vue'
+import AlgorithmLibraryView from '@/views/AlgorithmLibraryView.vue'
 import CanvasView from '@/views/CanvasView.vue'
 import CommandsView from '@/views/CommandsView.vue'
+import ContextBundleView from '@/views/ContextBundleView.vue'
 import ForbiddenView from '@/views/ForbiddenView.vue'
 import HomeView from '@/views/HomeView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
+import PermissionManagementView from '@/views/PermissionManagementView.vue'
 import PluginsView from '@/views/PluginsView.vue'
+import RunCenterView from '@/views/RunCenterView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import StreamsView from '@/views/StreamsView.vue'
 
@@ -41,6 +45,12 @@ const router = createRouter({
       meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'ai-workbench' },
     },
     {
+      path: '/run-center',
+      name: 'run-center',
+      component: RunCenterView,
+      meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'run-center' },
+    },
+    {
       path: '/commands',
       name: 'commands',
       component: CommandsView,
@@ -59,10 +69,28 @@ const router = createRouter({
       meta: { layoutDefault: 'topnav', windowed: true, windowManifestKey: 'plugins' },
     },
     {
+      path: '/algorithm-library',
+      name: 'algorithm-library',
+      component: AlgorithmLibraryView,
+      meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'algorithm-library' },
+    },
+    {
       path: '/streams',
       name: 'streams',
       component: StreamsView,
       meta: { layoutDefault: 'topnav', windowed: true, windowManifestKey: 'streams' },
+    },
+    {
+      path: '/permissions',
+      name: 'permission-management',
+      component: PermissionManagementView,
+      meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'permission-management' },
+    },
+    {
+      path: '/context-bundles',
+      name: 'context-bundles',
+      component: ContextBundleView,
+      meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'context-bundles' },
     },
     {
       path: '/settings',

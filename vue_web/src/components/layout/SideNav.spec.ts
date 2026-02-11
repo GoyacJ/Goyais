@@ -14,8 +14,21 @@ import { useDensityStore } from '@/design-system/density'
 import i18n from '@/i18n'
 
 const PINNED_STORAGE_KEY = 'goyais.ui.sidenav.pinned'
-const NAV_LABELS_ZH = ['首页', '画布', 'AI 工作台', '命令', '资源', '插件', '流媒体', '设置']
-const NAV_LABELS_EN = ['Home', 'Canvas', 'AI Workbench', 'Commands', 'Assets', 'Plugins', 'Streams', 'Settings']
+const NAV_LABELS_ZH = ['首页', '画布', 'AI 工作台', '运行中心', '命令', '资源', '算法库', '插件', '流媒体', '权限管理', '上下文包', '设置']
+const NAV_LABELS_EN = [
+  'Home',
+  'Canvas',
+  'AI Workbench',
+  'Run Center',
+  'Commands',
+  'Assets',
+  'Algorithm Library',
+  'Plugins',
+  'Streams',
+  'Permissions',
+  'Context Bundles',
+  'Settings',
+]
 
 describe('SideNav', () => {
   it('renders localized menu labels and keeps collapsed titles in sync with locale', async () => {

@@ -8,7 +8,16 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createStream, getStream, kickStream, listStreams, startStreamRecording, stopStreamRecording } from '@/api/streams'
+import {
+  createStream,
+  deleteStream,
+  getStream,
+  kickStream,
+  listStreams,
+  startStreamRecording,
+  stopStreamRecording,
+  updateStreamAuth,
+} from '@/api/streams'
 
 const apiRequestMock = vi.fn()
 
@@ -37,6 +46,8 @@ describe('streams api', () => {
     await startStreamRecording('str_1', 'idem-start')
     await stopStreamRecording('str_1', 'idem-stop')
     await kickStream('str_1', 'idem-kick')
+    await updateStreamAuth('str_1', { token: 'demo-token' }, 'idem-auth')
+    await deleteStream('str_1', 'idem-delete')
 
     expect(apiRequestMock.mock.calls[0]?.[0]).toBe('/streams')
     expect(apiRequestMock.mock.calls[1]?.[0]).toBe('/streams')
@@ -44,5 +55,7 @@ describe('streams api', () => {
     expect(apiRequestMock.mock.calls[3]?.[0]).toBe('/streams/str_1:record-start')
     expect(apiRequestMock.mock.calls[4]?.[0]).toBe('/streams/str_1:record-stop')
     expect(apiRequestMock.mock.calls[5]?.[0]).toBe('/streams/str_1:kick')
+    expect(apiRequestMock.mock.calls[6]?.[0]).toBe('/streams/str_1:update-auth')
+    expect(apiRequestMock.mock.calls[7]?.[0]).toBe('/streams/str_1')
   })
 })

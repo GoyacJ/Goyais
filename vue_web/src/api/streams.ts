@@ -12,6 +12,7 @@ import type {
   ResourceSnapshot,
   StreamCreateRequest,
   StreamDTO,
+  StreamUpdateAuthRequest,
   WorkflowListParams,
   WriteResponse,
   ListResponse,
@@ -76,6 +77,28 @@ export async function kickStream(
   return apiRequest<WriteResponse<StreamWriteResource>>(`/streams/${encodeURIComponent(streamId)}:kick`, {
     method: 'POST',
     body: {},
+    idempotencyKey,
+  })
+}
+
+export async function updateStreamAuth(
+  streamId: string,
+  request: StreamUpdateAuthRequest,
+  idempotencyKey?: string,
+): Promise<WriteResponse<StreamWriteResource>> {
+  return apiRequest<WriteResponse<StreamWriteResource>>(`/streams/${encodeURIComponent(streamId)}:update-auth`, {
+    method: 'POST',
+    body: request,
+    idempotencyKey,
+  })
+}
+
+export async function deleteStream(
+  streamId: string,
+  idempotencyKey?: string,
+): Promise<WriteResponse<StreamWriteResource>> {
+  return apiRequest<WriteResponse<StreamWriteResource>>(`/streams/${encodeURIComponent(streamId)}`, {
+    method: 'DELETE',
     idempotencyKey,
   })
 }

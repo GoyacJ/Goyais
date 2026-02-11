@@ -37,6 +37,10 @@ const manifests: Record<string, WindowPaneManifest[]> = {
     { id: 'ai-composer', x: 460, y: 20, w: 430, h: 720, minWidth: 360 },
     { id: 'ai-events', x: 906, y: 20, w: 402, h: 720, minWidth: 340 },
   ],
+  'run-center': [
+    { id: 'run-center-list', x: 24, y: 20, w: 620, h: 760, minWidth: 460 },
+    { id: 'run-center-detail', x: 660, y: 20, w: 648, h: 760, minWidth: 480 },
+  ],
   assets: [
     { id: 'filters', x: 24, y: 20, w: 1284, h: 190, minHeight: 160 },
     { id: 'list', x: 24, y: 226, w: 800, h: 620 },
@@ -51,9 +55,21 @@ const manifests: Record<string, WindowPaneManifest[]> = {
     { id: 'plugin-catalog', x: 24, y: 20, w: 860, h: 720 },
     { id: 'plugin-activity', x: 900, y: 20, w: 408, h: 720 },
   ],
+  'algorithm-library': [
+    { id: 'algorithm-list', x: 24, y: 20, w: 700, h: 760, minWidth: 500 },
+    { id: 'algorithm-detail', x: 740, y: 20, w: 568, h: 760, minWidth: 420 },
+  ],
   streams: [
     { id: 'stream-overview', x: 24, y: 20, w: 1284, h: 420 },
     { id: 'stream-logs', x: 24, y: 456, w: 1284, h: 290 },
+  ],
+  'permission-management': [
+    { id: 'permission-overview', x: 24, y: 20, w: 780, h: 760, minWidth: 520 },
+    { id: 'permission-logs', x: 820, y: 20, w: 488, h: 760, minWidth: 360 },
+  ],
+  'context-bundles': [
+    { id: 'context-list', x: 24, y: 20, w: 700, h: 760, minWidth: 500 },
+    { id: 'context-detail', x: 740, y: 20, w: 568, h: 760, minWidth: 420 },
   ],
   settings: [
     { id: 'preferences', x: 24, y: 20, w: 1284, h: 260 },
