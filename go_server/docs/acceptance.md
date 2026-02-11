@@ -215,7 +215,7 @@
 
 - [x] 存在统一回归脚本 `go_server/scripts/ci/contract_regression.sh`，串行执行 `path_migration_audit`、`source_header_check`、`go test ./...`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web typecheck`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run`、`make build`、single-binary verify。
 - [x] 存在迁移残留审计脚本 `go_server/scripts/ci/path_migration_audit.sh`，用于扫描旧路径引用是否清零。
-- [x] 存在源码头校验脚本 `go_server/scripts/ci/source_header_check.sh`，校验 SPDX/版权/作者/时间/版本/描述字段完整性与顺序。
+- [x] 存在源码头校验脚本 `go_server/scripts/ci/source_header_check.sh`：非 Java 校验 SPDX/版权/作者/时间/版本/描述字段；Java 校验 `SPDX + <p> + @author + @since(yyyy-MM-dd HH:mm:ss)`。
 - [x] 存在提交前防呆脚本 `go_server/scripts/git/precommit_guard.sh`，阻断 `data/objects/`、`*.db`、`go_server/build/`、`go_server/internal/access/webstatic/dist/assets/`、`go_server/internal/access/webstatic/dist/index.html`、`vue_web/dist/`、`vue_web/node_modules/` 被 staged。
 - [x] 存在 worktree 审计脚本 `go_server/scripts/git/worktree_audit.sh`，阻断 detached worktree 与重复分支绑定。
 - [x] CI workflow `.github/workflows/contract-regression.yml` 调用统一回归脚本，作为 PR/master 门禁入口。

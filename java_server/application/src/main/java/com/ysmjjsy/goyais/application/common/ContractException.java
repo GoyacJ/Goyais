@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Contract-oriented runtime exception carrying status and error envelope fields.
+ * <p>Contract-oriented runtime exception carrying status and error envelope fields.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.application.common;
 
 import java.util.Map;
@@ -21,6 +20,10 @@ public final class ContractException extends RuntimeException {
 
     /**
      * Creates one contract exception with status, code, message key, and optional details.
+     * @param statusCode TODO
+     * @param code TODO
+     * @param messageKey TODO
+     * @param details TODO
      */
     public ContractException(int statusCode, String code, String messageKey, Map<String, Object> details) {
         super(code + ":" + messageKey);
@@ -32,6 +35,10 @@ public final class ContractException extends RuntimeException {
 
     /**
      * Creates one contract exception without details payload.
+     * @param statusCode TODO
+     * @param code TODO
+     * @param messageKey TODO
+     * @return TODO
      */
     public static ContractException of(int statusCode, String code, String messageKey) {
         return new ContractException(statusCode, code, messageKey, Map.of());
@@ -39,6 +46,11 @@ public final class ContractException extends RuntimeException {
 
     /**
      * Creates one contract exception with details payload.
+     * @param statusCode TODO
+     * @param code TODO
+     * @param messageKey TODO
+     * @param details TODO
+     * @return TODO
      */
     public static ContractException of(int statusCode, String code, String messageKey, Map<String, Object> details) {
         return new ContractException(statusCode, code, messageKey, details);
@@ -46,6 +58,7 @@ public final class ContractException extends RuntimeException {
 
     /**
      * Returns HTTP status code.
+     * @return TODO
      */
     public int statusCode() {
         return statusCode;
@@ -53,6 +66,7 @@ public final class ContractException extends RuntimeException {
 
     /**
      * Returns contract error code.
+     * @return TODO
      */
     public String code() {
         return code;
@@ -60,6 +74,7 @@ public final class ContractException extends RuntimeException {
 
     /**
      * Returns i18n message key.
+     * @return TODO
      */
     public String messageKey() {
         return messageKey;
@@ -67,6 +82,7 @@ public final class ContractException extends RuntimeException {
 
     /**
      * Returns immutable error details payload.
+     * @return TODO
      */
     public Map<String, Object> details() {
         return details;

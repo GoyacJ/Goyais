@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Builds ExecutionContext from JWT claims with optional dev header fallback.
+ * <p>Builds ExecutionContext from JWT claims with optional dev header fallback.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.adapter.rest;
 
 import com.ysmjjsy.goyais.kernel.core.ExecutionContext;
@@ -30,6 +29,8 @@ public final class RequestExecutionContextFactory {
 
     /**
      * Creates context resolver with runtime guard for dev header fallback behavior.
+     * @param devHeaderContextEnabled TODO
+     * @return TODO
      */
     public RequestExecutionContextFactory(
             @Value("${goyais.security.dev-header-context-enabled:false}") boolean devHeaderContextEnabled
@@ -39,6 +40,9 @@ public final class RequestExecutionContextFactory {
 
     /**
      * Resolves execution context from JWT claims and optional X-* headers in dev mode.
+     * @param authentication TODO
+     * @param request TODO
+     * @return TODO
      */
     public ExecutionContext resolve(Authentication authentication, HttpServletRequest request) {
         if (authentication instanceof JwtAuthenticationToken jwtAuthenticationToken) {

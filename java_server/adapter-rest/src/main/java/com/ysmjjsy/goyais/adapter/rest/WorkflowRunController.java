@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Workflow run REST controller aligned with Go-compatible /api/v1/workflow-runs routes.
+ * <p>Workflow run REST controller aligned with Go-compatible /api/v1/workflow-runs routes.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.adapter.rest;
 
 import com.ysmjjsy.goyais.application.common.ContractException;
@@ -46,6 +45,10 @@ public final class WorkflowRunController {
 
     /**
      * Creates controller with workflow run service and execution-context resolver.
+     * @param runService TODO
+     * @param executionContextFactory TODO
+     * @param workflowEnabled TODO
+     * @return TODO
      */
     public WorkflowRunController(
             WorkflowRunApplicationService runService,
@@ -59,6 +62,11 @@ public final class WorkflowRunController {
 
     /**
      * Returns readable workflow run list response with pageInfo envelope.
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     @GetMapping
     public Map<String, Object> list(
@@ -83,6 +91,10 @@ public final class WorkflowRunController {
 
     /**
      * Creates one workflow run through command-first domain sugar endpoint.
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @param request TODO
+     * @return TODO
      */
     @PostMapping
     public ResponseEntity<WriteResponse<WorkflowRun>> create(
@@ -97,6 +109,10 @@ public final class WorkflowRunController {
 
     /**
      * Returns one readable workflow run or not-found contract envelope.
+     * @param runId TODO
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @return TODO
      */
     @GetMapping("/{runId}")
     public ResponseEntity<?> get(
@@ -118,6 +134,10 @@ public final class WorkflowRunController {
 
     /**
      * Cancels one workflow run through command-first domain sugar endpoint.
+     * @param runId TODO
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @return TODO
      */
     @PostMapping("/{runId}:cancel")
     public ResponseEntity<WriteResponse<WorkflowRun>> cancel(
@@ -132,6 +152,12 @@ public final class WorkflowRunController {
 
     /**
      * Returns step run list for one readable workflow run.
+     * @param runId TODO
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     @GetMapping("/{runId}/steps")
     public ResponseEntity<?> listSteps(
@@ -165,6 +191,10 @@ public final class WorkflowRunController {
 
     /**
      * Streams workflow run events as SSE for one readable workflow run.
+     * @param runId TODO
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @return TODO
      */
     @GetMapping(value = "/{runId}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<?> streamEvents(

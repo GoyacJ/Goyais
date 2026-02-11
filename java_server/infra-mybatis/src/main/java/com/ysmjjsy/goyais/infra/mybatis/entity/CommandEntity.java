@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Persisted command row mapped from commands table.
+ * <p>Persisted command row mapped from commands table.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.infra.mybatis.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -66,6 +65,7 @@ public class CommandEntity {
 
     /**
      * Returns command identifier.
+     * @return TODO
      */
     public String getId() {
         return id;
@@ -73,6 +73,7 @@ public class CommandEntity {
 
     /**
      * Sets command identifier.
+     * @param id TODO
      */
     public void setId(String id) {
         this.id = id;
@@ -80,6 +81,7 @@ public class CommandEntity {
 
     /**
      * Returns tenant identifier.
+     * @return TODO
      */
     public String getTenantId() {
         return tenantId;
@@ -87,6 +89,7 @@ public class CommandEntity {
 
     /**
      * Sets tenant identifier.
+     * @param tenantId TODO
      */
     public void setTenantId(String tenantId) {
         this.tenantId = tenantId;
@@ -94,6 +97,7 @@ public class CommandEntity {
 
     /**
      * Returns workspace identifier.
+     * @return TODO
      */
     public String getWorkspaceId() {
         return workspaceId;
@@ -101,6 +105,7 @@ public class CommandEntity {
 
     /**
      * Sets workspace identifier.
+     * @param workspaceId TODO
      */
     public void setWorkspaceId(String workspaceId) {
         this.workspaceId = workspaceId;
@@ -108,6 +113,7 @@ public class CommandEntity {
 
     /**
      * Returns owner identifier.
+     * @return TODO
      */
     public String getOwnerId() {
         return ownerId;
@@ -115,6 +121,7 @@ public class CommandEntity {
 
     /**
      * Sets owner identifier.
+     * @param ownerId TODO
      */
     public void setOwnerId(String ownerId) {
         this.ownerId = ownerId;
@@ -122,6 +129,7 @@ public class CommandEntity {
 
     /**
      * Returns visibility value.
+     * @return TODO
      */
     public String getVisibility() {
         return visibility;
@@ -129,6 +137,7 @@ public class CommandEntity {
 
     /**
      * Sets visibility value.
+     * @param visibility TODO
      */
     public void setVisibility(String visibility) {
         this.visibility = visibility;
@@ -136,6 +145,7 @@ public class CommandEntity {
 
     /**
      * Returns command status value.
+     * @return TODO
      */
     public String getStatus() {
         return status;
@@ -143,6 +153,7 @@ public class CommandEntity {
 
     /**
      * Sets command status value.
+     * @param status TODO
      */
     public void setStatus(String status) {
         this.status = status;
@@ -150,6 +161,7 @@ public class CommandEntity {
 
     /**
      * Returns command type value.
+     * @return TODO
      */
     public String getCommandType() {
         return commandType;
@@ -157,6 +169,7 @@ public class CommandEntity {
 
     /**
      * Sets command type value.
+     * @param commandType TODO
      */
     public void setCommandType(String commandType) {
         this.commandType = commandType;
@@ -164,6 +177,7 @@ public class CommandEntity {
 
     /**
      * Returns JSON payload.
+     * @return TODO
      */
     public String getPayloadJson() {
         return payloadJson;
@@ -171,6 +185,7 @@ public class CommandEntity {
 
     /**
      * Sets JSON payload.
+     * @param payloadJson TODO
      */
     public void setPayloadJson(String payloadJson) {
         this.payloadJson = payloadJson;
@@ -178,6 +193,7 @@ public class CommandEntity {
 
     /**
      * Returns trace identifier.
+     * @return TODO
      */
     public String getTraceId() {
         return traceId;
@@ -185,6 +201,7 @@ public class CommandEntity {
 
     /**
      * Sets trace identifier.
+     * @param traceId TODO
      */
     public void setTraceId(String traceId) {
         this.traceId = traceId;
@@ -192,6 +209,7 @@ public class CommandEntity {
 
     /**
      * Returns JSON result payload.
+     * @return TODO
      */
     public String getResultJson() {
         return resultJson;
@@ -199,6 +217,7 @@ public class CommandEntity {
 
     /**
      * Sets JSON result payload.
+     * @param resultJson TODO
      */
     public void setResultJson(String resultJson) {
         this.resultJson = resultJson;
@@ -206,6 +225,7 @@ public class CommandEntity {
 
     /**
      * Returns error code.
+     * @return TODO
      */
     public String getErrorCode() {
         return errorCode;
@@ -213,6 +233,7 @@ public class CommandEntity {
 
     /**
      * Sets error code.
+     * @param errorCode TODO
      */
     public void setErrorCode(String errorCode) {
         this.errorCode = errorCode;
@@ -220,6 +241,7 @@ public class CommandEntity {
 
     /**
      * Returns error i18n key.
+     * @return TODO
      */
     public String getErrorMessageKey() {
         return errorMessageKey;
@@ -227,6 +249,7 @@ public class CommandEntity {
 
     /**
      * Sets error i18n key.
+     * @param errorMessageKey TODO
      */
     public void setErrorMessageKey(String errorMessageKey) {
         this.errorMessageKey = errorMessageKey;
@@ -234,6 +257,7 @@ public class CommandEntity {
 
     /**
      * Returns accepted timestamp.
+     * @return TODO
      */
     public Instant getAcceptedAt() {
         return acceptedAt;
@@ -241,6 +265,7 @@ public class CommandEntity {
 
     /**
      * Sets accepted timestamp.
+     * @param acceptedAt TODO
      */
     public void setAcceptedAt(Instant acceptedAt) {
         this.acceptedAt = acceptedAt;
@@ -248,6 +273,7 @@ public class CommandEntity {
 
     /**
      * Returns created timestamp.
+     * @return TODO
      */
     public Instant getCreatedAt() {
         return createdAt;
@@ -255,6 +281,7 @@ public class CommandEntity {
 
     /**
      * Sets created timestamp.
+     * @param createdAt TODO
      */
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
@@ -262,6 +289,7 @@ public class CommandEntity {
 
     /**
      * Returns updated timestamp.
+     * @return TODO
      */
     public Instant getUpdatedAt() {
         return updatedAt;
@@ -269,6 +297,7 @@ public class CommandEntity {
 
     /**
      * Sets updated timestamp.
+     * @param updatedAt TODO
      */
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;

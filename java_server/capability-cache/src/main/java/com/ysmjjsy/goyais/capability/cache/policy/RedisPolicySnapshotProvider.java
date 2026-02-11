@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Redis-first policy snapshot provider with durable-store fallback.
+ * <p>Redis-first policy snapshot provider with durable-store fallback.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.capability.cache.policy;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -36,6 +35,10 @@ public final class RedisPolicySnapshotProvider implements PolicySnapshotProvider
 
     /**
      * Creates one provider using Redis cache, durable store, and in-process fallback cache.
+     * @param redisTemplate TODO
+     * @param snapshotStore TODO
+     * @param cacheTtl TODO
+     * @param objectMapper TODO
      */
     public RedisPolicySnapshotProvider(
             StringRedisTemplate redisTemplate,
@@ -51,6 +54,8 @@ public final class RedisPolicySnapshotProvider implements PolicySnapshotProvider
 
     /**
      * Loads latest snapshot from local cache, Redis, durable store, or request defaults.
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public PolicySnapshot loadLatest(ExecutionContext context) {
@@ -81,6 +86,9 @@ public final class RedisPolicySnapshotProvider implements PolicySnapshotProvider
 
     /**
      * Evicts local and Redis cache entries for one policy scope.
+     * @param tenantId TODO
+     * @param workspaceId TODO
+     * @param userId TODO
      */
     @Override
     public void evict(String tenantId, String workspaceId, String userId) {
@@ -197,12 +205,33 @@ public final class RedisPolicySnapshotProvider implements PolicySnapshotProvider
     }
 
     private static final class SnapshotPayload {
+        /**
+         * <p>TODO: describe field.</p>
+         */
         public String tenantId;
+        /**
+         * <p>TODO: describe field.</p>
+         */
         public String workspaceId;
+        /**
+         * <p>TODO: describe field.</p>
+         */
         public String userId;
+        /**
+         * <p>TODO: describe field.</p>
+         */
         public String policyVersion;
+        /**
+         * <p>TODO: describe field.</p>
+         */
         public Set<String> roles;
+        /**
+         * <p>TODO: describe field.</p>
+         */
         public Set<String> deniedCommandTypes;
+        /**
+         * <p>TODO: describe field.</p>
+         */
         public Instant updatedAt;
 
         /**

@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Canonical command endpoints for command-first bootstrap.
+ * <p>Canonical command endpoints for command-first bootstrap.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.adapter.rest;
 
 import com.ysmjjsy.goyais.application.command.CommandApplicationService;
@@ -34,6 +33,8 @@ public final class CommandController {
 
     /**
      * Creates command controller with application service dependency.
+     * @param commandService TODO
+     * @param executionContextFactory TODO
      */
     public CommandController(
             CommandApplicationService commandService,
@@ -45,6 +46,10 @@ public final class CommandController {
 
     /**
      * Accepts canonical command create requests and returns command reference envelope.
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @param request TODO
+     * @return TODO
      */
     @PostMapping
     public ResponseEntity<WriteResponse<CommandResource>> create(
@@ -58,6 +63,9 @@ public final class CommandController {
 
     /**
      * Returns command list response compatible with Go pagination envelope semantics.
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @return TODO
      */
     @GetMapping
     public Map<String, Object> list(Authentication authentication, HttpServletRequest servletRequest) {
@@ -71,6 +79,10 @@ public final class CommandController {
 
     /**
      * Returns one command resource by ID or contract error envelope when not found.
+     * @param commandId TODO
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @return TODO
      */
     @GetMapping("/{commandId}")
     public ResponseEntity<?> get(

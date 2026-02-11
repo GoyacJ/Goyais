@@ -126,7 +126,7 @@
 
 ## 8. 质量门禁 | Quality Gates
 
-- 文件头检查：`bash go_server/scripts/ci/source_header_check.sh`
+- 文件头检查：`bash go_server/scripts/ci/source_header_check.sh`（Java: `SPDX + <p> + @author + @since`）
 - JavaDoc 检查：`bash java_server/scripts/ci/java_javadoc_check.sh`
 - Java 构建：`mvn -f java_server/pom.xml -DskipTests verify`
 - Java 测试：`mvn -f java_server/pom.xml test`

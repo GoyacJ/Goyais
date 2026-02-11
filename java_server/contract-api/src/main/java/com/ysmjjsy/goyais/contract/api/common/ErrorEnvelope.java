@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Fixed error envelope compatible with Go contract.
+ * <p>Fixed error envelope compatible with Go contract.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.contract.api.common;
 
 import java.util.Map;
@@ -17,6 +16,9 @@ public record ErrorEnvelope(ErrorBody error) {
 
     /**
      * Builds one error envelope from code and message key.
+     * @param code TODO
+     * @param messageKey TODO
+     * @return TODO
      */
     public static ErrorEnvelope of(String code, String messageKey) {
         return new ErrorEnvelope(new ErrorBody(code, messageKey, null));
@@ -24,6 +26,10 @@ public record ErrorEnvelope(ErrorBody error) {
 
     /**
      * Builds one error envelope from code, message key, and details payload.
+     * @param code TODO
+     * @param messageKey TODO
+     * @param details TODO
+     * @return TODO
      */
     public static ErrorEnvelope of(String code, String messageKey, Map<String, Object> details) {
         return new ErrorEnvelope(new ErrorBody(code, messageKey, details));

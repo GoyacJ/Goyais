@@ -6,7 +6,7 @@
 
 ## Hard Constraints (MUST)
 
-- 回归门禁顺序：worktree audit -> precommit guard -> source header check -> java javadoc check -> go test -> web typecheck/test -> build -> single binary verify。
+- 回归门禁顺序：worktree audit -> precommit guard -> source header check（Java 新头模板 + 非 Java 旧头模板） -> java javadoc check（JDK/Javadoc 标准） -> go test -> web typecheck/test -> build -> single binary verify。
 - 验收需有可复现命令证据。
 
 ## Counterexamples

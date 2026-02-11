@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: MyBatisPlus implementation of share repository and permission checks.
+ * <p>MyBatisPlus implementation of share repository and permission checks.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.infra.mybatis.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -44,6 +43,10 @@ public final class MybatisShareRepository implements ShareRepository {
 
     /**
      * Creates repository with share, command, and asset mappers.
+     * @param shareMapper TODO
+     * @param commandMapper TODO
+     * @param assetMapper TODO
+     * @param objectMapper TODO
      */
     public MybatisShareRepository(
             ShareEntityMapper shareMapper,
@@ -59,6 +62,10 @@ public final class MybatisShareRepository implements ShareRepository {
 
     /**
      * Persists one share row and returns mapped share resource.
+     * @param request TODO
+     * @param context TODO
+     * @param now TODO
+     * @return TODO
      */
     @Override
     public Share create(ShareCreateRequest request, ExecutionContext context, Instant now) {
@@ -80,6 +87,10 @@ public final class MybatisShareRepository implements ShareRepository {
 
     /**
      * Returns share list for scope with deterministic ordering.
+     * @param context TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     @Override
     public List<Share> list(ExecutionContext context, int page, int pageSize) {
@@ -94,6 +105,8 @@ public final class MybatisShareRepository implements ShareRepository {
 
     /**
      * Returns share count in current tenant/workspace scope.
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public long count(ExecutionContext context) {
@@ -102,6 +115,9 @@ public final class MybatisShareRepository implements ShareRepository {
 
     /**
      * Deletes one share created by current user.
+     * @param shareId TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public boolean deleteByIdAndCreator(String shareId, ExecutionContext context) {
@@ -115,6 +131,10 @@ public final class MybatisShareRepository implements ShareRepository {
 
     /**
      * Returns resource scope projection for command or asset resources.
+     * @param resourceType TODO
+     * @param resourceId TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public ShareResourceScope findResourceScope(String resourceType, String resourceId, ExecutionContext context) {
@@ -128,6 +148,12 @@ public final class MybatisShareRepository implements ShareRepository {
 
     /**
      * Returns true when user/roles have requested permission on resource.
+     * @param resourceType TODO
+     * @param resourceId TODO
+     * @param context TODO
+     * @param permission TODO
+     * @param now TODO
+     * @return TODO
      */
     @Override
     public boolean hasResourcePermission(

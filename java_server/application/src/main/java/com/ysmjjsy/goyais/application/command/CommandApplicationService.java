@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Command service backed by repository persistence for contract iteration.
+ * <p>Command service backed by repository persistence for contract iteration.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.application.command;
 
 import com.ysmjjsy.goyais.contract.api.common.CommandCreateRequest;
@@ -31,6 +30,8 @@ public final class CommandApplicationService {
 
     /**
      * Creates application service with command pipeline dependency.
+     * @param pipeline TODO
+     * @param commandRepository TODO
      */
     public CommandApplicationService(CommandPipeline pipeline, CommandRepository commandRepository) {
         this.pipeline = pipeline;
@@ -39,6 +40,9 @@ public final class CommandApplicationService {
 
     /**
      * Creates command resource, executes pipeline and returns write response envelope.
+     * @param request TODO
+     * @param context TODO
+     * @return TODO
      */
     public WriteResponse<CommandResource> create(CommandCreateRequest request, ExecutionContext context) {
         String id = UUID.randomUUID().toString();
@@ -75,6 +79,8 @@ public final class CommandApplicationService {
 
     /**
      * Lists readable command resources with newest-first ordering.
+     * @param context TODO
+     * @return TODO
      */
     public List<CommandResource> list(ExecutionContext context) {
         return commandRepository.listReadable(context, 200);
@@ -82,6 +88,9 @@ public final class CommandApplicationService {
 
     /**
      * Returns one readable command resource by identifier.
+     * @param commandId TODO
+     * @param context TODO
+     * @return TODO
      */
     public CommandResource get(String commandId, ExecutionContext context) {
         return commandRepository.findReadableById(commandId, context);

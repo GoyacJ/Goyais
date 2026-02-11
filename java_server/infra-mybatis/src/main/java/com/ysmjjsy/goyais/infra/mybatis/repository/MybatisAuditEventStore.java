@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: MyBatisPlus implementation for persisting command audit events.
+ * <p>MyBatisPlus implementation for persisting command audit events.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.infra.mybatis.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -27,6 +26,8 @@ public final class MybatisAuditEventStore implements AuditEventStore {
 
     /**
      * Creates store with mapper and JSON codec dependencies.
+     * @param mapper TODO
+     * @param objectMapper TODO
      */
     public MybatisAuditEventStore(AuditEventEntityMapper mapper, ObjectMapper objectMapper) {
         this.mapper = mapper;
@@ -35,6 +36,7 @@ public final class MybatisAuditEventStore implements AuditEventStore {
 
     /**
      * Persists one audit event row.
+     * @param event TODO
      */
     @Override
     public void save(AuditEvent event) {

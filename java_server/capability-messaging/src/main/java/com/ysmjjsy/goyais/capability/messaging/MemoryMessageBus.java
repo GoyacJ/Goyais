@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: In-memory message bus fallback for minimal runtime mode.
+ * <p>In-memory message bus fallback for minimal runtime mode.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.capability.messaging;
 
 import com.ysmjjsy.goyais.capability.event.DomainEvent;
@@ -20,6 +19,8 @@ public final class MemoryMessageBus implements MessageBus {
 
     /**
      * Delivers the event to all subscribers currently registered on the topic.
+     * @param topic TODO
+     * @param event TODO
      */
     @Override
     public void publish(String topic, DomainEvent event) {
@@ -28,6 +29,8 @@ public final class MemoryMessageBus implements MessageBus {
 
     /**
      * Registers one subscriber callback for subsequent topic events.
+     * @param topic TODO
+     * @param consumer TODO
      */
     @Override
     public void subscribe(String topic, Consumer<DomainEvent> consumer) {

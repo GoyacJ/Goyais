@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Authorization server capability wiring reused by single app runtime.
+ * <p>Authorization server capability wiring reused by single app runtime.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.auth;
 
 import com.nimbusds.jose.jwk.JWKSet;
@@ -48,6 +47,9 @@ public class AuthServerSecurityConfiguration {
 
     /**
      * Enables OAuth2/OIDC authorization server endpoints with high precedence.
+     * @param http TODO
+     * @return TODO
+     * @throws Exception TODO
      */
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -68,6 +70,8 @@ public class AuthServerSecurityConfiguration {
 
     /**
      * Registers bootstrap OAuth client used by vue_web in local integration mode.
+     * @param passwordEncoder TODO
+     * @return TODO
      */
     @Bean
     public RegisteredClientRepository registeredClientRepository(PasswordEncoder passwordEncoder) {
@@ -88,6 +92,8 @@ public class AuthServerSecurityConfiguration {
 
     /**
      * Publishes issuer metadata consumed by resource servers and OIDC clients.
+     * @param issuer TODO
+     * @return TODO
      */
     @Bean
     public AuthorizationServerSettings authorizationServerSettings(
@@ -98,6 +104,7 @@ public class AuthServerSecurityConfiguration {
 
     /**
      * Creates JWK source used by token signing and key discovery endpoints.
+     * @return TODO
      */
     @Bean
     public JWKSource<SecurityContext> jwkSource() {
@@ -108,6 +115,8 @@ public class AuthServerSecurityConfiguration {
 
     /**
      * Provides local users for password login and integration tests.
+     * @param passwordEncoder TODO
+     * @return TODO
      */
     @Bean
     public UserDetailsManager userDetailsManager(PasswordEncoder passwordEncoder) {
@@ -125,6 +134,7 @@ public class AuthServerSecurityConfiguration {
 
     /**
      * Uses delegating encoder to allow future hash algorithm migrations.
+     * @return TODO
      */
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -133,6 +143,7 @@ public class AuthServerSecurityConfiguration {
 
     /**
      * Generates one ephemeral RSA key for development-token signing.
+     * @return TODO
      */
     public static RSAKey generateRsaKey() {
         KeyPair keyPair = generateRsaKeyPair();
@@ -146,6 +157,7 @@ public class AuthServerSecurityConfiguration {
 
     /**
      * Creates a 2048-bit RSA key pair used by {@link #generateRsaKey()}.
+     * @return TODO
      */
     public static KeyPair generateRsaKeyPair() {
         try {

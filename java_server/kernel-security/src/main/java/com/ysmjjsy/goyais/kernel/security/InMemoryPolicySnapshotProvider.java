@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: In-memory fallback policy snapshot provider for minimal runtime.
+ * <p>In-memory fallback policy snapshot provider for minimal runtime.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.kernel.security;
 
 import com.ysmjjsy.goyais.kernel.core.ExecutionContext;
@@ -23,6 +22,8 @@ public final class InMemoryPolicySnapshotProvider implements PolicySnapshotProvi
 
     /**
      * Builds or refreshes one snapshot from request context defaults.
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public PolicySnapshot loadLatest(ExecutionContext context) {
@@ -32,6 +33,9 @@ public final class InMemoryPolicySnapshotProvider implements PolicySnapshotProvi
 
     /**
      * Removes one snapshot so subsequent requests must reload effective policy.
+     * @param tenantId TODO
+     * @param workspaceId TODO
+     * @param userId TODO
      */
     @Override
     public void evict(String tenantId, String workspaceId, String userId) {
@@ -40,6 +44,7 @@ public final class InMemoryPolicySnapshotProvider implements PolicySnapshotProvi
 
     /**
      * Upserts one externally loaded snapshot for the same scope.
+     * @param snapshot TODO
      */
     public void upsert(PolicySnapshot snapshot) {
         snapshots.put(scopeKey(snapshot.tenantId(), snapshot.workspaceId(), snapshot.userId()), snapshot);

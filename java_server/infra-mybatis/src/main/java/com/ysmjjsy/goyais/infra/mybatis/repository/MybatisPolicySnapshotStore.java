@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Durable policy snapshot store implementation backed by PostgreSQL.
+ * <p>Durable policy snapshot store implementation backed by PostgreSQL.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.infra.mybatis.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -30,6 +29,8 @@ public final class MybatisPolicySnapshotStore implements PolicySnapshotStore {
 
     /**
      * Creates store with mapper and JSON codec dependencies.
+     * @param mapper TODO
+     * @param objectMapper TODO
      */
     public MybatisPolicySnapshotStore(PolicySnapshotEntityMapper mapper, ObjectMapper objectMapper) {
         this.mapper = mapper;
@@ -38,6 +39,10 @@ public final class MybatisPolicySnapshotStore implements PolicySnapshotStore {
 
     /**
      * Loads one policy snapshot by scope, or null when no row exists.
+     * @param tenantId TODO
+     * @param workspaceId TODO
+     * @param userId TODO
+     * @return TODO
      */
     @Override
     public PolicySnapshot load(String tenantId, String workspaceId, String userId) {
@@ -59,6 +64,7 @@ public final class MybatisPolicySnapshotStore implements PolicySnapshotStore {
 
     /**
      * Upserts one policy snapshot by scope key.
+     * @param snapshot TODO
      */
     @Override
     public void upsert(PolicySnapshot snapshot) {

@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: API application wiring for dynamic authz, command pipeline, and cache invalidation.
+ * <p>API application wiring for dynamic authz, command pipeline, and cache invalidation.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,6 +55,7 @@ public class ApiServerConfiguration {
 
     /**
      * Provides in-memory policy snapshots as Redis-unavailable fallback cache.
+     * @return TODO
      */
     @Bean
     public InMemoryPolicySnapshotProvider inMemoryPolicySnapshotProvider() {
@@ -64,6 +64,12 @@ public class ApiServerConfiguration {
 
     /**
      * Selects Redis-first provider with durable-store fallback when Redis is available.
+     * @param redisTemplateProvider TODO
+     * @param policySnapshotStore TODO
+     * @param inMemoryPolicySnapshotProvider TODO
+     * @param objectMapper TODO
+     * @param cacheTtl TODO
+     * @return TODO
      */
     @Bean
     public PolicySnapshotProvider policySnapshotProvider(
@@ -83,6 +89,7 @@ public class ApiServerConfiguration {
 
     /**
      * Provides local invalidation bus used when Redis pubsub is unavailable.
+     * @return TODO
      */
     @Bean
     public InMemoryPolicyInvalidationBus inMemoryPolicyInvalidationBus() {
@@ -91,6 +98,10 @@ public class ApiServerConfiguration {
 
     /**
      * Selects Redis or in-memory publisher for policy invalidation fan-out.
+     * @param redisTemplateProvider TODO
+     * @param inMemoryBus TODO
+     * @param channel TODO
+     * @return TODO
      */
     @Bean
     public PolicyInvalidationPublisher policyInvalidationPublisher(
@@ -107,6 +118,10 @@ public class ApiServerConfiguration {
 
     /**
      * Selects Redis or in-memory subscriber to receive policy invalidation events.
+     * @param listenerContainerProvider TODO
+     * @param inMemoryBus TODO
+     * @param channel TODO
+     * @return TODO
      */
     @Bean
     public PolicyInvalidationSubscriber policyInvalidationSubscriber(
@@ -123,6 +138,9 @@ public class ApiServerConfiguration {
 
     /**
      * Starts invalidation listener so remote policy updates evict local snapshot cache.
+     * @param subscriber TODO
+     * @param snapshotProvider TODO
+     * @return TODO
      */
     @Bean
     public ApplicationRunner policyInvalidationListener(
@@ -138,6 +156,9 @@ public class ApiServerConfiguration {
 
     /**
      * Creates policyVersion-aware authorization gate with runtime enable switch.
+     * @param snapshotProvider TODO
+     * @param dynamicEnabled TODO
+     * @return TODO
      */
     @Bean
     public AuthorizationGate authorizationGate(
@@ -149,6 +170,7 @@ public class ApiServerConfiguration {
 
     /**
      * Enforces minimal egress control and blocks explicit deny policy in payload.
+     * @return TODO
      */
     @Bean
     public EgressGate egressGate() {
@@ -163,6 +185,8 @@ public class ApiServerConfiguration {
 
     /**
      * Provides local object storage provider for minimal and bootstrap profiles.
+     * @param provider TODO
+     * @return TODO
      */
     @Bean
     public ObjectStorage objectStorage(
@@ -180,6 +204,7 @@ public class ApiServerConfiguration {
 
     /**
      * Uses in-process sink while event bus integration is still in bootstrap phase.
+     * @return TODO
      */
     @Bean
     public DomainEventPublisher domainEventPublisher() {
@@ -190,6 +215,10 @@ public class ApiServerConfiguration {
 
     /**
      * Provides default command handler and emits policy invalidation on policy refresh command.
+     * @param invalidationPublisher TODO
+     * @param snapshotProvider TODO
+     * @param policySnapshotStore TODO
+     * @return TODO
      */
     @Bean
     public CommandHandler defaultCommandHandler(
@@ -200,6 +229,8 @@ public class ApiServerConfiguration {
         return new CommandHandler() {
             /**
              * Accepts non-asset/non-share/non-workflow commands during bootstrap fallback.
+             * @param commandType TODO
+             * @return TODO
              */
             @Override
             public boolean supports(String commandType) {
@@ -216,6 +247,9 @@ public class ApiServerConfiguration {
 
             /**
              * Executes command and broadcasts policy invalidation when policy is refreshed.
+             * @param request TODO
+             * @param context TODO
+             * @return TODO
              */
             @Override
             public Map<String, Object> execute(CommandCreateRequest request, ExecutionContext context) {
@@ -281,6 +315,7 @@ public class ApiServerConfiguration {
 
     /**
      * Provides default row-level data permission resolver for MyBatis integration.
+     * @return TODO
      */
     @Bean
     public DataPermissionResolver dataPermissionResolver() {
@@ -289,6 +324,12 @@ public class ApiServerConfiguration {
 
     /**
      * Composes command pipeline with authorization, egress, audit, and event publication.
+     * @param authorizationGate TODO
+     * @param egressGate TODO
+     * @param handlers TODO
+     * @param eventPublisher TODO
+     * @param auditEventStore TODO
+     * @return TODO
      */
     @Bean
     public CommandPipeline commandPipeline(

@@ -44,7 +44,8 @@ git worktree add .worktrees/goya-thread20260211-my-topic -b goya/thread20260211-
 
 ### 3.2 源码头规范（强制） | Source Header Policy (MUST)
 
-源码（含测试）必须包含标准头（SPDX/版权/Author/Created/Version/Description）。
+源码（含测试）必须包含标准头。  
+Java 使用 `SPDX + <p> + @author + @since(yyyy-MM-dd HH:mm:ss)`；非 Java 继续使用 `SPDX/版权/Author/Created/Version/Description`。
 
 校验命令 | Validation:
 

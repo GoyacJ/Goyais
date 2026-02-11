@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Command handler for share create/delete actions.
+ * <p>Command handler for share create/delete actions.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.application.share;
 
 import com.ysmjjsy.goyais.application.command.CommandHandler;
@@ -37,6 +36,9 @@ public final class ShareCommandHandler implements CommandHandler {
 
     /**
      * Creates handler with share repository and role-subject feature switch.
+     * @param shareRepository TODO
+     * @param aclRoleSubjectEnabled TODO
+     * @return TODO
      */
     public ShareCommandHandler(
             ShareRepository shareRepository,
@@ -48,6 +50,8 @@ public final class ShareCommandHandler implements CommandHandler {
 
     /**
      * Returns true when command type belongs to share domain actions.
+     * @param commandType TODO
+     * @return TODO
      */
     @Override
     public boolean supports(String commandType) {
@@ -56,6 +60,9 @@ public final class ShareCommandHandler implements CommandHandler {
 
     /**
      * Executes share command and returns API-compatible result payload.
+     * @param request TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public Map<String, Object> execute(CommandCreateRequest request, ExecutionContext context) {

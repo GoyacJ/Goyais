@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: MyBatisPlus implementation of asset repository with SQL data-permission filtering.
+ * <p>MyBatisPlus implementation of asset repository with SQL data-permission filtering.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.infra.mybatis.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -43,6 +42,9 @@ public final class MybatisAssetRepository implements AssetRepository {
 
     /**
      * Creates repository with mapper, data permission resolver, and JSON codec.
+     * @param mapper TODO
+     * @param dataPermissionResolver TODO
+     * @param objectMapper TODO
      */
     public MybatisAssetRepository(
             AssetEntityMapper mapper,
@@ -56,6 +58,17 @@ public final class MybatisAssetRepository implements AssetRepository {
 
     /**
      * Persists one asset row and returns mapped resource.
+     * @param context TODO
+     * @param name TODO
+     * @param type TODO
+     * @param mime TODO
+     * @param size TODO
+     * @param hash TODO
+     * @param uri TODO
+     * @param visibility TODO
+     * @param metadata TODO
+     * @param now TODO
+     * @return TODO
      */
     @Override
     public Asset create(
@@ -94,6 +107,9 @@ public final class MybatisAssetRepository implements AssetRepository {
 
     /**
      * Returns one in-scope asset regardless of ACL read filters.
+     * @param assetId TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public Asset findByIdInScope(String assetId, ExecutionContext context) {
@@ -103,6 +119,9 @@ public final class MybatisAssetRepository implements AssetRepository {
 
     /**
      * Returns one readable asset by identifier, or null.
+     * @param assetId TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public Asset findReadableById(String assetId, ExecutionContext context) {
@@ -114,6 +133,10 @@ public final class MybatisAssetRepository implements AssetRepository {
 
     /**
      * Returns readable assets for requested page.
+     * @param context TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     @Override
     public List<Asset> listReadable(ExecutionContext context, int page, int pageSize) {
@@ -130,6 +153,8 @@ public final class MybatisAssetRepository implements AssetRepository {
 
     /**
      * Returns readable asset count for current context.
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public long countReadable(ExecutionContext context) {
@@ -140,6 +165,14 @@ public final class MybatisAssetRepository implements AssetRepository {
 
     /**
      * Updates mutable asset fields and returns latest resource.
+     * @param assetId TODO
+     * @param context TODO
+     * @param name TODO
+     * @param visibility TODO
+     * @param metadata TODO
+     * @param metadataProvided TODO
+     * @param now TODO
+     * @return TODO
      */
     @Override
     public Asset update(
@@ -166,6 +199,10 @@ public final class MybatisAssetRepository implements AssetRepository {
 
     /**
      * Marks one asset as deleted and returns latest resource.
+     * @param assetId TODO
+     * @param context TODO
+     * @param now TODO
+     * @return TODO
      */
     @Override
     public Asset markDeleted(String assetId, ExecutionContext context, Instant now) {
@@ -175,6 +212,11 @@ public final class MybatisAssetRepository implements AssetRepository {
 
     /**
      * Returns true when user or roles have requested asset permission.
+     * @param assetId TODO
+     * @param context TODO
+     * @param permission TODO
+     * @param now TODO
+     * @return TODO
      */
     @Override
     public boolean hasPermission(String assetId, ExecutionContext context, Permission permission, Instant now) {
@@ -214,6 +256,9 @@ public final class MybatisAssetRepository implements AssetRepository {
 
     /**
      * Returns lineage edges for one asset identifier.
+     * @param assetId TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public List<AssetLineageEdge> listLineage(String assetId, ExecutionContext context) {

@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Unit tests for command pipeline authorization, egress, and audit behavior.
+ * <p>Unit tests for command pipeline authorization, egress, and audit behavior.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.application.command;
 
 import com.ysmjjsy.goyais.application.audit.AuditEventStore;
@@ -103,6 +102,8 @@ class CommandPipelineTest {
 
         /**
          * Always accepts command types for pipeline unit testing.
+         * @param commandType TODO
+         * @return TODO
          */
         @Override
         public boolean supports(String commandType) {
@@ -111,6 +112,9 @@ class CommandPipelineTest {
 
         /**
          * Returns deterministic execution payload for assertions.
+         * @param request TODO
+         * @param context TODO
+         * @return TODO
          */
         @Override
         public Map<String, Object> execute(CommandCreateRequest request, ExecutionContext context) {

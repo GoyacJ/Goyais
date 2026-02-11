@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Unit tests for workflow template command authorization and patch behavior.
+ * <p>Unit tests for workflow template command authorization and patch behavior.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.application.workflow;
 
 import com.ysmjjsy.goyais.application.common.ContractException;
@@ -139,6 +138,16 @@ class WorkflowTemplateCommandHandlerTest {
 
         /**
          * Stores and returns a new draft template.
+         * @param context TODO
+         * @param name TODO
+         * @param description TODO
+         * @param visibility TODO
+         * @param graph TODO
+         * @param schemaInputs TODO
+         * @param schemaOutputs TODO
+         * @param uiState TODO
+         * @param now TODO
+         * @return TODO
          */
         @Override
         public WorkflowTemplate createDraft(
@@ -177,6 +186,9 @@ class WorkflowTemplateCommandHandlerTest {
 
         /**
          * Returns stubbed in-scope template.
+         * @param templateId TODO
+         * @param context TODO
+         * @return TODO
          */
         @Override
         public WorkflowTemplate findByIdInScope(String templateId, ExecutionContext context) {
@@ -185,6 +197,9 @@ class WorkflowTemplateCommandHandlerTest {
 
         /**
          * Returns stubbed readable template.
+         * @param templateId TODO
+         * @param context TODO
+         * @return TODO
          */
         @Override
         public WorkflowTemplate findReadableById(String templateId, ExecutionContext context) {
@@ -193,6 +208,10 @@ class WorkflowTemplateCommandHandlerTest {
 
         /**
          * Returns singleton readable list.
+         * @param context TODO
+         * @param page TODO
+         * @param pageSize TODO
+         * @return TODO
          */
         @Override
         public List<WorkflowTemplate> listReadable(ExecutionContext context, int page, int pageSize) {
@@ -201,6 +220,8 @@ class WorkflowTemplateCommandHandlerTest {
 
         /**
          * Returns readable template count.
+         * @param context TODO
+         * @return TODO
          */
         @Override
         public long countReadable(ExecutionContext context) {
@@ -209,6 +230,12 @@ class WorkflowTemplateCommandHandlerTest {
 
         /**
          * Updates graph and returns latest template.
+         * @param templateId TODO
+         * @param context TODO
+         * @param graph TODO
+         * @param uiState TODO
+         * @param now TODO
+         * @return TODO
          */
         @Override
         public WorkflowTemplate patch(
@@ -243,6 +270,10 @@ class WorkflowTemplateCommandHandlerTest {
 
         /**
          * Marks template as published and bumps version.
+         * @param templateId TODO
+         * @param context TODO
+         * @param now TODO
+         * @return TODO
          */
         @Override
         public WorkflowTemplate publish(String templateId, ExecutionContext context, Instant now) {
@@ -271,6 +302,11 @@ class WorkflowTemplateCommandHandlerTest {
 
         /**
          * Returns configured permission decision for non-owner checks.
+         * @param templateId TODO
+         * @param context TODO
+         * @param permission TODO
+         * @param now TODO
+         * @return TODO
          */
         @Override
         public boolean hasPermission(String templateId, ExecutionContext context, Permission permission, Instant now) {

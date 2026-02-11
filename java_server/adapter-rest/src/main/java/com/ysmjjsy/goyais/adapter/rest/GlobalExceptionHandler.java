@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Maps bootstrap exceptions into the unified error envelope.
+ * <p>Maps bootstrap exceptions into the unified error envelope.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.adapter.rest;
 
 import com.ysmjjsy.goyais.application.common.ContractException;
@@ -28,6 +27,8 @@ public final class GlobalExceptionHandler {
 
     /**
      * Maps contract exceptions to declared status and error envelope fields.
+     * @param ex TODO
+     * @return TODO
      */
     @ExceptionHandler(ContractException.class)
     public ResponseEntity<ErrorEnvelope> handleContractException(ContractException ex) {
@@ -40,6 +41,8 @@ public final class GlobalExceptionHandler {
 
     /**
      * Maps argument validation failures to INVALID_REQUEST contract error.
+     * @param ex TODO
+     * @return TODO
      */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorEnvelope> handleBadRequest(IllegalArgumentException ex) {
@@ -52,6 +55,8 @@ public final class GlobalExceptionHandler {
 
     /**
      * Maps authorization and state failures to FORBIDDEN contract error.
+     * @param ex TODO
+     * @return TODO
      */
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorEnvelope> handleForbidden(IllegalStateException ex) {
@@ -64,6 +69,8 @@ public final class GlobalExceptionHandler {
 
     /**
      * Maps Spring Security access denials to FORBIDDEN contract error.
+     * @param ex TODO
+     * @return TODO
      */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorEnvelope> handleAccessDenied(AccessDeniedException ex) {
@@ -76,6 +83,8 @@ public final class GlobalExceptionHandler {
 
     /**
      * Maps authentication failures to UNAUTHORIZED contract error.
+     * @param ex TODO
+     * @return TODO
      */
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ErrorEnvelope> handleUnauthorized(AuthenticationException ex) {
@@ -88,6 +97,8 @@ public final class GlobalExceptionHandler {
 
     /**
      * Maps unknown routes to NOT_FOUND contract error instead of generic internal failure.
+     * @param ex TODO
+     * @return TODO
      */
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ErrorEnvelope> handleNotFound(NoResourceFoundException ex) {
@@ -100,6 +111,8 @@ public final class GlobalExceptionHandler {
 
     /**
      * Maps unsupported HTTP verbs to METHOD_NOT_ALLOWED contract error.
+     * @param ex TODO
+     * @return TODO
      */
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ErrorEnvelope> handleMethodNotAllowed(HttpRequestMethodNotSupportedException ex) {
@@ -112,6 +125,8 @@ public final class GlobalExceptionHandler {
 
     /**
      * Maps unknown failures to INTERNAL_ERROR contract error.
+     * @param ex TODO
+     * @return TODO
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorEnvelope> handleUnknown(Exception ex) {

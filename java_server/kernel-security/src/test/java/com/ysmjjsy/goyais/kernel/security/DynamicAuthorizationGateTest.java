@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Unit tests for dynamic authorization decision ordering and policy version refresh.
+ * <p>Unit tests for dynamic authorization decision ordering and policy version refresh.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.kernel.security;
 
 import com.ysmjjsy.goyais.contract.api.common.CommandCreateRequest;
@@ -54,6 +53,8 @@ class DynamicAuthorizationGateTest {
         PolicySnapshotProvider provider = new PolicySnapshotProvider() {
             /**
              * Returns the same durable snapshot for each lookup.
+             * @param context TODO
+             * @return TODO
              */
             @Override
             public PolicySnapshot loadLatest(ExecutionContext context) {
@@ -62,6 +63,9 @@ class DynamicAuthorizationGateTest {
 
             /**
              * Simulates cache eviction while preserving durable source data.
+             * @param tenantId TODO
+             * @param workspaceId TODO
+             * @param userId TODO
              */
             @Override
             public void evict(String tenantId, String workspaceId, String userId) {

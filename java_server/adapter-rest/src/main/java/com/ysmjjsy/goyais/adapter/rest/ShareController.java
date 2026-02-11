@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Share REST controller aligned with Go-compatible /api/v1/shares routes.
+ * <p>Share REST controller aligned with Go-compatible /api/v1/shares routes.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.adapter.rest;
 
 import com.ysmjjsy.goyais.application.share.ShareApplicationService;
@@ -39,6 +38,8 @@ public final class ShareController {
 
     /**
      * Creates controller with share service and execution-context resolver.
+     * @param shareService TODO
+     * @param executionContextFactory TODO
      */
     public ShareController(
             ShareApplicationService shareService,
@@ -50,6 +51,10 @@ public final class ShareController {
 
     /**
      * Creates one share through command-first domain sugar endpoint.
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @param request TODO
+     * @return TODO
      */
     @PostMapping
     public ResponseEntity<WriteResponse<Share>> create(
@@ -63,6 +68,11 @@ public final class ShareController {
 
     /**
      * Returns share list with pageInfo envelope.
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     @GetMapping
     public Map<String, Object> list(
@@ -87,6 +97,10 @@ public final class ShareController {
 
     /**
      * Deletes one share through command-first domain sugar endpoint.
+     * @param shareId TODO
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @return TODO
      */
     @DeleteMapping("/{shareId}")
     public ResponseEntity<WriteResponse<ShareDeleteResult>> delete(

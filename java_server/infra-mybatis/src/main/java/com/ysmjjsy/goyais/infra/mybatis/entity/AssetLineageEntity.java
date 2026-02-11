@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Persisted asset lineage row mapped from asset_lineage table.
+ * <p>Persisted asset lineage row mapped from asset_lineage table.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.infra.mybatis.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -19,30 +18,57 @@ import java.time.Instant;
  */
 @TableName("asset_lineage")
 public final class AssetLineageEntity {
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableId(value = "id", type = IdType.INPUT)
     public String id;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("tenant_id")
     public String tenantId;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("workspace_id")
     public String workspaceId;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("source_asset_id")
     public String sourceAssetId;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("target_asset_id")
     public String targetAssetId;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("run_id")
     public String runId;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("step_id")
     public String stepId;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("relation")
     public String relation;
 
+    /**
+     * <p>TODO: describe field.</p>
+     */
     @TableField("created_at")
     public Instant createdAt;
 }

@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Applies workflow graph patch operations for workflow.patch command.
+ * <p>Applies workflow graph patch operations for workflow.patch command.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.application.workflow;
 
 import com.ysmjjsy.goyais.application.common.ContractException;
@@ -23,6 +22,9 @@ public final class WorkflowPatchApplier {
 
     /**
      * Applies patch operations and returns a new graph payload map.
+     * @param baseGraph TODO
+     * @param operations TODO
+     * @return TODO
      */
     public static Map<String, Object> apply(Map<String, Object> baseGraph, List<Map<String, Object>> operations) {
         if (operations == null || operations.isEmpty()) {

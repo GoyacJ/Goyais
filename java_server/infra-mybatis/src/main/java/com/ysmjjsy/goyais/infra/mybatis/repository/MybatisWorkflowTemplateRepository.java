@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: MyBatisPlus implementation of workflow template repository with SQL permission filtering.
+ * <p>MyBatisPlus implementation of workflow template repository with SQL permission filtering.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.infra.mybatis.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -43,6 +42,9 @@ public final class MybatisWorkflowTemplateRepository implements WorkflowTemplate
 
     /**
      * Creates repository with template mapper, data permission resolver, and JSON codec.
+     * @param mapper TODO
+     * @param dataPermissionResolver TODO
+     * @param objectMapper TODO
      */
     public MybatisWorkflowTemplateRepository(
             WorkflowTemplateEntityMapper mapper,
@@ -56,6 +58,16 @@ public final class MybatisWorkflowTemplateRepository implements WorkflowTemplate
 
     /**
      * Persists one draft workflow template and returns mapped resource.
+     * @param context TODO
+     * @param name TODO
+     * @param description TODO
+     * @param visibility TODO
+     * @param graph TODO
+     * @param schemaInputs TODO
+     * @param schemaOutputs TODO
+     * @param uiState TODO
+     * @param now TODO
+     * @return TODO
      */
     @Override
     public WorkflowTemplate createDraft(
@@ -93,6 +105,9 @@ public final class MybatisWorkflowTemplateRepository implements WorkflowTemplate
 
     /**
      * Returns one template in tenant/workspace scope without ACL read filtering.
+     * @param templateId TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public WorkflowTemplate findByIdInScope(String templateId, ExecutionContext context) {
@@ -102,6 +117,9 @@ public final class MybatisWorkflowTemplateRepository implements WorkflowTemplate
 
     /**
      * Returns one readable template by id, or null when inaccessible.
+     * @param templateId TODO
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public WorkflowTemplate findReadableById(String templateId, ExecutionContext context) {
@@ -113,6 +131,10 @@ public final class MybatisWorkflowTemplateRepository implements WorkflowTemplate
 
     /**
      * Returns readable template list with deterministic descending order.
+     * @param context TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     @Override
     public List<WorkflowTemplate> listReadable(ExecutionContext context, int page, int pageSize) {
@@ -129,6 +151,8 @@ public final class MybatisWorkflowTemplateRepository implements WorkflowTemplate
 
     /**
      * Returns count of readable templates for current context.
+     * @param context TODO
+     * @return TODO
      */
     @Override
     public long countReadable(ExecutionContext context) {
@@ -139,6 +163,12 @@ public final class MybatisWorkflowTemplateRepository implements WorkflowTemplate
 
     /**
      * Updates template graph/ui-state payload and returns latest template resource.
+     * @param templateId TODO
+     * @param context TODO
+     * @param graph TODO
+     * @param uiState TODO
+     * @param now TODO
+     * @return TODO
      */
     @Override
     public WorkflowTemplate patch(
@@ -161,6 +191,10 @@ public final class MybatisWorkflowTemplateRepository implements WorkflowTemplate
 
     /**
      * Publishes template, stores immutable version snapshot, and returns latest template.
+     * @param templateId TODO
+     * @param context TODO
+     * @param now TODO
+     * @return TODO
      */
     @Override
     public WorkflowTemplate publish(String templateId, ExecutionContext context, Instant now) {
@@ -201,6 +235,11 @@ public final class MybatisWorkflowTemplateRepository implements WorkflowTemplate
 
     /**
      * Returns true when user or roles have requested ACL permission on template.
+     * @param templateId TODO
+     * @param context TODO
+     * @param permission TODO
+     * @param now TODO
+     * @return TODO
      */
     @Override
     public boolean hasPermission(String templateId, ExecutionContext context, Permission permission, Instant now) {

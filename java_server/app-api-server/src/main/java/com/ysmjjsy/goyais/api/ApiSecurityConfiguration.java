@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: API security enforcing bearer-token auth for business endpoints.
+ * <p>API security enforcing bearer-token auth for business endpoints.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.api;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -25,6 +24,9 @@ public class ApiSecurityConfiguration {
 
     /**
      * Applies API security while supporting single and resource-only topology modes.
+     * @param http TODO
+     * @param topologyMode TODO
+     * @return TODO
      */
     @Bean
     @Order(200)

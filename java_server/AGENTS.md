@@ -17,8 +17,15 @@
 
 ## Comment and Quality Gate (MUST)
 
-- 每个 Java 源码文件必须具备标准文件头。
-- `public class/interface/enum/record` 与 `public` 方法/构造器必须提供 JavaDoc。
+- 每个 Java 源码文件必须使用如下文件头模板：
+  - `/**`
+  - ` * SPDX-License-Identifier: Apache-2.0`
+  - ` * <p>...</p>`
+  - ` * @author Goya`
+  - ` * @since YYYY-MM-DD HH:MM:SS`
+  - ` */`
+- `public/protected class/interface/enum/record`、方法、构造器、字段必须提供 JavaDoc。
+- 方法与构造器注释遵循 JDK/Javadoc 标准（`@param/@return/@throws`）。
 - 提交前至少执行：
   - `bash go_server/scripts/ci/source_header_check.sh`
   - `bash java_server/scripts/ci/java_javadoc_check.sh`

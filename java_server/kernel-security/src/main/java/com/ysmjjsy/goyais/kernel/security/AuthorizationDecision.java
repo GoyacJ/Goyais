@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Authorization decision with reason for auditable command flow.
+ * <p>Authorization decision with reason for auditable command flow.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.kernel.security;
 
 /**
@@ -15,6 +14,8 @@ public record AuthorizationDecision(boolean allowed, String reason) {
 
     /**
      * Creates an allow decision with explicit reason.
+     * @param reason TODO
+     * @return TODO
      */
     public static AuthorizationDecision allow(String reason) {
         return new AuthorizationDecision(true, reason);
@@ -22,6 +23,8 @@ public record AuthorizationDecision(boolean allowed, String reason) {
 
     /**
      * Creates a deny decision with explicit reason.
+     * @param reason TODO
+     * @return TODO
      */
     public static AuthorizationDecision deny(String reason) {
         return new AuthorizationDecision(false, reason);

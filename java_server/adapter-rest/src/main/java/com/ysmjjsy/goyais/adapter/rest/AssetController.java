@@ -1,11 +1,10 @@
 /**
  * SPDX-License-Identifier: Apache-2.0
- * Copyright (c) 2026 Goya
- * Author: Goya
- * Created: 2026-02-11
- * Version: v1.0.0
- * Description: Asset REST controller aligned with Go-compatible /api/v1/assets routes.
+ * <p>Asset REST controller aligned with Go-compatible /api/v1/assets routes.</p>
+ * @author Goya
+ * @since 2026-02-12 01:20:09
  */
+
 package com.ysmjjsy.goyais.adapter.rest;
 
 import com.ysmjjsy.goyais.application.asset.AssetApplicationService;
@@ -50,6 +49,10 @@ public final class AssetController {
 
     /**
      * Creates controller with asset service and execution-context resolver.
+     * @param assetService TODO
+     * @param executionContextFactory TODO
+     * @param assetLifecycleEnabled TODO
+     * @return TODO
      */
     public AssetController(
             AssetApplicationService assetService,
@@ -63,6 +66,11 @@ public final class AssetController {
 
     /**
      * Returns readable asset list response with pageInfo envelope.
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @param page TODO
+     * @param pageSize TODO
+     * @return TODO
      */
     @GetMapping
     public Map<String, Object> list(
@@ -86,6 +94,14 @@ public final class AssetController {
 
     /**
      * Creates one asset from multipart upload and returns write response envelope.
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @param file TODO
+     * @param name TODO
+     * @param type TODO
+     * @param mime TODO
+     * @param visibility TODO
+     * @return TODO
      */
     @PostMapping(consumes = "multipart/form-data")
     public ResponseEntity<WriteResponse<Asset>> create(
@@ -122,6 +138,10 @@ public final class AssetController {
 
     /**
      * Returns one readable asset or not-found contract envelope.
+     * @param assetId TODO
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @return TODO
      */
     @GetMapping("/{assetId}")
     public ResponseEntity<?> get(
@@ -139,6 +159,11 @@ public final class AssetController {
 
     /**
      * Updates one asset through command-first domain sugar endpoint.
+     * @param assetId TODO
+     * @param request TODO
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @return TODO
      */
     @PatchMapping("/{assetId}")
     public ResponseEntity<WriteResponse<Asset>> update(
@@ -154,6 +179,10 @@ public final class AssetController {
 
     /**
      * Deletes one asset through command-first domain sugar endpoint.
+     * @param assetId TODO
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @return TODO
      */
     @DeleteMapping("/{assetId}")
     public ResponseEntity<WriteResponse<Asset>> delete(
@@ -168,6 +197,10 @@ public final class AssetController {
 
     /**
      * Returns lineage graph for one readable asset.
+     * @param assetId TODO
+     * @param authentication TODO
+     * @param servletRequest TODO
+     * @return TODO
      */
     @GetMapping("/{assetId}/lineage")
     public ResponseEntity<AssetLineageResponse> lineage(
