@@ -322,6 +322,40 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /ai/plans:preview:
+    post:
+      tags: [AISession]
+      summary: Preview AI command plan (no side effects)
+      operationId: previewAIPlan
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIPlanPreviewRequest'
+      responses:
+        '200':
+          description: Planned command preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIPlanPreviewResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /ai/sessions/{sessionId}:
     get:
       tags: [AISession]
@@ -2329,13 +2363,6 @@ components:
         preferences:
           type: object
           additionalProperties: true
-        intentCommandType:
-          type: string
-          description: '可选显式意图命令类型（例如 workflow.run），用于与 execute 模式对齐。'
-        intentPayload:
-          type: object
-          additionalProperties: true
-          description: 'intentCommandType 对应 payload；未提供时由服务端确定性规划器推断。'
         visibility:
           $ref: '#/components/schemas/Visibility'
 
@@ -2358,6 +2385,53 @@ components:
         preferences:
           type: object
           additionalProperties: true
+        intentCommandType:
+          type: string
+          description: '可选显式意图命令类型（例如 workflow.run）。'
+        intentPayload:
+          type: object
+          additionalProperties: true
+          description: 'intentCommandType 对应 payload；未提供时由服务端确定性规划器推断。'
+
+    AIPlanPreviewRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        intentCommandType:
+          type: string
+        intentPayload:
+          type: object
+          additionalProperties: true
+
+    AIPlanPreview:
+      type: object
+      required: [payload, planner, reason, suggestions]
+      properties:
+        commandType:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        planner:
+          type: string
+        reason:
+          type: string
+        suggestions:
+          type: array
+          items:
+            type: string
+        explainability:
+          type: object
+          additionalProperties: true
+
+    AIPlanPreviewResponse:
+      type: object
+      required: [plan]
+      properties:
+        plan:
+          $ref: '#/components/schemas/AIPlanPreview'
 
     ContextBundle:
       allOf:

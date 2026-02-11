@@ -9,6 +9,8 @@
 
 import { ApiHttpError, apiRequest, getApiRuntimeConfig } from '@/api/http'
 import type {
+  AIPlanPreviewDTO,
+  AIPlanPreviewRequest,
   AISessionCreateRequest,
   AISessionDTO,
   AISessionTurnCreateRequest,
@@ -25,6 +27,10 @@ export interface AISessionEvent {
   id?: string
   event?: string
   data: AISessionTurnDTO | Record<string, unknown> | string | null
+}
+
+export interface AIPlanPreviewResponse {
+  plan: AIPlanPreviewDTO
 }
 
 export async function listAISessions(params: WorkflowListParams = {}): Promise<ListResponse<AISessionDTO>> {
@@ -75,6 +81,13 @@ export async function createAISessionTurn(
     method: 'POST',
     body: request,
     idempotencyKey,
+  })
+}
+
+export async function previewAIPlan(request: AIPlanPreviewRequest): Promise<AIPlanPreviewResponse> {
+  return apiRequest<AIPlanPreviewResponse>('/ai/plans:preview', {
+    method: 'POST',
+    body: request,
   })
 }
 

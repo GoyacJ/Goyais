@@ -122,10 +122,12 @@
 - 当前状态：路由已转正并返回 `202 + resource + commandRef`，`algorithm.run` 结果包含 `workflowRunId` 追踪。
 
 ## 0.11 AI Domain Sugar（S3 合同基线）
+- `POST /api/v1/ai/plans:preview` 为 preview-only 路径：仅返回计划结果，不创建 command、不写审计状态实体。
 - `POST /api/v1/ai/sessions` 必须转换为 `ai.session.create` command 执行（Command-first）。
 - `POST /api/v1/ai/sessions/{sessionId}:archive` 必须转换为 `ai.session.archive` command 执行。
 - `POST /api/v1/ai/sessions/{sessionId}/turns` 必须转换为 `ai.intent.plan` 或 `ai.command.execute` command 执行。
 - `GET /api/v1/ai/sessions/{sessionId}/events` 为 SSE 读路径；事件源来自 command 与 workflow 执行链路。
+- `GOYAIS_FEATURE_AI_WORKBENCH=false` 时，`/ai/plans:preview` 与 AI domain sugar 写路径统一返回 `501 NOT_IMPLEMENTED`。
 
 ## 0.12 ContextBundle Domain Sugar（S6 合同基线）
 - ContextBundle 重建能力必须通过 `context.bundle.rebuild` command 执行（Command-first）。

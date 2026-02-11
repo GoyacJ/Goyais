@@ -63,6 +63,7 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 		apiMux.Handle("/api/v1/commands/", NewCommandItemHandler(deps.CommandService))
 		apiMux.Handle("/api/v1/shares", NewShareCollectionHandler(deps.CommandService))
 		apiMux.Handle("/api/v1/shares/", NewShareItemHandler(deps.CommandService))
+		apiMux.Handle("/api/v1/ai/plans:preview", http.HandlerFunc(domainHandler.handleAIPlanPreview))
 		apiMux.Handle("/api/v1/ai/sessions", http.HandlerFunc(domainHandler.handleAISessions))
 		apiMux.Handle("/api/v1/ai/sessions/", http.HandlerFunc(domainHandler.handleAISessionRoutes))
 	}

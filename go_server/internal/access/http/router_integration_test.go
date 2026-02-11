@@ -382,6 +382,39 @@ func TestAPIContractRegression(t *testing.T) {
 
 	var aiSessionID string
 	t.Run("ai sessions create/list/get/turn/events/archive", func(t *testing.T) {
+		respPreview := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/plans:preview", headersWithJSONContext("u1"), map[string]any{
+			"message": "run workflow tpl_demo",
+		})
+		defer respPreview.Body.Close()
+		assertStatus(t, respPreview, http.StatusOK)
+		var previewPayload map[string]any
+		mustDecodeJSON(t, respPreview.Body, &previewPayload)
+		previewPlan, _ := previewPayload["plan"].(map[string]any)
+		if got, _ := previewPlan["commandType"].(string); got != "workflow.run" {
+			t.Fatalf("unexpected preview commandType: %v", previewPlan["commandType"])
+		}
+		previewPlanPayload, _ := previewPlan["payload"].(map[string]any)
+		if got, _ := previewPlanPayload["templateId"].(string); got != "tpl_demo" {
+			t.Fatalf("unexpected preview payload.templateId: %v", previewPlanPayload["templateId"])
+		}
+
+		respExplicitPreview := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/plans:preview", headersWithJSONContext("u1"), map[string]any{
+			"message":           "ignored when explicit",
+			"intentCommandType": "workflow.cancel",
+			"intentPayload":     map[string]any{"runId": "run_explicit"},
+		})
+		defer respExplicitPreview.Body.Close()
+		assertStatus(t, respExplicitPreview, http.StatusOK)
+		var explicitPreviewPayload map[string]any
+		mustDecodeJSON(t, respExplicitPreview.Body, &explicitPreviewPayload)
+		explicitPlan, _ := explicitPreviewPayload["plan"].(map[string]any)
+		if got, _ := explicitPlan["planner"].(string); got != "explicit" {
+			t.Fatalf("unexpected explicit preview planner: %v", explicitPlan["planner"])
+		}
+		if got, _ := explicitPlan["commandType"].(string); got != "workflow.cancel" {
+			t.Fatalf("unexpected explicit preview commandType: %v", explicitPlan["commandType"])
+		}
+
 		respCreate := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/sessions", headersWithJSONContext("u1"), map[string]any{
 			"title":      "assistant smoke",
 			"goal":       "validate ai session routes",
@@ -2294,6 +2327,13 @@ func TestAPIAIWorkbenchFeatureDisabled(t *testing.T) {
 	defer respArchive.Body.Close()
 	assertStatus(t, respArchive, http.StatusNotImplemented)
 	assertMessageKey(t, respArchive.Body, "error.ai.not_implemented")
+
+	respPreview := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/plans:preview", headersWithJSONContext("u1"), map[string]any{
+		"message": "run workflow tpl_demo",
+	})
+	defer respPreview.Body.Close()
+	assertStatus(t, respPreview, http.StatusNotImplemented)
+	assertMessageKey(t, respPreview.Body, "error.ai.not_implemented")
 
 	respAIPlanCommand := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headersWithJSONContext("u1"), map[string]any{
 		"commandType": "ai.intent.plan",

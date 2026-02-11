@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"goyais/internal/ai"
+	aiplanner "goyais/internal/ai/planner"
 	"goyais/internal/algorithm"
 	"goyais/internal/asset"
 	"goyais/internal/command"
@@ -556,6 +557,7 @@ func newAISessionTurnExecutor(aiService *ai.Service, commandService *command.Ser
 
 		result := map[string]any{
 			"turn": toAISessionTurnResultPayload(turn),
+			"plan": toAIPlanResultPayload(plan),
 		}
 		raw, _ := json.Marshal(result)
 		return raw, nil
@@ -563,49 +565,30 @@ func newAISessionTurnExecutor(aiService *ai.Service, commandService *command.Ser
 }
 
 type aiDeterministicCommandPlan struct {
-	CommandType string
-	Payload     json.RawMessage
-	Planner     string
-	Reason      string
-	Suggestions []string
+	CommandType    string
+	Payload        json.RawMessage
+	Planner        string
+	Reason         string
+	Suggestions    []string
+	Explainability map[string]any
 }
 
 func planAIDeterministicCommand(req aiSessionTurnCommandPayload) (aiDeterministicCommandPlan, error) {
-	explicitType := strings.TrimSpace(req.IntentCommandType)
-	if explicitType != "" {
-		if strings.HasPrefix(strings.ToLower(explicitType), "ai.") {
-			return aiDeterministicCommandPlan{}, ai.ErrInvalidRequest
-		}
-		payload := objectOrDefault(req.IntentCommandInput)
-		if !isJSONObjectRaw(payload) {
-			return aiDeterministicCommandPlan{}, ai.ErrInvalidRequest
-		}
-		return aiDeterministicCommandPlan{
-			CommandType: explicitType,
-			Payload:     payload,
-			Planner:     "explicit",
-			Reason:      "explicit_intent",
-		}, nil
+	plan, err := aiplanner.PlanTurn(aiplanner.TurnRequest{
+		Message:           req.Message,
+		IntentCommandType: req.IntentCommandType,
+		IntentPayload:     req.IntentCommandInput,
+	})
+	if err != nil {
+		return aiDeterministicCommandPlan{}, ai.ErrInvalidRequest
 	}
-
-	tokens := strings.Fields(strings.TrimSpace(req.Message))
-	parsers := []func([]string, string) (aiDeterministicCommandPlan, bool){
-		parseWorkflowRunIntent,
-		parseWorkflowRetryIntent,
-		parseWorkflowCancelIntent,
-		parseWorkflowPatchIntent,
-	}
-	for _, parser := range parsers {
-		plan, matched := parser(tokens, req.Message)
-		if matched {
-			return plan, nil
-		}
-	}
-
 	return aiDeterministicCommandPlan{
-		Planner:     "none",
-		Reason:      "unsupported_intent",
-		Suggestions: defaultAIPlanSuggestions(),
+		CommandType:    strings.TrimSpace(plan.CommandType),
+		Payload:        objectOrDefault(plan.Payload),
+		Planner:        strings.TrimSpace(plan.Planner),
+		Reason:         strings.TrimSpace(plan.Reason),
+		Suggestions:    append([]string{}, plan.Suggestions...),
+		Explainability: cloneMap(plan.Explainability),
 	}, nil
 }
 
@@ -839,20 +822,24 @@ func buildAIPlanAssistantMessage(plan aiDeterministicCommandPlan) string {
 	if strings.TrimSpace(plan.CommandType) == "" {
 		return buildAIRejectAssistantMessage(plan)
 	}
+	explainText := summarizeAIExplainability(plan)
 	return fmt.Sprintf(
-		"Planned command %s via %s (reason=%s) with payload %s",
+		"Planned command %s via %s (reason=%s) with payload %s%s",
 		plan.CommandType,
 		defaultAIPlanPlanner(plan),
 		defaultAIPlanReason(plan),
 		string(plan.Payload),
+		explainText,
 	)
 }
 
 func buildAIRejectAssistantMessage(plan aiDeterministicCommandPlan) string {
+	explainText := summarizeAIExplainability(plan)
 	return fmt.Sprintf(
-		"No executable intent detected (reason=%s). Suggestions: %s",
+		"No executable intent detected (reason=%s). Suggestions: %s%s",
 		defaultAIPlanReason(plan),
 		strings.Join(defaultAIPlanSuggestionsFor(plan), " | "),
+		explainText,
 	)
 }
 
@@ -906,6 +893,46 @@ func defaultAIPlanSuggestionsFor(plan aiDeterministicCommandPlan) []string {
 		return append([]string{}, plan.Suggestions...)
 	}
 	return defaultAIPlanSuggestions()
+}
+
+func summarizeAIExplainability(plan aiDeterministicCommandPlan) string {
+	if len(plan.Explainability) == 0 {
+		return ""
+	}
+	raw, err := json.Marshal(plan.Explainability)
+	if err != nil || len(raw) == 0 {
+		return ""
+	}
+	return " explainability=" + string(raw)
+}
+
+func toAIPlanResultPayload(plan aiDeterministicCommandPlan) map[string]any {
+	payload := map[string]any{
+		"commandType": strings.TrimSpace(plan.CommandType),
+		"planner":     defaultAIPlanPlanner(plan),
+		"reason":      defaultAIPlanReason(plan),
+		"suggestions": defaultAIPlanSuggestionsFor(plan),
+	}
+	if isJSONObjectRaw(plan.Payload) {
+		payload["payload"] = decodeJSON(plan.Payload, map[string]any{})
+	} else {
+		payload["payload"] = map[string]any{}
+	}
+	if len(plan.Explainability) > 0 {
+		payload["explainability"] = cloneMap(plan.Explainability)
+	}
+	return payload
+}
+
+func cloneMap(raw map[string]any) map[string]any {
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(raw))
+	for key, value := range raw {
+		out[key] = value
+	}
+	return out
 }
 
 func extractWorkflowRunID(resultRaw json.RawMessage) string {

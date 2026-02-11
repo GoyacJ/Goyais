@@ -321,6 +321,21 @@ export interface AISessionTurnCreateRequest {
   intentPayload?: ApiObject
 }
 
+export interface AIPlanPreviewRequest {
+  message: string
+  intentCommandType?: string
+  intentPayload?: ApiObject
+}
+
+export interface AIPlanPreviewDTO {
+  commandType?: string
+  payload: ApiObject
+  planner: string
+  reason: string
+  suggestions: string[]
+  explainability?: ApiObject
+}
+
 export interface PluginPackageUploadRequest {
   name: string
   version: string

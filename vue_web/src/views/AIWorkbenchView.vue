@@ -68,13 +68,17 @@
             />
             <div class="rounded-card border border-ui-border bg-ui-surface2 p-3">
               <p class="text-xs font-semibold text-ui-fg">{{ t('page.ai.planPreviewTitle') }}</p>
-              <template v-if="turnPlanPreview">
+              <p v-if="turnPlanPreviewLoading" class="mt-1 text-xs text-ui-muted">{{ t('common.loading') }}</p>
+              <template v-else-if="turnPlanPreview">
                 <p class="mt-1 text-xs text-ui-muted">
                   {{ t('page.ai.planPreviewCommand') }}: {{ turnPlanPreview.commandType }}
                 </p>
                 <pre class="mt-2 overflow-x-auto rounded border border-ui-border bg-ui-surface px-2 py-1 text-[11px] text-ui-fg">{{
                   formatJSON(turnPlanPreview.payload)
                 }}</pre>
+                <p class="mt-2 text-[11px] text-ui-muted">
+                  {{ turnPlanPreview.planner }} · {{ turnPlanPreview.reason }}
+                </p>
               </template>
               <p v-else class="mt-1 text-xs text-ui-muted">{{ t('page.ai.planPreviewEmpty') }}</p>
             </div>
@@ -145,11 +149,12 @@ import {
   createAISessionTurn,
   getAISession,
   getAISessionEvents,
+  previewAIPlan,
   type AISessionEvent,
   listAISessions,
 } from '@/api/ai'
 import { ApiHttpError } from '@/api/http'
-import type { AISessionDTO, ApiError } from '@/api/types'
+import type { AIPlanPreviewDTO, AISessionDTO, ApiError } from '@/api/types'
 import EmptyState from '@/components/layout/EmptyState.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import SectionCard from '@/components/layout/SectionCard.vue'
@@ -178,11 +183,15 @@ const createTitle = ref('')
 const createGoal = ref('')
 const turnMessage = ref('')
 const turnMode = ref<'plan' | 'execute'>('plan')
+const turnPlanPreview = ref<AIPlanPreviewDTO | null>(null)
+const turnPlanPreviewLoading = ref(false)
 
 const isRefreshing = ref(false)
 const isSubmitting = ref(false)
 const eventsPollTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const eventsPollingInFlight = ref(false)
+const planPreviewTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+const planPreviewInFlight = ref(false)
 
 const windowPanes = computed(() => [
   { id: 'ai-sessions', title: t('page.ai.sessionsTitle') },
@@ -195,21 +204,12 @@ const turnModeOptions = computed(() => [
   { value: 'execute', label: t('page.ai.turnModeExecute') },
 ])
 
-type TurnPlanPreview = {
-  commandType: string
-  payload: Record<string, unknown>
-}
-
 type TimelineItem = {
   id: string
   title: string
   detail: string
   timestamp: string
 }
-
-const turnPlanPreview = computed<TurnPlanPreview | null>(() => {
-  return inferTurnPlan(turnMessage.value.trim())
-})
 
 const feedbackTimeline = computed<TimelineItem[]>(() => {
   return sessionEvents.value.map(buildTimelineItem).filter((item): item is TimelineItem => item !== null)
@@ -228,6 +228,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopEventsPolling()
+  stopPlanPreview()
 })
 
 watch(
@@ -247,6 +248,14 @@ watch(
       return
     }
     scheduleEventsPolling(session.id)
+  },
+  { deep: false },
+)
+
+watch(
+  [selectedSessionId, turnMessage],
+  () => {
+    schedulePlanPreview()
   },
   { deep: false },
 )
@@ -349,6 +358,71 @@ function stopEventsPolling(): void {
   eventsPollTimer.value = null
 }
 
+function schedulePlanPreview(): void {
+  stopPlanPreview()
+  const sessionID = selectedSessionId.value.trim()
+  const message = turnMessage.value.trim()
+  if (sessionID.length === 0 || message.length === 0) {
+    turnPlanPreview.value = null
+    turnPlanPreviewLoading.value = false
+    return
+  }
+  planPreviewTimer.value = setTimeout(() => {
+    planPreviewTimer.value = null
+    void refreshPlanPreview(message)
+  }, 240)
+}
+
+function stopPlanPreview(): void {
+  if (!planPreviewTimer.value) {
+    return
+  }
+  clearTimeout(planPreviewTimer.value)
+  planPreviewTimer.value = null
+}
+
+async function refreshPlanPreview(message: string): Promise<void> {
+  const sessionID = selectedSessionId.value.trim()
+  const normalized = message.trim()
+  if (normalized.length === 0 || sessionID.length === 0) {
+    turnPlanPreview.value = null
+    return
+  }
+  if (planPreviewInFlight.value) {
+    return
+  }
+  planPreviewInFlight.value = true
+  turnPlanPreviewLoading.value = true
+  try {
+    const response = await previewAIPlan({ message: normalized })
+    if (turnMessage.value.trim() !== normalized) {
+      return
+    }
+    const plan = response.plan ?? {
+      commandType: '',
+      payload: {},
+      planner: 'none',
+      reason: 'unsupported_intent',
+      suggestions: [],
+    }
+    turnPlanPreview.value = {
+      commandType: typeof plan.commandType === 'string' ? plan.commandType : '',
+      payload: asObject(plan.payload),
+      planner: typeof plan.planner === 'string' ? plan.planner : 'none',
+      reason: typeof plan.reason === 'string' ? plan.reason : 'unsupported_intent',
+      suggestions: Array.isArray(plan.suggestions) ? plan.suggestions.map((item) => String(item)) : [],
+      explainability: asObject(plan.explainability),
+    }
+  } catch {
+    if (turnMessage.value.trim() === normalized) {
+      turnPlanPreview.value = null
+    }
+  } finally {
+    turnPlanPreviewLoading.value = false
+    planPreviewInFlight.value = false
+  }
+}
+
 async function onCreateSession(): Promise<void> {
   if (isSubmitting.value) {
     return
@@ -389,14 +463,26 @@ async function onSendTurn(): Promise<void> {
 
   isSubmitting.value = true
   try {
-    const preview = inferTurnPlan(message)
-    const response = await createAISessionTurn(sessionID, {
+    if (!turnPlanPreview.value || turnMessage.value.trim() !== message) {
+      await refreshPlanPreview(message)
+    }
+    const preview = turnPlanPreview.value
+    const requestPayload: {
+      message: string
+      execute: boolean
+      intentCommandType?: string
+      intentPayload?: Record<string, unknown>
+    } = {
       message,
       execute: turnMode.value === 'execute',
-      intentCommandType: preview?.commandType,
-      intentPayload: preview?.payload,
-    })
+    }
+    if (preview?.commandType) {
+      requestPayload.intentCommandType = preview.commandType
+      requestPayload.intentPayload = preview.payload
+    }
+    const response = await createAISessionTurn(sessionID, requestPayload)
     turnMessage.value = ''
+    turnPlanPreview.value = null
     await loadSessions()
     await loadSelectedSessionContext()
 
@@ -495,86 +581,19 @@ function readString(payload: Record<string, unknown>, key: string): string {
   return typeof raw === 'string' ? raw : ''
 }
 
-function inferTurnPlan(message: string): TurnPlanPreview | null {
-  const tokens = message.split(/\s+/).filter((item) => item.length > 0)
-  if (tokens.length === 0) {
-    return null
-  }
-
-  if (tokens.length >= 3 && eqToken(tokens[0], 'run') && eqToken(tokens[1], 'workflow')) {
-    return workflowRunPlan(cleanToken(tokens[2]))
-  }
-  if (tokens.length >= 2 && eqToken(tokens[0], 'workflow.run')) {
-    return workflowRunPlan(cleanToken(tokens[1]))
-  }
-  if (tokens.length >= 3 && eqToken(tokens[0], 'retry') && eqToken(tokens[1], 'workflow')) {
-    return workflowRetryPlan(cleanToken(tokens[2]))
-  }
-  if (tokens.length >= 2 && eqToken(tokens[0], 'workflow.retry')) {
-    return workflowRetryPlan(cleanToken(tokens[1]))
-  }
-  if (tokens.length >= 3 && eqToken(tokens[0], 'cancel') && eqToken(tokens[1], 'workflow')) {
-    return workflowCancelPlan(cleanToken(tokens[2]))
-  }
-  if (tokens.length >= 2 && eqToken(tokens[0], 'workflow.cancel')) {
-    return workflowCancelPlan(cleanToken(tokens[1]))
-  }
-  return null
-}
-
-function workflowRunPlan(templateId: string): TurnPlanPreview | null {
-  if (!templateId) {
-    return null
-  }
-  return {
-    commandType: 'workflow.run',
-    payload: {
-      templateId,
-      mode: 'sync',
-      inputs: {},
-    },
-  }
-}
-
-function workflowRetryPlan(runId: string): TurnPlanPreview | null {
-  if (!runId) {
-    return null
-  }
-  return {
-    commandType: 'workflow.retry',
-    payload: {
-      runId,
-      mode: 'sync',
-    },
-  }
-}
-
-function workflowCancelPlan(runId: string): TurnPlanPreview | null {
-  if (!runId) {
-    return null
-  }
-  return {
-    commandType: 'workflow.cancel',
-    payload: {
-      runId,
-    },
-  }
-}
-
-function eqToken(left: string, right: string): boolean {
-  return left.toLowerCase() === right.toLowerCase()
-}
-
-function cleanToken(raw: string): string {
-  return raw.trim().replace(/^[`"'()[\]{}.,;:]+|[`"'()[\]{}.,;:]+$/g, '')
-}
-
-function formatJSON(value: Record<string, unknown>): string {
+function formatJSON(value: unknown): string {
   try {
     return JSON.stringify(value, null, 2)
   } catch {
     return '{}'
   }
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  return value as Record<string, unknown>
 }
 
 function buildTimelineItem(item: AISessionEvent): TimelineItem | null {
