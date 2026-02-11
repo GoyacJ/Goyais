@@ -820,13 +820,19 @@ func (r *SQLiteRepository) applyToolGateToPlanFromConn(
 				adjusted.Steps[idx].WillRetry = false
 				adjusted.Steps[idx].RetryAfter = 0
 				adjusted.Steps[idx].Finished = true
-				adjusted.Steps[idx].Output = mustJSONObjectRaw(map[string]any{
-					"handled": false,
-					"mode":    "tool_gate_blocked",
-					"stepKey": step.Key,
-					"type":    step.Type,
-					"reason":  deniedReason,
-				})
+				adjusted.Steps[idx].Output = buildStepExecutionOutput(
+					step.Key,
+					step.Type,
+					"tool_gate_blocked",
+					StepStatusSkipped,
+					step.Attempt,
+					decodeJSONMap(step.Input),
+					"",
+					"",
+					deniedReason,
+					false,
+					0,
+				)
 			}
 			continue
 		}
@@ -852,13 +858,19 @@ func (r *SQLiteRepository) applyToolGateToPlanFromConn(
 		adjusted.Steps[idx].WillRetry = false
 		adjusted.Steps[idx].RetryAfter = 0
 		adjusted.Steps[idx].Finished = true
-		adjusted.Steps[idx].Output = mustJSONObjectRaw(map[string]any{
-			"handled": false,
-			"mode":    "tool_gate_denied",
-			"stepKey": step.Key,
-			"type":    step.Type,
-			"reason":  deniedReason,
-		})
+		adjusted.Steps[idx].Output = buildStepExecutionOutput(
+			step.Key,
+			step.Type,
+			"tool_gate_denied",
+			StepStatusFailed,
+			step.Attempt,
+			decodeJSONMap(step.Input),
+			"TOOL_GATE_DENIED",
+			"error.workflow.tool_gate_denied",
+			deniedReason,
+			false,
+			0,
+		)
 	}
 
 	if denied {
@@ -866,12 +878,15 @@ func (r *SQLiteRepository) applyToolGateToPlanFromConn(
 		adjusted.RunFinished = true
 		adjusted.RunErrorCode = "TOOL_GATE_DENIED"
 		adjusted.RunMessageKey = "error.workflow.tool_gate_denied"
-		adjusted.RunOutputs = mustJSONObjectRaw(map[string]any{
-			"handled":       false,
-			"mode":          "tool_gate_denied",
-			"deniedStepKey": deniedStepKey,
-			"reason":        deniedReason,
-		})
+		adjusted.RunOutputs = buildRunExecutionOutputFromSteps(
+			"tool_gate_denied",
+			RunStatusFailed,
+			adjusted.Steps,
+			map[string]any{
+				"deniedStepKey": deniedStepKey,
+				"reason":        deniedReason,
+			},
+		)
 	}
 
 	return adjusted, nil

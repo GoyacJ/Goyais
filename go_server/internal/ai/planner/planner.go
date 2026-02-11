@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -39,6 +40,27 @@ type Plan struct {
 	Reason         string
 	Suggestions    []string
 	Explainability map[string]any
+	Score          float64
+	Steps          []PlanStep
+	StrategyScores []PlanStrategyScore
+}
+
+type PlanStep struct {
+	Order       int
+	Segment     string
+	CommandType string
+	Payload     json.RawMessage
+	Planner     string
+	Reason      string
+	Score       float64
+	Executable  bool
+}
+
+type PlanStrategyScore struct {
+	Strategy string
+	Score    float64
+	Selected bool
+	Reason   string
 }
 
 type parserFn func(tokens []string, raw string) (Plan, bool)
@@ -49,6 +71,7 @@ type intentParser struct {
 }
 
 func PlanTurn(req TurnRequest) (Plan, error) {
+	trimmedMessage := strings.TrimSpace(req.Message)
 	explicitType := strings.TrimSpace(req.IntentCommandType)
 	if explicitType != "" {
 		if strings.HasPrefix(strings.ToLower(explicitType), "ai.") {
@@ -58,7 +81,7 @@ func PlanTurn(req TurnRequest) (Plan, error) {
 		if !isJSONObjectRaw(payload) {
 			return Plan{}, ErrInvalidIntent
 		}
-		return Plan{
+		explicitPlan := Plan{
 			CommandType: explicitType,
 			Payload:     payload,
 			Planner:     "explicit",
@@ -67,31 +90,20 @@ func PlanTurn(req TurnRequest) (Plan, error) {
 				"strategy": "explicit",
 				"source":   "intentCommandType",
 			},
-		}, nil
+			Score: 0.99,
+		}
+		explicitPlan.Steps = []PlanStep{
+			planToStep(explicitPlan, 1, strings.TrimSpace(trimmedMessage)),
+		}
+		explicitPlan.StrategyScores = buildSingleStrategyScores(explicitPlan)
+		return explicitPlan, nil
 	}
 
-	tokens := tokenize(req.Message)
-	for _, parser := range defaultParsers() {
-		plan, matched := parser.parse(tokens, req.Message)
-		if !matched {
-			continue
-		}
-		if strings.TrimSpace(plan.Planner) == "" {
-			plan.Planner = parser.name
-		}
-		if plan.Explainability == nil {
-			plan.Explainability = map[string]any{}
-		}
-		plan.Explainability["parser"] = parser.name
-		plan.Explainability["tokens"] = append([]string{}, tokens...)
-		return plan, nil
+	if multiPlan, matched := planCompositeIntent(trimmedMessage); matched {
+		return multiPlan, nil
 	}
 
-	if naturalPlan, matched := parseNaturalLanguageIntent(req.Message, tokens); matched {
-		return naturalPlan, nil
-	}
-
-	return buildRejectPlan(req.Message, tokens), nil
+	return finalizeSinglePlan(planSingleIntent(trimmedMessage), trimmedMessage), nil
 }
 
 func defaultParsers() []intentParser {
@@ -103,6 +115,443 @@ func defaultParsers() []intentParser {
 		{name: "algorithm.run", parse: parseAlgorithmRunIntent},
 		{name: "context.bundle.rebuild", parse: parseContextBundleRebuildIntent},
 	}
+}
+
+func planSingleIntent(rawMessage string) Plan {
+	tokens := tokenize(rawMessage)
+	for _, parser := range defaultParsers() {
+		plan, matched := parser.parse(tokens, rawMessage)
+		if !matched {
+			continue
+		}
+		if strings.TrimSpace(plan.Planner) == "" {
+			plan.Planner = parser.name
+		}
+		if plan.Explainability == nil {
+			plan.Explainability = map[string]any{}
+		}
+		plan.Explainability["parser"] = parser.name
+		plan.Explainability["tokens"] = append([]string{}, tokens...)
+		return plan
+	}
+
+	if naturalPlan, matched := parseNaturalLanguageIntent(rawMessage, tokens); matched {
+		return naturalPlan
+	}
+
+	return buildRejectPlan(rawMessage, tokens)
+}
+
+func finalizeSinglePlan(plan Plan, segment string) Plan {
+	plan.Score = normalizePlanScore(plan)
+	plan.Steps = []PlanStep{
+		planToStep(plan, 1, strings.TrimSpace(segment)),
+	}
+	plan.StrategyScores = buildSingleStrategyScores(plan)
+	return plan
+}
+
+func planCompositeIntent(rawMessage string) (Plan, bool) {
+	segments := splitCompositeMessage(rawMessage)
+	if len(segments) < 2 {
+		return Plan{}, false
+	}
+
+	segmentPlans := make([]Plan, 0, len(segments))
+	steps := make([]PlanStep, 0, len(segments))
+	executableIndexes := make([]int, 0, len(segments))
+	for idx, segment := range segments {
+		segmentPlan := planSingleIntent(segment)
+		segmentPlan.Score = normalizePlanScore(segmentPlan)
+		step := planToStep(segmentPlan, idx+1, segment)
+		segmentPlans = append(segmentPlans, segmentPlan)
+		steps = append(steps, step)
+		if step.Executable {
+			executableIndexes = append(executableIndexes, idx)
+		}
+	}
+
+	if len(executableIndexes) == 0 {
+		reject := buildRejectPlan(rawMessage, tokenize(rawMessage))
+		reject.Planner = "multi_step.reject"
+		reject.Reason = "multi_step_without_executable_intent"
+		reject.Score = 0.22
+		reject.Steps = steps
+		reject.Suggestions = mergedSuggestions(collectStepSuggestions(segmentPlans), reject.Suggestions)
+		reject.StrategyScores = []PlanStrategyScore{
+			{
+				Strategy: "clarify_before_execute",
+				Score:    0.74,
+				Selected: true,
+				Reason:   "segments_detected_without_executable_command",
+			},
+			{
+				Strategy: "reject_unsupported",
+				Score:    0.26,
+				Reason:   "missing_actionable_command",
+			},
+		}
+		reject.Explainability = mergeExplainability(reject.Explainability, map[string]any{
+			"strategy":        "multi_step_chain",
+			"segments":        len(segments),
+			"executableSteps": 0,
+		})
+		return reject, true
+	}
+
+	primaryIndex := executableIndexes[0]
+	primaryPlan := segmentPlans[primaryIndex]
+	selectedScore := maxFloat(normalizePlanScore(primaryPlan), aggregateStepScore(steps))
+
+	multiPlan := Plan{
+		CommandType: primaryPlan.CommandType,
+		Payload:     objectOrDefault(primaryPlan.Payload),
+		Planner:     "multi_step.chain",
+		Reason:      "matched_multi_step_intent",
+		Suggestions: mergedSuggestions(
+			collectStepSuggestions(segmentPlans),
+			primaryPlan.Suggestions,
+		),
+		Explainability: mergeExplainability(primaryPlan.Explainability, map[string]any{
+			"strategy":        "multi_step_chain",
+			"segments":        len(segments),
+			"selectedStep":    primaryIndex + 1,
+			"executableSteps": len(executableIndexes),
+		}),
+		Score: selectedScore,
+		Steps: steps,
+	}
+	multiPlan.StrategyScores = buildCompositeStrategyScores(multiPlan, executableIndexes)
+	return multiPlan, true
+}
+
+func planToStep(plan Plan, order int, segment string) PlanStep {
+	payload := objectOrDefault(plan.Payload)
+	if strings.TrimSpace(plan.CommandType) == "" {
+		payload = json.RawMessage(`{}`)
+	}
+	return PlanStep{
+		Order:       order,
+		Segment:     strings.TrimSpace(segment),
+		CommandType: strings.TrimSpace(plan.CommandType),
+		Payload:     payload,
+		Planner:     strings.TrimSpace(plan.Planner),
+		Reason:      strings.TrimSpace(plan.Reason),
+		Score:       normalizePlanScore(plan),
+		Executable:  strings.TrimSpace(plan.CommandType) != "",
+	}
+}
+
+func splitCompositeMessage(raw string) []string {
+	message := strings.TrimSpace(raw)
+	if message == "" {
+		return nil
+	}
+
+	primarySegments := splitOutsideBracesByDelimiter(message)
+	parts := make([]string, 0, len(primarySegments))
+	for _, segment := range primarySegments {
+		chunks := splitByConnectors(segment)
+		parts = append(parts, chunks...)
+	}
+
+	out := make([]string, 0, len(parts))
+	for _, item := range parts {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	if len(out) < 2 {
+		return nil
+	}
+	return out
+}
+
+func splitOutsideBracesByDelimiter(raw string) []string {
+	segments := make([]string, 0, 4)
+	var current strings.Builder
+	depth := 0
+	flush := func() {
+		value := strings.TrimSpace(current.String())
+		if value != "" {
+			segments = append(segments, value)
+		}
+		current.Reset()
+	}
+
+	for _, char := range raw {
+		switch char {
+		case '{', '[', '(':
+			depth++
+			current.WriteRune(char)
+		case '}', ']', ')':
+			if depth > 0 {
+				depth--
+			}
+			current.WriteRune(char)
+		case ';', '；', '\n':
+			if depth == 0 {
+				flush()
+				continue
+			}
+			current.WriteRune(char)
+		default:
+			current.WriteRune(char)
+		}
+	}
+	flush()
+	return segments
+}
+
+func splitByConnectors(raw string) []string {
+	segment := strings.TrimSpace(raw)
+	if segment == "" {
+		return nil
+	}
+	// Keep JSON patch text intact to avoid splitting command payload body.
+	if strings.Contains(segment, "{") || strings.Contains(segment, "}") {
+		return []string{segment}
+	}
+
+	parts := []string{segment}
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\s+(?:and\s+then|then|after\s+that|next)\s+`),
+		regexp.MustCompile(`(?:然后|接着|之后|随后|接下来)`),
+	}
+	for _, pattern := range patterns {
+		next := make([]string, 0, len(parts))
+		for _, item := range parts {
+			chunks := pattern.Split(item, -1)
+			for _, chunk := range chunks {
+				chunk = strings.TrimSpace(chunk)
+				if chunk != "" {
+					next = append(next, chunk)
+				}
+			}
+		}
+		parts = next
+	}
+	return parts
+}
+
+func normalizePlanScore(plan Plan) float64 {
+	if plan.Score > 0 {
+		return clampScore(plan.Score)
+	}
+	if confidence, ok := readFloatValue(plan.Explainability, "confidence"); ok {
+		return clampScore(confidence)
+	}
+
+	commandType := strings.TrimSpace(plan.CommandType)
+	reason := strings.ToLower(strings.TrimSpace(plan.Reason))
+	planner := strings.ToLower(strings.TrimSpace(plan.Planner))
+
+	switch {
+	case commandType != "":
+		if planner == "explicit" {
+			return 0.99
+		}
+		if strings.Contains(planner, ".nl") {
+			return 0.73
+		}
+		return 0.68
+	case strings.HasPrefix(reason, "missing_"):
+		return 0.36
+	case strings.Contains(reason, "ambiguous"):
+		return 0.32
+	case strings.Contains(reason, "unsupported"):
+		return 0.18
+	default:
+		return 0.24
+	}
+}
+
+func readFloatValue(raw map[string]any, key string) (float64, bool) {
+	if len(raw) == 0 {
+		return 0, false
+	}
+	value, ok := raw[key]
+	if !ok {
+		return 0, false
+	}
+	switch typed := value.(type) {
+	case float64:
+		return typed, true
+	case float32:
+		return float64(typed), true
+	case int:
+		return float64(typed), true
+	case int32:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case json.Number:
+		parsed, err := typed.Float64()
+		if err == nil {
+			return parsed, true
+		}
+	}
+	return 0, false
+}
+
+func aggregateStepScore(steps []PlanStep) float64 {
+	if len(steps) == 0 {
+		return 0
+	}
+	total := 0.0
+	weight := 0.0
+	for _, step := range steps {
+		currentWeight := 0.7
+		if step.Executable {
+			currentWeight = 1.0
+		}
+		total += clampScore(step.Score) * currentWeight
+		weight += currentWeight
+	}
+	if weight <= 0 {
+		return 0
+	}
+	return clampScore(total / weight)
+}
+
+func buildSingleStrategyScores(plan Plan) []PlanStrategyScore {
+	primaryScore := normalizePlanScore(plan)
+	if strings.TrimSpace(plan.CommandType) == "" {
+		return []PlanStrategyScore{
+			{
+				Strategy: "clarify_before_execute",
+				Score:    clampScore(primaryScore + 0.35),
+				Selected: true,
+				Reason:   strings.TrimSpace(plan.Reason),
+			},
+			{
+				Strategy: "reject_unsupported",
+				Score:    clampScore(1.0 - primaryScore),
+				Reason:   "no_executable_command",
+			},
+		}
+	}
+
+	scores := []PlanStrategyScore{
+		{
+			Strategy: "direct_execute",
+			Score:    primaryScore,
+			Selected: true,
+			Reason:   strings.TrimSpace(plan.Reason),
+		},
+		{
+			Strategy: "confirm_then_execute",
+			Score:    clampScore(primaryScore - 0.18),
+			Reason:   "lower_risk_with_user_confirmation",
+		},
+		{
+			Strategy: "defer_and_collect_context",
+			Score:    clampScore(primaryScore - 0.34),
+			Reason:   "execution_deferred_for_more_context",
+		},
+	}
+	sortStrategyScores(scores)
+	return scores
+}
+
+func buildCompositeStrategyScores(plan Plan, executableIndexes []int) []PlanStrategyScore {
+	selectedReason := "execute_steps_in_sequence"
+	if len(executableIndexes) <= 1 {
+		selectedReason = "single_executable_step_detected"
+	}
+	chainScore := clampScore(plan.Score)
+	scores := []PlanStrategyScore{
+		{
+			Strategy: "multi_step_chain",
+			Score:    chainScore,
+			Selected: true,
+			Reason:   selectedReason,
+		},
+		{
+			Strategy: "single_best_step",
+			Score:    clampScore(chainScore - 0.14),
+			Reason:   "execute_only_first_executable_step",
+		},
+		{
+			Strategy: "clarify_before_execute",
+			Score:    clampScore(chainScore - 0.28),
+			Reason:   "request_confirmation_for_multistep_execution",
+		},
+	}
+	sortStrategyScores(scores)
+	return scores
+}
+
+func sortStrategyScores(scores []PlanStrategyScore) {
+	sort.SliceStable(scores, func(i, j int) bool {
+		if scores[i].Selected != scores[j].Selected {
+			return scores[i].Selected
+		}
+		if scores[i].Score == scores[j].Score {
+			return scores[i].Strategy < scores[j].Strategy
+		}
+		return scores[i].Score > scores[j].Score
+	})
+}
+
+func collectStepSuggestions(steps []Plan) []string {
+	merged := make([]string, 0, len(steps))
+	seen := map[string]struct{}{}
+	for _, step := range steps {
+		for _, suggestion := range step.Suggestions {
+			trimmed := strings.TrimSpace(suggestion)
+			if trimmed == "" {
+				continue
+			}
+			if _, exists := seen[trimmed]; exists {
+				continue
+			}
+			seen[trimmed] = struct{}{}
+			merged = append(merged, trimmed)
+		}
+	}
+	return merged
+}
+
+func mergedSuggestions(groups ...[]string) []string {
+	merged := make([]string, 0)
+	seen := map[string]struct{}{}
+	for _, group := range groups {
+		for _, suggestion := range group {
+			trimmed := strings.TrimSpace(suggestion)
+			if trimmed == "" {
+				continue
+			}
+			if _, exists := seen[trimmed]; exists {
+				continue
+			}
+			seen[trimmed] = struct{}{}
+			merged = append(merged, trimmed)
+		}
+	}
+	if len(merged) == 0 {
+		return defaultSuggestions()
+	}
+	return merged
+}
+
+func clampScore(score float64) float64 {
+	if score < 0 {
+		return 0
+	}
+	if score > 1 {
+		return 1
+	}
+	return score
+}
+
+func maxFloat(left float64, right float64) float64 {
+	if left > right {
+		return left
+	}
+	return right
 }
 
 func parseNaturalLanguageIntent(rawMessage string, tokens []string) (Plan, bool) {

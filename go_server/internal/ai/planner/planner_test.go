@@ -160,3 +160,54 @@ func TestPlanTurnAmbiguousWorkflowIntent(t *testing.T) {
 		t.Fatalf("expected workflow suggestions")
 	}
 }
+
+func TestPlanTurnCompositeIntentIncludesStepsAndStrategyScores(t *testing.T) {
+	plan, err := PlanTurn(TurnRequest{
+		Message: "run workflow tpl_demo; run algorithm algo_face_detect; rebuild context bundle workspace ws_demo",
+	})
+	if err != nil {
+		t.Fatalf("PlanTurn returned error: %v", err)
+	}
+	if plan.CommandType != "workflow.run" {
+		t.Fatalf("unexpected command type: %s", plan.CommandType)
+	}
+	if plan.Reason != "matched_multi_step_intent" {
+		t.Fatalf("unexpected reason: %s", plan.Reason)
+	}
+	if len(plan.Steps) != 3 {
+		t.Fatalf("expected 3 plan steps got=%d", len(plan.Steps))
+	}
+	if plan.Steps[1].CommandType != "algorithm.run" {
+		t.Fatalf("unexpected second step command type: %s", plan.Steps[1].CommandType)
+	}
+	if plan.Score <= 0 {
+		t.Fatalf("expected positive score got=%f", plan.Score)
+	}
+	if len(plan.StrategyScores) == 0 {
+		t.Fatalf("expected strategy scores")
+	}
+	if !plan.StrategyScores[0].Selected {
+		t.Fatalf("expected first strategy score selected")
+	}
+}
+
+func TestPlanTurnCompositeWithoutExecutableIntent(t *testing.T) {
+	plan, err := PlanTurn(TurnRequest{
+		Message: "workflow maybe; algorithm maybe",
+	})
+	if err != nil {
+		t.Fatalf("PlanTurn returned error: %v", err)
+	}
+	if plan.CommandType != "" {
+		t.Fatalf("expected empty command type got=%s", plan.CommandType)
+	}
+	if plan.Reason != "multi_step_without_executable_intent" {
+		t.Fatalf("unexpected reason: %s", plan.Reason)
+	}
+	if len(plan.Steps) != 2 {
+		t.Fatalf("expected 2 steps got=%d", len(plan.Steps))
+	}
+	if len(plan.StrategyScores) == 0 || !plan.StrategyScores[0].Selected {
+		t.Fatalf("expected selected strategy score")
+	}
+}

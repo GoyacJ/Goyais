@@ -614,6 +614,7 @@ func toAIPlanPayload(plan aiplanner.Plan) map[string]any {
 		"commandType": strings.TrimSpace(plan.CommandType),
 		"planner":     strings.TrimSpace(plan.Planner),
 		"reason":      strings.TrimSpace(plan.Reason),
+		"score":       plan.Score,
 	}
 	if len(plan.Suggestions) > 0 {
 		payload["suggestions"] = append([]string{}, plan.Suggestions...)
@@ -627,6 +628,34 @@ func toAIPlanPayload(plan aiplanner.Plan) map[string]any {
 	}
 	if len(plan.Explainability) > 0 {
 		payload["explainability"] = plan.Explainability
+	}
+	if len(plan.Steps) > 0 {
+		steps := make([]map[string]any, 0, len(plan.Steps))
+		for _, step := range plan.Steps {
+			steps = append(steps, map[string]any{
+				"order":       step.Order,
+				"segment":     strings.TrimSpace(step.Segment),
+				"commandType": strings.TrimSpace(step.CommandType),
+				"payload":     decodeJSON(step.Payload, map[string]any{}),
+				"planner":     strings.TrimSpace(step.Planner),
+				"reason":      strings.TrimSpace(step.Reason),
+				"score":       step.Score,
+				"executable":  step.Executable,
+			})
+		}
+		payload["steps"] = steps
+	}
+	if len(plan.StrategyScores) > 0 {
+		strategyScores := make([]map[string]any, 0, len(plan.StrategyScores))
+		for _, item := range plan.StrategyScores {
+			strategyScores = append(strategyScores, map[string]any{
+				"strategy": strings.TrimSpace(item.Strategy),
+				"score":    item.Score,
+				"selected": item.Selected,
+				"reason":   strings.TrimSpace(item.Reason),
+			})
+		}
+		payload["strategyScores"] = strategyScores
 	}
 	return payload
 }

@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -481,18 +482,34 @@ func (s *Service) buildWorkspaceScopePayload(
 		warnings = append(warnings, "asset_reader_unavailable")
 	}
 
-	timeline := make([]map[string]any, 0, len(commandRefs)+1)
-	for _, item := range commandRefs {
-		ts, _ := item["acceptedAt"].(string)
-		timeline = append(timeline, map[string]any{
-			"ts":      ts,
-			"type":    "command." + strings.ToLower(stringOrDefault(item["status"], "accepted")),
-			"scope":   ScopeTypeWorkspace,
-			"scopeId": workspaceID,
-			"refId":   item["id"],
+	commandStatusCounts := countByKey(commandRefs, "status")
+	commandTypeCounts := countByKey(commandRefs, "commandType")
+	runStatusCounts := countByKey(runRefs, "status")
+	runTemplateCounts := countByKey(runRefs, "templateId")
+	sessionStatusCounts := countByKey(sessionRefs, "status")
+	assetTypeCounts := countByKey(assetRefs, "type")
+	assetStatusCounts := countByKey(assetRefs, "status")
+	recentFailedCommands := filterByStatus(commandRefs, command.StatusFailed, 10)
+	recentFailedRuns := filterByStatus(runRefs, workflow.RunStatusFailed, 10)
+
+	runCommandLinks := make([]map[string]any, 0, len(runRefs))
+	for _, runRef := range runRefs {
+		runID := toString(runRef["id"])
+		commandID := toString(runRef["commandId"])
+		if runID == "" || commandID == "" {
+			continue
+		}
+		runCommandLinks = append(runCommandLinks, map[string]any{
+			"runId":     runID,
+			"commandId": commandID,
 		})
 	}
-	appendRebuildTimeline(&timeline, ScopeTypeWorkspace, workspaceID, req.UserID, now)
+
+	coverage := "complete"
+	if len(warnings) > 0 {
+		coverage = "partial"
+	}
+	timeline := buildWorkspaceTimeline(workspaceID, req.UserID, now, commandRefs, runRefs, sessionRefs, assetRefs)
 
 	facts := map[string]any{
 		"scopeType":    ScopeTypeWorkspace,
@@ -505,17 +522,56 @@ func (s *Service) buildWorkspaceScopePayload(
 		"assetCount":   len(assetRefs),
 		"warningCount": len(warnings),
 		"warnings":     warnings,
+		"coverage":     coverage,
+		"commandStats": map[string]any{
+			"statusCounts": commandStatusCounts,
+			"topTypes":     topCountPairs(commandTypeCounts, 6),
+		},
+		"runStats": map[string]any{
+			"statusCounts":  runStatusCounts,
+			"topTemplates":  topCountPairs(runTemplateCounts, 6),
+			"failedRunRefs": len(recentFailedRuns),
+		},
+		"sessionStats": map[string]any{
+			"statusCounts": sessionStatusCounts,
+		},
+		"assetStats": map[string]any{
+			"typeCounts":   assetTypeCounts,
+			"statusCounts": assetStatusCounts,
+		},
+		"riskSignals": map[string]any{
+			"failedCommands": len(recentFailedCommands),
+			"failedRuns":     len(recentFailedRuns),
+			"warningCount":   len(warnings),
+		},
 	}
+
+	highlights := []string{
+		fmt.Sprintf("commands=%d runs=%d sessions=%d assets=%d", len(commandRefs), len(runRefs), len(sessionRefs), len(assetRefs)),
+	}
+	if len(recentFailedCommands) > 0 {
+		highlights = append(highlights, fmt.Sprintf("failed commands=%d", len(recentFailedCommands)))
+	}
+	if len(recentFailedRuns) > 0 {
+		highlights = append(highlights, fmt.Sprintf("failed runs=%d", len(recentFailedRuns)))
+	}
+	if len(warnings) > 0 {
+		highlights = append(highlights, fmt.Sprintf("degraded providers=%d", len(warnings)))
+	}
+
 	summaries := map[string]any{
 		"text": fmt.Sprintf(
-			"workspace %s commands=%d runs=%d sessions=%d assets=%d",
+			"workspace %s coverage=%s commands=%d runs=%d sessions=%d assets=%d",
 			workspaceID,
+			coverage,
 			len(commandRefs),
 			len(runRefs),
 			len(sessionRefs),
 			len(assetRefs),
 		),
-		"warnings": warnings,
+		"highlights":      highlights,
+		"warnings":        warnings,
+		"recommendations": buildWorkspaceRecommendations(recentFailedCommands, recentFailedRuns, warnings),
 	}
 	refs := map[string]any{
 		"commands": commandRefs,
@@ -523,10 +579,25 @@ func (s *Service) buildWorkspaceScopePayload(
 		"sessions": sessionRefs,
 		"assets":   assetRefs,
 		"warnings": warnings,
+		"analytics": map[string]any{
+			"topCommandTypes": topCountPairs(commandTypeCounts, 10),
+			"topRunTemplates": topCountPairs(runTemplateCounts, 10),
+			"assetTypes":      topCountPairs(assetTypeCounts, 10),
+		},
+		"crossRefs": map[string]any{
+			"runCommandLinks": runCommandLinks,
+		},
+		"recentFailures": map[string]any{
+			"commands": recentFailedCommands,
+			"runs":     recentFailedRuns,
+		},
 	}
 
-	embeddings := make([]map[string]any, 0, 1+len(runRefs)+len(sessionRefs)+len(assetRefs))
+	embeddings := make([]map[string]any, 0, 1+len(commandRefs)+len(runRefs)+len(sessionRefs)+len(assetRefs))
 	embeddings = append(embeddings, map[string]any{"kind": "workspace", "ref": workspaceID})
+	for _, item := range commandRefs {
+		embeddings = append(embeddings, map[string]any{"kind": "command", "ref": item["id"]})
+	}
 	for _, item := range runRefs {
 		embeddings = append(embeddings, map[string]any{"kind": "workflow_run", "ref": item["id"]})
 	}
@@ -724,6 +795,163 @@ func stringOrDefault(raw any, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func toString(raw any) string {
+	value, _ := raw.(string)
+	return strings.TrimSpace(value)
+}
+
+func countByKey(items []map[string]any, key string) map[string]int {
+	counts := map[string]int{}
+	for _, item := range items {
+		value := toString(item[key])
+		if value == "" {
+			value = "unknown"
+		}
+		counts[value]++
+	}
+	return counts
+}
+
+func topCountPairs(counts map[string]int, limit int) []map[string]any {
+	type pair struct {
+		name  string
+		count int
+	}
+	pairs := make([]pair, 0, len(counts))
+	for name, count := range counts {
+		pairs = append(pairs, pair{name: name, count: count})
+	}
+	sort.SliceStable(pairs, func(i, j int) bool {
+		if pairs[i].count == pairs[j].count {
+			return pairs[i].name < pairs[j].name
+		}
+		return pairs[i].count > pairs[j].count
+	})
+	if limit <= 0 || limit > len(pairs) {
+		limit = len(pairs)
+	}
+	out := make([]map[string]any, 0, limit)
+	for idx := 0; idx < limit; idx++ {
+		out = append(out, map[string]any{
+			"name":  pairs[idx].name,
+			"count": pairs[idx].count,
+		})
+	}
+	return out
+}
+
+func filterByStatus(items []map[string]any, status string, limit int) []map[string]any {
+	target := strings.TrimSpace(status)
+	if target == "" {
+		return []map[string]any{}
+	}
+	filtered := make([]map[string]any, 0)
+	for _, item := range items {
+		if strings.EqualFold(toString(item["status"]), target) {
+			filtered = append(filtered, item)
+		}
+	}
+	if limit > 0 && len(filtered) > limit {
+		return append([]map[string]any{}, filtered[:limit]...)
+	}
+	return filtered
+}
+
+func buildWorkspaceTimeline(
+	workspaceID string,
+	requestedBy string,
+	now time.Time,
+	commandRefs []map[string]any,
+	runRefs []map[string]any,
+	sessionRefs []map[string]any,
+	assetRefs []map[string]any,
+) []map[string]any {
+	timeline := make([]map[string]any, 0, len(commandRefs)+len(runRefs)+len(sessionRefs)+len(assetRefs)+1)
+	for _, item := range commandRefs {
+		ts := toString(item["acceptedAt"])
+		timeline = append(timeline, map[string]any{
+			"ts":      ts,
+			"type":    "command." + strings.ToLower(stringOrDefault(item["status"], "accepted")),
+			"scope":   ScopeTypeWorkspace,
+			"scopeId": workspaceID,
+			"refId":   item["id"],
+		})
+	}
+	for _, item := range runRefs {
+		ts := toString(item["startedAt"])
+		timeline = append(timeline, map[string]any{
+			"ts":      ts,
+			"type":    "workflow.run." + strings.ToLower(stringOrDefault(item["status"], "unknown")),
+			"scope":   ScopeTypeWorkspace,
+			"scopeId": workspaceID,
+			"refId":   item["id"],
+		})
+	}
+	for _, item := range sessionRefs {
+		ts := toString(item["lastTurnAt"])
+		if ts == "" {
+			continue
+		}
+		timeline = append(timeline, map[string]any{
+			"ts":      ts,
+			"type":    "ai.session.activity",
+			"scope":   ScopeTypeWorkspace,
+			"scopeId": workspaceID,
+			"refId":   item["id"],
+		})
+	}
+	for _, item := range assetRefs {
+		ts := toString(item["createdAt"])
+		timeline = append(timeline, map[string]any{
+			"ts":      ts,
+			"type":    "asset." + strings.ToLower(stringOrDefault(item["status"], "created")),
+			"scope":   ScopeTypeWorkspace,
+			"scopeId": workspaceID,
+			"refId":   item["id"],
+		})
+	}
+	appendRebuildTimeline(&timeline, ScopeTypeWorkspace, workspaceID, requestedBy, now)
+	sort.SliceStable(timeline, func(i, j int) bool {
+		left := parseRFC3339OrZero(toString(timeline[i]["ts"]))
+		right := parseRFC3339OrZero(toString(timeline[j]["ts"]))
+		return left.After(right)
+	})
+	return timeline
+}
+
+func buildWorkspaceRecommendations(
+	recentFailedCommands []map[string]any,
+	recentFailedRuns []map[string]any,
+	warnings []string,
+) []string {
+	recommendations := make([]string, 0, 4)
+	if len(recentFailedCommands) > 0 {
+		recommendations = append(recommendations, "review failed commands and retriable error codes")
+	}
+	if len(recentFailedRuns) > 0 {
+		recommendations = append(recommendations, "inspect failed workflow runs and step-level artifacts")
+	}
+	if len(warnings) > 0 {
+		recommendations = append(recommendations, "restore unavailable providers before relying on workspace bundle")
+	}
+	if len(recommendations) == 0 {
+		recommendations = append(recommendations, "workspace context is healthy; continue periodic rebuild checks")
+	}
+	return recommendations
+}
+
+func parseRFC3339OrZero(raw string) time.Time {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return time.Time{}
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed.UTC()
 }
 
 func mapWorkflowDependencyError(err error) error {

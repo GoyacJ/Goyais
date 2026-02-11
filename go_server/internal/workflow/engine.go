@@ -293,30 +293,34 @@ func buildSucceededPlan(
 	inputs map[string]any,
 	mode string,
 ) executionPlan {
-	stepKeys := make([]string, 0, len(nodes))
 	steps := make([]plannedStep, 0, len(nodes))
 	for _, node := range nodes {
-		stepKeys = append(stepKeys, node.ID)
-		stepOutput := mustJSONObjectRaw(map[string]any{
-			"handled": true,
-			"mode":    mode,
-			"stepKey": node.ID,
-			"type":    node.Type,
-		})
 		steps = append(steps, plannedStep{
-			Key:      node.ID,
-			Type:     node.Type,
-			Attempt:  1,
-			Status:   StepStatusSucceeded,
-			Input:    mustJSONObjectRaw(inputs),
-			Output:   stepOutput,
+			Key:     node.ID,
+			Type:    node.Type,
+			Attempt: 1,
+			Status:  StepStatusSucceeded,
+			Input:   mustJSONObjectRaw(inputs),
+			Output: buildStepExecutionOutput(
+				node.ID,
+				node.Type,
+				mode,
+				StepStatusSucceeded,
+				1,
+				inputs,
+				"",
+				"",
+				"",
+				false,
+				0,
+			),
 			Finished: true,
 		})
 	}
 
 	return executionPlan{
 		RunStatus:   RunStatusSucceeded,
-		RunOutputs:  mustJSONObjectRaw(map[string]any{"handled": true, "mode": mode, "steps": stepKeys}),
+		RunOutputs:  buildRunExecutionOutputFromSteps(mode, RunStatusSucceeded, steps, nil),
 		RunFinished: true,
 		Steps:       steps,
 	}
@@ -344,15 +348,27 @@ func buildFailedPlan(
 		switch {
 		case !failed && node.ID != failStepKey:
 			step.Status = StepStatusSucceeded
-			step.Output = mustJSONObjectRaw(map[string]any{
-				"handled": true,
-				"mode":    RunModeFail,
-				"stepKey": node.ID,
-				"type":    node.Type,
-			})
+			step.Output = buildStepExecutionOutput(
+				node.ID,
+				node.Type,
+				RunModeFail,
+				StepStatusSucceeded,
+				1,
+				inputs,
+				"",
+				"",
+				"",
+				false,
+				0,
+			)
 			step.Finished = true
 		case !failed && node.ID == failStepKey:
 			for attempt := 1; attempt <= retry.MaxAttempts; attempt++ {
+				willRetry := attempt < retry.MaxAttempts
+				retryAfter := 0
+				if willRetry {
+					retryAfter = computeRetryBackoffMS(retry, attempt)
+				}
 				stepAttempt := plannedStep{
 					Key:        node.ID,
 					Type:       node.Type,
@@ -361,18 +377,24 @@ func buildFailedPlan(
 					Input:      mustJSONObjectRaw(inputs),
 					ErrorCode:  "WORKFLOW_STEP_FAILED",
 					MessageKey: "error.workflow.step_failed",
-					Output: mustJSONObjectRaw(map[string]any{
-						"handled": false,
-						"mode":    RunModeFail,
-						"stepKey": node.ID,
-						"type":    node.Type,
-						"attempt": attempt,
-					}),
+					Output: buildStepExecutionOutput(
+						node.ID,
+						node.Type,
+						RunModeFail,
+						StepStatusFailed,
+						attempt,
+						inputs,
+						"WORKFLOW_STEP_FAILED",
+						"error.workflow.step_failed",
+						"step_execution_failed",
+						willRetry,
+						retryAfter,
+					),
 					Finished: true,
 				}
-				if attempt < retry.MaxAttempts {
+				if willRetry {
 					stepAttempt.WillRetry = true
-					stepAttempt.RetryAfter = computeRetryBackoffMS(retry, attempt)
+					stepAttempt.RetryAfter = retryAfter
 				}
 				steps = append(steps, stepAttempt)
 			}
@@ -380,12 +402,19 @@ func buildFailedPlan(
 			continue
 		case failed:
 			step.Status = StepStatusSkipped
-			step.Output = mustJSONObjectRaw(map[string]any{
-				"handled": false,
-				"mode":    RunModeFail,
-				"stepKey": node.ID,
-				"type":    node.Type,
-			})
+			step.Output = buildStepExecutionOutput(
+				node.ID,
+				node.Type,
+				RunModeFail,
+				StepStatusSkipped,
+				1,
+				inputs,
+				"",
+				"",
+				"dependency_failed",
+				false,
+				0,
+			)
 			step.Finished = true
 		}
 
@@ -393,8 +422,16 @@ func buildFailedPlan(
 	}
 
 	return executionPlan{
-		RunStatus:     RunStatusFailed,
-		RunOutputs:    mustJSONObjectRaw(map[string]any{"handled": false, "mode": RunModeFail, "failedStepKey": failStepKey, "attempts": retry.MaxAttempts}),
+		RunStatus: RunStatusFailed,
+		RunOutputs: buildRunExecutionOutputFromSteps(
+			RunModeFail,
+			RunStatusFailed,
+			steps,
+			map[string]any{
+				"failedStepKey": failStepKey,
+				"maxAttempts":   retry.MaxAttempts,
+			},
+		),
 		RunErrorCode:  "WORKFLOW_RUN_FAILED",
 		RunMessageKey: "error.workflow.run_failed",
 		RunFinished:   true,
@@ -442,15 +479,34 @@ func buildRunningPlan(
 		}
 		if _, ok := rootNodes[node.ID]; ok {
 			step.Status = StepStatusRunning
-			step.Output = mustJSONObjectRaw(map[string]any{
-				"handled": false,
-				"mode":    RunModeRunning,
-				"stepKey": node.ID,
-				"type":    node.Type,
-			})
+			step.Output = buildStepExecutionOutput(
+				node.ID,
+				node.Type,
+				RunModeRunning,
+				StepStatusRunning,
+				1,
+				inputs,
+				"",
+				"",
+				"",
+				false,
+				0,
+			)
 		} else {
 			step.Status = StepStatusPending
-			step.Output = mustJSONObjectRaw(map[string]any{})
+			step.Output = buildStepExecutionOutput(
+				node.ID,
+				node.Type,
+				RunModeRunning,
+				StepStatusPending,
+				1,
+				inputs,
+				"",
+				"",
+				"waiting_for_dependencies",
+				false,
+				0,
+			)
 		}
 		step.Finished = false
 		steps = append(steps, step)
@@ -458,7 +514,7 @@ func buildRunningPlan(
 
 	return executionPlan{
 		RunStatus:   RunStatusRunning,
-		RunOutputs:  mustJSONObjectRaw(map[string]any{"handled": false, "mode": RunModeRunning}),
+		RunOutputs:  buildRunExecutionOutputFromSteps(RunModeRunning, RunStatusRunning, steps, nil),
 		RunFinished: false,
 		Steps:       steps,
 	}

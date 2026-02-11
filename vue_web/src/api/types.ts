@@ -352,12 +352,33 @@ export interface AIPlanPreviewRequest {
   intentPayload?: ApiObject
 }
 
+export interface AIPlanStepDTO {
+  order: number
+  segment: string
+  commandType?: string
+  payload: ApiObject
+  planner: string
+  reason: string
+  score?: number
+  executable?: boolean
+}
+
+export interface AIPlanStrategyScoreDTO {
+  strategy: string
+  score: number
+  selected: boolean
+  reason: string
+}
+
 export interface AIPlanPreviewDTO {
   commandType?: string
   payload: ApiObject
   planner: string
   reason: string
   suggestions: string[]
+  score?: number
+  steps?: AIPlanStepDTO[]
+  strategyScores?: AIPlanStrategyScoreDTO[]
   explainability?: ApiObject
 }
 

@@ -245,3 +245,68 @@ func TestBuildExecutionEventsIncludesRetryScheduled(t *testing.T) {
 		t.Fatalf("expected workflow.step.retry_scheduled event")
 	}
 }
+
+func TestBuildExecutionPlanUsesCapabilityStepOutputs(t *testing.T) {
+	plan, err := buildExecutionPlan(
+		json.RawMessage(`{"nodes":[{"id":"n1","type":"tool.http"}]}`),
+		json.RawMessage(`{"input":"demo"}`),
+		RunModeSync,
+		"",
+		false,
+	)
+	if err != nil {
+		t.Fatalf("buildExecutionPlan returned error: %v", err)
+	}
+	if len(plan.Steps) != 1 {
+		t.Fatalf("expected 1 planned step got=%d", len(plan.Steps))
+	}
+
+	var stepOutput map[string]any
+	if err := json.Unmarshal(plan.Steps[0].Output, &stepOutput); err != nil {
+		t.Fatalf("decode step output: %v", err)
+	}
+	stepMeta, _ := stepOutput["step"].(map[string]any)
+	if status, _ := stepMeta["status"].(string); status != StepStatusSucceeded {
+		t.Fatalf("unexpected step status in output: %v", stepMeta["status"])
+	}
+	capabilityMeta, _ := stepOutput["capability"].(map[string]any)
+	if executor, _ := capabilityMeta["executor"].(string); executor == "" {
+		t.Fatalf("expected capability executor in step output")
+	}
+
+	var runOutput map[string]any
+	if err := json.Unmarshal(plan.RunOutputs, &runOutput); err != nil {
+		t.Fatalf("decode run output: %v", err)
+	}
+	if _, ok := runOutput["capabilitySummary"].(map[string]any); !ok {
+		t.Fatalf("expected capabilitySummary in run output")
+	}
+}
+
+func TestBuildExecutionPlanFailedStepIncludesErrorSemantics(t *testing.T) {
+	plan, err := buildExecutionPlan(
+		json.RawMessage(`{"nodes":[{"id":"n1","type":"tool.http"}]}`),
+		json.RawMessage(`{"failStepKey":"n1","retry":{"maxAttempts":2}}`),
+		RunModeFail,
+		"",
+		false,
+	)
+	if err != nil {
+		t.Fatalf("buildExecutionPlan returned error: %v", err)
+	}
+	if len(plan.Steps) != 2 {
+		t.Fatalf("expected 2 failed attempts got=%d", len(plan.Steps))
+	}
+
+	var failedOutput map[string]any
+	if err := json.Unmarshal(plan.Steps[0].Output, &failedOutput); err != nil {
+		t.Fatalf("decode failed step output: %v", err)
+	}
+	errorPayload, _ := failedOutput["error"].(map[string]any)
+	if code, _ := errorPayload["code"].(string); code != "WORKFLOW_STEP_FAILED" {
+		t.Fatalf("unexpected error code in failed output: %v", errorPayload["code"])
+	}
+	if _, ok := errorPayload["recovery"].(map[string]any); !ok {
+		t.Fatalf("expected recovery metadata for retriable failed step")
+	}
+}
