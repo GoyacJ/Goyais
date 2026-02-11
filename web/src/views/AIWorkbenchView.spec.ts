@@ -130,6 +130,18 @@ describe('AIWorkbenchView', () => {
         data: { commandId: 'cmd_1', commandType: 'workflow.run', status: 'succeeded', updatedAt: '2026-02-11T00:00:11Z' },
       },
       {
+        id: 'cmd_2',
+        event: 'command.failed',
+        data: {
+          commandId: 'cmd_2',
+          commandType: 'workflow.run',
+          status: 'failed',
+          errorCode: 'AUTHZ_DENIED',
+          messageKey: 'error.authz.forbidden',
+          updatedAt: '2026-02-11T00:00:12Z',
+        },
+      },
+      {
         id: 'run_1',
         event: 'workflow.run.succeeded',
         data: { runId: 'run_1', status: 'succeeded', commandId: 'cmd_1', commandType: 'workflow.run' },
@@ -161,6 +173,7 @@ describe('AIWorkbenchView', () => {
 
     expect(wrapper.text()).toContain('AI 工作台')
     expect(wrapper.text()).toContain('demo session')
+    expect(wrapper.text()).toContain('AUTHZ_DENIED')
 
     const textarea = wrapper.find('textarea')
     await textarea.setValue('run workflow tpl_1')

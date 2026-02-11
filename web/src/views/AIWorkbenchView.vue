@@ -154,7 +154,7 @@ import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
 import Textarea from '@/components/ui/Textarea.vue'
 import { useToast } from '@/composables/useToast'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n({ useScope: 'global' })
@@ -173,6 +173,8 @@ const turnMode = ref<'plan' | 'execute'>('plan')
 
 const isRefreshing = ref(false)
 const isSubmitting = ref(false)
+const eventsPollTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+const eventsPollingInFlight = ref(false)
 
 const windowPanes = computed(() => [
   { id: 'ai-sessions', title: t('page.ai.sessionsTitle') },
@@ -216,12 +218,29 @@ onMounted(() => {
   void loadSessions()
 })
 
+onBeforeUnmount(() => {
+  stopEventsPolling()
+})
+
 watch(
   selectedSessionId,
   () => {
+    stopEventsPolling()
     void loadSelectedSessionContext()
   },
   { immediate: true },
+)
+
+watch(
+  selectedSession,
+  (session) => {
+    stopEventsPolling()
+    if (!session || session.status !== 'active') {
+      return
+    }
+    scheduleEventsPolling(session.id)
+  },
+  { deep: false },
 )
 
 async function loadSessions(): Promise<void> {
@@ -265,6 +284,61 @@ async function loadSelectedSessionContext(): Promise<void> {
   } catch (error) {
     notifyError(t('common.refresh'), error)
   }
+}
+
+async function refreshSelectedSessionEvents(sessionID: string): Promise<void> {
+  if (sessionID.trim().length === 0 || selectedSessionId.value !== sessionID) {
+    return
+  }
+  const events = await getAISessionEvents(sessionID)
+  if (selectedSessionId.value !== sessionID) {
+    return
+  }
+  sessionEvents.value = events
+  eventLines.value = events.map(formatEventLine)
+}
+
+function scheduleEventsPolling(sessionID: string): void {
+  if (eventsPollTimer.value || selectedSessionId.value !== sessionID) {
+    return
+  }
+  eventsPollTimer.value = setTimeout(() => {
+    eventsPollTimer.value = null
+    void pollSelectedSessionEvents(sessionID)
+  }, 2000)
+}
+
+async function pollSelectedSessionEvents(sessionID: string): Promise<void> {
+  if (
+    eventsPollingInFlight.value ||
+    selectedSessionId.value !== sessionID ||
+    selectedSession.value?.status !== 'active' ||
+    isSubmitting.value
+  ) {
+    if (selectedSessionId.value === sessionID && selectedSession.value?.status === 'active') {
+      scheduleEventsPolling(sessionID)
+    }
+    return
+  }
+  eventsPollingInFlight.value = true
+  try {
+    await refreshSelectedSessionEvents(sessionID)
+  } catch {
+    // Keep polling resilient to transient read errors.
+  } finally {
+    eventsPollingInFlight.value = false
+  }
+  if (selectedSessionId.value === sessionID && selectedSession.value?.status === 'active') {
+    scheduleEventsPolling(sessionID)
+  }
+}
+
+function stopEventsPolling(): void {
+  if (!eventsPollTimer.value) {
+    return
+  }
+  clearTimeout(eventsPollTimer.value)
+  eventsPollTimer.value = null
 }
 
 async function onCreateSession(): Promise<void> {
@@ -387,7 +461,10 @@ function formatEventLine(item: AISessionEvent): string {
     const commandType = readString(eventPayload, 'commandType')
     const commandID = readString(eventPayload, 'commandId') || readString(eventPayload, 'id')
     const status = readString(eventPayload, 'status')
-    return `${prefix}: ${commandType || 'command'} ${commandID} ${status}`.trim()
+    const errorCode = readString(eventPayload, 'errorCode')
+    const messageKey = readString(eventPayload, 'messageKey')
+    const suffix = errorCode || messageKey ? ` (${errorCode || ''}${errorCode && messageKey ? ' / ' : ''}${messageKey || ''})` : ''
+    return `${prefix}: ${commandType || 'command'} ${commandID} ${status}${suffix}`.trim()
   }
   if (prefix.startsWith('workflow.')) {
     const runID = readString(eventPayload, 'runId')
@@ -503,11 +580,25 @@ function buildTimelineItem(item: AISessionEvent): TimelineItem | null {
     const commandType = readString(payload, 'commandType') || 'command'
     const commandID = readString(payload, 'commandId') || readString(payload, 'id')
     const status = readString(payload, 'status')
+    const errorCode = readString(payload, 'errorCode')
+    const messageKey = readString(payload, 'messageKey')
     const fallbackID = `${eventType}:${commandType}:${status}`
+    const detailParts: string[] = []
+    if (commandID) {
+      detailParts.push(`commandId=${commandID}`)
+    } else {
+      detailParts.push(eventType)
+    }
+    if (errorCode) {
+      detailParts.push(`errorCode=${errorCode}`)
+    }
+    if (messageKey) {
+      detailParts.push(`messageKey=${messageKey}`)
+    }
     return {
       id: `${eventType}:${commandID || fallbackID}`,
       title: `${commandType} · ${status || eventType}`,
-      detail: commandID ? `commandId=${commandID}` : eventType,
+      detail: detailParts.join(' · '),
       timestamp: readString(payload, 'updatedAt') || readString(payload, 'acceptedAt') || readString(payload, 'finishedAt'),
     }
   }
@@ -538,9 +629,11 @@ function buildTimelineItem(item: AISessionEvent): TimelineItem | null {
 
 function notifyError(action: string, error: unknown): void {
   const apiError = toApiError(error)
+  const reason = readReason(apiError.details)
+  const localized = t(apiError.messageKey || 'error.common.internal', apiError.details ?? {})
   pushToast({
     title: action,
-    message: t(apiError.messageKey || 'error.common.internal', apiError.details ?? {}),
+    message: reason ? `${localized} (${reason})` : localized,
     tone: 'error',
   })
 }
@@ -553,5 +646,13 @@ function toApiError(error: unknown): ApiError {
     code: 'INTERNAL_ERROR',
     messageKey: 'error.common.internal',
   }
+}
+
+function readReason(details: ApiError['details']): string {
+  if (!details || typeof details !== 'object') {
+    return ''
+  }
+  const raw = details.reason
+  return typeof raw === 'string' ? raw.trim() : ''
 }
 </script>

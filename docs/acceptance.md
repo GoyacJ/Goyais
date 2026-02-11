@@ -223,12 +223,15 @@
 
 - [x] S0 契约同步：`openapi/data-model/state-machines/overview/acceptance` 已同步新增 API、commandType、实体口径。
 - [x] S0 路由可达：`openapi_reachability` 覆盖新增参数 `sessionId/packageId/bundleId`，新增路径均非 `API_NOT_FOUND`。
-- [ ] S1 Workflow Engine V2：完成 DAG 拓扑校验、并发调度、重试退避、Tool Gate 与 run/step 事件流。
-- [ ] S2 Canvas V2：满足 PRD 8.9 五条验收（typed ports/minimap/undo-redo/run-from-here/test-node）。
+- [x] S1 Workflow Engine V2：完成 DAG 拓扑校验、并发调度、重试退避、Tool Gate 与 run/step 事件流。
+- [x] S2 Canvas V2：满足 PRD 8.9 五条验收（typed ports/minimap/undo-redo/run-from-here/test-node）。
 - [x] S2.1 Canvas 图编辑能力：`typed ports`、`minimap`、`undo/redo`、`run from here`、`test node` 已在 `web/src/views/CanvasV2View.vue` 落地。
 - [x] S2.2 Canvas 运行态可视化：节点运行状态/耗时/产物数/错误码与步骤侧栏联动，运行中自动轮询刷新（`web/src/views/CanvasV2View.vue`、`web/src/components/canvas/TypedPortNode.vue`）。
 - [x] S2.3 Canvas 回归：`pnpm -C web typecheck`、`pnpm -C web test:run -- src/views/CanvasView.spec.ts src/components/canvas/TypedPortNode.spec.ts` 通过。
-- [ ] S3 AI 工作台：会话/turn/计划/执行反馈闭环，且 AI/UI 同动作 command 同形。
+- [x] S3 AI 工作台：会话/turn/计划/执行反馈闭环，且 AI/UI 同动作 command 同形。
+- [x] S3.1 AI 事件反馈：`/ai/sessions/{id}/events` 输出 `ai.turn.*` + `command.*` + `workflow.*` 摘要事件，turn `commandIds` 绑定真实 commandId。
+- [x] S3.2 AI 前端闭环：计划预览、执行反馈时间线、失败错误码展示与会话事件自动轮询已落地（`web/src/views/AIWorkbenchView.vue`）。
+- [x] S3.3 AI 回归：`go test ./internal/access/http -run TestAPIContractRegression -count=1`、`pnpm -C web test:run -- src/views/AIWorkbenchView.spec.ts` 通过。
 - [x] S4 MediaMTX 控制面：`update-auth/delete`、录制资产化、onPublish 事件触发 workflow（经 command gate）。
 - [x] S5 插件市场生命周期：`download/upgrade` 与 `uploaded->validating->installing->enabled` 全链路一致。
 - [x] S6 ContextBundle + ACL role：`context-bundles` 读接口与 `acl_entries.subject_type=user|role` 落地。
