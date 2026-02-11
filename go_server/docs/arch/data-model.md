@@ -447,6 +447,9 @@ payload 约定（v0.1）：
 - `command_ids`（JSON 数组）
 - `created_at`
 
+补充（S3 strict）：
+- `POST /api/v1/ai/plans:preview` 为纯预览接口，不写入 `ai_sessions`/`ai_session_turns`/`commands` 表。
+
 ### workflow_run_events
 - `id`
 - `run_id`

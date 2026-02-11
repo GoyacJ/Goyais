@@ -19,6 +19,7 @@ const getAISessionEventsMock = vi.fn()
 const createAISessionMock = vi.fn()
 const createAISessionTurnMock = vi.fn()
 const archiveAISessionMock = vi.fn()
+const previewAIPlanMock = vi.fn()
 
 vi.mock('@/api/http', () => ({
   ApiHttpError: class ApiHttpError extends Error {
@@ -37,6 +38,7 @@ vi.mock('@/api/ai', () => ({
   listAISessions: (...args: unknown[]) => listAISessionsMock(...args),
   getAISession: (...args: unknown[]) => getAISessionMock(...args),
   getAISessionEvents: (...args: unknown[]) => getAISessionEventsMock(...args),
+  previewAIPlan: (...args: unknown[]) => previewAIPlanMock(...args),
   createAISession: (...args: unknown[]) => createAISessionMock(...args),
   createAISessionTurn: (...args: unknown[]) => createAISessionTurnMock(...args),
   archiveAISession: (...args: unknown[]) => archiveAISessionMock(...args),
@@ -92,6 +94,7 @@ describe('AIWorkbenchView', () => {
     createAISessionMock.mockReset()
     createAISessionTurnMock.mockReset()
     archiveAISessionMock.mockReset()
+    previewAIPlanMock.mockReset()
 
     listAISessionsMock.mockResolvedValue({
       items: [
@@ -164,6 +167,19 @@ describe('AIWorkbenchView', () => {
       resource: { id: 'turn_3', status: 'succeeded' },
       commandRef: { commandId: 'cmd_ai_turn', status: 'succeeded', acceptedAt: '2026-02-11T00:00:11Z' },
     })
+    previewAIPlanMock.mockResolvedValue({
+      plan: {
+        commandType: 'workflow.run',
+        payload: {
+          templateId: 'tpl_1',
+          mode: 'sync',
+          inputs: {},
+        },
+        planner: 'workflow.run',
+        reason: 'matched_workflow_run',
+        suggestions: [],
+      },
+    })
     archiveAISessionMock.mockResolvedValue({
       resource: { id: 'sess_1', status: 'archived' },
       commandRef: { commandId: 'cmd_ai_archive', status: 'succeeded', acceptedAt: '2026-02-11T00:00:12Z' },
@@ -186,13 +202,13 @@ describe('AIWorkbenchView', () => {
 
     const textarea = wrapper.find('textarea')
     await textarea.setValue('run workflow tpl_1')
-    expect(wrapper.text()).toContain('workflow.run')
     const sendButton = wrapper
       .findAll('button')
       .find((item) => item.text().includes('发送回合') || item.text().includes('Send Turn'))
     await sendButton?.trigger('click')
     await flushAll()
 
+    expect(previewAIPlanMock).toHaveBeenCalled()
     expect(createAISessionTurnMock).toHaveBeenCalledTimes(1)
     expect(createAISessionTurnMock.mock.calls[0]?.[0]).toBe('sess_1')
     expect(createAISessionTurnMock.mock.calls[0]?.[1]).toMatchObject({

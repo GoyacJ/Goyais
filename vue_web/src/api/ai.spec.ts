@@ -15,6 +15,7 @@ import {
   getAISession,
   getAISessionEvents,
   listAISessions,
+  previewAIPlan,
 } from '@/api/ai'
 
 const apiRequestMock = vi.fn()
@@ -52,14 +53,16 @@ describe('ai api', () => {
     await listAISessions({ page: 1, pageSize: 20 })
     await createAISession({ title: 't', goal: 'g' }, 'idem-ai-create')
     await getAISession('sess_1')
+    await previewAIPlan({ message: 'run workflow tpl_1' })
     await createAISessionTurn('sess_1', { message: 'hello', execute: false }, 'idem-ai-turn')
     await archiveAISession('sess_1', 'idem-ai-archive')
 
     expect(apiRequestMock.mock.calls[0]?.[0]).toBe('/ai/sessions')
     expect(apiRequestMock.mock.calls[1]?.[0]).toBe('/ai/sessions')
     expect(apiRequestMock.mock.calls[2]?.[0]).toBe('/ai/sessions/sess_1')
-    expect(apiRequestMock.mock.calls[3]?.[0]).toBe('/ai/sessions/sess_1/turns')
-    expect(apiRequestMock.mock.calls[4]?.[0]).toBe('/ai/sessions/sess_1:archive')
+    expect(apiRequestMock.mock.calls[3]?.[0]).toBe('/ai/plans:preview')
+    expect(apiRequestMock.mock.calls[4]?.[0]).toBe('/ai/sessions/sess_1/turns')
+    expect(apiRequestMock.mock.calls[5]?.[0]).toBe('/ai/sessions/sess_1:archive')
   })
 
   it('parses sse events from ai session events endpoint', async () => {

@@ -1,159 +1,121 @@
-# Goyais PRD Strict Refactor Plan (Truth-Based Progress, 2026-02-11)
+# Goyais PRD Strict Refactor Plan（Truth-Based, 2026-02-11）
 
-## 1. Scope and Baseline
+## 1. 基线与原则（Baseline）
 
-This document tracks strict PRD alignment by **current code truth** instead of historical assumptions.
-
-- PRD baseline: `docs/prd.md`
-- Strict contracts: `go_server/docs/api/openapi.yaml`, `go_server/docs/arch/*`, `go_server/docs/acceptance.md`
-- Unified regression command:
+- 唯一需求基线（single source of truth）：`docs/prd.md`
+- 严格口径契约（strict contracts）：
+  - `go_server/docs/api/openapi.yaml`
+  - `go_server/docs/arch/overview.md`
+  - `go_server/docs/arch/data-model.md`
+  - `go_server/docs/arch/state-machines.md`
+  - `go_server/docs/acceptance.md`
+- 统一回归命令（fixed gate）：
   - `bash go_server/scripts/ci/contract_regression.sh`
 
-Latest verification baseline (2026-02-11): regression pipeline passed (Go tests, Vue typecheck/tests, single-binary verification).
+本文件只记录“代码真值（code truth）+ 下一步缺口（next gaps）”，不复述历史结论。
 
-## 2. Current Truth Matrix
+## 2. 当前实现真值矩阵（As-Is Truth）
 
-### 2.1 Completed
+### 2.1 已完成（Completed）
 
-| Domain | Status | Evidence |
+| 领域 | 结论 | 证据 |
 |---|---|---|
-| Workflow engine backbone (DAG scheduling, retry, run-from-here, test-node) | Completed (backbone) | `go_server/internal/workflow/engine.go:69`, `go_server/internal/workflow/sqlite_engine.go:429` |
-| Canvas orchestration core (minimap, undo/redo, run-from-here, test-node) | Completed (core interaction) | `vue_web/src/views/CanvasView.vue:103`, `vue_web/src/views/CanvasView.vue:744` |
-| Stream control backend (`update-auth` / `delete`) | Completed (backend) | `go_server/internal/app/command_executors.go:1320`, `go_server/internal/access/http/streams.go:67` |
-| AI workbench command pipeline and session/event chain | Completed (feature gated) | `go_server/internal/access/http/ai_context.go:25`, `go_server/internal/app/command_executors.go:518` |
+| 页面路由覆盖（Run Center / Algorithm Library / Permission Management / ContextBundle） | 已存在独立路由 | `vue_web/src/router/index.ts:48`, `vue_web/src/router/index.ts:72`, `vue_web/src/router/index.ts:84`, `vue_web/src/router/index.ts:90` |
+| Stream 前端控制面对齐（update-auth / delete） | 已有 API + UI 入口 | `vue_web/src/api/streams.ts:84`, `vue_web/src/api/streams.ts:96`, `vue_web/src/views/StreamsView.vue:266`, `vue_web/src/views/StreamsView.vue:300` |
+| AI 计划预览链路（preview-only） | 已新增后端路由、前端 API、工作台接入 | `go_server/internal/access/http/router.go:66`, `go_server/internal/access/http/ai_context.go:68`, `vue_web/src/api/ai.ts:87`, `vue_web/src/views/AIWorkbenchView.vue:395` |
+| 统一回归健康 | 本轮复核通过 | `go_server/scripts/ci/contract_regression.sh` |
 
-### 2.2 Partially Completed
+### 2.2 部分完成（Partially Completed）
 
-| Domain | Status | Evidence | Remaining Gap |
+| 领域 | 现状 | 证据 | 严格缺口 |
 |---|---|---|---|
-| AI planning semantics | Partial | `go_server/internal/app/command_executors.go:518`, `vue_web/src/views/AIWorkbenchView.vue:498` | Planner still rule-based; needs richer intent strategy and stronger explainability |
-| Canvas strict semantics | Partial | `vue_web/src/views/CanvasView.vue:322` | Node taxonomy, AI patch governance, and replay depth need further hardening |
-| ContextBundle rebuild | Partial | `go_server/internal/contextbundle/service.go:115` | Needs richer domain synthesis quality for large workspace scopes |
+| AI planner | 已从单点解析抽离为可扩展 parser chain，并返回 explainability | `go_server/internal/ai/planner/planner.go:43`, `go_server/internal/ai/planner/planner.go:93` | 仍属 deterministic rule-based，缺少更高层 intent strategy（reject/alternative 语义仍偏模板化） |
+| Workflow 执行语义 | DAG/调度/重试骨架在位 | `go_server/internal/workflow/engine.go:291` | step 输出仍以 `handled/mode/stepKey` 规则化结果为主，真实 capability 语义不足 |
+| ContextBundle rebuild | 已有 run/session/workspace 聚合 | `go_server/internal/contextbundle/service.go:376`, `go_server/internal/contextbundle/service.go:497` | workspace 大规模场景下摘要质量仍偏浅层统计 |
 
-### 2.3 Gaps
+### 2.3 未闭环（Open Gaps）
 
-| Domain | Status | Evidence | Target |
+| 领域 | 现状 | 证据 | 目标 |
 |---|---|---|---|
-| PRD page coverage (independent Run Center / Algorithm Library / Permission Management / ContextBundle pages) | Gap | `vue_web/src/router/index.ts:24` | Add dedicated routes/views and keep Commands as audit view |
-| Stream frontend parity for `update-auth` / `delete` | Gap | `vue_web/src/api/streams.ts:21`, `vue_web/src/views/StreamsView.vue:24` | Add API wrappers + UI actions + pre-check and errors |
+| Canvas AI patch 闭环 | 仍是前端本地注入节点/连线 | `vue_web/src/views/CanvasView.vue:720`, `vue_web/src/views/CanvasView.vue:763` | 改为后端产出 `workflow.patch` + 服务端校验 + 前端差异可视化/失败解释 |
+| 权限管理页面语义 | 当前以 share command 审计视图为主 | `vue_web/src/views/PermissionManagementView.vue:146` | 补齐用户/角色/策略最小管理闭环 |
+| 算法库页面语义 | 当前以 list/detail 展示为主 | `vue_web/src/views/AlgorithmLibraryView.vue:77` | 补输入面板、`algorithm.run` 入口与结果回显 |
+| Run Center 操作深度 | 当前以 events/steps 基础浏览为主 | `vue_web/src/views/RunCenterView.vue:129` | 补日志与产物可操作视图（引用/跳转/下载） |
 
-## 3. Next Work Plan
+## 3. 下一步未完成项（Next Steps）
 
-## 3.1 P0 - Truth Document and Strict Semantic Gaps
+### 3.1 P0（必须优先）
 
-### P0-A: Keep this document as source-of-truth progress ledger
-- DoD:
-  - Use only relative repository paths
-  - Every gap line must include evidence, DoD, acceptance commands, risk, rollback
-- Acceptance commands:
-  - `rg -n '(/home/|[A-Za-z]:\\\\)' go_server/docs/prd-strict-refactor-plan.md` returns empty
+#### P0-1 文档真值持续同步（Doc Truth Sync）
+- DoD：
+  - 每个严格缺口必须给出代码证据、验收命令、风险与回滚开关。
+  - 本文、`acceptance.md`、`openapi.yaml` 保持同一口径。
+- 验收命令：
   - `bash go_server/scripts/ci/contract_regression.sh`
-- Risk:
-  - Drift against `go_server/docs/acceptance.md`
-- Rollback:
-  - Revert only this doc commit; no runtime impact
 
-### P0-B: AI strict semantics uplift (while keeping Command-first)
-- Scope:
-  - Extend planner from fixed token parser to extensible intent planner chain
-  - Add controlled `workflow.patch` plan generation and explainable reject messages
-  - Keep `ai.intent.plan` and `ai.command.execute` API paths stable
-- DoD:
-  - Same input yields deterministic, explainable plan output
-  - Unsupported input returns reject reason + alternatives
-  - Execution still goes through command/tool gates and audit
-- Acceptance commands:
-  - `go test ./internal/app ./internal/access/http`
-  - `bash go_server/scripts/ci/contract_regression.sh`
-- Risk:
-  - Over-permissive planner may route unsafe command payload
-- Rollback:
-  - Disable AI workbench via feature gate (`GOYAIS_FEATURE_AI_WORKBENCH=false`)
+#### P0-2 AI 规划能力深化（Command-first 保持不变）
+- 范围：
+  - 在现有 planner chain 上扩展更强 intent strategy。
+  - 强化 reject reason 与 alternatives 的可解释性（explainability）。
+  - 执行仍必须经 `ai.command.execute -> command gate -> tool gate`。
+- DoD：
+  - 同输入稳定输出可解释 plan。
+  - 不支持输入返回明确拒绝原因与替代建议。
+- 风险与回滚：
+  - 风险：planner 误判导致 payload 过宽。
+  - 回滚：`GOYAIS_FEATURE_AI_WORKBENCH=false`。
 
-### P0-C: Canvas strict semantics uplift
-- Scope:
-  - Enforce 7-node taxonomy: Input/Tool/Model/Algorithm/Transform/Control/Output
-  - Add AI patch source marker + one-click apply + validation-failure explanation
-  - Add run events + step details dual replay view
-- DoD:
-  - All seven node families can be created and connected under type constraints
-  - AI patch UX surfaces source and validation reason
-  - Replay includes event stream and step runtime details
-- Acceptance commands:
+#### P0-3 Canvas AI patch 闭环（Server-validated）
+- 范围：
+  - 后端生成/验证受控 `workflow.patch`。
+  - 前端展示 patch diff（来源、增删改、失败原因）并一键应用。
+- DoD：
+  - AI patch 必须经过服务端校验后才能落图。
+  - 校验失败可见具体拒绝原因（messageKey/details）。
+- 验收命令：
   - `pnpm -C vue_web typecheck`
   - `pnpm -C vue_web test:run`
-  - `bash go_server/scripts/ci/contract_regression.sh`
-- Risk:
-  - More state transitions may increase UI complexity and regression surface
-- Rollback:
-  - Keep previous panel actions and disable AI patch apply entry via guarded UI flag
+  - `go test ./internal/workflow ./internal/access/http`
 
-## 3.2 P1 - Capability Alignment and Product Surface
+#### P0-4 Workflow 语义深化（Execution Semantics）
+- 范围：
+  - step 输出从占位结构升级为真实执行上下文（input/output/artifacts/error metadata）。
+- DoD：
+  - step 详情可用于 Run Center 直接消费，不再仅靠 `handled/mode/stepKey`。
 
-### P1-A: Stream frontend parity
-- Scope:
-  - Add `updateStreamAuth` and `deleteStream` client API wrappers
-  - Add status pre-check and localized error feedback in stream page
-- DoD:
-  - Frontend can execute both actions and command trail matches backend
-- Acceptance commands:
-  - `pnpm -C vue_web test:run`
-  - `go test ./internal/access/http`
-- Risk:
-  - Deletion pre-check mismatch with backend policy
-- Rollback:
-  - Keep buttons hidden behind guard while preserving backend endpoints
+### 3.2 P1（在 P0 后）
 
-### P1-B: ContextBundle practical synthesis quality
-- Scope:
-  - Rebuild aggregates real run/session/workspace references (not placeholder text)
-  - Include useful facts/summaries/refs/timeline for auditing and replay context
-- DoD:
-  - Rebuilt bundle contains real IDs and status references from workflow/ai/command/asset domains
-- Acceptance commands:
-  - `go test ./internal/contextbundle ./internal/access/http`
-  - `bash go_server/scripts/ci/contract_regression.sh`
-- Risk:
-  - Multi-service reads may fail partially under provider degradation
-- Rollback:
-  - Fallback to minimal payload mode by removing optional readers from wiring
+#### P1-1 ContextBundle 质量增强
+- 目标：提升 facts/summaries/refs/timeline 的跨 run/session/workspace 可读性与可检索性。
 
-### P1-C: Product page coverage closure
-- Scope:
-  - Add independent pages: Run Center / Algorithm Library / Permission Management / ContextBundle
-  - Keep `/commands` as audit-oriented runtime history page
-- DoD:
-  - New routes are accessible and support window-panel interaction (drag/resize/fullscreen)
-- Acceptance commands:
-  - `pnpm -C vue_web typecheck`
-  - `pnpm -C vue_web test:run`
-- Risk:
-  - i18n or nav drift across layouts
-- Rollback:
-  - Route-level rollback without touching backend APIs
+#### P1-2 页面能力补齐
+- 权限管理：用户/角色/策略最小闭环。
+- 算法库：输入 -> `algorithm.run` -> 结果/产物回显。
+- Run Center：日志与产物操作入口。
 
-## 4. API and Contract Stability
+## 4. 接口与兼容性（Interfaces）
 
-- Keep `/api/v1` prefix unchanged.
-- Keep command-first semantics unchanged.
-- Keep existing AI endpoints (`ai.intent.plan`, `ai.command.execute`) unchanged.
-- Expected frontend expansions:
-  - Stream actions: `POST /streams/{id}:update-auth`, `DELETE /streams/{id}`
-  - Workflow replay consumption: `GET /workflow-runs/{runId}/events`
+- 保持不变：
+  - `/api/v1` 前缀不变。
+  - Command-first 语义不变。
+  - 既有 stream 控制面 API 不变。
+- 本轮新增：
+  - `POST /api/v1/ai/plans:preview`（preview-only，无副作用）。
+- 兼容策略：
+  - 未来 AI planner 字段扩展采用向后兼容（optional fields），不破坏既有调用方。
 
-## 5. Acceptance Command Set (Fixed)
+## 5. 固定验收命令（Quality Gates）
 
-- `go test ./...` (under `go_server/`)
+- `go test ./...`（在 `go_server/`）
 - `pnpm -C vue_web typecheck`
 - `pnpm -C vue_web test:run`
 - `bash go_server/scripts/ci/contract_regression.sh`
 
-## 6. Change Discipline
+## 6. 风险控制（Risk Control）
 
-For any API/entity/state-machine/ACL/static-routing change, update in the same PR:
-
-- `go_server/docs/api/openapi.yaml`
-- `go_server/docs/arch/data-model.md`
-- `go_server/docs/arch/state-machines.md`
-- `go_server/docs/arch/overview.md`
-- `go_server/docs/acceptance.md`
+- 风险：`acceptance.md` 与严格口径再次漂移。
+  处理：每个切片 PR 同步更新契约文档矩阵。
+- 风险：AI 规划能力增强引入越权路径。
+  处理：AI 仅产生命令草案，执行仍经 command/tool gate 与审计链路。
+- 风险：前端页面能力补齐导致交互复杂度上升。
+  处理：按最小闭环分阶段发布，并保持 feature-gate 回滚点。

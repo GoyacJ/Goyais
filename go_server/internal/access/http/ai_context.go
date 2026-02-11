@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"goyais/internal/ai"
+	aiplanner "goyais/internal/ai/planner"
 	"goyais/internal/command"
 	"goyais/internal/common/errorx"
 	"goyais/internal/contextbundle"
@@ -62,6 +63,53 @@ func (h *apiHandler) handleAISessionRoutes(w http.ResponseWriter, r *http.Reques
 		}
 		h.handleGetAISession(w, r, strings.TrimSpace(route))
 	}
+}
+
+func (h *apiHandler) handleAIPlanPreview(w http.ResponseWriter, r *http.Request) {
+	reqCtx, ok := requireRequestContext(w, r)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if !h.aiWorkbenchEnabled {
+		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.ai.not_implemented", nil)
+		return
+	}
+	_ = reqCtx
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		errorx.Write(w, http.StatusBadRequest, "INVALID_JSON", "error.request.invalid_json", nil)
+		return
+	}
+	if len(body) == 0 {
+		body = []byte("{}")
+	}
+	var req struct {
+		Message           string          `json:"message"`
+		IntentCommandType string          `json:"intentCommandType"`
+		IntentPayload     json.RawMessage `json:"intentPayload"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		errorx.Write(w, http.StatusBadRequest, "INVALID_JSON", "error.request.invalid_json", nil)
+		return
+	}
+
+	plan, err := aiplanner.PlanTurn(aiplanner.TurnRequest{
+		Message:           strings.TrimSpace(req.Message),
+		IntentCommandType: strings.TrimSpace(req.IntentCommandType),
+		IntentPayload:     req.IntentPayload,
+	})
+	if err != nil {
+		errorx.Write(w, http.StatusBadRequest, "INVALID_AI_REQUEST", "error.ai.invalid_request", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"plan": toAIPlanPayload(plan),
+	})
 }
 
 func (h *apiHandler) handleListAISessions(w http.ResponseWriter, r *http.Request, reqCtx command.RequestContext) {
@@ -557,6 +605,28 @@ func toAISessionPayload(item ai.Session) map[string]any {
 	}
 	if item.LastTurnAt != nil {
 		payload["lastTurnAt"] = item.LastTurnAt.UTC().Format(time.RFC3339Nano)
+	}
+	return payload
+}
+
+func toAIPlanPayload(plan aiplanner.Plan) map[string]any {
+	payload := map[string]any{
+		"commandType": strings.TrimSpace(plan.CommandType),
+		"planner":     strings.TrimSpace(plan.Planner),
+		"reason":      strings.TrimSpace(plan.Reason),
+	}
+	if len(plan.Suggestions) > 0 {
+		payload["suggestions"] = append([]string{}, plan.Suggestions...)
+	} else {
+		payload["suggestions"] = []string{}
+	}
+	if len(plan.Payload) > 0 {
+		payload["payload"] = decodeJSON(plan.Payload, map[string]any{})
+	} else {
+		payload["payload"] = map[string]any{}
+	}
+	if len(plan.Explainability) > 0 {
+		payload["explainability"] = plan.Explainability
 	}
 	return payload
 }

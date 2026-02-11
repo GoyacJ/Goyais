@@ -260,6 +260,7 @@ Command 执行管道（必须）：
     - `algo-pack` 安装会将 manifest 内算法定义写入 registry `algorithms`，支持多算法注册
   - S0-S6 严格口径合同基线（当前实现）：
     - `ai sessions`
+      - `POST /ai/plans:preview`（preview-only，无副作用）
       - `POST /ai/sessions`（domain sugar -> `ai.session.create` command）
       - `GET /ai/sessions`
       - `GET /ai/sessions/{sessionId}`
@@ -282,7 +283,7 @@ Command 执行管道（必须）：
   - `GOYAIS_FEATURE_CONTEXT_BUNDLE=false` 时，`context-bundles` 读路径与 `context.bundle.rebuild` command 返回 `501 NOT_IMPLEMENTED`
   - `GOYAIS_FEATURE_ACL_ROLE_SUBJECT=false` 时，`share.create` 仅允许 `subjectType=user`
   - `GOYAIS_FEATURE_STREAM_CONTROL_PLANE=false` 时，`streams` 的 `:update-auth` / `DELETE` 与对应 command 返回 `501 NOT_IMPLEMENTED`
-  - `GOYAIS_FEATURE_AI_WORKBENCH=false` 时，`ai` 写路径返回 `501 NOT_IMPLEMENTED`
+  - `GOYAIS_FEATURE_AI_WORKBENCH=false` 时，`ai` 预览/写路径返回 `501 NOT_IMPLEMENTED`
 
 ## 8. 配置规范
 
