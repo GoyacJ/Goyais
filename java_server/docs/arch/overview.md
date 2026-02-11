@@ -2,13 +2,13 @@
 
 ## 1. Runtime Topology
 
-- `app-auth-server`: OAuth2.1/OIDC Authorization Server。
-- `app-api-server`: Resource Server + `/api/v1` business APIs。
+- 默认：`app-api-server` 单应用运行（Auth + Resource 同进程）。
+- 扩展：`resource-only` 模式用于水平扩容多个资源服务器。
 - Shared frontend: `vue_web`。
 
 ## 2. Layered Architecture
 
-1. Access Layer: REST + SSE。
+1. Access Layer: REST + SSE + OAuth2/OIDC endpoints。
 2. Application Layer: Command pipeline + use cases。
 3. Domain Layer: aggregate/state machine/policy。
 4. Infrastructure Layer: MyBatis/Flyway/Redis/ObjectStorage/MessageBus。
@@ -25,7 +25,8 @@
 
 - Agent-as-User execution context。
 - JWT claims 必含 `tenantId/workspaceId/userId/roles/policyVersion/traceId`。
-- 高危动作默认策略收敛（PUBLIC、跨租户共享、策略更新）。
+- 动态权限：`policyVersion + Redis invalidation`。
+- Redis 不可用时降级本地缓存并标记 `healthz` degraded。
 
 ## 5. Deployment Profiles
 

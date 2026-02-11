@@ -11,6 +11,9 @@ package com.ysmjjsy.goyais.contract.api.common;
 import java.time.Instant;
 import java.util.Map;
 
+/**
+ * Represents command read model returned by list and detail APIs.
+ */
 public record CommandResource(
         ResourceBase base,
         String commandType,

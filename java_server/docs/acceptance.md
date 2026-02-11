@@ -6,33 +6,49 @@
 - error envelope fixed: `error: { code, messageKey, details }`.
 - write path follows command-first.
 
-## 2. Minimal Runtime
+## 2. Topology Mode
+
+- `single` 模式下：
+  - `GET /api/v1/healthz` 可用。
+  - OAuth2/OIDC metadata endpoints 可用。
+- `resource-only` 模式下：
+  - `/api/v1/*` 可用。
+  - OAuth2/OIDC metadata endpoints 不可用（deny/404）。
+
+## 3. Minimal Runtime
 
 - PostgreSQL + Redis + Local file store starts successfully.
 - `GET /api/v1/healthz` and `GET /api/v1/system/healthz` return provider readiness.
 
-## 3. Security and Auth
+## 4. Security and Auth
 
 - OAuth2.1/OIDC usable for web login。
-- Password/SMS/OIDC/Social login paths pass e2e checks。
+- Password/OIDC login paths pass e2e checks。
 - JWT claims map to ExecutionContext without drift。
 
-## 4. Authorization and Data Scope
+## 5. Dynamic Authorization
 
 - Authorization order fixed: Tenant -> Visibility -> ACL -> RBAC -> Egress。
+- `policyVersion` 过期请求会在无重启场景下按新策略生效。
+- Redis invalidation 广播可使多节点权限缓存同步失效。
+
+## 6. Data Scope
+
 - Row-level data permission SQL filtering is enforced。
+- owner/WORKSPACE/ACL.READ 三类路径过滤语义正确。
 
-## 5. Command Pipeline
-
-- `POST /api/v1/commands` returns `202 + resource + commandRef`。
-- command traces and audit events are queryable。
-
-## 6. Capability Wrappers
+## 7. Capability Wrappers
 
 - cache/event/messaging/storage SPI are available and swappable.
 - memory/local fallback paths work when kafka/minio/s3 are unavailable.
 
-## 7. Rollback
+## 8. Comment and CI Gates
+
+- `bash go_server/scripts/ci/source_header_check.sh` 通过。
+- `bash java_server/scripts/ci/java_javadoc_check.sh` 通过。
+- `bash go_server/scripts/ci/contract_regression.sh` 通过。
+
+## 9. Rollback
 
 - Feature gates can disable high-risk domains without full rollback.
 - DB migration rollback scripts are executable.

@@ -11,6 +11,9 @@ package com.ysmjjsy.goyais.contract.api.common;
 import java.time.Instant;
 import java.util.Set;
 
+/**
+ * Describes one ACL grant entry in API resource representations.
+ */
 public record AclItem(
         String subjectType,
         String subjectId,

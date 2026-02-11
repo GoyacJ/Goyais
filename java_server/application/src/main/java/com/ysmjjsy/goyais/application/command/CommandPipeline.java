@@ -19,12 +19,18 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Implements validate-authorize-execute-audit-event pipeline for command-first flow.
+ */
 public final class CommandPipeline {
     private final AuthorizationGate authorizationGate;
     private final EgressGate egressGate;
     private final List<CommandHandler> handlers;
     private final DomainEventPublisher eventPublisher;
 
+    /**
+     * Creates pipeline with authorization, egress, command handlers and event publisher.
+     */
     public CommandPipeline(
             AuthorizationGate authorizationGate,
             EgressGate egressGate,
@@ -37,6 +43,9 @@ public final class CommandPipeline {
         this.eventPublisher = eventPublisher;
     }
 
+    /**
+     * Runs the full command pipeline and returns handler execution result.
+     */
     public Map<String, Object> run(CommandCreateRequest request, ExecutionContext context) {
         validate(request);
 

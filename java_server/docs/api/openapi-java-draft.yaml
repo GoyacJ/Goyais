@@ -5,8 +5,10 @@ info:
   description: |
     Goyais v0.1 初版 API 契约。
     - API 基础路径固定为 /api/v1
+    - 默认拓扑为单应用（Auth + Resource 同进程），可切换 resource-only
     - v0.1 通过 x-release 标注，不体现在 URL
     - 所有错误响应固定外层包装：{ error: { code, messageKey, details } }
+    - 动态权限语义通过 policyVersion 与 details.reason 传递
     - messageKey 即 i18nKey
   x-release: v0.1
 servers:
@@ -2178,6 +2180,7 @@ components:
           description: i18n key（即 messageKey）
         details:
           type: object
+          description: 扩展错误细节，推荐使用 details.reason 承载新增语义。
           additionalProperties: true
 
     ErrorResponse:

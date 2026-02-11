@@ -18,11 +18,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public final class HealthController {
 
+    /**
+     * Returns primary health endpoint payload.
+     */
     @GetMapping("/healthz")
     public Map<String, Object> healthz() {
         return payload();
     }
 
+    /**
+     * Returns alias health endpoint payload kept for Go contract parity.
+     */
     @GetMapping("/system/healthz")
     public Map<String, Object> systemHealthz() {
         return payload();

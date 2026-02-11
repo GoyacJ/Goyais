@@ -8,6 +8,9 @@
  */
 package com.ysmjjsy.goyais.contract.api.common;
 
+/**
+ * Defines ACL permissions supported by the cross-stack contract.
+ */
 public enum Permission {
     READ,
     WRITE,

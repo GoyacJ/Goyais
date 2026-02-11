@@ -33,10 +33,16 @@ import org.springframework.web.bind.annotation.RestController;
 public final class CommandController {
     private final CommandApplicationService commandService;
 
+    /**
+     * Creates command controller with application service dependency.
+     */
     public CommandController(CommandApplicationService commandService) {
         this.commandService = commandService;
     }
 
+    /**
+     * Accepts canonical command create requests and returns command reference envelope.
+     */
     @PostMapping
     public ResponseEntity<WriteResponse<CommandResource>> create(
             @RequestHeader("X-Tenant-Id") String tenantId,
@@ -59,6 +65,9 @@ public final class CommandController {
         return ResponseEntity.accepted().body(commandService.create(request, context));
     }
 
+    /**
+     * Returns command list response compatible with Go pagination envelope semantics.
+     */
     @GetMapping
     public Map<String, Object> list() {
         List<CommandResource> items = commandService.list();
@@ -68,6 +77,9 @@ public final class CommandController {
         );
     }
 
+    /**
+     * Returns one command resource by ID or contract error envelope when not found.
+     */
     @GetMapping("/{commandId}")
     public ResponseEntity<?> get(@PathVariable String commandId) {
         CommandResource command = commandService.get(commandId);

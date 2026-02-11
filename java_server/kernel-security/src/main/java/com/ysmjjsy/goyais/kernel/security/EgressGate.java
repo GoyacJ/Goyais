@@ -11,6 +11,13 @@ package com.ysmjjsy.goyais.kernel.security;
 import com.ysmjjsy.goyais.contract.api.common.CommandCreateRequest;
 import com.ysmjjsy.goyais.kernel.core.ExecutionContext;
 
+/**
+ * Verifies outbound data policy before side effects leave tenant boundary.
+ */
 public interface EgressGate {
+
+    /**
+     * Evaluates one command request against egress policy.
+     */
     AuthorizationDecision verify(CommandCreateRequest request, ExecutionContext context);
 }

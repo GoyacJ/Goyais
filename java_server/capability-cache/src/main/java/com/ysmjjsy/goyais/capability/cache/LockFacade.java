@@ -11,6 +11,13 @@ package com.ysmjjsy.goyais.capability.cache;
 import java.time.Duration;
 import java.util.function.Supplier;
 
+/**
+ * Abstracts distributed lock execution semantics for critical sections.
+ */
 public interface LockFacade {
+
+    /**
+     * Executes action within lock boundaries and returns action result.
+     */
     <T> T withLock(String key, Duration waitTime, Duration leaseTime, Supplier<T> action);
 }

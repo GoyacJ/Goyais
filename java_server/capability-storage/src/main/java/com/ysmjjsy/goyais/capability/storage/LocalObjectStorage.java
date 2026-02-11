@@ -17,10 +17,16 @@ import java.nio.file.StandardCopyOption;
 public final class LocalObjectStorage implements ObjectStorage {
     private final Path root;
 
+    /**
+     * Creates local storage provider rooted at the supplied filesystem path.
+     */
     public LocalObjectStorage(Path root) {
         this.root = root;
     }
 
+    /**
+     * Writes uploaded data to local filesystem and returns descriptor metadata.
+     */
     @Override
     public StorageObject put(String bucket, String key, InputStream data, String contentType) {
         try {
@@ -33,6 +39,9 @@ public final class LocalObjectStorage implements ObjectStorage {
         }
     }
 
+    /**
+     * Reads one object stream from local filesystem.
+     */
     @Override
     public InputStream get(String bucket, String key) {
         try {
@@ -42,6 +51,9 @@ public final class LocalObjectStorage implements ObjectStorage {
         }
     }
 
+    /**
+     * Deletes one object from local filesystem if it exists.
+     */
     @Override
     public void delete(String bucket, String key) {
         try {

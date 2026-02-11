@@ -8,6 +8,13 @@
  */
 package com.ysmjjsy.goyais.kernel.mybatis;
 
+/**
+ * Resolves SQL predicate fragments that enforce row-level data permission.
+ */
 public interface DataPermissionResolver {
+
+    /**
+     * Builds read predicate using tenant/workspace/visibility/ACL semantics.
+     */
     String resolveReadPredicate(String tableAlias, DataPermissionContext context);
 }

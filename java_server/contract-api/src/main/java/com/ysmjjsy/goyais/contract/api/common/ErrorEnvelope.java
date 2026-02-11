@@ -8,7 +8,14 @@
  */
 package com.ysmjjsy.goyais.contract.api.common;
 
+/**
+ * Wraps all API errors using the fixed Go-compatible envelope contract.
+ */
 public record ErrorEnvelope(ErrorBody error) {
+
+    /**
+     * Builds one error envelope from code and message key.
+     */
     public static ErrorEnvelope of(String code, String messageKey) {
         return new ErrorEnvelope(new ErrorBody(code, messageKey, null));
     }

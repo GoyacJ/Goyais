@@ -32,12 +32,23 @@
 - `command_events`
 - `audit_events`
 
-## 5. Asset and Lineage
+## 5. Dynamic AuthZ Cache Model
+
+- `PolicySnapshot`（内存/Redis 缓存模型）：
+  - `tenantId/workspaceId/userId`
+  - `policyVersion`
+  - `roles`
+  - `deniedCommandTypes`
+  - `updatedAt`
+- `PolicyInvalidationEvent`（Redis topic payload）：
+  - `tenantId/workspaceId/userId/policyVersion/traceId/changedAt`
+
+## 6. Asset and Lineage
 
 - `assets`
 - `asset_lineage`
 
-## 6. Workflow
+## 7. Workflow
 
 - `workflow_templates`
 - `workflow_template_versions`
@@ -45,7 +56,7 @@
 - `step_runs`
 - `workflow_step_queue`
 
-## 7. Registry/Plugin/Stream/Context
+## 8. Registry/Plugin/Stream/Context
 
 - `capability_providers`
 - `capabilities`
@@ -56,7 +67,8 @@
 - `stream_recordings`
 - `context_bundles`
 
-## 8. Data Permission Strategy
+## 9. Data Permission Strategy
 
 - 行级过滤统一由 SQL 层注入：tenant/workspace/visibility/acl。
+- 过滤规则必须保留 `policyVersion` 上下文用于审计关联。
 - 业务层禁止手写散落式数据权限 if-else。

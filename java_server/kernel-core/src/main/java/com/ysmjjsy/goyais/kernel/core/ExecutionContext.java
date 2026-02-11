@@ -10,6 +10,9 @@ package com.ysmjjsy.goyais.kernel.core;
 
 import java.util.Set;
 
+/**
+ * Carries agent-as-user identity and policy metadata across command execution.
+ */
 public record ExecutionContext(
         String tenantId,
         String workspaceId,

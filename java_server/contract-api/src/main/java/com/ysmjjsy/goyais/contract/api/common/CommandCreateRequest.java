@@ -10,6 +10,9 @@ package com.ysmjjsy.goyais.contract.api.common;
 
 import java.util.Map;
 
+/**
+ * Defines canonical payload submitted to `POST /api/v1/commands`.
+ */
 public record CommandCreateRequest(
         String commandType,
         Map<String, Object> payload,
