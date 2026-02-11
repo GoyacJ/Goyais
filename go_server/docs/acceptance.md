@@ -239,6 +239,7 @@
 - [x] S3.3 AI 回归：`go test ./internal/access/http -run TestAPIContractRegression -count=1`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run -- src/views/AIWorkbenchView.spec.ts` 通过。
 - [x] S4 MediaMTX 控制面：`update-auth/delete`、录制资产化、onPublish 事件触发 workflow（经 command gate）。
 - [x] S4.1 算法库页面闭环：`Algorithm Library` 支持输入 JSON 参数、触发 `algorithm.run`、展示 `workflowRunId/assetIds/commandId` 结果。
+- [x] S4.2 Run Center 深化：支持 step 详情输入/输出/错误上下文，并提供 `logRef/artifacts` 引用的复制与新标签打开入口（`vue_web/src/views/RunCenterView.vue`、`vue_web/src/views/RunCenterView.spec.ts`）。
 - [x] S5 插件市场生命周期：`download/upgrade` 与 `uploaded->validating->installing->enabled` 全链路一致。
 - [x] S6 ContextBundle + ACL role：`context-bundles` 读接口与 `acl_entries.subject_type=user|role` 落地。
 - [x] 每切片均具备全量回归证据（`go test ./...`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web typecheck`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run`、`make build`、single-binary verify）。
