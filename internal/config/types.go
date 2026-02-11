@@ -97,6 +97,9 @@ type AuthzConfig struct {
 
 type FeatureConfig struct {
 	AssetLifecycle bool `json:"assetLifecycle"`
+	PluginMarketV2 bool `json:"pluginMarketV2"`
+	ContextBundle  bool `json:"contextBundle"`
+	ACLRoleSubject bool `json:"aclRoleSubject"`
 }
 
 type RuntimePathConf struct {
@@ -122,6 +125,9 @@ type fileConfig struct {
 	} `yaml:"authz"`
 	Feature struct {
 		AssetLifecycle *bool `yaml:"asset_lifecycle"`
+		PluginMarketV2 *bool `yaml:"plugin_market_v2"`
+		ContextBundle  *bool `yaml:"context_bundle"`
+		ACLRoleSubject *bool `yaml:"acl_role_subject"`
 	} `yaml:"feature"`
 	Cache struct {
 		Provider      string `yaml:"provider"`

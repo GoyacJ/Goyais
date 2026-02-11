@@ -10,6 +10,7 @@ import (
 	"goyais/internal/command"
 	"goyais/internal/common/errorx"
 	"goyais/internal/config"
+	"goyais/internal/contextbundle"
 	"goyais/internal/plugin"
 	"goyais/internal/registry"
 	"goyais/internal/stream"
@@ -17,15 +18,16 @@ import (
 )
 
 type RouterDeps struct {
-	CommandService  *command.Service
-	AIService       *ai.Service
-	AssetService    *asset.Service
-	WorkflowService *workflow.Service
-	RegistryService *registry.Service
-	PluginService   *plugin.Service
-	StreamService   *stream.Service
-	HealthChecker   HealthChecker
-	ProviderProbe   ProviderProbe
+	CommandService       *command.Service
+	AIService            *ai.Service
+	AssetService         *asset.Service
+	WorkflowService      *workflow.Service
+	RegistryService      *registry.Service
+	PluginService        *plugin.Service
+	StreamService        *stream.Service
+	ContextBundleService *contextbundle.Service
+	HealthChecker        HealthChecker
+	ProviderProbe        ProviderProbe
 }
 
 func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
@@ -40,10 +42,13 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 		aiService:             deps.AIService,
 		assetService:          deps.AssetService,
 		assetLifecycleEnabled: cfg.Feature.AssetLifecycle,
+		pluginMarketV2Enabled: cfg.Feature.PluginMarketV2,
+		contextBundleEnabled:  cfg.Feature.ContextBundle,
 		workflowService:       deps.WorkflowService,
 		registryService:       deps.RegistryService,
 		pluginService:         deps.PluginService,
 		streamService:         deps.StreamService,
+		contextBundleService:  deps.ContextBundleService,
 	}
 	if deps.CommandService != nil {
 		apiMux.Handle("/api/v1/commands", NewCommandCollectionHandler(deps.CommandService))

@@ -227,10 +227,10 @@ func (r *PostgresRepository) CreateInstall(ctx context.Context, in CreateInstall
 		"[]",
 		in.PackageID,
 		in.Scope,
-		InstallStatusEnabled,
+		InstallStatusUploaded,
 		nil,
 		nil,
-		now,
+		nil,
 		now,
 		now,
 	); err != nil {
@@ -238,6 +238,34 @@ func (r *PostgresRepository) CreateInstall(ctx context.Context, in CreateInstall
 	}
 
 	return r.GetInstallForAccess(ctx, in.Context, installID)
+}
+
+func (r *PostgresRepository) FindLatestPackageForUpgrade(ctx context.Context, in FindLatestPackageForUpgradeInput) (PluginPackage, error) {
+	name := strings.TrimSpace(in.PackageName)
+	if name == "" {
+		return PluginPackage{}, ErrInvalidRequest
+	}
+
+	row := r.db.QueryRowContext(
+		ctx,
+		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json::text, name, version, package_type, manifest_json::text, artifact_uri, status, created_at, updated_at
+		 FROM plugin_packages
+		 WHERE tenant_id = $1 AND workspace_id = $2 AND name = $3 AND id <> $4
+		 ORDER BY created_at DESC, id DESC
+		 LIMIT 1`,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+		name,
+		strings.TrimSpace(in.CurrentPackageID),
+	)
+	item, err := scanPostgresPackage(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return PluginPackage{}, ErrPackageNotFound
+	}
+	if err != nil {
+		return PluginPackage{}, fmt.Errorf("query latest upgrade package: %w", err)
+	}
+	return item, nil
 }
 
 func (r *PostgresRepository) UpsertAlgorithms(ctx context.Context, in UpsertAlgorithmsInput) error {
@@ -321,12 +349,22 @@ func (r *PostgresRepository) UpdateInstallStatus(ctx context.Context, in UpdateI
 		err    error
 	)
 	if in.Status == InstallStatusEnabled {
+		var errorCode any
+		var messageKey any
+		if strings.TrimSpace(in.ErrorCode) != "" {
+			errorCode = strings.TrimSpace(in.ErrorCode)
+		}
+		if strings.TrimSpace(in.MessageKey) != "" {
+			messageKey = strings.TrimSpace(in.MessageKey)
+		}
 		result, err = r.db.ExecContext(
 			ctx,
 			`UPDATE plugin_installs
-			 SET status = $1, error_code = NULL, message_key = NULL, installed_at = COALESCE(installed_at, $2), updated_at = $3
-			 WHERE id = $4 AND tenant_id = $5 AND workspace_id = $6`,
+			 SET status = $1, error_code = $2, message_key = $3, installed_at = COALESCE(installed_at, $4), updated_at = $5
+			 WHERE id = $6 AND tenant_id = $7 AND workspace_id = $8`,
 			in.Status,
+			errorCode,
+			messageKey,
 			now,
 			now,
 			in.InstallID,
@@ -334,12 +372,22 @@ func (r *PostgresRepository) UpdateInstallStatus(ctx context.Context, in UpdateI
 			in.Context.WorkspaceID,
 		)
 	} else {
+		var errorCode any
+		var messageKey any
+		if strings.TrimSpace(in.ErrorCode) != "" {
+			errorCode = strings.TrimSpace(in.ErrorCode)
+		}
+		if strings.TrimSpace(in.MessageKey) != "" {
+			messageKey = strings.TrimSpace(in.MessageKey)
+		}
 		result, err = r.db.ExecContext(
 			ctx,
 			`UPDATE plugin_installs
-			 SET status = $1, error_code = NULL, message_key = NULL, updated_at = $2
-			 WHERE id = $3 AND tenant_id = $4 AND workspace_id = $5`,
+			 SET status = $1, error_code = $2, message_key = $3, updated_at = $4
+			 WHERE id = $5 AND tenant_id = $6 AND workspace_id = $7`,
 			in.Status,
+			errorCode,
+			messageKey,
 			now,
 			in.InstallID,
 			in.Context.TenantID,
@@ -361,6 +409,103 @@ func (r *PostgresRepository) UpdateInstallStatus(ctx context.Context, in UpdateI
 	}
 
 	return r.GetInstallForAccess(ctx, in.Context, in.InstallID)
+}
+
+func (r *PostgresRepository) UpdateInstallPackage(ctx context.Context, in UpdateInstallPackageInput) (PluginInstall, error) {
+	now := in.Now.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+
+	var errorCode any
+	var messageKey any
+	if strings.TrimSpace(in.ErrorCode) != "" {
+		errorCode = strings.TrimSpace(in.ErrorCode)
+	}
+	if strings.TrimSpace(in.MessageKey) != "" {
+		messageKey = strings.TrimSpace(in.MessageKey)
+	}
+
+	result, err := r.db.ExecContext(
+		ctx,
+		`UPDATE plugin_installs
+		 SET package_id = $1, status = $2, error_code = $3, message_key = $4, installed_at = COALESCE(installed_at, $5), updated_at = $6
+		 WHERE id = $7 AND tenant_id = $8 AND workspace_id = $9`,
+		in.PackageID,
+		in.Status,
+		errorCode,
+		messageKey,
+		now,
+		now,
+		in.InstallID,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+	)
+	if err != nil {
+		return PluginInstall{}, fmt.Errorf("update plugin install package: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return PluginInstall{}, fmt.Errorf("update plugin install package rows affected: %w", err)
+	}
+	if affected == 0 {
+		if _, err := r.GetInstallForAccess(ctx, in.Context, in.InstallID); err != nil {
+			return PluginInstall{}, err
+		}
+	}
+	return r.GetInstallForAccess(ctx, in.Context, in.InstallID)
+}
+
+func (r *PostgresRepository) CreateInstallHistory(ctx context.Context, in CreateInstallHistoryInput) (PluginInstallHistory, error) {
+	now := in.Now.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	historyID := newID("phs")
+
+	var errorCode any
+	var messageKey any
+	if strings.TrimSpace(in.ErrorCode) != "" {
+		errorCode = strings.TrimSpace(in.ErrorCode)
+	}
+	if strings.TrimSpace(in.MessageKey) != "" {
+		messageKey = strings.TrimSpace(in.MessageKey)
+	}
+
+	_, err := r.db.ExecContext(
+		ctx,
+		`INSERT INTO plugin_install_history(
+			id, tenant_id, workspace_id, install_id, from_version, to_version, command_id, status, error_code, message_key, created_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		historyID,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+		in.InstallID,
+		strings.TrimSpace(in.FromVersion),
+		strings.TrimSpace(in.ToVersion),
+		strings.TrimSpace(in.CommandID),
+		strings.TrimSpace(in.Status),
+		errorCode,
+		messageKey,
+		now,
+	)
+	if err != nil {
+		return PluginInstallHistory{}, fmt.Errorf("insert plugin install history: %w", err)
+	}
+
+	return PluginInstallHistory{
+		ID:          historyID,
+		TenantID:    in.Context.TenantID,
+		WorkspaceID: in.Context.WorkspaceID,
+		InstallID:   in.InstallID,
+		FromVersion: strings.TrimSpace(in.FromVersion),
+		ToVersion:   strings.TrimSpace(in.ToVersion),
+		CommandID:   strings.TrimSpace(in.CommandID),
+		Status:      strings.TrimSpace(in.Status),
+		ErrorCode:   strings.TrimSpace(in.ErrorCode),
+		MessageKey:  strings.TrimSpace(in.MessageKey),
+		CreatedAt:   now,
+	}, nil
 }
 
 func (r *PostgresRepository) GetInstallForAccess(ctx context.Context, req command.RequestContext, installID string) (PluginInstall, error) {

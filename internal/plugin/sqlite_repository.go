@@ -230,10 +230,10 @@ func (r *SQLiteRepository) CreateInstall(ctx context.Context, in CreateInstallIn
 		"[]",
 		in.PackageID,
 		in.Scope,
-		InstallStatusEnabled,
+		InstallStatusUploaded,
 		nil,
 		nil,
-		now.Format(time.RFC3339Nano),
+		nil,
 		now.Format(time.RFC3339Nano),
 		now.Format(time.RFC3339Nano),
 	); err != nil {
@@ -241,6 +241,34 @@ func (r *SQLiteRepository) CreateInstall(ctx context.Context, in CreateInstallIn
 	}
 
 	return r.GetInstallForAccess(ctx, in.Context, installID)
+}
+
+func (r *SQLiteRepository) FindLatestPackageForUpgrade(ctx context.Context, in FindLatestPackageForUpgradeInput) (PluginPackage, error) {
+	name := strings.TrimSpace(in.PackageName)
+	if name == "" {
+		return PluginPackage{}, ErrInvalidRequest
+	}
+
+	row := r.db.QueryRowContext(
+		ctx,
+		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json, name, version, package_type, manifest_json, artifact_uri, status, created_at, updated_at
+		 FROM plugin_packages
+		 WHERE tenant_id = ? AND workspace_id = ? AND name = ? AND id <> ?
+		 ORDER BY created_at DESC, id DESC
+		 LIMIT 1`,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+		name,
+		strings.TrimSpace(in.CurrentPackageID),
+	)
+	item, err := scanPackage(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return PluginPackage{}, ErrPackageNotFound
+	}
+	if err != nil {
+		return PluginPackage{}, fmt.Errorf("query latest upgrade package: %w", err)
+	}
+	return item, nil
 }
 
 func (r *SQLiteRepository) UpsertAlgorithms(ctx context.Context, in UpsertAlgorithmsInput) error {
@@ -326,12 +354,22 @@ func (r *SQLiteRepository) UpdateInstallStatus(ctx context.Context, in UpdateIns
 		err    error
 	)
 	if in.Status == InstallStatusEnabled {
+		var errorCode any
+		var messageKey any
+		if strings.TrimSpace(in.ErrorCode) != "" {
+			errorCode = strings.TrimSpace(in.ErrorCode)
+		}
+		if strings.TrimSpace(in.MessageKey) != "" {
+			messageKey = strings.TrimSpace(in.MessageKey)
+		}
 		result, err = r.db.ExecContext(
 			ctx,
 			`UPDATE plugin_installs
-			 SET status = ?, error_code = NULL, message_key = NULL, installed_at = COALESCE(installed_at, ?), updated_at = ?
+			 SET status = ?, error_code = ?, message_key = ?, installed_at = COALESCE(installed_at, ?), updated_at = ?
 			 WHERE id = ? AND tenant_id = ? AND workspace_id = ?`,
 			in.Status,
+			errorCode,
+			messageKey,
 			nowRaw,
 			nowRaw,
 			in.InstallID,
@@ -339,12 +377,22 @@ func (r *SQLiteRepository) UpdateInstallStatus(ctx context.Context, in UpdateIns
 			in.Context.WorkspaceID,
 		)
 	} else {
+		var errorCode any
+		var messageKey any
+		if strings.TrimSpace(in.ErrorCode) != "" {
+			errorCode = strings.TrimSpace(in.ErrorCode)
+		}
+		if strings.TrimSpace(in.MessageKey) != "" {
+			messageKey = strings.TrimSpace(in.MessageKey)
+		}
 		result, err = r.db.ExecContext(
 			ctx,
 			`UPDATE plugin_installs
-			 SET status = ?, error_code = NULL, message_key = NULL, updated_at = ?
+			 SET status = ?, error_code = ?, message_key = ?, updated_at = ?
 			 WHERE id = ? AND tenant_id = ? AND workspace_id = ?`,
 			in.Status,
+			errorCode,
+			messageKey,
 			nowRaw,
 			in.InstallID,
 			in.Context.TenantID,
@@ -366,6 +414,104 @@ func (r *SQLiteRepository) UpdateInstallStatus(ctx context.Context, in UpdateIns
 	}
 
 	return r.GetInstallForAccess(ctx, in.Context, in.InstallID)
+}
+
+func (r *SQLiteRepository) UpdateInstallPackage(ctx context.Context, in UpdateInstallPackageInput) (PluginInstall, error) {
+	now := in.Now.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	nowRaw := now.Format(time.RFC3339Nano)
+
+	var errorCode any
+	var messageKey any
+	if strings.TrimSpace(in.ErrorCode) != "" {
+		errorCode = strings.TrimSpace(in.ErrorCode)
+	}
+	if strings.TrimSpace(in.MessageKey) != "" {
+		messageKey = strings.TrimSpace(in.MessageKey)
+	}
+
+	result, err := r.db.ExecContext(
+		ctx,
+		`UPDATE plugin_installs
+		 SET package_id = ?, status = ?, error_code = ?, message_key = ?, installed_at = COALESCE(installed_at, ?), updated_at = ?
+		 WHERE id = ? AND tenant_id = ? AND workspace_id = ?`,
+		in.PackageID,
+		in.Status,
+		errorCode,
+		messageKey,
+		nowRaw,
+		nowRaw,
+		in.InstallID,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+	)
+	if err != nil {
+		return PluginInstall{}, fmt.Errorf("update plugin install package: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return PluginInstall{}, fmt.Errorf("update plugin install package rows affected: %w", err)
+	}
+	if affected == 0 {
+		if _, err := r.GetInstallForAccess(ctx, in.Context, in.InstallID); err != nil {
+			return PluginInstall{}, err
+		}
+	}
+	return r.GetInstallForAccess(ctx, in.Context, in.InstallID)
+}
+
+func (r *SQLiteRepository) CreateInstallHistory(ctx context.Context, in CreateInstallHistoryInput) (PluginInstallHistory, error) {
+	now := in.Now.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	historyID := newID("phs")
+
+	var errorCode any
+	var messageKey any
+	if strings.TrimSpace(in.ErrorCode) != "" {
+		errorCode = strings.TrimSpace(in.ErrorCode)
+	}
+	if strings.TrimSpace(in.MessageKey) != "" {
+		messageKey = strings.TrimSpace(in.MessageKey)
+	}
+
+	_, err := r.db.ExecContext(
+		ctx,
+		`INSERT INTO plugin_install_history(
+			id, tenant_id, workspace_id, install_id, from_version, to_version, command_id, status, error_code, message_key, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		historyID,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+		in.InstallID,
+		strings.TrimSpace(in.FromVersion),
+		strings.TrimSpace(in.ToVersion),
+		strings.TrimSpace(in.CommandID),
+		strings.TrimSpace(in.Status),
+		errorCode,
+		messageKey,
+		now.Format(time.RFC3339Nano),
+	)
+	if err != nil {
+		return PluginInstallHistory{}, fmt.Errorf("insert plugin install history: %w", err)
+	}
+
+	return PluginInstallHistory{
+		ID:          historyID,
+		TenantID:    in.Context.TenantID,
+		WorkspaceID: in.Context.WorkspaceID,
+		InstallID:   in.InstallID,
+		FromVersion: strings.TrimSpace(in.FromVersion),
+		ToVersion:   strings.TrimSpace(in.ToVersion),
+		CommandID:   strings.TrimSpace(in.CommandID),
+		Status:      strings.TrimSpace(in.Status),
+		ErrorCode:   strings.TrimSpace(in.ErrorCode),
+		MessageKey:  strings.TrimSpace(in.MessageKey),
+		CreatedAt:   now,
+	}, nil
 }
 
 func (r *SQLiteRepository) GetInstallForAccess(ctx context.Context, req command.RequestContext, installID string) (PluginInstall, error) {

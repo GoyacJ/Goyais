@@ -56,10 +56,11 @@
 - `POST /api/v1/shares` 必须转换为 `share.create` command 执行（Command-first）。
 - `DELETE /api/v1/shares/{shareId}` 必须转换为 `share.delete` command 执行（Command-first）。
 - `POST /api/v1/shares` 执行顺序固定：`Tenant -> Visibility -> ACL -> RBAC -> Egress`。
-- v0.1 支持 `resource_type=command|asset`，且 `subject_type=user`。
+- v0.1 支持 `resource_type=command|asset`，`subject_type=user|role`。
 - 分享前必须校验“同资源 SHARE 权限”：`owner` 或 `acl_entries(resource_type=<目标资源类型>, resource_id=<目标资源ID>, permission=SHARE)` 命中。
 - 校验失败返回 `403 FORBIDDEN`，`messageKey=error.authz.forbidden`。
 - `share.delete` v0.1 最小语义：仅允许创建者删除同租户/工作区下的 share 记录；不存在时返回 `404 SHARE_NOT_FOUND`。
+- `GOYAIS_FEATURE_ACL_ROLE_SUBJECT=false` 时，`subject_type=role` 的分享请求返回 `400 INVALID_SHARE_REQUEST`。
 
 ## 0.5 Asset Domain Sugar（A/B 过渡）
 - `POST /api/v1/assets` 必须转换为 `asset.upload` command 执行（Command-first）。
@@ -88,8 +89,10 @@
 
 ## 0.7 Plugin Domain Sugar（C2 MVP）
 - `POST /api/v1/plugin-market/packages`、`POST /api/v1/plugin-market/installs`、`POST /api/v1/plugin-market/installs/{installId}:enable|:disable|:rollback|:upgrade` 必须转换为 `plugin.*` command 执行（Command-first）。
-- `plugin.install` 最小语义：创建 install 记录并收敛为 `enabled`。
+- `plugin.install` 状态链路固定为 `uploaded -> validating -> installing -> enabled|failed`。
 - `plugin.enable|plugin.disable|plugin.rollback|plugin.upgrade` 必须在 install 状态机允许的转换上执行，不允许非法跃迁。
+- `plugin.upgrade` 必须记录 `plugin_install_history`，并绑定当前 commandId。
+- `GOYAIS_FEATURE_PLUGIN_MARKET_V2=false` 时，`download/upgrade` 路径与 `plugin.upgrade` command 返回 `501 NOT_IMPLEMENTED`。
 
 ## 0.8 Registry C1 Read Path（M2 启动）
 - `GET /api/v1/registry/capabilities`、`GET /api/v1/registry/capabilities/{capabilityId}`、`GET /api/v1/registry/algorithms`、`GET /api/v1/registry/providers` 在 v0.1 作为 read-only 能力落地。
@@ -125,6 +128,7 @@
 - ContextBundle 重建能力必须通过 `context.bundle.rebuild` command 执行（Command-first）。
 - `GET /api/v1/context-bundles`、`GET /api/v1/context-bundles/{bundleId}` 为 read path，不得绕过 tenant/workspace + ACL 判定。
 - `context.bundle.rebuild` 的输入作用域固定为 `run|session|workspace`。
+- `GOYAIS_FEATURE_CONTEXT_BUNDLE=false` 时，以上读路径与 `context.bundle.rebuild` command 返回 `501 NOT_IMPLEMENTED`。
 
 ## 1. WorkflowRun / StepRun
 

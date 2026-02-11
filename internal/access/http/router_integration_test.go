@@ -535,16 +535,21 @@ func TestAPIContractRegression(t *testing.T) {
 		assertStatus(t, respForbidden, http.StatusForbidden)
 		assertMessageKey(t, respForbidden.Body, "error.authz.forbidden")
 
-		respInvalidSubject := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/shares", headersWithJSONContext("u1"), map[string]any{
+		respRoleSubject := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/shares", headersWithJSONContext("u1"), map[string]any{
 			"resourceType": "command",
 			"resourceId":   commandID,
 			"subjectType":  "role",
-			"subjectId":    "u2",
+			"subjectId":    "analyst",
 			"permissions":  []string{"READ"},
 		})
-		defer respInvalidSubject.Body.Close()
-		assertStatus(t, respInvalidSubject, http.StatusBadRequest)
-		assertErrorCode(t, respInvalidSubject.Body, "INVALID_SHARE_REQUEST")
+		defer respRoleSubject.Body.Close()
+		assertStatus(t, respRoleSubject, http.StatusAccepted)
+
+		headersRoleReader := headersWithContext("u9")
+		headersRoleReader.Set("X-Roles", "analyst")
+		respRoleRead := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+commandID, headersRoleReader, nil)
+		defer respRoleRead.Body.Close()
+		assertStatus(t, respRoleRead, http.StatusOK)
 
 		respInvalidPermission := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/shares", headersWithJSONContext("u1"), map[string]any{
 			"resourceType": "command",
@@ -1325,11 +1330,18 @@ func TestAPIContractRegression(t *testing.T) {
 			t.Fatalf("unexpected plugin enable status: %v", enableStatus)
 		}
 
-		respRollback := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/"+installID+":rollback", headersWithJSONContext("u1"), map[string]any{})
-		defer respRollback.Body.Close()
-		assertStatus(t, respRollback, http.StatusAccepted)
-		if rollbackStatus := readJSONPath(t, respRollback.Body, "resource.status"); rollbackStatus != "rolled_back" {
-			t.Fatalf("unexpected plugin rollback status: %v", rollbackStatus)
+		respUploadV2 := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/packages", headersWithJSONContext("u1"), map[string]any{
+			"name":        "demo-plugin",
+			"version":     "1.0.1",
+			"packageType": "tool-provider",
+			"manifest":    map[string]any{"entry": "main-v2"},
+			"visibility":  "PRIVATE",
+		})
+		defer respUploadV2.Body.Close()
+		assertStatus(t, respUploadV2, http.StatusAccepted)
+		packageIDV2 := readJSONPath(t, respUploadV2.Body, "resource.id").(string)
+		if packageIDV2 == "" {
+			t.Fatalf("expected plugin package v2 id")
 		}
 
 		respUpgrade := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/"+installID+":upgrade", headersWithJSONContext("u1"), map[string]any{})
@@ -1337,6 +1349,10 @@ func TestAPIContractRegression(t *testing.T) {
 		assertStatus(t, respUpgrade, http.StatusAccepted)
 		var upgradePayload map[string]any
 		mustDecodeJSON(t, respUpgrade.Body, &upgradePayload)
+		upgradeResource, _ := upgradePayload["resource"].(map[string]any)
+		if upgradeStatus, _ := upgradeResource["status"].(string); upgradeStatus != "enabled" {
+			t.Fatalf("unexpected plugin upgrade status: %v", upgradeResource["status"])
+		}
 		upgradeCommandRef, _ := upgradePayload["commandRef"].(map[string]any)
 		upgradeCommandID, _ := upgradeCommandRef["commandId"].(string)
 		if upgradeCommandID == "" {
@@ -1349,15 +1365,115 @@ func TestAPIContractRegression(t *testing.T) {
 			t.Fatalf("unexpected plugin upgrade command type: %v", got)
 		}
 
+		respRollback := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/"+installID+":rollback", headersWithJSONContext("u1"), map[string]any{})
+		defer respRollback.Body.Close()
+		assertStatus(t, respRollback, http.StatusAccepted)
+		if rollbackStatus := readJSONPath(t, respRollback.Body, "resource.status"); rollbackStatus != "rolled_back" {
+			t.Fatalf("unexpected plugin rollback status: %v", rollbackStatus)
+		}
+
 		respDownload := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/plugin-market/packages/"+packageID+":download", headersWithContext("u1"), nil)
 		defer respDownload.Body.Close()
-		assertStatus(t, respDownload, http.StatusNotImplemented)
-		assertErrorCode(t, respDownload.Body, "NOT_IMPLEMENTED")
+		assertStatus(t, respDownload, http.StatusOK)
+		if got := respDownload.Header.Get("Content-Type"); !strings.Contains(got, "application/octet-stream") {
+			t.Fatalf("expected octet-stream content type, got=%s", got)
+		}
+		downloadBytes, err := io.ReadAll(respDownload.Body)
+		if err != nil {
+			t.Fatalf("read download response: %v", err)
+		}
+		if !strings.Contains(string(downloadBytes), "\"entry\":\"main\"") {
+			t.Fatalf("unexpected plugin download payload: %s", string(downloadBytes))
+		}
 
 		respForbiddenEnable := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/"+installID+":enable", headersWithJSONContext("u2"), map[string]any{})
 		defer respForbiddenEnable.Body.Close()
 		assertStatus(t, respForbiddenEnable, http.StatusForbidden)
 		assertErrorCode(t, respForbiddenEnable.Body, "FORBIDDEN")
+	})
+
+	t.Run("context bundle routes available", func(t *testing.T) {
+		respRebuild := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headersWithJSONContext("u1"), map[string]any{
+			"commandType": "context.bundle.rebuild",
+			"payload": map[string]any{
+				"scopeType":  "workspace",
+				"scopeId":    "w1",
+				"visibility": "PRIVATE",
+			},
+		})
+		defer respRebuild.Body.Close()
+		assertStatus(t, respRebuild, http.StatusAccepted)
+		rebuildCommandID := readJSONPath(t, respRebuild.Body, "commandRef.commandId").(string)
+		if rebuildCommandID == "" {
+			t.Fatalf("expected context bundle rebuild command id")
+		}
+
+		respRebuildCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+rebuildCommandID, headersWithContext("u1"), nil)
+		defer respRebuildCommand.Body.Close()
+		assertStatus(t, respRebuildCommand, http.StatusOK)
+		var rebuildCommandPayload map[string]any
+		mustDecodeJSON(t, respRebuildCommand.Body, &rebuildCommandPayload)
+		if got, _ := rebuildCommandPayload["commandType"].(string); got != "context.bundle.rebuild" {
+			t.Fatalf("unexpected context bundle command type: %v", rebuildCommandPayload["commandType"])
+		}
+		rebuildResult, _ := rebuildCommandPayload["result"].(map[string]any)
+		rebuildBundle, _ := rebuildResult["bundle"].(map[string]any)
+		bundleID, _ := rebuildBundle["id"].(string)
+		if bundleID == "" {
+			t.Fatalf("expected context bundle id in command result")
+		}
+
+		respList := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/context-bundles?page=1&pageSize=20", headersWithContext("u1"), nil)
+		defer respList.Body.Close()
+		assertStatus(t, respList, http.StatusOK)
+		var listPayload map[string]any
+		mustDecodeJSON(t, respList.Body, &listPayload)
+		items, ok := listPayload["items"].([]any)
+		if !ok {
+			t.Fatalf("expected context bundle list items")
+		}
+		if _, ok := listPayload["pageInfo"].(map[string]any); !ok {
+			t.Fatalf("expected context bundle list pageInfo")
+		}
+		foundBundle := false
+		for _, item := range items {
+			entry, _ := item.(map[string]any)
+			if id, _ := entry["id"].(string); id == bundleID {
+				foundBundle = true
+				break
+			}
+		}
+		if !foundBundle {
+			t.Fatalf("expected rebuilt bundle %s in context bundle list", bundleID)
+		}
+
+		if len(items) > 0 {
+			lastItem, _ := items[len(items)-1].(map[string]any)
+			contextCursor := buildCursor(t, lastItem["createdAt"].(string), lastItem["id"].(string))
+			respListCursor := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/context-bundles?cursor="+contextCursor+"&page=1&pageSize=1", headersWithContext("u1"), nil)
+			defer respListCursor.Body.Close()
+			assertStatus(t, respListCursor, http.StatusOK)
+			var cursorPayload map[string]any
+			mustDecodeJSON(t, respListCursor.Body, &cursorPayload)
+			if _, ok := cursorPayload["cursorInfo"].(map[string]any); !ok {
+				t.Fatalf("expected context bundle list cursorInfo")
+			}
+			if _, ok := cursorPayload["pageInfo"]; ok {
+				t.Fatalf("did not expect context bundle pageInfo when cursor is used")
+			}
+		}
+
+		respGet := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/context-bundles/"+bundleID, headersWithContext("u1"), nil)
+		defer respGet.Body.Close()
+		assertStatus(t, respGet, http.StatusOK)
+		if got := readJSONPath(t, respGet.Body, "id"); got != bundleID {
+			t.Fatalf("unexpected context bundle id: got=%v want=%s", got, bundleID)
+		}
+
+		respGetForbidden := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/context-bundles/"+bundleID, headersWithContext("u2"), nil)
+		defer respGetForbidden.Body.Close()
+		assertStatus(t, respGetForbidden, http.StatusForbidden)
+		assertMessageKey(t, respGetForbidden.Body, "error.authz.forbidden")
 	})
 
 	t.Run("algo-pack install registers multiple runnable algorithms", func(t *testing.T) {
@@ -1725,6 +1841,23 @@ func newTestServerWithDBPathWithOptions(
 	contextMode string,
 	assetLifecycleEnabled bool,
 ) (string, string, func()) {
+	return newTestServerWithDBPathWithFeatureOptions(
+		t,
+		contextMode,
+		config.FeatureConfig{
+			AssetLifecycle: assetLifecycleEnabled,
+			PluginMarketV2: true,
+			ContextBundle:  true,
+			ACLRoleSubject: true,
+		},
+	)
+}
+
+func newTestServerWithDBPathWithFeatureOptions(
+	t *testing.T,
+	contextMode string,
+	feature config.FeatureConfig,
+) (string, string, func()) {
 	t.Helper()
 
 	previousWD, err := os.Getwd()
@@ -1763,9 +1896,7 @@ func newTestServerWithDBPathWithOptions(
 			AllowPrivateToPublic: false,
 			ContextMode:          contextMode,
 		},
-		Feature: config.FeatureConfig{
-			AssetLifecycle: assetLifecycleEnabled,
-		},
+		Feature: feature,
 	}
 
 	srv, err := app.NewServer(cfg)
@@ -1897,6 +2028,119 @@ func TestAPIAssetLifecycleFeatureEnabled(t *testing.T) {
 	defer respGet.Body.Close()
 	assertStatus(t, respGet, http.StatusNotFound)
 	assertErrorCode(t, respGet.Body, "ASSET_NOT_FOUND")
+}
+
+func TestAPIPluginMarketV2FeatureDisabled(t *testing.T) {
+	baseURL, _, shutdown := newTestServerWithDBPathWithFeatureOptions(
+		t,
+		config.AuthContextModeJWTOrHeader,
+		config.FeatureConfig{
+			AssetLifecycle: false,
+			PluginMarketV2: false,
+			ContextBundle:  true,
+			ACLRoleSubject: true,
+		},
+	)
+	defer shutdown()
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	respDownload := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/plugin-market/packages/pkg_demo:download", headersWithContext("u1"), nil)
+	defer respDownload.Body.Close()
+	assertStatus(t, respDownload, http.StatusNotImplemented)
+	assertMessageKey(t, respDownload.Body, "error.plugin.not_implemented")
+
+	respUpgrade := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/ins_demo:upgrade", headersWithJSONContext("u1"), map[string]any{})
+	defer respUpgrade.Body.Close()
+	assertStatus(t, respUpgrade, http.StatusNotImplemented)
+	assertMessageKey(t, respUpgrade.Body, "error.plugin.not_implemented")
+
+	respUpgradeCommand := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headersWithJSONContext("u1"), map[string]any{
+		"commandType": "plugin.upgrade",
+		"payload": map[string]any{
+			"installId": "ins_demo",
+		},
+	})
+	defer respUpgradeCommand.Body.Close()
+	assertStatus(t, respUpgradeCommand, http.StatusNotImplemented)
+	assertMessageKey(t, respUpgradeCommand.Body, "error.plugin.not_implemented")
+}
+
+func TestAPIContextBundleFeatureDisabled(t *testing.T) {
+	baseURL, _, shutdown := newTestServerWithDBPathWithFeatureOptions(
+		t,
+		config.AuthContextModeJWTOrHeader,
+		config.FeatureConfig{
+			AssetLifecycle: false,
+			PluginMarketV2: true,
+			ContextBundle:  false,
+			ACLRoleSubject: true,
+		},
+	)
+	defer shutdown()
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	respList := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/context-bundles?page=1&pageSize=20", headersWithContext("u1"), nil)
+	defer respList.Body.Close()
+	assertStatus(t, respList, http.StatusNotImplemented)
+	assertMessageKey(t, respList.Body, "error.context_bundle.not_implemented")
+
+	respGet := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/context-bundles/cb_demo", headersWithContext("u1"), nil)
+	defer respGet.Body.Close()
+	assertStatus(t, respGet, http.StatusNotImplemented)
+	assertMessageKey(t, respGet.Body, "error.context_bundle.not_implemented")
+
+	respRebuild := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headersWithJSONContext("u1"), map[string]any{
+		"commandType": "context.bundle.rebuild",
+		"payload": map[string]any{
+			"scopeType": "workspace",
+			"scopeId":   "w1",
+		},
+	})
+	defer respRebuild.Body.Close()
+	assertStatus(t, respRebuild, http.StatusNotImplemented)
+	assertMessageKey(t, respRebuild.Body, "error.context_bundle.not_implemented")
+}
+
+func TestAPIACLRoleSubjectFeatureDisabled(t *testing.T) {
+	baseURL, _, shutdown := newTestServerWithDBPathWithFeatureOptions(
+		t,
+		config.AuthContextModeJWTOrHeader,
+		config.FeatureConfig{
+			AssetLifecycle: false,
+			PluginMarketV2: true,
+			ContextBundle:  true,
+			ACLRoleSubject: false,
+		},
+	)
+	defer shutdown()
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	respCreateCommand := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headersWithJSONContext("u1"), map[string]any{
+		"commandType": "test.noop",
+		"payload": map[string]any{
+			"seed": "acl-role-disabled",
+		},
+	})
+	defer respCreateCommand.Body.Close()
+	assertStatus(t, respCreateCommand, http.StatusAccepted)
+	commandID := readJSONPath(t, respCreateCommand.Body, "commandRef.commandId").(string)
+	if commandID == "" {
+		t.Fatalf("expected command id")
+	}
+
+	respRoleShare := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/shares", headersWithJSONContext("u1"), map[string]any{
+		"resourceType": "command",
+		"resourceId":   commandID,
+		"subjectType":  "role",
+		"subjectId":    "analyst",
+		"permissions":  []string{"READ"},
+	})
+	defer respRoleShare.Body.Close()
+	assertStatus(t, respRoleShare, http.StatusBadRequest)
+	assertErrorCode(t, respRoleShare.Body, "INVALID_SHARE_REQUEST")
 }
 
 type auditEventRow struct {

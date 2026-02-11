@@ -93,7 +93,8 @@ func (h *apiHandler) handlePluginPackageRoutes(w http.ResponseWriter, r *http.Re
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if _, ok := requireRequestContext(w, r); !ok {
+	reqCtx, ok := requireRequestContext(w, r)
+	if !ok {
 		return
 	}
 	if h.pluginService == nil {
@@ -117,10 +118,35 @@ func (h *apiHandler) handlePluginPackageRoutes(w http.ResponseWriter, r *http.Re
 		errorx.Write(w, http.StatusNotFound, "PLUGIN_PACKAGE_NOT_FOUND", "error.plugin.not_found", map[string]any{"path": r.URL.Path})
 		return
 	}
+	if !h.pluginMarketV2Enabled {
+		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.plugin.not_implemented", nil)
+		return
+	}
 
-	errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.plugin.not_implemented", map[string]any{
-		"packageId": packageID,
-	})
+	item, bytes, err := h.pluginService.DownloadPackage(r.Context(), reqCtx, packageID)
+	if err != nil {
+		writePluginError(w, err)
+		return
+	}
+
+	filename := strings.TrimSpace(item.Name)
+	if filename == "" {
+		filename = item.ID
+	}
+	version := strings.TrimSpace(item.Version)
+	if version != "" {
+		filename = filename + "-" + version
+	}
+	filename = strings.ReplaceAll(filename, "\"", "")
+	if !strings.HasSuffix(strings.ToLower(filename), ".json") {
+		filename += ".json"
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(bytes)
 }
 
 func (h *apiHandler) handlePluginInstallRoutes(w http.ResponseWriter, r *http.Request) {
@@ -159,6 +185,10 @@ func (h *apiHandler) handlePluginInstallRoutes(w http.ResponseWriter, r *http.Re
 		commandType = "plugin.rollback"
 	case strings.HasSuffix(route, ":upgrade"):
 		installID = strings.TrimSpace(strings.TrimSuffix(route, ":upgrade"))
+		if !h.pluginMarketV2Enabled {
+			errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.plugin.not_implemented", nil)
+			return
+		}
 		commandType = "plugin.upgrade"
 	default:
 		errorx.Write(w, http.StatusNotFound, "PLUGIN_INSTALL_NOT_FOUND", "error.plugin.not_found", map[string]any{"path": r.URL.Path})

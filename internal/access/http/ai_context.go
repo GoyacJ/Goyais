@@ -12,6 +12,7 @@ import (
 	"goyais/internal/ai"
 	"goyais/internal/command"
 	"goyais/internal/common/errorx"
+	"goyais/internal/contextbundle"
 )
 
 func (h *apiHandler) handleAISessions(w http.ResponseWriter, r *http.Request) {
@@ -386,23 +387,85 @@ func (h *apiHandler) handleAISessionEvents(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *apiHandler) handleContextBundles(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requireRequestContext(w, r); !ok {
+	reqCtx, ok := requireRequestContext(w, r)
+	if !ok {
 		return
 	}
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	if h.contextBundleService == nil || !h.contextBundleEnabled {
+		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.context_bundle.not_implemented", nil)
+		return
+	}
 
-	errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.context_bundle.not_implemented", nil)
+	query := r.URL.Query()
+	cursor := strings.TrimSpace(query.Get("cursor"))
+	page := 1
+	pageSize := 20
+	if cursor == "" {
+		if rawPage := strings.TrimSpace(query.Get("page")); rawPage != "" {
+			parsed, err := strconv.Atoi(rawPage)
+			if err != nil || parsed <= 0 {
+				errorx.Write(w, http.StatusBadRequest, "INVALID_PAGINATION", "error.pagination.invalid", map[string]any{"page": rawPage})
+				return
+			}
+			page = parsed
+		}
+		if rawPageSize := strings.TrimSpace(query.Get("pageSize")); rawPageSize != "" {
+			parsed, err := strconv.Atoi(rawPageSize)
+			if err != nil || parsed <= 0 {
+				errorx.Write(w, http.StatusBadRequest, "INVALID_PAGINATION", "error.pagination.invalid", map[string]any{"pageSize": rawPageSize})
+				return
+			}
+			pageSize = parsed
+		}
+	}
+
+	result, err := h.contextBundleService.ListBundles(r.Context(), contextbundle.ListParams{
+		Context:  reqCtx,
+		Page:     page,
+		PageSize: pageSize,
+		Cursor:   cursor,
+	})
+	if err != nil {
+		writeContextBundleError(w, err)
+		return
+	}
+
+	items := make([]map[string]any, 0, len(result.Items))
+	for _, item := range result.Items {
+		items = append(items, toContextBundlePayload(item))
+	}
+	response := map[string]any{"items": items}
+	if result.UsedCursor {
+		cursorInfo := map[string]any{"nextCursor": nil}
+		if result.NextCursor != "" {
+			cursorInfo["nextCursor"] = result.NextCursor
+		}
+		response["cursorInfo"] = cursorInfo
+	} else {
+		response["pageInfo"] = map[string]any{
+			"page":     page,
+			"pageSize": pageSize,
+			"total":    result.Total,
+		}
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *apiHandler) handleContextBundleRoutes(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requireRequestContext(w, r); !ok {
+	reqCtx, ok := requireRequestContext(w, r)
+	if !ok {
 		return
 	}
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if h.contextBundleService == nil || !h.contextBundleEnabled {
+		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.context_bundle.not_implemented", nil)
 		return
 	}
 
@@ -411,7 +474,12 @@ func (h *apiHandler) handleContextBundleRoutes(w http.ResponseWriter, r *http.Re
 		errorx.Write(w, http.StatusNotFound, "CONTEXT_BUNDLE_NOT_FOUND", "error.context_bundle.not_found", nil)
 		return
 	}
-	errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.context_bundle.not_implemented", nil)
+	item, err := h.contextBundleService.GetBundle(r.Context(), reqCtx, bundleID)
+	if err != nil {
+		writeContextBundleError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toContextBundlePayload(item))
 }
 
 func writeAIError(w http.ResponseWriter, err error) {
@@ -460,6 +528,46 @@ func toAISessionPayload(item ai.Session) map[string]any {
 		payload["lastTurnAt"] = item.LastTurnAt.UTC().Format(time.RFC3339Nano)
 	}
 	return payload
+}
+
+func toContextBundlePayload(item contextbundle.Bundle) map[string]any {
+	return map[string]any{
+		"id":                  item.ID,
+		"tenantId":            item.TenantID,
+		"workspaceId":         item.WorkspaceID,
+		"ownerId":             item.OwnerID,
+		"visibility":          item.Visibility,
+		"acl":                 decodeJSON(item.ACLJSON, []any{}),
+		"scopeType":           item.ScopeType,
+		"scopeId":             item.ScopeID,
+		"facts":               decodeJSON(item.FactsJSON, map[string]any{}),
+		"summaries":           decodeJSON(item.SummariesJSON, map[string]any{}),
+		"refs":                decodeJSON(item.RefsJSON, map[string]any{}),
+		"embeddingsIndexRefs": decodeJSON(item.EmbeddingsIndexRefsJSON, []any{}),
+		"timeline":            decodeJSON(item.TimelineJSON, []any{}),
+		"createdAt":           item.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt":           item.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
+func writeContextBundleError(w http.ResponseWriter, err error) {
+	var forbidden *contextbundle.ForbiddenError
+	switch {
+	case errors.Is(err, contextbundle.ErrInvalidRequest):
+		errorx.Write(w, http.StatusBadRequest, "INVALID_CONTEXT_BUNDLE_REQUEST", "error.context_bundle.invalid_request", nil)
+	case errors.Is(err, contextbundle.ErrInvalidCursor):
+		errorx.Write(w, http.StatusBadRequest, "INVALID_CURSOR", "error.pagination.invalid_cursor", nil)
+	case errors.Is(err, contextbundle.ErrNotFound):
+		errorx.Write(w, http.StatusNotFound, "CONTEXT_BUNDLE_NOT_FOUND", "error.context_bundle.not_found", nil)
+	case errors.As(err, &forbidden), errors.Is(err, contextbundle.ErrForbidden):
+		details := map[string]any{}
+		if forbidden != nil && forbidden.Reason != "" {
+			details["reason"] = forbidden.Reason
+		}
+		errorx.Write(w, http.StatusForbidden, "FORBIDDEN", "error.authz.forbidden", details)
+	default:
+		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.common.internal", map[string]any{"reason": err.Error()})
+	}
 }
 
 func toAISessionTurnPayload(item ai.SessionTurn) map[string]any {

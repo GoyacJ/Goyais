@@ -289,37 +289,27 @@ func (r *SQLiteRepository) HasCommandPermission(ctx context.Context, req Request
 	if strings.TrimSpace(commandID) == "" || strings.TrimSpace(permission) == "" {
 		return false, nil
 	}
-
-	var marker int
-	err := r.db.QueryRowContext(
-		ctx,
-		`SELECT 1
-		 FROM acl_entries a
-		 WHERE a.tenant_id = ?
-		   AND a.workspace_id = ?
-		   AND a.resource_type = 'command'
-		   AND a.resource_id = ?
-		   AND a.subject_type = 'user'
-		   AND a.subject_id = ?
-		   AND (a.expires_at IS NULL OR a.expires_at >= ?)
-		   AND EXISTS (
-		     SELECT 1 FROM json_each(a.permissions) p WHERE p.value = ?
-		   )
-		 LIMIT 1`,
-		req.TenantID,
-		req.WorkspaceID,
-		commandID,
-		req.UserID,
-		now.UTC().Format(time.RFC3339Nano),
-		strings.ToUpper(permission),
-	).Scan(&marker)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
+	permission = strings.ToUpper(strings.TrimSpace(permission))
+	nowRaw := now.UTC().Format(time.RFC3339Nano)
+	if allowed, err := r.hasACLPermission(ctx, req.TenantID, req.WorkspaceID, "command", commandID, "user", req.UserID, permission, nowRaw); err != nil {
+		return false, err
+	} else if allowed {
+		return true, nil
 	}
-	if err != nil {
-		return false, fmt.Errorf("query acl permission: %w", err)
+	for _, role := range req.Roles {
+		role = strings.TrimSpace(role)
+		if role == "" {
+			continue
+		}
+		allowed, err := r.hasACLPermission(ctx, req.TenantID, req.WorkspaceID, "command", commandID, "role", role, permission, nowRaw)
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			return true, nil
+		}
 	}
-	return true, nil
+	return false, nil
 }
 
 func (r *SQLiteRepository) GetShareResource(ctx context.Context, req RequestContext, resourceType, resourceID string) (ShareResource, error) {
@@ -387,7 +377,35 @@ func (r *SQLiteRepository) HasShareResourcePermission(
 	default:
 		return false, ErrInvalidShareRequest
 	}
+	nowRaw := now.UTC().Format(time.RFC3339Nano)
+	if allowed, err := r.hasACLPermission(ctx, req.TenantID, req.WorkspaceID, resourceType, resourceID, "user", req.UserID, permission, nowRaw); err != nil {
+		return false, err
+	} else if allowed {
+		return true, nil
+	}
+	for _, role := range req.Roles {
+		role = strings.TrimSpace(role)
+		if role == "" {
+			continue
+		}
+		allowed, err := r.hasACLPermission(ctx, req.TenantID, req.WorkspaceID, resourceType, resourceID, "role", role, permission, nowRaw)
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
+func (r *SQLiteRepository) hasACLPermission(
+	ctx context.Context,
+	tenantID, workspaceID, resourceType, resourceID, subjectType, subjectID, permission, nowRaw string,
+) (bool, error) {
+	if strings.TrimSpace(subjectID) == "" {
+		return false, nil
+	}
 	var marker int
 	err := r.db.QueryRowContext(
 		ctx,
@@ -397,26 +415,27 @@ func (r *SQLiteRepository) HasShareResourcePermission(
 		   AND a.workspace_id = ?
 		   AND a.resource_type = ?
 		   AND a.resource_id = ?
-		   AND a.subject_type = 'user'
+		   AND a.subject_type = ?
 		   AND a.subject_id = ?
 		   AND (a.expires_at IS NULL OR a.expires_at >= ?)
 		   AND EXISTS (
 		     SELECT 1 FROM json_each(a.permissions) p WHERE p.value = ?
 		   )
 		 LIMIT 1`,
-		req.TenantID,
-		req.WorkspaceID,
+		tenantID,
+		workspaceID,
 		resourceType,
 		resourceID,
-		req.UserID,
-		now.UTC().Format(time.RFC3339Nano),
+		subjectType,
+		subjectID,
+		nowRaw,
 		permission,
 	).Scan(&marker)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("query share resource permission: %w", err)
+		return false, fmt.Errorf("query acl permission: %w", err)
 	}
 	return true, nil
 }

@@ -77,6 +77,31 @@ type PluginInstall struct {
 	UpdatedAt time.Time
 }
 
+type PluginInstallHistoryStatus string
+
+const (
+	InstallHistoryStatusStarted    PluginInstallHistoryStatus = "started"
+	InstallHistoryStatusSucceeded  PluginInstallHistoryStatus = "succeeded"
+	InstallHistoryStatusFailed     PluginInstallHistoryStatus = "failed"
+	InstallHistoryStatusRolledBack PluginInstallHistoryStatus = "rolled_back"
+)
+
+type PluginInstallHistory struct {
+	ID          string
+	TenantID    string
+	WorkspaceID string
+	InstallID   string
+
+	FromVersion string
+	ToVersion   string
+	CommandID   string
+	Status      string
+	ErrorCode   string
+	MessageKey  string
+
+	CreatedAt time.Time
+}
+
 type CreatePackageInput struct {
 	Context command.RequestContext
 
@@ -116,10 +141,45 @@ type CreateInstallInput struct {
 type UpdateInstallStatusInput struct {
 	Context command.RequestContext
 
-	InstallID string
-	Status    string
+	InstallID  string
+	Status     string
+	ErrorCode string
+	MessageKey string
 
 	Now time.Time
+}
+
+type UpdateInstallPackageInput struct {
+	Context command.RequestContext
+
+	InstallID  string
+	PackageID  string
+	Status     string
+	ErrorCode  string
+	MessageKey string
+
+	Now time.Time
+}
+
+type FindLatestPackageForUpgradeInput struct {
+	Context command.RequestContext
+
+	CurrentPackageID string
+	PackageName      string
+	CurrentVersion   string
+}
+
+type CreateInstallHistoryInput struct {
+	Context command.RequestContext
+
+	InstallID   string
+	FromVersion string
+	ToVersion   string
+	CommandID   string
+	Status      string
+	ErrorCode   string
+	MessageKey  string
+	Now         time.Time
 }
 
 type AlgorithmDefinition struct {

@@ -206,6 +206,8 @@ export default {
       actionUpload: '上传插件包',
       actionInstall: '安装',
       actionRollback: '回滚',
+      actionUpgrade: '升级',
+      actionDownload: '下载',
       fieldPackageName: '包名',
       fieldVersion: '版本',
       fieldManifest: 'manifest（JSON）',

@@ -103,6 +103,9 @@ func defaultsForProfile(profile string) Config {
 		},
 		Feature: FeatureConfig{
 			AssetLifecycle: false,
+			PluginMarketV2: true,
+			ContextBundle:  true,
+			ACLRoleSubject: true,
 		},
 	}
 
@@ -156,6 +159,15 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	}
 	if fc.Feature.AssetLifecycle != nil {
 		cfg.Feature.AssetLifecycle = *fc.Feature.AssetLifecycle
+	}
+	if fc.Feature.PluginMarketV2 != nil {
+		cfg.Feature.PluginMarketV2 = *fc.Feature.PluginMarketV2
+	}
+	if fc.Feature.ContextBundle != nil {
+		cfg.Feature.ContextBundle = *fc.Feature.ContextBundle
+	}
+	if fc.Feature.ACLRoleSubject != nil {
+		cfg.Feature.ACLRoleSubject = *fc.Feature.ACLRoleSubject
 	}
 	if v := strings.ToLower(strings.TrimSpace(fc.Cache.Provider)); v != "" {
 		cfg.Providers.Cache = v
@@ -273,6 +285,21 @@ func applyEnvOverrides(cfg *Config) {
 	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_ASSET_LIFECYCLE")); v != "" {
 		if parsed, err := strconv.ParseBool(v); err == nil {
 			cfg.Feature.AssetLifecycle = parsed
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_PLUGIN_MARKET_V2")); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			cfg.Feature.PluginMarketV2 = parsed
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_CONTEXT_BUNDLE")); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			cfg.Feature.ContextBundle = parsed
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_ACL_ROLE_SUBJECT")); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			cfg.Feature.ACLRoleSubject = parsed
 		}
 	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_CACHE_PROVIDER"))); v != "" {

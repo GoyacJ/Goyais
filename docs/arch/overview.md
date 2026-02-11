@@ -258,7 +258,7 @@ Command 执行管道（必须）：
     - `POST /algorithms/{algorithmId}:run`（domain sugar -> `algorithm.run` command）
     - `algorithm.run` 结果映射 `workflow_run_id` 并可通过 `GET /commands/{id}` 回查
     - `algo-pack` 安装会将 manifest 内算法定义写入 registry `algorithms`，支持多算法注册
-  - S0 严格口径合同基线（已挂载路由/占位）：
+  - S0-S6 严格口径合同基线（当前实现）：
     - `ai sessions`
       - `POST /ai/sessions`（domain sugar -> `ai.session.create` command）
       - `GET /ai/sessions`
@@ -268,18 +268,20 @@ Command 执行管道（必须）：
       - `GET /ai/sessions/{sessionId}/events`（SSE 目标路径）
     - `workflow events`
       - `GET /workflow-runs/{runId}/events`（SSE 目标路径）
-    - `plugin-market` 增补：
+    - `plugin-market`（S5）：
       - `GET /plugin-market/packages/{packageId}:download`
       - `POST /plugin-market/installs/{installId}:upgrade`（domain sugar -> `plugin.upgrade` command）
     - `streams` 增补：
       - `POST /streams/{streamId}:update-auth`（domain sugar -> `stream.updateAuth` command）
       - `DELETE /streams/{streamId}`（domain sugar -> `stream.delete` command）
-    - `context-bundles`：
+    - `context-bundles`（S6）：
       - `GET /context-bundles`
       - `GET /context-bundles/{bundleId}`
 - 仍保留的占位（按 provider 或 feature gate）：
   - `GOYAIS_FEATURE_ASSET_LIFECYCLE=false` 时，`assets` 的 `PATCH /assets/{assetId}`、`DELETE /assets/{assetId}`、`GET /assets/{assetId}/lineage` 返回 `501 NOT_IMPLEMENTED`
-  - S0 新增接口在对应切片完成前允许返回 `501 NOT_IMPLEMENTED`，但路径与契约必须保持可达、可测、可审计。
+  - `GOYAIS_FEATURE_PLUGIN_MARKET_V2=false` 时，`plugin-market` 的 `download/upgrade` 与 `plugin.upgrade` command 返回 `501 NOT_IMPLEMENTED`
+  - `GOYAIS_FEATURE_CONTEXT_BUNDLE=false` 时，`context-bundles` 读路径与 `context.bundle.rebuild` command 返回 `501 NOT_IMPLEMENTED`
+  - `GOYAIS_FEATURE_ACL_ROLE_SUBJECT=false` 时，`share.create` 仅允许 `subjectType=user`
 
 ## 8. 配置规范
 
@@ -319,6 +321,9 @@ Command 执行管道（必须）：
 - `GOYAIS_EVENT_BUS_KAFKA_CONSUMER_GROUP=goyais-stream-trigger`
 - `GOYAIS_AUTH_CONTEXT_MODE=jwt_or_header`
 - `GOYAIS_FEATURE_ASSET_LIFECYCLE=false`
+- `GOYAIS_FEATURE_PLUGIN_MARKET_V2=true`
+- `GOYAIS_FEATURE_CONTEXT_BUNDLE=true`
+- `GOYAIS_FEATURE_ACL_ROLE_SUBJECT=true`
 
 PostgreSQL DSN 规则（冻结）：
 - 当 `db.driver=postgres` 时，`GOYAIS_DB_DSN` 必须显式包含 `dbname`。

@@ -492,10 +492,11 @@ paths:
       description: |
         v0.1 限定：
         - resourceType 支持 command/asset
-        - subjectType 必须为 user
+        - subjectType 支持 user/role
         - permissions 必须来自固定枚举
         创建前服务端会校验分享者对同一资源的 SHARE 权限（owner 或已有 ACL.SHARE）。
         该接口为 domain sugar，服务端内部转换为 `share.create` command 执行。
+        当 `GOYAIS_FEATURE_ACL_ROLE_SUBJECT=false` 时，`subjectType=role` 返回 `400 INVALID_SHARE_REQUEST`。
       operationId: createShare
       parameters:
         - $ref: '#/components/parameters/RequiredXTenantId'
@@ -1359,38 +1360,6 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
-
-  /plugin-market/packages/{packageId}:download:
-    get:
-      tags: [PluginMarket]
-      summary: Download plugin package
-      operationId: downloadPluginPackage
-      parameters:
-        - $ref: '#/components/parameters/RequiredXTenantId'
-        - $ref: '#/components/parameters/RequiredXWorkspaceId'
-        - $ref: '#/components/parameters/RequiredXUserId'
-        - $ref: '#/components/parameters/XRoles'
-        - $ref: '#/components/parameters/XPolicyVersion'
-        - $ref: '#/components/parameters/XTraceId'
-        - $ref: '#/components/parameters/PackageId'
-      responses:
-        '200':
-          description: Package bytes
-          content:
-            application/octet-stream:
-              schema:
-                type: string
-                format: binary
-        '400':
-          $ref: '#/components/responses/ErrorResponse'
-        '403':
-          $ref: '#/components/responses/ErrorResponse'
-        '404':
-          $ref: '#/components/responses/ErrorResponse'
-        '501':
-          $ref: '#/components/responses/ErrorResponse'
-        default:
-          $ref: '#/components/responses/ErrorResponse'
     post:
       tags: [PluginMarket]
       summary: Upload plugin package
@@ -1418,6 +1387,41 @@ paths:
         '400':
           $ref: '#/components/responses/ErrorResponse'
         '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /plugin-market/packages/{packageId}:download:
+    get:
+      tags: [PluginMarket]
+      summary: Download plugin package
+      operationId: downloadPluginPackage
+      description: |
+        优先返回已落地 artifact；若未落地 artifact，返回 manifest 序列化字节（`application/octet-stream`）。
+        当 `GOYAIS_FEATURE_PLUGIN_MARKET_V2=false` 时返回 `501 NOT_IMPLEMENTED`。
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/PackageId'
+      responses:
+        '200':
+          description: Package bytes
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
           $ref: '#/components/responses/ErrorResponse'
         '501':
           $ref: '#/components/responses/ErrorResponse'
@@ -1558,6 +1562,9 @@ paths:
       tags: [PluginMarket]
       summary: Upgrade install
       operationId: upgradePluginInstall
+      description: |
+        仅允许 `enabled|disabled` 状态发起升级；升级会写入 `plugin_install_history` 并绑定当前 commandId。
+        当 `GOYAIS_FEATURE_PLUGIN_MARKET_V2=false` 时返回 `501 NOT_IMPLEMENTED`。
       parameters:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
@@ -1849,6 +1856,7 @@ paths:
       tags: [ContextBundle]
       summary: List context bundles
       operationId: listContextBundles
+      description: 当 `GOYAIS_FEATURE_CONTEXT_BUNDLE=false` 时返回 `501 NOT_IMPLEMENTED`。
       parameters:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
@@ -1880,6 +1888,7 @@ paths:
       tags: [ContextBundle]
       summary: Get context bundle
       operationId: getContextBundle
+      description: 当 `GOYAIS_FEATURE_CONTEXT_BUNDLE=false` 时返回 `501 NOT_IMPLEMENTED`。
       parameters:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
@@ -2097,7 +2106,7 @@ components:
       properties:
         subjectType:
           type: string
-          enum: [user, role, workspace]
+          enum: [user, role]
         subjectId:
           type: string
         permissions:
@@ -2363,6 +2372,11 @@ components:
             refs:
               type: object
               additionalProperties: true
+            embeddingsIndexRefs:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
             timeline:
               type: array
               items:
@@ -2396,7 +2410,7 @@ components:
           type: string
         subjectType:
           type: string
-          enum: [user]
+          enum: [user, role]
         subjectId:
           type: string
         permissions:
@@ -2424,7 +2438,7 @@ components:
           type: string
         subjectType:
           type: string
-          enum: [user]
+          enum: [user, role]
         subjectId:
           type: string
         permissions:

@@ -58,6 +58,21 @@
       >
         {{ t('page.plugins.actionRollback') }}
       </Button>
+      <Button
+        v-if="showUpgrade"
+        variant="secondary"
+        :disabled="busy || !item.installId"
+        @click="$emit('upgrade', item.installId as string)"
+      >
+        {{ t('page.plugins.actionUpgrade') }}
+      </Button>
+      <Button
+        variant="ghost"
+        :disabled="busy"
+        @click="$emit('download', item.id)"
+      >
+        {{ t('page.plugins.actionDownload') }}
+      </Button>
     </div>
   </article>
 </template>
@@ -93,6 +108,8 @@ defineEmits<{
   (e: 'enable', installId: string): void
   (e: 'disable', installId: string): void
   (e: 'rollback', installId: string): void
+  (e: 'upgrade', installId: string): void
+  (e: 'download', packageId: string): void
 }>()
 
 const { t } = useI18n({ useScope: 'global' })
@@ -139,4 +156,5 @@ const showRollback = computed(
     normalizedInstallStatus.value === 'disabled' ||
     normalizedInstallStatus.value === 'failed',
 )
+const showUpgrade = computed(() => normalizedInstallStatus.value === 'enabled' || normalizedInstallStatus.value === 'disabled')
 </script>

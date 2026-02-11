@@ -6,6 +6,7 @@ import (
 	"goyais/internal/ai"
 	"goyais/internal/asset"
 	"goyais/internal/command"
+	"goyais/internal/contextbundle"
 	"goyais/internal/plugin"
 	"goyais/internal/registry"
 	"goyais/internal/stream"
@@ -18,10 +19,13 @@ type apiHandler struct {
 	aiService             *ai.Service
 	assetService          *asset.Service
 	assetLifecycleEnabled bool
+	pluginMarketV2Enabled bool
+	contextBundleEnabled  bool
 	workflowService       *workflow.Service
 	registryService       *registry.Service
 	pluginService         *plugin.Service
 	streamService         *stream.Service
+	contextBundleService  *contextbundle.Service
 }
 
 func pathID(prefix, full string) string {

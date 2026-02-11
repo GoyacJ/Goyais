@@ -13,6 +13,7 @@ import (
 	"goyais/internal/asset"
 	"goyais/internal/command"
 	"goyais/internal/config"
+	"goyais/internal/contextbundle"
 	"goyais/internal/platform/cache"
 	platformdb "goyais/internal/platform/db"
 	"goyais/internal/platform/eventbus"
@@ -36,6 +37,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	}
 
 	commandService := command.NewService(repo, cfg.Command.IdempotencyTTL, cfg.Authz.AllowPrivateToPublic, log.Default())
+	commandService.SetACLRoleSubjectEnabled(cfg.Feature.ACLRoleSubject)
 
 	assetRepo, err := asset.NewRepository(cfg.Providers.DB, db)
 	if err != nil {
@@ -109,6 +111,13 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	}
 	algorithmService := algorithm.NewService(algorithmRepo, registryService, workflowService, assetService)
 
+	contextBundleRepo, err := contextbundle.NewRepository(cfg.Providers.DB, db)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("build context bundle repository: %w", err)
+	}
+	contextBundleService := contextbundle.NewService(contextBundleRepo, cfg.Authz.AllowPrivateToPublic)
+
 	cacheProvider, err := cache.New(cache.Config{
 		Provider:      cfg.Providers.Cache,
 		RedisAddr:     cfg.Cache.RedisAddr,
@@ -143,7 +152,19 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	commandService.SetEventBusProvider(eventBusProvider)
 	streamService.SetEventBusProvider(eventBusProvider)
 
-	registerCommandExecutors(commandService, aiService, assetService, cfg.Feature.AssetLifecycle, workflowService, pluginService, streamService, algorithmService)
+	registerCommandExecutors(
+		commandService,
+		aiService,
+		assetService,
+		cfg.Feature.AssetLifecycle,
+		pluginService,
+		cfg.Feature.PluginMarketV2,
+		workflowService,
+		streamService,
+		algorithmService,
+		contextBundleService,
+		cfg.Feature.ContextBundle,
+	)
 	stopStreamConsumer, err := startKafkaStreamConsumer(cfg, commandService, log.Default())
 	if err != nil {
 		_ = eventBusProvider.Close()
@@ -152,14 +173,15 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	}
 
 	h, err := httpapi.NewRouter(cfg, httpapi.RouterDeps{
-		CommandService:  commandService,
-		AIService:       aiService,
-		AssetService:    assetService,
-		WorkflowService: workflowService,
-		RegistryService: registryService,
-		PluginService:   pluginService,
-		StreamService:   streamService,
-		HealthChecker:   db,
+		CommandService:       commandService,
+		AIService:            aiService,
+		AssetService:         assetService,
+		WorkflowService:      workflowService,
+		RegistryService:      registryService,
+		PluginService:        pluginService,
+		StreamService:        streamService,
+		ContextBundleService: contextBundleService,
+		HealthChecker:        db,
 		ProviderProbe: func(ctx context.Context) map[string]httpapi.ProviderStatus {
 			out := map[string]httpapi.ProviderStatus{
 				"db":          readinessFromErr(db.PingContext(ctx)),

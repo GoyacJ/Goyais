@@ -15,6 +15,18 @@ import (
 	"goyais/internal/platform/eventbus"
 )
 
+type commandExecutionContextKey string
+
+const commandExecutionKeyID commandExecutionContextKey = "command_id"
+
+func CurrentCommandID(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	value, _ := ctx.Value(commandExecutionKeyID).(string)
+	return strings.TrimSpace(value)
+}
+
 type AuthzHook interface {
 	Check(ctx context.Context, reqCtx RequestContext, cmd Command, permission string) (allowed bool, reason string, err error)
 }
@@ -22,15 +34,16 @@ type AuthzHook interface {
 type ExecuteFunc func(ctx context.Context, reqCtx RequestContext, payload json.RawMessage) (result []byte, err error)
 
 type Service struct {
-	repo                 Repository
-	idempotencyTTL       time.Duration
-	allowPrivateToPublic bool
-	logger               *log.Logger
-	rbacHook             AuthzHook
-	egressHook           AuthzHook
-	eventBus             eventbus.Provider
-	executorsMu          sync.RWMutex
-	executors            map[string]ExecuteFunc
+	repo                  Repository
+	idempotencyTTL        time.Duration
+	allowPrivateToPublic  bool
+	aclRoleSubjectEnabled bool
+	logger                *log.Logger
+	rbacHook              AuthzHook
+	egressHook            AuthzHook
+	eventBus              eventbus.Provider
+	executorsMu           sync.RWMutex
+	executors             map[string]ExecuteFunc
 }
 
 func NewService(repo Repository, idempotencyTTL time.Duration, allowPrivateToPublic bool, logger *log.Logger) *Service {
@@ -38,11 +51,12 @@ func NewService(repo Repository, idempotencyTTL time.Duration, allowPrivateToPub
 		logger = log.Default()
 	}
 	return &Service{
-		repo:                 repo,
-		idempotencyTTL:       idempotencyTTL,
-		allowPrivateToPublic: allowPrivateToPublic,
-		logger:               logger,
-		executors:            make(map[string]ExecuteFunc),
+		repo:                  repo,
+		idempotencyTTL:        idempotencyTTL,
+		allowPrivateToPublic:  allowPrivateToPublic,
+		aclRoleSubjectEnabled: true,
+		logger:                logger,
+		executors:             make(map[string]ExecuteFunc),
 	}
 }
 
@@ -52,6 +66,10 @@ func (s *Service) SetRBACHook(hook AuthzHook) {
 
 func (s *Service) SetEgressHook(hook AuthzHook) {
 	s.egressHook = hook
+}
+
+func (s *Service) SetACLRoleSubjectEnabled(enabled bool) {
+	s.aclRoleSubjectEnabled = enabled
 }
 
 func (s *Service) SetEventBusProvider(provider eventbus.Provider) {
@@ -70,6 +88,7 @@ func (s *Service) SetExecutor(commandType string, executor ExecuteFunc) {
 }
 
 func (s *Service) Submit(ctx context.Context, reqCtx RequestContext, commandType string, payload json.RawMessage, idempotencyKey, requestedVisibility string) (Command, error) {
+	reqCtx = s.normalizeRequestContext(reqCtx)
 	if err := validateCreateRequest(commandType, payload); err != nil {
 		return Command{}, err
 	}
@@ -115,7 +134,8 @@ func (s *Service) Submit(ctx context.Context, reqCtx RequestContext, commandType
 	}
 	_ = s.repo.AppendCommandEvent(ctx, reqCtx, running.ID, "command.running", payload)
 
-	resultBytes, err := s.executeCommand(ctx, reqCtx, commandType, payload)
+	executionCtx := context.WithValue(ctx, commandExecutionKeyID, running.ID)
+	resultBytes, err := s.executeCommand(executionCtx, reqCtx, commandType, payload)
 	if err != nil {
 		failed, markErr := s.markCommandFailed(ctx, reqCtx, running.ID, commandType, payload, resultBytes, err)
 		if markErr != nil {
@@ -318,6 +338,7 @@ func defaultCommandResult(commandType string) []byte {
 }
 
 func (s *Service) Get(ctx context.Context, reqCtx RequestContext, id string) (Command, error) {
+	reqCtx = s.normalizeRequestContext(reqCtx)
 	cmd, err := s.repo.GetForAccess(ctx, reqCtx, id)
 	if err != nil {
 		return Command{}, err
@@ -337,6 +358,7 @@ func (s *Service) Get(ctx context.Context, reqCtx RequestContext, id string) (Co
 }
 
 func (s *Service) List(ctx context.Context, params ListParams) (ListResult, error) {
+	params.Context = s.normalizeRequestContext(params.Context)
 	return s.repo.List(ctx, params)
 }
 
@@ -350,6 +372,7 @@ func (s *Service) CreateShare(
 	permissions []string,
 	expiresAt *time.Time,
 ) (Share, error) {
+	reqCtx = s.normalizeRequestContext(reqCtx)
 	normalizedResourceType, err := normalizeShareResourceType(resourceType)
 	if err != nil {
 		return Share{}, err
@@ -358,7 +381,13 @@ func (s *Service) CreateShare(
 	subjectID = strings.TrimSpace(subjectID)
 	resourceID = strings.TrimSpace(resourceID)
 
-	if resourceID == "" || subjectType != "user" || subjectID == "" {
+	if resourceID == "" || subjectID == "" {
+		return Share{}, ErrInvalidShareRequest
+	}
+	if subjectType != "user" && subjectType != "role" {
+		return Share{}, ErrInvalidShareRequest
+	}
+	if subjectType == "role" && !s.aclRoleSubjectEnabled {
 		return Share{}, ErrInvalidShareRequest
 	}
 
@@ -411,11 +440,21 @@ func (s *Service) CreateShare(
 }
 
 func (s *Service) ListShares(ctx context.Context, params ShareListParams) (ShareListResult, error) {
+	params.Context = s.normalizeRequestContext(params.Context)
 	return s.repo.ListShares(ctx, params)
 }
 
 func (s *Service) DeleteShare(ctx context.Context, reqCtx RequestContext, shareID string) error {
+	reqCtx = s.normalizeRequestContext(reqCtx)
 	return s.repo.DeleteShare(ctx, reqCtx, shareID)
+}
+
+func (s *Service) normalizeRequestContext(reqCtx RequestContext) RequestContext {
+	if s.aclRoleSubjectEnabled {
+		return reqCtx
+	}
+	reqCtx.Roles = nil
+	return reqCtx
 }
 
 func (s *Service) authorizeCommand(ctx context.Context, reqCtx RequestContext, cmd Command, permission string) (bool, string, error) {

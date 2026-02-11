@@ -49,6 +49,8 @@
               @enable="onEnableInstall"
               @disable="onDisableInstall"
               @rollback="onRollbackInstall"
+              @upgrade="onUpgradeInstall"
+              @download="onDownloadPackage"
             />
           </div>
         </SectionCard>
@@ -67,11 +69,13 @@
 import { listCommands } from '@/api/commands'
 import { ApiHttpError, isMockEnabled } from '@/api/http'
 import {
+  downloadPluginPackage,
   disablePluginInstall,
   enablePluginInstall,
   installPlugin,
   listPluginPackages,
   rollbackPluginInstall,
+  upgradePluginInstall,
   uploadPluginPackage,
 } from '@/api/plugins'
 import type { ApiError, ApiObject, CommandDTO, PluginPackageDTO } from '@/api/types'
@@ -304,6 +308,29 @@ async function onDisableInstall(installId: string): Promise<void> {
 
 async function onRollbackInstall(installId: string): Promise<void> {
   await runInstallAction(installId, t('page.plugins.actionRollback'), rollbackPluginInstall)
+}
+
+async function onUpgradeInstall(installId: string): Promise<void> {
+  await runInstallAction(installId, t('page.plugins.actionUpgrade'), upgradePluginInstall)
+}
+
+async function onDownloadPackage(packageId: string): Promise<void> {
+  if (useMock) {
+    return
+  }
+  pendingPackageActionId.value = packageId
+  try {
+    const result = await downloadPluginPackage(packageId)
+    pushToast({
+      title: t('page.plugins.actionDownload'),
+      message: `${result.filename} (${result.content.length} bytes)`,
+      tone: 'success',
+    })
+  } catch (error) {
+    notifyActionError(t('page.plugins.actionDownload'), error)
+  } finally {
+    pendingPackageActionId.value = null
+  }
 }
 
 async function runInstallAction(

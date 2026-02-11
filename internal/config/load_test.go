@@ -56,6 +56,15 @@ func TestLoadDefaultsMinimal(t *testing.T) {
 	if cfg.Feature.AssetLifecycle {
 		t.Fatalf("expected default feature.asset_lifecycle=false")
 	}
+	if !cfg.Feature.PluginMarketV2 {
+		t.Fatalf("expected default feature.plugin_market_v2=true")
+	}
+	if !cfg.Feature.ContextBundle {
+		t.Fatalf("expected default feature.context_bundle=true")
+	}
+	if !cfg.Feature.ACLRoleSubject {
+		t.Fatalf("expected default feature.acl_role_subject=true")
+	}
 }
 
 func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
@@ -91,6 +100,9 @@ func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	t.Setenv("GOYAIS_EVENT_BUS_KAFKA_CONSUMER_GROUP", "goyais-test-group")
 	t.Setenv("GOYAIS_AUTH_CONTEXT_MODE", AuthContextModeHeaderOnly)
 	t.Setenv("GOYAIS_FEATURE_ASSET_LIFECYCLE", "true")
+	t.Setenv("GOYAIS_FEATURE_PLUGIN_MARKET_V2", "false")
+	t.Setenv("GOYAIS_FEATURE_CONTEXT_BUNDLE", "false")
+	t.Setenv("GOYAIS_FEATURE_ACL_ROLE_SUBJECT", "false")
 
 	cfg, err := Load()
 	if err != nil {
@@ -156,6 +168,15 @@ func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	}
 	if !cfg.Feature.AssetLifecycle {
 		t.Fatalf("expected feature.asset_lifecycle=true from env override")
+	}
+	if cfg.Feature.PluginMarketV2 {
+		t.Fatalf("expected feature.plugin_market_v2=false from env override")
+	}
+	if cfg.Feature.ContextBundle {
+		t.Fatalf("expected feature.context_bundle=false from env override")
+	}
+	if cfg.Feature.ACLRoleSubject {
+		t.Fatalf("expected feature.acl_role_subject=false from env override")
 	}
 }
 

@@ -325,6 +325,36 @@ func (r *PostgresRepository) HasPermission(ctx context.Context, req command.Requ
 	if strings.TrimSpace(assetID) == "" || strings.TrimSpace(permission) == "" {
 		return false, nil
 	}
+	permission = strings.ToUpper(strings.TrimSpace(permission))
+	if allowed, err := r.hasACLPermission(ctx, req.TenantID, req.WorkspaceID, assetID, "user", req.UserID, permission, now.UTC()); err != nil {
+		return false, err
+	} else if allowed {
+		return true, nil
+	}
+	for _, role := range req.Roles {
+		role = strings.TrimSpace(role)
+		if role == "" {
+			continue
+		}
+		allowed, err := r.hasACLPermission(ctx, req.TenantID, req.WorkspaceID, assetID, "role", role, permission, now.UTC())
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *PostgresRepository) hasACLPermission(
+	ctx context.Context,
+	tenantID, workspaceID, assetID, subjectType, subjectID, permission string,
+	now time.Time,
+) (bool, error) {
+	if strings.TrimSpace(subjectID) == "" {
+		return false, nil
+	}
 	var marker int
 	err := r.db.QueryRowContext(
 		ctx,
@@ -334,17 +364,18 @@ func (r *PostgresRepository) HasPermission(ctx context.Context, req command.Requ
 		   AND a.workspace_id = $2
 		   AND a.resource_type = 'asset'
 		   AND a.resource_id = $3
-		   AND a.subject_type = 'user'
-		   AND a.subject_id = $4
-		   AND (a.expires_at IS NULL OR a.expires_at >= $5)
-		   AND a.permissions @> jsonb_build_array($6::text)
+		   AND a.subject_type = $4
+		   AND a.subject_id = $5
+		   AND (a.expires_at IS NULL OR a.expires_at >= $6)
+		   AND a.permissions @> jsonb_build_array($7::text)
 		 LIMIT 1`,
-		req.TenantID,
-		req.WorkspaceID,
+		tenantID,
+		workspaceID,
 		assetID,
-		req.UserID,
+		subjectType,
+		subjectID,
 		now.UTC(),
-		strings.ToUpper(permission),
+		permission,
 	).Scan(&marker)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil

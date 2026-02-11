@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -95,27 +96,17 @@ func (s *Service) InstallPackage(
 		return PluginInstall{}, &ForbiddenError{Reason: reason}
 	}
 
-	if pkg.PackageType == PackageTypeAlgoPack {
-		definitions, err := parseAlgoPackDefinitions(pkg.ID, pkg.Version, pkg.ManifestJSON)
-		if err != nil {
-			return PluginInstall{}, err
-		}
-		if err := s.repo.UpsertAlgorithms(ctx, UpsertAlgorithmsInput{
-			Context:    req,
-			Visibility: pkg.Visibility,
-			Items:      definitions,
-			Now:        time.Now().UTC(),
-		}); err != nil {
-			return PluginInstall{}, err
-		}
-	}
-
-	return s.repo.CreateInstall(ctx, CreateInstallInput{
+	created, err := s.repo.CreateInstall(ctx, CreateInstallInput{
 		Context:   req,
 		PackageID: packageID,
 		Scope:     normalizedScope,
 		Now:       time.Now().UTC(),
 	})
+	if err != nil {
+		return PluginInstall{}, err
+	}
+
+	return s.installPipeline(ctx, req, created, pkg)
 }
 
 func (s *Service) EnableInstall(ctx context.Context, req command.RequestContext, installID string) (PluginInstall, error) {
@@ -128,6 +119,236 @@ func (s *Service) DisableInstall(ctx context.Context, req command.RequestContext
 
 func (s *Service) RollbackInstall(ctx context.Context, req command.RequestContext, installID string) (PluginInstall, error) {
 	return s.transitionInstall(ctx, req, installID, InstallStatusRolledBack)
+}
+
+func (s *Service) UpgradeInstall(ctx context.Context, req command.RequestContext, installID string) (PluginInstall, error) {
+	installID = strings.TrimSpace(installID)
+	if installID == "" {
+		return PluginInstall{}, ErrInvalidRequest
+	}
+
+	ins, err := s.repo.GetInstallForAccess(ctx, req, installID)
+	if err != nil {
+		return PluginInstall{}, err
+	}
+	allowed, reason, err := s.authorizeInstall(ctx, req, ins, command.PermissionManage)
+	if err != nil {
+		return PluginInstall{}, err
+	}
+	if !allowed {
+		return PluginInstall{}, &ForbiddenError{Reason: reason}
+	}
+	if ins.Status != InstallStatusEnabled && ins.Status != InstallStatusDisabled {
+		return PluginInstall{}, ErrInvalidRequest
+	}
+
+	currentPackage, err := s.repo.GetPackageForAccess(ctx, req, ins.PackageID)
+	if err != nil {
+		return PluginInstall{}, err
+	}
+	targetPackage, err := s.repo.FindLatestPackageForUpgrade(ctx, FindLatestPackageForUpgradeInput{
+		Context:          req,
+		CurrentPackageID: currentPackage.ID,
+		PackageName:      currentPackage.Name,
+		CurrentVersion:   currentPackage.Version,
+	})
+	if err != nil {
+		if errors.Is(err, ErrPackageNotFound) {
+			return PluginInstall{}, ErrInvalidRequest
+		}
+		return PluginInstall{}, err
+	}
+	if targetPackage.ID == currentPackage.ID {
+		return ins, nil
+	}
+	targetAllowed, targetReason, err := s.authorizePackage(ctx, req, targetPackage, command.PermissionExecute)
+	if err != nil {
+		return PluginInstall{}, err
+	}
+	if !targetAllowed {
+		return PluginInstall{}, &ForbiddenError{Reason: targetReason}
+	}
+
+	now := time.Now().UTC()
+	ins, err = s.repo.UpdateInstallStatus(ctx, UpdateInstallStatusInput{
+		Context:   req,
+		InstallID: ins.ID,
+		Status:    InstallStatusValidating,
+		Now:       now,
+	})
+	if err != nil {
+		return PluginInstall{}, err
+	}
+	ins, err = s.repo.UpdateInstallStatus(ctx, UpdateInstallStatusInput{
+		Context:   req,
+		InstallID: ins.ID,
+		Status:    InstallStatusInstalling,
+		Now:       time.Now().UTC(),
+	})
+	if err != nil {
+		return PluginInstall{}, err
+	}
+
+	commandID := strings.TrimSpace(command.CurrentCommandID(ctx))
+	if commandID == "" {
+		commandID = "unknown"
+	}
+
+	failUpgrade := func(code, messageKey string, err error) (PluginInstall, error) {
+		failed, markErr := s.markInstallFailed(ctx, req, ins.ID, code, messageKey)
+		if markErr != nil {
+			return PluginInstall{}, markErr
+		}
+		_, _ = s.repo.CreateInstallHistory(ctx, CreateInstallHistoryInput{
+			Context:     req,
+			InstallID:   ins.ID,
+			FromVersion: currentPackage.Version,
+			ToVersion:   targetPackage.Version,
+			CommandID:   commandID,
+			Status:      string(InstallHistoryStatusFailed),
+			ErrorCode:   code,
+			MessageKey:  messageKey,
+			Now:         time.Now().UTC(),
+		})
+		return failed, err
+	}
+
+	if targetPackage.PackageType == PackageTypeAlgoPack {
+		definitions, parseErr := parseAlgoPackDefinitions(targetPackage.ID, targetPackage.Version, targetPackage.ManifestJSON)
+		if parseErr != nil {
+			return failUpgrade("INVALID_PLUGIN_REQUEST", "error.plugin.invalid_request", parseErr)
+		}
+		if upsertErr := s.repo.UpsertAlgorithms(ctx, UpsertAlgorithmsInput{
+			Context:    req,
+			Visibility: targetPackage.Visibility,
+			Items:      definitions,
+			Now:        time.Now().UTC(),
+		}); upsertErr != nil {
+			return failUpgrade("PLUGIN_UPGRADE_FAILED", "error.plugin.install_failed", upsertErr)
+		}
+	}
+
+	updated, err := s.repo.UpdateInstallPackage(ctx, UpdateInstallPackageInput{
+		Context:   req,
+		InstallID: ins.ID,
+		PackageID: targetPackage.ID,
+		Status:    InstallStatusEnabled,
+		Now:       time.Now().UTC(),
+	})
+	if err != nil {
+		return failUpgrade("PLUGIN_UPGRADE_FAILED", "error.plugin.install_failed", err)
+	}
+	_, _ = s.repo.CreateInstallHistory(ctx, CreateInstallHistoryInput{
+		Context:     req,
+		InstallID:   ins.ID,
+		FromVersion: currentPackage.Version,
+		ToVersion:   targetPackage.Version,
+		CommandID:   commandID,
+		Status:      string(InstallHistoryStatusSucceeded),
+		Now:         time.Now().UTC(),
+	})
+	return updated, nil
+}
+
+func (s *Service) DownloadPackage(ctx context.Context, req command.RequestContext, packageID string) (PluginPackage, []byte, error) {
+	packageID = strings.TrimSpace(packageID)
+	if packageID == "" {
+		return PluginPackage{}, nil, ErrInvalidRequest
+	}
+	item, err := s.repo.GetPackageForAccess(ctx, req, packageID)
+	if err != nil {
+		return PluginPackage{}, nil, err
+	}
+	allowed, reason, err := s.authorizePackage(ctx, req, item, command.PermissionRead)
+	if err != nil {
+		return PluginPackage{}, nil, err
+	}
+	if !allowed {
+		return PluginPackage{}, nil, &ForbiddenError{Reason: reason}
+	}
+	manifest := item.ManifestJSON
+	if len(manifest) == 0 {
+		manifest = json.RawMessage(`{}`)
+	}
+	if !json.Valid(manifest) {
+		manifest = json.RawMessage(`{}`)
+	}
+	out := make([]byte, len(manifest))
+	copy(out, manifest)
+	return item, out, nil
+}
+
+func (s *Service) installPipeline(
+	ctx context.Context,
+	req command.RequestContext,
+	install PluginInstall,
+	pkg PluginPackage,
+) (PluginInstall, error) {
+	_, err := s.repo.UpdateInstallStatus(ctx, UpdateInstallStatusInput{
+		Context:   req,
+		InstallID: install.ID,
+		Status:    InstallStatusValidating,
+		Now:       time.Now().UTC(),
+	})
+	if err != nil {
+		return PluginInstall{}, err
+	}
+	_, err = s.repo.UpdateInstallStatus(ctx, UpdateInstallStatusInput{
+		Context:   req,
+		InstallID: install.ID,
+		Status:    InstallStatusInstalling,
+		Now:       time.Now().UTC(),
+	})
+	if err != nil {
+		return PluginInstall{}, err
+	}
+
+	if pkg.PackageType == PackageTypeAlgoPack {
+		definitions, parseErr := parseAlgoPackDefinitions(pkg.ID, pkg.Version, pkg.ManifestJSON)
+		if parseErr != nil {
+			failed, markErr := s.markInstallFailed(ctx, req, install.ID, "INVALID_PLUGIN_REQUEST", "error.plugin.invalid_request")
+			if markErr != nil {
+				return PluginInstall{}, markErr
+			}
+			return failed, parseErr
+		}
+		if upsertErr := s.repo.UpsertAlgorithms(ctx, UpsertAlgorithmsInput{
+			Context:    req,
+			Visibility: pkg.Visibility,
+			Items:      definitions,
+			Now:        time.Now().UTC(),
+		}); upsertErr != nil {
+			failed, markErr := s.markInstallFailed(ctx, req, install.ID, "PLUGIN_INSTALL_FAILED", "error.plugin.install_failed")
+			if markErr != nil {
+				return PluginInstall{}, markErr
+			}
+			return failed, upsertErr
+		}
+	}
+
+	return s.repo.UpdateInstallStatus(ctx, UpdateInstallStatusInput{
+		Context:   req,
+		InstallID: install.ID,
+		Status:    InstallStatusEnabled,
+		Now:       time.Now().UTC(),
+	})
+}
+
+func (s *Service) markInstallFailed(
+	ctx context.Context,
+	req command.RequestContext,
+	installID,
+	code,
+	messageKey string,
+) (PluginInstall, error) {
+	return s.repo.UpdateInstallStatus(ctx, UpdateInstallStatusInput{
+		Context:    req,
+		InstallID:  strings.TrimSpace(installID),
+		Status:     InstallStatusFailed,
+		ErrorCode:  strings.TrimSpace(code),
+		MessageKey: strings.TrimSpace(messageKey),
+		Now:        time.Now().UTC(),
+	})
 }
 
 func (s *Service) transitionInstall(

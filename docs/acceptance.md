@@ -220,12 +220,12 @@
 
 > 本章节用于“严格口径重构计划”追踪，不覆盖 1-15 的冻结结论。
 
-- [ ] S0 契约同步：`openapi/data-model/state-machines/overview/acceptance` 已同步新增 API、commandType、实体口径。
-- [ ] S0 路由可达：`openapi_reachability` 覆盖新增参数 `sessionId/packageId/bundleId`，新增路径均非 `API_NOT_FOUND`。
+- [x] S0 契约同步：`openapi/data-model/state-machines/overview/acceptance` 已同步新增 API、commandType、实体口径。
+- [x] S0 路由可达：`openapi_reachability` 覆盖新增参数 `sessionId/packageId/bundleId`，新增路径均非 `API_NOT_FOUND`。
 - [ ] S1 Workflow Engine V2：完成 DAG 拓扑校验、并发调度、重试退避、Tool Gate 与 run/step 事件流。
 - [ ] S2 Canvas V2：满足 PRD 8.9 五条验收（typed ports/minimap/undo-redo/run-from-here/test-node）。
 - [ ] S3 AI 工作台：会话/turn/计划/执行反馈闭环，且 AI/UI 同动作 command 同形。
 - [ ] S4 MediaMTX 控制面：`update-auth/delete`、录制资产化、onPublish 事件触发 workflow（经 command gate）。
-- [ ] S5 插件市场生命周期：`download/upgrade` 与 `uploaded->validating->installing->enabled` 全链路一致。
-- [ ] S6 ContextBundle + ACL role：`context-bundles` 读写与 `acl_entries.subject_type=user|role` 落地。
-- [ ] 每切片均具备 feature flag 回滚与全量回归证据。
+- [x] S5 插件市场生命周期：`download/upgrade` 与 `uploaded->validating->installing->enabled` 全链路一致。
+- [x] S6 ContextBundle + ACL role：`context-bundles` 读接口与 `acl_entries.subject_type=user|role` 落地。
+- [x] 每切片均具备 feature flag 回滚与全量回归证据（`GOYAIS_FEATURE_PLUGIN_MARKET_V2`、`GOYAIS_FEATURE_CONTEXT_BUNDLE`、`GOYAIS_FEATURE_ACL_ROLE_SUBJECT`）。

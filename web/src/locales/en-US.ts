@@ -206,6 +206,8 @@ export default {
       actionUpload: 'Upload Package',
       actionInstall: 'Install',
       actionRollback: 'Rollback',
+      actionUpgrade: 'Upgrade',
+      actionDownload: 'Download',
       fieldPackageName: 'package name',
       fieldVersion: 'version',
       fieldManifest: 'manifest (JSON)',

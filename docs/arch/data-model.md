@@ -86,7 +86,7 @@
 - `workspace_id`
 - `resource_type`（v0.1 share API 支持 `command/asset`；查询判定可覆盖 `workflow_template/workflow_run/capability/capability_provider/algorithm`）
 - `resource_id`
-- `subject_type`（S0 合同基线：`user|role`；当前实现阶段允许先从 `user` 落地）
+- `subject_type`（`user|role`）
 - `subject_id`
 - `permissions`（JSON 数组：READ/WRITE/EXECUTE/MANAGE/SHARE）
 - `expires_at`（可空）
@@ -103,8 +103,9 @@
 - PostgreSQL：`permissions` 使用 `JSONB`；权限包含判断使用 `@>`（示例：`a.permissions @> '["READ"]'::jsonb`）。
 - 过期判定统一：`expires_at < now` 视为无效 ACL。
 - 写入路径固定为 Command-first：
-  - `share.create`：新增 `acl_entries` 记录（subjectType 固定 `user`）。
+  - `share.create`：新增 `acl_entries` 记录（subjectType 支持 `user|role`）。
   - `share.delete`：按 `(id, tenant_id, workspace_id, created_by)` 删除记录。
+- `GOYAIS_FEATURE_ACL_ROLE_SUBJECT=false` 时，仅允许 `subjectType=user` 写入。
 
 ## 3.3 资产与血缘
 
@@ -273,6 +274,10 @@ v0.1 当前实现进度：
 - `message_key`
 - `created_at`
 
+建议索引：
+- `plugin_install_history(tenant_id, workspace_id, created_at desc, id desc)`
+- `plugin_install_history(install_id, created_at desc, id desc)`
+
 ## 3.6 流媒体
 
 ### streaming_assets
@@ -382,6 +387,7 @@ payload 约定（v0.1）：
 ### context_bundles
 - `id`
 - `tenant_id, workspace_id, owner_id, visibility`
+- `acl_json`（JSON 数组）
 - `scope_type`（run/session/workspace）
 - `scope_id`
 - `facts`（JSON）
@@ -390,6 +396,10 @@ payload 约定（v0.1）：
 - `embeddings_index_refs`（JSON）
 - `timeline`（JSON）
 - `created_at, updated_at`
+
+约束与索引：
+- 唯一键：`(tenant_id, workspace_id, owner_id, scope_type, scope_id)`。
+- `context_bundles(tenant_id, workspace_id, created_at desc, id desc)`。
 
 ### context_bundle_items
 - `id`

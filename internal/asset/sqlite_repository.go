@@ -312,6 +312,36 @@ func (r *SQLiteRepository) HasPermission(ctx context.Context, req command.Reques
 	if strings.TrimSpace(assetID) == "" || strings.TrimSpace(permission) == "" {
 		return false, nil
 	}
+	permission = strings.ToUpper(strings.TrimSpace(permission))
+	nowRaw := now.UTC().Format(time.RFC3339Nano)
+	if allowed, err := r.hasACLPermission(ctx, req.TenantID, req.WorkspaceID, assetID, "user", req.UserID, permission, nowRaw); err != nil {
+		return false, err
+	} else if allowed {
+		return true, nil
+	}
+	for _, role := range req.Roles {
+		role = strings.TrimSpace(role)
+		if role == "" {
+			continue
+		}
+		allowed, err := r.hasACLPermission(ctx, req.TenantID, req.WorkspaceID, assetID, "role", role, permission, nowRaw)
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *SQLiteRepository) hasACLPermission(
+	ctx context.Context,
+	tenantID, workspaceID, assetID, subjectType, subjectID, permission, nowRaw string,
+) (bool, error) {
+	if strings.TrimSpace(subjectID) == "" {
+		return false, nil
+	}
 	var marker int
 	err := r.db.QueryRowContext(ctx,
 		`SELECT 1
@@ -320,17 +350,18 @@ func (r *SQLiteRepository) HasPermission(ctx context.Context, req command.Reques
 		   AND a.workspace_id = ?
 		   AND a.resource_type = 'asset'
 		   AND a.resource_id = ?
-		   AND a.subject_type = 'user'
+		   AND a.subject_type = ?
 		   AND a.subject_id = ?
 		   AND (a.expires_at IS NULL OR a.expires_at >= ?)
 		   AND EXISTS (SELECT 1 FROM json_each(a.permissions) p WHERE p.value = ?)
 		 LIMIT 1`,
-		req.TenantID,
-		req.WorkspaceID,
+		tenantID,
+		workspaceID,
 		assetID,
-		req.UserID,
-		now.UTC().Format(time.RFC3339Nano),
-		strings.ToUpper(permission),
+		subjectType,
+		subjectID,
+		nowRaw,
+		permission,
 	).Scan(&marker)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil

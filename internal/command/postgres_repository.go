@@ -270,35 +270,26 @@ func (r *PostgresRepository) HasCommandPermission(ctx context.Context, req Reque
 	if strings.TrimSpace(commandID) == "" || strings.TrimSpace(permission) == "" {
 		return false, nil
 	}
-
-	var marker int
-	err := r.db.QueryRowContext(
-		ctx,
-		`SELECT 1
-		 FROM acl_entries a
-		 WHERE a.tenant_id = $1
-		   AND a.workspace_id = $2
-		   AND a.resource_type = 'command'
-		   AND a.resource_id = $3
-		   AND a.subject_type = 'user'
-		   AND a.subject_id = $4
-		   AND (a.expires_at IS NULL OR a.expires_at >= $5)
-		   AND a.permissions @> jsonb_build_array($6::text)
-		 LIMIT 1`,
-		req.TenantID,
-		req.WorkspaceID,
-		commandID,
-		req.UserID,
-		now.UTC(),
-		strings.ToUpper(permission),
-	).Scan(&marker)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
+	permission = strings.ToUpper(strings.TrimSpace(permission))
+	if allowed, err := r.hasACLPermission(ctx, req.TenantID, req.WorkspaceID, "command", commandID, "user", req.UserID, permission, now.UTC()); err != nil {
+		return false, err
+	} else if allowed {
+		return true, nil
 	}
-	if err != nil {
-		return false, fmt.Errorf("query acl permission: %w", err)
+	for _, role := range req.Roles {
+		role = strings.TrimSpace(role)
+		if role == "" {
+			continue
+		}
+		allowed, err := r.hasACLPermission(ctx, req.TenantID, req.WorkspaceID, "command", commandID, "role", role, permission, now.UTC())
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			return true, nil
+		}
 	}
-	return true, nil
+	return false, nil
 }
 
 func (r *PostgresRepository) GetShareResource(ctx context.Context, req RequestContext, resourceType, resourceID string) (ShareResource, error) {
@@ -366,7 +357,35 @@ func (r *PostgresRepository) HasShareResourcePermission(
 	default:
 		return false, ErrInvalidShareRequest
 	}
+	if allowed, err := r.hasACLPermission(ctx, req.TenantID, req.WorkspaceID, resourceType, resourceID, "user", req.UserID, permission, now.UTC()); err != nil {
+		return false, err
+	} else if allowed {
+		return true, nil
+	}
+	for _, role := range req.Roles {
+		role = strings.TrimSpace(role)
+		if role == "" {
+			continue
+		}
+		allowed, err := r.hasACLPermission(ctx, req.TenantID, req.WorkspaceID, resourceType, resourceID, "role", role, permission, now.UTC())
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
+func (r *PostgresRepository) hasACLPermission(
+	ctx context.Context,
+	tenantID, workspaceID, resourceType, resourceID, subjectType, subjectID, permission string,
+	now time.Time,
+) (bool, error) {
+	if strings.TrimSpace(subjectID) == "" {
+		return false, nil
+	}
 	var marker int
 	err := r.db.QueryRowContext(
 		ctx,
@@ -376,16 +395,17 @@ func (r *PostgresRepository) HasShareResourcePermission(
 		   AND a.workspace_id = $2
 		   AND a.resource_type = $3
 		   AND a.resource_id = $4
-		   AND a.subject_type = 'user'
-		   AND a.subject_id = $5
-		   AND (a.expires_at IS NULL OR a.expires_at >= $6)
-		   AND a.permissions @> jsonb_build_array($7::text)
+		   AND a.subject_type = $5
+		   AND a.subject_id = $6
+		   AND (a.expires_at IS NULL OR a.expires_at >= $7)
+		   AND a.permissions @> jsonb_build_array($8::text)
 		 LIMIT 1`,
-		req.TenantID,
-		req.WorkspaceID,
+		tenantID,
+		workspaceID,
 		resourceType,
 		resourceID,
-		req.UserID,
+		subjectType,
+		subjectID,
 		now.UTC(),
 		permission,
 	).Scan(&marker)
@@ -393,7 +413,7 @@ func (r *PostgresRepository) HasShareResourcePermission(
 		return false, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("query share resource permission: %w", err)
+		return false, fmt.Errorf("query acl permission: %w", err)
 	}
 	return true, nil
 }

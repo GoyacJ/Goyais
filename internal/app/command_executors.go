@@ -16,6 +16,7 @@ import (
 	"goyais/internal/algorithm"
 	"goyais/internal/asset"
 	"goyais/internal/command"
+	"goyais/internal/contextbundle"
 	"goyais/internal/plugin"
 	"goyais/internal/stream"
 	"goyais/internal/workflow"
@@ -151,6 +152,12 @@ type aiSessionTurnCommandPayload struct {
 	Message   string `json:"message"`
 }
 
+type contextBundleRebuildCommandPayload struct {
+	ScopeType  string `json:"scopeType"`
+	ScopeID    string `json:"scopeId"`
+	Visibility string `json:"visibility"`
+}
+
 const timeRFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
 
 func registerCommandExecutors(
@@ -158,14 +165,19 @@ func registerCommandExecutors(
 	aiService *ai.Service,
 	assetService *asset.Service,
 	assetLifecycleEnabled bool,
-	workflowService *workflow.Service,
 	pluginService *plugin.Service,
+	pluginMarketV2Enabled bool,
+	workflowService *workflow.Service,
 	streamService *stream.Service,
 	algorithmService *algorithm.Service,
+	contextBundleService *contextbundle.Service,
+	contextBundleEnabled bool,
 ) {
 	if commandService == nil {
 		return
 	}
+	commandService.SetExecutor("plugin.upgrade", newNotImplementedExecutor("error.plugin.not_implemented"))
+	commandService.SetExecutor("context.bundle.rebuild", newNotImplementedExecutor("error.context_bundle.not_implemented"))
 	commandService.SetExecutor("share.create", newShareCreateExecutor(commandService))
 	commandService.SetExecutor("share.delete", newShareDeleteExecutor(commandService))
 	if aiService != nil {
@@ -195,6 +207,9 @@ func registerCommandExecutors(
 		commandService.SetExecutor("plugin.enable", newPluginEnableExecutor(pluginService))
 		commandService.SetExecutor("plugin.disable", newPluginDisableExecutor(pluginService))
 		commandService.SetExecutor("plugin.rollback", newPluginRollbackExecutor(pluginService))
+		if pluginMarketV2Enabled {
+			commandService.SetExecutor("plugin.upgrade", newPluginUpgradeExecutor(pluginService))
+		}
 	}
 	if streamService != nil {
 		commandService.SetExecutor("stream.create", newStreamCreateExecutor(streamService))
@@ -206,6 +221,19 @@ func registerCommandExecutors(
 	}
 	if algorithmService != nil {
 		commandService.SetExecutor("algorithm.run", newAlgorithmRunExecutor(algorithmService))
+	}
+	if contextBundleService != nil && contextBundleEnabled {
+		commandService.SetExecutor("context.bundle.rebuild", newContextBundleRebuildExecutor(contextBundleService))
+	}
+}
+
+func newNotImplementedExecutor(messageKey string) command.ExecuteFunc {
+	return func(_ context.Context, _ command.RequestContext, _ json.RawMessage) ([]byte, error) {
+		return nil, &command.ExecutionError{
+			Code:       "NOT_IMPLEMENTED",
+			MessageKey: messageKey,
+			Err:        command.ErrNotImplemented,
+		}
 	}
 }
 
@@ -889,6 +917,26 @@ func newPluginRollbackExecutor(pluginService *plugin.Service) command.ExecuteFun
 	}
 }
 
+func newPluginUpgradeExecutor(pluginService *plugin.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req pluginInstallActionCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapPluginExecutionError(plugin.ErrInvalidRequest)
+		}
+
+		ins, err := pluginService.UpgradeInstall(ctx, reqCtx, req.InstallID)
+		if err != nil {
+			return nil, mapPluginExecutionError(err)
+		}
+
+		result := map[string]any{
+			"install": toPluginInstallResultPayload(ins),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
 func mapPluginExecutionError(err error) error {
 	switch {
 	case errors.Is(err, plugin.ErrInvalidRequest):
@@ -1184,6 +1232,64 @@ func mapStreamExecutionError(err error) error {
 			Code:       "INTERNAL_ERROR",
 			MessageKey: "error.common.internal",
 			Err:        fmt.Errorf("stream executor: %w", err),
+		}
+	}
+}
+
+func newContextBundleRebuildExecutor(contextBundleService *contextbundle.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req contextBundleRebuildCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapContextBundleExecutionError(contextbundle.ErrInvalidRequest)
+		}
+		bundle, err := contextBundleService.RebuildBundle(ctx, reqCtx, req.ScopeType, req.ScopeID, req.Visibility)
+		if err != nil {
+			return nil, mapContextBundleExecutionError(err)
+		}
+		result := map[string]any{
+			"bundle": map[string]any{
+				"id":         bundle.ID,
+				"status":     command.StatusSucceeded,
+				"scopeType":  bundle.ScopeType,
+				"scopeId":    bundle.ScopeID,
+				"visibility": bundle.Visibility,
+			},
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func mapContextBundleExecutionError(err error) error {
+	switch {
+	case errors.Is(err, contextbundle.ErrInvalidRequest):
+		return &command.ExecutionError{
+			Code:       "INVALID_CONTEXT_BUNDLE_REQUEST",
+			MessageKey: "error.context_bundle.invalid_request",
+			Err:        command.ErrInvalidCommandRequest,
+		}
+	case errors.Is(err, contextbundle.ErrNotFound):
+		return &command.ExecutionError{
+			Code:       "CONTEXT_BUNDLE_NOT_FOUND",
+			MessageKey: "error.context_bundle.not_found",
+			Err:        command.ErrInvalidCommandRequest,
+		}
+	case errors.Is(err, contextbundle.ErrForbidden):
+		reason := ""
+		var forbidden *contextbundle.ForbiddenError
+		if errors.As(err, &forbidden) {
+			reason = forbidden.Reason
+		}
+		return &command.ExecutionError{
+			Code:       "FORBIDDEN",
+			MessageKey: "error.authz.forbidden",
+			Err:        &command.ForbiddenError{Reason: reason},
+		}
+	default:
+		return &command.ExecutionError{
+			Code:       "INTERNAL_ERROR",
+			MessageKey: "error.common.internal",
+			Err:        fmt.Errorf("context bundle executor: %w", err),
 		}
 	}
 }
