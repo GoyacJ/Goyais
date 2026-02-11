@@ -1,0 +1,3202 @@
+openapi: 3.0.3
+info:
+  title: Goyais Java API Draft
+  version: 1.0.0
+  description: |
+    Goyais v0.1 初版 API 契约。
+    - API 基础路径固定为 /api/v1
+    - v0.1 通过 x-release 标注，不体现在 URL
+    - 所有错误响应固定外层包装：{ error: { code, messageKey, details } }
+    - messageKey 即 i18nKey
+  x-release: v0.1
+servers:
+  - url: /api/v1
+tags:
+  - name: Health
+    description: 健康检查
+  - name: Command
+    description: Command-first 规范入口
+  - name: Share
+    description: 资源 ACL 分享（v0.1 支持 command/asset）
+  - name: Asset
+    description: 资产管理
+  - name: WorkflowTemplate
+    description: DAG 模板
+  - name: WorkflowRun
+    description: 运行与回放
+  - name: Algorithm
+    description: 算法运行（domain sugar -> command）
+  - name: Registry
+    description: 能力与算法注册中心
+  - name: PluginMarket
+    description: 插件市场
+  - name: Stream
+    description: 流媒体控制面
+  - name: AISession
+    description: AI 工作台会话与 turn 执行
+  - name: ContextBundle
+    description: 上下文索引与回放聚合
+
+security:
+  - bearerAuth: []
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Health check
+      operationId: healthz
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, timestamp]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+                    description: 构建注入版本信息（tag/commit/semver）。
+                    example: v0.1.0
+                  mode:
+                    type: string
+                    description: 当前运行模式（可选），用于 minimal/full 验收。
+                    enum: [minimal, full]
+                    example: minimal
+                  providers:
+                    type: object
+                    description: 当前生效 provider 选择（可选），用于 provider 切换验收。
+                    properties:
+                      db:
+                        type: string
+                        example: sqlite
+                      cache:
+                        type: string
+                        example: memory
+                      vector:
+                        type: string
+                        example: sqlite
+                      objectStore:
+                        type: string
+                        example: local
+                      stream:
+                        type: string
+                        example: mediamtx
+                      eventBus:
+                        type: string
+                        example: memory
+                  details:
+                    type: object
+                    description: provider 细粒度可用性（ready/degraded），异常时在 error 返回如认证失败等原因。
+                    properties:
+                      providers:
+                        type: object
+                        properties:
+                          db:
+                            $ref: '#/components/schemas/ProviderReadiness'
+                          cache:
+                            $ref: '#/components/schemas/ProviderReadiness'
+                          vector:
+                            $ref: '#/components/schemas/ProviderReadiness'
+                          objectStore:
+                            $ref: '#/components/schemas/ProviderReadiness'
+                          stream:
+                            $ref: '#/components/schemas/ProviderReadiness'
+                          event_bus:
+                            $ref: '#/components/schemas/ProviderReadiness'
+
+  /system/healthz:
+    get:
+      tags: [Health]
+      summary: Health check (alias)
+      operationId: systemHealthz
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, timestamp]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+                    description: 构建注入版本信息（tag/commit/semver）。
+                    example: v0.1.0
+                  mode:
+                    type: string
+                    description: 当前运行模式（可选），用于 minimal/full 验收。
+                    enum: [minimal, full]
+                    example: minimal
+                  providers:
+                    type: object
+                    description: 当前生效 provider 选择（可选），用于 provider 切换验收。
+                    properties:
+                      db:
+                        type: string
+                        example: sqlite
+                      cache:
+                        type: string
+                        example: memory
+                      vector:
+                        type: string
+                        example: sqlite
+                      objectStore:
+                        type: string
+                        example: local
+                      stream:
+                        type: string
+                        example: mediamtx
+                      eventBus:
+                        type: string
+                        example: memory
+                  details:
+                    type: object
+                    description: provider 细粒度可用性（ready/degraded）。
+                    properties:
+                      providers:
+                        type: object
+                        properties:
+                          db:
+                            $ref: '#/components/schemas/ProviderReadiness'
+                          cache:
+                            $ref: '#/components/schemas/ProviderReadiness'
+                          vector:
+                            $ref: '#/components/schemas/ProviderReadiness'
+                          objectStore:
+                            $ref: '#/components/schemas/ProviderReadiness'
+                          stream:
+                            $ref: '#/components/schemas/ProviderReadiness'
+                          event_bus:
+                            $ref: '#/components/schemas/ProviderReadiness'
+
+  /commands:
+    get:
+      tags: [Command]
+      summary: List commands
+      description: 固定排序为 created_at DESC, id DESC。若提供 cursor，服务端忽略 page/pageSize，二者都使用同一排序语义。可读过滤在 repository/SQL 层完成（owner OR WORKSPACE OR ACL.READ）。
+      operationId: listCommands
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Command list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [Command]
+      summary: Submit command (canonical)
+      operationId: createCommand
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandCreateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resource, commandRef]
+                properties:
+                  resource:
+                    $ref: '#/components/schemas/Command'
+                  commandRef:
+                    $ref: '#/components/schemas/CommandRef'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /ai/sessions:
+    get:
+      tags: [AISession]
+      summary: List AI sessions
+      operationId: listAISessions
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: AI session list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AISessionListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [AISession]
+      summary: Create AI session (domain sugar -> command)
+      operationId: createAISession
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AISessionCreateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseAISession'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /ai/sessions/{sessionId}:
+    get:
+      tags: [AISession]
+      summary: Get AI session
+      operationId: getAISession
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: AI session detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AISession'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /ai/sessions/{sessionId}:archive:
+    post:
+      tags: [AISession]
+      summary: Archive AI session (domain sugar -> command)
+      operationId: archiveAISession
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseAISession'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /ai/sessions/{sessionId}/turns:
+    post:
+      tags: [AISession]
+      summary: Create AI turn (domain sugar -> command)
+      operationId: createAISessionTurn
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AISessionTurnCreateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseAISessionTurn'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /ai/sessions/{sessionId}/events:
+    get:
+      tags: [AISession]
+      summary: Stream AI session events (SSE)
+      operationId: streamAISessionEvents
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: |
+            SSE event stream，包含以下事件类型：
+            - `ai.turn.*`：会话回合事件
+            - `command.*`：AI 关联 command 状态摘要
+            - `workflow.run.*`：当关联 command 触发 workflow 时的运行摘要
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /commands/{commandId}:
+    get:
+      tags: [Command]
+      summary: Get command by id
+      operationId: getCommand
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: Command detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Command'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /shares:
+    post:
+      tags: [Share]
+      summary: Create share entry
+      description: |
+        v0.1 限定：
+        - resourceType 支持 command/asset
+        - subjectType 支持 user/role
+        - permissions 必须来自固定枚举
+        创建前服务端会校验分享者对同一资源的 SHARE 权限（owner 或已有 ACL.SHARE）。
+        该接口为 domain sugar，服务端内部转换为 `share.create` command 执行。
+        当 `GOYAIS_FEATURE_ACL_ROLE_SUBJECT=false` 时，`subjectType=role` 返回 `400 INVALID_SHARE_REQUEST`。
+      operationId: createShare
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareCreateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseShare'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    get:
+      tags: [Share]
+      summary: List shares
+      description: 固定排序为 created_at DESC, id DESC。若提供 cursor，服务端忽略 page/pageSize。
+      operationId: listShares
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Share list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /shares/{shareId}:
+    delete:
+      tags: [Share]
+      summary: Delete share entry
+      description: 该接口为 domain sugar，服务端内部转换为 `share.delete` command 执行。
+      operationId: deleteShare
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/ShareId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseShare'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /assets:
+    get:
+      tags: [Asset]
+      summary: List assets
+      operationId: listAssets
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Asset list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [Asset]
+      summary: Create asset (domain sugar -> command)
+      operationId: createAsset
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssetCreateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseAsset'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /assets/{assetId}:
+    get:
+      tags: [Asset]
+      summary: Get asset
+      operationId: getAsset
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200':
+          description: Asset detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    patch:
+      tags: [Asset]
+      summary: Update asset (domain sugar -> command)
+      operationId: updateAsset
+      description: 受 `GOYAIS_FEATURE_ASSET_LIFECYCLE` 控制；关闭时返回 `501 NOT_IMPLEMENTED`。
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/AssetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetUpdateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseAsset'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      tags: [Asset]
+      summary: Delete asset (domain sugar -> command)
+      operationId: deleteAsset
+      description: 受 `GOYAIS_FEATURE_ASSET_LIFECYCLE` 控制；关闭时返回 `501 NOT_IMPLEMENTED`。
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseAsset'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /assets/{assetId}/lineage:
+    get:
+      tags: [Asset]
+      summary: Get asset lineage graph
+      operationId: getAssetLineage
+      description: 受 `GOYAIS_FEATURE_ASSET_LIFECYCLE` 控制；关闭时返回 `501 NOT_IMPLEMENTED`。
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200':
+          description: Asset lineage graph
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetLineageResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-templates:
+    get:
+      tags: [WorkflowTemplate]
+      summary: List workflow templates
+      operationId: listWorkflowTemplates
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Workflow template list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowTemplateListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [WorkflowTemplate]
+      summary: Create workflow template (domain sugar -> command)
+      operationId: createWorkflowTemplate
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowTemplateCreateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowTemplate'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-templates/{templateId}:
+    get:
+      tags: [WorkflowTemplate]
+      summary: Get workflow template
+      operationId: getWorkflowTemplate
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/TemplateId'
+      responses:
+        '200':
+          description: Workflow template detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowTemplate'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-templates/{templateId}:patch:
+    post:
+      tags: [WorkflowTemplate]
+      summary: Patch workflow template (domain sugar -> command)
+      operationId: patchWorkflowTemplate
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/TemplateId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowTemplatePatchRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowTemplate'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-templates/{templateId}:publish:
+    post:
+      tags: [WorkflowTemplate]
+      summary: Publish workflow template (domain sugar -> command)
+      operationId: publishWorkflowTemplate
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/TemplateId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowTemplate'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-runs:
+    get:
+      tags: [WorkflowRun]
+      summary: List workflow runs
+      operationId: listWorkflowRuns
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Workflow run list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowRunListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [WorkflowRun]
+      summary: Run workflow (domain sugar -> command)
+      operationId: createWorkflowRun
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowRunCreateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowRun'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-runs/{runId}:
+    get:
+      tags: [WorkflowRun]
+      summary: Get workflow run
+      operationId: getWorkflowRun
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: Workflow run detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowRun'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-runs/{runId}:cancel:
+    post:
+      tags: [WorkflowRun]
+      summary: Cancel run (domain sugar -> command)
+      operationId: cancelWorkflowRun
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseWorkflowRun'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-runs/{runId}/steps:
+    get:
+      tags: [WorkflowRun]
+      summary: List step runs
+      operationId: listStepRuns
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Step run list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StepRunListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /workflow-runs/{runId}/events:
+    get:
+      tags: [WorkflowRun]
+      summary: Stream workflow run events (SSE)
+      operationId: streamWorkflowRunEvents
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: SSE event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /algorithms/{algorithmId}:run:
+    post:
+      tags: [Algorithm]
+      summary: Run algorithm (domain sugar -> command)
+      operationId: runAlgorithm
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/AlgorithmId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlgorithmRunRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseAlgorithmRun'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /registry/capabilities:
+    get:
+      tags: [Registry]
+      summary: List capabilities
+      description: 固定排序为 created_at DESC, id DESC。若提供 cursor，服务端忽略 page/pageSize。
+      operationId: listCapabilities
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Capability list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /registry/capabilities/{capabilityId}:
+    get:
+      tags: [Registry]
+      summary: Get capability
+      operationId: getCapability
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/CapabilityId'
+      responses:
+        '200':
+          description: Capability detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Capability'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /registry/algorithms:
+    get:
+      tags: [Registry]
+      summary: List algorithms
+      description: 固定排序为 created_at DESC, id DESC。若提供 cursor，服务端忽略 page/pageSize。
+      operationId: listAlgorithms
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Algorithm list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlgorithmListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /registry/algorithms/{algorithmId}:
+    get:
+      tags: [Registry]
+      summary: Get algorithm
+      operationId: getAlgorithm
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/AlgorithmId'
+      responses:
+        '200':
+          description: Algorithm detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Algorithm'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /registry/providers:
+    get:
+      tags: [Registry]
+      summary: List capability providers
+      description: 固定排序为 created_at DESC, id DESC。若提供 cursor，服务端忽略 page/pageSize。
+      operationId: listProviders
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Provider list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /plugin-market/packages:
+    get:
+      tags: [PluginMarket]
+      summary: List plugin packages
+      operationId: listPluginPackages
+      description: 固定排序为 created_at DESC, id DESC。若提供 cursor，服务端忽略 page/pageSize。
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Plugin package list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginPackageListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [PluginMarket]
+      summary: Upload plugin package
+      operationId: uploadPluginPackage
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PluginPackageUploadRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginPackage'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /plugin-market/packages/{packageId}:download:
+    get:
+      tags: [PluginMarket]
+      summary: Download plugin package
+      operationId: downloadPluginPackage
+      description: |
+        优先返回已落地 artifact；若未落地 artifact，返回 manifest 序列化字节（`application/octet-stream`）。
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/PackageId'
+      responses:
+        '200':
+          description: Package bytes
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /plugin-market/installs:
+    post:
+      tags: [PluginMarket]
+      summary: Install plugin package
+      operationId: installPlugin
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PluginInstallRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /plugin-market/installs/{installId}:enable:
+    post:
+      tags: [PluginMarket]
+      summary: Enable install
+      operationId: enablePluginInstall
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/InstallId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /plugin-market/installs/{installId}:disable:
+    post:
+      tags: [PluginMarket]
+      summary: Disable install
+      operationId: disablePluginInstall
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/InstallId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /plugin-market/installs/{installId}:rollback:
+    post:
+      tags: [PluginMarket]
+      summary: Rollback install
+      operationId: rollbackPluginInstall
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/InstallId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /plugin-market/installs/{installId}:upgrade:
+    post:
+      tags: [PluginMarket]
+      summary: Upgrade install
+      operationId: upgradePluginInstall
+      description: |
+        仅允许 `enabled|disabled` 状态发起升级；升级会写入 `plugin_install_history` 并绑定当前 commandId。
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/InstallId'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponsePluginInstall'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /streams:
+    get:
+      tags: [Stream]
+      summary: List streams
+      operationId: listStreams
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Stream list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreamListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      tags: [Stream]
+      summary: Create stream (domain sugar -> command)
+      operationId: createStream
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StreamCreateRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseStream'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /streams/{streamId}:
+    get:
+      tags: [Stream]
+      summary: Get stream
+      operationId: getStream
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/StreamId'
+      responses:
+        '200':
+          description: Stream detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stream'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      tags: [Stream]
+      summary: Delete stream (domain sugar -> command)
+      operationId: deleteStream
+      description: 当 `GOYAIS_FEATURE_STREAM_CONTROL_PLANE=false` 时返回 `501 NOT_IMPLEMENTED`。
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/StreamId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseStream'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /streams/{streamId}:update-auth:
+    post:
+      tags: [Stream]
+      summary: Update stream auth rule (domain sugar -> command)
+      operationId: updateStreamAuth
+      description: 当 `GOYAIS_FEATURE_STREAM_CONTROL_PLANE=false` 时返回 `501 NOT_IMPLEMENTED`。
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/StreamId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseStream'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /streams/{streamId}:record-start:
+    post:
+      tags: [Stream]
+      summary: Start stream recording (domain sugar -> command)
+      operationId: startStreamRecording
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/StreamId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseStream'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /streams/{streamId}:record-stop:
+    post:
+      tags: [Stream]
+      summary: Stop stream recording (domain sugar -> command)
+      operationId: stopStreamRecording
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/StreamId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseStream'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /streams/{streamId}:kick:
+    post:
+      tags: [Stream]
+      summary: Kick stream connection (domain sugar -> command)
+      operationId: kickStream
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/StreamId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponseStream'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /context-bundles:
+    get:
+      tags: [ContextBundle]
+      summary: List context bundles
+      operationId: listContextBundles
+      description: 当 `GOYAIS_FEATURE_CONTEXT_BUNDLE=false` 时返回 `501 NOT_IMPLEMENTED`。
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Context bundle list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContextBundleListResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /context-bundles/{bundleId}:
+    get:
+      tags: [ContextBundle]
+      summary: Get context bundle
+      operationId: getContextBundle
+      description: 当 `GOYAIS_FEATURE_CONTEXT_BUNDLE=false` 时返回 `501 NOT_IMPLEMENTED`。
+      parameters:
+        - $ref: '#/components/parameters/RequiredXTenantId'
+        - $ref: '#/components/parameters/RequiredXWorkspaceId'
+        - $ref: '#/components/parameters/RequiredXUserId'
+        - $ref: '#/components/parameters/XRoles'
+        - $ref: '#/components/parameters/XPolicyVersion'
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/BundleId'
+      responses:
+        '200':
+          description: Context bundle detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContextBundle'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '501':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    XTenantId:
+      name: X-Tenant-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 可选租户上下文。服务端必须校验是否属于 JWT 可访问范围。
+    XWorkspaceId:
+      name: X-Workspace-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 可选工作区上下文。服务端必须校验是否属于 JWT 可访问范围。
+    RequiredXTenantId:
+      name: X-Tenant-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 当 `GOYAIS_AUTH_CONTEXT_MODE=header_only` 或请求未携带有效 Bearer JWT 时必须传入。
+    RequiredXWorkspaceId:
+      name: X-Workspace-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 当 `GOYAIS_AUTH_CONTEXT_MODE=header_only` 或请求未携带有效 Bearer JWT 时必须传入。
+    RequiredXUserId:
+      name: X-User-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 当 `GOYAIS_AUTH_CONTEXT_MODE=header_only` 或请求未携带有效 Bearer JWT 时必须传入，服务端将 ownerId 映射为该值。
+    XRoles:
+      name: X-Roles
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 可选。逗号分隔角色列表；当存在 JWT claims 时仅允许在 claims.roles 范围内覆盖。
+    XPolicyVersion:
+      name: X-Policy-Version
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 可选。授权策略版本，未提供时默认 `v0.1`。
+    XTraceId:
+      name: X-Trace-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 可选。链路追踪 ID，未提供时服务端自动生成。
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+      description: 强烈建议传入。用于命令幂等去重；同 key 不同 payload 会返回冲突。
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+      description: 若存在 cursor，则 cursor 优先级高于 page/pageSize，服务端必须忽略 page/pageSize。
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 20
+    CommandId:
+      name: commandId
+      in: path
+      required: true
+      schema:
+        type: string
+    ShareId:
+      name: shareId
+      in: path
+      required: true
+      schema:
+        type: string
+    AssetId:
+      name: assetId
+      in: path
+      required: true
+      schema:
+        type: string
+    TemplateId:
+      name: templateId
+      in: path
+      required: true
+      schema:
+        type: string
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema:
+        type: string
+    CapabilityId:
+      name: capabilityId
+      in: path
+      required: true
+      schema:
+        type: string
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+    AlgorithmId:
+      name: algorithmId
+      in: path
+      required: true
+      schema:
+        type: string
+    PackageId:
+      name: packageId
+      in: path
+      required: true
+      schema:
+        type: string
+    InstallId:
+      name: installId
+      in: path
+      required: true
+      schema:
+        type: string
+    BundleId:
+      name: bundleId
+      in: path
+      required: true
+      schema:
+        type: string
+    StreamId:
+      name: streamId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    ErrorResponse:
+      description: 'Error（响应体固定为 { error: { code, messageKey, details } }）'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    Visibility:
+      type: string
+      enum: [PRIVATE, WORKSPACE, TENANT, PUBLIC]
+
+    Permission:
+      type: string
+      enum: [READ, WRITE, EXECUTE, MANAGE, SHARE]
+
+    ACLItem:
+      type: object
+      required: [subjectType, subjectId, permissions]
+      properties:
+        subjectType:
+          type: string
+          enum: [user, role]
+        subjectId:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ResourceBase:
+      type: object
+      required:
+        - id
+        - tenantId
+        - workspaceId
+        - ownerId
+        - visibility
+        - acl
+        - createdAt
+        - updatedAt
+        - status
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        workspaceId:
+          type: string
+        ownerId:
+          type: string
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        acl:
+          type: array
+          items:
+            $ref: '#/components/schemas/ACLItem'
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CommandRef:
+      type: object
+      required: [commandId, status, acceptedAt]
+      properties:
+        commandId:
+          type: string
+        status:
+          type: string
+        acceptedAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required: [code, messageKey]
+      properties:
+        code:
+          type: string
+          description: 机器可读错误码
+        messageKey:
+          type: string
+          description: i18n key（即 messageKey）
+        details:
+          type: object
+          additionalProperties: true
+
+    ErrorResponse:
+      type: object
+      description: 固定外层字段为 error，不返回裸 error 对象。
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/Error'
+
+    PageInfo:
+      type: object
+      required: [page, pageSize, total]
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+
+    CursorInfo:
+      type: object
+      properties:
+        nextCursor:
+          type: string
+          nullable: true
+
+    ProviderReadiness:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ready, degraded]
+        error:
+          type: string
+          nullable: true
+
+    Command:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [commandType, payload, acceptedAt, traceId]
+          properties:
+            commandType:
+              type: string
+              example: workflow.run
+            payload:
+              type: object
+              additionalProperties: true
+            acceptedAt:
+              type: string
+              format: date-time
+            traceId:
+              type: string
+            result:
+              type: object
+              additionalProperties: true
+            error:
+              $ref: '#/components/schemas/Error'
+
+    CommandCreateRequest:
+      type: object
+      required: [commandType, payload]
+      properties:
+        commandType:
+          type: string
+          description: |
+            支持的关键 commandType（v0.1）包括：
+            `asset.upload`、`share.create`、`share.delete`、
+            `workflow.createDraft`、`workflow.patch`、`workflow.publish`、
+            `workflow.run`、`workflow.retry`、`workflow.cancel`、`algorithm.run`、
+            `plugin.upload`、`plugin.install`、`plugin.enable`、
+            `plugin.disable`、`plugin.rollback`、`plugin.upgrade`、
+            `stream.create`、`stream.updateAuth`、`stream.delete`、
+            `stream.record.start`、`stream.record.stop`、`stream.kick`、
+            `ai.session.create`、`ai.session.archive`、`ai.intent.plan`、
+            `ai.command.execute`、`context.bundle.rebuild`。
+        payload:
+          type: object
+          additionalProperties: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+          description: 可选。默认 PRIVATE；若提升可见性但策略不允许将返回 FORBIDDEN。
+
+    AISession:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [title]
+          properties:
+            title:
+              type: string
+            goal:
+              type: string
+            inputs:
+              type: object
+              additionalProperties: true
+            constraints:
+              type: object
+              additionalProperties: true
+            preferences:
+              type: object
+              additionalProperties: true
+            archivedAt:
+              type: string
+              format: date-time
+              nullable: true
+            lastTurnAt:
+              type: string
+              format: date-time
+              nullable: true
+
+    AISessionTurn:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [sessionId, role, content]
+          properties:
+            sessionId:
+              type: string
+            role:
+              type: string
+              enum: [user, assistant, system]
+            content:
+              type: string
+            commandType:
+              type: string
+              nullable: true
+            commandIds:
+              type: array
+              items:
+                type: string
+
+    AISessionCreateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        goal:
+          type: string
+        inputs:
+          type: object
+          additionalProperties: true
+        constraints:
+          type: object
+          additionalProperties: true
+        preferences:
+          type: object
+          additionalProperties: true
+        intentCommandType:
+          type: string
+          description: '可选显式意图命令类型（例如 workflow.run），用于与 execute 模式对齐。'
+        intentPayload:
+          type: object
+          additionalProperties: true
+          description: 'intentCommandType 对应 payload；未提供时由服务端确定性规划器推断。'
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+
+    AISessionTurnCreateRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        execute:
+          type: boolean
+          default: false
+          description: false 时提交 `ai.intent.plan`，true 时提交 `ai.command.execute`。
+        inputs:
+          type: object
+          additionalProperties: true
+        constraints:
+          type: object
+          additionalProperties: true
+        preferences:
+          type: object
+          additionalProperties: true
+
+    ContextBundle:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [scopeType, scopeId]
+          properties:
+            scopeType:
+              type: string
+              enum: [run, session, workspace]
+            scopeId:
+              type: string
+            facts:
+              type: object
+              additionalProperties: true
+            summaries:
+              type: object
+              additionalProperties: true
+            refs:
+              type: object
+              additionalProperties: true
+            embeddingsIndexRefs:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            timeline:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+
+    Share:
+      type: object
+      required:
+        - id
+        - tenantId
+        - workspaceId
+        - resourceType
+        - resourceId
+        - subjectType
+        - subjectId
+        - permissions
+        - createdBy
+        - createdAt
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        workspaceId:
+          type: string
+        resourceType:
+          type: string
+          enum: [command, asset]
+        resourceId:
+          type: string
+        subjectType:
+          type: string
+          enum: [user, role]
+        subjectId:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ShareCreateRequest:
+      type: object
+      required: [resourceType, resourceId, subjectType, subjectId, permissions]
+      properties:
+        resourceType:
+          type: string
+          enum: [command, asset]
+        resourceId:
+          type: string
+        subjectType:
+          type: string
+          enum: [user, role]
+        subjectId:
+          type: string
+        permissions:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/Permission'
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    Asset:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [name, type, mime, size, hash, uri]
+          properties:
+            name:
+              type: string
+            type:
+              type: string
+            mime:
+              type: string
+            size:
+              type: integer
+            hash:
+              type: string
+            uri:
+              type: string
+            metadata:
+              type: object
+              additionalProperties: true
+
+    AssetCreateRequest:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+        name:
+          type: string
+        type:
+          type: string
+        mime:
+          type: string
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+
+    AssetUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    AssetLineageEdge:
+      type: object
+      required: [id, targetAssetId, relation, createdAt]
+      properties:
+        id:
+          type: string
+        sourceAssetId:
+          type: string
+        targetAssetId:
+          type: string
+        runId:
+          type: string
+        stepId:
+          type: string
+        relation:
+          type: string
+          enum: [derived_from, recorded_from, transformed_from]
+        createdAt:
+          type: string
+          format: date-time
+
+    AssetLineageResponse:
+      type: object
+      required: [assetId, edges]
+      properties:
+        assetId:
+          type: string
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetLineageEdge'
+
+    WorkflowTemplate:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [name, graph]
+          properties:
+            name:
+              type: string
+            description:
+              type: string
+            graph:
+              type: object
+              additionalProperties: true
+            schemaInputs:
+              type: object
+              additionalProperties: true
+            schemaOutputs:
+              type: object
+              additionalProperties: true
+            uiState:
+              type: object
+              additionalProperties: true
+            currentVersion:
+              type: string
+
+    WorkflowTemplateCreateRequest:
+      type: object
+      required: [name, graph]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        graph:
+          type: object
+          additionalProperties: true
+        schemaInputs:
+          type: object
+          additionalProperties: true
+        schemaOutputs:
+          type: object
+          additionalProperties: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+
+    WorkflowTemplatePatchRequest:
+      type: object
+      properties:
+        graph:
+          type: object
+          additionalProperties: true
+        operations:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      description: 至少需要提供 graph 或 operations 之一。
+      anyOf:
+        - required: [graph]
+        - required: [operations]
+
+    WorkflowRun:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [templateId, templateVersion]
+          properties:
+            templateId:
+              type: string
+            templateVersion:
+              type: string
+            attempt:
+              type: integer
+            retryOfRunId:
+              type: string
+              nullable: true
+            replayFromStepKey:
+              type: string
+              nullable: true
+            traceId:
+              type: string
+              nullable: true
+            inputs:
+              type: object
+              additionalProperties: true
+            outputs:
+              type: object
+              additionalProperties: true
+            startedAt:
+              type: string
+              format: date-time
+            finishedAt:
+              type: string
+              format: date-time
+              nullable: true
+            durationMs:
+              type: integer
+              nullable: true
+              readOnly: true
+            error:
+              $ref: '#/components/schemas/Error'
+
+    WorkflowRunCreateRequest:
+      type: object
+      required: [templateId]
+      properties:
+        templateId:
+          type: string
+        templateVersion:
+          type: string
+        inputs:
+          type: object
+          additionalProperties: true
+        mode:
+          type: string
+          enum: [sync, running, fail]
+          default: sync
+        fromStepKey:
+          type: string
+          description: 从指定 step 开始执行（Run from here / retry 补充参数）。
+        testNode:
+          type: boolean
+          default: false
+          description: 仅测试指定 step（为 true 时仅执行 fromStepKey 指向节点）。
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+
+    StepRun:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [runId, stepKey]
+          properties:
+            runId:
+              type: string
+            stepKey:
+              type: string
+            stepType:
+              type: string
+            attempt:
+              type: integer
+            traceId:
+              type: string
+              nullable: true
+            input:
+              type: object
+              additionalProperties: true
+            output:
+              type: object
+              additionalProperties: true
+            artifacts:
+              type: object
+              additionalProperties: true
+            logRef:
+              type: string
+            startedAt:
+              type: string
+              format: date-time
+            finishedAt:
+              type: string
+              format: date-time
+              nullable: true
+            durationMs:
+              type: integer
+              nullable: true
+              readOnly: true
+            error:
+              $ref: '#/components/schemas/Error'
+
+    Capability:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [name, kind, version]
+          properties:
+            name:
+              type: string
+            kind:
+              type: string
+              enum: [tool, model, skill, algorithmRef]
+            version:
+              type: string
+            providerId:
+              type: string
+            inputSchema:
+              type: object
+              additionalProperties: true
+            outputSchema:
+              type: object
+              additionalProperties: true
+            requiredPermissions:
+              type: array
+              items:
+                type: string
+            egressPolicy:
+              type: object
+              additionalProperties: true
+
+    Algorithm:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [name, version]
+          properties:
+            name:
+              type: string
+            version:
+              type: string
+            templateRef:
+              type: string
+            defaults:
+              type: object
+              additionalProperties: true
+            constraints:
+              type: object
+              additionalProperties: true
+            dependencies:
+              type: object
+              additionalProperties: true
+
+    AlgorithmRunRequest:
+      type: object
+      required: [inputs]
+      properties:
+        inputs:
+          type: object
+          additionalProperties: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        mode:
+          type: string
+          description: 运行模式，默认 `sync`。
+          example: sync
+
+    AlgorithmRunResource:
+      type: object
+      required: [id, algorithmId, workflowRunId, status]
+      properties:
+        id:
+          type: string
+        algorithmId:
+          type: string
+        workflowRunId:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, succeeded, failed, canceled]
+        outputs:
+          type: object
+          additionalProperties: true
+        assetIds:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CapabilityProvider:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [name, providerType]
+          properties:
+            name:
+              type: string
+            providerType:
+              type: string
+              enum: [http, container, mcp]
+            endpoint:
+              type: string
+            metadata:
+              type: object
+              additionalProperties: true
+
+    PluginPackage:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [name, version, packageType]
+          properties:
+            name:
+              type: string
+            version:
+              type: string
+            packageType:
+              type: string
+              enum: [tool-provider, skill-pack, algo-pack, mcp-provider]
+            manifest:
+              type: object
+              additionalProperties: true
+
+    PluginInstall:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [packageId, scope]
+          properties:
+            packageId:
+              type: string
+            scope:
+              type: string
+              enum: [workspace, tenant]
+            error:
+              $ref: '#/components/schemas/Error'
+
+    PluginPackageUploadRequest:
+      type: object
+      required: [name, version, packageType]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        packageType:
+          type: string
+        manifest:
+          type: object
+          additionalProperties: true
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+
+    PluginInstallRequest:
+      type: object
+      required: [packageId]
+      properties:
+        packageId:
+          type: string
+        scope:
+          type: string
+          enum: [workspace, tenant]
+          default: workspace
+
+    Stream:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBase'
+        - type: object
+          required: [path, protocol]
+          properties:
+            path:
+              type: string
+            protocol:
+              type: string
+              enum: [rtsp, rtmp, srt, webrtc, hls]
+            source:
+              type: string
+              enum: [push, pull]
+            endpoints:
+              type: object
+              additionalProperties: true
+            state:
+              type: object
+              additionalProperties: true
+
+    StreamCreateRequest:
+      type: object
+      required: [path, protocol]
+      properties:
+        path:
+          type: string
+        protocol:
+          type: string
+        source:
+          type: string
+        visibility:
+          $ref: '#/components/schemas/Visibility'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    WriteResponseAsset:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          $ref: '#/components/schemas/Asset'
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponseWorkflowTemplate:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          $ref: '#/components/schemas/WorkflowTemplate'
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponseWorkflowRun:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          $ref: '#/components/schemas/WorkflowRun'
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponseAlgorithmRun:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          $ref: '#/components/schemas/AlgorithmRunResource'
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponsePluginPackage:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          $ref: '#/components/schemas/PluginPackage'
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponsePluginInstall:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          type: object
+          required: [id, status]
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponseStream:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          $ref: '#/components/schemas/Stream'
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponseAISession:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          type: object
+          required: [id, status]
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponseAISessionTurn:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          type: object
+          required: [id, status]
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    WriteResponseShare:
+      type: object
+      required: [resource, commandRef]
+      properties:
+        resource:
+          oneOf:
+            - $ref: '#/components/schemas/Share'
+            - $ref: '#/components/schemas/ShareDeleteResult'
+        commandRef:
+          $ref: '#/components/schemas/CommandRef'
+
+    ShareDeleteResult:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [deleted]
+
+    CommandListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Command'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    ShareListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Share'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    AssetListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Asset'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    WorkflowTemplateListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowTemplate'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    WorkflowRunListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowRun'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    StepRunListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StepRun'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    CapabilityListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Capability'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    AlgorithmListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Algorithm'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    ProviderListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CapabilityProvider'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    PluginPackageListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PluginPackage'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    StreamListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Stream'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    AISessionListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AISession'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
+
+    ContextBundleListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContextBundle'
+        pageInfo:
+          $ref: '#/components/schemas/PageInfo'
+        cursorInfo:
+          $ref: '#/components/schemas/CursorInfo'
