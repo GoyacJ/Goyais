@@ -771,10 +771,171 @@ func (r *PostgresRepository) ListRunEvents(ctx context.Context, req command.Requ
 }
 
 func (r *PostgresRepository) ProcessStepQueueOnce(ctx context.Context, workerID string, now time.Time) (bool, error) {
-	_ = ctx
-	_ = workerID
-	_ = now
-	return false, nil
+	if strings.TrimSpace(workerID) == "" {
+		workerID = "workflow-worker"
+	}
+	now = now.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return false, fmt.Errorf("begin workflow queue tx: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	item, err := r.leaseNextQueueItemFromTx(ctx, tx, workerID, now)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	reqCtx := command.RequestContext{
+		TenantID:    item.TenantID,
+		WorkspaceID: item.WorkspaceID,
+	}
+	run, err := r.getRunByIDFromTx(ctx, tx, reqCtx, item.RunID)
+	if err != nil {
+		_ = r.setQueueStatusFromTx(ctx, tx, item.ID, queueStatusCanceled, workerID, now)
+		if commitErr := tx.Commit(); commitErr != nil {
+			return true, fmt.Errorf("commit canceled queue item: %w", commitErr)
+		}
+		committed = true
+		return true, nil
+	}
+
+	if run.Status == RunStatusSucceeded || run.Status == RunStatusFailed || run.Status == RunStatusCanceled {
+		if err := r.setQueueStatusFromTx(ctx, tx, item.ID, queueStatusCanceled, workerID, now); err != nil {
+			return false, err
+		}
+		if err := tx.Commit(); err != nil {
+			return false, fmt.Errorf("commit canceled terminal queue item: %w", err)
+		}
+		committed = true
+		return true, nil
+	}
+
+	step, err := r.loadStepRunByAttemptFromTx(ctx, tx, run, item.StepKey, item.Attempt)
+	if err != nil {
+		_ = r.setQueueStatusFromTx(ctx, tx, item.ID, queueStatusCanceled, workerID, now)
+		if commitErr := tx.Commit(); commitErr != nil {
+			return true, fmt.Errorf("commit missing step queue item: %w", commitErr)
+		}
+		committed = true
+		return true, nil
+	}
+
+	payload := decodeStepQueuePayload(item.PayloadJSON)
+
+	if run.Status == RunStatusPending {
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE workflow_runs SET status = $1, updated_at = $2 WHERE id = $3 AND tenant_id = $4 AND workspace_id = $5`,
+			RunStatusRunning,
+			now,
+			run.ID,
+			run.TenantID,
+			run.WorkspaceID,
+		); err != nil {
+			return false, fmt.Errorf("mark workflow run running: %w", err)
+		}
+		run.Status = RunStatusRunning
+		if err := r.appendRunEventFromTx(ctx, tx, WorkflowRunEvent{
+			ID:          newID("wfevt"),
+			RunID:       run.ID,
+			TenantID:    run.TenantID,
+			WorkspaceID: run.WorkspaceID,
+			EventType:   "workflow.run.started",
+			PayloadJSON: mustJSONObjectRaw(map[string]any{"status": RunStatusRunning}),
+			CreatedAt:   now,
+		}); err != nil {
+			return false, err
+		}
+	}
+
+	if step.Status == StepStatusPending {
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE step_runs
+			 SET status = $1, updated_at = $2, error_code = NULL, message_key = NULL
+			 WHERE run_id = $3 AND tenant_id = $4 AND workspace_id = $5 AND step_key = $6 AND attempt = $7`,
+			StepStatusRunning,
+			now,
+			run.ID,
+			run.TenantID,
+			run.WorkspaceID,
+			item.StepKey,
+			item.Attempt,
+		); err != nil {
+			return false, fmt.Errorf("mark step running: %w", err)
+		}
+		step.Status = StepStatusRunning
+		if err := r.appendRunEventFromTx(ctx, tx, WorkflowRunEvent{
+			ID:          newID("wfevt"),
+			RunID:       run.ID,
+			TenantID:    run.TenantID,
+			WorkspaceID: run.WorkspaceID,
+			StepKey:     step.StepKey,
+			EventType:   "workflow.step.started",
+			PayloadJSON: mustJSONObjectRaw(map[string]any{"stepKey": step.StepKey, "stepType": step.StepType, "attempt": item.Attempt, "status": StepStatusRunning}),
+			CreatedAt:   now,
+		}); err != nil {
+			return false, err
+		}
+	}
+
+	allowed, _, err := r.checkToolGateFromTx(ctx, tx, command.RequestContext{
+		TenantID:    run.TenantID,
+		WorkspaceID: run.WorkspaceID,
+		UserID:      run.OwnerID,
+	}, run.ID, run.OwnerID, now)
+	if err != nil {
+		return false, err
+	}
+	if !allowed {
+		if err := r.failStepAttemptFromTx(ctx, tx, run, step, item.Attempt, now); err != nil {
+			return false, err
+		}
+		if err := r.failRunFromTx(ctx, tx, run, now); err != nil {
+			return false, err
+		}
+		if err := r.setQueueStatusFromTx(ctx, tx, item.ID, queueStatusDone, workerID, now); err != nil {
+			return false, err
+		}
+		if err := tx.Commit(); err != nil {
+			return false, fmt.Errorf("commit tool gate denial: %w", err)
+		}
+		committed = true
+		return true, nil
+	}
+
+	if payload.Mode == RunModeRunning {
+		if err := r.setQueueStatusFromTx(ctx, tx, item.ID, queueStatusDone, workerID, now); err != nil {
+			return false, err
+		}
+		if err := tx.Commit(); err != nil {
+			return false, fmt.Errorf("commit running mode queue item: %w", err)
+		}
+		committed = true
+		return true, nil
+	}
+
+	if err := r.setQueueStatusFromTx(ctx, tx, item.ID, queueStatusDone, workerID, now); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("commit workflow queue item: %w", err)
+	}
+	committed = true
+	return true, nil
 }
 
 func postgresNullableText(value string) any {

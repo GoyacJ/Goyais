@@ -1395,17 +1395,17 @@ func TestAPIContractRegression(t *testing.T) {
 			t.Fatalf("unexpected plugin enable status: %v", enableStatus)
 		}
 
-		respUploadV2 := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/packages", headersWithJSONContext("u1"), map[string]any{
+		respUploadNext := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/packages", headersWithJSONContext("u1"), map[string]any{
 			"name":        "demo-plugin",
 			"version":     "1.0.1",
 			"packageType": "tool-provider",
 			"manifest":    map[string]any{"entry": "main"},
 			"visibility":  "PRIVATE",
 		})
-		defer respUploadV2.Body.Close()
-		assertStatus(t, respUploadV2, http.StatusAccepted)
-		packageIDV2 := readJSONPath(t, respUploadV2.Body, "resource.id").(string)
-		if packageIDV2 == "" {
+		defer respUploadNext.Body.Close()
+		assertStatus(t, respUploadNext, http.StatusAccepted)
+		packageIDNext := readJSONPath(t, respUploadNext.Body, "resource.id").(string)
+		if packageIDNext == "" {
 			t.Fatalf("expected plugin package id")
 		}
 
