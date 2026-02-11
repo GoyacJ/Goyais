@@ -10,6 +10,9 @@ package com.ysmjjsy.goyais.contract.api.common;
 
 import java.time.Instant;
 
+/**
+ * References accepted command metadata returned by write APIs.
+ */
 public record CommandRef(
         String commandId,
         String status,

@@ -25,15 +25,24 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.springframework.stereotype.Service;
 
+/**
+ * Exposes command create/list/get use cases for adapter layer.
+ */
 @Service
 public final class CommandApplicationService {
     private final ConcurrentMap<String, CommandResource> commands = new ConcurrentHashMap<>();
     private final CommandPipeline pipeline;
 
+    /**
+     * Creates application service with command pipeline dependency.
+     */
     public CommandApplicationService(CommandPipeline pipeline) {
         this.pipeline = pipeline;
     }
 
+    /**
+     * Creates command resource, executes pipeline and returns write response envelope.
+     */
     public WriteResponse<CommandResource> create(CommandCreateRequest request, ExecutionContext context) {
         String id = UUID.randomUUID().toString();
         Instant now = Instant.now();
@@ -67,12 +76,18 @@ public final class CommandApplicationService {
         return new WriteResponse<>(command, new CommandRef(id, "accepted", now));
     }
 
+    /**
+     * Lists current in-memory command resources with newest-first ordering.
+     */
     public List<CommandResource> list() {
         List<CommandResource> result = new ArrayList<>(commands.values());
         result.sort(Comparator.comparing(CommandResource::acceptedAt).reversed());
         return result;
     }
 
+    /**
+     * Returns one command resource by identifier.
+     */
     public CommandResource get(String commandId) {
         return commands.get(commandId);
     }

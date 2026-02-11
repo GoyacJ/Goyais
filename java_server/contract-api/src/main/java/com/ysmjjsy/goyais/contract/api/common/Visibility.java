@@ -8,6 +8,9 @@
  */
 package com.ysmjjsy.goyais.contract.api.common;
 
+/**
+ * Represents supported visibility scopes for all shared resources.
+ */
 public enum Visibility {
     PRIVATE,
     WORKSPACE,

@@ -11,6 +11,9 @@ package com.ysmjjsy.goyais.contract.api.common;
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * Defines shared resource fields required by Go and Java contract parity.
+ */
 public record ResourceBase(
         String id,
         String tenantId,

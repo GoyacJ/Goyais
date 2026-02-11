@@ -11,6 +11,9 @@ package com.ysmjjsy.goyais.domain.command;
 import java.time.Instant;
 import java.util.Map;
 
+/**
+ * Captures persisted command aggregate state for command-first execution tracing.
+ */
 public record CommandAggregate(
         String id,
         String tenantId,

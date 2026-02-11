@@ -13,6 +13,11 @@
     <dependencies>
         <dependency>
             <groupId>com.ysmjjsy.goyais</groupId>
+            <artifactId>app-auth-server</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.ysmjjsy.goyais</groupId>
             <artifactId>adapter-rest</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -27,6 +32,16 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.ysmjjsy.goyais</groupId>
+            <artifactId>capability-cache</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.ysmjjsy.goyais</groupId>
+            <artifactId>kernel-mybatis</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
@@ -37,6 +52,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
     </dependencies>
     <build>

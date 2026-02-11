@@ -11,6 +11,9 @@ package com.ysmjjsy.goyais.capability.event;
 import java.time.Instant;
 import java.util.Map;
 
+/**
+ * Represents one immutable domain event payload emitted by command pipeline.
+ */
 public record DomainEvent(
         String type,
         String traceId,

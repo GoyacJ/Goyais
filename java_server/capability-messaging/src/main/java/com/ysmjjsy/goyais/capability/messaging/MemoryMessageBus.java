@@ -18,11 +18,17 @@ import java.util.function.Consumer;
 public final class MemoryMessageBus implements MessageBus {
     private final Map<String, List<Consumer<DomainEvent>>> subscribers = new ConcurrentHashMap<>();
 
+    /**
+     * Delivers the event to all subscribers currently registered on the topic.
+     */
     @Override
     public void publish(String topic, DomainEvent event) {
         subscribers.getOrDefault(topic, List.of()).forEach(consumer -> consumer.accept(event));
     }
 
+    /**
+     * Registers one subscriber callback for subsequent topic events.
+     */
     @Override
     public void subscribe(String topic, Consumer<DomainEvent> consumer) {
         subscribers.computeIfAbsent(topic, ignored -> new CopyOnWriteArrayList<>()).add(consumer);

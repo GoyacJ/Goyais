@@ -8,6 +8,9 @@
  */
 package com.ysmjjsy.goyais.contract.api.common;
 
+/**
+ * Wraps domain resource and command reference for command-first write endpoints.
+ */
 public record WriteResponse<T>(
         T resource,
         CommandRef commandRef

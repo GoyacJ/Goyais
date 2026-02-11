@@ -8,6 +8,9 @@
  */
 package com.ysmjjsy.goyais.capability.storage;
 
+/**
+ * Represents normalized object metadata returned by storage providers.
+ */
 public record StorageObject(
         String bucket,
         String key,

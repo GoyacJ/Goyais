@@ -8,6 +8,13 @@
  */
 package com.ysmjjsy.goyais.capability.event;
 
+/**
+ * Publishes domain events to outbox or message bus infrastructure.
+ */
 public interface DomainEventPublisher {
+
+    /**
+     * Publishes one domain event after command execution.
+     */
     void publish(DomainEvent event);
 }

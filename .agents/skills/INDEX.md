@@ -4,7 +4,7 @@
 
 1. `goyais-repo-norm-check`
 2. `goyais-cross-stack-plan`
-3. module skill (`goyais-go-delivery-slice` / `goyais-vue-delivery-slice` / design-gate)
+3. module skill (`goyais-go-delivery-slice` / `goyais-vue-delivery-slice` / `goyais-java-delivery-slice` / design-gate)
 4. `goyais-contract-sync`
 5. `goyais-release-regression`
 
@@ -19,6 +19,7 @@
 - `goyais-release-regression`
 - `goyais-vue-asset-governance`
 - `goyais-java-design-gate`
+- `goyais-java-delivery-slice`
 - `goyais-python-design-gate`
 - `goyais-flutter-design-gate`
 - `goyais-cross-stack-plan`
@@ -35,3 +36,4 @@
 - `goyais-single-binary-acceptance` -> `goyais-release-regression`
 - `goyais-web-asset-governance` -> `goyais-vue-asset-governance`
 - `goyais-thread2-bootstrap` -> `goyais-cross-stack-plan`
+- `goyais-java-design-gate` -> `goyais-java-delivery-slice`（Java implementation phase）

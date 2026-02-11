@@ -1,6 +1,15 @@
 spring:
   application:
     name: goyais-api-server
+goyais:
+  security:
+    topology-mode: ${GOYAIS_SECURITY_TOPOLOGY_MODE:single}
+    auth-server:
+      issuer: ${GOYAIS_AUTH_SERVER_ISSUER:http://127.0.0.1:18080}
+    authz:
+      dynamic-enabled: ${GOYAIS_AUTHZ_DYNAMIC_ENABLED:true}
+      policy-cache-ttl: ${GOYAIS_AUTHZ_POLICY_CACHE_TTL:30s}
+      policy-invalidation-channel: ${GOYAIS_AUTHZ_POLICY_INVALIDATION_CHANNEL:goyais:policy:invalidate}
 server:
   port: 18080
 management:

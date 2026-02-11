@@ -11,8 +11,15 @@ package com.ysmjjsy.goyais.api;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
+/**
+ * Bootstraps the unified API and authorization runtime entrypoint.
+ */
 @SpringBootApplication(scanBasePackages = "com.ysmjjsy.goyais")
 public class ApiServerApplication {
+
+    /**
+     * Starts the single Java server application.
+     */
     public static void main(String[] args) {
         SpringApplication.run(ApiServerApplication.class, args);
     }

@@ -10,10 +10,14 @@ package com.ysmjjsy.goyais.kernel.mybatis;
 
 import java.util.Set;
 
+/**
+ * Carries caller scope metadata used to compose SQL row-level predicates.
+ */
 public record DataPermissionContext(
         String tenantId,
         String workspaceId,
         String userId,
-        Set<String> roles
+        Set<String> roles,
+        String policyVersion
 ) {
 }

@@ -11,6 +11,9 @@ package com.ysmjjsy.goyais.domain.audit;
 import java.time.Instant;
 import java.util.Map;
 
+/**
+ * Stores auditable authorization and execution outcomes for one command action.
+ */
 public record AuditEvent(
         String type,
         String traceId,

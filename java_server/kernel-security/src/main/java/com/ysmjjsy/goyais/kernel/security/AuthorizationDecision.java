@@ -8,11 +8,21 @@
  */
 package com.ysmjjsy.goyais.kernel.security;
 
+/**
+ * Represents allow/deny result together with auditable reason.
+ */
 public record AuthorizationDecision(boolean allowed, String reason) {
+
+    /**
+     * Creates an allow decision with explicit reason.
+     */
     public static AuthorizationDecision allow(String reason) {
         return new AuthorizationDecision(true, reason);
     }
 
+    /**
+     * Creates a deny decision with explicit reason.
+     */
     public static AuthorizationDecision deny(String reason) {
         return new AuthorizationDecision(false, reason);
     }

@@ -18,7 +18,11 @@
   - TS/JS/Java/Vue script: `/** ... */`
   - Python: `#`
 - 实现内注释仅解释“为什么”，避免逐行翻译式注释。
+- Java 代码必须为以下声明提供 JavaDoc（`/** ... */`）：
+  - `public class/interface/enum/record`
+  - `public` 方法与构造器
 - CI 必须执行 `source_header_check.sh`，缺失或顺序错误直接失败。
+- CI 必须执行 `java_javadoc_check.sh`，JavaDoc 缺失直接失败。
 
 ## Counterexamples
 
@@ -29,5 +33,6 @@
 ## Validation Commands
 
 - `bash go_server/scripts/ci/source_header_check.sh`
+- `bash java_server/scripts/ci/java_javadoc_check.sh`
 - `bash go_server/scripts/ci/source_header_backfill.sh`
 - `bash go_server/scripts/ci/contract_regression.sh`

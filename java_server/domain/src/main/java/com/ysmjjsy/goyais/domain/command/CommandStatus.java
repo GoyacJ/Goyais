@@ -8,6 +8,9 @@
  */
 package com.ysmjjsy.goyais.domain.command;
 
+/**
+ * Defines canonical command lifecycle states used by audit and read models.
+ */
 public enum CommandStatus {
     ACCEPTED,
     RUNNING,

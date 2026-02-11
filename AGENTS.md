@@ -59,7 +59,7 @@
 - `docs/`: 业务与治理（non-implementation-centric）。
 - `go_server/`: Go 服务端实现与技术契约。
 - `vue_web/`: Vue Web 实现与 UI 规范。
-- `java_server/`: Java 服务端设计期模块。
+- `java_server/`: Java 服务端实现模块（v0.1 implementation phase）。
 - `python_server/`: Python 服务端设计期模块。
 - `flutter_mobile/`: Flutter 移动端设计期模块。
 
@@ -83,7 +83,8 @@
 
 - Web：必须遵循 `vue_web/docs/web-ui.md` 与 design-system token/hook；页面需支持多 panel 拖拽、缩放、全屏、一致性行为。
 - Go：必须遵循 `/api/v1`、统一错误模型 `error: { code, messageKey, details }`、配置优先级 `ENV > YAML > default`。
-- Java/Python/Flutter：当前阶段采用设计期强约束，先完成接口草案、DoD、验收矩阵与风险清单，再进入编码。
+- Java：当前阶段进入实现期，默认单应用拓扑（Auth + Resource 同进程），同时保留多资源服务器扩展模式。
+- Python/Flutter：当前阶段采用设计期强约束，先完成接口草案、DoD、验收矩阵与风险清单，再进入编码。
 
 ## 9. Release Shape (Single Binary)
 
@@ -98,7 +99,7 @@
 - 使用顺序建议：
   1. `goyais-repo-norm-check`
   2. `goyais-cross-stack-plan`
-  3. 进入具体模块 skill（go/vue/java/python/flutter）
+  3. 进入具体模块 skill（go/vue/java-delivery/python/flutter）
   4. `goyais-contract-sync`
   5. `goyais-release-regression`
 
@@ -128,3 +129,6 @@
   - TS/JS/Java/Vue script 使用 `/** ... */`
   - Python 使用 `#`
 - 代码内注释必须解释“为什么”（边界、权限、兼容、性能/安全取舍），禁止低价值逐行翻译式注释。
+- Java 代码额外要求：
+  - `public class/interface/enum/record` 必须有 JavaDoc
+  - `public` 方法与构造器必须有 JavaDoc

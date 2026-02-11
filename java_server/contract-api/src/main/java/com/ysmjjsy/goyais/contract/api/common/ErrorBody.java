@@ -10,6 +10,9 @@ package com.ysmjjsy.goyais.contract.api.common;
 
 import java.util.Map;
 
+/**
+ * Describes machine-readable error payload for i18n-aware clients.
+ */
 public record ErrorBody(
         String code,
         String messageKey,

@@ -20,6 +20,9 @@ bash go_server/scripts/ci/path_migration_audit.sh
 echo "[contract_regression] source header check"
 bash go_server/scripts/ci/source_header_check.sh
 
+echo "[contract_regression] java javadoc check"
+bash java_server/scripts/ci/java_javadoc_check.sh
+
 echo "[contract_regression] go test"
 (cd "${GO_SERVER_DIR}" && go test ./...)
 
