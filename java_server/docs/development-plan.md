@@ -71,6 +71,16 @@
   - 落地 `workflow_templates/workflow_template_versions/workflow_runs/step_runs/workflow_run_events`。
   - 落地 `MybatisWorkflowTemplateRepository`、`MybatisWorkflowRunRepository`。
 
+## 2.4 2026-02-11 N6 第一批进展（本次实现）
+
+- 测试补齐：
+  - 新增 `WorkflowPatchApplierTest`（graph patch 操作语义覆盖）。
+  - 新增 `WorkflowTemplateCommandHandlerTest`（create/patch/publish 权限与约束覆盖）。
+  - 新增 `WorkflowRunCommandHandlerTest`（run/cancel 权限与状态约束覆盖）。
+- 风险收敛：
+  - 覆盖 workflow domain sugar 的关键 deny/allow 路径，降低权限回归风险。
+  - 覆盖 patch operations 的受控变更语义，降低图编辑兼容回归风险。
+
 ## 3. 固定 DoD
 
 - API/数据模型/状态机文档与实现同变更同步。
