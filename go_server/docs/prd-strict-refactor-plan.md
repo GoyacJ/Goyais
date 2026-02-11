@@ -26,6 +26,7 @@
 | Canvas AI patch 闭环（server-validated） | 已支持“preview -> workflow.patch(operations) -> 服务端校验应用 -> 前端差异/失败反馈” | `go_server/internal/workflow/service.go:81`, `vue_web/src/views/CanvasView.vue:726`, `go_server/internal/access/http/router_integration_test.go:898` |
 | 算法库页面运行闭环 | 已支持输入 JSON、触发 `algorithm.run`、展示 run 结果与 commandId | `vue_web/src/views/AlgorithmLibraryView.vue:73`, `vue_web/src/api/algorithms.ts:13`, `vue_web/src/views/AlgorithmLibraryView.spec.ts:122` |
 | Run Center 操作深度 | 已支持 step 级详情、日志引用与产物引用可操作入口（复制/新标签打开） | `vue_web/src/views/RunCenterView.vue:61`, `vue_web/src/views/RunCenterView.vue:95`, `vue_web/src/views/RunCenterView.spec.ts:207` |
+| 权限管理页面语义闭环 | 已支持策略编辑（grant/revoke）、策略列表与 share.* 命令审计并存 | `vue_web/src/views/PermissionManagementView.vue:14`, `vue_web/src/api/shares.ts:21`, `vue_web/src/views/PermissionManagementView.spec.ts:168` |
 | 统一回归健康 | 本轮复核通过 | `go_server/scripts/ci/contract_regression.sh` |
 
 ### 2.2 部分完成（Partially Completed）
@@ -37,10 +38,7 @@
 | ContextBundle rebuild | 已有 run/session/workspace 聚合 | `go_server/internal/contextbundle/service.go:376`, `go_server/internal/contextbundle/service.go:497` | workspace 大规模场景下摘要质量仍偏浅层统计 |
 
 ### 2.3 未闭环（Open Gaps）
-
-| 领域 | 现状 | 证据 | 目标 |
-|---|---|---|---|
-| 权限管理页面语义 | 当前以 share command 审计视图为主 | `vue_web/src/views/PermissionManagementView.vue:146` | 补齐用户/角色/策略最小管理闭环 |
+当前前端页面级严格口径缺口已关闭，剩余缺口集中在 P0 的 AI planner / workflow execution semantics / context bundle 质量深化。
 
 ## 3. 下一步未完成项（Next Steps）
 
@@ -75,9 +73,6 @@
 
 #### P1-1 ContextBundle 质量增强
 - 目标：提升 facts/summaries/refs/timeline 的跨 run/session/workspace 可读性与可检索性。
-
-#### P1-2 页面能力补齐
-- 权限管理：用户/角色/策略最小闭环。
 
 ## 4. 接口与兼容性（Interfaces）
 

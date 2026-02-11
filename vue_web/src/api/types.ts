@@ -211,6 +211,22 @@ export interface StreamDTO extends ResourceBase {
   state: ApiObject
 }
 
+export type ShareSubjectType = 'user' | 'role'
+
+export interface ShareDTO {
+  id: string
+  tenantId: string
+  workspaceId: string
+  resourceType: string
+  resourceId: string
+  subjectType: ShareSubjectType | string
+  subjectId: string
+  permissions: string[]
+  createdBy: string
+  createdAt: string
+  expiresAt?: string
+}
+
 export interface ContextBundleDTO extends ResourceBase {
   scopeType: string
   scopeId: string
@@ -235,6 +251,15 @@ export interface StreamRecordingDTO {
   updatedAt: string
   assetId?: string
   error?: ApiError
+}
+
+export interface ShareCreateRequest {
+  resourceType: string
+  resourceId: string
+  subjectType: ShareSubjectType
+  subjectId: string
+  permissions: string[]
+  expiresAt?: string
 }
 
 export interface AlgorithmRunResourceDTO {
