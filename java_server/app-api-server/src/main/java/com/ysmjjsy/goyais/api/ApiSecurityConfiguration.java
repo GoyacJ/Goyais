@@ -4,7 +4,7 @@
  * Author: Goya
  * Created: 2026-02-11
  * Version: v1.0.0
- * Description: Security bootstrap for API server with open endpoints in design phase.
+ * Description: API security enforcing bearer-token auth for business endpoints.
  */
 package com.ysmjjsy.goyais.api;
 
@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
@@ -23,7 +24,7 @@ import org.springframework.security.web.SecurityFilterChain;
 public class ApiSecurityConfiguration {
 
     /**
-     * Applies default API security while supporting single and resource-only topology modes.
+     * Applies API security while supporting single and resource-only topology modes.
      */
     @Bean
     @Order(200)
@@ -31,17 +32,21 @@ public class ApiSecurityConfiguration {
             HttpSecurity http,
             @Value("${goyais.security.topology-mode:single}") String topologyMode
     ) throws Exception {
+        boolean resourceOnly = "resource-only".equalsIgnoreCase(topologyMode);
         http
                 .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/healthz", "/api/v1/system/healthz", "/actuator/**").permitAll()
-                        .requestMatchers("/oauth2/jwks", "/oauth2/token", "/oauth2/authorize", "/.well-known/**")
+                        .requestMatchers("/api/v1/healthz", "/api/v1/system/healthz").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/info", "/error").permitAll()
+                        .requestMatchers("/oauth2/**", "/.well-known/**", "/connect/**")
                         .access((authentication, context) -> new org.springframework.security.authorization.AuthorizationDecision(
-                                !"resource-only".equalsIgnoreCase(topologyMode)
+                                !resourceOnly
                         ))
-                        .anyRequest().permitAll()
+                        .requestMatchers("/api/v1/**").authenticated()
+                        .anyRequest().denyAll()
                 )
-                .httpBasic(Customizer.withDefaults());
+                .oauth2ResourceServer(resourceServer -> resourceServer.jwt(Customizer.withDefaults()));
         return http.build();
     }
 }

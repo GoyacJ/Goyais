@@ -18,6 +18,8 @@ public record DataPermissionContext(
         String workspaceId,
         String userId,
         Set<String> roles,
-        String policyVersion
+        String policyVersion,
+        String resourceType,
+        String requiredPermission
 ) {
 }

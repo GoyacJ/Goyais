@@ -1,15 +1,43 @@
 spring:
   application:
     name: goyais-api-server
+  datasource:
+    url: ${GOYAIS_DB_URL:jdbc:postgresql://127.0.0.1:5432/goyais}
+    username: ${GOYAIS_DB_USERNAME:goyais}
+    password: ${GOYAIS_DB_PASSWORD:goyais}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: ${GOYAIS_DB_FLYWAY_ENABLED:true}
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${GOYAIS_RESOURCE_SERVER_JWK_SET_URI:http://127.0.0.1:18080/oauth2/jwks}
 goyais:
+  storage:
+    provider: ${GOYAIS_STORAGE_PROVIDER:local}
+    local-root: ${GOYAIS_STORAGE_LOCAL_ROOT:${java.io.tmpdir}/goyais-storage}
+    bucket: ${GOYAIS_STORAGE_BUCKET:assets}
+  feature:
+    asset-lifecycle-enabled: ${GOYAIS_FEATURE_ASSET_LIFECYCLE:true}
+    workflow-enabled: ${GOYAIS_FEATURE_WORKFLOW_ENABLED:true}
+    acl-role-subject-enabled: ${GOYAIS_FEATURE_ACL_ROLE_SUBJECT:true}
   security:
     topology-mode: ${GOYAIS_SECURITY_TOPOLOGY_MODE:single}
+    dev-header-context-enabled: ${GOYAIS_SECURITY_DEV_HEADER_CONTEXT_ENABLED:false}
     auth-server:
       issuer: ${GOYAIS_AUTH_SERVER_ISSUER:http://127.0.0.1:18080}
     authz:
       dynamic-enabled: ${GOYAIS_AUTHZ_DYNAMIC_ENABLED:true}
       policy-cache-ttl: ${GOYAIS_AUTHZ_POLICY_CACHE_TTL:30s}
       policy-invalidation-channel: ${GOYAIS_AUTHZ_POLICY_INVALIDATION_CHANNEL:goyais:policy:invalidate}
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
 server:
   port: 18080
 management:
