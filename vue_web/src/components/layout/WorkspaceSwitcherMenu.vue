@@ -32,7 +32,7 @@
         leave-from-class="scale-100 opacity-100"
         leave-to-class="scale-95 opacity-0"
       >
-        <MenuItems v-if="open" class="ui-overlay-panel absolute left-0 z-40 mt-2 w-[18rem] origin-top-left p-2">
+        <MenuItems v-if="open" class="ui-overlay-panel absolute left-0 z-40 mt-2 w-56 origin-top-left p-2">
           <section>
             <p class="px-2 pb-1 text-[11px] uppercase tracking-[0.12em] text-ui-muted">{{ t('common.workspaceList') }}</p>
             <MenuItem v-for="workspace in workspaces" :key="workspace.id" as="template" v-slot="{ active }">
