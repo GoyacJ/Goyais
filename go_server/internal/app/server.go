@@ -124,6 +124,10 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 		return nil, fmt.Errorf("build context bundle repository: %w", err)
 	}
 	contextBundleService := contextbundle.NewService(contextBundleRepo, cfg.Authz.AllowPrivateToPublic)
+	contextBundleService.SetWorkflowReader(workflowService)
+	contextBundleService.SetAISessionReader(aiService)
+	contextBundleService.SetCommandReader(commandService)
+	contextBundleService.SetAssetReader(assetService)
 
 	cacheProvider, err := cache.New(cache.Config{
 		Provider:      cfg.Providers.Cache,

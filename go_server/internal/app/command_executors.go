@@ -533,7 +533,7 @@ func newAISessionTurnExecutor(aiService *ai.Service, commandService *command.Ser
 
 		if commandType == "ai.command.execute" {
 			if strings.TrimSpace(plan.CommandType) == "" {
-				assistantMessage = "No executable intent detected. Use `run workflow <templateId>` or provide `intentCommandType`."
+				assistantMessage = buildAIRejectAssistantMessage(plan)
 			} else {
 				if commandService == nil {
 					return nil, mapAIExecutionError(ai.ErrNotImplemented)
@@ -543,9 +543,9 @@ func newAISessionTurnExecutor(aiService *ai.Service, commandService *command.Ser
 					return nil, err
 				}
 				commandIDs = append(commandIDs, child.ID)
-				assistantMessage = buildAIExecuteAssistantMessage(plan.CommandType, child)
+				assistantMessage = buildAIExecuteAssistantMessage(plan.CommandType, child, plan)
 			}
-		} else if strings.TrimSpace(plan.CommandType) != "" {
+		} else {
 			assistantMessage = buildAIPlanAssistantMessage(plan)
 		}
 
@@ -565,6 +565,9 @@ func newAISessionTurnExecutor(aiService *ai.Service, commandService *command.Ser
 type aiDeterministicCommandPlan struct {
 	CommandType string
 	Payload     json.RawMessage
+	Planner     string
+	Reason      string
+	Suggestions []string
 }
 
 func planAIDeterministicCommand(req aiSessionTurnCommandPayload) (aiDeterministicCommandPlan, error) {
@@ -580,31 +583,152 @@ func planAIDeterministicCommand(req aiSessionTurnCommandPayload) (aiDeterministi
 		return aiDeterministicCommandPlan{
 			CommandType: explicitType,
 			Payload:     payload,
+			Planner:     "explicit",
+			Reason:      "explicit_intent",
 		}, nil
 	}
 
 	tokens := strings.Fields(strings.TrimSpace(req.Message))
-	switch {
-	case len(tokens) >= 3 && strings.EqualFold(tokens[0], "run") && strings.EqualFold(tokens[1], "workflow"):
-		return buildWorkflowRunPlan(cleanAICommandToken(tokens[2])), nil
-	case len(tokens) >= 2 && strings.EqualFold(tokens[0], "workflow.run"):
-		return buildWorkflowRunPlan(cleanAICommandToken(tokens[1])), nil
-	case len(tokens) >= 3 && strings.EqualFold(tokens[0], "retry") && strings.EqualFold(tokens[1], "workflow"):
-		return buildWorkflowRetryPlan(cleanAICommandToken(tokens[2])), nil
-	case len(tokens) >= 2 && strings.EqualFold(tokens[0], "workflow.retry"):
-		return buildWorkflowRetryPlan(cleanAICommandToken(tokens[1])), nil
-	case len(tokens) >= 3 && strings.EqualFold(tokens[0], "cancel") && strings.EqualFold(tokens[1], "workflow"):
-		return buildWorkflowCancelPlan(cleanAICommandToken(tokens[2])), nil
-	case len(tokens) >= 2 && strings.EqualFold(tokens[0], "workflow.cancel"):
-		return buildWorkflowCancelPlan(cleanAICommandToken(tokens[1])), nil
-	default:
-		return aiDeterministicCommandPlan{}, nil
+	parsers := []func([]string, string) (aiDeterministicCommandPlan, bool){
+		parseWorkflowRunIntent,
+		parseWorkflowRetryIntent,
+		parseWorkflowCancelIntent,
+		parseWorkflowPatchIntent,
 	}
+	for _, parser := range parsers {
+		plan, matched := parser(tokens, req.Message)
+		if matched {
+			return plan, nil
+		}
+	}
+
+	return aiDeterministicCommandPlan{
+		Planner:     "none",
+		Reason:      "unsupported_intent",
+		Suggestions: defaultAIPlanSuggestions(),
+	}, nil
+}
+
+func parseWorkflowRunIntent(tokens []string, _ string) (aiDeterministicCommandPlan, bool) {
+	if len(tokens) >= 2 && strings.EqualFold(tokens[0], "run") && strings.EqualFold(tokens[1], "workflow") {
+		if len(tokens) < 3 {
+			return aiDeterministicCommandPlan{
+				Planner:     "workflow.run",
+				Reason:      "missing_workflow_template_id",
+				Suggestions: []string{"run workflow <templateId>"},
+			}, true
+		}
+		return buildWorkflowRunPlan(cleanAICommandToken(tokens[2])), true
+	}
+	if len(tokens) >= 1 && strings.EqualFold(tokens[0], "workflow.run") {
+		if len(tokens) < 2 {
+			return aiDeterministicCommandPlan{
+				Planner:     "workflow.run",
+				Reason:      "missing_workflow_template_id",
+				Suggestions: []string{"workflow.run <templateId>"},
+			}, true
+		}
+		return buildWorkflowRunPlan(cleanAICommandToken(tokens[1])), true
+	}
+	return aiDeterministicCommandPlan{}, false
+}
+
+func parseWorkflowRetryIntent(tokens []string, _ string) (aiDeterministicCommandPlan, bool) {
+	if len(tokens) >= 2 && strings.EqualFold(tokens[0], "retry") && strings.EqualFold(tokens[1], "workflow") {
+		if len(tokens) < 3 {
+			return aiDeterministicCommandPlan{
+				Planner:     "workflow.retry",
+				Reason:      "missing_workflow_run_id",
+				Suggestions: []string{"retry workflow <runId>"},
+			}, true
+		}
+		return buildWorkflowRetryPlan(cleanAICommandToken(tokens[2])), true
+	}
+	if len(tokens) >= 1 && strings.EqualFold(tokens[0], "workflow.retry") {
+		if len(tokens) < 2 {
+			return aiDeterministicCommandPlan{
+				Planner:     "workflow.retry",
+				Reason:      "missing_workflow_run_id",
+				Suggestions: []string{"workflow.retry <runId>"},
+			}, true
+		}
+		return buildWorkflowRetryPlan(cleanAICommandToken(tokens[1])), true
+	}
+	return aiDeterministicCommandPlan{}, false
+}
+
+func parseWorkflowCancelIntent(tokens []string, _ string) (aiDeterministicCommandPlan, bool) {
+	if len(tokens) >= 2 && strings.EqualFold(tokens[0], "cancel") && strings.EqualFold(tokens[1], "workflow") {
+		if len(tokens) < 3 {
+			return aiDeterministicCommandPlan{
+				Planner:     "workflow.cancel",
+				Reason:      "missing_workflow_run_id",
+				Suggestions: []string{"cancel workflow <runId>"},
+			}, true
+		}
+		return buildWorkflowCancelPlan(cleanAICommandToken(tokens[2])), true
+	}
+	if len(tokens) >= 1 && strings.EqualFold(tokens[0], "workflow.cancel") {
+		if len(tokens) < 2 {
+			return aiDeterministicCommandPlan{
+				Planner:     "workflow.cancel",
+				Reason:      "missing_workflow_run_id",
+				Suggestions: []string{"workflow.cancel <runId>"},
+			}, true
+		}
+		return buildWorkflowCancelPlan(cleanAICommandToken(tokens[1])), true
+	}
+	return aiDeterministicCommandPlan{}, false
+}
+
+func parseWorkflowPatchIntent(tokens []string, rawMessage string) (aiDeterministicCommandPlan, bool) {
+	var (
+		templateID string
+		patchRaw   json.RawMessage
+	)
+
+	switch {
+	case len(tokens) >= 1 && strings.EqualFold(tokens[0], "workflow.patch"):
+		if len(tokens) < 2 {
+			return aiDeterministicCommandPlan{
+				Planner:     "workflow.patch",
+				Reason:      "missing_workflow_template_id",
+				Suggestions: []string{"workflow.patch <templateId> {\"operations\":[...]}"}, // controlled patch payload
+			}, true
+		}
+		templateID = cleanAICommandToken(tokens[1])
+		patchRaw = extractJSONPatchFromMessage(rawMessage)
+	case len(tokens) >= 2 && strings.EqualFold(tokens[0], "patch") && strings.EqualFold(tokens[1], "workflow"):
+		if len(tokens) < 3 {
+			return aiDeterministicCommandPlan{
+				Planner:     "workflow.patch",
+				Reason:      "missing_workflow_template_id",
+				Suggestions: []string{"patch workflow <templateId> {\"operations\":[...]}"}, // controlled patch payload
+			}, true
+		}
+		templateID = cleanAICommandToken(tokens[2])
+		patchRaw = extractJSONPatchFromMessage(rawMessage)
+	default:
+		return aiDeterministicCommandPlan{}, false
+	}
+
+	if templateID == "" {
+		return aiDeterministicCommandPlan{
+			Planner:     "workflow.patch",
+			Reason:      "missing_workflow_template_id",
+			Suggestions: []string{"patch workflow <templateId> {\"operations\":[...]}"}, // controlled patch payload
+		}, true
+	}
+	return buildWorkflowPatchPlan(templateID, patchRaw), true
 }
 
 func buildWorkflowRunPlan(templateID string) aiDeterministicCommandPlan {
 	if templateID == "" {
-		return aiDeterministicCommandPlan{}
+		return aiDeterministicCommandPlan{
+			Planner:     "workflow.run",
+			Reason:      "missing_workflow_template_id",
+			Suggestions: []string{"run workflow <templateId>"},
+		}
 	}
 	payload, _ := json.Marshal(map[string]any{
 		"templateId": templateID,
@@ -614,12 +738,18 @@ func buildWorkflowRunPlan(templateID string) aiDeterministicCommandPlan {
 	return aiDeterministicCommandPlan{
 		CommandType: "workflow.run",
 		Payload:     payload,
+		Planner:     "workflow.run",
+		Reason:      "matched_workflow_run",
 	}
 }
 
 func buildWorkflowRetryPlan(runID string) aiDeterministicCommandPlan {
 	if runID == "" {
-		return aiDeterministicCommandPlan{}
+		return aiDeterministicCommandPlan{
+			Planner:     "workflow.retry",
+			Reason:      "missing_workflow_run_id",
+			Suggestions: []string{"retry workflow <runId>"},
+		}
 	}
 	payload, _ := json.Marshal(map[string]any{
 		"runId": runID,
@@ -628,12 +758,18 @@ func buildWorkflowRetryPlan(runID string) aiDeterministicCommandPlan {
 	return aiDeterministicCommandPlan{
 		CommandType: "workflow.retry",
 		Payload:     payload,
+		Planner:     "workflow.retry",
+		Reason:      "matched_workflow_retry",
 	}
 }
 
 func buildWorkflowCancelPlan(runID string) aiDeterministicCommandPlan {
 	if runID == "" {
-		return aiDeterministicCommandPlan{}
+		return aiDeterministicCommandPlan{
+			Planner:     "workflow.cancel",
+			Reason:      "missing_workflow_run_id",
+			Suggestions: []string{"cancel workflow <runId>"},
+		}
 	}
 	payload, _ := json.Marshal(map[string]any{
 		"runId": runID,
@@ -641,6 +777,36 @@ func buildWorkflowCancelPlan(runID string) aiDeterministicCommandPlan {
 	return aiDeterministicCommandPlan{
 		CommandType: "workflow.cancel",
 		Payload:     payload,
+		Planner:     "workflow.cancel",
+		Reason:      "matched_workflow_cancel",
+	}
+}
+
+func buildWorkflowPatchPlan(templateID string, patchRaw json.RawMessage) aiDeterministicCommandPlan {
+	patch := patchRaw
+	if !isJSONObjectRaw(patch) {
+		patch, _ = json.Marshal(map[string]any{
+			"operations": []map[string]any{
+				{
+					"op":   "annotate",
+					"path": "/ui_state/ai_patch",
+					"value": map[string]any{
+						"source":  "ai.intent.plan",
+						"message": "Provide explicit patch JSON for deterministic graph updates.",
+					},
+				},
+			},
+		})
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"templateId": templateID,
+		"patch":      json.RawMessage(patch),
+	})
+	return aiDeterministicCommandPlan{
+		CommandType: "workflow.patch",
+		Payload:     payload,
+		Planner:     "workflow.patch",
+		Reason:      "matched_workflow_patch",
 	}
 }
 
@@ -650,6 +816,20 @@ func cleanAICommandToken(raw string) string {
 	return token
 }
 
+func extractJSONPatchFromMessage(raw string) json.RawMessage {
+	message := strings.TrimSpace(raw)
+	start := strings.Index(message, "{")
+	end := strings.LastIndex(message, "}")
+	if start < 0 || end <= start {
+		return nil
+	}
+	candidate := json.RawMessage(strings.TrimSpace(message[start : end+1]))
+	if !isJSONObjectRaw(candidate) {
+		return nil
+	}
+	return candidate
+}
+
 func isJSONObjectRaw(raw json.RawMessage) bool {
 	var value map[string]any
 	return json.Unmarshal(raw, &value) == nil
@@ -657,16 +837,75 @@ func isJSONObjectRaw(raw json.RawMessage) bool {
 
 func buildAIPlanAssistantMessage(plan aiDeterministicCommandPlan) string {
 	if strings.TrimSpace(plan.CommandType) == "" {
-		return ""
+		return buildAIRejectAssistantMessage(plan)
 	}
-	return fmt.Sprintf("Planned command %s with payload %s", plan.CommandType, string(plan.Payload))
+	return fmt.Sprintf(
+		"Planned command %s via %s (reason=%s) with payload %s",
+		plan.CommandType,
+		defaultAIPlanPlanner(plan),
+		defaultAIPlanReason(plan),
+		string(plan.Payload),
+	)
 }
 
-func buildAIExecuteAssistantMessage(commandType string, cmd command.Command) string {
+func buildAIRejectAssistantMessage(plan aiDeterministicCommandPlan) string {
+	return fmt.Sprintf(
+		"No executable intent detected (reason=%s). Suggestions: %s",
+		defaultAIPlanReason(plan),
+		strings.Join(defaultAIPlanSuggestionsFor(plan), " | "),
+	)
+}
+
+func buildAIExecuteAssistantMessage(commandType string, cmd command.Command, plan aiDeterministicCommandPlan) string {
 	if runID := extractWorkflowRunID(cmd.Result); runID != "" {
-		return fmt.Sprintf("Executed %s via command %s (workflowRun=%s, status=%s).", commandType, cmd.ID, runID, cmd.Status)
+		return fmt.Sprintf(
+			"Executed %s via command %s (planner=%s, workflowRun=%s, status=%s).",
+			commandType,
+			cmd.ID,
+			defaultAIPlanPlanner(plan),
+			runID,
+			cmd.Status,
+		)
 	}
-	return fmt.Sprintf("Executed %s via command %s (status=%s).", commandType, cmd.ID, cmd.Status)
+	return fmt.Sprintf(
+		"Executed %s via command %s (planner=%s, status=%s).",
+		commandType,
+		cmd.ID,
+		defaultAIPlanPlanner(plan),
+		cmd.Status,
+	)
+}
+
+func defaultAIPlanPlanner(plan aiDeterministicCommandPlan) string {
+	value := strings.TrimSpace(plan.Planner)
+	if value == "" {
+		return "deterministic"
+	}
+	return value
+}
+
+func defaultAIPlanReason(plan aiDeterministicCommandPlan) string {
+	value := strings.TrimSpace(plan.Reason)
+	if value == "" {
+		return "unsupported_intent"
+	}
+	return value
+}
+
+func defaultAIPlanSuggestions() []string {
+	return []string{
+		"run workflow <templateId>",
+		"retry workflow <runId>",
+		"cancel workflow <runId>",
+		"patch workflow <templateId> {\"operations\":[...]}",
+	}
+}
+
+func defaultAIPlanSuggestionsFor(plan aiDeterministicCommandPlan) []string {
+	if len(plan.Suggestions) > 0 {
+		return append([]string{}, plan.Suggestions...)
+	}
+	return defaultAIPlanSuggestions()
 }
 
 func extractWorkflowRunID(resultRaw json.RawMessage) string {
