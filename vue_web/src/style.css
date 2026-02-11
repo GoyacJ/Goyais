@@ -578,6 +578,39 @@
     color: rgb(var(--ui-primary-600) / 1) !important;
   }
 
+  .ui-route-tab {
+    background: transparent;
+    transition:
+      background-color 110ms ease,
+      border-color 110ms ease;
+  }
+
+  .ui-route-tab:hover {
+    background:
+      linear-gradient(
+        0deg,
+        rgb(var(--ui-state-layer) / var(--ui-state-hover-opacity)),
+        rgb(var(--ui-state-layer) / var(--ui-state-hover-opacity))
+      ),
+      transparent;
+    border-color: rgb(var(--ui-neutral-border) / var(--ui-state-hover-border));
+  }
+
+  .ui-route-tab-trigger {
+    border: 0;
+    background: transparent;
+  }
+
+  .ui-route-tab-close {
+    border: 0;
+    background: transparent;
+    transition: background-color 110ms ease;
+  }
+
+  .ui-route-tab-close:hover {
+    background: rgb(var(--ui-state-layer) / var(--ui-state-hover-opacity));
+  }
+
   .dark .ui-tab-active {
     color: rgb(var(--ui-primary-500) / 1) !important;
   }

@@ -42,11 +42,11 @@
         </button>
       </header>
 
-      <div class="border-b border-ui-border px-3 py-3">
-        <WorkspaceAccountMenu />
-      </div>
+      <section class="border-b border-ui-border px-3 py-3">
+        <WorkspaceSwitcherMenu />
+      </section>
 
-      <nav class="ui-page p-3">
+      <nav class="ui-page min-h-0 flex-1 overflow-auto p-3">
         <RouterLink
           v-for="item in NAV_ITEMS"
           :key="item.to"
@@ -61,6 +61,10 @@
           </span>
         </RouterLink>
       </nav>
+
+      <section class="mt-auto border-t border-ui-border px-3 py-3">
+        <UserAccountMenu />
+      </section>
     </aside>
   </transition>
 </template>
@@ -72,10 +76,11 @@
  * Author: Goya
  * Created: 2026-02-11
  * Version: v1.0.0
- * Description: Goyais source file.
+ * Description: Render mobile side drawer with workspace-nav-user three-zone layout.
  */
 import Icon from '@/components/ui/Icon.vue'
-import WorkspaceAccountMenu from '@/components/layout/WorkspaceAccountMenu.vue'
+import UserAccountMenu from '@/components/layout/UserAccountMenu.vue'
+import WorkspaceSwitcherMenu from '@/components/layout/WorkspaceSwitcherMenu.vue'
 import { NAV_ITEMS } from '@/design-system/navigation'
 import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

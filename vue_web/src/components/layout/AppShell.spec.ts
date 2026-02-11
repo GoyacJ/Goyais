@@ -11,7 +11,6 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import AppShell from '@/components/layout/AppShell.vue'
 import RouteTabBar from '@/components/layout/RouteTabBar.vue'
-import TopBar from '@/components/layout/TopBar.vue'
 import SideNav from '@/components/layout/SideNav.vue'
 import i18n from '@/i18n'
 import { __resetLayoutSystemForTests, initLayoutSystem, useLayoutStore } from '@/design-system/layout'
@@ -121,7 +120,6 @@ describe('AppShell console-only layout', () => {
 
     await flushPromises()
     expect(wrapper.findComponent(SideNav).exists()).toBe(false)
-    expect(wrapper.findComponent(TopBar).exists()).toBe(false)
     expect(wrapper.findComponent(RouteTabBar).exists()).toBe(false)
     expect(wrapper.find('main').classes()).toContain('ui-shell-main--immersive')
   })
