@@ -227,6 +227,7 @@
 - [x] S0 契约同步：`openapi/data-model/state-machines/overview/acceptance` 已同步新增 API、commandType、实体口径。
 - [x] S0 路由可达：`openapi_reachability` 覆盖新增参数 `sessionId/packageId/bundleId`，新增路径均非 `API_NOT_FOUND`。
 - [x] S1 Workflow Engine：完成 DAG 拓扑校验、并发调度、重试退避、Tool Gate 与 run/step 事件流。
+- [x] S1.1 Workflow 执行语义深化：step/run 输出已切换为 `capability.v1` 语义（executor/contract/input/output/error/recovery/capabilitySummary），不再依赖占位字段。
 - [x] S2 Canvas：满足 PRD 8.9 五条验收（typed ports/minimap/undo-redo/run-from-here/test-node）。
 - [x] S2.1 Canvas 图编辑能力：`typed ports`、`minimap`、`undo/redo`、`run from here`、`test node` 已在 `vue_web/src/views/CanvasView.vue` 落地。
 - [x] S2.2 Canvas 运行态可视化：节点运行状态/耗时/产物数/错误码与步骤侧栏联动，运行中自动轮询刷新（`vue_web/src/views/CanvasView.vue`、`vue_web/src/components/canvas/TypedPortNode.vue`）。
@@ -238,10 +239,12 @@
 - [x] S3.2 AI 前端闭环：计划预览、执行反馈时间线、失败错误码展示与会话事件自动轮询已落地（`vue_web/src/views/AIWorkbenchView.vue`）。
 - [x] S3.3 AI 回归：`go test ./internal/access/http -run TestAPIContractRegression -count=1`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run -- src/views/AIWorkbenchView.spec.ts` 通过。
 - [x] S3.4 AI planner 语义增强：新增自然语言 intent strategy（中英关键词）、domain-aware reject reason/alternatives 与 explainability confidence；回归覆盖 `go_server/internal/ai/planner/planner_test.go`。
+- [x] S3.5 AI 多步执行闭环：`ai.command.execute` 可按计划 steps 串行执行多命令并回填 turn `commandIds`；前端多步场景下不再注入 explicit single-command intent。
 - [x] S4 MediaMTX 控制面：`update-auth/delete`、录制资产化、onPublish 事件触发 workflow（经 command gate）。
 - [x] S4.1 算法库页面闭环：`Algorithm Library` 支持输入 JSON 参数、触发 `algorithm.run`、展示 `workflowRunId/assetIds/commandId` 结果。
 - [x] S4.2 Run Center 深化：支持 step 详情输入/输出/错误上下文，并提供 `logRef/artifacts` 引用的复制与新标签打开入口（`vue_web/src/views/RunCenterView.vue`、`vue_web/src/views/RunCenterView.spec.ts`）。
 - [x] S4.3 权限管理闭环：支持 ACL 策略授予/撤销（`share.create/share.delete`）、策略列表浏览，以及 share.* 命令审计并行视图（`vue_web/src/views/PermissionManagementView.vue`、`vue_web/src/api/shares.ts`、`vue_web/src/views/PermissionManagementView.spec.ts`）。
 - [x] S5 插件市场生命周期：`download/upgrade` 与 `uploaded->validating->installing->enabled` 全链路一致。
 - [x] S6 ContextBundle + ACL role：`context-bundles` 读接口与 `acl_entries.subject_type=user|role` 落地。
+- [x] S6.1 ContextBundle 质量增强：workspace rebuild 输出 `stats/risk/recommendations/recentFailures/timeline`，Web 端 detail 以结构化摘要优先展示并保留 raw payload 调试入口。
 - [x] 每切片均具备全量回归证据（`go test ./...`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web typecheck`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run`、`make build`、single-binary verify）。

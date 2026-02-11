@@ -44,31 +44,88 @@
               <div>{{ t('page.contextBundle.fieldVisibility') }}: {{ selectedBundle.visibility }}</div>
             </div>
 
-            <div class="rounded-lg border border-ui-border bg-ui-panel p-3">
-              <div class="mb-2 font-medium text-ui-text">facts</div>
-              <pre class="ui-scrollbar max-h-44 overflow-auto rounded border border-ui-border bg-ui-bg p-2">{{
-                formatJSON(selectedBundle.facts)
-              }}</pre>
+            <div class="grid gap-2 md:grid-cols-3">
+              <div class="rounded-lg border border-ui-border bg-ui-panel p-3">
+                <div class="text-[11px] text-ui-muted">{{ t('page.contextBundle.metricCoverage') }}</div>
+                <div class="mt-1 text-sm font-semibold text-ui-text">{{ factCoverage }}</div>
+              </div>
+              <div class="rounded-lg border border-ui-border bg-ui-panel p-3">
+                <div class="text-[11px] text-ui-muted">{{ t('page.contextBundle.metricCommandCount') }}</div>
+                <div class="mt-1 text-sm font-semibold text-ui-text">{{ factCommandCount }}</div>
+              </div>
+              <div class="rounded-lg border border-ui-border bg-ui-panel p-3">
+                <div class="text-[11px] text-ui-muted">{{ t('page.contextBundle.metricRunCount') }}</div>
+                <div class="mt-1 text-sm font-semibold text-ui-text">{{ factRunCount }}</div>
+              </div>
+              <div class="rounded-lg border border-ui-border bg-ui-panel p-3">
+                <div class="text-[11px] text-ui-muted">{{ t('page.contextBundle.metricSessionCount') }}</div>
+                <div class="mt-1 text-sm font-semibold text-ui-text">{{ factSessionCount }}</div>
+              </div>
+              <div class="rounded-lg border border-ui-border bg-ui-panel p-3">
+                <div class="text-[11px] text-ui-muted">{{ t('page.contextBundle.metricAssetCount') }}</div>
+                <div class="mt-1 text-sm font-semibold text-ui-text">{{ factAssetCount }}</div>
+              </div>
+              <div class="rounded-lg border border-ui-border bg-ui-panel p-3">
+                <div class="text-[11px] text-ui-muted">{{ t('page.contextBundle.metricWarningCount') }}</div>
+                <div class="mt-1 text-sm font-semibold text-ui-text">{{ warningItems.length }}</div>
+              </div>
             </div>
 
             <div class="rounded-lg border border-ui-border bg-ui-panel p-3">
-              <div class="mb-2 font-medium text-ui-text">summaries</div>
-              <pre class="ui-scrollbar max-h-44 overflow-auto rounded border border-ui-border bg-ui-bg p-2">{{
-                formatJSON(selectedBundle.summaries)
-              }}</pre>
+              <div class="mb-2 font-medium text-ui-text">{{ t('page.contextBundle.highlightsTitle') }}</div>
+              <ul v-if="highlightItems.length > 0" class="space-y-1 text-[11px] text-ui-muted">
+                <li v-for="item in highlightItems" :key="item">{{ item }}</li>
+              </ul>
+              <div v-else class="text-[11px] text-ui-muted">-</div>
             </div>
 
             <div class="rounded-lg border border-ui-border bg-ui-panel p-3">
-              <div class="mb-2 font-medium text-ui-text">refs</div>
-              <pre class="ui-scrollbar max-h-44 overflow-auto rounded border border-ui-border bg-ui-bg p-2">{{
-                formatJSON(selectedBundle.refs)
-              }}</pre>
+              <div class="mb-2 font-medium text-ui-text">{{ t('page.contextBundle.recommendationsTitle') }}</div>
+              <ul v-if="recommendationItems.length > 0" class="space-y-1 text-[11px] text-ui-muted">
+                <li v-for="item in recommendationItems" :key="item">{{ item }}</li>
+              </ul>
+              <div v-else class="text-[11px] text-ui-muted">-</div>
             </div>
 
             <div class="rounded-lg border border-ui-border bg-ui-panel p-3">
-              <div class="mb-2 font-medium text-ui-text">timeline</div>
-              <pre class="ui-scrollbar max-h-44 overflow-auto rounded border border-ui-border bg-ui-bg p-2">{{
-                formatJSON(selectedBundle.timeline)
+              <div class="mb-2 font-medium text-ui-text">{{ t('page.contextBundle.recentFailuresTitle') }}</div>
+              <div class="grid gap-2 md:grid-cols-2">
+                <div class="space-y-1">
+                  <p class="text-[11px] font-semibold text-ui-text">commands</p>
+                  <ul v-if="recentFailedCommands.length > 0" class="space-y-1 text-[11px] text-ui-muted">
+                    <li v-for="item in recentFailedCommands" :key="`cmd:${item}`">{{ item }}</li>
+                  </ul>
+                  <p v-else class="text-[11px] text-ui-muted">-</p>
+                </div>
+                <div class="space-y-1">
+                  <p class="text-[11px] font-semibold text-ui-text">runs</p>
+                  <ul v-if="recentFailedRuns.length > 0" class="space-y-1 text-[11px] text-ui-muted">
+                    <li v-for="item in recentFailedRuns" :key="`run:${item}`">{{ item }}</li>
+                  </ul>
+                  <p v-else class="text-[11px] text-ui-muted">-</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-lg border border-ui-border bg-ui-panel p-3">
+              <div class="mb-2 font-medium text-ui-text">{{ t('page.contextBundle.timelineTitle') }}</div>
+              <ul v-if="timelineDigestItems.length > 0" class="space-y-1 text-[11px] text-ui-muted">
+                <li v-for="item in timelineDigestItems" :key="item.id">
+                  {{ item.ts }} · {{ item.type }} · {{ item.scope }} · {{ item.refId }}
+                </li>
+              </ul>
+              <p v-else class="text-[11px] text-ui-muted">{{ t('page.contextBundle.timelineEmpty') }}</p>
+            </div>
+
+            <div class="rounded-lg border border-ui-border bg-ui-panel p-3">
+              <div class="mb-2 font-medium text-ui-text">{{ t('page.contextBundle.rawPayloadTitle') }}</div>
+              <pre class="ui-scrollbar max-h-52 overflow-auto rounded border border-ui-border bg-ui-bg p-2">{{
+                formatJSON({
+                  facts: selectedBundle.facts,
+                  summaries: selectedBundle.summaries,
+                  refs: selectedBundle.refs,
+                  timeline: selectedBundle.timeline,
+                })
               }}</pre>
             </div>
           </div>
@@ -161,6 +218,66 @@ const tableErrorMessage = computed(() => {
 })
 
 const isRefreshing = computed(() => tableState.value === 'loading')
+const factsMap = computed(() => asObject(selectedBundle.value?.facts))
+const summariesMap = computed(() => asObject(selectedBundle.value?.summaries))
+const refsMap = computed(() => asObject(selectedBundle.value?.refs))
+
+const factCoverage = computed(() => readString(factsMap.value, 'coverage') || '-')
+const factCommandCount = computed(() => readNumber(factsMap.value, 'commandCount'))
+const factRunCount = computed(() => readNumber(factsMap.value, 'runCount'))
+const factSessionCount = computed(() => readNumber(factsMap.value, 'sessionCount'))
+const factAssetCount = computed(() => readNumber(factsMap.value, 'assetCount'))
+const warningItems = computed(() => readStringArray(factsMap.value, 'warnings'))
+const highlightItems = computed(() => readStringArray(summariesMap.value, 'highlights'))
+const recommendationItems = computed(() => readStringArray(summariesMap.value, 'recommendations'))
+
+const recentFailedCommands = computed(() => {
+  const refs = asObject(refsMap.value.recentFailures)
+  const commands = asArray(refs.commands)
+  return commands
+    .map((item) => readString(asObject(item), 'id') || readString(asObject(item), 'commandId'))
+    .filter((item) => item.length > 0)
+    .slice(0, 8)
+})
+
+const recentFailedRuns = computed(() => {
+  const refs = asObject(refsMap.value.recentFailures)
+  const runs = asArray(refs.runs)
+  return runs
+    .map((item) => readString(asObject(item), 'id') || readString(asObject(item), 'runId'))
+    .filter((item) => item.length > 0)
+    .slice(0, 8)
+})
+
+type TimelineDigestItem = {
+  id: string
+  ts: string
+  type: string
+  scope: string
+  refId: string
+}
+
+const timelineDigestItems = computed<TimelineDigestItem[]>(() => {
+  if (!selectedBundle.value) {
+    return []
+  }
+  return asArray(selectedBundle.value.timeline)
+    .map((item, index) => {
+      const payload = asObject(item)
+      const ts = readString(payload, 'ts')
+      const type = readString(payload, 'type')
+      const scope = readString(payload, 'scope')
+      const refId = readString(payload, 'refId')
+      return {
+        id: `${index}:${ts}:${type}:${refId}`,
+        ts: ts || '-',
+        type: type || '-',
+        scope: scope || '-',
+        refId: refId || '-',
+      }
+    })
+    .slice(0, 20)
+})
 
 watch(
   bundles,
@@ -274,5 +391,41 @@ function formatJSON(value: unknown): string {
   } catch {
     return '{}'
   }
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  return value as Record<string, unknown>
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
+}
+
+function readString(payload: Record<string, unknown>, key: string): string {
+  const value = payload[key]
+  return typeof value === 'string' ? value : ''
+}
+
+function readNumber(payload: Record<string, unknown>, key: string): number {
+  const value = payload[key]
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+  return 0
+}
+
+function readStringArray(payload: Record<string, unknown>, key: string): string[] {
+  return asArray(payload[key])
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter((item) => item.length > 0)
 }
 </script>

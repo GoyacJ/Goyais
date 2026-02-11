@@ -77,8 +77,51 @@
                   formatJSON(turnPlanPreview.payload)
                 }}</pre>
                 <p class="mt-2 text-[11px] text-ui-muted">
-                  {{ turnPlanPreview.planner }} · {{ turnPlanPreview.reason }}
+                  {{ turnPlanPreview.planner }} · {{ turnPlanPreview.reason }} ·
+                  {{ t('page.ai.planPreviewScore') }}: {{ formatScore(turnPlanPreview.score) }}
                 </p>
+                <div class="mt-2 space-y-1 rounded border border-ui-border bg-ui-surface px-2 py-1">
+                  <p class="text-[11px] font-semibold text-ui-fg">{{ t('page.ai.planPreviewSteps') }}</p>
+                  <ul
+                    v-if="turnPlanPreview.steps && turnPlanPreview.steps.length > 0"
+                    class="space-y-1 text-[11px] text-ui-muted"
+                  >
+                    <li v-for="step in turnPlanPreview.steps" :key="`${step.order}:${step.commandType}:${step.reason}`">
+                      {{
+                        t('page.ai.planPreviewStepLabel', {
+                          order: step.order,
+                          command: step.commandType || '-',
+                          score: formatScore(step.score),
+                          reason: step.reason,
+                          executable: step.executable ? 'yes' : 'no',
+                        })
+                      }}
+                    </li>
+                  </ul>
+                  <p v-else class="text-[11px] text-ui-muted">{{ t('page.ai.planPreviewNoSteps') }}</p>
+                </div>
+                <div class="mt-2 space-y-1 rounded border border-ui-border bg-ui-surface px-2 py-1">
+                  <p class="text-[11px] font-semibold text-ui-fg">{{ t('page.ai.planPreviewStrategies') }}</p>
+                  <ul
+                    v-if="turnPlanPreview.strategyScores && turnPlanPreview.strategyScores.length > 0"
+                    class="space-y-1 text-[11px] text-ui-muted"
+                  >
+                    <li
+                      v-for="item in turnPlanPreview.strategyScores"
+                      :key="`${item.strategy}:${item.score}:${item.selected}`"
+                    >
+                      {{
+                        t('page.ai.planPreviewStrategyLabel', {
+                          strategy: item.strategy,
+                          score: formatScore(item.score),
+                          selected: item.selected ? 'yes' : 'no',
+                          reason: item.reason,
+                        })
+                      }}
+                    </li>
+                  </ul>
+                  <p v-else class="text-[11px] text-ui-muted">{{ t('page.ai.planPreviewNoStrategies') }}</p>
+                </div>
               </template>
               <p v-else class="mt-1 text-xs text-ui-muted">{{ t('page.ai.planPreviewEmpty') }}</p>
             </div>
@@ -154,7 +197,13 @@ import {
   listAISessions,
 } from '@/api/ai'
 import { ApiHttpError } from '@/api/http'
-import type { AIPlanPreviewDTO, AISessionDTO, ApiError } from '@/api/types'
+import type {
+  AIPlanPreviewDTO,
+  AIPlanStepDTO,
+  AIPlanStrategyScoreDTO,
+  AISessionDTO,
+  ApiError,
+} from '@/api/types'
 import EmptyState from '@/components/layout/EmptyState.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import SectionCard from '@/components/layout/SectionCard.vue'
@@ -404,6 +453,9 @@ async function refreshPlanPreview(message: string): Promise<void> {
       planner: 'none',
       reason: 'unsupported_intent',
       suggestions: [],
+      score: 0,
+      steps: [],
+      strategyScores: [],
     }
     turnPlanPreview.value = {
       commandType: typeof plan.commandType === 'string' ? plan.commandType : '',
@@ -411,6 +463,9 @@ async function refreshPlanPreview(message: string): Promise<void> {
       planner: typeof plan.planner === 'string' ? plan.planner : 'none',
       reason: typeof plan.reason === 'string' ? plan.reason : 'unsupported_intent',
       suggestions: Array.isArray(plan.suggestions) ? plan.suggestions.map((item) => String(item)) : [],
+      score: typeof plan.score === 'number' ? plan.score : 0,
+      steps: normalizePlanSteps(plan.steps),
+      strategyScores: normalizePlanStrategyScores(plan.strategyScores),
       explainability: asObject(plan.explainability),
     }
   } catch {
@@ -476,7 +531,9 @@ async function onSendTurn(): Promise<void> {
       message,
       execute: turnMode.value === 'execute',
     }
-    if (preview?.commandType) {
+    const executableSteps = preview?.steps?.filter((item) => item.executable && item.commandType)
+    const hasExecutableChain = Array.isArray(executableSteps) && executableSteps.length > 1
+    if (preview?.commandType && !hasExecutableChain) {
       requestPayload.intentCommandType = preview.commandType
       requestPayload.intentPayload = preview.payload
     }
@@ -589,11 +646,52 @@ function formatJSON(value: unknown): string {
   }
 }
 
+function formatScore(value: unknown): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return '0.00'
+  }
+  return value.toFixed(2)
+}
+
 function asObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {}
   }
   return value as Record<string, unknown>
+}
+
+function normalizePlanSteps(value: unknown): AIPlanStepDTO[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.map((item, index) => {
+    const raw = asObject(item)
+    return {
+      order: typeof raw.order === 'number' ? raw.order : index + 1,
+      segment: typeof raw.segment === 'string' ? raw.segment : '',
+      commandType: typeof raw.commandType === 'string' ? raw.commandType : '',
+      payload: asObject(raw.payload),
+      planner: typeof raw.planner === 'string' ? raw.planner : '',
+      reason: typeof raw.reason === 'string' ? raw.reason : '',
+      score: typeof raw.score === 'number' ? raw.score : 0,
+      executable: Boolean(raw.executable),
+    }
+  })
+}
+
+function normalizePlanStrategyScores(value: unknown): AIPlanStrategyScoreDTO[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.map((item) => {
+    const raw = asObject(item)
+    return {
+      strategy: typeof raw.strategy === 'string' ? raw.strategy : '',
+      score: typeof raw.score === 'number' ? raw.score : 0,
+      selected: Boolean(raw.selected),
+      reason: typeof raw.reason === 'string' ? raw.reason : '',
+    }
+  })
 }
 
 function buildTimelineItem(item: AISessionEvent): TimelineItem | null {

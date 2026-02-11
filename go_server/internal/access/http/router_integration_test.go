@@ -545,9 +545,11 @@ func TestAPIContractRegression(t *testing.T) {
 		respExecutePublish := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-templates/"+executeTemplateID+":publish", headersWithJSONContext("u1"), map[string]any{})
 		defer respExecutePublish.Body.Close()
 		assertStatus(t, respExecutePublish, http.StatusAccepted)
+		executeAlgorithmID := "algo_ai_exec_" + strings.ReplaceAll(executeTemplateID, "tpl_", "")
+		insertAlgorithmFixture(t, dbPath, executeAlgorithmID, executeTemplateID)
 
 		respExecuteTurn := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/sessions/"+aiSessionID+"/turns", headersWithJSONContext("u1"), map[string]any{
-			"message": "run workflow " + executeTemplateID,
+			"message": "run workflow " + executeTemplateID + "; run algorithm " + executeAlgorithmID,
 			"execute": true,
 		})
 		defer respExecuteTurn.Body.Close()
@@ -559,8 +561,8 @@ func TestAPIContractRegression(t *testing.T) {
 			t.Fatalf("unexpected execute turn commandType: %v", got)
 		}
 		executeTurnIDs, _ := executeTurnResource["commandIds"].([]any)
-		if len(executeTurnIDs) < 2 {
-			t.Fatalf("expected execute turn commandIds to include ai and child command IDs, got=%v", executeTurnIDs)
+		if len(executeTurnIDs) < 3 {
+			t.Fatalf("expected execute turn commandIds to include ai and multi-step child command IDs, got=%v", executeTurnIDs)
 		}
 
 		respEventsAfterExecute := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/ai/sessions/"+aiSessionID+"/events", headersWithContext("u1"), nil)
@@ -573,6 +575,9 @@ func TestAPIContractRegression(t *testing.T) {
 		eventsAfterExecute := string(eventsAfterExecuteRaw)
 		if !strings.Contains(eventsAfterExecute, "event: workflow.run.") {
 			t.Fatalf("expected workflow.run.* event in stream body=%s", eventsAfterExecute)
+		}
+		if !strings.Contains(eventsAfterExecute, "algorithm.run(") {
+			t.Fatalf("expected assistant multi-step execution summary to include algorithm.run in stream body=%s", eventsAfterExecute)
 		}
 
 		respArchive := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/sessions/"+aiSessionID+":archive", headersWithJSONContext("u1"), map[string]any{})

@@ -1,102 +1,86 @@
 # Goyais PRD Strict Refactor Plan（Truth-Based, 2026-02-11）
 
-## 1. 基线与原则（Baseline）
+## 1. Baseline 与固定原则
 
 - 唯一需求基线（single source of truth）：`docs/prd.md`
-- 严格口径契约（strict contracts）：
+- 严格契约文档（strict contracts）：
   - `go_server/docs/api/openapi.yaml`
   - `go_server/docs/arch/overview.md`
   - `go_server/docs/arch/data-model.md`
   - `go_server/docs/arch/state-machines.md`
   - `go_server/docs/acceptance.md`
-- 统一回归命令（fixed gate）：
+- 统一回归门禁（fixed quality gate）：
   - `bash go_server/scripts/ci/contract_regression.sh`
 
-本文件只记录“代码真值（code truth）+ 下一步缺口（next gaps）”，不复述历史结论。
+本文件只记录“当前代码真值（as-is truth）+ 下一步建议（next focus）”，不保留历史口径。
 
 ## 2. 当前实现真值矩阵（As-Is Truth）
 
 ### 2.1 已完成（Completed）
 
-| 领域 | 结论 | 证据 |
+| 领域 | 结论 | 代码证据 |
 |---|---|---|
-| 页面路由覆盖（Run Center / Algorithm Library / Permission Management / ContextBundle） | 已存在独立路由 | `vue_web/src/router/index.ts:48`, `vue_web/src/router/index.ts:72`, `vue_web/src/router/index.ts:84`, `vue_web/src/router/index.ts:90` |
-| Stream 前端控制面对齐（update-auth / delete） | 已有 API + UI 入口 | `vue_web/src/api/streams.ts:84`, `vue_web/src/api/streams.ts:96`, `vue_web/src/views/StreamsView.vue:266`, `vue_web/src/views/StreamsView.vue:300` |
-| AI 计划预览链路（preview-only） | 已新增后端路由、前端 API、工作台接入 | `go_server/internal/access/http/router.go:66`, `go_server/internal/access/http/ai_context.go:68`, `vue_web/src/api/ai.ts:87`, `vue_web/src/views/AIWorkbenchView.vue:395` |
-| Canvas AI patch 闭环（server-validated） | 已支持“preview -> workflow.patch(operations) -> 服务端校验应用 -> 前端差异/失败反馈” | `go_server/internal/workflow/service.go:81`, `vue_web/src/views/CanvasView.vue:726`, `go_server/internal/access/http/router_integration_test.go:898` |
-| 算法库页面运行闭环 | 已支持输入 JSON、触发 `algorithm.run`、展示 run 结果与 commandId | `vue_web/src/views/AlgorithmLibraryView.vue:73`, `vue_web/src/api/algorithms.ts:13`, `vue_web/src/views/AlgorithmLibraryView.spec.ts:122` |
-| Run Center 操作深度 | 已支持 step 级详情、日志引用与产物引用可操作入口（复制/新标签打开） | `vue_web/src/views/RunCenterView.vue:61`, `vue_web/src/views/RunCenterView.vue:95`, `vue_web/src/views/RunCenterView.spec.ts:207` |
-| 权限管理页面语义闭环 | 已支持策略编辑（grant/revoke）、策略列表与 share.* 命令审计并存 | `vue_web/src/views/PermissionManagementView.vue:14`, `vue_web/src/api/shares.ts:21`, `vue_web/src/views/PermissionManagementView.spec.ts:168` |
-| 统一回归健康 | 本轮复核通过 | `go_server/scripts/ci/contract_regression.sh` |
+| 路由覆盖（Run Center / Algorithm Library / Permission Management / ContextBundle） | 页面路由已独立存在 | `vue_web/src/router/index.ts:48`, `vue_web/src/router/index.ts:72`, `vue_web/src/router/index.ts:84`, `vue_web/src/router/index.ts:90` |
+| Stream 前端控制面对齐 | `update-auth/delete` 前后端已打通 | `vue_web/src/api/streams.ts:84`, `vue_web/src/api/streams.ts:96`, `vue_web/src/views/StreamsView.vue:266`, `vue_web/src/views/StreamsView.vue:300` |
+| AI planner 多步规划与策略打分 | 规划器已支持 composite decomposition + strategy scores | `go_server/internal/ai/planner/planner.go:154`, `go_server/internal/ai/planner/planner.go:224`, `go_server/internal/ai/planner/planner.go:459`, `go_server/internal/ai/planner/planner_test.go:164` |
+| AI execute 多步命令执行闭环 | `ai.command.execute` 已按 steps 串行提交子命令，回写全量 commandIds 与执行摘要 | `go_server/internal/app/command_executors.go:537`, `go_server/internal/app/command_executors.go:710`, `go_server/internal/app/command_executors.go:731`, `go_server/internal/app/command_executors_ai_test.go:19`, `go_server/internal/access/http/router_integration_test.go:563` |
+| AI 工作台预览可解释性 | 前端已展示 score/steps/strategyScores，并避免多步链路被 explicit intent 降级为单命令 | `vue_web/src/views/AIWorkbenchView.vue:81`, `vue_web/src/views/AIWorkbenchView.vue:467`, `vue_web/src/views/AIWorkbenchView.vue:535`, `vue_web/src/views/AIWorkbenchView.spec.ts:245` |
+| Workflow 执行语义深化 | step/run 输出已切到 capability 语义（executor/contract/input/output/error/recovery/capabilitySummary） | `go_server/internal/workflow/execution_semantics.go:16`, `go_server/internal/workflow/execution_semantics.go:162`, `go_server/internal/workflow/execution_semantics.go:225`, `go_server/internal/workflow/engine_test.go:281` |
+| ContextBundle 质量增强 | workspace rebuild 已输出 stats/risk/recommendations/recentFailures/timeline digest；前端已结构化消费 | `go_server/internal/contextbundle/service.go:526`, `go_server/internal/contextbundle/service.go:542`, `go_server/internal/contextbundle/service.go:574`, `go_server/internal/contextbundle/service.go:590`, `vue_web/src/views/ContextBundleView.vue:49`, `vue_web/src/views/ContextBundleView.vue:260` |
+| 统一回归健康 | 全量 contract regression 通过 | `go_server/scripts/ci/contract_regression.sh` |
 
-### 2.2 部分完成（Partially Completed）
+### 2.2 严格口径判定（Strict PRD Gate）
 
-| 领域 | 现状 | 证据 | 严格缺口 |
-|---|---|---|---|
-| AI planner | 已具备 parser chain + 自然语言 strategy + domain-aware reject reason/suggestions explainability | `go_server/internal/ai/planner/planner.go:51`, `go_server/internal/ai/planner/planner.go:97`, `go_server/internal/ai/planner/planner.go:252` | 仍属 deterministic/single-command，缺少多步规划与策略打分（tool/provider 级决策） |
-| Workflow 执行语义 | DAG/调度/重试骨架在位 | `go_server/internal/workflow/engine.go:291` | step 输出仍以 `handled/mode/stepKey` 规则化结果为主，真实 capability 语义不足 |
-| ContextBundle rebuild | 已有 run/session/workspace 聚合 | `go_server/internal/contextbundle/service.go:376`, `go_server/internal/contextbundle/service.go:497` | workspace 大规模场景下摘要质量仍偏浅层统计 |
+| 严格项 | 判定 | 说明 |
+|---|---|---|
+| AI planner 的多步规划 + 策略打分 | 通过（Pass） | 已具备分段、评分、策略选择与拒绝语义；执行路径支持 multi-step。 |
+| Workflow 执行语义真实化 | 通过（Pass） | 已不再输出 `handled/mode/stepKey` 占位结构，改为 capability 语义结构。 |
+| ContextBundle 可消费质量 | 通过（Pass） | 后端聚合深度与前端可消费视图均已补齐。 |
 
-### 2.3 未闭环（Open Gaps）
-当前前端页面级严格口径缺口已关闭，剩余缺口集中在 P0 的 AI planner / workflow execution semantics / context bundle 质量深化。
+## 3. 本轮变更 DoD（Definition of Done）
 
-## 3. 下一步未完成项（Next Steps）
+### 3.1 AI 多步执行 DoD
 
-### 3.1 P0（必须优先）
+- `ai.command.execute` 对可执行 steps 执行顺序稳定（按 order）。
+- turn `commandIds` 包含 AI 命令自身 + 全部子命令。
+- AI 助手回合文本可解释执行路径（命令类型、commandId、workflowRun 引用）。
+- 前端在 multi-step 计划下不强制注入 `intentCommandType/intentPayload`，避免链路退化。
 
-#### P0-1 文档真值持续同步（Doc Truth Sync）
-- DoD：
-  - 每个严格缺口必须给出代码证据、验收命令、风险与回滚开关。
-  - 本文、`acceptance.md`、`openapi.yaml` 保持同一口径。
-- 验收命令：
-  - `bash go_server/scripts/ci/contract_regression.sh`
+### 3.2 Workflow 语义 DoD
 
-#### P0-2 AI 规划能力深化（Command-first 保持不变）
-- 范围：
-  - 在现有 parser chain + natural-language strategy 之上补充多步规划（plan decomposition）。
-  - 增加 intent/risk 评分与 alternatives 排序（而非仅模板建议）。
-  - 执行仍必须经 `ai.command.execute -> command gate -> tool gate`。
-- DoD：
-  - 同输入稳定输出可解释 plan（含 strategy/confidence/risk）。
-  - 不支持输入返回明确拒绝原因与可排序替代建议。
-- 风险与回滚：
-  - 风险：planner 误判导致 payload 过宽。
-  - 回滚：`GOYAIS_FEATURE_AI_WORKBENCH=false`。
+- step output 包含 capability contract、executor、input/output/error/recovery。
+- run output 包含 capabilitySummary（step keys + status counts）。
+- Run Center 可直接消费 step/run 输出，不依赖占位字段推断。
 
-#### P0-4 Workflow 语义深化（Execution Semantics）
-- 范围：
-  - step 输出从占位结构升级为真实执行上下文（input/output/artifacts/error metadata）。
-- DoD：
-  - step 详情可用于 Run Center 直接消费，不再仅靠 `handled/mode/stepKey`。
+### 3.3 ContextBundle DoD
 
-### 3.2 P1（在 P0 后）
+- rebuild 输出 facts/summaries/refs/timeline 的结构化统计信息（coverage/stats/risk/recommendations/recent failures）。
+- Web 端 detail 面板优先展示结构化摘要，并保留 raw payload 调试入口。
 
-#### P1-1 ContextBundle 质量增强
-- 目标：提升 facts/summaries/refs/timeline 的跨 run/session/workspace 可读性与可检索性。
+## 4. 验收命令（Acceptance Commands）
 
-## 4. 接口与兼容性（Interfaces）
+1. `go test ./internal/app`（`go_server/` 下）
+2. `go test ./internal/ai/planner`（`go_server/` 下）
+3. `go test ./internal/access/http -run TestAPIContractRegression -count=1`（`go_server/` 下）
+4. `pnpm -C vue_web typecheck`
+5. `pnpm -C vue_web test:run src/views/AIWorkbenchView.spec.ts`
+6. `bash go_server/scripts/ci/contract_regression.sh`
+
+当前状态：上述命令在 2026-02-11 本轮改动中已通过。
+
+## 5. 兼容性与接口说明（Compatibility）
 
 - 保持不变：
   - `/api/v1` 前缀不变。
   - Command-first 语义不变。
-  - 既有 stream 控制面 API 不变。
-- 本轮新增：
-  - `POST /api/v1/ai/plans:preview`（preview-only，无副作用）。
-- 兼容策略：
-  - 未来 AI planner 字段扩展采用向后兼容（optional fields），不破坏既有调用方。
+  - 现有 stream 控制面 API 不变。
+- 向后兼容扩展：
+  - AI plan 响应的 `score/steps/strategyScores` 继续作为 optional fields，旧调用方不受破坏。
 
-## 5. 固定验收命令（Quality Gates）
+## 6. 后续建议（Post-Closure Enhancements）
 
-- `go test ./...`（在 `go_server/`）
-- `pnpm -C vue_web typecheck`
-- `pnpm -C vue_web test:run`
-- `bash go_server/scripts/ci/contract_regression.sh`
+以下属于 v0.2 增强，不再归类为本轮 strict gap：
 
-## 6. 风险控制（Risk Control）
-
-- 风险：`acceptance.md` 与严格口径再次漂移。
-  处理：每个切片 PR 同步更新契约文档矩阵。
-- 风险：AI 规划能力增强引入越权路径。
-  处理：AI 仅产生命令草案，执行仍经 command/tool gate 与审计链路。
-- 风险：前端页面能力补齐导致交互复杂度上升。
-  处理：按最小闭环分阶段发布，并保持 feature-gate 回滚点。
+1. Planner 从 rule-based 扩展为可插拔策略层（provider/tool 成本、风险、时延建模）。
+2. ContextBundle 增加跨 workspace 的检索索引与评分排序。
+3. Run Center 增加 step 级 artifacts/logs 的批量导出能力。

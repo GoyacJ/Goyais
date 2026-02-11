@@ -178,6 +178,27 @@ describe('AIWorkbenchView', () => {
         planner: 'workflow.run',
         reason: 'matched_workflow_run',
         suggestions: [],
+        score: 0.91,
+        steps: [
+          {
+            order: 1,
+            segment: 'run workflow tpl_1',
+            commandType: 'workflow.run',
+            payload: { templateId: 'tpl_1' },
+            planner: 'workflow.run',
+            reason: 'matched_workflow_run',
+            score: 0.91,
+            executable: true,
+          },
+        ],
+        strategyScores: [
+          {
+            strategy: 'single_step',
+            score: 0.91,
+            selected: true,
+            reason: 'high_confidence',
+          },
+        ],
       },
     })
     archiveAISessionMock.mockResolvedValue({
@@ -219,5 +240,75 @@ describe('AIWorkbenchView', () => {
         templateId: 'tpl_1',
       },
     })
+  })
+
+  it('omits explicit intent payload when planner returns executable multi-step chain', async () => {
+    previewAIPlanMock.mockResolvedValueOnce({
+      plan: {
+        commandType: 'workflow.run',
+        payload: {
+          templateId: 'tpl_1',
+        },
+        planner: 'multi_step.chain',
+        reason: 'matched_multi_step_intent',
+        suggestions: [],
+        score: 0.88,
+        steps: [
+          {
+            order: 1,
+            segment: 'run workflow tpl_1',
+            commandType: 'workflow.run',
+            payload: { templateId: 'tpl_1' },
+            planner: 'workflow.run',
+            reason: 'matched_workflow_run',
+            score: 0.91,
+            executable: true,
+          },
+          {
+            order: 2,
+            segment: 'run algorithm algo_1',
+            commandType: 'algorithm.run',
+            payload: { algorithmId: 'algo_1' },
+            planner: 'algorithm.run',
+            reason: 'matched_algorithm_run',
+            score: 0.85,
+            executable: true,
+          },
+        ],
+        strategyScores: [
+          {
+            strategy: 'multi_step_chain',
+            score: 0.88,
+            selected: true,
+            reason: 'contains_two_executable_segments',
+          },
+        ],
+      },
+    })
+
+    const wrapper = mount(AIWorkbenchView, {
+      global: {
+        plugins: [i18n],
+        stubs,
+      },
+    })
+
+    await flushAll()
+
+    const textarea = wrapper.find('textarea')
+    await textarea.setValue('run workflow tpl_1; run algorithm algo_1')
+    const sendButton = wrapper
+      .findAll('button')
+      .find((item) => item.text().includes('发送回合') || item.text().includes('Send Turn'))
+    await sendButton?.trigger('click')
+    await flushAll()
+
+    expect(createAISessionTurnMock).toHaveBeenCalledTimes(1)
+    expect(createAISessionTurnMock.mock.calls[0]?.[1]).toMatchObject({
+      message: 'run workflow tpl_1; run algorithm algo_1',
+      execute: false,
+    })
+    expect(createAISessionTurnMock.mock.calls[0]?.[1]).not.toHaveProperty('intentCommandType')
+    expect(createAISessionTurnMock.mock.calls[0]?.[1]).not.toHaveProperty('intentPayload')
   })
 })
