@@ -14,8 +14,8 @@
 | S1 | W1-W2 | 单应用拓扑骨架、OIDC 元数据端点 | Maven 模块骨架、`/healthz` | 单应用可启动 | Done |
 | S2 | W3-W4 | password/oidc 登录链路、JWT claims | command baseline + `/api/v1/commands` + error envelope | command 202 合规 | Done |
 | S3 | W5-W6 | `policyVersion + Redis invalidation` | authz gate + row-level data permission | 动态权限即时生效 | In Progress (基础落地) |
-| S4 | W7-W8 | `single/resource-only` 切换治理 | assets/workflow/shares 同构落地 | 契约字段同构 | In Progress (assets/shares 已落地) |
-| S5 | W9-W10 | 安全策略收敛与审计增强 | cache/event/messaging/storage provider 切换 | minimal/full 均可跑 | Planned |
+| S4 | W7-W8 | `single/resource-only` 切换治理 | assets/workflow/shares 同构落地 | 契约字段同构 | Done |
+| S5 | W9-W10 | 安全策略收敛与审计增强 | cache/event/messaging/storage provider 切换 | minimal/full 均可跑 | In Progress |
 | S6 | W11-W12 | 安全加固与发布策略 | 回归/性能/发布回滚演练 | v0.1 gates 全绿 | Planned |
 
 ## 2.1 2026-02-11 执行结果（本次实现）
@@ -49,6 +49,27 @@
   - 新增 Flyway `V2__assets_shares_schema.sql`。
   - 落地 `assets`、`asset_lineage`，扩展 `acl_entries` 支持 `tenant/workspace/subjectType/expiresAt/createdBy`。
   - 落地 `MybatisAssetRepository`、`MybatisShareRepository`。
+
+## 2.3 2026-02-11 N5 切片进展（本次实现）
+
+- API：
+  - 新增 `GET/POST /api/v1/workflow-templates`。
+  - 新增 `GET /api/v1/workflow-templates/{templateId}`。
+  - 新增 `POST /api/v1/workflow-templates/{templateId}:patch`。
+  - 新增 `POST /api/v1/workflow-templates/{templateId}:publish`。
+  - 新增 `GET/POST /api/v1/workflow-runs`。
+  - 新增 `GET /api/v1/workflow-runs/{runId}`。
+  - 新增 `POST /api/v1/workflow-runs/{runId}:cancel`。
+  - 新增 `GET /api/v1/workflow-runs/{runId}/steps`。
+  - 新增 `GET /api/v1/workflow-runs/{runId}/events`（SSE）。
+- Command-first：
+  - domain sugar 写路径统一映射到
+    `workflow.createDraft/workflow.patch/workflow.publish/workflow.run/workflow.cancel`。
+  - 新增 `WorkflowTemplateCommandHandler`、`WorkflowRunCommandHandler`。
+- 持久化：
+  - 新增 Flyway `V3__workflow_schema.sql`。
+  - 落地 `workflow_templates/workflow_template_versions/workflow_runs/step_runs/workflow_run_events`。
+  - 落地 `MybatisWorkflowTemplateRepository`、`MybatisWorkflowRunRepository`。
 
 ## 3. 固定 DoD
 

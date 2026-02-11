@@ -22,6 +22,11 @@
 
 - States: `pending -> running -> succeeded|failed|canceled`
 - Retry creates new run with `retry_of_run_id`
+- v0.1 bootstrap 事件流：
+  - `workflow.run.started`
+  - `workflow.step.started|workflow.step.succeeded|workflow.step.failed|workflow.step.canceled`
+  - `workflow.run.succeeded|workflow.run.failed|workflow.run.canceled`
+- 受开关控制：`GOYAIS_FEATURE_WORKFLOW_ENABLED`（关闭时 workflow domain sugar 路径返回 `NOT_IMPLEMENTED`）。
 
 ## 3.1 Asset
 

@@ -199,14 +199,16 @@ public class ApiServerConfiguration {
     ) {
         return new CommandHandler() {
             /**
-             * Accepts non-asset and non-share commands during bootstrap fallback.
+             * Accepts non-asset/non-share/non-workflow commands during bootstrap fallback.
              */
             @Override
             public boolean supports(String commandType) {
                 if (commandType == null || commandType.isBlank()) {
                     return false;
                 }
-                if (commandType.startsWith("asset.") || commandType.startsWith("share.")) {
+                if (commandType.startsWith("asset.")
+                        || commandType.startsWith("share.")
+                        || commandType.startsWith("workflow.")) {
                     return false;
                 }
                 return true;

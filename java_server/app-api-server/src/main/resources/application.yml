@@ -22,6 +22,7 @@ goyais:
     bucket: ${GOYAIS_STORAGE_BUCKET:assets}
   feature:
     asset-lifecycle-enabled: ${GOYAIS_FEATURE_ASSET_LIFECYCLE:true}
+    workflow-enabled: ${GOYAIS_FEATURE_WORKFLOW_ENABLED:true}
     acl-role-subject-enabled: ${GOYAIS_FEATURE_ACL_ROLE_SUBJECT:true}
   security:
     topology-mode: ${GOYAIS_SECURITY_TOPOLOGY_MODE:single}

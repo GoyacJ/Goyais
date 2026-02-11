@@ -85,11 +85,11 @@
 
 ## 7. Workflow
 
-- `workflow_templates`
-- `workflow_template_versions`
-- `workflow_runs`
-- `step_runs`
-- `workflow_step_queue`
+- `workflow_templates`（已落地）
+- `workflow_template_versions`（已落地）
+- `workflow_runs`（已落地）
+- `step_runs`（已落地）
+- `workflow_run_events`（已落地）
 
 ## 8. Registry/Plugin/Stream/Context
 

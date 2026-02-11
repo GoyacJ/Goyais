@@ -19,7 +19,8 @@
 
 - PostgreSQL + Redis + Local file store starts successfully.
 - `GET /api/v1/healthz` and `GET /api/v1/system/healthz` return provider readiness.
-- Flyway migration creates `commands/audit_events/policies/acl_entries/assets/asset_lineage`.
+- Flyway migration creates
+  `commands/audit_events/policies/acl_entries/assets/asset_lineage/workflow_templates/workflow_template_versions/workflow_runs/step_runs/workflow_run_events`.
 
 ## 4. Security and Auth
 
@@ -57,6 +58,20 @@
   - `POST /api/v1/shares` returns 202 and `WriteResponseShare`.
   - `DELETE /api/v1/shares/{shareId}` returns 202 and `status=deleted`.
   - `GOYAIS_FEATURE_ACL_ROLE_SUBJECT=false` 时，`subjectType=role` 返回 `INVALID_SHARE_REQUEST`.
+
+## 7.2 Workflow
+
+- `workflow templates`:
+  - `POST /api/v1/workflow-templates` returns 202 and `WriteResponseWorkflowTemplate`.
+  - `POST /api/v1/workflow-templates/{templateId}:patch` accepts `graph|operations` patch payload.
+  - `POST /api/v1/workflow-templates/{templateId}:publish` bumps `currentVersion`.
+- `workflow runs`:
+  - `POST /api/v1/workflow-runs` returns 202 and `WriteResponseWorkflowRun`.
+  - `POST /api/v1/workflow-runs/{runId}:cancel` updates run and active steps to `canceled`.
+  - `GET /api/v1/workflow-runs/{runId}/steps` returns deterministic ordering `created_at DESC, id DESC`.
+  - `GET /api/v1/workflow-runs/{runId}/events` returns SSE stream ordered by `created_at ASC, id ASC`.
+- feature gate:
+  - `GOYAIS_FEATURE_WORKFLOW_ENABLED=false` 时，workflow domain sugar 路径返回 `NOT_IMPLEMENTED`。
 
 ## 8. Comment and CI Gates
 

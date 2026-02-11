@@ -38,6 +38,8 @@
   - `commands*`
   - `assets*`
   - `shares*`
+  - `workflow-templates*`
+  - `workflow-runs*`
 - 鉴权默认：除健康检查外，`/api/v1/**` 默认要求 Bearer Token。
 - 授权顺序：Tenant -> Visibility -> ACL -> RBAC -> Egress。
 - 统一执行上下文：`tenantId/workspaceId/userId/roles/policyVersion/traceId`。
@@ -74,6 +76,7 @@
 
 - Flyway 迁移脚本：`app-api-server/src/main/resources/db/migration/V1__baseline.sql`。
 - 增量迁移脚本：`app-api-server/src/main/resources/db/migration/V2__assets_shares_schema.sql`。
+- 增量迁移脚本：`app-api-server/src/main/resources/db/migration/V3__workflow_schema.sql`。
 - 基线表：
   - `commands`
   - `audit_events`
@@ -83,6 +86,11 @@
   - `assets`
   - `asset_lineage`
   - `acl_entries` 扩展字段：`tenant_id/workspace_id/subject_type/expires_at/created_by`
+  - `workflow_templates`
+  - `workflow_template_versions`
+  - `workflow_runs`
+  - `step_runs`
+  - `workflow_run_events`
 - 命令与审计落地实现：
   - `MybatisCommandRepository`
   - `MybatisAuditEventStore`
@@ -90,6 +98,9 @@
 - 资产与分享落地实现：
   - `MybatisAssetRepository`
   - `MybatisShareRepository`
+- workflow 落地实现：
+  - `MybatisWorkflowTemplateRepository`
+  - `MybatisWorkflowRunRepository`
 
 ## 7. 配置策略 | Configuration Strategy
 
@@ -110,6 +121,7 @@
   - `GOYAIS_STORAGE_LOCAL_ROOT`
   - `GOYAIS_STORAGE_BUCKET`
   - `GOYAIS_FEATURE_ASSET_LIFECYCLE`
+  - `GOYAIS_FEATURE_WORKFLOW_ENABLED`
   - `GOYAIS_FEATURE_ACL_ROLE_SUBJECT`
 
 ## 8. 质量门禁 | Quality Gates
