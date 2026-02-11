@@ -25,6 +25,7 @@
 | AI 计划预览链路（preview-only） | 已新增后端路由、前端 API、工作台接入 | `go_server/internal/access/http/router.go:66`, `go_server/internal/access/http/ai_context.go:68`, `vue_web/src/api/ai.ts:87`, `vue_web/src/views/AIWorkbenchView.vue:395` |
 | Canvas AI patch 闭环（server-validated） | 已支持“preview -> workflow.patch(operations) -> 服务端校验应用 -> 前端差异/失败反馈” | `go_server/internal/workflow/service.go:81`, `vue_web/src/views/CanvasView.vue:726`, `go_server/internal/access/http/router_integration_test.go:898` |
 | 算法库页面运行闭环 | 已支持输入 JSON、触发 `algorithm.run`、展示 run 结果与 commandId | `vue_web/src/views/AlgorithmLibraryView.vue:73`, `vue_web/src/api/algorithms.ts:13`, `vue_web/src/views/AlgorithmLibraryView.spec.ts:122` |
+| Run Center 操作深度 | 已支持 step 级详情、日志引用与产物引用可操作入口（复制/新标签打开） | `vue_web/src/views/RunCenterView.vue:61`, `vue_web/src/views/RunCenterView.vue:95`, `vue_web/src/views/RunCenterView.spec.ts:207` |
 | 统一回归健康 | 本轮复核通过 | `go_server/scripts/ci/contract_regression.sh` |
 
 ### 2.2 部分完成（Partially Completed）
@@ -40,7 +41,6 @@
 | 领域 | 现状 | 证据 | 目标 |
 |---|---|---|---|
 | 权限管理页面语义 | 当前以 share command 审计视图为主 | `vue_web/src/views/PermissionManagementView.vue:146` | 补齐用户/角色/策略最小管理闭环 |
-| Run Center 操作深度 | 当前以 events/steps 基础浏览为主 | `vue_web/src/views/RunCenterView.vue:129` | 补日志与产物可操作视图（引用/跳转/下载） |
 
 ## 3. 下一步未完成项（Next Steps）
 
@@ -78,7 +78,6 @@
 
 #### P1-2 页面能力补齐
 - 权限管理：用户/角色/策略最小闭环。
-- Run Center：日志与产物操作入口。
 
 ## 4. 接口与兼容性（Interfaces）
 
