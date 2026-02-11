@@ -237,6 +237,7 @@
 - [x] S3.1 AI 事件反馈：`/ai/sessions/{id}/events` 输出 `ai.turn.*` + `command.*` + `workflow.*` 摘要事件，turn `commandIds` 绑定真实 commandId。
 - [x] S3.2 AI 前端闭环：计划预览、执行反馈时间线、失败错误码展示与会话事件自动轮询已落地（`vue_web/src/views/AIWorkbenchView.vue`）。
 - [x] S3.3 AI 回归：`go test ./internal/access/http -run TestAPIContractRegression -count=1`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run -- src/views/AIWorkbenchView.spec.ts` 通过。
+- [x] S3.4 AI planner 语义增强：新增自然语言 intent strategy（中英关键词）、domain-aware reject reason/alternatives 与 explainability confidence；回归覆盖 `go_server/internal/ai/planner/planner_test.go`。
 - [x] S4 MediaMTX 控制面：`update-auth/delete`、录制资产化、onPublish 事件触发 workflow（经 command gate）。
 - [x] S4.1 算法库页面闭环：`Algorithm Library` 支持输入 JSON 参数、触发 `algorithm.run`、展示 `workflowRunId/assetIds/commandId` 结果。
 - [x] S4.2 Run Center 深化：支持 step 详情输入/输出/错误上下文，并提供 `logRef/artifacts` 引用的复制与新标签打开入口（`vue_web/src/views/RunCenterView.vue`、`vue_web/src/views/RunCenterView.spec.ts`）。
