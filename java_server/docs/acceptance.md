@@ -28,6 +28,9 @@
 - Password/OIDC login paths pass e2e checks。
 - JWT claims map to ExecutionContext without drift。
 - `GET /api/v1/commands` without token returns 401。
+- 已认证但权限拒绝时返回 403，且 `error.details.reason` 可追踪。
+- 未匹配路由返回 404（`NOT_FOUND`）统一错误 envelope。
+- 不支持的 HTTP 方法返回 405（`METHOD_NOT_ALLOWED`）统一错误 envelope。
 - `GOYAIS_SECURITY_DEV_HEADER_CONTEXT_ENABLED=false` 时，`X-*` 头不会绕过认证。
 
 ## 5. Dynamic Authorization

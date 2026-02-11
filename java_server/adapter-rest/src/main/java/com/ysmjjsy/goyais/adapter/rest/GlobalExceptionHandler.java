@@ -15,8 +15,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Converts framework exceptions into fixed contract error envelope.
@@ -80,6 +82,30 @@ public final class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ErrorEnvelope.of(
                 "UNAUTHORIZED",
                 "error.authn.unauthorized",
+                Map.of("reason", safeReason(ex.getMessage()))
+        ));
+    }
+
+    /**
+     * Maps unknown routes to NOT_FOUND contract error instead of generic internal failure.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorEnvelope> handleNotFound(NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorEnvelope.of(
+                "NOT_FOUND",
+                "error.request.not_found",
+                Map.of("reason", safeReason(ex.getMessage()))
+        ));
+    }
+
+    /**
+     * Maps unsupported HTTP verbs to METHOD_NOT_ALLOWED contract error.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorEnvelope> handleMethodNotAllowed(HttpRequestMethodNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(ErrorEnvelope.of(
+                "METHOD_NOT_ALLOWED",
+                "error.request.method_not_allowed",
                 Map.of("reason", safeReason(ex.getMessage()))
         ));
     }

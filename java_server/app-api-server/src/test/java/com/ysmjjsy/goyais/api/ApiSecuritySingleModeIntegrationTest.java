@@ -78,6 +78,21 @@ class ApiSecuritySingleModeIntegrationTest {
                 .andExpect(jsonPath("$.error.details.reason").value("permission_denied_by_test"));
     }
 
+    @Test
+    void shouldReturnNotFoundEnvelopeForMissingRoute() throws Exception {
+        mockMvc.perform(get("/api/v1/test-secure/missing")
+                        .with(SecurityMockMvcRequestPostProcessors.jwt().jwt(jwt -> jwt
+                                .claim("tenantId", "tenant-a")
+                                .claim("workspaceId", "workspace-a")
+                                .claim("userId", "user-a")
+                                .claim("policyVersion", "v1")
+                                .claim("roles", java.util.List.of("member"))
+                        )))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.error.messageKey").value("error.request.not_found"));
+    }
+
     @SpringBootConfiguration
     @EnableAutoConfiguration
     @Import({

@@ -26,6 +26,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(
@@ -58,6 +60,14 @@ class ApiSecurityResourceOnlyModeIntegrationTest {
     void shouldRequireBearerTokenForProtectedApi() throws Exception {
         mockMvc.perform(get("/api/v1/test-secure/ok"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldReturnMethodNotAllowedEnvelopeForUnsupportedVerb() throws Exception {
+        mockMvc.perform(post("/api/v1/healthz"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.error.code").value("METHOD_NOT_ALLOWED"))
+                .andExpect(jsonPath("$.error.messageKey").value("error.request.method_not_allowed"));
     }
 
     @SpringBootConfiguration

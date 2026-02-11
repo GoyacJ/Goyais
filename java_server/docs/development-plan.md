@@ -96,6 +96,15 @@
   - 修复 `single` 模式双过滤链冲突：授权链增加端点级 `securityMatcher`，避免与 API 链同时匹配 `anyRequest`。
   - 显式启用 `oauth2AuthorizationServer` 默认配置，确保 OAuth2/OIDC 标准端点在 `single` 模式可用。
 
+## 2.6 2026-02-12 N6 第三批进展（本次实现）
+
+- 错误语义修复：
+  - 修复未匹配路由被错误映射为 500 的问题，新增 `NoResourceFoundException -> 404 NOT_FOUND` 映射。
+  - 新增 `HttpRequestMethodNotSupportedException -> 405 METHOD_NOT_ALLOWED` 映射。
+- 安全集成测试补齐：
+  - `ApiSecuritySingleModeIntegrationTest` 新增缺失路由断言，验证 404 统一 envelope。
+  - `ApiSecurityResourceOnlyModeIntegrationTest` 新增不支持 HTTP 方法断言，验证 405 统一 envelope。
+
 ## 3. 固定 DoD
 
 - API/数据模型/状态机文档与实现同变更同步。
