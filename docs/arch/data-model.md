@@ -86,7 +86,7 @@
 - `workspace_id`
 - `resource_type`（v0.1 share API 支持 `command/asset`；查询判定可覆盖 `workflow_template/workflow_run/capability/capability_provider/algorithm`）
 - `resource_id`
-- `subject_type`（v0.1 固定 `user`）
+- `subject_type`（S0 合同基线：`user|role`；当前实现阶段允许先从 `user` 落地）
 - `subject_id`
 - `permissions`（JSON 数组：READ/WRITE/EXECUTE/MANAGE/SHARE）
 - `expires_at`（可空）
@@ -261,6 +261,18 @@ v0.1 当前实现进度：
 - `installed_at`
 - `updated_at`
 
+### plugin_install_history
+- `id`
+- `tenant_id, workspace_id`
+- `install_id`
+- `from_version`
+- `to_version`
+- `command_id`（`plugin.upgrade`）
+- `status`（started/succeeded/failed/rolled_back）
+- `error_code`
+- `message_key`
+- `created_at`
+
 ## 3.6 流媒体
 
 ### streaming_assets
@@ -293,11 +305,20 @@ v0.1 当前实现进度：
 - `stream_recordings(stream_id, created_at desc, id desc)`
 - `stream_recordings(tenant_id, workspace_id, created_at desc, id desc)`
 
+### stream_auth_rules
+- `id`
+- `tenant_id, workspace_id`
+- `stream_id`
+- `rule`（JSON）
+- `status`（active/disabled）
+- `updated_by`
+- `created_at, updated_at`
+
 ## 3.7 命令、审计与上下文索引
 
 ### commands
 - `id, tenant_id, workspace_id, owner_id`
-- `command_type`（示例：`asset.upload`、`asset.update`、`asset.delete`、`workflow.run`、`workflow.retry`、`algorithm.run`、`share.create`、`share.delete`、`plugin.upload`、`plugin.install`、`plugin.enable`、`plugin.disable`、`plugin.rollback`、`stream.create`、`stream.record.start`、`stream.record.stop`、`stream.kick`）
+- `command_type`（示例：`asset.upload`、`asset.update`、`asset.delete`、`workflow.run`、`workflow.retry`、`algorithm.run`、`share.create`、`share.delete`、`plugin.upload`、`plugin.install`、`plugin.enable`、`plugin.disable`、`plugin.rollback`、`plugin.upgrade`、`stream.create`、`stream.updateAuth`、`stream.delete`、`stream.record.start`、`stream.record.stop`、`stream.kick`、`ai.session.create`、`ai.session.archive`、`ai.intent.plan`、`ai.command.execute`、`context.bundle.rebuild`）
 - `payload`（JSON）
 - `status`（accepted/running/succeeded/failed/canceled）
 - `visibility`（默认 `PRIVATE`，NOT NULL）
@@ -369,6 +390,46 @@ payload 约定（v0.1）：
 - `embeddings_index_refs`（JSON）
 - `timeline`（JSON）
 - `created_at, updated_at`
+
+### context_bundle_items
+- `id`
+- `tenant_id, workspace_id`
+- `bundle_id`
+- `item_type`（asset/report/run/step/message）
+- `item_id`
+- `digest`
+- `weight`
+- `created_at`
+
+### ai_sessions
+- `id, tenant_id, workspace_id, owner_id, visibility`
+- `title`
+- `goal`
+- `status`（active/archived）
+- `inputs`（JSON）
+- `constraints`（JSON）
+- `preferences`（JSON）
+- `archived_at`（可空）
+- `created_at, updated_at`
+
+### ai_session_turns
+- `id`
+- `session_id`
+- `tenant_id, workspace_id, owner_id, visibility`
+- `role`（user/assistant/system）
+- `content`
+- `command_type`（可空，示例：`ai.intent.plan`、`ai.command.execute`）
+- `command_ids`（JSON 数组）
+- `created_at`
+
+### workflow_run_events
+- `id`
+- `run_id`
+- `tenant_id, workspace_id`
+- `step_key`（可空）
+- `event_type`
+- `payload`（JSON）
+- `created_at`
 
 ### chunk_index
 - `id`

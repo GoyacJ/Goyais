@@ -17,6 +17,7 @@ function createTestRouter() {
         meta: { layoutDefault: 'console' },
       },
       { path: '/canvas', component: view },
+      { path: '/ai', component: view },
       { path: '/commands', component: view },
       { path: '/assets', component: view },
       { path: '/plugins', component: view },

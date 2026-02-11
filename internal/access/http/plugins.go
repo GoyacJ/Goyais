@@ -88,6 +88,41 @@ func (h *apiHandler) handlePluginInstalls(w http.ResponseWriter, r *http.Request
 	})
 }
 
+func (h *apiHandler) handlePluginPackageRoutes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := requireRequestContext(w, r); !ok {
+		return
+	}
+	if h.pluginService == nil {
+		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.plugin.not_implemented", nil)
+		return
+	}
+
+	route := strings.TrimPrefix(r.URL.Path, "/api/v1/plugin-market/packages/")
+	if strings.TrimSpace(route) == "" {
+		errorx.Write(w, http.StatusNotFound, "PLUGIN_PACKAGE_NOT_FOUND", "error.plugin.not_found", map[string]any{"path": r.URL.Path})
+		return
+	}
+
+	if !strings.HasSuffix(route, ":download") {
+		errorx.Write(w, http.StatusNotFound, "PLUGIN_PACKAGE_NOT_FOUND", "error.plugin.not_found", map[string]any{"path": r.URL.Path})
+		return
+	}
+
+	packageID := strings.TrimSpace(strings.TrimSuffix(route, ":download"))
+	if packageID == "" || strings.Contains(packageID, "/") || strings.Contains(packageID, ":") {
+		errorx.Write(w, http.StatusNotFound, "PLUGIN_PACKAGE_NOT_FOUND", "error.plugin.not_found", map[string]any{"path": r.URL.Path})
+		return
+	}
+
+	errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.plugin.not_implemented", map[string]any{
+		"packageId": packageID,
+	})
+}
+
 func (h *apiHandler) handlePluginInstallRoutes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -122,6 +157,9 @@ func (h *apiHandler) handlePluginInstallRoutes(w http.ResponseWriter, r *http.Re
 	case strings.HasSuffix(route, ":rollback"):
 		installID = strings.TrimSpace(strings.TrimSuffix(route, ":rollback"))
 		commandType = "plugin.rollback"
+	case strings.HasSuffix(route, ":upgrade"):
+		installID = strings.TrimSpace(strings.TrimSuffix(route, ":upgrade"))
+		commandType = "plugin.upgrade"
 	default:
 		errorx.Write(w, http.StatusNotFound, "PLUGIN_INSTALL_NOT_FOUND", "error.plugin.not_found", map[string]any{"path": r.URL.Path})
 		return

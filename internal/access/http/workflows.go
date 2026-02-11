@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -76,6 +77,9 @@ func (h *apiHandler) handleWorkflowRunRoutes(w http.ResponseWriter, r *http.Requ
 	case strings.HasSuffix(route, ":cancel"):
 		runID := strings.TrimSpace(strings.TrimSuffix(route, ":cancel"))
 		h.handleCancelWorkflowRun(w, r, runID)
+	case strings.HasSuffix(route, "/events"):
+		runID := strings.TrimSpace(strings.TrimSuffix(route, "/events"))
+		h.handleWorkflowRunEvents(w, r, runID)
 	case strings.HasSuffix(route, "/steps"):
 		runID := strings.TrimSpace(strings.TrimSuffix(route, "/steps"))
 		h.handleListWorkflowStepRuns(w, r, runID)
@@ -85,6 +89,61 @@ func (h *apiHandler) handleWorkflowRunRoutes(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		h.handleGetWorkflowRun(w, r, strings.TrimSpace(route))
+	}
+}
+
+func (h *apiHandler) handleWorkflowRunEvents(w http.ResponseWriter, r *http.Request, runID string) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if strings.TrimSpace(runID) == "" || strings.Contains(runID, "/") || strings.Contains(runID, ":") {
+		errorx.Write(w, http.StatusNotFound, "WORKFLOW_RUN_NOT_FOUND", "error.workflow.not_found", nil)
+		return
+	}
+	reqCtx, ok := requireRequestContext(w, r)
+	if !ok {
+		return
+	}
+	if h.workflowService == nil {
+		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.workflow.not_implemented", nil)
+		return
+	}
+
+	events, err := h.workflowService.ListRunEvents(r.Context(), reqCtx, runID)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.common.internal", map[string]any{"reason": "sse_flusher_unavailable"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+
+	for _, item := range events {
+		payload, err := json.Marshal(toWorkflowRunEventPayload(item))
+		if err != nil {
+			continue
+		}
+		if _, err := fmt.Fprintf(w, "id: %s\n", item.ID); err != nil {
+			return
+		}
+		if strings.TrimSpace(item.EventType) != "" {
+			if _, err := fmt.Fprintf(w, "event: %s\n", strings.TrimSpace(item.EventType)); err != nil {
+				return
+			}
+		}
+		if _, err := fmt.Fprintf(w, "data: %s\n\n", payload); err != nil {
+			return
+		}
+		flusher.Flush()
 	}
 }
 
@@ -766,6 +825,22 @@ func toStepRunPayload(item workflow.StepRun) map[string]any {
 			"code":       item.ErrorCode,
 			"messageKey": item.MessageKey,
 		}
+	}
+	return resp
+}
+
+func toWorkflowRunEventPayload(item workflow.WorkflowRunEvent) map[string]any {
+	resp := map[string]any{
+		"id":          item.ID,
+		"runId":       item.RunID,
+		"tenantId":    item.TenantID,
+		"workspaceId": item.WorkspaceID,
+		"eventType":   item.EventType,
+		"payload":     decodeJSON(item.PayloadJSON, map[string]any{}),
+		"createdAt":   item.CreatedAt.UTC().Format(timeRFC3339Nano),
+	}
+	if strings.TrimSpace(item.StepKey) != "" {
+		resp["stepKey"] = item.StepKey
 	}
 	return resp
 }

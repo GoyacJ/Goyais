@@ -3,6 +3,7 @@ package httpapi
 import (
 	"strings"
 
+	"goyais/internal/ai"
 	"goyais/internal/asset"
 	"goyais/internal/command"
 	"goyais/internal/plugin"
@@ -14,6 +15,7 @@ import (
 // Keep the legacy receiver type so asset handlers continue to compile.
 type apiHandler struct {
 	commandService        *command.Service
+	aiService             *ai.Service
 	assetService          *asset.Service
 	assetLifecycleEnabled bool
 	workflowService       *workflow.Service

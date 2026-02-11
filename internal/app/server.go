@@ -8,6 +8,7 @@ import (
 	"time"
 
 	httpapi "goyais/internal/access/http"
+	"goyais/internal/ai"
 	"goyais/internal/algorithm"
 	"goyais/internal/asset"
 	"goyais/internal/command"
@@ -52,6 +53,13 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 		UseSSL:    cfg.ObjectStore.UseSSL,
 	})
 	assetService := asset.NewService(assetRepo, objectStore, cfg.Authz.AllowPrivateToPublic)
+
+	aiRepo, err := ai.NewRepository(cfg.Providers.DB, db)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("build ai repository: %w", err)
+	}
+	aiService := ai.NewService(aiRepo, cfg.Authz.AllowPrivateToPublic)
 
 	workflowRepo, err := workflow.NewRepository(cfg.Providers.DB, db)
 	if err != nil {
@@ -122,7 +130,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	commandService.SetEventBusProvider(eventBusProvider)
 	streamService.SetEventBusProvider(eventBusProvider)
 
-	registerCommandExecutors(commandService, assetService, cfg.Feature.AssetLifecycle, workflowService, pluginService, streamService, algorithmService)
+	registerCommandExecutors(commandService, aiService, assetService, cfg.Feature.AssetLifecycle, workflowService, pluginService, streamService, algorithmService)
 	stopStreamConsumer, err := startKafkaStreamConsumer(cfg, commandService, log.Default())
 	if err != nil {
 		_ = eventBusProvider.Close()
@@ -132,6 +140,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 
 	h, err := httpapi.NewRouter(cfg, httpapi.RouterDeps{
 		CommandService:  commandService,
+		AIService:       aiService,
 		AssetService:    assetService,
 		WorkflowService: workflowService,
 		RegistryService: registryService,

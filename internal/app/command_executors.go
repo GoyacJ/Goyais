@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"goyais/internal/ai"
 	"goyais/internal/algorithm"
 	"goyais/internal/asset"
 	"goyais/internal/command"
@@ -127,10 +128,29 @@ type streamActionCommandPayload struct {
 	StreamID string `json:"streamId"`
 }
 
+type aiSessionCreateCommandPayload struct {
+	Title       string          `json:"title"`
+	Goal        string          `json:"goal"`
+	Visibility  string          `json:"visibility"`
+	Inputs      json.RawMessage `json:"inputs"`
+	Constraints json.RawMessage `json:"constraints"`
+	Preferences json.RawMessage `json:"preferences"`
+}
+
+type aiSessionArchiveCommandPayload struct {
+	SessionID string `json:"sessionId"`
+}
+
+type aiSessionTurnCommandPayload struct {
+	SessionID string `json:"sessionId"`
+	Message   string `json:"message"`
+}
+
 const timeRFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
 
 func registerCommandExecutors(
 	commandService *command.Service,
+	aiService *ai.Service,
 	assetService *asset.Service,
 	assetLifecycleEnabled bool,
 	workflowService *workflow.Service,
@@ -143,6 +163,12 @@ func registerCommandExecutors(
 	}
 	commandService.SetExecutor("share.create", newShareCreateExecutor(commandService))
 	commandService.SetExecutor("share.delete", newShareDeleteExecutor(commandService))
+	if aiService != nil {
+		commandService.SetExecutor("ai.session.create", newAISessionCreateExecutor(aiService))
+		commandService.SetExecutor("ai.session.archive", newAISessionArchiveExecutor(aiService))
+		commandService.SetExecutor("ai.intent.plan", newAISessionTurnExecutor(aiService, "ai.intent.plan"))
+		commandService.SetExecutor("ai.command.execute", newAISessionTurnExecutor(aiService, "ai.command.execute"))
+	}
 	if assetService != nil {
 		commandService.SetExecutor("asset.upload", newAssetUploadExecutor(assetService))
 		if assetLifecycleEnabled {
@@ -376,6 +402,124 @@ func mapAssetExecutionError(err error) error {
 			Code:       "INTERNAL_ERROR",
 			MessageKey: "error.common.internal",
 			Err:        fmt.Errorf("asset executor: %w", err),
+		}
+	}
+}
+
+func newAISessionCreateExecutor(aiService *ai.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req aiSessionCreateCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapAIExecutionError(ai.ErrInvalidRequest)
+		}
+		if len(req.Inputs) == 0 {
+			req.Inputs = json.RawMessage(`{}`)
+		}
+		if len(req.Constraints) == 0 {
+			req.Constraints = json.RawMessage(`{}`)
+		}
+		if len(req.Preferences) == 0 {
+			req.Preferences = json.RawMessage(`{}`)
+		}
+
+		session, err := aiService.CreateSession(
+			ctx,
+			reqCtx,
+			req.Title,
+			req.Goal,
+			objectOrDefault(req.Inputs),
+			objectOrDefault(req.Constraints),
+			objectOrDefault(req.Preferences),
+			req.Visibility,
+		)
+		if err != nil {
+			return nil, mapAIExecutionError(err)
+		}
+
+		result := map[string]any{
+			"session": toAISessionResultPayload(session),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func newAISessionArchiveExecutor(aiService *ai.Service) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req aiSessionArchiveCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapAIExecutionError(ai.ErrInvalidRequest)
+		}
+
+		session, err := aiService.ArchiveSession(ctx, reqCtx, req.SessionID)
+		if err != nil {
+			return nil, mapAIExecutionError(err)
+		}
+
+		result := map[string]any{
+			"session": toAISessionResultPayload(session),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func newAISessionTurnExecutor(aiService *ai.Service, commandType string) command.ExecuteFunc {
+	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
+		var req aiSessionTurnCommandPayload
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, mapAIExecutionError(ai.ErrInvalidRequest)
+		}
+
+		turn, err := aiService.CreateTurn(ctx, reqCtx, req.SessionID, req.Message, commandType)
+		if err != nil {
+			return nil, mapAIExecutionError(err)
+		}
+
+		result := map[string]any{
+			"turn": toAISessionTurnResultPayload(turn),
+		}
+		raw, _ := json.Marshal(result)
+		return raw, nil
+	}
+}
+
+func mapAIExecutionError(err error) error {
+	switch {
+	case errors.Is(err, ai.ErrInvalidRequest):
+		return &command.ExecutionError{
+			Code:       "INVALID_AI_REQUEST",
+			MessageKey: "error.ai.invalid_request",
+			Err:        command.ErrInvalidCommandRequest,
+		}
+	case errors.Is(err, ai.ErrSessionNotFound):
+		return &command.ExecutionError{
+			Code:       "AI_SESSION_NOT_FOUND",
+			MessageKey: "error.ai.not_found",
+			Err:        command.ErrNotFound,
+		}
+	case errors.Is(err, ai.ErrNotImplemented):
+		return &command.ExecutionError{
+			Code:       "NOT_IMPLEMENTED",
+			MessageKey: "error.ai.not_implemented",
+			Err:        command.ErrNotImplemented,
+		}
+	case errors.Is(err, ai.ErrForbidden):
+		reason := ""
+		var forbidden *ai.ForbiddenError
+		if errors.As(err, &forbidden) {
+			reason = forbidden.Reason
+		}
+		return &command.ExecutionError{
+			Code:       "FORBIDDEN",
+			MessageKey: "error.authz.forbidden",
+			Err:        &command.ForbiddenError{Reason: reason},
+		}
+	default:
+		return &command.ExecutionError{
+			Code:       "INTERNAL_ERROR",
+			MessageKey: "error.common.internal",
+			Err:        fmt.Errorf("ai executor: %w", err),
 		}
 	}
 }
@@ -1276,6 +1420,52 @@ func toShareDeleteResultPayload(shareID string) map[string]any {
 		"id":     shareID,
 		"status": "deleted",
 	}
+}
+
+func toAISessionResultPayload(item ai.Session) map[string]any {
+	result := map[string]any{
+		"id":          item.ID,
+		"tenantId":    item.TenantID,
+		"workspaceId": item.WorkspaceID,
+		"ownerId":     item.OwnerID,
+		"visibility":  item.Visibility,
+		"acl":         decodeJSON(item.ACLJSON, []any{}),
+		"title":       item.Title,
+		"goal":        item.Goal,
+		"status":      item.Status,
+		"inputs":      decodeJSON(item.InputsJSON, map[string]any{}),
+		"constraints": decodeJSON(item.ConstraintsJSON, map[string]any{}),
+		"preferences": decodeJSON(item.PreferencesJSON, map[string]any{}),
+		"createdAt":   item.CreatedAt.UTC().Format(timeRFC3339Nano),
+		"updatedAt":   item.UpdatedAt.UTC().Format(timeRFC3339Nano),
+	}
+	if item.ArchivedAt != nil {
+		result["archivedAt"] = item.ArchivedAt.UTC().Format(timeRFC3339Nano)
+	}
+	if item.LastTurnAt != nil {
+		result["lastTurnAt"] = item.LastTurnAt.UTC().Format(timeRFC3339Nano)
+	}
+	return result
+}
+
+func toAISessionTurnResultPayload(item ai.SessionTurn) map[string]any {
+	result := map[string]any{
+		"id":          item.ID,
+		"status":      command.StatusSucceeded,
+		"sessionId":   item.SessionID,
+		"tenantId":    item.TenantID,
+		"workspaceId": item.WorkspaceID,
+		"ownerId":     item.OwnerID,
+		"visibility":  item.Visibility,
+		"role":        item.Role,
+		"content":     item.Content,
+		"commandIds":  decodeJSON(item.CommandIDsJSON, []any{}),
+		"createdAt":   item.CreatedAt.UTC().Format(timeRFC3339Nano),
+	}
+	if strings.TrimSpace(item.CommandType) != "" {
+		result["commandType"] = strings.TrimSpace(item.CommandType)
+	}
+	return result
 }
 
 func objectOrDefault(raw json.RawMessage) json.RawMessage {

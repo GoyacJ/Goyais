@@ -23,6 +23,11 @@ const manifests: Record<string, WindowPaneManifest[]> = {
     { id: 'list', x: 24, y: 226, w: 760, h: 620 },
     { id: 'detail', x: 800, y: 226, w: 508, h: 620 },
   ],
+  'ai-workbench': [
+    { id: 'ai-sessions', x: 24, y: 20, w: 420, h: 720, minWidth: 360 },
+    { id: 'ai-composer', x: 460, y: 20, w: 430, h: 720, minWidth: 360 },
+    { id: 'ai-events', x: 906, y: 20, w: 402, h: 720, minWidth: 340 },
+  ],
   assets: [
     { id: 'filters', x: 24, y: 20, w: 1284, h: 190, minHeight: 160 },
     { id: 'list', x: 24, y: 226, w: 800, h: 620 },

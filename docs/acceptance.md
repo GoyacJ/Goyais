@@ -192,6 +192,7 @@
 - [x] P0 条目（2、4、5、6）全部通过。
 - [x] 其余条目无阻断性失败（M2 占位项已标注 deferred）。
 - [x] 失败项形成缺陷清单并绑定后续里程碑（见 7/8/9/11 与 M2 规划）。
+- [x] “v0.1 冻结验收通过”与“PRD 严格口径不满足”可并存：冻结验收用于当前里程碑收口，PRD 严格口径用于后续重构闭环判定。
 
 ## 14. 本轮证据命令（2026-02-10）
 
@@ -214,3 +215,17 @@
 - [x] 存在提交前防呆脚本 `scripts/git/precommit_guard.sh`，阻断 `data/objects/`、`*.db`、`build/`、`web/dist/`、`web/node_modules/`、`.agents/` 被 staged。
 - [x] 存在 worktree 审计脚本 `scripts/git/worktree_audit.sh`，阻断 detached worktree 与重复分支绑定。
 - [x] CI workflow `.github/workflows/contract-regression.yml` 调用统一回归脚本，作为 PR/master 门禁入口。
+
+## 16. PRD 严格口径重构启动验收（S0-S6）
+
+> 本章节用于“严格口径重构计划”追踪，不覆盖 1-15 的冻结结论。
+
+- [ ] S0 契约同步：`openapi/data-model/state-machines/overview/acceptance` 已同步新增 API、commandType、实体口径。
+- [ ] S0 路由可达：`openapi_reachability` 覆盖新增参数 `sessionId/packageId/bundleId`，新增路径均非 `API_NOT_FOUND`。
+- [ ] S1 Workflow Engine V2：完成 DAG 拓扑校验、并发调度、重试退避、Tool Gate 与 run/step 事件流。
+- [ ] S2 Canvas V2：满足 PRD 8.9 五条验收（typed ports/minimap/undo-redo/run-from-here/test-node）。
+- [ ] S3 AI 工作台：会话/turn/计划/执行反馈闭环，且 AI/UI 同动作 command 同形。
+- [ ] S4 MediaMTX 控制面：`update-auth/delete`、录制资产化、onPublish 事件触发 workflow（经 command gate）。
+- [ ] S5 插件市场生命周期：`download/upgrade` 与 `uploaded->validating->installing->enabled` 全链路一致。
+- [ ] S6 ContextBundle + ACL role：`context-bundles` 读写与 `acl_entries.subject_type=user|role` 落地。
+- [ ] 每切片均具备 feature flag 回滚与全量回归证据。

@@ -351,6 +351,26 @@ func (s *Service) ListStepRuns(ctx context.Context, params StepListParams) (Step
 	return s.repo.ListStepRuns(ctx, params)
 }
 
+func (s *Service) ListRunEvents(ctx context.Context, req command.RequestContext, runID string) ([]WorkflowRunEvent, error) {
+	runID = strings.TrimSpace(runID)
+	if runID == "" {
+		return nil, ErrInvalidRequest
+	}
+
+	run, err := s.repo.GetRunForAccess(ctx, req, runID)
+	if err != nil {
+		return nil, err
+	}
+	allowed, reason, err := s.authorizeRun(ctx, req, run, command.PermissionRead)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, &ForbiddenError{Reason: reason}
+	}
+	return s.repo.ListRunEvents(ctx, req, runID)
+}
+
 func (s *Service) authorizeTemplate(
 	ctx context.Context,
 	req command.RequestContext,

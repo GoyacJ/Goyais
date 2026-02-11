@@ -60,6 +60,37 @@ func (h *apiHandler) handleStreamRoutes(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if r.Method == http.MethodDelete {
+		streamID := strings.TrimSpace(route)
+		if streamID == "" || strings.Contains(streamID, ":") {
+			errorx.Write(w, http.StatusNotFound, "STREAM_NOT_FOUND", "error.stream.not_found", map[string]any{"path": r.URL.Path})
+			return
+		}
+		if h.commandService == nil {
+			errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.stream.not_implemented", nil)
+			return
+		}
+
+		payload, _ := json.Marshal(map[string]any{"streamId": streamID})
+		cmd, err := h.commandService.Submit(
+			r.Context(),
+			reqCtx,
+			"stream.delete",
+			payload,
+			strings.TrimSpace(r.Header.Get("Idempotency-Key")),
+			"",
+		)
+		if err != nil {
+			writeStreamCommandError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]any{
+			"resource":   readStreamResourceFromResult(cmd.Result),
+			"commandRef": toCommandRefPayload(cmd),
+		})
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -83,6 +114,9 @@ func (h *apiHandler) handleStreamRoutes(w http.ResponseWriter, r *http.Request) 
 	case strings.HasSuffix(route, ":kick"):
 		streamID = strings.TrimSpace(strings.TrimSuffix(route, ":kick"))
 		commandType = "stream.kick"
+	case strings.HasSuffix(route, ":update-auth"):
+		streamID = strings.TrimSpace(strings.TrimSuffix(route, ":update-auth"))
+		commandType = "stream.updateAuth"
 	default:
 		errorx.Write(w, http.StatusNotFound, "STREAM_NOT_FOUND", "error.stream.not_found", map[string]any{"path": r.URL.Path})
 		return
@@ -92,7 +126,25 @@ func (h *apiHandler) handleStreamRoutes(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	payload, _ := json.Marshal(map[string]any{"streamId": streamID})
+	payloadData := map[string]any{"streamId": streamID}
+	if commandType == "stream.updateAuth" {
+		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		if err != nil {
+			errorx.Write(w, http.StatusBadRequest, "INVALID_JSON", "error.request.invalid_json", nil)
+			return
+		}
+		if len(body) == 0 {
+			body = []byte("{}")
+		}
+		var req map[string]any
+		if err := json.Unmarshal(body, &req); err != nil {
+			errorx.Write(w, http.StatusBadRequest, "INVALID_JSON", "error.request.invalid_json", nil)
+			return
+		}
+		payloadData["authRule"] = req
+	}
+
+	payload, _ := json.Marshal(payloadData)
 	cmd, err := h.commandService.Submit(
 		r.Context(),
 		reqCtx,

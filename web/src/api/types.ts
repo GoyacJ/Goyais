@@ -104,6 +104,30 @@ export interface WorkflowRunDTO extends ResourceBase {
   error?: ApiError
 }
 
+export interface AISessionDTO extends ResourceBase {
+  title: string
+  goal?: string
+  inputs: ApiObject
+  constraints: ApiObject
+  preferences: ApiObject
+  archivedAt?: string
+  lastTurnAt?: string
+}
+
+export interface AISessionTurnDTO {
+  id: string
+  sessionId: string
+  tenantId: string
+  workspaceId: string
+  ownerId: string
+  visibility: Visibility
+  role: 'user' | 'assistant' | 'system' | string
+  content: string
+  commandType?: string
+  commandIds?: string[]
+  createdAt: string
+}
+
 export interface StepRunDTO extends ResourceBase {
   runId: string
   stepKey: string
@@ -249,6 +273,23 @@ export interface WorkflowRunCreateRequest {
   inputs?: ApiObject
   mode?: 'sync' | 'running' | 'fail'
   visibility?: Visibility
+}
+
+export interface AISessionCreateRequest {
+  title?: string
+  goal?: string
+  inputs?: ApiObject
+  constraints?: ApiObject
+  preferences?: ApiObject
+  visibility?: Visibility
+}
+
+export interface AISessionTurnCreateRequest {
+  message: string
+  execute?: boolean
+  inputs?: ApiObject
+  constraints?: ApiObject
+  preferences?: ApiObject
 }
 
 export interface PluginPackageUploadRequest {

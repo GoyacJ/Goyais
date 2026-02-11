@@ -373,6 +373,126 @@ func TestAPIContractRegression(t *testing.T) {
 		}
 	})
 
+	var aiSessionID string
+	t.Run("ai sessions create/list/get/turn/events/archive", func(t *testing.T) {
+		respCreate := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/sessions", headersWithJSONContext("u1"), map[string]any{
+			"title":      "assistant smoke",
+			"goal":       "validate ai session routes",
+			"visibility": "PRIVATE",
+			"inputs":     map[string]any{"topic": "smoke"},
+		})
+		defer respCreate.Body.Close()
+		assertStatus(t, respCreate, http.StatusAccepted)
+		var createPayload map[string]any
+		mustDecodeJSON(t, respCreate.Body, &createPayload)
+		createResource, _ := createPayload["resource"].(map[string]any)
+		aiSessionID, _ = createResource["id"].(string)
+		if aiSessionID == "" {
+			t.Fatalf("expected ai session id")
+		}
+		if got, _ := createResource["status"].(string); got != "active" {
+			t.Fatalf("unexpected ai session status: %v", createResource["status"])
+		}
+		createCommandRef, _ := createPayload["commandRef"].(map[string]any)
+		aiCreateCommandID, _ := createCommandRef["commandId"].(string)
+		if aiCreateCommandID == "" {
+			t.Fatalf("expected ai create commandRef.commandId")
+		}
+		respCreateCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+aiCreateCommandID, headersWithContext("u1"), nil)
+		defer respCreateCommand.Body.Close()
+		assertStatus(t, respCreateCommand, http.StatusOK)
+		if got := readJSONPath(t, respCreateCommand.Body, "commandType"); got != "ai.session.create" {
+			t.Fatalf("unexpected ai create command type: %v", got)
+		}
+
+		respList := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/ai/sessions?page=1&pageSize=20", headersWithContext("u1"), nil)
+		defer respList.Body.Close()
+		assertStatus(t, respList, http.StatusOK)
+		var listPayload map[string]any
+		mustDecodeJSON(t, respList.Body, &listPayload)
+		items, ok := listPayload["items"].([]any)
+		if !ok || len(items) == 0 {
+			t.Fatalf("expected ai session items")
+		}
+		if _, ok := listPayload["pageInfo"].(map[string]any); !ok {
+			t.Fatalf("expected ai session list pageInfo")
+		}
+		if !containsAssetID(items, aiSessionID) {
+			t.Fatalf("expected ai session list to contain %s", aiSessionID)
+		}
+
+		respGet := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/ai/sessions/"+aiSessionID, headersWithContext("u1"), nil)
+		defer respGet.Body.Close()
+		assertStatus(t, respGet, http.StatusOK)
+		if got := readJSONPath(t, respGet.Body, "title"); got != "assistant smoke" {
+			t.Fatalf("unexpected ai session title: %v", got)
+		}
+
+		respTurn := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/sessions/"+aiSessionID+"/turns", headersWithJSONContext("u1"), map[string]any{
+			"message": "please draft a plan",
+			"execute": false,
+		})
+		defer respTurn.Body.Close()
+		assertStatus(t, respTurn, http.StatusAccepted)
+		var turnPayload map[string]any
+		mustDecodeJSON(t, respTurn.Body, &turnPayload)
+		turnResource, _ := turnPayload["resource"].(map[string]any)
+		if got, _ := turnResource["status"].(string); got != "succeeded" {
+			t.Fatalf("unexpected ai turn resource.status: %v", turnResource["status"])
+		}
+		turnCommandRef, _ := turnPayload["commandRef"].(map[string]any)
+		aiTurnCommandID, _ := turnCommandRef["commandId"].(string)
+		if aiTurnCommandID == "" {
+			t.Fatalf("expected ai turn commandRef.commandId")
+		}
+		respTurnCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+aiTurnCommandID, headersWithContext("u1"), nil)
+		defer respTurnCommand.Body.Close()
+		assertStatus(t, respTurnCommand, http.StatusOK)
+		if got := readJSONPath(t, respTurnCommand.Body, "commandType"); got != "ai.intent.plan" {
+			t.Fatalf("unexpected ai turn command type: %v", got)
+		}
+
+		respEvents := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/ai/sessions/"+aiSessionID+"/events", headersWithContext("u1"), nil)
+		defer respEvents.Body.Close()
+		assertStatus(t, respEvents, http.StatusOK)
+		if contentType := respEvents.Header.Get("Content-Type"); !strings.Contains(contentType, "text/event-stream") {
+			t.Fatalf("expected text/event-stream content type got=%s", contentType)
+		}
+		eventsRaw, err := io.ReadAll(respEvents.Body)
+		if err != nil {
+			t.Fatalf("read ai session events body: %v", err)
+		}
+		eventsBody := string(eventsRaw)
+		if !strings.Contains(eventsBody, "event: ai.turn.user") {
+			t.Fatalf("expected ai.turn.user event in stream body=%s", eventsBody)
+		}
+		if !strings.Contains(eventsBody, "event: ai.turn.assistant") {
+			t.Fatalf("expected ai.turn.assistant event in stream body=%s", eventsBody)
+		}
+
+		respArchive := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/sessions/"+aiSessionID+":archive", headersWithJSONContext("u1"), map[string]any{})
+		defer respArchive.Body.Close()
+		assertStatus(t, respArchive, http.StatusAccepted)
+		var archivePayload map[string]any
+		mustDecodeJSON(t, respArchive.Body, &archivePayload)
+		archiveResource, _ := archivePayload["resource"].(map[string]any)
+		if got, _ := archiveResource["status"].(string); got != "archived" {
+			t.Fatalf("unexpected ai session archive status: %v", archiveResource["status"])
+		}
+
+		respTurnArchived := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/sessions/"+aiSessionID+"/turns", headersWithJSONContext("u1"), map[string]any{
+			"message": "should fail after archive",
+		})
+		defer respTurnArchived.Body.Close()
+		assertStatus(t, respTurnArchived, http.StatusBadRequest)
+		assertErrorCode(t, respTurnArchived.Body, "INVALID_AI_REQUEST")
+
+		respForbidden := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/ai/sessions/"+aiSessionID, headersWithContext("u2"), nil)
+		defer respForbidden.Body.Close()
+		assertStatus(t, respForbidden, http.StatusForbidden)
+		assertMessageKey(t, respForbidden.Body, "error.authz.forbidden")
+	})
+
 	var commandShareID string
 	t.Run("shares", func(t *testing.T) {
 		resp := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/shares", headersWithJSONContext("u1"), map[string]any{
@@ -719,6 +839,56 @@ func TestAPIContractRegression(t *testing.T) {
 		}
 		if _, ok := syncRunPayload["durationMs"].(float64); !ok {
 			t.Fatalf("expected durationMs on finished sync run")
+		}
+
+		respEvents := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+runSyncID+"/events", headersWithContext("u1"), nil)
+		defer respEvents.Body.Close()
+		assertStatus(t, respEvents, http.StatusOK)
+		if contentType := respEvents.Header.Get("Content-Type"); !strings.Contains(contentType, "text/event-stream") {
+			t.Fatalf("expected text/event-stream content type got=%s", contentType)
+		}
+		eventsRaw, err := io.ReadAll(respEvents.Body)
+		if err != nil {
+			t.Fatalf("read workflow run events body: %v", err)
+		}
+		eventsBody := string(eventsRaw)
+		if !strings.Contains(eventsBody, "event: workflow.run.succeeded") {
+			t.Fatalf("expected workflow.run.succeeded event in stream body=%s", eventsBody)
+		}
+		if !strings.Contains(eventsBody, "event: workflow.step.succeeded") {
+			t.Fatalf("expected workflow.step.succeeded event in stream body=%s", eventsBody)
+		}
+		respEventsNotFound := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/run_missing/events", headersWithContext("u1"), nil)
+		defer respEventsNotFound.Body.Close()
+		assertStatus(t, respEventsNotFound, http.StatusNotFound)
+		assertErrorCode(t, respEventsNotFound.Body, "WORKFLOW_RUN_NOT_FOUND")
+
+		respRunFailWithRetry := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-runs", headersWithJSONContext("u1"), map[string]any{
+			"templateId": templateID,
+			"inputs": map[string]any{
+				"failStepKey": "n1",
+				"retry": map[string]any{
+					"maxAttempts":   3,
+					"baseBackoffMs": 25,
+				},
+			},
+			"mode": "fail",
+		})
+		defer respRunFailWithRetry.Body.Close()
+		assertStatus(t, respRunFailWithRetry, http.StatusAccepted)
+		failWithRetryRunID := readJSONPath(t, respRunFailWithRetry.Body, "resource.id").(string)
+		if failWithRetryRunID == "" {
+			t.Fatalf("expected failed run id with retry policy")
+		}
+		respFailWithRetryEvents := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+failWithRetryRunID+"/events", headersWithContext("u1"), nil)
+		defer respFailWithRetryEvents.Body.Close()
+		assertStatus(t, respFailWithRetryEvents, http.StatusOK)
+		failWithRetryEventsRaw, err := io.ReadAll(respFailWithRetryEvents.Body)
+		if err != nil {
+			t.Fatalf("read workflow fail-with-retry events body: %v", err)
+		}
+		if !strings.Contains(string(failWithRetryEventsRaw), "event: workflow.step.retry_scheduled") {
+			t.Fatalf("expected workflow.step.retry_scheduled event in fail-with-retry stream body=%s", string(failWithRetryEventsRaw))
 		}
 
 		respRunFail := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-runs", headersWithJSONContext("u1"), map[string]any{
@@ -1162,6 +1332,28 @@ func TestAPIContractRegression(t *testing.T) {
 			t.Fatalf("unexpected plugin rollback status: %v", rollbackStatus)
 		}
 
+		respUpgrade := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/"+installID+":upgrade", headersWithJSONContext("u1"), map[string]any{})
+		defer respUpgrade.Body.Close()
+		assertStatus(t, respUpgrade, http.StatusAccepted)
+		var upgradePayload map[string]any
+		mustDecodeJSON(t, respUpgrade.Body, &upgradePayload)
+		upgradeCommandRef, _ := upgradePayload["commandRef"].(map[string]any)
+		upgradeCommandID, _ := upgradeCommandRef["commandId"].(string)
+		if upgradeCommandID == "" {
+			t.Fatalf("expected plugin upgrade command id")
+		}
+		respUpgradeCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+upgradeCommandID, headersWithContext("u1"), nil)
+		defer respUpgradeCommand.Body.Close()
+		assertStatus(t, respUpgradeCommand, http.StatusOK)
+		if got := readJSONPath(t, respUpgradeCommand.Body, "commandType"); got != "plugin.upgrade" {
+			t.Fatalf("unexpected plugin upgrade command type: %v", got)
+		}
+
+		respDownload := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/plugin-market/packages/"+packageID+":download", headersWithContext("u1"), nil)
+		defer respDownload.Body.Close()
+		assertStatus(t, respDownload, http.StatusNotImplemented)
+		assertErrorCode(t, respDownload.Body, "NOT_IMPLEMENTED")
+
 		respForbiddenEnable := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/plugin-market/installs/"+installID+":enable", headersWithJSONContext("u2"), map[string]any{})
 		defer respForbiddenEnable.Body.Close()
 		assertStatus(t, respForbiddenEnable, http.StatusForbidden)
@@ -1374,6 +1566,26 @@ func TestAPIContractRegression(t *testing.T) {
 		assertStatus(t, respStartForbidden, http.StatusForbidden)
 		assertMessageKey(t, respStartForbidden.Body, "error.authz.forbidden")
 
+		respUpdateAuth := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams/"+streamID+":update-auth", headersWithJSONContext("u1"), map[string]any{
+			"mode":       "allowlist",
+			"cidrRanges": []string{"10.0.0.0/8"},
+		})
+		defer respUpdateAuth.Body.Close()
+		assertStatus(t, respUpdateAuth, http.StatusAccepted)
+		var updateAuthPayload map[string]any
+		mustDecodeJSON(t, respUpdateAuth.Body, &updateAuthPayload)
+		updateAuthCommandRef, _ := updateAuthPayload["commandRef"].(map[string]any)
+		updateAuthCommandID, _ := updateAuthCommandRef["commandId"].(string)
+		if updateAuthCommandID == "" {
+			t.Fatalf("expected stream update-auth command id")
+		}
+		respUpdateAuthCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+updateAuthCommandID, headersWithContext("u1"), nil)
+		defer respUpdateAuthCommand.Body.Close()
+		assertStatus(t, respUpdateAuthCommand, http.StatusOK)
+		if got := readJSONPath(t, respUpdateAuthCommand.Body, "commandType"); got != "stream.updateAuth" {
+			t.Fatalf("unexpected stream update-auth command type: %v", got)
+		}
+
 		respStop := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams/"+streamID+":record-stop", headersWithJSONContext("u1"), map[string]any{})
 		defer respStop.Body.Close()
 		assertStatus(t, respStop, http.StatusAccepted)
@@ -1411,6 +1623,23 @@ func TestAPIContractRegression(t *testing.T) {
 		assertStatus(t, respKick, http.StatusAccepted)
 		if kickStatus := readJSONPath(t, respKick.Body, "resource.status"); kickStatus != "offline" {
 			t.Fatalf("unexpected stream status after kick: %v", kickStatus)
+		}
+
+		respDelete := mustRequest(t, client, http.MethodDelete, baseURL+"/api/v1/streams/"+streamID, headersWithContext("u1"), nil)
+		defer respDelete.Body.Close()
+		assertStatus(t, respDelete, http.StatusAccepted)
+		var deletePayload map[string]any
+		mustDecodeJSON(t, respDelete.Body, &deletePayload)
+		deleteCommandRef, _ := deletePayload["commandRef"].(map[string]any)
+		deleteCommandID, _ := deleteCommandRef["commandId"].(string)
+		if deleteCommandID == "" {
+			t.Fatalf("expected stream delete command id")
+		}
+		respDeleteCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+deleteCommandID, headersWithContext("u1"), nil)
+		defer respDeleteCommand.Body.Close()
+		assertStatus(t, respDeleteCommand, http.StatusOK)
+		if got := readJSONPath(t, respDeleteCommand.Body, "commandType"); got != "stream.delete" {
+			t.Fatalf("unexpected stream delete command type: %v", got)
 		}
 
 	})

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"goyais/internal/access/webstatic"
+	"goyais/internal/ai"
 	"goyais/internal/asset"
 	"goyais/internal/command"
 	"goyais/internal/common/errorx"
@@ -17,6 +18,7 @@ import (
 
 type RouterDeps struct {
 	CommandService  *command.Service
+	AIService       *ai.Service
 	AssetService    *asset.Service
 	WorkflowService *workflow.Service
 	RegistryService *registry.Service
@@ -33,20 +35,23 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 	healthzHandler := NewHealthzHandler(cfg, deps.HealthChecker, deps.ProviderProbe)
 	apiMux.Handle("/api/v1/healthz", healthzHandler)
 	apiMux.Handle("/api/v1/system/healthz", healthzHandler)
-	if deps.CommandService != nil {
-		apiMux.Handle("/api/v1/commands", NewCommandCollectionHandler(deps.CommandService))
-		apiMux.Handle("/api/v1/commands/", NewCommandItemHandler(deps.CommandService))
-		apiMux.Handle("/api/v1/shares", NewShareCollectionHandler(deps.CommandService))
-		apiMux.Handle("/api/v1/shares/", NewShareItemHandler(deps.CommandService))
-	}
 	domainHandler := &apiHandler{
 		commandService:        deps.CommandService,
+		aiService:             deps.AIService,
 		assetService:          deps.AssetService,
 		assetLifecycleEnabled: cfg.Feature.AssetLifecycle,
 		workflowService:       deps.WorkflowService,
 		registryService:       deps.RegistryService,
 		pluginService:         deps.PluginService,
 		streamService:         deps.StreamService,
+	}
+	if deps.CommandService != nil {
+		apiMux.Handle("/api/v1/commands", NewCommandCollectionHandler(deps.CommandService))
+		apiMux.Handle("/api/v1/commands/", NewCommandItemHandler(deps.CommandService))
+		apiMux.Handle("/api/v1/shares", NewShareCollectionHandler(deps.CommandService))
+		apiMux.Handle("/api/v1/shares/", NewShareItemHandler(deps.CommandService))
+		apiMux.Handle("/api/v1/ai/sessions", http.HandlerFunc(domainHandler.handleAISessions))
+		apiMux.Handle("/api/v1/ai/sessions/", http.HandlerFunc(domainHandler.handleAISessionRoutes))
 	}
 	if deps.AssetService != nil {
 		apiMux.Handle("/api/v1/assets", http.HandlerFunc(domainHandler.handleAssets))
@@ -89,11 +94,13 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 
 	if deps.PluginService != nil {
 		apiMux.Handle("/api/v1/plugin-market/packages", http.HandlerFunc(domainHandler.handlePluginPackages))
+		apiMux.Handle("/api/v1/plugin-market/packages/", http.HandlerFunc(domainHandler.handlePluginPackageRoutes))
 		apiMux.Handle("/api/v1/plugin-market/installs", http.HandlerFunc(domainHandler.handlePluginInstalls))
 		apiMux.Handle("/api/v1/plugin-market/installs/", http.HandlerFunc(domainHandler.handlePluginInstallRoutes))
 	} else {
 		pluginNotImplemented := NewNotImplementedHandler("error.plugin.not_implemented")
 		apiMux.Handle("/api/v1/plugin-market/packages", pluginNotImplemented)
+		apiMux.Handle("/api/v1/plugin-market/packages/", pluginNotImplemented)
 		apiMux.Handle("/api/v1/plugin-market/installs", pluginNotImplemented)
 		apiMux.Handle("/api/v1/plugin-market/installs/", pluginNotImplemented)
 	}
@@ -106,6 +113,9 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 		apiMux.Handle("/api/v1/streams", streamNotImplemented)
 		apiMux.Handle("/api/v1/streams/", streamNotImplemented)
 	}
+
+	apiMux.Handle("/api/v1/context-bundles", http.HandlerFunc(domainHandler.handleContextBundles))
+	apiMux.Handle("/api/v1/context-bundles/", http.HandlerFunc(domainHandler.handleContextBundleRoutes))
 
 	staticHandler, err := webstatic.NewHandler()
 	if err != nil {

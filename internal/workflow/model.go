@@ -98,6 +98,17 @@ type StepRun struct {
 	UpdatedAt     time.Time
 }
 
+type WorkflowRunEvent struct {
+	ID          string
+	RunID       string
+	TenantID    string
+	WorkspaceID string
+	StepKey     string
+	EventType   string
+	PayloadJSON json.RawMessage
+	CreatedAt   time.Time
+}
+
 type CreateTemplateInput struct {
 	Context       command.RequestContext
 	Name          string

@@ -379,9 +379,12 @@ func (r *PostgresRepository) CreateRun(ctx context.Context, in CreateRunInput) (
 	if err != nil {
 		return WorkflowRun{}, err
 	}
+	plan, err := buildExecutionPlan(tpl.GraphJSON, in.Inputs, in.Mode, "")
+	if err != nil {
+		return WorkflowRun{}, err
+	}
 
 	runID := newID("wfr")
-	stepID := newID("srun")
 
 	if _, err := tx.ExecContext(
 		ctx,
@@ -413,37 +416,102 @@ func (r *PostgresRepository) CreateRun(ctx context.Context, in CreateRunInput) (
 		return WorkflowRun{}, fmt.Errorf("insert workflow run: %w", err)
 	}
 
-	if _, err := tx.ExecContext(
-		ctx,
-		`INSERT INTO step_runs(id, run_id, tenant_id, workspace_id, owner_id, trace_id, visibility, step_key, step_type, attempt, input, output, artifacts, log_ref, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::jsonb, $14, $15, $16, $17, $18, $19, $20, $21)`,
-		stepID,
-		runID,
-		in.Context.TenantID,
-		in.Context.WorkspaceID,
-		in.Context.OwnerID,
-		in.Context.TraceID,
-		in.Visibility,
-		"step-1",
-		"noop",
-		1,
-		string(in.Inputs),
-		"{}",
-		"{}",
-		nil,
-		StepStatusPending,
-		nil,
-		nil,
-		now,
-		nil,
-		now,
-		now,
-	); err != nil {
-		return WorkflowRun{}, fmt.Errorf("insert step run: %w", err)
+	plan, err = r.applyToolGateToPlanFromTx(ctx, tx, in.Context, WorkflowRun{
+		ID:          runID,
+		TenantID:    in.Context.TenantID,
+		WorkspaceID: in.Context.WorkspaceID,
+		OwnerID:     in.Context.OwnerID,
+		Visibility:  in.Visibility,
+	}, plan, now)
+	if err != nil {
+		return WorkflowRun{}, err
 	}
 
-	if err := applyRunModePostgres(ctx, tx, runID, stepID, in.Mode, now); err != nil {
-		return WorkflowRun{}, err
+	for _, step := range plan.Steps {
+		stepID := newID("srun")
+		finishedAt := any(nil)
+		if step.Finished {
+			finishedAt = now
+		}
+		stepInput := step.Input
+		if len(stepInput) == 0 {
+			stepInput = json.RawMessage(`{}`)
+		}
+		stepOutput := step.Output
+		if len(stepOutput) == 0 {
+			stepOutput = json.RawMessage(`{}`)
+		}
+		stepAttempt := step.Attempt
+		if stepAttempt <= 0 {
+			stepAttempt = 1
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			`INSERT INTO step_runs(id, run_id, tenant_id, workspace_id, owner_id, trace_id, visibility, step_key, step_type, attempt, input, output, artifacts, log_ref, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::jsonb, $14, $15, $16, $17, $18, $19, $20, $21)`,
+			stepID,
+			runID,
+			in.Context.TenantID,
+			in.Context.WorkspaceID,
+			in.Context.OwnerID,
+			in.Context.TraceID,
+			in.Visibility,
+			step.Key,
+			step.Type,
+			stepAttempt,
+			string(stepInput),
+			string(stepOutput),
+			"{}",
+			nil,
+			step.Status,
+			postgresNullableText(step.ErrorCode),
+			postgresNullableText(step.MessageKey),
+			now,
+			finishedAt,
+			now,
+			now,
+		); err != nil {
+			return WorkflowRun{}, fmt.Errorf("insert step run: %w", err)
+		}
+	}
+
+	finishedAt := any(nil)
+	if plan.RunFinished {
+		finishedAt = now
+	}
+	runOutputs := plan.RunOutputs
+	if len(runOutputs) == 0 {
+		runOutputs = json.RawMessage(`{}`)
+	}
+	if _, err := tx.ExecContext(
+		ctx,
+		`UPDATE workflow_runs
+		 SET status = $1, outputs = $2::jsonb, error_code = $3, message_key = $4, finished_at = $5, updated_at = $6
+		 WHERE id = $7`,
+		plan.RunStatus,
+		string(runOutputs),
+		postgresNullableText(plan.RunErrorCode),
+		postgresNullableText(plan.RunMessageKey),
+		finishedAt,
+		now,
+		runID,
+	); err != nil {
+		return WorkflowRun{}, fmt.Errorf("update workflow run execution result: %w", err)
+	}
+
+	for idx, event := range buildExecutionEvents(plan) {
+		if err := r.appendRunEventFromTx(ctx, tx, WorkflowRunEvent{
+			ID:          newID("wfevt"),
+			RunID:       runID,
+			TenantID:    in.Context.TenantID,
+			WorkspaceID: in.Context.WorkspaceID,
+			StepKey:     event.StepKey,
+			EventType:   event.EventType,
+			PayloadJSON: event.Payload,
+			CreatedAt:   now.Add(time.Duration(idx) * time.Microsecond),
+		}); err != nil {
+			return WorkflowRun{}, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -475,6 +543,10 @@ func (r *PostgresRepository) RetryRun(ctx context.Context, in RetryRunInput) (Wo
 	if err != nil {
 		return WorkflowRun{}, err
 	}
+	tpl, err := r.getTemplateByIDFromTx(ctx, tx, in.Context, sourceRun.TemplateID)
+	if err != nil {
+		return WorkflowRun{}, err
+	}
 
 	nextAttempt := sourceRun.Attempt + 1
 	if nextAttempt <= 1 {
@@ -485,13 +557,12 @@ func (r *PostgresRepository) RetryRun(ctx context.Context, in RetryRunInput) (Wo
 	if replayStepKey == "" {
 		replayStepKey = "step-1"
 	}
+	plan, err := buildExecutionPlan(tpl.GraphJSON, sourceRun.InputsJSON, in.Mode, replayStepKey)
+	if err != nil {
+		return WorkflowRun{}, err
+	}
 
 	runID := newID("wfr")
-	stepID := newID("srun")
-	stepInput := sourceRun.InputsJSON
-	if len(stepInput) == 0 {
-		stepInput = json.RawMessage(`{}`)
-	}
 
 	if _, err := tx.ExecContext(
 		ctx,
@@ -523,37 +594,102 @@ func (r *PostgresRepository) RetryRun(ctx context.Context, in RetryRunInput) (Wo
 		return WorkflowRun{}, fmt.Errorf("insert retried workflow run: %w", err)
 	}
 
-	if _, err := tx.ExecContext(
-		ctx,
-		`INSERT INTO step_runs(id, run_id, tenant_id, workspace_id, owner_id, trace_id, visibility, step_key, step_type, attempt, input, output, artifacts, log_ref, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::jsonb, $14, $15, $16, $17, $18, $19, $20, $21)`,
-		stepID,
-		runID,
-		in.Context.TenantID,
-		in.Context.WorkspaceID,
-		in.Context.OwnerID,
-		in.Context.TraceID,
-		sourceRun.Visibility,
-		replayStepKey,
-		"noop",
-		nextAttempt,
-		string(stepInput),
-		"{}",
-		"{}",
-		nil,
-		StepStatusPending,
-		nil,
-		nil,
-		now,
-		nil,
-		now,
-		now,
-	); err != nil {
-		return WorkflowRun{}, fmt.Errorf("insert retried step run: %w", err)
+	plan, err = r.applyToolGateToPlanFromTx(ctx, tx, in.Context, WorkflowRun{
+		ID:          runID,
+		TenantID:    in.Context.TenantID,
+		WorkspaceID: in.Context.WorkspaceID,
+		OwnerID:     sourceRun.OwnerID,
+		Visibility:  sourceRun.Visibility,
+	}, plan, now)
+	if err != nil {
+		return WorkflowRun{}, err
 	}
 
-	if err := applyRunModePostgres(ctx, tx, runID, stepID, in.Mode, now); err != nil {
-		return WorkflowRun{}, err
+	for _, step := range plan.Steps {
+		stepID := newID("srun")
+		finishedAt := any(nil)
+		if step.Finished {
+			finishedAt = now
+		}
+		stepInput := step.Input
+		if len(stepInput) == 0 {
+			stepInput = json.RawMessage(`{}`)
+		}
+		stepOutput := step.Output
+		if len(stepOutput) == 0 {
+			stepOutput = json.RawMessage(`{}`)
+		}
+		stepAttempt := step.Attempt
+		if stepAttempt <= 1 {
+			stepAttempt = nextAttempt
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			`INSERT INTO step_runs(id, run_id, tenant_id, workspace_id, owner_id, trace_id, visibility, step_key, step_type, attempt, input, output, artifacts, log_ref, status, error_code, message_key, started_at, finished_at, created_at, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::jsonb, $14, $15, $16, $17, $18, $19, $20, $21)`,
+			stepID,
+			runID,
+			in.Context.TenantID,
+			in.Context.WorkspaceID,
+			in.Context.OwnerID,
+			in.Context.TraceID,
+			sourceRun.Visibility,
+			step.Key,
+			step.Type,
+			stepAttempt,
+			string(stepInput),
+			string(stepOutput),
+			"{}",
+			nil,
+			step.Status,
+			postgresNullableText(step.ErrorCode),
+			postgresNullableText(step.MessageKey),
+			now,
+			finishedAt,
+			now,
+			now,
+		); err != nil {
+			return WorkflowRun{}, fmt.Errorf("insert retried step run: %w", err)
+		}
+	}
+
+	finishedAt := any(nil)
+	if plan.RunFinished {
+		finishedAt = now
+	}
+	runOutputs := plan.RunOutputs
+	if len(runOutputs) == 0 {
+		runOutputs = json.RawMessage(`{}`)
+	}
+	if _, err := tx.ExecContext(
+		ctx,
+		`UPDATE workflow_runs
+		 SET status = $1, outputs = $2::jsonb, error_code = $3, message_key = $4, finished_at = $5, updated_at = $6
+		 WHERE id = $7`,
+		plan.RunStatus,
+		string(runOutputs),
+		postgresNullableText(plan.RunErrorCode),
+		postgresNullableText(plan.RunMessageKey),
+		finishedAt,
+		now,
+		runID,
+	); err != nil {
+		return WorkflowRun{}, fmt.Errorf("update retried workflow run execution result: %w", err)
+	}
+
+	for idx, event := range buildExecutionEvents(plan) {
+		if err := r.appendRunEventFromTx(ctx, tx, WorkflowRunEvent{
+			ID:          newID("wfevt"),
+			RunID:       runID,
+			TenantID:    in.Context.TenantID,
+			WorkspaceID: in.Context.WorkspaceID,
+			StepKey:     event.StepKey,
+			EventType:   event.EventType,
+			PayloadJSON: event.Payload,
+			CreatedAt:   now.Add(time.Duration(idx) * time.Microsecond),
+		}); err != nil {
+			return WorkflowRun{}, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -615,7 +751,60 @@ func (r *PostgresRepository) CancelRun(ctx context.Context, in CancelRunInput) (
 		return WorkflowRun{}, fmt.Errorf("cancel step runs: %w", err)
 	}
 
-	return r.GetRunForAccess(ctx, in.Context, in.RunID)
+	run, err := r.GetRunForAccess(ctx, in.Context, in.RunID)
+	if err != nil {
+		return WorkflowRun{}, err
+	}
+
+	_ = r.appendRunEvent(ctx, WorkflowRunEvent{
+		ID:          newID("wfevt"),
+		RunID:       run.ID,
+		TenantID:    run.TenantID,
+		WorkspaceID: run.WorkspaceID,
+		EventType:   "workflow.run.canceled",
+		PayloadJSON: mustJSONObjectRaw(map[string]any{"status": RunStatusCanceled}),
+		CreatedAt:   now,
+	})
+
+	rows, queryErr := r.db.QueryContext(
+		ctx,
+		`SELECT step_key
+		 FROM step_runs
+		 WHERE tenant_id = $1 AND workspace_id = $2 AND run_id = $3 AND status = $4
+		 ORDER BY created_at ASC, id ASC`,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+		in.RunID,
+		StepStatusCanceled,
+	)
+	if queryErr == nil {
+		stepKeys := make([]string, 0)
+		for rows.Next() {
+			var stepKey string
+			if err := rows.Scan(&stepKey); err != nil {
+				stepKeys = nil
+				break
+			}
+			stepKeys = append(stepKeys, stepKey)
+		}
+		_ = rows.Close()
+		if err := rows.Err(); err == nil && len(stepKeys) > 0 {
+			for idx, stepKey := range stepKeys {
+				_ = r.appendRunEvent(ctx, WorkflowRunEvent{
+					ID:          newID("wfevt"),
+					RunID:       run.ID,
+					TenantID:    run.TenantID,
+					WorkspaceID: run.WorkspaceID,
+					StepKey:     stepKey,
+					EventType:   "workflow.step.canceled",
+					PayloadJSON: mustJSONObjectRaw(map[string]any{"stepKey": stepKey, "status": StepStatusCanceled}),
+					CreatedAt:   now.Add(time.Duration(idx+1) * time.Microsecond),
+				})
+			}
+		}
+	}
+
+	return run, nil
 }
 
 func (r *PostgresRepository) GetRunForAccess(ctx context.Context, req command.RequestContext, runID string) (WorkflowRun, error) {
@@ -898,119 +1087,246 @@ func (r *PostgresRepository) ListStepRuns(ctx context.Context, params StepListPa
 	}, nil
 }
 
-func applyRunModePostgres(ctx context.Context, tx *sql.Tx, runID, stepID, mode string, now time.Time) error {
-	switch mode {
-	case RunModeRunning:
-		if _, err := tx.ExecContext(
-			ctx,
-			`UPDATE workflow_runs SET status = $1, updated_at = $2 WHERE id = $3`,
-			RunStatusRunning,
-			now,
-			runID,
-		); err != nil {
-			return fmt.Errorf("set running workflow run status: %w", err)
-		}
-		if _, err := tx.ExecContext(
-			ctx,
-			`UPDATE step_runs SET status = $1, updated_at = $2 WHERE id = $3`,
-			StepStatusRunning,
-			now,
-			stepID,
-		); err != nil {
-			return fmt.Errorf("set running step run status: %w", err)
-		}
-		return nil
-	case RunModeFail:
-		if _, err := tx.ExecContext(
-			ctx,
-			`UPDATE workflow_runs
-			 SET status = $1, error_code = $2, message_key = $3, finished_at = $4, updated_at = $5
-			 WHERE id = $6`,
-			RunStatusFailed,
-			"WORKFLOW_RUN_FAILED",
-			"error.workflow.run_failed",
-			now,
-			now,
-			runID,
-		); err != nil {
-			return fmt.Errorf("set failed workflow run status: %w", err)
-		}
-		if _, err := tx.ExecContext(
-			ctx,
-			`UPDATE step_runs
-			 SET status = $1, error_code = $2, message_key = $3, finished_at = $4, updated_at = $5
-			 WHERE id = $6`,
-			StepStatusFailed,
-			"WORKFLOW_STEP_FAILED",
-			"error.workflow.step_failed",
-			now,
-			now,
-			stepID,
-		); err != nil {
-			return fmt.Errorf("set failed step run status: %w", err)
-		}
-		return nil
-	case RunModeRetry:
-		output := `{"handled":true,"mode":"retry"}`
-		stepOutput := `{"handled":true,"mode":"retry"}`
-		if _, err := tx.ExecContext(
-			ctx,
-			`UPDATE workflow_runs
-			 SET status = $1, outputs = $2::jsonb, finished_at = $3, updated_at = $4, error_code = NULL, message_key = NULL
-			 WHERE id = $5`,
-			RunStatusSucceeded,
-			output,
-			now,
-			now,
-			runID,
-		); err != nil {
-			return fmt.Errorf("set retried workflow run status: %w", err)
-		}
-		if _, err := tx.ExecContext(
-			ctx,
-			`UPDATE step_runs
-			 SET status = $1, output = $2::jsonb, finished_at = $3, updated_at = $4, error_code = NULL, message_key = NULL
-			 WHERE id = $5`,
-			StepStatusSucceeded,
-			stepOutput,
-			now,
-			now,
-			stepID,
-		); err != nil {
-			return fmt.Errorf("set retried step run status: %w", err)
-		}
-		return nil
-	default:
-		output := `{"handled":true,"mode":"sync"}`
-		stepOutput := `{"handled":true}`
-		if _, err := tx.ExecContext(
-			ctx,
-			`UPDATE workflow_runs
-			 SET status = $1, outputs = $2::jsonb, finished_at = $3, updated_at = $4, error_code = NULL, message_key = NULL
-			 WHERE id = $5`,
-			RunStatusSucceeded,
-			output,
-			now,
-			now,
-			runID,
-		); err != nil {
-			return fmt.Errorf("set succeeded workflow run status: %w", err)
-		}
-		if _, err := tx.ExecContext(
-			ctx,
-			`UPDATE step_runs
-			 SET status = $1, output = $2::jsonb, finished_at = $3, updated_at = $4, error_code = NULL, message_key = NULL
-			 WHERE id = $5`,
-			StepStatusSucceeded,
-			stepOutput,
-			now,
-			now,
-			stepID,
-		); err != nil {
-			return fmt.Errorf("set succeeded step run status: %w", err)
-		}
+func (r *PostgresRepository) ListRunEvents(ctx context.Context, req command.RequestContext, runID string) ([]WorkflowRunEvent, error) {
+	rows, err := r.db.QueryContext(
+		ctx,
+		`SELECT id, run_id, tenant_id, workspace_id, step_key, event_type, payload::text, created_at
+		 FROM workflow_run_events
+		 WHERE tenant_id = $1 AND workspace_id = $2 AND run_id = $3
+		 ORDER BY created_at ASC, id ASC`,
+		req.TenantID,
+		req.WorkspaceID,
+		runID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list workflow run events: %w", err)
+	}
+	defer rows.Close()
+
+	items, err := scanPostgresRunEvents(rows)
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func postgresNullableText(value string) any {
+	if strings.TrimSpace(value) == "" {
 		return nil
 	}
+	return value
+}
+
+func (r *PostgresRepository) applyToolGateToPlanFromTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	req command.RequestContext,
+	run WorkflowRun,
+	plan executionPlan,
+	now time.Time,
+) (executionPlan, error) {
+	steps := make([]plannedStep, len(plan.Steps))
+	copy(steps, plan.Steps)
+	adjusted := plan
+	adjusted.Steps = steps
+
+	denied := false
+	deniedStepKey := ""
+	deniedReason := ""
+
+	for idx, step := range adjusted.Steps {
+		if denied {
+			switch step.Status {
+			case StepStatusPending, StepStatusRunning, StepStatusSucceeded:
+				adjusted.Steps[idx].Status = StepStatusSkipped
+				adjusted.Steps[idx].ErrorCode = ""
+				adjusted.Steps[idx].MessageKey = ""
+				adjusted.Steps[idx].WillRetry = false
+				adjusted.Steps[idx].RetryAfter = 0
+				adjusted.Steps[idx].Finished = true
+				adjusted.Steps[idx].Output = mustJSONObjectRaw(map[string]any{
+					"handled": false,
+					"mode":    "tool_gate_blocked",
+					"stepKey": step.Key,
+					"type":    step.Type,
+					"reason":  deniedReason,
+				})
+			}
+			continue
+		}
+
+		if !requiresToolGateCheck(step.Status) {
+			continue
+		}
+		allowed, reason, err := r.checkToolGateFromTx(ctx, tx, req, run.ID, run.OwnerID, now)
+		if err != nil {
+			return executionPlan{}, err
+		}
+		if allowed {
+			continue
+		}
+
+		denied = true
+		deniedStepKey = step.Key
+		deniedReason = reasonOrFallback(reason, "permission_denied")
+		adjusted.Steps[idx].Status = StepStatusFailed
+		adjusted.Steps[idx].ErrorCode = "TOOL_GATE_DENIED"
+		adjusted.Steps[idx].MessageKey = "error.workflow.tool_gate_denied"
+		adjusted.Steps[idx].WillRetry = false
+		adjusted.Steps[idx].RetryAfter = 0
+		adjusted.Steps[idx].Finished = true
+		adjusted.Steps[idx].Output = mustJSONObjectRaw(map[string]any{
+			"handled": false,
+			"mode":    "tool_gate_denied",
+			"stepKey": step.Key,
+			"type":    step.Type,
+			"reason":  deniedReason,
+		})
+	}
+
+	if denied {
+		adjusted.RunStatus = RunStatusFailed
+		adjusted.RunFinished = true
+		adjusted.RunErrorCode = "TOOL_GATE_DENIED"
+		adjusted.RunMessageKey = "error.workflow.tool_gate_denied"
+		adjusted.RunOutputs = mustJSONObjectRaw(map[string]any{
+			"handled":       false,
+			"mode":          "tool_gate_denied",
+			"deniedStepKey": deniedStepKey,
+			"reason":        deniedReason,
+		})
+	}
+
+	return adjusted, nil
+}
+
+func (r *PostgresRepository) checkToolGateFromTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	req command.RequestContext,
+	runID string,
+	ownerID string,
+	now time.Time,
+) (bool, string, error) {
+	if strings.TrimSpace(req.TenantID) == "" {
+		return false, "tenant_mismatch", nil
+	}
+	if strings.TrimSpace(req.WorkspaceID) == "" {
+		return false, "workspace_mismatch", nil
+	}
+	if req.UserID == ownerID {
+		return true, "owner", nil
+	}
+
+	allowed, err := r.hasRunPermissionFromTx(ctx, tx, req, runID, command.PermissionExecute, now)
+	if err != nil {
+		return false, "", err
+	}
+	if allowed {
+		return true, "acl_execute", nil
+	}
+	return false, "permission_denied", nil
+}
+
+func (r *PostgresRepository) hasRunPermissionFromTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	req command.RequestContext,
+	runID string,
+	permission string,
+	now time.Time,
+) (bool, error) {
+	if strings.TrimSpace(runID) == "" || strings.TrimSpace(permission) == "" {
+		return false, nil
+	}
+	var marker int
+	err := tx.QueryRowContext(
+		ctx,
+		`SELECT 1
+		 FROM acl_entries a
+		 WHERE a.tenant_id = $1
+		   AND a.workspace_id = $2
+		   AND a.resource_type = 'workflow_run'
+		   AND a.resource_id = $3
+		   AND a.subject_type = 'user'
+		   AND a.subject_id = $4
+		   AND (a.expires_at IS NULL OR a.expires_at >= $5)
+		   AND a.permissions @> jsonb_build_array($6::text)
+		 LIMIT 1`,
+		req.TenantID,
+		req.WorkspaceID,
+		runID,
+		req.UserID,
+		now.UTC(),
+		strings.ToUpper(permission),
+	).Scan(&marker)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("query workflow run permission in tx: %w", err)
+	}
+	return true, nil
+}
+
+func (r *PostgresRepository) appendRunEventFromTx(ctx context.Context, tx *sql.Tx, event WorkflowRunEvent) error {
+	if strings.TrimSpace(event.ID) == "" {
+		event.ID = newID("wfevt")
+	}
+	if len(event.PayloadJSON) == 0 {
+		event.PayloadJSON = json.RawMessage(`{}`)
+	}
+	createdAt := event.CreatedAt.UTC()
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	_, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO workflow_run_events(id, run_id, tenant_id, workspace_id, step_key, event_type, payload, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)`,
+		event.ID,
+		event.RunID,
+		event.TenantID,
+		event.WorkspaceID,
+		postgresNullableText(event.StepKey),
+		event.EventType,
+		string(event.PayloadJSON),
+		createdAt,
+	)
+	if err != nil {
+		return fmt.Errorf("insert workflow run event: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresRepository) appendRunEvent(ctx context.Context, event WorkflowRunEvent) error {
+	if strings.TrimSpace(event.ID) == "" {
+		event.ID = newID("wfevt")
+	}
+	if len(event.PayloadJSON) == 0 {
+		event.PayloadJSON = json.RawMessage(`{}`)
+	}
+	createdAt := event.CreatedAt.UTC()
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	_, err := r.db.ExecContext(
+		ctx,
+		`INSERT INTO workflow_run_events(id, run_id, tenant_id, workspace_id, step_key, event_type, payload, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)`,
+		event.ID,
+		event.RunID,
+		event.TenantID,
+		event.WorkspaceID,
+		postgresNullableText(event.StepKey),
+		event.EventType,
+		string(event.PayloadJSON),
+		createdAt,
+	)
+	if err != nil {
+		return fmt.Errorf("insert workflow run event: %w", err)
+	}
+	return nil
 }
 
 func (r *PostgresRepository) getTemplateByIDFromTx(ctx context.Context, tx *sql.Tx, req command.RequestContext, templateID string) (WorkflowTemplate, error) {
@@ -1306,5 +1622,50 @@ func scanPostgresStepRun(row rowScanner) (StepRun, error) {
 		f := finishedAt.Time.UTC()
 		item.FinishedAt = &f
 	}
+	return item, nil
+}
+
+func scanPostgresRunEvents(rows *sql.Rows) ([]WorkflowRunEvent, error) {
+	items := make([]WorkflowRunEvent, 0)
+	for rows.Next() {
+		item, err := scanPostgresRunEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate workflow run events: %w", err)
+	}
+	return items, nil
+}
+
+func scanPostgresRunEvent(row rowScanner) (WorkflowRunEvent, error) {
+	var (
+		item      WorkflowRunEvent
+		stepKey   sql.NullString
+		payload   string
+		createdAt time.Time
+	)
+	if err := row.Scan(
+		&item.ID,
+		&item.RunID,
+		&item.TenantID,
+		&item.WorkspaceID,
+		&stepKey,
+		&item.EventType,
+		&payload,
+		&createdAt,
+	); err != nil {
+		return WorkflowRunEvent{}, err
+	}
+	if stepKey.Valid {
+		item.StepKey = stepKey.String
+	}
+	if strings.TrimSpace(payload) == "" {
+		payload = "{}"
+	}
+	item.PayloadJSON = json.RawMessage(payload)
+	item.CreatedAt = createdAt.UTC()
 	return item, nil
 }

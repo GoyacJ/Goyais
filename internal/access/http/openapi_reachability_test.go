@@ -141,6 +141,12 @@ func materializeOpenAPIPath(path string) string {
 			return "run_1"
 		case "capabilityId":
 			return "cap_1"
+		case "sessionId":
+			return "sess_1"
+		case "bundleId":
+			return "cb_1"
+		case "packageId":
+			return "pkg_1"
 		case "installId":
 			return "ins_1"
 		case "streamId":

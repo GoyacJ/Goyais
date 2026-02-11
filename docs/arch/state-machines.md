@@ -87,9 +87,9 @@
   - `replay_from_step_key` 来源于 payload（缺省 `step-1`）。
 
 ## 0.7 Plugin Domain Sugar（C2 MVP）
-- `POST /api/v1/plugin-market/packages`、`POST /api/v1/plugin-market/installs`、`POST /api/v1/plugin-market/installs/{installId}:enable|:disable|:rollback` 必须转换为 `plugin.*` command 执行（Command-first）。
+- `POST /api/v1/plugin-market/packages`、`POST /api/v1/plugin-market/installs`、`POST /api/v1/plugin-market/installs/{installId}:enable|:disable|:rollback|:upgrade` 必须转换为 `plugin.*` command 执行（Command-first）。
 - `plugin.install` 最小语义：创建 install 记录并收敛为 `enabled`。
-- `plugin.enable|plugin.disable|plugin.rollback` 必须在 install 状态机允许的转换上执行，不允许非法跃迁。
+- `plugin.enable|plugin.disable|plugin.rollback|plugin.upgrade` 必须在 install 状态机允许的转换上执行，不允许非法跃迁。
 
 ## 0.8 Registry C1 Read Path（M2 启动）
 - `GET /api/v1/registry/capabilities`、`GET /api/v1/registry/capabilities/{capabilityId}`、`GET /api/v1/registry/algorithms`、`GET /api/v1/registry/providers` 在 v0.1 作为 read-only 能力落地。
@@ -102,7 +102,7 @@
 
 ## 0.9 Stream Domain Sugar（D1 MVP）
 - `POST /api/v1/streams` 必须转换为 `stream.create` command 执行（Command-first）。
-- `POST /api/v1/streams/{streamId}:record-start`、`POST /api/v1/streams/{streamId}:record-stop`、`POST /api/v1/streams/{streamId}:kick` 必须转换为 `stream.record.start`、`stream.record.stop`、`stream.kick` command 执行。
+- `POST /api/v1/streams/{streamId}:update-auth`、`POST /api/v1/streams/{streamId}:record-start`、`POST /api/v1/streams/{streamId}:record-stop`、`POST /api/v1/streams/{streamId}:kick`、`DELETE /api/v1/streams/{streamId}` 必须转换为 `stream.updateAuth`、`stream.record.start`、`stream.record.stop`、`stream.kick`、`stream.delete` command 执行。
 - 当流 `state.onPublishTemplateId` 存在时，`stream.record.start` 必须发布 `stream.on_publish` 事件；事件消费者收到后必须通过 command gate 提交 `workflow.run` command（禁止绕过 command service 直调 workflow 写路径）。
 - 事件触发的幂等键固定：`stream-onpublish-<recordingId>`；重复投递不应创建重复 run。
 
@@ -114,6 +114,17 @@
   - `status`
 - 错误语义保持统一：`error { code, messageKey, details }`。
 - 当前状态：路由已转正并返回 `202 + resource + commandRef`，`algorithm.run` 结果包含 `workflowRunId` 追踪。
+
+## 0.11 AI Domain Sugar（S3 合同基线）
+- `POST /api/v1/ai/sessions` 必须转换为 `ai.session.create` command 执行（Command-first）。
+- `POST /api/v1/ai/sessions/{sessionId}:archive` 必须转换为 `ai.session.archive` command 执行。
+- `POST /api/v1/ai/sessions/{sessionId}/turns` 必须转换为 `ai.intent.plan` 或 `ai.command.execute` command 执行。
+- `GET /api/v1/ai/sessions/{sessionId}/events` 为 SSE 读路径；事件源来自 command 与 workflow 执行链路。
+
+## 0.12 ContextBundle Domain Sugar（S6 合同基线）
+- ContextBundle 重建能力必须通过 `context.bundle.rebuild` command 执行（Command-first）。
+- `GET /api/v1/context-bundles`、`GET /api/v1/context-bundles/{bundleId}` 为 read path，不得绕过 tenant/workspace + ACL 判定。
+- `context.bundle.rebuild` 的输入作用域固定为 `run|session|workspace`。
 
 ## 1. WorkflowRun / StepRun
 
@@ -182,10 +193,14 @@
 | installing | install.fail | 安装步骤失败 | failed | `plugin.install.failed` |
 | enabled | command.disable | 调用者有管理权限 | disabled | `plugin.install.disabled` |
 | disabled | command.enable | 依赖仍满足 | enabled | `plugin.install.enabled` |
+| enabled/disabled | command.upgrade | 目标版本存在且依赖满足 | validating | `plugin.install.upgrade.validating` |
+| validating | upgrade.validation.pass | 升级校验通过 | installing | `plugin.install.upgrade.installing` |
+| validating | upgrade.validation.fail | 升级校验失败 | failed | `plugin.install.upgrade.failed` |
 | enabled/disabled | command.rollback | 目标版本可用 | rolled_back | `plugin.install.rolled_back` |
 
 ## 2.3 约束
 - `failed` 需包含 `error_code/message_key`。
+- `upgrade` 必须写入 `plugin_install_history` 并绑定 `command_id`。
 - rollback 结果必须保留与 `commandId` 的关联。
 - `enabled` 前，Capability 必须可在 Registry 查询到。
 
@@ -233,9 +248,34 @@
 - 无占位静态文件时 `/favicon.ico`、`/robots.txt` 404 不影响流状态。
 - 事件触发 `workflow.run` 必须经过 Command Gate。
 
+## 3.4 Stream 控制面补齐（S4 合同基线）
+- `stream.updateAuth`：仅更新鉴权规则，不改变 `StreamingAsset.status`，但必须记录 `stream.auth.updated` 审计事件。
+- `stream.delete`：仅允许在 `offline/error` 终止态执行，成功后资源状态迁移为 `deleted`（或软删除标记），并写入 `stream.deleted` 审计事件。
+
 ---
 
-## 4. 与 API/数据模型一致性要求
+## 4. AI Session 状态机（S3 目标）
+
+## 4.1 AISession 状态
+- `active`
+- `archived`
+
+## 4.2 转换
+
+| From | Trigger | Guard | To | 审计事件 |
+|---|---|---|---|---|
+| active | command.ai.session.archive | 发起者具备会话管理权限 | archived | `ai.session.archived` |
+| active | command.ai.intent.plan | 会话可读且上下文可用 | active | `ai.turn.planned` |
+| active | command.ai.command.execute | 命令授权通过 | active | `ai.turn.executed` |
+
+## 4.3 约束
+- AI turn 执行必须绑定 `tenantId/workspaceId/userId/roles/policyVersion/traceId`。
+- 当授权拒绝时，返回 `FORBIDDEN + error.authz.forbidden` 并在 details 写入拒绝原因。
+- `GET /api/v1/ai/sessions/{sessionId}/events` 仅传递摘要事件，不输出敏感原文。
+
+---
+
+## 5. 与 API/数据模型一致性要求
 
 - 状态枚举必须与 `docs/api/openapi.yaml`、`docs/arch/data-model.md` 完全一致。
 - 任意状态拒绝时，返回错误结构：`error { code, messageKey, details }`。
@@ -243,7 +283,7 @@
 
 ---
 
-## 5. Share 授权判定点（A3/B1）
+## 6. Share 授权判定点（A3/B1）
 
 `POST /api/v1/shares` 在写入 ACL 前必须按固定顺序执行（通过 `share.create` command）：
 1. 请求字段校验（`resourceType`、`subjectType`、`permissions`）。

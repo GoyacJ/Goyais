@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AssetsView from '@/views/AssetsView.vue'
+import AIWorkbenchView from '@/views/AIWorkbenchView.vue'
 import CanvasView from '@/views/CanvasView.vue'
 import CommandsView from '@/views/CommandsView.vue'
 import ForbiddenView from '@/views/ForbiddenView.vue'
@@ -23,6 +24,12 @@ const router = createRouter({
       name: 'canvas',
       component: CanvasView,
       meta: { layoutDefault: 'focus', windowed: true, windowManifestKey: 'canvas' },
+    },
+    {
+      path: '/ai',
+      name: 'ai-workbench',
+      component: AIWorkbenchView,
+      meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'ai-workbench' },
     },
     {
       path: '/commands',
