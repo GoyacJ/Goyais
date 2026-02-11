@@ -283,6 +283,8 @@ Command 执行管道（必须）：
   - `GOYAIS_FEATURE_CONTEXT_BUNDLE=false` 时，`context-bundles` 读路径与 `context.bundle.rebuild` command 返回 `501 NOT_IMPLEMENTED`
   - `GOYAIS_FEATURE_ACL_ROLE_SUBJECT=false` 时，`share.create` 仅允许 `subjectType=user`
   - `GOYAIS_FEATURE_STREAM_CONTROL_PLANE=false` 时，`streams` 的 `:update-auth` / `DELETE` 与对应 command 返回 `501 NOT_IMPLEMENTED`
+  - `GOYAIS_FEATURE_WORKFLOW_ENGINE_V2=false` 时，`workflow-runs` 保持旧执行路径（非队列 worker 语义）
+  - `GOYAIS_FEATURE_AI_WORKBENCH=false` 时，`ai` 写路径返回 `501 NOT_IMPLEMENTED`
 
 ## 8. 配置规范
 
@@ -326,6 +328,8 @@ Command 执行管道（必须）：
 - `GOYAIS_FEATURE_CONTEXT_BUNDLE=true`
 - `GOYAIS_FEATURE_ACL_ROLE_SUBJECT=true`
 - `GOYAIS_FEATURE_STREAM_CONTROL_PLANE=true`
+- `GOYAIS_FEATURE_WORKFLOW_ENGINE_V2=false`
+- `GOYAIS_FEATURE_AI_WORKBENCH=false`
 
 PostgreSQL DSN 规则（冻结）：
 - 当 `db.driver=postgres` 时，`GOYAIS_DB_DSN` 必须显式包含 `dbname`。

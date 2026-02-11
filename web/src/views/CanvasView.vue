@@ -1,5 +1,7 @@
 <template>
-  <section class="ui-page">
+  <CanvasV2View v-if="canvasV2Enabled" />
+
+  <section v-else class="ui-page">
     <PageHeader :title="t('page.canvas.title')" :subtitle="t('page.canvas.subtitle')">
       <template #actions>
         <Button variant="secondary" :disabled="isBusy" @click="onRefreshAll">
@@ -73,6 +75,7 @@
 import { runAlgorithm } from '@/api/algorithms'
 import { ApiHttpError, isMockEnabled } from '@/api/http'
 import { listAlgorithms, listCapabilities, listProviders } from '@/api/registry'
+import CanvasV2View from '@/views/CanvasV2View.vue'
 import type {
   AlgorithmDTO,
   ApiError,
@@ -109,6 +112,7 @@ import { useI18n } from 'vue-i18n'
 const { t } = useI18n({ useScope: 'global' })
 const { pushToast } = useToast()
 
+const canvasV2Enabled = isCanvasV2Enabled()
 const useMock = isMockEnabled()
 
 const templates = ref<WorkflowTemplateDTO[]>([])
@@ -440,5 +444,14 @@ function asApiError(value: unknown): ApiError {
     code: 'INTERNAL_ERROR',
     messageKey: 'error.common.internal',
   }
+}
+
+function isCanvasV2Enabled(): boolean {
+  const raw = import.meta.env.VITE_GOYAIS_FEATURE_CANVAS_V2
+  if (!raw) {
+    return false
+  }
+  const value = raw.trim().toLowerCase()
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on'
 }
 </script>

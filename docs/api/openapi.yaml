@@ -438,7 +438,11 @@ paths:
         - $ref: '#/components/parameters/SessionId'
       responses:
         '200':
-          description: SSE event stream
+          description: |
+            SSE event stream，包含以下事件类型：
+            - `ai.turn.*`：会话回合事件
+            - `command.*`：AI 关联 command 状态摘要
+            - `workflow.run.*`：当关联 command 触发 workflow 时的运行摘要
           content:
             text/event-stream:
               schema:
@@ -2331,6 +2335,13 @@ components:
         preferences:
           type: object
           additionalProperties: true
+        intentCommandType:
+          type: string
+          description: '可选显式意图命令类型（例如 workflow.run），用于与 execute 模式对齐。'
+        intentPayload:
+          type: object
+          additionalProperties: true
+          description: 'intentCommandType 对应 payload；未提供时由服务端确定性规划器推断。'
         visibility:
           $ref: '#/components/schemas/Visibility'
 
@@ -2651,6 +2662,13 @@ components:
           type: string
           enum: [sync, running, fail]
           default: sync
+        fromStepKey:
+          type: string
+          description: 从指定 step 开始执行（Run from here / retry 补充参数）。
+        testNode:
+          type: boolean
+          default: false
+          description: 仅测试指定 step（为 true 时仅执行 fromStepKey 指向节点）。
         visibility:
           $ref: '#/components/schemas/Visibility'
 

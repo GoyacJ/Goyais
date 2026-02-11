@@ -225,8 +225,11 @@
 - [x] S0 路由可达：`openapi_reachability` 覆盖新增参数 `sessionId/packageId/bundleId`，新增路径均非 `API_NOT_FOUND`。
 - [ ] S1 Workflow Engine V2：完成 DAG 拓扑校验、并发调度、重试退避、Tool Gate 与 run/step 事件流。
 - [ ] S2 Canvas V2：满足 PRD 8.9 五条验收（typed ports/minimap/undo-redo/run-from-here/test-node）。
+- [x] S2.1 Canvas 图编辑能力：`typed ports`、`minimap`、`undo/redo`、`run from here`、`test node` 已在 `web/src/views/CanvasV2View.vue` 落地。
+- [x] S2.2 Canvas 运行态可视化：节点运行状态/耗时/产物数/错误码与步骤侧栏联动，运行中自动轮询刷新（`web/src/views/CanvasV2View.vue`、`web/src/components/canvas/TypedPortNode.vue`）。
+- [x] S2.3 Canvas 回归：`pnpm -C web typecheck`、`pnpm -C web test:run -- src/views/CanvasView.spec.ts src/components/canvas/TypedPortNode.spec.ts` 通过。
 - [ ] S3 AI 工作台：会话/turn/计划/执行反馈闭环，且 AI/UI 同动作 command 同形。
 - [x] S4 MediaMTX 控制面：`update-auth/delete`、录制资产化、onPublish 事件触发 workflow（经 command gate）。
 - [x] S5 插件市场生命周期：`download/upgrade` 与 `uploaded->validating->installing->enabled` 全链路一致。
 - [x] S6 ContextBundle + ACL role：`context-bundles` 读接口与 `acl_entries.subject_type=user|role` 落地。
-- [x] 每切片均具备 feature flag 回滚与全量回归证据（`GOYAIS_FEATURE_PLUGIN_MARKET_V2`、`GOYAIS_FEATURE_CONTEXT_BUNDLE`、`GOYAIS_FEATURE_ACL_ROLE_SUBJECT`）。
+- [x] 每切片均具备 feature flag 回滚与全量回归证据（`GOYAIS_FEATURE_PLUGIN_MARKET_V2`、`GOYAIS_FEATURE_CONTEXT_BUNDLE`、`GOYAIS_FEATURE_ACL_ROLE_SUBJECT`、`GOYAIS_FEATURE_WORKFLOW_ENGINE_V2`、`GOYAIS_FEATURE_AI_WORKBENCH`）。

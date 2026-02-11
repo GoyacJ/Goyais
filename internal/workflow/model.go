@@ -150,12 +150,15 @@ type TemplateListResult struct {
 }
 
 type CreateRunInput struct {
-	Context    command.RequestContext
-	TemplateID string
-	Visibility string
-	Inputs     json.RawMessage
-	Mode       string
-	Now        time.Time
+	Context     command.RequestContext
+	TemplateID  string
+	Visibility  string
+	Inputs      json.RawMessage
+	Mode        string
+	FromStepKey string
+	TestNode    bool
+	EngineV2    bool
+	Now         time.Time
 }
 
 type RetryRunInput struct {
@@ -164,6 +167,7 @@ type RetryRunInput struct {
 	FromStepKey string
 	Reason      string
 	Mode        string
+	EngineV2    bool
 	Now         time.Time
 }
 

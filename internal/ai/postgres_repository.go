@@ -129,6 +129,7 @@ func (r *PostgresRepository) CreateTurn(ctx context.Context, in CreateTurnInput)
 	if status != SessionStatusActive {
 		return SessionTurn{}, ErrInvalidRequest
 	}
+	commandIDsJSON := marshalCommandIDsJSON(in.CommandIDs)
 
 	userTurnID := newID("turn")
 	if _, err := tx.ExecContext(
@@ -166,7 +167,7 @@ func (r *PostgresRepository) CreateTurn(ctx context.Context, in CreateTurnInput)
 		TurnRoleAssistant,
 		in.AssistantMessage,
 		in.CommandType,
-		"[]",
+		commandIDsJSON,
 		now,
 	); err != nil {
 		return SessionTurn{}, fmt.Errorf("insert ai assistant turn: %w", err)

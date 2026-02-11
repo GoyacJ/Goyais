@@ -186,10 +186,25 @@
 - `started_at, finished_at`
 - `created_at, updated_at`
 
+### workflow_step_queue
+- `id`
+- `tenant_id, workspace_id`
+- `run_id`
+- `step_key`
+- `attempt`
+- `status`（pending/leased/done/canceled）
+- `available_at`
+- `leased_at`
+- `leased_by`
+- `payload`（JSON，包含 mode/retry/backoff/fromStepKey/testNode 等执行上下文）
+- `created_at, updated_at`
+
 建议索引：
 - `workflow_runs(tenant_id, workspace_id, status, created_at desc)`
 - `workflow_runs(retry_of_run_id)`
 - `step_runs(run_id, step_key, attempt)`
+- `workflow_step_queue(run_id, status, available_at asc, id asc)`
+- `workflow_step_queue(tenant_id, workspace_id, status, available_at asc, id asc)`
 
 ## 3.5 能力注册与插件
 

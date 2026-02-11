@@ -63,10 +63,12 @@ type workflowTemplatePublishCommandPayload struct {
 }
 
 type workflowRunCommandPayload struct {
-	TemplateID string          `json:"templateId"`
-	Inputs     json.RawMessage `json:"inputs"`
-	Visibility string          `json:"visibility"`
-	Mode       string          `json:"mode"`
+	TemplateID  string          `json:"templateId"`
+	Inputs      json.RawMessage `json:"inputs"`
+	Visibility  string          `json:"visibility"`
+	Mode        string          `json:"mode"`
+	FromStepKey string          `json:"fromStepKey"`
+	TestNode    bool            `json:"testNode"`
 }
 
 type workflowRetryCommandPayload struct {
@@ -148,8 +150,11 @@ type aiSessionArchiveCommandPayload struct {
 }
 
 type aiSessionTurnCommandPayload struct {
-	SessionID string `json:"sessionId"`
-	Message   string `json:"message"`
+	SessionID          string          `json:"sessionId"`
+	Message            string          `json:"message"`
+	Execute            bool            `json:"execute"`
+	IntentCommandType  string          `json:"intentCommandType"`
+	IntentCommandInput json.RawMessage `json:"intentPayload"`
 }
 
 type contextBundleRebuildCommandPayload struct {
@@ -163,6 +168,7 @@ const timeRFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
 func registerCommandExecutors(
 	commandService *command.Service,
 	aiService *ai.Service,
+	aiWorkbenchEnabled bool,
 	assetService *asset.Service,
 	assetLifecycleEnabled bool,
 	pluginService *plugin.Service,
@@ -183,11 +189,15 @@ func registerCommandExecutors(
 	commandService.SetExecutor("stream.delete", newNotImplementedExecutor("error.stream.not_implemented"))
 	commandService.SetExecutor("share.create", newShareCreateExecutor(commandService))
 	commandService.SetExecutor("share.delete", newShareDeleteExecutor(commandService))
-	if aiService != nil {
+	commandService.SetExecutor("ai.session.create", newNotImplementedExecutor("error.ai.not_implemented"))
+	commandService.SetExecutor("ai.session.archive", newNotImplementedExecutor("error.ai.not_implemented"))
+	commandService.SetExecutor("ai.intent.plan", newNotImplementedExecutor("error.ai.not_implemented"))
+	commandService.SetExecutor("ai.command.execute", newNotImplementedExecutor("error.ai.not_implemented"))
+	if aiService != nil && aiWorkbenchEnabled {
 		commandService.SetExecutor("ai.session.create", newAISessionCreateExecutor(aiService))
 		commandService.SetExecutor("ai.session.archive", newAISessionArchiveExecutor(aiService))
-		commandService.SetExecutor("ai.intent.plan", newAISessionTurnExecutor(aiService, "ai.intent.plan"))
-		commandService.SetExecutor("ai.command.execute", newAISessionTurnExecutor(aiService, "ai.command.execute"))
+		commandService.SetExecutor("ai.intent.plan", newAISessionTurnExecutor(aiService, commandService, "ai.intent.plan"))
+		commandService.SetExecutor("ai.command.execute", newAISessionTurnExecutor(aiService, commandService, "ai.command.execute"))
 	}
 	if assetService != nil {
 		commandService.SetExecutor("asset.upload", newAssetUploadExecutor(assetService))
@@ -504,14 +514,38 @@ func newAISessionArchiveExecutor(aiService *ai.Service) command.ExecuteFunc {
 	}
 }
 
-func newAISessionTurnExecutor(aiService *ai.Service, commandType string) command.ExecuteFunc {
+func newAISessionTurnExecutor(aiService *ai.Service, commandService *command.Service, commandType string) command.ExecuteFunc {
 	return func(ctx context.Context, reqCtx command.RequestContext, payload json.RawMessage) ([]byte, error) {
 		var req aiSessionTurnCommandPayload
 		if err := json.Unmarshal(payload, &req); err != nil {
 			return nil, mapAIExecutionError(ai.ErrInvalidRequest)
 		}
+		assistantMessage := ""
+		commandIDs := make([]string, 0, 2)
+		plan, err := planAIDeterministicCommand(req)
+		if err != nil {
+			return nil, mapAIExecutionError(ai.ErrInvalidRequest)
+		}
 
-		turn, err := aiService.CreateTurn(ctx, reqCtx, req.SessionID, req.Message, commandType)
+		if commandType == "ai.command.execute" {
+			if strings.TrimSpace(plan.CommandType) == "" {
+				assistantMessage = "No executable intent detected. Use `run workflow <templateId>` or provide `intentCommandType`."
+			} else {
+				if commandService == nil {
+					return nil, mapAIExecutionError(ai.ErrNotImplemented)
+				}
+				child, err := commandService.Submit(ctx, reqCtx, plan.CommandType, plan.Payload, "", "")
+				if err != nil {
+					return nil, err
+				}
+				commandIDs = append(commandIDs, child.ID)
+				assistantMessage = buildAIExecuteAssistantMessage(plan.CommandType, child)
+			}
+		} else if strings.TrimSpace(plan.CommandType) != "" {
+			assistantMessage = buildAIPlanAssistantMessage(plan)
+		}
+
+		turn, err := aiService.CreateTurn(ctx, reqCtx, req.SessionID, req.Message, commandType, assistantMessage, commandIDs)
 		if err != nil {
 			return nil, mapAIExecutionError(err)
 		}
@@ -522,6 +556,129 @@ func newAISessionTurnExecutor(aiService *ai.Service, commandType string) command
 		raw, _ := json.Marshal(result)
 		return raw, nil
 	}
+}
+
+type aiDeterministicCommandPlan struct {
+	CommandType string
+	Payload     json.RawMessage
+}
+
+func planAIDeterministicCommand(req aiSessionTurnCommandPayload) (aiDeterministicCommandPlan, error) {
+	explicitType := strings.TrimSpace(req.IntentCommandType)
+	if explicitType != "" {
+		if strings.HasPrefix(strings.ToLower(explicitType), "ai.") {
+			return aiDeterministicCommandPlan{}, ai.ErrInvalidRequest
+		}
+		payload := objectOrDefault(req.IntentCommandInput)
+		if !isJSONObjectRaw(payload) {
+			return aiDeterministicCommandPlan{}, ai.ErrInvalidRequest
+		}
+		return aiDeterministicCommandPlan{
+			CommandType: explicitType,
+			Payload:     payload,
+		}, nil
+	}
+
+	tokens := strings.Fields(strings.TrimSpace(req.Message))
+	switch {
+	case len(tokens) >= 3 && strings.EqualFold(tokens[0], "run") && strings.EqualFold(tokens[1], "workflow"):
+		return buildWorkflowRunPlan(cleanAICommandToken(tokens[2])), nil
+	case len(tokens) >= 2 && strings.EqualFold(tokens[0], "workflow.run"):
+		return buildWorkflowRunPlan(cleanAICommandToken(tokens[1])), nil
+	case len(tokens) >= 3 && strings.EqualFold(tokens[0], "retry") && strings.EqualFold(tokens[1], "workflow"):
+		return buildWorkflowRetryPlan(cleanAICommandToken(tokens[2])), nil
+	case len(tokens) >= 2 && strings.EqualFold(tokens[0], "workflow.retry"):
+		return buildWorkflowRetryPlan(cleanAICommandToken(tokens[1])), nil
+	case len(tokens) >= 3 && strings.EqualFold(tokens[0], "cancel") && strings.EqualFold(tokens[1], "workflow"):
+		return buildWorkflowCancelPlan(cleanAICommandToken(tokens[2])), nil
+	case len(tokens) >= 2 && strings.EqualFold(tokens[0], "workflow.cancel"):
+		return buildWorkflowCancelPlan(cleanAICommandToken(tokens[1])), nil
+	default:
+		return aiDeterministicCommandPlan{}, nil
+	}
+}
+
+func buildWorkflowRunPlan(templateID string) aiDeterministicCommandPlan {
+	if templateID == "" {
+		return aiDeterministicCommandPlan{}
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"templateId": templateID,
+		"mode":       "sync",
+		"inputs":     map[string]any{},
+	})
+	return aiDeterministicCommandPlan{
+		CommandType: "workflow.run",
+		Payload:     payload,
+	}
+}
+
+func buildWorkflowRetryPlan(runID string) aiDeterministicCommandPlan {
+	if runID == "" {
+		return aiDeterministicCommandPlan{}
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"runId": runID,
+		"mode":  "sync",
+	})
+	return aiDeterministicCommandPlan{
+		CommandType: "workflow.retry",
+		Payload:     payload,
+	}
+}
+
+func buildWorkflowCancelPlan(runID string) aiDeterministicCommandPlan {
+	if runID == "" {
+		return aiDeterministicCommandPlan{}
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"runId": runID,
+	})
+	return aiDeterministicCommandPlan{
+		CommandType: "workflow.cancel",
+		Payload:     payload,
+	}
+}
+
+func cleanAICommandToken(raw string) string {
+	token := strings.TrimSpace(raw)
+	token = strings.Trim(token, "`\"'.,;:()[]{}")
+	return token
+}
+
+func isJSONObjectRaw(raw json.RawMessage) bool {
+	var value map[string]any
+	return json.Unmarshal(raw, &value) == nil
+}
+
+func buildAIPlanAssistantMessage(plan aiDeterministicCommandPlan) string {
+	if strings.TrimSpace(plan.CommandType) == "" {
+		return ""
+	}
+	return fmt.Sprintf("Planned command %s with payload %s", plan.CommandType, string(plan.Payload))
+}
+
+func buildAIExecuteAssistantMessage(commandType string, cmd command.Command) string {
+	if runID := extractWorkflowRunID(cmd.Result); runID != "" {
+		return fmt.Sprintf("Executed %s via command %s (workflowRun=%s, status=%s).", commandType, cmd.ID, runID, cmd.Status)
+	}
+	return fmt.Sprintf("Executed %s via command %s (status=%s).", commandType, cmd.ID, cmd.Status)
+}
+
+func extractWorkflowRunID(resultRaw json.RawMessage) string {
+	if len(resultRaw) == 0 {
+		return ""
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(resultRaw, &payload); err != nil {
+		return ""
+	}
+	runRaw, ok := payload["run"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	runID, _ := runRaw["id"].(string)
+	return strings.TrimSpace(runID)
 }
 
 func mapAIExecutionError(err error) error {
@@ -652,6 +809,8 @@ func newWorkflowRunExecutor(workflowService *workflow.Service) command.ExecuteFu
 			objectOrDefault(req.Inputs),
 			req.Visibility,
 			req.Mode,
+			req.FromStepKey,
+			req.TestNode,
 		)
 		if err != nil {
 			return nil, mapWorkflowExecutionError(err)

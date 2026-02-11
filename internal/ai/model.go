@@ -81,6 +81,7 @@ type CreateTurnInput struct {
 	UserMessage      string
 	AssistantMessage string
 	CommandType      string
+	CommandIDs       []string
 
 	Now time.Time
 }

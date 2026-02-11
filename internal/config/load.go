@@ -107,6 +107,8 @@ func defaultsForProfile(profile string) Config {
 			ContextBundle:      true,
 			ACLRoleSubject:     true,
 			StreamControlPlane: true,
+			WorkflowEngineV2:   false,
+			AIWorkbench:        false,
 		},
 	}
 
@@ -172,6 +174,12 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	}
 	if fc.Feature.StreamControlPlane != nil {
 		cfg.Feature.StreamControlPlane = *fc.Feature.StreamControlPlane
+	}
+	if fc.Feature.WorkflowEngineV2 != nil {
+		cfg.Feature.WorkflowEngineV2 = *fc.Feature.WorkflowEngineV2
+	}
+	if fc.Feature.AIWorkbench != nil {
+		cfg.Feature.AIWorkbench = *fc.Feature.AIWorkbench
 	}
 	if v := strings.ToLower(strings.TrimSpace(fc.Cache.Provider)); v != "" {
 		cfg.Providers.Cache = v
@@ -309,6 +317,16 @@ func applyEnvOverrides(cfg *Config) {
 	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_STREAM_CONTROL_PLANE")); v != "" {
 		if parsed, err := strconv.ParseBool(v); err == nil {
 			cfg.Feature.StreamControlPlane = parsed
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_WORKFLOW_ENGINE_V2")); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			cfg.Feature.WorkflowEngineV2 = parsed
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_AI_WORKBENCH")); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			cfg.Feature.AIWorkbench = parsed
 		}
 	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_CACHE_PROVIDER"))); v != "" {

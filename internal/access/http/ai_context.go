@@ -121,7 +121,7 @@ func (h *apiHandler) handleListAISessions(w http.ResponseWriter, r *http.Request
 }
 
 func (h *apiHandler) handleCreateAISession(w http.ResponseWriter, r *http.Request, reqCtx command.RequestContext) {
-	if h.commandService == nil {
+	if h.commandService == nil || !h.aiWorkbenchEnabled {
 		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.ai.not_implemented", nil)
 		return
 	}
@@ -225,7 +225,7 @@ func (h *apiHandler) handleArchiveAISession(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	if h.commandService == nil {
+	if h.commandService == nil || !h.aiWorkbenchEnabled {
 		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.ai.not_implemented", nil)
 		return
 	}
@@ -263,7 +263,7 @@ func (h *apiHandler) handleCreateAISessionTurn(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
-	if h.commandService == nil {
+	if h.commandService == nil || !h.aiWorkbenchEnabled {
 		errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.ai.not_implemented", nil)
 		return
 	}
@@ -278,11 +278,13 @@ func (h *apiHandler) handleCreateAISessionTurn(w http.ResponseWriter, r *http.Re
 	}
 
 	var req struct {
-		Message     string          `json:"message"`
-		Execute     bool            `json:"execute"`
-		Inputs      json.RawMessage `json:"inputs"`
-		Constraints json.RawMessage `json:"constraints"`
-		Preferences json.RawMessage `json:"preferences"`
+		Message           string          `json:"message"`
+		Execute           bool            `json:"execute"`
+		Inputs            json.RawMessage `json:"inputs"`
+		Constraints       json.RawMessage `json:"constraints"`
+		Preferences       json.RawMessage `json:"preferences"`
+		IntentCommandType string          `json:"intentCommandType"`
+		IntentPayload     json.RawMessage `json:"intentPayload"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		errorx.Write(w, http.StatusBadRequest, "INVALID_JSON", "error.request.invalid_json", nil)
@@ -304,13 +306,15 @@ func (h *apiHandler) handleCreateAISessionTurn(w http.ResponseWriter, r *http.Re
 	}
 
 	payload, _ := json.Marshal(map[string]any{
-		"sessionId":   sessionID,
-		"message":     strings.TrimSpace(req.Message),
-		"inputs":      req.Inputs,
-		"constraints": req.Constraints,
-		"preferences": req.Preferences,
-		"execute":     req.Execute,
-		"commandType": commandType,
+		"sessionId":         sessionID,
+		"message":           strings.TrimSpace(req.Message),
+		"inputs":            req.Inputs,
+		"constraints":       req.Constraints,
+		"preferences":       req.Preferences,
+		"execute":           req.Execute,
+		"commandType":       commandType,
+		"intentCommandType": strings.TrimSpace(req.IntentCommandType),
+		"intentPayload":     req.IntentPayload,
 	})
 
 	cmd, err := h.commandService.Submit(
@@ -367,22 +371,42 @@ func (h *apiHandler) handleAISessionEvents(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
 
+	emittedCommands := make(map[string]struct{})
 	for _, turn := range turns {
-		payload, err := json.Marshal(toAISessionTurnPayload(turn))
-		if err != nil {
-			continue
-		}
-		if _, err := w.Write([]byte("id: " + turn.ID + "\n")); err != nil {
-			return
-		}
 		eventType := "ai.turn." + strings.ToLower(strings.TrimSpace(turn.Role))
-		if _, err := w.Write([]byte("event: " + eventType + "\n")); err != nil {
+		if err := writeSSEPayload(w, flusher, turn.ID, eventType, toAISessionTurnPayload(turn)); err != nil {
 			return
 		}
-		if _, err := w.Write([]byte("data: " + string(payload) + "\n\n")); err != nil {
-			return
+
+		for _, commandID := range readStringSlice(turn.CommandIDsJSON) {
+			commandID = strings.TrimSpace(commandID)
+			if commandID == "" {
+				continue
+			}
+			if _, exists := emittedCommands[commandID]; exists {
+				continue
+			}
+			emittedCommands[commandID] = struct{}{}
+
+			if h.commandService == nil {
+				continue
+			}
+			cmd, err := h.commandService.Get(r.Context(), reqCtx, commandID)
+			if err != nil {
+				continue
+			}
+			commandEventType := "command." + strings.ToLower(strings.TrimSpace(cmd.Status))
+			if err := writeSSEPayload(w, flusher, cmd.ID, commandEventType, toAICommandEventPayload(cmd)); err != nil {
+				return
+			}
+
+			workflowEventType, workflowPayload, ok := buildWorkflowSummaryEvent(cmd)
+			if ok {
+				if err := writeSSEPayload(w, flusher, cmd.ID, workflowEventType, workflowPayload); err != nil {
+					return
+				}
+			}
 		}
-		flusher.Flush()
 	}
 }
 
@@ -587,6 +611,104 @@ func toAISessionTurnPayload(item ai.SessionTurn) map[string]any {
 		payload["commandType"] = strings.TrimSpace(item.CommandType)
 	}
 	return payload
+}
+
+func toAICommandEventPayload(item command.Command) map[string]any {
+	payload := map[string]any{
+		"id":          item.ID,
+		"commandId":   item.ID,
+		"commandType": item.CommandType,
+		"status":      item.Status,
+		"errorCode":   item.ErrorCode,
+		"messageKey":  item.MessageKey,
+		"acceptedAt":  item.AcceptedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt":   item.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if item.FinishedAt != nil {
+		payload["finishedAt"] = item.FinishedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return payload
+}
+
+func buildWorkflowSummaryEvent(item command.Command) (string, map[string]any, bool) {
+	commandType := strings.TrimSpace(item.CommandType)
+	if !(strings.HasPrefix(commandType, "workflow.") || commandType == "algorithm.run") {
+		return "", nil, false
+	}
+
+	var result map[string]any
+	if len(item.Result) > 0 {
+		if err := json.Unmarshal(item.Result, &result); err != nil {
+			result = nil
+		}
+	}
+
+	runID := ""
+	runStatus := ""
+	if runRaw, ok := result["run"].(map[string]any); ok {
+		runID, _ = runRaw["id"].(string)
+		runStatus, _ = runRaw["status"].(string)
+	}
+	if runID == "" {
+		return "", nil, false
+	}
+	if strings.TrimSpace(runStatus) == "" {
+		runStatus = item.Status
+	}
+
+	payload := map[string]any{
+		"runId":       runID,
+		"status":      strings.TrimSpace(runStatus),
+		"commandId":   item.ID,
+		"commandType": commandType,
+	}
+	eventType := "workflow.run." + strings.ToLower(strings.TrimSpace(runStatus))
+	return eventType, payload, true
+}
+
+func writeSSEPayload(w http.ResponseWriter, flusher http.Flusher, id string, eventType string, payload map[string]any) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte("id: " + strings.TrimSpace(id) + "\n")); err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte("event: " + strings.TrimSpace(eventType) + "\n")); err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte("data: " + string(raw) + "\n\n")); err != nil {
+		return err
+	}
+	flusher.Flush()
+	return nil
+}
+
+func readStringSlice(raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var direct []string
+	if err := json.Unmarshal(raw, &direct); err == nil {
+		return direct
+	}
+	var generic []any
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(generic))
+	for _, item := range generic {
+		value, ok := item.(string)
+		if !ok {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
 }
 
 func readAIResourceFromResult(resultRaw json.RawMessage, key string) map[string]any {

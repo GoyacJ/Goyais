@@ -26,6 +26,7 @@ type Repository interface {
 	HasRunPermission(ctx context.Context, req command.RequestContext, runID, permission string, now time.Time) (bool, error)
 	ListStepRuns(ctx context.Context, params StepListParams) (StepListResult, error)
 	ListRunEvents(ctx context.Context, req command.RequestContext, runID string) ([]WorkflowRunEvent, error)
+	ProcessStepQueueOnce(ctx context.Context, workerID string, now time.Time) (bool, error)
 }
 
 func NewRepository(dbDriver string, db *sql.DB) (Repository, error) {

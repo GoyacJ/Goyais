@@ -17,6 +17,7 @@ import (
 type apiHandler struct {
 	commandService            *command.Service
 	aiService                 *ai.Service
+	aiWorkbenchEnabled        bool
 	assetService              *asset.Service
 	assetLifecycleEnabled     bool
 	pluginMarketV2Enabled     bool

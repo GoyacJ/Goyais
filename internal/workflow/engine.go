@@ -63,14 +63,15 @@ func buildExecutionPlan(
 	graphRaw json.RawMessage,
 	inputsRaw json.RawMessage,
 	mode string,
-	replayFromStepKey string,
+	fromStepKey string,
+	testNode bool,
 ) (executionPlan, error) {
 	nodesInOrder, adjacency, indegree, err := parseGraphTopology(graphRaw)
 	if err != nil {
 		return executionPlan{}, err
 	}
 
-	selected := selectPlannedNodes(nodesInOrder, adjacency, strings.TrimSpace(replayFromStepKey), mode)
+	selected := selectPlannedNodes(nodesInOrder, adjacency, strings.TrimSpace(fromStepKey), testNode)
 	if len(selected) == 0 {
 		selected = []workflowGraphNode{{ID: "step-1", Type: "noop"}}
 	}
@@ -231,16 +232,16 @@ func topologicalOrder(
 func selectPlannedNodes(
 	nodes []workflowGraphNode,
 	adjacency map[string][]string,
-	replayFromStepKey string,
-	mode string,
+	fromStepKey string,
+	testNode bool,
 ) []workflowGraphNode {
-	if mode != RunModeRetry || replayFromStepKey == "" {
+	if fromStepKey == "" {
 		return nodes
 	}
 
 	exists := false
 	for _, node := range nodes {
-		if node.ID == replayFromStepKey {
+		if node.ID == fromStepKey {
 			exists = true
 			break
 		}
@@ -248,9 +249,17 @@ func selectPlannedNodes(
 	if !exists {
 		return nodes
 	}
+	if testNode {
+		for _, node := range nodes {
+			if node.ID == fromStepKey {
+				return []workflowGraphNode{node}
+			}
+		}
+		return nodes
+	}
 
 	reachable := make(map[string]struct{}, len(nodes))
-	stack := []string{replayFromStepKey}
+	stack := []string{fromStepKey}
 	for len(stack) > 0 {
 		current := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]

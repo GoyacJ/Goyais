@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	httpapi "goyais/internal/access/http"
@@ -68,7 +69,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("build workflow repository: %w", err)
 	}
-	workflowService := workflow.NewService(workflowRepo, cfg.Authz.AllowPrivateToPublic)
+	workflowService := workflow.NewService(workflowRepo, cfg.Authz.AllowPrivateToPublic, cfg.Feature.WorkflowEngineV2)
 
 	registryRepo, err := registry.NewRepository(cfg.Providers.DB, db)
 	if err != nil {
@@ -155,6 +156,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 	registerCommandExecutors(
 		commandService,
 		aiService,
+		cfg.Feature.AIWorkbench,
 		assetService,
 		cfg.Feature.AssetLifecycle,
 		pluginService,
@@ -166,8 +168,24 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 		contextBundleService,
 		cfg.Feature.ContextBundle,
 	)
+
+	stopWorkflowWorkers := func() {}
+	if cfg.Feature.WorkflowEngineV2 && strings.EqualFold(cfg.Providers.DB, "postgres") {
+		workerCount := cfg.Command.MaxConcurrency
+		if workerCount <= 0 {
+			workerCount = 1
+		}
+		if workerCount > 8 {
+			workerCount = 8
+		}
+		workerPool := workflow.NewStepWorkerPool(workflowRepo, workerCount, 100*time.Millisecond, log.Default())
+		workerPool.Start(context.Background())
+		stopWorkflowWorkers = workerPool.Stop
+	}
+
 	stopStreamConsumer, err := startKafkaStreamConsumer(cfg, commandService, log.Default())
 	if err != nil {
+		stopWorkflowWorkers()
 		_ = eventBusProvider.Close()
 		_ = db.Close()
 		return nil, fmt.Errorf("start stream event consumer: %w", err)
@@ -208,6 +226,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 
 	srv.RegisterOnShutdown(func() {
 		stopStreamConsumer()
+		stopWorkflowWorkers()
 		_ = eventBusProvider.Close()
 		_ = db.Close()
 	})

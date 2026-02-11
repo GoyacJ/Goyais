@@ -272,6 +272,8 @@ export interface WorkflowRunCreateRequest {
   templateVersion?: string
   inputs?: ApiObject
   mode?: 'sync' | 'running' | 'fail'
+  fromStepKey?: string
+  testNode?: boolean
   visibility?: Visibility
 }
 
@@ -290,6 +292,8 @@ export interface AISessionTurnCreateRequest {
   inputs?: ApiObject
   constraints?: ApiObject
   preferences?: ApiObject
+  intentCommandType?: string
+  intentPayload?: ApiObject
 }
 
 export interface PluginPackageUploadRequest {

@@ -66,6 +66,18 @@
               :rows="8"
               :placeholder="t('page.ai.turnPlaceholder')"
             />
+            <div class="rounded-card border border-ui-border bg-ui-surface2 p-3">
+              <p class="text-xs font-semibold text-ui-fg">{{ t('page.ai.planPreviewTitle') }}</p>
+              <template v-if="turnPlanPreview">
+                <p class="mt-1 text-xs text-ui-muted">
+                  {{ t('page.ai.planPreviewCommand') }}: {{ turnPlanPreview.commandType }}
+                </p>
+                <pre class="mt-2 overflow-x-auto rounded border border-ui-border bg-ui-surface px-2 py-1 text-[11px] text-ui-fg">{{
+                  formatJSON(turnPlanPreview.payload)
+                }}</pre>
+              </template>
+              <p v-else class="mt-1 text-xs text-ui-muted">{{ t('page.ai.planPreviewEmpty') }}</p>
+            </div>
             <div class="grid gap-2 md:grid-cols-[1fr_auto_auto]">
               <Select v-model="turnMode" :options="turnModeOptions" />
               <Button :disabled="!canSendTurn" @click="onSendTurn">
@@ -98,7 +110,20 @@
             :title="t('page.ai.emptyEventsTitle')"
             :description="t('page.ai.emptyEventsDescription')"
           />
-          <LogPanel v-else :lines="eventLines" />
+          <div v-else class="space-y-3">
+            <div v-if="feedbackTimeline.length > 0" class="space-y-2">
+              <div
+                v-for="item in feedbackTimeline"
+                :key="item.id"
+                class="rounded-card border border-ui-border bg-ui-surface2 px-3 py-2"
+              >
+                <p class="text-xs font-semibold text-ui-fg">{{ item.title }}</p>
+                <p class="mt-1 text-xs text-ui-muted">{{ item.detail }}</p>
+                <p v-if="item.timestamp" class="mt-1 text-[11px] text-ui-muted">{{ item.timestamp }}</p>
+              </div>
+            </div>
+            <LogPanel :lines="eventLines" />
+          </div>
         </SectionCard>
       </template>
     </WindowBoard>
@@ -138,6 +163,7 @@ const { pushToast } = useToast()
 const sessions = ref<AISessionDTO[]>([])
 const selectedSessionId = ref('')
 const selectedSession = ref<AISessionDTO | null>(null)
+const sessionEvents = ref<AISessionEvent[]>([])
 const eventLines = ref<string[]>([])
 
 const createTitle = ref('')
@@ -158,6 +184,26 @@ const turnModeOptions = computed(() => [
   { value: 'plan', label: t('page.ai.turnModePlan') },
   { value: 'execute', label: t('page.ai.turnModeExecute') },
 ])
+
+type TurnPlanPreview = {
+  commandType: string
+  payload: Record<string, unknown>
+}
+
+type TimelineItem = {
+  id: string
+  title: string
+  detail: string
+  timestamp: string
+}
+
+const turnPlanPreview = computed<TurnPlanPreview | null>(() => {
+  return inferTurnPlan(turnMessage.value.trim())
+})
+
+const feedbackTimeline = computed<TimelineItem[]>(() => {
+  return sessionEvents.value.map(buildTimelineItem).filter((item): item is TimelineItem => item !== null)
+})
 
 const canSendTurn = computed(
   () =>
@@ -187,6 +233,7 @@ async function loadSessions(): Promise<void> {
     if (sessions.value.length === 0) {
       selectedSessionId.value = ''
       selectedSession.value = null
+      sessionEvents.value = []
       eventLines.value = []
       return
     }
@@ -206,12 +253,14 @@ async function loadSelectedSessionContext(): Promise<void> {
   const sessionID = selectedSessionId.value.trim()
   if (sessionID.length === 0) {
     selectedSession.value = null
+    sessionEvents.value = []
     eventLines.value = []
     return
   }
   try {
     const [session, events] = await Promise.all([getAISession(sessionID), getAISessionEvents(sessionID)])
     selectedSession.value = session
+    sessionEvents.value = events
     eventLines.value = events.map(formatEventLine)
   } catch (error) {
     notifyError(t('common.refresh'), error)
@@ -258,9 +307,12 @@ async function onSendTurn(): Promise<void> {
 
   isSubmitting.value = true
   try {
+    const preview = inferTurnPlan(message)
     const response = await createAISessionTurn(sessionID, {
       message,
       execute: turnMode.value === 'execute',
+      intentCommandType: preview?.commandType,
+      intentPayload: preview?.payload,
     })
     turnMessage.value = ''
     await loadSessions()
@@ -331,6 +383,18 @@ function formatEventLine(item: AISessionEvent): string {
   }
 
   const eventPayload = item.data as Record<string, unknown>
+  if (prefix.startsWith('command.')) {
+    const commandType = readString(eventPayload, 'commandType')
+    const commandID = readString(eventPayload, 'commandId') || readString(eventPayload, 'id')
+    const status = readString(eventPayload, 'status')
+    return `${prefix}: ${commandType || 'command'} ${commandID} ${status}`.trim()
+  }
+  if (prefix.startsWith('workflow.')) {
+    const runID = readString(eventPayload, 'runId')
+    const status = readString(eventPayload, 'status')
+    return `${prefix}: run=${runID} status=${status}`.trim()
+  }
+
   const role = readString(eventPayload, 'role')
   const content = readString(eventPayload, 'content')
   const createdAt = readString(eventPayload, 'createdAt')
@@ -344,6 +408,132 @@ function formatEventLine(item: AISessionEvent): string {
 function readString(payload: Record<string, unknown>, key: string): string {
   const raw = payload[key]
   return typeof raw === 'string' ? raw : ''
+}
+
+function inferTurnPlan(message: string): TurnPlanPreview | null {
+  const tokens = message.split(/\s+/).filter((item) => item.length > 0)
+  if (tokens.length === 0) {
+    return null
+  }
+
+  if (tokens.length >= 3 && eqToken(tokens[0], 'run') && eqToken(tokens[1], 'workflow')) {
+    return workflowRunPlan(cleanToken(tokens[2]))
+  }
+  if (tokens.length >= 2 && eqToken(tokens[0], 'workflow.run')) {
+    return workflowRunPlan(cleanToken(tokens[1]))
+  }
+  if (tokens.length >= 3 && eqToken(tokens[0], 'retry') && eqToken(tokens[1], 'workflow')) {
+    return workflowRetryPlan(cleanToken(tokens[2]))
+  }
+  if (tokens.length >= 2 && eqToken(tokens[0], 'workflow.retry')) {
+    return workflowRetryPlan(cleanToken(tokens[1]))
+  }
+  if (tokens.length >= 3 && eqToken(tokens[0], 'cancel') && eqToken(tokens[1], 'workflow')) {
+    return workflowCancelPlan(cleanToken(tokens[2]))
+  }
+  if (tokens.length >= 2 && eqToken(tokens[0], 'workflow.cancel')) {
+    return workflowCancelPlan(cleanToken(tokens[1]))
+  }
+  return null
+}
+
+function workflowRunPlan(templateId: string): TurnPlanPreview | null {
+  if (!templateId) {
+    return null
+  }
+  return {
+    commandType: 'workflow.run',
+    payload: {
+      templateId,
+      mode: 'sync',
+      inputs: {},
+    },
+  }
+}
+
+function workflowRetryPlan(runId: string): TurnPlanPreview | null {
+  if (!runId) {
+    return null
+  }
+  return {
+    commandType: 'workflow.retry',
+    payload: {
+      runId,
+      mode: 'sync',
+    },
+  }
+}
+
+function workflowCancelPlan(runId: string): TurnPlanPreview | null {
+  if (!runId) {
+    return null
+  }
+  return {
+    commandType: 'workflow.cancel',
+    payload: {
+      runId,
+    },
+  }
+}
+
+function eqToken(left: string, right: string): boolean {
+  return left.toLowerCase() === right.toLowerCase()
+}
+
+function cleanToken(raw: string): string {
+  return raw.trim().replace(/^[`"'()[\]{}.,;:]+|[`"'()[\]{}.,;:]+$/g, '')
+}
+
+function formatJSON(value: Record<string, unknown>): string {
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return '{}'
+  }
+}
+
+function buildTimelineItem(item: AISessionEvent): TimelineItem | null {
+  const eventType = item.event ?? ''
+  if (!item.data || typeof item.data !== 'object') {
+    return null
+  }
+  const payload = item.data as Record<string, unknown>
+
+  if (eventType.startsWith('command.')) {
+    const commandType = readString(payload, 'commandType') || 'command'
+    const commandID = readString(payload, 'commandId') || readString(payload, 'id')
+    const status = readString(payload, 'status')
+    const fallbackID = `${eventType}:${commandType}:${status}`
+    return {
+      id: `${eventType}:${commandID || fallbackID}`,
+      title: `${commandType} · ${status || eventType}`,
+      detail: commandID ? `commandId=${commandID}` : eventType,
+      timestamp: readString(payload, 'updatedAt') || readString(payload, 'acceptedAt') || readString(payload, 'finishedAt'),
+    }
+  }
+  if (eventType.startsWith('workflow.')) {
+    const runID = readString(payload, 'runId')
+    const status = readString(payload, 'status')
+    const fallbackID = `${eventType}:${status}`
+    return {
+      id: `${eventType}:${runID || fallbackID}`,
+      title: `workflow · ${status || eventType}`,
+      detail: runID ? `runId=${runID}` : eventType,
+      timestamp: '',
+    }
+  }
+  if (eventType.startsWith('ai.turn.')) {
+    const role = readString(payload, 'role') || eventType.replace('ai.turn.', '')
+    const content = readString(payload, 'content')
+    const turnID = readString(payload, 'id') || `${eventType}:${role}:${readString(payload, 'createdAt')}`
+    return {
+      id: `${eventType}:${turnID}`,
+      title: `ai.turn · ${role}`,
+      detail: content || '-',
+      timestamp: readString(payload, 'createdAt'),
+    }
+  }
+  return null
 }
 
 function notifyError(action: string, error: unknown): void {

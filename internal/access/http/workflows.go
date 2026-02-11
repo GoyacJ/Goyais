@@ -396,22 +396,31 @@ func (h *apiHandler) handleCreateWorkflowRun(w http.ResponseWriter, r *http.Requ
 	}
 
 	var req struct {
-		TemplateID string          `json:"templateId"`
-		Inputs     json.RawMessage `json:"inputs"`
-		Visibility string          `json:"visibility"`
-		Mode       string          `json:"mode"`
+		TemplateID  string          `json:"templateId"`
+		Inputs      json.RawMessage `json:"inputs"`
+		Visibility  string          `json:"visibility"`
+		Mode        string          `json:"mode"`
+		FromStepKey string          `json:"fromStepKey"`
+		TestNode    *bool           `json:"testNode"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		errorx.Write(w, http.StatusBadRequest, "INVALID_JSON", "error.request.invalid_json", map[string]any{"reason": err.Error()})
 		return
 	}
 
-	payload, err := json.Marshal(map[string]any{
+	commandPayload := map[string]any{
 		"templateId": req.TemplateID,
 		"inputs":     req.Inputs,
 		"visibility": req.Visibility,
 		"mode":       req.Mode,
-	})
+	}
+	if strings.TrimSpace(req.FromStepKey) != "" {
+		commandPayload["fromStepKey"] = strings.TrimSpace(req.FromStepKey)
+	}
+	if req.TestNode != nil {
+		commandPayload["testNode"] = *req.TestNode
+	}
+	payload, err := json.Marshal(commandPayload)
 	if err != nil {
 		errorx.Write(w, http.StatusInternalServerError, "INTERNAL_ERROR", "error.common.internal", map[string]any{"reason": err.Error()})
 		return

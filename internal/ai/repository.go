@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -30,4 +31,25 @@ func NewRepository(dbDriver string, db *sql.DB) (Repository, error) {
 	default:
 		return nil, fmt.Errorf("unsupported ai repository driver: %s", dbDriver)
 	}
+}
+
+func marshalCommandIDsJSON(ids []string) string {
+	values := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, item := range ids {
+		value := strings.TrimSpace(item)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		values = append(values, value)
+	}
+	raw, err := json.Marshal(values)
+	if err != nil {
+		return "[]"
+	}
+	return string(raw)
 }

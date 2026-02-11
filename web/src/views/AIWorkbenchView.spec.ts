@@ -124,6 +124,16 @@ describe('AIWorkbenchView', () => {
     getAISessionEventsMock.mockResolvedValue([
       { id: 'turn_1', event: 'ai.turn.user', data: { role: 'user', content: 'hello' } },
       { id: 'turn_2', event: 'ai.turn.assistant', data: { role: 'assistant', content: 'Plan drafted' } },
+      {
+        id: 'cmd_1',
+        event: 'command.succeeded',
+        data: { commandId: 'cmd_1', commandType: 'workflow.run', status: 'succeeded', updatedAt: '2026-02-11T00:00:11Z' },
+      },
+      {
+        id: 'run_1',
+        event: 'workflow.run.succeeded',
+        data: { runId: 'run_1', status: 'succeeded', commandId: 'cmd_1', commandType: 'workflow.run' },
+      },
     ])
     createAISessionMock.mockResolvedValue({
       resource: { id: 'sess_2', status: 'active' },
@@ -153,7 +163,8 @@ describe('AIWorkbenchView', () => {
     expect(wrapper.text()).toContain('demo session')
 
     const textarea = wrapper.find('textarea')
-    await textarea.setValue('please plan this')
+    await textarea.setValue('run workflow tpl_1')
+    expect(wrapper.text()).toContain('workflow.run')
     const sendButton = wrapper
       .findAll('button')
       .find((item) => item.text().includes('发送回合') || item.text().includes('Send Turn'))
@@ -162,5 +173,13 @@ describe('AIWorkbenchView', () => {
 
     expect(createAISessionTurnMock).toHaveBeenCalledTimes(1)
     expect(createAISessionTurnMock.mock.calls[0]?.[0]).toBe('sess_1')
+    expect(createAISessionTurnMock.mock.calls[0]?.[1]).toMatchObject({
+      message: 'run workflow tpl_1',
+      execute: false,
+      intentCommandType: 'workflow.run',
+      intentPayload: {
+        templateId: 'tpl_1',
+      },
+    })
   })
 })

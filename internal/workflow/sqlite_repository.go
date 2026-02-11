@@ -362,6 +362,9 @@ func (r *SQLiteRepository) HasTemplatePermission(ctx context.Context, req comman
 }
 
 func (r *SQLiteRepository) CreateRun(ctx context.Context, in CreateRunInput) (WorkflowRun, error) {
+	if in.EngineV2 {
+		return r.createRunV2(ctx, in)
+	}
 	now := in.Now.UTC()
 	if now.IsZero() {
 		now = time.Now().UTC()
@@ -394,7 +397,7 @@ func (r *SQLiteRepository) CreateRun(ctx context.Context, in CreateRunInput) (Wo
 	if err != nil {
 		return WorkflowRun{}, err
 	}
-	plan, err := buildExecutionPlan(tpl.GraphJSON, in.Inputs, in.Mode, "")
+	plan, err := buildExecutionPlan(tpl.GraphJSON, in.Inputs, in.Mode, in.FromStepKey, in.TestNode)
 	if err != nil {
 		return WorkflowRun{}, err
 	}
@@ -538,6 +541,9 @@ func (r *SQLiteRepository) CreateRun(ctx context.Context, in CreateRunInput) (Wo
 }
 
 func (r *SQLiteRepository) RetryRun(ctx context.Context, in RetryRunInput) (WorkflowRun, error) {
+	if in.EngineV2 {
+		return r.retryRunV2(ctx, in)
+	}
 	now := in.Now.UTC()
 	if now.IsZero() {
 		now = time.Now().UTC()
@@ -578,7 +584,7 @@ func (r *SQLiteRepository) RetryRun(ctx context.Context, in RetryRunInput) (Work
 	if replayStepKey == "" {
 		replayStepKey = "step-1"
 	}
-	plan, err := buildExecutionPlan(tpl.GraphJSON, sourceRun.InputsJSON, in.Mode, replayStepKey)
+	plan, err := buildExecutionPlan(tpl.GraphJSON, sourceRun.InputsJSON, in.Mode, replayStepKey, false)
 	if err != nil {
 		return WorkflowRun{}, err
 	}

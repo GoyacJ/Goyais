@@ -36,12 +36,22 @@ describe('workflow api', () => {
 
   it('calls workflow run endpoints with expected paths', async () => {
     await listWorkflowRuns({ cursor: 'cursor_1' })
-    await createWorkflowRun({ templateId: 'tpl_1', mode: 'sync', inputs: {} }, 'idem-run-create')
+    await createWorkflowRun(
+      { templateId: 'tpl_1', mode: 'sync', inputs: {}, fromStepKey: 'n2', testNode: true },
+      'idem-run-create',
+    )
     await cancelWorkflowRun('run_1', 'idem-run-cancel')
     await listWorkflowStepRuns('run_1', { page: 1, pageSize: 20 })
 
     expect(apiRequestMock.mock.calls[0]?.[0]).toBe('/workflow-runs')
     expect(apiRequestMock.mock.calls[1]?.[0]).toBe('/workflow-runs')
+    expect(apiRequestMock.mock.calls[1]?.[1]).toMatchObject({
+      body: {
+        templateId: 'tpl_1',
+        fromStepKey: 'n2',
+        testNode: true,
+      },
+    })
     expect(apiRequestMock.mock.calls[2]?.[0]).toBe('/workflow-runs/run_1:cancel')
     expect(apiRequestMock.mock.calls[3]?.[0]).toBe('/workflow-runs/run_1/steps')
   })

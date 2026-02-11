@@ -11,7 +11,7 @@ func TestBuildExecutionPlanSyncTopological(t *testing.T) {
 		"nodes":[{"id":"n1","type":"input"},{"id":"n2","type":"tool"}],
 		"edges":[{"source":"n1","target":"n2"}]
 	}`)
-	plan, err := buildExecutionPlan(graph, json.RawMessage(`{"k":"v"}`), RunModeSync, "")
+	plan, err := buildExecutionPlan(graph, json.RawMessage(`{"k":"v"}`), RunModeSync, "", false)
 	if err != nil {
 		t.Fatalf("buildExecutionPlan returned error: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestBuildExecutionPlanRejectsCycle(t *testing.T) {
 		"nodes":[{"id":"n1","type":"input"},{"id":"n2","type":"tool"}],
 		"edges":[{"source":"n1","target":"n2"},{"source":"n2","target":"n1"}]
 	}`)
-	_, err := buildExecutionPlan(graph, json.RawMessage(`{}`), RunModeSync, "")
+	_, err := buildExecutionPlan(graph, json.RawMessage(`{}`), RunModeSync, "", false)
 	if !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("expected ErrInvalidRequest for cyclic graph got=%v", err)
 	}
@@ -53,7 +53,7 @@ func TestBuildExecutionPlanRunning(t *testing.T) {
 		],
 		"edges":[{"source":"n1","target":"n3"}]
 	}`)
-	plan, err := buildExecutionPlan(graph, json.RawMessage(`{}`), RunModeRunning, "")
+	plan, err := buildExecutionPlan(graph, json.RawMessage(`{}`), RunModeRunning, "", false)
 	if err != nil {
 		t.Fatalf("buildExecutionPlan returned error: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestBuildExecutionPlanRetryFromStepKey(t *testing.T) {
 			{"source":"n2","target":"n3"}
 		]
 	}`)
-	plan, err := buildExecutionPlan(graph, json.RawMessage(`{}`), RunModeRetry, "n2")
+	plan, err := buildExecutionPlan(graph, json.RawMessage(`{}`), RunModeRetry, "n2", false)
 	if err != nil {
 		t.Fatalf("buildExecutionPlan returned error: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestBuildExecutionPlanFailStepSelection(t *testing.T) {
 		"nodes":[{"id":"n1","type":"input"},{"id":"n2","type":"tool"}],
 		"edges":[{"source":"n1","target":"n2"}]
 	}`)
-	plan, err := buildExecutionPlan(graph, json.RawMessage(`{"failStepKey":"n2"}`), RunModeFail, "")
+	plan, err := buildExecutionPlan(graph, json.RawMessage(`{"failStepKey":"n2"}`), RunModeFail, "", false)
 	if err != nil {
 		t.Fatalf("buildExecutionPlan returned error: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestBuildExecutionPlanFailWithRetryPolicy(t *testing.T) {
 		"nodes":[{"id":"n1","type":"input"},{"id":"n2","type":"tool"},{"id":"n3","type":"output"}],
 		"edges":[{"source":"n1","target":"n2"},{"source":"n2","target":"n3"}]
 	}`)
-	plan, err := buildExecutionPlan(graph, json.RawMessage(`{"failStepKey":"n2","retry":{"maxAttempts":3,"baseBackoffMs":50}}`), RunModeFail, "")
+	plan, err := buildExecutionPlan(graph, json.RawMessage(`{"failStepKey":"n2","retry":{"maxAttempts":3,"baseBackoffMs":50}}`), RunModeFail, "", false)
 	if err != nil {
 		t.Fatalf("buildExecutionPlan returned error: %v", err)
 	}

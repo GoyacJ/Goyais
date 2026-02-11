@@ -445,6 +445,21 @@ func TestAPIContractRegression(t *testing.T) {
 		if aiTurnCommandID == "" {
 			t.Fatalf("expected ai turn commandRef.commandId")
 		}
+		turnCommandIDs, _ := turnResource["commandIds"].([]any)
+		if len(turnCommandIDs) == 0 {
+			t.Fatalf("expected ai turn resource.commandIds")
+		}
+		foundTurnCommandID := false
+		for _, item := range turnCommandIDs {
+			value, _ := item.(string)
+			if value == aiTurnCommandID {
+				foundTurnCommandID = true
+				break
+			}
+		}
+		if !foundTurnCommandID {
+			t.Fatalf("expected ai turn resource.commandIds to include commandRef command id=%s got=%v", aiTurnCommandID, turnCommandIDs)
+		}
 		respTurnCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+aiTurnCommandID, headersWithContext("u1"), nil)
 		defer respTurnCommand.Body.Close()
 		assertStatus(t, respTurnCommand, http.StatusOK)
@@ -468,6 +483,56 @@ func TestAPIContractRegression(t *testing.T) {
 		}
 		if !strings.Contains(eventsBody, "event: ai.turn.assistant") {
 			t.Fatalf("expected ai.turn.assistant event in stream body=%s", eventsBody)
+		}
+		if !strings.Contains(eventsBody, "event: command.succeeded") {
+			t.Fatalf("expected command.succeeded event in stream body=%s", eventsBody)
+		}
+
+		respExecuteTemplate := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-templates", headersWithJSONContext("u1"), map[string]any{
+			"name": "ai-exec-workflow",
+			"graph": map[string]any{
+				"nodes": []any{map[string]any{"id": "step_1", "type": "noop"}},
+				"edges": []any{},
+			},
+			"visibility": "PRIVATE",
+		})
+		defer respExecuteTemplate.Body.Close()
+		assertStatus(t, respExecuteTemplate, http.StatusAccepted)
+		executeTemplateID, _ := readJSONPath(t, respExecuteTemplate.Body, "resource.id").(string)
+		if executeTemplateID == "" {
+			t.Fatalf("expected execute template id")
+		}
+		respExecutePublish := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-templates/"+executeTemplateID+":publish", headersWithJSONContext("u1"), map[string]any{})
+		defer respExecutePublish.Body.Close()
+		assertStatus(t, respExecutePublish, http.StatusAccepted)
+
+		respExecuteTurn := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/sessions/"+aiSessionID+"/turns", headersWithJSONContext("u1"), map[string]any{
+			"message": "run workflow " + executeTemplateID,
+			"execute": true,
+		})
+		defer respExecuteTurn.Body.Close()
+		assertStatus(t, respExecuteTurn, http.StatusAccepted)
+		var executeTurnPayload map[string]any
+		mustDecodeJSON(t, respExecuteTurn.Body, &executeTurnPayload)
+		executeTurnResource, _ := executeTurnPayload["resource"].(map[string]any)
+		if got := executeTurnResource["commandType"]; got != "ai.command.execute" {
+			t.Fatalf("unexpected execute turn commandType: %v", got)
+		}
+		executeTurnIDs, _ := executeTurnResource["commandIds"].([]any)
+		if len(executeTurnIDs) < 2 {
+			t.Fatalf("expected execute turn commandIds to include ai and child command IDs, got=%v", executeTurnIDs)
+		}
+
+		respEventsAfterExecute := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/ai/sessions/"+aiSessionID+"/events", headersWithContext("u1"), nil)
+		defer respEventsAfterExecute.Body.Close()
+		assertStatus(t, respEventsAfterExecute, http.StatusOK)
+		eventsAfterExecuteRaw, err := io.ReadAll(respEventsAfterExecute.Body)
+		if err != nil {
+			t.Fatalf("read ai execute events body: %v", err)
+		}
+		eventsAfterExecute := string(eventsAfterExecuteRaw)
+		if !strings.Contains(eventsAfterExecute, "event: workflow.run.") {
+			t.Fatalf("expected workflow.run.* event in stream body=%s", eventsAfterExecute)
 		}
 
 		respArchive := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/sessions/"+aiSessionID+":archive", headersWithJSONContext("u1"), map[string]any{})
@@ -1818,6 +1883,164 @@ func TestAPIContractRegression(t *testing.T) {
 	})
 }
 
+func TestAPIWorkflowEngineV2RunFromStepAndTestNode(t *testing.T) {
+	baseURL, _, shutdown := newTestServerWithDBPathWithFeatureOptions(
+		t,
+		config.AuthContextModeJWTOrHeader,
+		config.FeatureConfig{
+			AssetLifecycle:     false,
+			PluginMarketV2:     true,
+			ContextBundle:      true,
+			ACLRoleSubject:     true,
+			StreamControlPlane: true,
+			WorkflowEngineV2:   true,
+			AIWorkbench:        false,
+		},
+	)
+	defer shutdown()
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	respCreate := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-templates", headersWithJSONContext("u1"), map[string]any{
+		"name": "wf-v2",
+		"graph": map[string]any{
+			"nodes": []any{
+				map[string]any{"id": "n1", "type": "noop"},
+				map[string]any{"id": "n2", "type": "noop"},
+				map[string]any{"id": "n3", "type": "noop"},
+			},
+			"edges": []any{
+				map[string]any{"from": "n1", "to": "n2"},
+				map[string]any{"from": "n2", "to": "n3"},
+			},
+		},
+		"visibility": "PRIVATE",
+	})
+	defer respCreate.Body.Close()
+	assertStatus(t, respCreate, http.StatusAccepted)
+	templateID, _ := readJSONPath(t, respCreate.Body, "resource.id").(string)
+	if templateID == "" {
+		t.Fatalf("expected workflow template id")
+	}
+
+	respPublish := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-templates/"+templateID+":publish", headersWithJSONContext("u1"), map[string]any{})
+	defer respPublish.Body.Close()
+	assertStatus(t, respPublish, http.StatusAccepted)
+
+	respRunFrom := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-runs", headersWithJSONContext("u1"), map[string]any{
+		"templateId":  templateID,
+		"mode":        "sync",
+		"fromStepKey": "n2",
+		"inputs":      map[string]any{"k": "v"},
+	})
+	defer respRunFrom.Body.Close()
+	assertStatus(t, respRunFrom, http.StatusAccepted)
+	runFromID, _ := readJSONPath(t, respRunFrom.Body, "resource.id").(string)
+	if runFromID == "" {
+		t.Fatalf("expected workflow run id")
+	}
+
+	var runFromStatus string
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		respGetRun := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+runFromID, headersWithContext("u1"), nil)
+		var runPayload map[string]any
+		mustDecodeJSON(t, respGetRun.Body, &runPayload)
+		_ = respGetRun.Body.Close()
+		runFromStatus, _ = runPayload["status"].(string)
+		if runFromStatus == "succeeded" || runFromStatus == "failed" || runFromStatus == "canceled" {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if runFromStatus != "succeeded" {
+		t.Fatalf("expected run-from-here status=succeeded got=%s", runFromStatus)
+	}
+
+	respRunFromSteps := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+runFromID+"/steps", headersWithContext("u1"), nil)
+	defer respRunFromSteps.Body.Close()
+	assertStatus(t, respRunFromSteps, http.StatusOK)
+	var runFromStepsPayload map[string]any
+	mustDecodeJSON(t, respRunFromSteps.Body, &runFromStepsPayload)
+	runFromSteps, _ := runFromStepsPayload["items"].([]any)
+	stepKeys := make(map[string]struct{}, len(runFromSteps))
+	for _, raw := range runFromSteps {
+		item, _ := raw.(map[string]any)
+		stepKey, _ := item["stepKey"].(string)
+		stepKeys[stepKey] = struct{}{}
+	}
+	if _, ok := stepKeys["n2"]; !ok {
+		t.Fatalf("expected run-from-here steps include n2")
+	}
+	if _, ok := stepKeys["n3"]; !ok {
+		t.Fatalf("expected run-from-here steps include n3")
+	}
+	if _, ok := stepKeys["n1"]; ok {
+		t.Fatalf("expected run-from-here steps not include n1")
+	}
+
+	respRunNode := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-runs", headersWithJSONContext("u1"), map[string]any{
+		"templateId":  templateID,
+		"mode":        "sync",
+		"fromStepKey": "n2",
+		"testNode":    true,
+		"inputs":      map[string]any{"k": "v"},
+	})
+	defer respRunNode.Body.Close()
+	assertStatus(t, respRunNode, http.StatusAccepted)
+	runNodeID, _ := readJSONPath(t, respRunNode.Body, "resource.id").(string)
+	if runNodeID == "" {
+		t.Fatalf("expected test-node run id")
+	}
+
+	respRunNodeSteps := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+runNodeID+"/steps", headersWithContext("u1"), nil)
+	defer respRunNodeSteps.Body.Close()
+	assertStatus(t, respRunNodeSteps, http.StatusOK)
+	var runNodeStepsPayload map[string]any
+	mustDecodeJSON(t, respRunNodeSteps.Body, &runNodeStepsPayload)
+	runNodeSteps, _ := runNodeStepsPayload["items"].([]any)
+	if len(runNodeSteps) != 1 {
+		t.Fatalf("expected test-node run only 1 step, got=%d", len(runNodeSteps))
+	}
+	onlyStep, _ := runNodeSteps[0].(map[string]any)
+	if stepKey, _ := onlyStep["stepKey"].(string); stepKey != "n2" {
+		t.Fatalf("expected test-node step=n2 got=%v", onlyStep["stepKey"])
+	}
+
+	respRunFail := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/workflow-runs", headersWithJSONContext("u1"), map[string]any{
+		"templateId": templateID,
+		"mode":       "fail",
+		"inputs": map[string]any{
+			"failStepKey": "n2",
+			"retry": map[string]any{
+				"maxAttempts":   2,
+				"baseBackoffMs": 1,
+			},
+		},
+	})
+	defer respRunFail.Body.Close()
+	assertStatus(t, respRunFail, http.StatusAccepted)
+	runFailID, _ := readJSONPath(t, respRunFail.Body, "resource.id").(string)
+	if runFailID == "" {
+		t.Fatalf("expected fail run id")
+	}
+
+	respFailEvents := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/workflow-runs/"+runFailID+"/events", headersWithContext("u1"), nil)
+	defer respFailEvents.Body.Close()
+	assertStatus(t, respFailEvents, http.StatusOK)
+	eventsRaw, err := io.ReadAll(respFailEvents.Body)
+	if err != nil {
+		t.Fatalf("read fail run events: %v", err)
+	}
+	eventsText := string(eventsRaw)
+	if !strings.Contains(eventsText, "event: workflow.step.retry_scheduled") {
+		t.Fatalf("expected workflow.step.retry_scheduled in v2 events")
+	}
+	if !strings.Contains(eventsText, "event: workflow.step.started") {
+		t.Fatalf("expected workflow.step.started in v2 events")
+	}
+}
+
 func newTestServer(t *testing.T) (string, func()) {
 	t.Helper()
 	baseURL, _, shutdown := newTestServerWithDBPath(t)
@@ -1850,6 +2073,7 @@ func newTestServerWithDBPathWithOptions(
 			ContextBundle:      true,
 			ACLRoleSubject:     true,
 			StreamControlPlane: true,
+			AIWorkbench:        true,
 		},
 	)
 }
@@ -2029,6 +2253,55 @@ func TestAPIAssetLifecycleFeatureEnabled(t *testing.T) {
 	defer respGet.Body.Close()
 	assertStatus(t, respGet, http.StatusNotFound)
 	assertErrorCode(t, respGet.Body, "ASSET_NOT_FOUND")
+}
+
+func TestAPIAIWorkbenchFeatureDisabled(t *testing.T) {
+	baseURL, _, shutdown := newTestServerWithDBPathWithFeatureOptions(
+		t,
+		config.AuthContextModeJWTOrHeader,
+		config.FeatureConfig{
+			AssetLifecycle:     false,
+			PluginMarketV2:     true,
+			ContextBundle:      true,
+			ACLRoleSubject:     true,
+			StreamControlPlane: true,
+			AIWorkbench:        false,
+		},
+	)
+	defer shutdown()
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	respCreateSession := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/sessions", headersWithJSONContext("u1"), map[string]any{
+		"title": "disabled",
+	})
+	defer respCreateSession.Body.Close()
+	assertStatus(t, respCreateSession, http.StatusNotImplemented)
+	assertMessageKey(t, respCreateSession.Body, "error.ai.not_implemented")
+
+	respCreateTurn := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/sessions/sess_demo/turns", headersWithJSONContext("u1"), map[string]any{
+		"message": "run workflow tpl_demo",
+		"execute": true,
+	})
+	defer respCreateTurn.Body.Close()
+	assertStatus(t, respCreateTurn, http.StatusNotImplemented)
+	assertMessageKey(t, respCreateTurn.Body, "error.ai.not_implemented")
+
+	respArchive := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/ai/sessions/sess_demo:archive", headersWithJSONContext("u1"), map[string]any{})
+	defer respArchive.Body.Close()
+	assertStatus(t, respArchive, http.StatusNotImplemented)
+	assertMessageKey(t, respArchive.Body, "error.ai.not_implemented")
+
+	respAIPlanCommand := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headersWithJSONContext("u1"), map[string]any{
+		"commandType": "ai.intent.plan",
+		"payload": map[string]any{
+			"sessionId": "sess_demo",
+			"message":   "plan",
+		},
+	})
+	defer respAIPlanCommand.Body.Close()
+	assertStatus(t, respAIPlanCommand, http.StatusNotImplemented)
+	assertMessageKey(t, respAIPlanCommand.Body, "error.ai.not_implemented")
 }
 
 func TestAPIPluginMarketV2FeatureDisabled(t *testing.T) {

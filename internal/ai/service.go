@@ -101,6 +101,8 @@ func (s *Service) CreateTurn(
 	sessionID string,
 	message string,
 	commandType string,
+	assistantMessage string,
+	commandIDs []string,
 ) (SessionTurn, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	message = strings.TrimSpace(message)
@@ -127,13 +129,18 @@ func (s *Service) CreateTurn(
 		return SessionTurn{}, ErrInvalidRequest
 	}
 
-	assistantMessage := buildAssistantResponse(commandType, message)
+	if strings.TrimSpace(assistantMessage) == "" {
+		assistantMessage = buildAssistantResponse(commandType, message)
+	}
+	commandIDs = normalizeCommandIDs(append([]string{command.CurrentCommandID(ctx)}, commandIDs...))
+
 	return s.repo.CreateTurn(ctx, CreateTurnInput{
 		Context:          req,
 		SessionID:        sessionID,
 		UserMessage:      message,
 		AssistantMessage: assistantMessage,
 		CommandType:      commandType,
+		CommandIDs:       commandIDs,
 		Now:              time.Now().UTC(),
 	})
 }
@@ -245,4 +252,21 @@ func isJSONObject(raw json.RawMessage) bool {
 	}
 	var value map[string]any
 	return json.Unmarshal(raw, &value) == nil
+}
+
+func normalizeCommandIDs(raw []string) []string {
+	seen := make(map[string]struct{}, len(raw))
+	result := make([]string, 0, len(raw))
+	for _, item := range raw {
+		value := strings.TrimSpace(item)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }

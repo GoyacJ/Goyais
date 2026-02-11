@@ -379,7 +379,7 @@ func (r *PostgresRepository) CreateRun(ctx context.Context, in CreateRunInput) (
 	if err != nil {
 		return WorkflowRun{}, err
 	}
-	plan, err := buildExecutionPlan(tpl.GraphJSON, in.Inputs, in.Mode, "")
+	plan, err := buildExecutionPlan(tpl.GraphJSON, in.Inputs, in.Mode, in.FromStepKey, in.TestNode)
 	if err != nil {
 		return WorkflowRun{}, err
 	}
@@ -557,7 +557,7 @@ func (r *PostgresRepository) RetryRun(ctx context.Context, in RetryRunInput) (Wo
 	if replayStepKey == "" {
 		replayStepKey = "step-1"
 	}
-	plan, err := buildExecutionPlan(tpl.GraphJSON, sourceRun.InputsJSON, in.Mode, replayStepKey)
+	plan, err := buildExecutionPlan(tpl.GraphJSON, sourceRun.InputsJSON, in.Mode, replayStepKey, false)
 	if err != nil {
 		return WorkflowRun{}, err
 	}
@@ -1108,6 +1108,13 @@ func (r *PostgresRepository) ListRunEvents(ctx context.Context, req command.Requ
 		return nil, err
 	}
 	return items, nil
+}
+
+func (r *PostgresRepository) ProcessStepQueueOnce(ctx context.Context, workerID string, now time.Time) (bool, error) {
+	_ = ctx
+	_ = workerID
+	_ = now
+	return false, nil
 }
 
 func postgresNullableText(value string) any {

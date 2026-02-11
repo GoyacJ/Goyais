@@ -88,6 +88,8 @@ func (s *Service) Run(ctx context.Context, in RunInput) (Run, error) {
 		workflowInputs,
 		runVisibility,
 		in.Mode,
+		"",
+		false,
 	)
 	if err != nil {
 		return Run{}, mapWorkflowError(err)

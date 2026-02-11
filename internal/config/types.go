@@ -101,6 +101,8 @@ type FeatureConfig struct {
 	ContextBundle      bool `json:"contextBundle"`
 	ACLRoleSubject     bool `json:"aclRoleSubject"`
 	StreamControlPlane bool `json:"streamControlPlane"`
+	WorkflowEngineV2   bool `json:"workflowEngineV2"`
+	AIWorkbench        bool `json:"aiWorkbench"`
 }
 
 type RuntimePathConf struct {
@@ -130,6 +132,8 @@ type fileConfig struct {
 		ContextBundle      *bool `yaml:"context_bundle"`
 		ACLRoleSubject     *bool `yaml:"acl_role_subject"`
 		StreamControlPlane *bool `yaml:"stream_control_plane"`
+		WorkflowEngineV2   *bool `yaml:"workflow_engine_v2"`
+		AIWorkbench        *bool `yaml:"ai_workbench"`
 	} `yaml:"feature"`
 	Cache struct {
 		Provider      string `yaml:"provider"`

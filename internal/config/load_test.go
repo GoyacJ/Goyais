@@ -68,6 +68,12 @@ func TestLoadDefaultsMinimal(t *testing.T) {
 	if !cfg.Feature.StreamControlPlane {
 		t.Fatalf("expected default feature.stream_control_plane=true")
 	}
+	if cfg.Feature.WorkflowEngineV2 {
+		t.Fatalf("expected default feature.workflow_engine_v2=false")
+	}
+	if cfg.Feature.AIWorkbench {
+		t.Fatalf("expected default feature.ai_workbench=false")
+	}
 }
 
 func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
@@ -107,6 +113,8 @@ func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	t.Setenv("GOYAIS_FEATURE_CONTEXT_BUNDLE", "false")
 	t.Setenv("GOYAIS_FEATURE_ACL_ROLE_SUBJECT", "false")
 	t.Setenv("GOYAIS_FEATURE_STREAM_CONTROL_PLANE", "false")
+	t.Setenv("GOYAIS_FEATURE_WORKFLOW_ENGINE_V2", "true")
+	t.Setenv("GOYAIS_FEATURE_AI_WORKBENCH", "true")
 
 	cfg, err := Load()
 	if err != nil {
@@ -184,6 +192,12 @@ func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	}
 	if cfg.Feature.StreamControlPlane {
 		t.Fatalf("expected feature.stream_control_plane=false from env override")
+	}
+	if !cfg.Feature.WorkflowEngineV2 {
+		t.Fatalf("expected feature.workflow_engine_v2=true from env override")
+	}
+	if !cfg.Feature.AIWorkbench {
+		t.Fatalf("expected feature.ai_workbench=true from env override")
 	}
 }
 

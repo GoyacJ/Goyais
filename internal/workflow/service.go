@@ -19,12 +19,14 @@ const (
 type Service struct {
 	repo                 Repository
 	allowPrivateToPublic bool
+	engineV2Enabled      bool
 }
 
-func NewService(repo Repository, allowPrivateToPublic bool) *Service {
+func NewService(repo Repository, allowPrivateToPublic bool, engineV2Enabled bool) *Service {
 	return &Service{
 		repo:                 repo,
 		allowPrivateToPublic: allowPrivateToPublic,
+		engineV2Enabled:      engineV2Enabled,
 	}
 }
 
@@ -191,11 +193,14 @@ func (s *Service) CreateRun(
 	inputs json.RawMessage,
 	visibility string,
 	mode string,
+	fromStepKey string,
+	testNode bool,
 ) (WorkflowRun, error) {
 	templateID = strings.TrimSpace(templateID)
 	if templateID == "" {
 		return WorkflowRun{}, ErrInvalidRequest
 	}
+	fromStepKey = strings.TrimSpace(fromStepKey)
 	if len(inputs) == 0 {
 		inputs = json.RawMessage(`{}`)
 	}
@@ -234,12 +239,15 @@ func (s *Service) CreateRun(
 	}
 
 	return s.repo.CreateRun(ctx, CreateRunInput{
-		Context:    req,
-		TemplateID: templateID,
-		Visibility: runVisibility,
-		Inputs:     inputs,
-		Mode:       normalizedMode,
-		Now:        time.Now().UTC(),
+		Context:     req,
+		TemplateID:  templateID,
+		Visibility:  runVisibility,
+		Inputs:      inputs,
+		Mode:        normalizedMode,
+		FromStepKey: fromStepKey,
+		TestNode:    testNode,
+		EngineV2:    s.engineV2Enabled,
+		Now:         time.Now().UTC(),
 	})
 }
 
@@ -284,6 +292,7 @@ func (s *Service) RetryRun(
 		FromStepKey: fromStepKey,
 		Reason:      reason,
 		Mode:        normalizedMode,
+		EngineV2:    s.engineV2Enabled,
 		Now:         time.Now().UTC(),
 	})
 }

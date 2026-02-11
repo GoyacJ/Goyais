@@ -40,6 +40,7 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 	domainHandler := &apiHandler{
 		commandService:            deps.CommandService,
 		aiService:                 deps.AIService,
+		aiWorkbenchEnabled:        cfg.Feature.AIWorkbench,
 		assetService:              deps.AssetService,
 		assetLifecycleEnabled:     cfg.Feature.AssetLifecycle,
 		pluginMarketV2Enabled:     cfg.Feature.PluginMarketV2,
