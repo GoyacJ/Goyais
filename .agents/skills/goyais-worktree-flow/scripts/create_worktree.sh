@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Goya
+# Author: Goya
+# Created: 2026-02-11
+# Version: v1.0.0
+# Description: Create a thread branch and isolated worktree under the repository.
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,7 +30,8 @@ DEFAULT_REPO_ROOT="$(resolve_default_repo_root)"
 TOPIC=""
 THREAD_ID=""
 REPO_ROOT="${DEFAULT_REPO_ROOT}"
-WORKTREE_ROOT="$(dirname "${DEFAULT_REPO_ROOT}")"
+WORKTREE_ROOT=""
+WORKTREE_ROOT_SET=0
 SKIP_SYNC=0
 DRY_RUN=0
 
@@ -36,7 +44,7 @@ Options:
   --topic <value>          Thread topic (required)
   --thread-id <value>      Thread id; default threadYYYYMMDD-HHMMSS
   --repo-root <path>       Repo root path; default auto-detected
-  --worktree-root <path>   Worktree root dir; default dirname(repo-root)
+  --worktree-root <path>   Worktree root dir; default <repo-root>/.worktrees
   --skip-sync              Skip master sync (fetch/pull)
   --dry-run                Print commands without executing
   -h, --help               Show help
@@ -89,6 +97,7 @@ while [[ $# -gt 0 ]]; do
     --worktree-root)
       [[ $# -ge 2 ]] || die "missing value for --worktree-root"
       WORKTREE_ROOT="$2"
+      WORKTREE_ROOT_SET=1
       shift 2
       ;;
     --skip-sync)
@@ -122,6 +131,11 @@ THREAD_ID_SLUG="$(sanitize_segment "${THREAD_ID}")"
 [[ -d "${REPO_ROOT}" ]] || die "repo root does not exist: ${REPO_ROOT}"
 git -C "${REPO_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not a git repo: ${REPO_ROOT}"
 git -C "${REPO_ROOT}" show-ref --verify --quiet refs/heads/master || die "master branch not found in ${REPO_ROOT}"
+
+if [[ "${WORKTREE_ROOT_SET}" -eq 0 ]]; then
+  WORKTREE_ROOT="${REPO_ROOT}/.worktrees"
+fi
+run_cmd mkdir -p "${WORKTREE_ROOT}"
 
 REPO_NAME="$(basename "${REPO_ROOT}")"
 BRANCH="goya/${THREAD_ID_SLUG}-${TOPIC_SLUG}"

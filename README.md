@@ -113,6 +113,7 @@ bash go_server/scripts/ci/contract_regression.sh
 
 该脚本统一执行：
 - worktree 审计
+- merged-thread cleanup 审计（warn-only）
 - precommit 防呆检查
 - 路径迁移审计
 - 源码头校验（SPDX/Author/Created/Version/Description）
@@ -170,7 +171,10 @@ GOYAIS_SERVER_ADDR=:18080 ./go_server/build/goyais
 
 工作流强约束（简版）：
 - 分支前缀：`goya/<thread-id>-<topic>`
-- 一线程一 worktree
+- 一线程一 worktree（默认在 `<repo>/.worktrees/`）
+- 线程开启必须执行：`bash .agents/skills/goyais-worktree-flow/scripts/create_worktree.sh --topic <topic>`
+- 线程收口必须执行：`bash .agents/skills/goyais-worktree-flow/scripts/merge_thread.sh --thread-branch <goya/...>`
+- 禁止手工 `git merge` / `git branch -d` / `git worktree remove` 绕过标准收口
 - 提交前执行：`bash go_server/scripts/git/precommit_guard.sh`
 
 ## License

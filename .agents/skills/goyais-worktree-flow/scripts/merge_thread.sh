@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Goya
+# Author: Goya
+# Created: 2026-02-11
+# Version: v1.0.0
+# Description: Merge a thread branch into master and force local cleanup.
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,7 +31,6 @@ THREAD_BRANCH=""
 REPO_ROOT="${DEFAULT_REPO_ROOT}"
 TEST_CMD="go test ./..."
 PUSH=0
-CLEANUP=1
 DRY_RUN=0
 
 usage() {
@@ -38,9 +44,7 @@ Options:
   --test-cmd <value>       Command run after merge; default "go test ./..."
   --push                   Push master to origin after merge
   --push=<bool>            Explicit push flag: true/false
-  --cleanup                Enable cleanup (default)
-  --cleanup=<bool>         Explicit cleanup flag: true/false
-  --no-cleanup             Disable cleanup
+  --cleanup*               Deprecated; cleanup is mandatory and cannot be disabled
   --dry-run                Print commands without executing
   -h, --help               Show help
 EOF
@@ -112,16 +116,13 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --cleanup)
-      CLEANUP=1
-      shift
+      die "--cleanup flags are deprecated; cleanup is mandatory by default"
       ;;
     --cleanup=*)
-      CLEANUP="$(parse_bool "${1#*=}")"
-      shift
+      die "--cleanup flags are deprecated; cleanup is mandatory by default"
       ;;
     --no-cleanup)
-      CLEANUP=0
-      shift
+      die "--no-cleanup is forbidden; use mandatory cleanup flow"
       ;;
     --dry-run)
       DRY_RUN=1
@@ -138,6 +139,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "${THREAD_BRANCH}" ]] || die "--thread-branch is required"
+[[ "${THREAD_BRANCH}" == goya/* ]] || die "--thread-branch must start with goya/"
 [[ -d "${REPO_ROOT}" ]] || die "repo root does not exist: ${REPO_ROOT}"
 git -C "${REPO_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not a git repo: ${REPO_ROOT}"
 
@@ -162,23 +164,19 @@ else
 fi
 
 WORKTREE_PATH=""
-if [[ "${CLEANUP}" -eq 1 ]]; then
-  WORKTREE_PATH="$(git -C "${REPO_ROOT}" worktree list --porcelain | awk -v target="refs/heads/${THREAD_BRANCH}" '
-    $1=="worktree" {path=$2}
-    $1=="branch" && $2==target {print path}
-  ' | head -n 1)"
+WORKTREE_PATH="$(git -C "${REPO_ROOT}" worktree list --porcelain | awk -v target="refs/heads/${THREAD_BRANCH}" '
+  $1=="worktree" {path=$2}
+  $1=="branch" && $2==target {print path}
+' | head -n 1)"
 
-  if [[ -n "${WORKTREE_PATH}" && "${WORKTREE_PATH}" != "${REPO_ROOT}" ]]; then
-    run_cmd git -C "${REPO_ROOT}" worktree remove "${WORKTREE_PATH}"
-  else
-    log "cleanup: no removable worktree found for ${THREAD_BRANCH}"
-  fi
-
-  run_cmd git -C "${REPO_ROOT}" branch -d "${THREAD_BRANCH}"
-  run_cmd git -C "${REPO_ROOT}" worktree prune
+if [[ -n "${WORKTREE_PATH}" && "${WORKTREE_PATH}" != "${REPO_ROOT}" ]]; then
+  run_cmd git -C "${REPO_ROOT}" worktree remove "${WORKTREE_PATH}"
 else
-  log "skip cleanup: disabled by flag"
+  log "cleanup: no removable worktree found for ${THREAD_BRANCH}"
 fi
+
+run_cmd git -C "${REPO_ROOT}" branch -d "${THREAD_BRANCH}"
+run_cmd git -C "${REPO_ROOT}" worktree prune
 
 MERGE_COMMIT="dry-run"
 if [[ "${DRY_RUN}" -eq 0 ]]; then
@@ -190,7 +188,7 @@ log "merge flow complete"
 printf 'thread_branch=%s\n' "${THREAD_BRANCH}"
 printf 'merge_commit=%s\n' "${MERGE_COMMIT}"
 printf 'push=%s\n' "${PUSH}"
-printf 'cleanup=%s\n' "${CLEANUP}"
+printf 'cleanup=1\n'
 if [[ -n "${WORKTREE_PATH}" ]]; then
   printf 'cleanup_worktree=%s\n' "${WORKTREE_PATH}"
 fi

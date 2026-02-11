@@ -213,11 +213,12 @@
 
 ## 15. 自动化回归与 Git 护栏验收
 
-- [x] 存在统一回归脚本 `go_server/scripts/ci/contract_regression.sh`，串行执行 `path_migration_audit`、`source_header_check`、`go test ./...`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web typecheck`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run`、`make build`、single-binary verify。
+- [x] 存在统一回归脚本 `go_server/scripts/ci/contract_regression.sh`，串行执行 `worktree_audit`、`merged_thread_cleanup_audit`（warn-only）、`precommit_guard`、`path_migration_audit`、`source_header_check`、`go test ./...`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web typecheck`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run`、`make build`、single-binary verify。
 - [x] 存在迁移残留审计脚本 `go_server/scripts/ci/path_migration_audit.sh`，用于扫描旧路径引用是否清零。
 - [x] 存在源码头校验脚本 `go_server/scripts/ci/source_header_check.sh`，校验 SPDX/版权/作者/时间/版本/描述字段完整性与顺序。
 - [x] 存在提交前防呆脚本 `go_server/scripts/git/precommit_guard.sh`，阻断 `data/objects/`、`*.db`、`go_server/build/`、`go_server/internal/access/webstatic/dist/assets/`、`go_server/internal/access/webstatic/dist/index.html`、`vue_web/dist/`、`vue_web/node_modules/` 被 staged。
 - [x] 存在 worktree 审计脚本 `go_server/scripts/git/worktree_audit.sh`，阻断 detached worktree 与重复分支绑定。
+- [x] 存在 merged thread 清理审计脚本 `go_server/scripts/git/merged_thread_cleanup_audit.sh`，对“已合入 `master` 但未删除的本地 `goya/*` 分支”输出告警与清理建议（warn-only，不阻断回归）。
 - [x] CI workflow `.github/workflows/contract-regression.yml` 调用统一回归脚本，作为 PR/master 门禁入口。
 
 ## 16. PRD 严格口径重构启动验收（S0-S6）
