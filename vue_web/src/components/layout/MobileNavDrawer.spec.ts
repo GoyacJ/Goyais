@@ -4,7 +4,7 @@
  * Author: Goya
  * Created: 2026-02-11
  * Version: v1.0.0
- * Description: Goyais source file.
+ * Description: Verify MobileNavDrawer locale sync and account menu render.
  */
 
 import { mount, RouterLinkStub } from '@vue/test-utils'
@@ -43,6 +43,9 @@ describe('MobileNavDrawer', () => {
           plugins: [i18n],
           stubs: {
             RouterLink: RouterLinkStub,
+            WorkspaceAccountMenu: {
+              template: '<div data-testid="workspace-account-menu" />',
+            },
           },
         },
       })
@@ -53,6 +56,7 @@ describe('MobileNavDrawer', () => {
       expect(zhLinks).toHaveLength(NAV_LABELS_ZH.length)
       expect(zhLinks.map((link) => link.find('.truncate').text())).toEqual(NAV_LABELS_ZH)
       expect(zhLinks[0]?.attributes('active-class')).toBe('ui-nav-link-active')
+      expect(wrapper.find('[data-testid="workspace-account-menu"]').exists()).toBe(true)
 
       i18n.global.locale.value = 'en-US'
       await nextTick()

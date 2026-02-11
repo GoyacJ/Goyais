@@ -19,7 +19,7 @@
 
     <div class="ui-topbar-controls flex min-w-0 flex-wrap items-center gap-2">
       <span class="ui-control ui-monospace inline-flex h-8 min-h-0 items-center bg-ui-surface2 px-2 py-0 text-xs leading-none text-ui-muted">
-        {{ t('common.workspace') }}
+        {{ workspaceBadge }}
       </span>
 
       <button type="button" class="ui-control ui-focus-ring ui-pressable inline-flex items-center gap-2 text-sm text-ui-fgSubtle">
@@ -40,8 +40,6 @@
           <Select v-model="localeModel" :options="localeOptions" />
         </div>
       </label>
-
-      <Dropdown :label="t('common.userMenu')" :items="userMenuItems" @select="onUserMenuAction" />
     </div>
   </header>
 </template>
@@ -55,10 +53,9 @@
  * Version: v1.0.0
  * Description: Goyais source file.
  */
-import Dropdown, { type DropdownItem } from '@/components/ui/Dropdown.vue'
 import Icon from '@/components/ui/Icon.vue'
 import Select from '@/components/ui/Select.vue'
-import { useToast } from '@/composables/useToast'
+import { useIdentityStore } from '@/design-system/identity'
 import { useThemeStore } from '@/design-system/theme'
 import type { SupportedLocale, ThemeMode } from '@/design-system/types'
 import { computed } from 'vue'
@@ -79,13 +76,7 @@ const emit = defineEmits<{
 
 const { t, locale } = useI18n({ useScope: 'global' })
 const { themeMode, setThemeMode } = useThemeStore()
-const { pushToast } = useToast()
-
-const userMenuItems = computed<DropdownItem[]>(() => [
-  { label: t('common.profile'), value: 'profile', hint: 'P' },
-  { label: t('common.preferences'), value: 'preferences', hint: 'S' },
-  { label: t('common.signOut'), value: 'signOut', danger: true },
-])
+const { activeWorkspace } = useIdentityStore()
 
 const themeModel = computed<ThemeMode>({
   get: () => themeMode.value,
@@ -112,11 +103,5 @@ const localeOptions = computed(() => [
   { value: 'en-US', label: t('common.localeEnUS') },
 ])
 
-function onUserMenuAction(value: string): void {
-  pushToast({
-    title: t('common.userMenu'),
-    message: t('common.placeholderAction', { value }),
-    tone: 'info',
-  })
-}
+const workspaceBadge = computed(() => activeWorkspace.value?.name ?? t('common.workspace'))
 </script>

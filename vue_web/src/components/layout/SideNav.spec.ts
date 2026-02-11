@@ -4,7 +4,7 @@
  * Author: Goya
  * Created: 2026-02-11
  * Version: v1.0.0
- * Description: Goyais source file.
+ * Description: Verify SideNav rendering, pin behavior, and locale sync.
  */
 
 import { mount, RouterLinkStub } from '@vue/test-utils'
@@ -30,20 +30,27 @@ const NAV_LABELS_EN = [
   'Settings',
 ]
 
+function mountSideNav() {
+  return mount(SideNav, {
+    global: {
+      plugins: [i18n],
+      stubs: {
+        RouterLink: RouterLinkStub,
+        WorkspaceAccountMenu: {
+          template: '<div data-testid="workspace-account-menu" />',
+        },
+      },
+    },
+  })
+}
+
 describe('SideNav', () => {
   it('renders localized menu labels and keeps collapsed titles in sync with locale', async () => {
     const originalLocale = i18n.global.locale.value
     localStorage.removeItem(PINNED_STORAGE_KEY)
 
     try {
-      const wrapper = mount(SideNav, {
-        global: {
-          plugins: [i18n],
-          stubs: {
-            RouterLink: RouterLinkStub,
-          },
-        },
-      })
+      const wrapper = mountSideNav()
 
       i18n.global.locale.value = 'zh-CN'
       await nextTick()
@@ -71,6 +78,7 @@ describe('SideNav', () => {
 
       const enCollapsedLinks = wrapper.findAll('a.ui-nav-link')
       expect(enCollapsedLinks.map((link) => link.attributes('title'))).toEqual(NAV_LABELS_EN)
+      expect(wrapper.find('[data-testid="workspace-account-menu"]').exists()).toBe(true)
 
       wrapper.unmount()
     } finally {
@@ -81,31 +89,24 @@ describe('SideNav', () => {
 
   it('keeps header and menu region dimensions stable across locale switches', async () => {
     const originalLocale = i18n.global.locale.value
-    const wrapper = mount(SideNav, {
-      global: {
-        plugins: [i18n],
-        stubs: {
-          RouterLink: RouterLinkStub,
-        },
-      },
-    })
+    const wrapper = mountSideNav()
 
     const header = wrapper.find('aside > div')
     const nav = wrapper.find('nav')
 
-    expect(header.classes()).toContain('h-[4.25rem]')
+    expect(header.classes()).toContain('h-[4.5rem]')
     expect(header.classes()).toContain('shrink-0')
     expect(nav.classes()).toContain('flex-1')
     expect(nav.classes()).toContain('overflow-auto')
 
     i18n.global.locale.value = 'zh-CN'
     await nextTick()
-    expect(header.classes()).toContain('h-[4.25rem]')
+    expect(header.classes()).toContain('h-[4.5rem]')
     expect(header.classes()).toContain('shrink-0')
 
     i18n.global.locale.value = 'en-US'
     await nextTick()
-    expect(header.classes()).toContain('h-[4.25rem]')
+    expect(header.classes()).toContain('h-[4.5rem]')
     expect(header.classes()).toContain('shrink-0')
 
     i18n.global.locale.value = originalLocale
@@ -121,46 +122,31 @@ describe('SideNav', () => {
     densityMode.value = 'compact'
 
     try {
-      const wrapper = mount(SideNav, {
-        global: {
-          plugins: [i18n],
-          stubs: {
-            RouterLink: RouterLinkStub,
-          },
-        },
-      })
+      const wrapper = mountSideNav()
 
       const aside = wrapper.get('aside')
-      const pinButton = wrapper.get(`button[data-pinned]`)
+      const pinButton = wrapper.get('button[data-pinned]')
 
       expect(aside.classes()).toContain('w-[4.75rem]')
-      expect(pinButton.text()).toBe('PIN')
+      expect(pinButton.attributes('aria-label')).toBe('Pin navigation')
 
       await pinButton.trigger('click')
       await nextTick()
 
       expect(pinButton.attributes('data-pinned')).toBe('true')
-      expect(pinButton.text()).toBe('UNP')
+      expect(pinButton.attributes('aria-label')).toBe('Unpin navigation')
       expect(aside.classes()).toContain('w-64')
       expect(localStorage.getItem(PINNED_STORAGE_KEY)).toBe('true')
 
       wrapper.unmount()
 
-      const restored = mount(SideNav, {
-        global: {
-          plugins: [i18n],
-          stubs: {
-            RouterLink: RouterLinkStub,
-          },
-        },
-      })
+      const restored = mountSideNav()
       await nextTick()
 
       const restoredAside = restored.get('aside')
       const restoredPinButton = restored.get('button[data-pinned]')
 
       expect(restoredPinButton.attributes('data-pinned')).toBe('true')
-      expect(restoredPinButton.text()).toBe('UNP')
       expect(restoredAside.classes()).toContain('w-64')
 
       await restoredPinButton.trigger('click')
@@ -186,14 +172,7 @@ describe('SideNav', () => {
     densityMode.value = 'comfortable'
 
     try {
-      const wrapper = mount(SideNav, {
-        global: {
-          plugins: [i18n],
-          stubs: {
-            RouterLink: RouterLinkStub,
-          },
-        },
-      })
+      const wrapper = mountSideNav()
 
       const aside = wrapper.get('aside')
       const pinButton = wrapper.get('button[data-pinned]')

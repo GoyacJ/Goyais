@@ -10,6 +10,7 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import AppShell from '@/components/layout/AppShell.vue'
+import RouteTabBar from '@/components/layout/RouteTabBar.vue'
 import TopBar from '@/components/layout/TopBar.vue'
 import SideNav from '@/components/layout/SideNav.vue'
 import i18n from '@/i18n'
@@ -75,6 +76,7 @@ describe('AppShell console-only layout', () => {
 
     await flushPromises()
     expect(wrapper.findComponent(SideNav).exists()).toBe(true)
+    expect(wrapper.findComponent(RouteTabBar).exists()).toBe(true)
   })
 
   it('keeps side navigation visible even when setting topnav or focus preferences', async () => {
@@ -94,10 +96,12 @@ describe('AppShell console-only layout', () => {
 
     await flushPromises()
     expect(wrapper.findComponent(SideNav).exists()).toBe(true)
+    expect(wrapper.findComponent(RouteTabBar).exists()).toBe(true)
 
     setLayoutPreference('focus')
     await flushPromises()
     expect(wrapper.findComponent(SideNav).exists()).toBe(true)
+    expect(wrapper.findComponent(RouteTabBar).exists()).toBe(true)
   })
 
   it('hides shell chrome and enters immersive main mode for valid immersive query', async () => {
@@ -118,6 +122,7 @@ describe('AppShell console-only layout', () => {
     await flushPromises()
     expect(wrapper.findComponent(SideNav).exists()).toBe(false)
     expect(wrapper.findComponent(TopBar).exists()).toBe(false)
+    expect(wrapper.findComponent(RouteTabBar).exists()).toBe(false)
     expect(wrapper.find('main').classes()).toContain('ui-shell-main--immersive')
   })
 })

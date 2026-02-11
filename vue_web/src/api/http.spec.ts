@@ -8,11 +8,20 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiHttpError, apiRequest } from '@/api/http'
+import { ApiHttpError, apiRequest, setApiRuntimeContext } from '@/api/http'
+
+const DEFAULT_CONTEXT = {
+  tenantId: 't1',
+  workspaceId: 'w1',
+  userId: 'u1',
+  roles: 'member',
+  policyVersion: 'v0.1',
+}
 
 describe('apiRequest', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    setApiRuntimeContext(DEFAULT_CONTEXT)
   })
 
   it('injects context headers and idempotency key', async () => {
@@ -73,5 +82,36 @@ describe('apiRequest', () => {
     expect(apiErr.status).toBe(403)
     expect(apiErr.error.code).toBe('FORBIDDEN')
     expect(apiErr.error.messageKey).toBe('error.authz.forbidden')
+  })
+
+  it('updates context headers after runtime context switch', async () => {
+    setApiRuntimeContext({
+      tenantId: 'tenant-next',
+      workspaceId: 'workspace-next',
+      userId: 'user-next',
+      roles: 'admin',
+      policyVersion: 'v9.9',
+    })
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }),
+    )
+
+    await apiRequest('/commands', {
+      method: 'GET',
+    })
+
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    const headers = new Headers((init as RequestInit).headers)
+    expect(headers.get('X-Tenant-Id')).toBe('tenant-next')
+    expect(headers.get('X-Workspace-Id')).toBe('workspace-next')
+    expect(headers.get('X-User-Id')).toBe('user-next')
+    expect(headers.get('X-Roles')).toBe('admin')
+    expect(headers.get('X-Policy-Version')).toBe('v9.9')
   })
 })
