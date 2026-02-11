@@ -31,7 +31,7 @@
         leave-from-class="scale-100 opacity-100"
         leave-to-class="scale-95 opacity-0"
       >
-        <MenuItems v-if="open" class="ui-overlay-panel absolute bottom-full left-0 z-40 mb-2 w-[18.5rem] origin-bottom-left p-2">
+        <MenuItems v-if="open" class="ui-overlay-panel absolute bottom-full left-0 z-40 mb-2 w-56 origin-bottom-left p-2">
           <section>
             <p class="px-2 pb-1 text-[11px] uppercase tracking-[0.12em] text-ui-muted">{{ t('common.accountList') }}</p>
             <MenuItem v-for="account in accounts" :key="account.id" as="template" v-slot="{ active }">
