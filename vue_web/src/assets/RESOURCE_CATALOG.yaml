@@ -1,7 +1,7 @@
 - asset_id: heroicon-home-24-outline
   type: icon
   scenario: nav-home
-  local_path: web/src/assets/icons/heroicons/24/outline/home.svg
+  local_path: vue_web/src/assets/icons/heroicons/24/outline/home.svg
   license: MIT
   source_url: https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/src/24/outline/home.svg
   version_or_date: v2.2.0
@@ -9,7 +9,7 @@
 - asset_id: heroicon-squares-2x2-24-outline
   type: icon
   scenario: nav-canvas
-  local_path: web/src/assets/icons/heroicons/24/outline/squares-2x2.svg
+  local_path: vue_web/src/assets/icons/heroicons/24/outline/squares-2x2.svg
   license: MIT
   source_url: https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/src/24/outline/squares-2x2.svg
   version_or_date: v2.2.0
@@ -17,7 +17,7 @@
 - asset_id: heroicon-command-line-24-outline
   type: icon
   scenario: nav-commands
-  local_path: web/src/assets/icons/heroicons/24/outline/command-line.svg
+  local_path: vue_web/src/assets/icons/heroicons/24/outline/command-line.svg
   license: MIT
   source_url: https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/src/24/outline/command-line.svg
   version_or_date: v2.2.0
@@ -25,7 +25,7 @@
 - asset_id: heroicon-cube-24-outline
   type: icon
   scenario: nav-assets
-  local_path: web/src/assets/icons/heroicons/24/outline/cube.svg
+  local_path: vue_web/src/assets/icons/heroicons/24/outline/cube.svg
   license: MIT
   source_url: https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/src/24/outline/cube.svg
   version_or_date: v2.2.0
@@ -33,7 +33,7 @@
 - asset_id: heroicon-puzzle-piece-24-outline
   type: icon
   scenario: nav-plugins
-  local_path: web/src/assets/icons/heroicons/24/outline/puzzle-piece.svg
+  local_path: vue_web/src/assets/icons/heroicons/24/outline/puzzle-piece.svg
   license: MIT
   source_url: https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/src/24/outline/puzzle-piece.svg
   version_or_date: v2.2.0
@@ -41,7 +41,7 @@
 - asset_id: heroicon-signal-24-outline
   type: icon
   scenario: nav-streams
-  local_path: web/src/assets/icons/heroicons/24/outline/signal.svg
+  local_path: vue_web/src/assets/icons/heroicons/24/outline/signal.svg
   license: MIT
   source_url: https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/src/24/outline/signal.svg
   version_or_date: v2.2.0
@@ -49,7 +49,7 @@
 - asset_id: heroicon-cog-6-tooth-24-outline
   type: icon
   scenario: nav-settings
-  local_path: web/src/assets/icons/heroicons/24/outline/cog-6-tooth.svg
+  local_path: vue_web/src/assets/icons/heroicons/24/outline/cog-6-tooth.svg
   license: MIT
   source_url: https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/src/24/outline/cog-6-tooth.svg
   version_or_date: v2.2.0
@@ -57,7 +57,7 @@
 - asset_id: heroicon-arrow-path-24-outline
   type: icon
   scenario: action-refresh
-  local_path: web/src/assets/icons/heroicons/24/outline/arrow-path.svg
+  local_path: vue_web/src/assets/icons/heroicons/24/outline/arrow-path.svg
   license: MIT
   source_url: https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/src/24/outline/arrow-path.svg
   version_or_date: v2.2.0
@@ -65,7 +65,7 @@
 - asset_id: heroicon-cloud-arrow-up-24-outline
   type: icon
   scenario: action-upload
-  local_path: web/src/assets/icons/heroicons/24/outline/cloud-arrow-up.svg
+  local_path: vue_web/src/assets/icons/heroicons/24/outline/cloud-arrow-up.svg
   license: MIT
   source_url: https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/src/24/outline/cloud-arrow-up.svg
   version_or_date: v2.2.0
@@ -73,7 +73,7 @@
 - asset_id: heroicon-shield-exclamation-24-outline
   type: icon
   scenario: forbidden-403
-  local_path: web/src/assets/icons/heroicons/24/outline/shield-exclamation.svg
+  local_path: vue_web/src/assets/icons/heroicons/24/outline/shield-exclamation.svg
   license: MIT
   source_url: https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/src/24/outline/shield-exclamation.svg
   version_or_date: v2.2.0
@@ -81,7 +81,7 @@
 - asset_id: heroicon-exclamation-triangle-24-outline
   type: icon
   scenario: error-state
-  local_path: web/src/assets/icons/heroicons/24/outline/exclamation-triangle.svg
+  local_path: vue_web/src/assets/icons/heroicons/24/outline/exclamation-triangle.svg
   license: MIT
   source_url: https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/src/24/outline/exclamation-triangle.svg
   version_or_date: v2.2.0
@@ -89,7 +89,7 @@
 - asset_id: heroicon-magnifying-glass-24-outline
   type: icon
   scenario: search-and-not-found
-  local_path: web/src/assets/icons/heroicons/24/outline/magnifying-glass.svg
+  local_path: vue_web/src/assets/icons/heroicons/24/outline/magnifying-glass.svg
   license: MIT
   source_url: https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/src/24/outline/magnifying-glass.svg
   version_or_date: v2.2.0
@@ -97,7 +97,7 @@
 - asset_id: undraw-process-0wew-raw
   type: illustration
   scenario: source-empty-commands
-  local_path: web/src/assets/illustrations/undraw/raw/process_0wew.svg
+  local_path: vue_web/src/assets/illustrations/undraw/raw/process_0wew.svg
   license: unDraw License (commercial use permitted with restrictions)
   source_url: https://cdn.undraw.co/illustration/process_0wew.svg
   version_or_date: 2026-02-10
@@ -105,7 +105,7 @@
 - asset_id: undraw-data-table-xmec-raw
   type: illustration
   scenario: source-empty-assets
-  local_path: web/src/assets/illustrations/undraw/raw/data-table_xmec.svg
+  local_path: vue_web/src/assets/illustrations/undraw/raw/data-table_xmec.svg
   license: unDraw License (commercial use permitted with restrictions)
   source_url: https://cdn.undraw.co/illustration/data-table_xmec.svg
   version_or_date: 2026-02-10
@@ -113,7 +113,7 @@
 - asset_id: undraw-secure-usb-drive-7pj5-raw
   type: illustration
   scenario: source-forbidden-403
-  local_path: web/src/assets/illustrations/undraw/raw/secure-usb-drive_7pj5.svg
+  local_path: vue_web/src/assets/illustrations/undraw/raw/secure-usb-drive_7pj5.svg
   license: unDraw License (commercial use permitted with restrictions)
   source_url: https://cdn.undraw.co/illustration/secure-usb-drive_7pj5.svg
   version_or_date: 2026-02-10
@@ -121,7 +121,7 @@
 - asset_id: undraw-searching-everywhere-tffi-raw
   type: illustration
   scenario: source-not-found-404
-  local_path: web/src/assets/illustrations/undraw/raw/searching-everywhere_tffi.svg
+  local_path: vue_web/src/assets/illustrations/undraw/raw/searching-everywhere_tffi.svg
   license: unDraw License (commercial use permitted with restrictions)
   source_url: https://cdn.undraw.co/illustration/searching-everywhere_tffi.svg
   version_or_date: 2026-02-10
@@ -129,7 +129,7 @@
 - asset_id: state-empty-commands
   type: illustration
   scenario: commands-empty
-  local_path: web/src/assets/illustrations/states/empty-commands.svg
+  local_path: vue_web/src/assets/illustrations/states/empty-commands.svg
   license: Project-owned original
   source_url: internal://goyais/thread7
   version_or_date: 2026-02-10
@@ -137,7 +137,7 @@
 - asset_id: state-empty-assets
   type: illustration
   scenario: assets-empty
-  local_path: web/src/assets/illustrations/states/empty-assets.svg
+  local_path: vue_web/src/assets/illustrations/states/empty-assets.svg
   license: Project-owned original
   source_url: internal://goyais/thread7
   version_or_date: 2026-02-10
@@ -145,7 +145,7 @@
 - asset_id: state-forbidden-403
   type: illustration
   scenario: forbidden-403
-  local_path: web/src/assets/illustrations/states/forbidden-403.svg
+  local_path: vue_web/src/assets/illustrations/states/forbidden-403.svg
   license: Project-owned original
   source_url: internal://goyais/thread7
   version_or_date: 2026-02-10
@@ -153,7 +153,7 @@
 - asset_id: state-not-found-404
   type: illustration
   scenario: not-found-404
-  local_path: web/src/assets/illustrations/states/not-found-404.svg
+  local_path: vue_web/src/assets/illustrations/states/not-found-404.svg
   license: Project-owned original
   source_url: internal://goyais/thread7
   version_or_date: 2026-02-10
@@ -161,7 +161,7 @@
 - asset_id: state-loading
   type: illustration
   scenario: loading
-  local_path: web/src/assets/illustrations/states/loading.svg
+  local_path: vue_web/src/assets/illustrations/states/loading.svg
   license: Project-owned original
   source_url: internal://goyais/thread7
   version_or_date: 2026-02-10
@@ -169,7 +169,7 @@
 - asset_id: state-error
   type: illustration
   scenario: error
-  local_path: web/src/assets/illustrations/states/error.svg
+  local_path: vue_web/src/assets/illustrations/states/error.svg
   license: Project-owned original
   source_url: internal://goyais/thread7
   version_or_date: 2026-02-10
@@ -177,7 +177,7 @@
 - asset_id: bg-grid-soft
   type: background
   scenario: background-grid
-  local_path: web/src/assets/bg/grid-soft.svg
+  local_path: vue_web/src/assets/bg/grid-soft.svg
   license: Project-owned original
   source_url: internal://goyais/thread7
   version_or_date: 2026-02-10
@@ -185,7 +185,7 @@
 - asset_id: bg-gradient-mesh
   type: background
   scenario: background-gradient
-  local_path: web/src/assets/bg/gradient-mesh.svg
+  local_path: vue_web/src/assets/bg/gradient-mesh.svg
   license: Project-owned original
   source_url: internal://goyais/thread7
   version_or_date: 2026-02-10
@@ -193,7 +193,7 @@
 - asset_id: bg-dots-noise
   type: background
   scenario: background-dots
-  local_path: web/src/assets/bg/dots-noise.svg
+  local_path: vue_web/src/assets/bg/dots-noise.svg
   license: Project-owned original
   source_url: internal://goyais/thread7
   version_or_date: 2026-02-10

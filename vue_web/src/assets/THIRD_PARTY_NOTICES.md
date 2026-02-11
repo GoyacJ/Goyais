@@ -13,7 +13,7 @@ This project vendors visual assets under approved licenses and explicit commerci
 - License Link: https://github.com/tailwindlabs/heroicons/blob/master/LICENSE
 - Version/Tag Used: v2.2.0
 - Local Paths:
-  - `web/src/assets/icons/heroicons/24/outline/*.svg`
+  - `vue_web/src/assets/icons/heroicons/24/outline/*.svg`
 
 Notes:
 - Files were fetched from `src/24/outline` and normalized for design-token use (`currentColor`, unified stroke width).
@@ -26,10 +26,10 @@ Notes:
 - License Type: Official unDraw license (explicitly permits commercial and non-commercial usage, with stated restrictions)
 - Version/Date Acquired: 2026-02-10
 - Local Paths:
-  - `web/src/assets/illustrations/undraw/raw/process_0wew.svg`
-  - `web/src/assets/illustrations/undraw/raw/data-table_xmec.svg`
-  - `web/src/assets/illustrations/undraw/raw/secure-usb-drive_7pj5.svg`
-  - `web/src/assets/illustrations/undraw/raw/searching-everywhere_tffi.svg`
+  - `vue_web/src/assets/illustrations/undraw/raw/process_0wew.svg`
+  - `vue_web/src/assets/illustrations/undraw/raw/data-table_xmec.svg`
+  - `vue_web/src/assets/illustrations/undraw/raw/secure-usb-drive_7pj5.svg`
+  - `vue_web/src/assets/illustrations/undraw/raw/searching-everywhere_tffi.svg`
 
 Restrictions tracked from license page:
 - Do not replicate or provide a competing illustration service.
@@ -39,4 +39,4 @@ Restrictions tracked from license page:
 
 Project policy usage note:
 - unDraw files are vendored into the repository and are not hotlinked at runtime.
-- Runtime states use project-authored token-aligned SVGs under `web/src/assets/illustrations/states/`.
+- Runtime states use project-authored token-aligned SVGs under `vue_web/src/assets/illustrations/states/`.

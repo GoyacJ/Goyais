@@ -135,6 +135,6 @@
 
 ## 10. Validation Commands
 
-- `pnpm -C web typecheck`
-- `pnpm -C web test:run`
-- `pnpm -C web build`
+- `cd /Users/goya/Repo/Git/Goyais/vue_web && pnpm typecheck`
+- `cd /Users/goya/Repo/Git/Goyais/vue_web && pnpm test:run`
+- `cd /Users/goya/Repo/Git/Goyais/vue_web && pnpm build`

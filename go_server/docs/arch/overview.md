@@ -151,7 +151,7 @@ flowchart LR
 
 ### 6.1 发布策略
 - 生产环境必须打包为单二进制（Go embed Vite dist）。
-- 构建命令：`make build`。
+- 构建命令：`cd /Users/goya/Repo/Git/Goyais/go_server && make build`。
 - 开发模式可使用 Vite dev + API proxy，不改变生产策略。
 
 ### 6.2 路由优先级（固定）

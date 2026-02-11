@@ -2,9 +2,19 @@ name: contract-regression
 
 on:
   pull_request:
+    paths:
+      - 'go_server/**'
+      - 'vue_web/**'
+      - 'docs/**'
+      - '.github/workflows/contract-regression.yml'
   push:
     branches:
       - master
+    paths:
+      - 'go_server/**'
+      - 'vue_web/**'
+      - 'docs/**'
+      - '.github/workflows/contract-regression.yml'
 
 jobs:
   contract-regression:
@@ -17,7 +27,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: go_server/go.mod
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -36,4 +46,4 @@ jobs:
           pnpm --version
 
       - name: Run contract regression
-        run: bash scripts/ci/contract_regression.sh
+        run: bash go_server/scripts/ci/contract_regression.sh

@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-WEB_DIR := web
+WEB_DIR := ../vue_web
 BINARY := build/goyais
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)

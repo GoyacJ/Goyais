@@ -104,12 +104,12 @@
 - 目标：先完成契约，确保新增 API/状态机/数据模型可审计。
 - 范围：文档与路由可达性，不引入破坏性运行时变更。
 - 受影响绝对路径：
-  - `/Users/goya/Repo/Git/Goyais/docs/api/openapi.yaml`
-  - `/Users/goya/Repo/Git/Goyais/docs/arch/data-model.md`
-  - `/Users/goya/Repo/Git/Goyais/docs/arch/state-machines.md`
-  - `/Users/goya/Repo/Git/Goyais/docs/arch/overview.md`
-  - `/Users/goya/Repo/Git/Goyais/docs/acceptance.md`
-  - `/Users/goya/Repo/Git/Goyais/internal/access/http/openapi_reachability_test.go`
+  - `/Users/goya/Repo/Git/Goyais/go_server/docs/api/openapi.yaml`
+  - `/Users/goya/Repo/Git/Goyais/go_server/docs/arch/data-model.md`
+  - `/Users/goya/Repo/Git/Goyais/go_server/docs/arch/state-machines.md`
+  - `/Users/goya/Repo/Git/Goyais/go_server/docs/arch/overview.md`
+  - `/Users/goya/Repo/Git/Goyais/go_server/docs/acceptance.md`
+  - `/Users/goya/Repo/Git/Goyais/go_server/internal/access/http/openapi_reachability_test.go`
 - DoD：
   - 新增 API 全部进入 OpenAPI。
   - 路由可达性测试覆盖新增 path params。
@@ -120,11 +120,11 @@
 - 目标：替换最小 run mode，转为真实 DAG 执行。
 - 范围：拓扑校验、并发调度、重试退避、Tool Gate、run/step 事件输出。
 - 受影响绝对路径：
-  - `/Users/goya/Repo/Git/Goyais/internal/workflow`
-  - `/Users/goya/Repo/Git/Goyais/internal/command`
-  - `/Users/goya/Repo/Git/Goyais/internal/app`
-  - `/Users/goya/Repo/Git/Goyais/migrations/sqlite`
-  - `/Users/goya/Repo/Git/Goyais/migrations/postgres`
+  - `/Users/goya/Repo/Git/Goyais/go_server/internal/workflow`
+  - `/Users/goya/Repo/Git/Goyais/go_server/internal/command`
+  - `/Users/goya/Repo/Git/Goyais/go_server/internal/app`
+  - `/Users/goya/Repo/Git/Goyais/go_server/migrations/sqlite`
+  - `/Users/goya/Repo/Git/Goyais/go_server/migrations/postgres`
 - DoD：DAG 并发与重试行为可验证，events 可回放。
 - 测试命令：见第 7 章 + workflow 专项回归。
 
@@ -132,51 +132,51 @@
 - 目标：落地复杂可视化编排器。
 - 范围：typed ports、minimap、undo/redo、run from here、test node。
 - 受影响绝对路径：
-  - `/Users/goya/Repo/Git/Goyais/web/src/views/CanvasView.vue`
-  - `/Users/goya/Repo/Git/Goyais/web/src/components/runtime`
-  - `/Users/goya/Repo/Git/Goyais/web/src/api/workflow.ts`
+  - `/Users/goya/Repo/Git/Goyais/vue_web/src/views/CanvasView.vue`
+  - `/Users/goya/Repo/Git/Goyais/vue_web/src/components/runtime`
+  - `/Users/goya/Repo/Git/Goyais/vue_web/src/api/workflow.ts`
 - DoD：满足 PRD 8.9 五条验收。
 
 ### 6.4 S3（P0）AI 工作台
 - 目标：文本 AI 会话 + Intent 计划 + Command 解释与执行反馈。
 - 范围：会话 API、turn 执行、SSE 事件、前端路由与页面。
 - 受影响绝对路径：
-  - `/Users/goya/Repo/Git/Goyais/internal/access/http`
-  - `/Users/goya/Repo/Git/Goyais/internal/command`
-  - `/Users/goya/Repo/Git/Goyais/internal/app`
-  - `/Users/goya/Repo/Git/Goyais/web/src/router/index.ts`
-  - `/Users/goya/Repo/Git/Goyais/web/src/views`
-  - `/Users/goya/Repo/Git/Goyais/migrations/sqlite`
-  - `/Users/goya/Repo/Git/Goyais/migrations/postgres`
+  - `/Users/goya/Repo/Git/Goyais/go_server/internal/access/http`
+  - `/Users/goya/Repo/Git/Goyais/go_server/internal/command`
+  - `/Users/goya/Repo/Git/Goyais/go_server/internal/app`
+  - `/Users/goya/Repo/Git/Goyais/vue_web/src/router/index.ts`
+  - `/Users/goya/Repo/Git/Goyais/vue_web/src/views`
+  - `/Users/goya/Repo/Git/Goyais/go_server/migrations/sqlite`
+  - `/Users/goya/Repo/Git/Goyais/go_server/migrations/postgres`
 - DoD：AI/UI 同动作 command 同形，权限拒绝原因可解释。
 
 ### 6.5 S4（P0）MediaMTX 控制面
 - 目标：真实控制面调用与录制资产化。
 - 范围：控制面 API、事件消费、workflow 触发、录制回填。
 - 受影响绝对路径：
-  - `/Users/goya/Repo/Git/Goyais/internal/stream`
-  - `/Users/goya/Repo/Git/Goyais/internal/app/eventbus_stream_consumer.go`
-  - `/Users/goya/Repo/Git/Goyais/internal/access/http/streams.go`
+  - `/Users/goya/Repo/Git/Goyais/go_server/internal/stream`
+  - `/Users/goya/Repo/Git/Goyais/go_server/internal/app/eventbus_stream_consumer.go`
+  - `/Users/goya/Repo/Git/Goyais/go_server/internal/access/http/streams.go`
 - DoD：onPublish/onRead/onConnect/onRecordFinish 事件可驱动 workflow。
 
 ### 6.6 S5（P1）插件市场完整生命周期
 - 目标：补齐 download/upgrade 与状态机中间态。
 - 范围：validating/installing、依赖校验、ceiling 校验、回滚链。
 - 受影响绝对路径：
-  - `/Users/goya/Repo/Git/Goyais/internal/plugin`
-  - `/Users/goya/Repo/Git/Goyais/internal/access/http/plugins.go`
-  - `/Users/goya/Repo/Git/Goyais/web/src/api/plugins.ts`
-  - `/Users/goya/Repo/Git/Goyais/web/src/views/PluginsView.vue`
+  - `/Users/goya/Repo/Git/Goyais/go_server/internal/plugin`
+  - `/Users/goya/Repo/Git/Goyais/go_server/internal/access/http/plugins.go`
+  - `/Users/goya/Repo/Git/Goyais/vue_web/src/api/plugins.ts`
+  - `/Users/goya/Repo/Git/Goyais/vue_web/src/views/PluginsView.vue`
 - DoD：状态机与文档一致，不再直接 `install -> enabled`。
 
 ### 6.7 S6（P1）ContextBundle + ACL 扩面
 - 目标：补齐 ContextBundle 与 ACL role 主体。
 - 范围：读写接口、聚合策略、role 维度授权。
 - 受影响绝对路径：
-  - `/Users/goya/Repo/Git/Goyais/migrations/sqlite`
-  - `/Users/goya/Repo/Git/Goyais/migrations/postgres`
-  - `/Users/goya/Repo/Git/Goyais/internal/command`
-  - `/Users/goya/Repo/Git/Goyais/internal/access/http`
+  - `/Users/goya/Repo/Git/Goyais/go_server/migrations/sqlite`
+  - `/Users/goya/Repo/Git/Goyais/go_server/migrations/postgres`
+  - `/Users/goya/Repo/Git/Goyais/go_server/internal/command`
+  - `/Users/goya/Repo/Git/Goyais/go_server/internal/access/http`
 - DoD：RUN/SESSION/WORKSPACE 三层上下文可写可查。
 
 ## 7. 验收与回归命令（固定清单）
@@ -192,11 +192,11 @@
 8. ContextBundle 读写与 ACL role 覆盖。
 
 ### 7.2 固定命令
-- `go test ./...`
-- `pnpm -C /Users/goya/Repo/Git/Goyais/web typecheck`
-- `pnpm -C /Users/goya/Repo/Git/Goyais/web test:run`
-- `make -C /Users/goya/Repo/Git/Goyais build`
-- `GOYAIS_VERIFY_BASE_URL=http://127.0.0.1:18080 GOYAIS_START_CMD='GOYAIS_SERVER_ADDR=:18080 ./build/goyais' bash /Users/goya/Repo/Git/Goyais/.agents/skills/goyais-single-binary-acceptance/scripts/verify_single_binary.sh`
+- `cd /Users/goya/Repo/Git/Goyais/go_server && go test ./...`
+- `pnpm -C /Users/goya/Repo/Git/Goyais/vue_web typecheck`
+- `pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run`
+- `make -C /Users/goya/Repo/Git/Goyais/go_server build`
+- `GOYAIS_VERIFY_BASE_URL=http://127.0.0.1:18080 GOYAIS_START_CMD='GOYAIS_SERVER_ADDR=:18080 ./go_server/build/goyais' bash /Users/goya/Repo/Git/Goyais/.agents/skills/goyais-single-binary-acceptance/scripts/verify_single_binary.sh`
 
 ## 8. 风险与缓解（P0/P1/P2）
 
@@ -240,11 +240,11 @@
 
 ### 10.2 契约同步规则
 - 若改动 API/实体/状态机/ACL/静态路由，必须同变更更新：
-  - `/Users/goya/Repo/Git/Goyais/docs/api/openapi.yaml`
-  - `/Users/goya/Repo/Git/Goyais/docs/arch/data-model.md`
-  - `/Users/goya/Repo/Git/Goyais/docs/arch/state-machines.md`
-  - `/Users/goya/Repo/Git/Goyais/docs/arch/overview.md`
-  - `/Users/goya/Repo/Git/Goyais/docs/acceptance.md`
+  - `/Users/goya/Repo/Git/Goyais/go_server/docs/api/openapi.yaml`
+  - `/Users/goya/Repo/Git/Goyais/go_server/docs/arch/data-model.md`
+  - `/Users/goya/Repo/Git/Goyais/go_server/docs/arch/state-machines.md`
+  - `/Users/goya/Repo/Git/Goyais/go_server/docs/arch/overview.md`
+  - `/Users/goya/Repo/Git/Goyais/go_server/docs/acceptance.md`
 
 ### 10.3 执行顺序与默认值
 1. 固定顺序：`S0 -> S1 -> S2 -> S3 -> S4 -> S5 -> S6`。

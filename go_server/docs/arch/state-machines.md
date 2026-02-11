@@ -284,7 +284,7 @@
 
 ## 5. 与 API/数据模型一致性要求
 
-- 状态枚举必须与 `docs/api/openapi.yaml`、`docs/arch/data-model.md` 完全一致。
+- 状态枚举必须与 `go_server/docs/api/openapi.yaml`、`go_server/docs/arch/data-model.md` 完全一致。
 - 任意状态拒绝时，返回错误结构：`error { code, messageKey, details }`。
 - 所有转换需关联 `tenantId/workspaceId/ownerId` 上下文并可审计。
 

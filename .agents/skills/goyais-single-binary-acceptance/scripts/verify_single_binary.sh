@@ -8,6 +8,8 @@ BINARY_OVERRIDE="${GOYAIS_BINARY_PATH:-}"
 START_CMD="${GOYAIS_START_CMD:-}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+GO_SERVER_DIR="${REPO_ROOT}/go_server"
+VUE_WEB_DIR="${REPO_ROOT}/vue_web"
 cd "$REPO_ROOT"
 
 LOG_FILE="$(mktemp -t verify_single_binary.XXXXXX.log)"
@@ -32,8 +34,8 @@ cleanup() {
   fi
 
   if [ "$DIST_MOVED" = "1" ] && [ -n "$DIST_BACKUP" ] && [ -d "$DIST_BACKUP" ]; then
-    rm -rf web/dist 2>/dev/null || true
-    mv "$DIST_BACKUP" web/dist
+    rm -rf "${VUE_WEB_DIR}/dist" 2>/dev/null || true
+    mv "$DIST_BACKUP" "${VUE_WEB_DIR}/dist"
   fi
 
   rm -f "$LOG_FILE" "$INDEX_FILE" "$BEFORE_FILE" "$AFTER_FILE" "$NEW_FILE"
@@ -52,7 +54,7 @@ get_mtime() {
 
 is_excluded_path() {
   case "$1" in
-    ./.git/*|./.agents/*|./docs/*|./node_modules/*|./vendor/*|./testdata/*|./tmp/*)
+    ./.git/*|./.agents/*|./docs/*|./node_modules/*|./vendor/*|./testdata/*|./tmp/*|./vue_web/node_modules/*)
       return 0
       ;;
     *)
@@ -158,7 +160,7 @@ check_js_content_type() {
 
 write_snapshot "$BEFORE_FILE"
 
-if ! make build; then
+if ! make -C "$GO_SERVER_DIR" build; then
   log "make build failed"
   exit 3
 fi
@@ -190,9 +192,9 @@ fi
 
 log "selected binary: ${BINARY_PATH}"
 
-if [ -d web/dist ]; then
-  DIST_BACKUP="web/dist.__verify_backup_$$"
-  mv web/dist "$DIST_BACKUP"
+if [ -d "${VUE_WEB_DIR}/dist" ]; then
+  DIST_BACKUP="${VUE_WEB_DIR}/dist.__verify_backup_$$"
+  mv "${VUE_WEB_DIR}/dist" "$DIST_BACKUP"
   DIST_MOVED="1"
 fi
 

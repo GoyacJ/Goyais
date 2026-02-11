@@ -36,11 +36,11 @@
 - 静态路由、缓存策略与 Content-Type 策略。
 
 至少同步以下文件：
-- `docs/api/openapi.yaml`
-- `docs/arch/data-model.md`
-- `docs/arch/state-machines.md`
-- `docs/arch/overview.md`
-- `docs/acceptance.md`
+- `go_server/docs/api/openapi.yaml`
+- `go_server/docs/arch/data-model.md`
+- `go_server/docs/arch/state-machines.md`
+- `go_server/docs/arch/overview.md`
+- `go_server/docs/acceptance.md`
 
 ## 3. Provider 抽象与最小化运行
 
@@ -108,7 +108,7 @@
 
 ### 7.1 发布要求
 - 生产发布必须是单二进制：Go 服务通过 embed 内嵌 Vite `dist`。
-- 构建入口：`make build`（产物为单可执行文件）。
+- 构建入口：`cd go_server && make build`（产物为单可执行文件）。
 - 开发模式可分离：Vite dev server + API proxy。
 
 ### 7.2 路由优先级（必须）
@@ -130,12 +130,12 @@
 
 - `docs/prd.md` 是产品需求权威来源。
 - 架构与接口以以下文档为实现前置契约：
-  - `docs/arch/overview.md`
-  - `docs/arch/data-model.md`
-  - `docs/arch/state-machines.md`
-  - `docs/api/openapi.yaml`
-  - `docs/spec/v0.1.md`
-  - `docs/acceptance.md`
+  - `go_server/docs/arch/overview.md`
+  - `go_server/docs/arch/data-model.md`
+  - `go_server/docs/arch/state-machines.md`
+  - `go_server/docs/api/openapi.yaml`
+  - `go_server/docs/spec/v0.1.md`
+  - `go_server/docs/acceptance.md`
 
 出现冲突时处理顺序：
 1. 先修订契约文档保持一致。
@@ -157,7 +157,7 @@
 ### 9.3 提交前防呆检查（必须）
 - 每次提交前必须执行以下检查命令：
   - `git diff --cached --name-only`
-  - `git diff --cached --name-only | rg '^(data/objects/|.*\.db$|build/|web/dist/|web/node_modules/|\.agents/)' && exit 1 || true`
+  - `git diff --cached --name-only | rg '^(data/objects/|.*\.db$|go_server/build/|go_server/internal/access/webstatic/dist/assets/|go_server/internal/access/webstatic/dist/index\.html$|vue_web/dist/|vue_web/node_modules/|\.agents/)' && exit 1 || true`
 - 若命中禁止路径，必须先清理 staged 后再提交。
 
 ### 9.4 分支指针安全（必须）

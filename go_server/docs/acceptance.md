@@ -46,7 +46,7 @@
 
 ### 4.1 构建与独立运行
 - [x] 执行 `make build` 后产出单个可执行文件。
-- [x] 改名或删除 `web/dist`（可选强化：改名或删除 `web/`）后，启动该二进制。
+- [x] 改名或删除 `vue_web/dist`（可选强化：改名或删除 `vue_web/`）后，启动该二进制。
 - [x] 访问 `/` 返回 200。
 - [x] 访问 `/canvas` 返回 200（SPA fallback 生效）。
 - [x] 访问 `/api/v1/healthz` 返回 200。
@@ -149,7 +149,7 @@
 - [x] 多布局模式 `console/topnav/focus` 可切换，且 `auto` 能按路由默认生效。
 - [x] 三布局在 desktop 下都支持窗口拖拽/缩放/置顶；mobile 自动降级为单列卡片。
 - [x] 窗口布局按 `route+layout` 独立持久化；切换布局或路由不会污染彼此状态。
-- [x] `pnpm -C web test --run` 通过（包含 layout/window 核心用例）。
+- [x] `pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test --run` 通过（包含 layout/window 核心用例）。
 - [x] 本轮执行 `bash .agents/skills/goyais-web-asset-governance/scripts/validate-assets.sh` 并通过（若有素材变更同样适用）。
 
 ## 11. 审计与可观测性验收
@@ -180,7 +180,7 @@
 
 ### 12.4 回归（必须通过）
 - [x] `make build` 通过。
-- [x] `verify_single_binary.sh` 返回 `0`（含 no-store、favicon/robots 404、JS Content-Type、移除 web/dist 后可运行）。
+- [x] `verify_single_binary.sh` 返回 `0`（含 no-store、favicon/robots 404、JS Content-Type、移除 vue_web/dist 后可运行）。
 
 ### 12.5 Asset 生命周期（feature gate）
 - [x] `GOYAIS_FEATURE_ASSET_LIFECYCLE=true` 时，`PATCH /api/v1/assets/{assetId}` 走 command-first，返回 `202 + resource + commandRef`。
@@ -203,18 +203,19 @@
 - `GOYAIS_IT_REDIS_ADDR='<host:port>' GOYAIS_IT_REDIS_PASSWORD='<password>' go test ./internal/platform/cache -run TestRedisProviderIntegration -v`
 - `GOYAIS_IT_POSTGRES_DSN='<dsn>' GOYAIS_IT_KAFKA_BROKERS='<host:port>' go test ./internal/integration -run KafkaStreamTrigger -v`
 - `go test ./internal/config ./internal/access/http -v`
-- `pnpm -C web typecheck`
-- `pnpm -C web test:run`
+- `pnpm -C /Users/goya/Repo/Git/Goyais/vue_web typecheck`
+- `pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run`
 - `bash .agents/skills/goyais-web-asset-governance/scripts/validate-assets.sh`
 - `make build`
-- `GOYAIS_VERIFY_BASE_URL=http://127.0.0.1:18080 GOYAIS_START_CMD='GOYAIS_SERVER_ADDR=:18080 ./build/goyais' bash .agents/skills/goyais-single-binary-acceptance/scripts/verify_single_binary.sh`
+- `GOYAIS_VERIFY_BASE_URL=http://127.0.0.1:18080 GOYAIS_START_CMD='GOYAIS_SERVER_ADDR=:18080 ./go_server/build/goyais' bash .agents/skills/goyais-single-binary-acceptance/scripts/verify_single_binary.sh`
   - 说明：默认 `:8080` 被本机其他进程占用，验收脚本改用 `:18080` 执行并通过。
 
 ## 15. 自动化回归与 Git 护栏验收
 
-- [x] 存在统一回归脚本 `scripts/ci/contract_regression.sh`，串行执行 `go test ./...`、`pnpm -C web typecheck`、`pnpm -C web test:run`、`make build`、single-binary verify。
-- [x] 存在提交前防呆脚本 `scripts/git/precommit_guard.sh`，阻断 `data/objects/`、`*.db`、`build/`、`web/dist/`、`web/node_modules/`、`.agents/` 被 staged。
-- [x] 存在 worktree 审计脚本 `scripts/git/worktree_audit.sh`，阻断 detached worktree 与重复分支绑定。
+- [x] 存在统一回归脚本 `go_server/scripts/ci/contract_regression.sh`，串行执行 `go test ./...`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web typecheck`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run`、`make build`、single-binary verify。
+- [x] 存在迁移残留审计脚本 `go_server/scripts/ci/path_migration_audit.sh`，用于扫描旧路径引用是否清零。
+- [x] 存在提交前防呆脚本 `go_server/scripts/git/precommit_guard.sh`，阻断 `data/objects/`、`*.db`、`go_server/build/`、`go_server/internal/access/webstatic/dist/assets/`、`go_server/internal/access/webstatic/dist/index.html`、`vue_web/dist/`、`vue_web/node_modules/`、`.agents/` 被 staged。
+- [x] 存在 worktree 审计脚本 `go_server/scripts/git/worktree_audit.sh`，阻断 detached worktree 与重复分支绑定。
 - [x] CI workflow `.github/workflows/contract-regression.yml` 调用统一回归脚本，作为 PR/master 门禁入口。
 
 ## 16. PRD 严格口径重构启动验收（S0-S6）
@@ -225,14 +226,14 @@
 - [x] S0 路由可达：`openapi_reachability` 覆盖新增参数 `sessionId/packageId/bundleId`，新增路径均非 `API_NOT_FOUND`。
 - [x] S1 Workflow Engine：完成 DAG 拓扑校验、并发调度、重试退避、Tool Gate 与 run/step 事件流。
 - [x] S2 Canvas：满足 PRD 8.9 五条验收（typed ports/minimap/undo-redo/run-from-here/test-node）。
-- [x] S2.1 Canvas 图编辑能力：`typed ports`、`minimap`、`undo/redo`、`run from here`、`test node` 已在 `web/src/views/CanvasView.vue` 落地。
-- [x] S2.2 Canvas 运行态可视化：节点运行状态/耗时/产物数/错误码与步骤侧栏联动，运行中自动轮询刷新（`web/src/views/CanvasView.vue`、`web/src/components/canvas/TypedPortNode.vue`）。
-- [x] S2.3 Canvas 回归：`pnpm -C web typecheck`、`pnpm -C web test:run -- src/views/CanvasView.spec.ts src/components/canvas/TypedPortNode.spec.ts` 通过。
+- [x] S2.1 Canvas 图编辑能力：`typed ports`、`minimap`、`undo/redo`、`run from here`、`test node` 已在 `vue_web/src/views/CanvasView.vue` 落地。
+- [x] S2.2 Canvas 运行态可视化：节点运行状态/耗时/产物数/错误码与步骤侧栏联动，运行中自动轮询刷新（`vue_web/src/views/CanvasView.vue`、`vue_web/src/components/canvas/TypedPortNode.vue`）。
+- [x] S2.3 Canvas 回归：`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web typecheck`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run -- src/views/CanvasView.spec.ts src/components/canvas/TypedPortNode.spec.ts` 通过。
 - [x] S3 AI 工作台：会话/turn/计划/执行反馈闭环，且 AI/UI 同动作 command 同形。
 - [x] S3.1 AI 事件反馈：`/ai/sessions/{id}/events` 输出 `ai.turn.*` + `command.*` + `workflow.*` 摘要事件，turn `commandIds` 绑定真实 commandId。
-- [x] S3.2 AI 前端闭环：计划预览、执行反馈时间线、失败错误码展示与会话事件自动轮询已落地（`web/src/views/AIWorkbenchView.vue`）。
-- [x] S3.3 AI 回归：`go test ./internal/access/http -run TestAPIContractRegression -count=1`、`pnpm -C web test:run -- src/views/AIWorkbenchView.spec.ts` 通过。
+- [x] S3.2 AI 前端闭环：计划预览、执行反馈时间线、失败错误码展示与会话事件自动轮询已落地（`vue_web/src/views/AIWorkbenchView.vue`）。
+- [x] S3.3 AI 回归：`go test ./internal/access/http -run TestAPIContractRegression -count=1`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run -- src/views/AIWorkbenchView.spec.ts` 通过。
 - [x] S4 MediaMTX 控制面：`update-auth/delete`、录制资产化、onPublish 事件触发 workflow（经 command gate）。
 - [x] S5 插件市场生命周期：`download/upgrade` 与 `uploaded->validating->installing->enabled` 全链路一致。
 - [x] S6 ContextBundle + ACL role：`context-bundles` 读接口与 `acl_entries.subject_type=user|role` 落地。
-- [x] 每切片均具备全量回归证据（`go test ./...`、`pnpm -C web typecheck`、`pnpm -C web test:run`、`make build`、single-binary verify）。
+- [x] 每切片均具备全量回归证据（`go test ./...`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web typecheck`、`pnpm -C /Users/goya/Repo/Git/Goyais/vue_web test:run`、`make build`、single-binary verify）。
