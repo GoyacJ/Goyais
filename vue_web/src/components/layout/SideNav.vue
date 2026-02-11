@@ -5,13 +5,18 @@
     @mouseenter="hovering = true"
     @mouseleave="hovering = false"
   >
-    <header class="flex h-[4.75rem] shrink-0 items-center gap-2 border-b border-ui-border px-3 py-2" data-testid="sidenav-workspace">
-      <div class="min-w-0 flex-1">
+    <header
+      class="flex h-[3.25rem] shrink-0 items-center border-b border-ui-border py-2"
+      :class="collapsed ? 'gap-1 px-1' : 'gap-2 px-3'"
+      data-testid="sidenav-workspace"
+    >
+      <div :class="collapsed ? 'shrink-0' : 'min-w-0 flex-1'">
         <WorkspaceSwitcherMenu :collapsed="collapsed" />
       </div>
       <button
         type="button"
-        class="ui-control ui-focus-ring ui-pressable inline-flex h-8 w-8 min-h-0 shrink-0 items-center justify-center p-0"
+        class="ui-focus-ring ui-pressable inline-flex min-h-0 shrink-0 items-center justify-center rounded-button border border-transparent bg-transparent p-0"
+        :class="collapsed ? 'h-7 w-7' : 'h-8 w-8'"
         :aria-label="pinned ? t('common.unpinNav') : t('common.pinNav')"
         :data-pinned="pinned ? 'true' : 'false'"
         @click="onTogglePinned"

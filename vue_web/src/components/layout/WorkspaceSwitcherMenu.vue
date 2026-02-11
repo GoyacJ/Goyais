@@ -2,8 +2,11 @@
   <div class="relative">
     <Menu as="div" class="relative block" v-slot="{ open, close }">
       <MenuButton :class="triggerClasses" :aria-label="t('common.openWorkspaceMenu')">
-        <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-ui-border bg-ui-surface2">
-          <Icon name="canvas" :size="14" decorative class="text-ui-muted" />
+        <span
+          class="inline-flex shrink-0 items-center justify-center rounded-full bg-ui-surface2"
+          :class="props.collapsed ? 'h-7 w-7' : 'h-8 w-8'"
+        >
+          <Icon name="canvas" :size="props.collapsed ? 12 : 14" decorative class="text-ui-muted" />
         </span>
 
         <span v-if="!collapsed" class="min-w-0 flex-1 text-left">
@@ -84,8 +87,8 @@ const { t } = useI18n({ useScope: 'global' })
 const { activeWorkspace, activeAccount, switchWorkspace } = useIdentityStore()
 
 const triggerClasses = computed(() => [
-  'ui-control ui-focus-ring ui-pressable inline-flex min-h-0 w-full items-center gap-2 rounded-button border-ui-border px-2 py-2 text-left',
-  props.collapsed ? 'justify-center px-1' : '',
+  'ui-focus-ring ui-pressable inline-flex min-h-0 items-center gap-2 rounded-button border border-transparent bg-transparent text-left',
+  props.collapsed ? 'h-8 w-8 justify-center p-0' : 'w-full px-2 py-2',
 ])
 
 const workspaceDisplayName = computed(() => activeWorkspace.value?.name ?? t('common.workspace'))

@@ -3,7 +3,7 @@
     <Menu as="div" class="relative block" v-slot="{ open, close }">
       <MenuButton :class="triggerClasses" :aria-label="t('common.userMenu')">
         <span
-          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-ui-border bg-ui-surface2 text-xs font-semibold text-ui-fg"
+          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ui-surface2 text-xs font-semibold text-ui-fg"
         >
           {{ avatarText }}
         </span>
@@ -195,8 +195,8 @@ const draft = reactive<IdentityAccountDraft>({
 })
 
 const triggerClasses = computed(() => [
-  'ui-control ui-focus-ring ui-pressable inline-flex min-h-0 w-full items-center gap-2 rounded-button border-ui-border px-2 py-2 text-left',
-  props.collapsed ? 'justify-center px-1' : '',
+  'ui-focus-ring ui-pressable inline-flex min-h-0 items-center gap-2 rounded-button border border-transparent bg-transparent text-left',
+  props.collapsed ? 'h-8 w-8 justify-center p-0' : 'w-full px-2 py-2',
 ])
 
 const accountDisplayName = computed(() => activeAccount.value?.nickname ?? 'User')
