@@ -137,6 +137,7 @@
 - [x] `onPublish` 事件能触发一次 workflow run（经 command gate）。
 - [x] 在 `event_bus.provider=kafka` 下，`stream.on_publish` 消费链路通过 command gate 触发 `workflow.run`，重复事件按 `stream-onpublish-<recordingId>` 幂等收敛。
 - [x] 流对象的 visibility/ACL 判定与其他对象一致（owner/ACL.READ；当策略允许提升可见性时支持 WORKSPACE 读，写动作受 EXECUTE/MANAGE 约束）。
+- [x] `GOYAIS_FEATURE_STREAM_CONTROL_PLANE=false` 时，`stream.updateAuth`、`stream.delete` 以及对应 domain sugar 路径返回 `501 NOT_IMPLEMENTED`（含 `/api/v1/commands` 直调）。
 
 ## 10. 前端主题与国际化验收
 
@@ -225,7 +226,7 @@
 - [ ] S1 Workflow Engine V2：完成 DAG 拓扑校验、并发调度、重试退避、Tool Gate 与 run/step 事件流。
 - [ ] S2 Canvas V2：满足 PRD 8.9 五条验收（typed ports/minimap/undo-redo/run-from-here/test-node）。
 - [ ] S3 AI 工作台：会话/turn/计划/执行反馈闭环，且 AI/UI 同动作 command 同形。
-- [ ] S4 MediaMTX 控制面：`update-auth/delete`、录制资产化、onPublish 事件触发 workflow（经 command gate）。
+- [x] S4 MediaMTX 控制面：`update-auth/delete`、录制资产化、onPublish 事件触发 workflow（经 command gate）。
 - [x] S5 插件市场生命周期：`download/upgrade` 与 `uploaded->validating->installing->enabled` 全链路一致。
 - [x] S6 ContextBundle + ACL role：`context-bundles` 读接口与 `acl_entries.subject_type=user|role` 落地。
 - [x] 每切片均具备 feature flag 回滚与全量回归证据（`GOYAIS_FEATURE_PLUGIN_MARKET_V2`、`GOYAIS_FEATURE_CONTEXT_BUNDLE`、`GOYAIS_FEATURE_ACL_ROLE_SUBJECT`）。

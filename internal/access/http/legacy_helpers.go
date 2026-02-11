@@ -15,17 +15,18 @@ import (
 
 // Keep the legacy receiver type so asset handlers continue to compile.
 type apiHandler struct {
-	commandService        *command.Service
-	aiService             *ai.Service
-	assetService          *asset.Service
-	assetLifecycleEnabled bool
-	pluginMarketV2Enabled bool
-	contextBundleEnabled  bool
-	workflowService       *workflow.Service
-	registryService       *registry.Service
-	pluginService         *plugin.Service
-	streamService         *stream.Service
-	contextBundleService  *contextbundle.Service
+	commandService            *command.Service
+	aiService                 *ai.Service
+	assetService              *asset.Service
+	assetLifecycleEnabled     bool
+	pluginMarketV2Enabled     bool
+	contextBundleEnabled      bool
+	streamControlPlaneEnabled bool
+	workflowService           *workflow.Service
+	registryService           *registry.Service
+	pluginService             *plugin.Service
+	streamService             *stream.Service
+	contextBundleService      *contextbundle.Service
 }
 
 func pathID(prefix, full string) string {

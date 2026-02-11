@@ -1845,10 +1845,11 @@ func newTestServerWithDBPathWithOptions(
 		t,
 		contextMode,
 		config.FeatureConfig{
-			AssetLifecycle: assetLifecycleEnabled,
-			PluginMarketV2: true,
-			ContextBundle:  true,
-			ACLRoleSubject: true,
+			AssetLifecycle:     assetLifecycleEnabled,
+			PluginMarketV2:     true,
+			ContextBundle:      true,
+			ACLRoleSubject:     true,
+			StreamControlPlane: true,
 		},
 	)
 }
@@ -2035,10 +2036,11 @@ func TestAPIPluginMarketV2FeatureDisabled(t *testing.T) {
 		t,
 		config.AuthContextModeJWTOrHeader,
 		config.FeatureConfig{
-			AssetLifecycle: false,
-			PluginMarketV2: false,
-			ContextBundle:  true,
-			ACLRoleSubject: true,
+			AssetLifecycle:     false,
+			PluginMarketV2:     false,
+			ContextBundle:      true,
+			ACLRoleSubject:     true,
+			StreamControlPlane: true,
 		},
 	)
 	defer shutdown()
@@ -2071,10 +2073,11 @@ func TestAPIContextBundleFeatureDisabled(t *testing.T) {
 		t,
 		config.AuthContextModeJWTOrHeader,
 		config.FeatureConfig{
-			AssetLifecycle: false,
-			PluginMarketV2: true,
-			ContextBundle:  false,
-			ACLRoleSubject: true,
+			AssetLifecycle:     false,
+			PluginMarketV2:     true,
+			ContextBundle:      false,
+			ACLRoleSubject:     true,
+			StreamControlPlane: true,
 		},
 	)
 	defer shutdown()
@@ -2108,10 +2111,11 @@ func TestAPIACLRoleSubjectFeatureDisabled(t *testing.T) {
 		t,
 		config.AuthContextModeJWTOrHeader,
 		config.FeatureConfig{
-			AssetLifecycle: false,
-			PluginMarketV2: true,
-			ContextBundle:  true,
-			ACLRoleSubject: false,
+			AssetLifecycle:     false,
+			PluginMarketV2:     true,
+			ContextBundle:      true,
+			ACLRoleSubject:     false,
+			StreamControlPlane: true,
 		},
 	)
 	defer shutdown()
@@ -2141,6 +2145,56 @@ func TestAPIACLRoleSubjectFeatureDisabled(t *testing.T) {
 	defer respRoleShare.Body.Close()
 	assertStatus(t, respRoleShare, http.StatusBadRequest)
 	assertErrorCode(t, respRoleShare.Body, "INVALID_SHARE_REQUEST")
+}
+
+func TestAPIStreamControlPlaneFeatureDisabled(t *testing.T) {
+	baseURL, _, shutdown := newTestServerWithDBPathWithFeatureOptions(
+		t,
+		config.AuthContextModeJWTOrHeader,
+		config.FeatureConfig{
+			AssetLifecycle:     false,
+			PluginMarketV2:     true,
+			ContextBundle:      true,
+			ACLRoleSubject:     true,
+			StreamControlPlane: false,
+		},
+	)
+	defer shutdown()
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	respUpdateAuth := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams/stream_demo:update-auth", headersWithJSONContext("u1"), map[string]any{
+		"allowIps": []string{"127.0.0.1/32"},
+	})
+	defer respUpdateAuth.Body.Close()
+	assertStatus(t, respUpdateAuth, http.StatusNotImplemented)
+	assertMessageKey(t, respUpdateAuth.Body, "error.stream.not_implemented")
+
+	respDelete := mustRequest(t, client, http.MethodDelete, baseURL+"/api/v1/streams/stream_demo", headersWithContext("u1"), nil)
+	defer respDelete.Body.Close()
+	assertStatus(t, respDelete, http.StatusNotImplemented)
+	assertMessageKey(t, respDelete.Body, "error.stream.not_implemented")
+
+	respUpdateAuthCommand := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headersWithJSONContext("u1"), map[string]any{
+		"commandType": "stream.updateAuth",
+		"payload": map[string]any{
+			"streamId": "stream_demo",
+			"authRule": map[string]any{},
+		},
+	})
+	defer respUpdateAuthCommand.Body.Close()
+	assertStatus(t, respUpdateAuthCommand, http.StatusNotImplemented)
+	assertMessageKey(t, respUpdateAuthCommand.Body, "error.stream.not_implemented")
+
+	respDeleteCommand := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/commands", headersWithJSONContext("u1"), map[string]any{
+		"commandType": "stream.delete",
+		"payload": map[string]any{
+			"streamId": "stream_demo",
+		},
+	})
+	defer respDeleteCommand.Body.Close()
+	assertStatus(t, respDeleteCommand, http.StatusNotImplemented)
+	assertMessageKey(t, respDeleteCommand.Body, "error.stream.not_implemented")
 }
 
 type auditEventRow struct {

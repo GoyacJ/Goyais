@@ -66,6 +66,10 @@ func (h *apiHandler) handleStreamRoutes(w http.ResponseWriter, r *http.Request) 
 			errorx.Write(w, http.StatusNotFound, "STREAM_NOT_FOUND", "error.stream.not_found", map[string]any{"path": r.URL.Path})
 			return
 		}
+		if !h.streamControlPlaneEnabled {
+			errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.stream.not_implemented", nil)
+			return
+		}
 		if h.commandService == nil {
 			errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.stream.not_implemented", nil)
 			return
@@ -116,6 +120,10 @@ func (h *apiHandler) handleStreamRoutes(w http.ResponseWriter, r *http.Request) 
 		commandType = "stream.kick"
 	case strings.HasSuffix(route, ":update-auth"):
 		streamID = strings.TrimSpace(strings.TrimSuffix(route, ":update-auth"))
+		if !h.streamControlPlaneEnabled {
+			errorx.Write(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "error.stream.not_implemented", nil)
+			return
+		}
 		commandType = "stream.updateAuth"
 	default:
 		errorx.Write(w, http.StatusNotFound, "STREAM_NOT_FOUND", "error.stream.not_found", map[string]any{"path": r.URL.Path})

@@ -169,6 +169,7 @@ func registerCommandExecutors(
 	pluginMarketV2Enabled bool,
 	workflowService *workflow.Service,
 	streamService *stream.Service,
+	streamControlPlaneEnabled bool,
 	algorithmService *algorithm.Service,
 	contextBundleService *contextbundle.Service,
 	contextBundleEnabled bool,
@@ -178,6 +179,8 @@ func registerCommandExecutors(
 	}
 	commandService.SetExecutor("plugin.upgrade", newNotImplementedExecutor("error.plugin.not_implemented"))
 	commandService.SetExecutor("context.bundle.rebuild", newNotImplementedExecutor("error.context_bundle.not_implemented"))
+	commandService.SetExecutor("stream.updateAuth", newNotImplementedExecutor("error.stream.not_implemented"))
+	commandService.SetExecutor("stream.delete", newNotImplementedExecutor("error.stream.not_implemented"))
 	commandService.SetExecutor("share.create", newShareCreateExecutor(commandService))
 	commandService.SetExecutor("share.delete", newShareDeleteExecutor(commandService))
 	if aiService != nil {
@@ -216,8 +219,10 @@ func registerCommandExecutors(
 		commandService.SetExecutor("stream.record.start", newStreamRecordStartExecutor(commandService, streamService))
 		commandService.SetExecutor("stream.record.stop", newStreamRecordStopExecutor(commandService, streamService))
 		commandService.SetExecutor("stream.kick", newStreamKickExecutor(streamService))
-		commandService.SetExecutor("stream.updateAuth", newStreamUpdateAuthExecutor(streamService))
-		commandService.SetExecutor("stream.delete", newStreamDeleteExecutor(streamService))
+		if streamControlPlaneEnabled {
+			commandService.SetExecutor("stream.updateAuth", newStreamUpdateAuthExecutor(streamService))
+			commandService.SetExecutor("stream.delete", newStreamDeleteExecutor(streamService))
+		}
 	}
 	if algorithmService != nil {
 		commandService.SetExecutor("algorithm.run", newAlgorithmRunExecutor(algorithmService))

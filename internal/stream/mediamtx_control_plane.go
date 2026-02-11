@@ -80,6 +80,11 @@ func (c *MediaMTXControlPlane) EnsurePath(ctx context.Context, streamPath string
 			if strings.Contains(strings.ToLower(statusErr.Message), "already exists") {
 				return c.doJSON(ctx, http.MethodPatch, "/v3/config/paths/patch/"+url.PathEscape(normalizedPath), payload, nil)
 			}
+			// Some MediaMTX auth modes reject path add/patch credentials management.
+			// In this mode we keep stream metadata in Goyais and rely on runtime dynamic paths.
+			if isMediaMTXLegacyAuthConflictMessage(statusErr.Message) {
+				return nil
+			}
 		}
 		return err
 	}
@@ -239,6 +244,12 @@ func decodeMediaMTXStatusError(statusCode int, raw []byte) error {
 		StatusCode: statusCode,
 		Message:    msg,
 	}
+}
+
+func isMediaMTXLegacyAuthConflictMessage(message string) bool {
+	message = strings.ToLower(strings.TrimSpace(message))
+	return strings.Contains(message, "authinternalusers") &&
+		strings.Contains(message, "legacy credentials")
 }
 
 func normalizeMediaMTXPath(raw string) (string, error) {

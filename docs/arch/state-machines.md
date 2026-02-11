@@ -108,6 +108,7 @@
 - `POST /api/v1/streams/{streamId}:update-auth`、`POST /api/v1/streams/{streamId}:record-start`、`POST /api/v1/streams/{streamId}:record-stop`、`POST /api/v1/streams/{streamId}:kick`、`DELETE /api/v1/streams/{streamId}` 必须转换为 `stream.updateAuth`、`stream.record.start`、`stream.record.stop`、`stream.kick`、`stream.delete` command 执行。
 - 当流 `state.onPublishTemplateId` 存在时，`stream.record.start` 必须发布 `stream.on_publish` 事件；事件消费者收到后必须通过 command gate 提交 `workflow.run` command（禁止绕过 command service 直调 workflow 写路径）。
 - 事件触发的幂等键固定：`stream-onpublish-<recordingId>`；重复投递不应创建重复 run。
+- `GOYAIS_FEATURE_STREAM_CONTROL_PLANE=false` 时，`stream.updateAuth`、`stream.delete` 以及对应 domain sugar 路径返回 `501 NOT_IMPLEMENTED`。
 
 ## 0.10 Algorithm Domain Sugar（MVP）
 - `POST /api/v1/algorithms/{algorithmId}:run` 必须转换为 `algorithm.run` command 执行（Command-first）。

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -72,7 +73,7 @@ func (s *Service) CreateStream(
 	}
 	if s.controlPlane != nil {
 		if err := s.controlPlane.EnsurePath(ctx, path, normalizedSource, state); err != nil {
-			return Stream{}, err
+			return Stream{}, s.translateControlPlaneError(err)
 		}
 	}
 
@@ -314,7 +315,7 @@ func (s *Service) KickStream(ctx context.Context, req command.RequestContext, st
 	}
 	if s.controlPlane != nil {
 		if err := s.controlPlane.KickPath(ctx, item.Path); err != nil {
-			return Stream{}, err
+			return Stream{}, s.translateControlPlaneError(err)
 		}
 	}
 
@@ -372,7 +373,7 @@ func (s *Service) UpdateAuthRule(
 	}
 	if s.controlPlane != nil {
 		if err := s.controlPlane.PatchPathAuth(ctx, item.Path, parsedRule); err != nil {
-			return Stream{}, err
+			return Stream{}, s.translateControlPlaneError(err)
 		}
 	}
 	nextState := mergeStreamState(item.StateJSON, map[string]any{
@@ -409,7 +410,7 @@ func (s *Service) DeleteStream(ctx context.Context, req command.RequestContext, 
 	}
 	if s.controlPlane != nil {
 		if err := s.controlPlane.DeletePath(ctx, item.Path); err != nil {
-			return Stream{}, err
+			return Stream{}, s.translateControlPlaneError(err)
 		}
 	}
 
@@ -581,6 +582,27 @@ func mergeStreamState(raw json.RawMessage, patch map[string]any) json.RawMessage
 		return raw
 	}
 	return merged
+}
+
+func (s *Service) translateControlPlaneError(err error) error {
+	var statusErr *mediaMTXStatusError
+	if !errors.As(err, &statusErr) {
+		return err
+	}
+
+	if statusErr.StatusCode == http.StatusBadRequest {
+		if isMediaMTXLegacyAuthConflictMessage(statusErr.Message) {
+			return ErrNotImplemented
+		}
+		return ErrInvalidRequest
+	}
+	if statusErr.StatusCode == http.StatusNotFound {
+		return ErrStreamNotFound
+	}
+	if statusErr.StatusCode == http.StatusUnauthorized || statusErr.StatusCode == http.StatusForbidden {
+		return &ForbiddenError{Reason: "control_plane_denied"}
+	}
+	return err
 }
 
 func isJSONObject(raw json.RawMessage) bool {

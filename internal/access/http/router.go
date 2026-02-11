@@ -38,17 +38,18 @@ func NewRouter(cfg config.Config, deps RouterDeps) (http.Handler, error) {
 	apiMux.Handle("/api/v1/healthz", healthzHandler)
 	apiMux.Handle("/api/v1/system/healthz", healthzHandler)
 	domainHandler := &apiHandler{
-		commandService:        deps.CommandService,
-		aiService:             deps.AIService,
-		assetService:          deps.AssetService,
-		assetLifecycleEnabled: cfg.Feature.AssetLifecycle,
-		pluginMarketV2Enabled: cfg.Feature.PluginMarketV2,
-		contextBundleEnabled:  cfg.Feature.ContextBundle,
-		workflowService:       deps.WorkflowService,
-		registryService:       deps.RegistryService,
-		pluginService:         deps.PluginService,
-		streamService:         deps.StreamService,
-		contextBundleService:  deps.ContextBundleService,
+		commandService:            deps.CommandService,
+		aiService:                 deps.AIService,
+		assetService:              deps.AssetService,
+		assetLifecycleEnabled:     cfg.Feature.AssetLifecycle,
+		pluginMarketV2Enabled:     cfg.Feature.PluginMarketV2,
+		contextBundleEnabled:      cfg.Feature.ContextBundle,
+		streamControlPlaneEnabled: cfg.Feature.StreamControlPlane,
+		workflowService:           deps.WorkflowService,
+		registryService:           deps.RegistryService,
+		pluginService:             deps.PluginService,
+		streamService:             deps.StreamService,
+		contextBundleService:      deps.ContextBundleService,
 	}
 	if deps.CommandService != nil {
 		apiMux.Handle("/api/v1/commands", NewCommandCollectionHandler(deps.CommandService))

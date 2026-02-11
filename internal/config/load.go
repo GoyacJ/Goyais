@@ -102,10 +102,11 @@ func defaultsForProfile(profile string) Config {
 			ContextMode:          AuthContextModeJWTOrHeader,
 		},
 		Feature: FeatureConfig{
-			AssetLifecycle: false,
-			PluginMarketV2: true,
-			ContextBundle:  true,
-			ACLRoleSubject: true,
+			AssetLifecycle:     false,
+			PluginMarketV2:     true,
+			ContextBundle:      true,
+			ACLRoleSubject:     true,
+			StreamControlPlane: true,
 		},
 	}
 
@@ -168,6 +169,9 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	}
 	if fc.Feature.ACLRoleSubject != nil {
 		cfg.Feature.ACLRoleSubject = *fc.Feature.ACLRoleSubject
+	}
+	if fc.Feature.StreamControlPlane != nil {
+		cfg.Feature.StreamControlPlane = *fc.Feature.StreamControlPlane
 	}
 	if v := strings.ToLower(strings.TrimSpace(fc.Cache.Provider)); v != "" {
 		cfg.Providers.Cache = v
@@ -300,6 +304,11 @@ func applyEnvOverrides(cfg *Config) {
 	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_ACL_ROLE_SUBJECT")); v != "" {
 		if parsed, err := strconv.ParseBool(v); err == nil {
 			cfg.Feature.ACLRoleSubject = parsed
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_FEATURE_STREAM_CONTROL_PLANE")); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			cfg.Feature.StreamControlPlane = parsed
 		}
 	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_CACHE_PROVIDER"))); v != "" {

@@ -161,6 +161,7 @@ func NewServer(cfg config.Config) (*http.Server, error) {
 		cfg.Feature.PluginMarketV2,
 		workflowService,
 		streamService,
+		cfg.Feature.StreamControlPlane,
 		algorithmService,
 		contextBundleService,
 		cfg.Feature.ContextBundle,

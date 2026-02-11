@@ -1689,6 +1689,7 @@ paths:
       tags: [Stream]
       summary: Delete stream (domain sugar -> command)
       operationId: deleteStream
+      description: 当 `GOYAIS_FEATURE_STREAM_CONTROL_PLANE=false` 时返回 `501 NOT_IMPLEMENTED`。
       parameters:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
@@ -1721,6 +1722,7 @@ paths:
       tags: [Stream]
       summary: Update stream auth rule (domain sugar -> command)
       operationId: updateStreamAuth
+      description: 当 `GOYAIS_FEATURE_STREAM_CONTROL_PLANE=false` 时返回 `501 NOT_IMPLEMENTED`。
       parameters:
         - $ref: '#/components/parameters/RequiredXTenantId'
         - $ref: '#/components/parameters/RequiredXWorkspaceId'
