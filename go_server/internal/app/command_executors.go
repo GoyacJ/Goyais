@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -533,18 +534,21 @@ func newAISessionTurnExecutor(aiService *ai.Service, commandService *command.Ser
 		}
 
 		if commandType == "ai.command.execute" {
-			if strings.TrimSpace(plan.CommandType) == "" {
+			executableCommands := resolveAIExecutablePlanCommands(plan)
+			if len(executableCommands) == 0 {
 				assistantMessage = buildAIRejectAssistantMessage(plan)
 			} else {
 				if commandService == nil {
 					return nil, mapAIExecutionError(ai.ErrNotImplemented)
 				}
-				child, err := commandService.Submit(ctx, reqCtx, plan.CommandType, plan.Payload, "", "")
+				executedCommands, err := executeAIPlannedCommands(ctx, reqCtx, commandService, executableCommands)
 				if err != nil {
 					return nil, err
 				}
-				commandIDs = append(commandIDs, child.ID)
-				assistantMessage = buildAIExecuteAssistantMessage(plan.CommandType, child, plan)
+				for _, child := range executedCommands {
+					commandIDs = append(commandIDs, child.ID)
+				}
+				assistantMessage = buildAIExecuteAssistantMessage(plan, executedCommands)
 			}
 		} else {
 			assistantMessage = buildAIPlanAssistantMessage(plan)
@@ -647,23 +651,132 @@ func buildAIRejectAssistantMessage(plan aiplanner.Plan) string {
 	)
 }
 
-func buildAIExecuteAssistantMessage(commandType string, cmd command.Command, plan aiplanner.Plan) string {
-	if runID := extractWorkflowRunID(cmd.Result); runID != "" {
+func resolveAIExecutablePlanCommands(plan aiplanner.Plan) []aiplanner.PlanStep {
+	if len(plan.Steps) == 0 {
+		commandType := strings.TrimSpace(plan.CommandType)
+		if commandType == "" {
+			return nil
+		}
+		return []aiplanner.PlanStep{
+			{
+				Order:       1,
+				Segment:     "single_intent",
+				CommandType: commandType,
+				Payload:     objectOrDefault(plan.Payload),
+				Planner:     defaultAIPlanPlanner(plan),
+				Reason:      defaultAIPlanReason(plan),
+				Score:       defaultAIPlanScore(plan),
+				Executable:  true,
+			},
+		}
+	}
+
+	steps := make([]aiplanner.PlanStep, 0, len(plan.Steps))
+	for _, step := range plan.Steps {
+		if !step.Executable || strings.TrimSpace(step.CommandType) == "" {
+			continue
+		}
+		steps = append(steps, aiplanner.PlanStep{
+			Order:       step.Order,
+			Segment:     strings.TrimSpace(step.Segment),
+			CommandType: strings.TrimSpace(step.CommandType),
+			Payload:     objectOrDefault(step.Payload),
+			Planner:     strings.TrimSpace(step.Planner),
+			Reason:      strings.TrimSpace(step.Reason),
+			Score:       step.Score,
+			Executable:  true,
+		})
+	}
+	sort.SliceStable(steps, func(i, j int) bool {
+		left := steps[i].Order
+		right := steps[j].Order
+		if left <= 0 && right <= 0 {
+			return i < j
+		}
+		if left <= 0 {
+			return false
+		}
+		if right <= 0 {
+			return true
+		}
+		if left == right {
+			return i < j
+		}
+		return left < right
+	})
+	return steps
+}
+
+func executeAIPlannedCommands(
+	ctx context.Context,
+	reqCtx command.RequestContext,
+	commandService *command.Service,
+	steps []aiplanner.PlanStep,
+) ([]command.Command, error) {
+	executedCommands := make([]command.Command, 0, len(steps))
+	for _, step := range steps {
+		commandType := strings.TrimSpace(step.CommandType)
+		if commandType == "" {
+			continue
+		}
+		child, err := commandService.Submit(ctx, reqCtx, commandType, objectOrDefault(step.Payload), "", "")
+		if err != nil {
+			return executedCommands, err
+		}
+		executedCommands = append(executedCommands, child)
+	}
+	return executedCommands, nil
+}
+
+func buildAIExecuteAssistantMessage(plan aiplanner.Plan, executedCommands []command.Command) string {
+	if len(executedCommands) == 0 {
+		return buildAIRejectAssistantMessage(plan)
+	}
+
+	stepSummaries := make([]string, 0, len(executedCommands))
+	workflowRuns := make([]string, 0, len(executedCommands))
+	for _, cmd := range executedCommands {
+		runID := extractWorkflowRunID(cmd.Result)
+		if runID != "" {
+			workflowRuns = append(workflowRuns, runID)
+			stepSummaries = append(stepSummaries, fmt.Sprintf("%s(%s,run=%s,%s)", cmd.CommandType, cmd.ID, runID, cmd.Status))
+			continue
+		}
+		stepSummaries = append(stepSummaries, fmt.Sprintf("%s(%s,%s)", cmd.CommandType, cmd.ID, cmd.Status))
+	}
+
+	if len(executedCommands) == 1 {
+		cmd := executedCommands[0]
+		if runID := extractWorkflowRunID(cmd.Result); runID != "" {
+			return fmt.Sprintf(
+				"Executed %s via command %s (planner=%s, workflowRun=%s, status=%s).",
+				cmd.CommandType,
+				cmd.ID,
+				defaultAIPlanPlanner(plan),
+				runID,
+				cmd.Status,
+			)
+		}
 		return fmt.Sprintf(
-			"Executed %s via command %s (planner=%s, workflowRun=%s, status=%s).",
-			commandType,
+			"Executed %s via command %s (planner=%s, status=%s).",
+			cmd.CommandType,
 			cmd.ID,
 			defaultAIPlanPlanner(plan),
-			runID,
 			cmd.Status,
 		)
 	}
+
+	workflowSummary := ""
+	if len(workflowRuns) > 0 {
+		workflowSummary = fmt.Sprintf(" workflowRuns=%s;", strings.Join(workflowRuns, ","))
+	}
 	return fmt.Sprintf(
-		"Executed %s via command %s (planner=%s, status=%s).",
-		commandType,
-		cmd.ID,
+		"Executed multi-step plan via %d commands (%s). planner=%s reason=%s%s",
+		len(executedCommands),
+		strings.Join(stepSummaries, " -> "),
 		defaultAIPlanPlanner(plan),
-		cmd.Status,
+		defaultAIPlanReason(plan),
+		workflowSummary,
 	)
 }
 
