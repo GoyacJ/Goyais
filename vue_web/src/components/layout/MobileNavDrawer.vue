@@ -47,7 +47,7 @@
           v-for="item in NAV_ITEMS"
           :key="item.to"
           :to="item.to"
-          class="ui-control ui-focus-ring ui-pressable flex items-center justify-between border-transparent text-sm"
+          class="ui-nav-link ui-focus-ring ui-pressable flex items-center justify-between text-sm"
           active-class="ui-nav-link-active"
           @click="emitClose"
         >

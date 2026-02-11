@@ -72,7 +72,6 @@ export default {
     layoutFocus: '专注',
     resetWindowLayout: '重置窗口布局',
     navShort: '导航',
-    consoleFirst: '控制台优先',
     workspaceLabel: '工作区',
     pinShort: '固定',
     unpinShort: '浮动',

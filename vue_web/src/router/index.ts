@@ -30,13 +30,13 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: HomeView,
-      meta: { layoutDefault: 'topnav', windowed: true, windowManifestKey: 'home' },
+      meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'home' },
     },
     {
       path: '/canvas',
       name: 'canvas',
       component: CanvasView,
-      meta: { layoutDefault: 'focus', windowed: true, windowManifestKey: 'canvas' },
+      meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'canvas' },
     },
     {
       path: '/ai',
@@ -66,7 +66,7 @@ const router = createRouter({
       path: '/plugins',
       name: 'plugins',
       component: PluginsView,
-      meta: { layoutDefault: 'topnav', windowed: true, windowManifestKey: 'plugins' },
+      meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'plugins' },
     },
     {
       path: '/algorithm-library',
@@ -78,7 +78,7 @@ const router = createRouter({
       path: '/streams',
       name: 'streams',
       component: StreamsView,
-      meta: { layoutDefault: 'topnav', windowed: true, windowManifestKey: 'streams' },
+      meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'streams' },
     },
     {
       path: '/permissions',
@@ -96,19 +96,19 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: SettingsView,
-      meta: { layoutDefault: 'topnav', windowed: true, windowManifestKey: 'settings' },
+      meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'settings' },
     },
     {
       path: '/forbidden',
       name: 'forbidden',
       component: ForbiddenView,
-      meta: { layoutDefault: 'topnav', windowed: true, windowManifestKey: 'forbidden' },
+      meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'forbidden' },
     },
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: NotFoundView,
-      meta: { layoutDefault: 'topnav', windowed: true, windowManifestKey: 'not-found' },
+      meta: { layoutDefault: 'console', windowed: true, windowManifestKey: 'not-found' },
     },
   ],
 })

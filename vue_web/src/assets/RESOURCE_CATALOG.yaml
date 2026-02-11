@@ -94,6 +94,14 @@
   source_url: https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/src/24/outline/magnifying-glass.svg
   version_or_date: v2.2.0
   token_constraints: stroke=currentColor; stroke-width=1.75; 24x24
+- asset_id: heroicon-chevron-down-24-outline
+  type: icon
+  scenario: select-caret
+  local_path: vue_web/src/assets/icons/heroicons/24/outline/chevron-down.svg
+  license: MIT
+  source_url: https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/src/24/outline/chevron-down.svg
+  version_or_date: v2.2.0
+  token_constraints: stroke=currentColor; stroke-width=1.75; 24x24
 - asset_id: undraw-process-0wew-raw
   type: illustration
   scenario: source-empty-commands

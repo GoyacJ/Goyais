@@ -1,6 +1,6 @@
 # Third-Party Asset Notices
 
-Last updated: 2026-02-10
+Last updated: 2026-02-11
 
 This project vendors visual assets under approved licenses and explicit commercial-use terms. No production runtime path may hotlink external asset URLs.
 

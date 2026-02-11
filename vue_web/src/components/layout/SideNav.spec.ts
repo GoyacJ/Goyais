@@ -48,27 +48,28 @@ describe('SideNav', () => {
       i18n.global.locale.value = 'zh-CN'
       await nextTick()
 
-      const zhCollapsedLinks = wrapper.findAll('a.ui-control')
+      const zhCollapsedLinks = wrapper.findAll('a.ui-nav-link')
       expect(zhCollapsedLinks).toHaveLength(NAV_LABELS_ZH.length)
       expect(zhCollapsedLinks.map((link) => link.attributes('title'))).toEqual(NAV_LABELS_ZH)
+      expect(zhCollapsedLinks[0]?.attributes('active-class')).toBe('ui-nav-link-active')
 
       const pinButton = wrapper.get('button[data-pinned]')
       await pinButton.trigger('click')
       await nextTick()
 
-      const zhExpandedLinks = wrapper.findAll('a.ui-control')
+      const zhExpandedLinks = wrapper.findAll('a.ui-nav-link')
       expect(zhExpandedLinks.map((link) => link.find('.truncate').text())).toEqual(NAV_LABELS_ZH)
 
       i18n.global.locale.value = 'en-US'
       await nextTick()
 
-      const enExpandedLinks = wrapper.findAll('a.ui-control')
+      const enExpandedLinks = wrapper.findAll('a.ui-nav-link')
       expect(enExpandedLinks.map((link) => link.find('.truncate').text())).toEqual(NAV_LABELS_EN)
 
       await pinButton.trigger('click')
       await nextTick()
 
-      const enCollapsedLinks = wrapper.findAll('a.ui-control')
+      const enCollapsedLinks = wrapper.findAll('a.ui-nav-link')
       expect(enCollapsedLinks.map((link) => link.attributes('title'))).toEqual(NAV_LABELS_EN)
 
       wrapper.unmount()

@@ -11,7 +11,7 @@
 ## 2. 布局与交互
 
 - 页面需保证 panel 能拖拽、缩放、全屏与恢复。
-- 布局模式 `console/topnav/focus` 行为一致。
+- 布局模式固定为 `console`（console-only），禁止引入 `topnav/focus` 新路径。
 - 窗口状态按 `route + layout` 持久化且互不污染。
 
 ## 3. i18n 与主题

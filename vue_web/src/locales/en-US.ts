@@ -72,7 +72,6 @@ export default {
     layoutFocus: 'Focus',
     resetWindowLayout: 'Reset Window Layout',
     navShort: 'NAV',
-    consoleFirst: 'Console-first',
     workspaceLabel: 'Workspace',
     pinShort: 'PIN',
     unpinShort: 'UNP',

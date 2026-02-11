@@ -71,6 +71,15 @@
     color: rgb(var(--ui-neutral-fg) / 1);
   }
 
+  .ui-nav-link {
+    min-height: var(--ui-control-h);
+    padding: var(--ui-control-py) var(--ui-control-px);
+    border: 1px solid transparent;
+    border-radius: var(--ui-radius-button);
+    background: transparent;
+    color: rgb(var(--ui-neutral-fg) / 1);
+  }
+
   .ui-control::placeholder {
     color: rgb(var(--ui-neutral-fg-subtle) / 0.92);
   }
@@ -515,13 +524,19 @@
   }
 
   .ui-nav-link-active {
-    border-color: rgb(var(--ui-primary-500) / 0.45) !important;
-    background: rgb(var(--ui-primary-500) / 0.12) !important;
-    color: rgb(var(--ui-primary-600) / 1) !important;
+    border-color: rgb(var(--ui-neutral-border-strong) / 0.62) !important;
+    background:
+      linear-gradient(
+        0deg,
+        rgb(var(--ui-state-layer) / var(--ui-list-selected-opacity)),
+        rgb(var(--ui-state-layer) / var(--ui-list-selected-opacity))
+      ),
+      rgb(var(--ui-neutral-surface-2) / 1) !important;
+    color: rgb(var(--ui-neutral-fg) / 1) !important;
   }
 
   .dark .ui-nav-link-active {
-    color: rgb(var(--ui-primary-500) / 1) !important;
+    border-color: rgb(var(--ui-neutral-border-strong) / 0.72) !important;
   }
 
   .ui-state-selected {
