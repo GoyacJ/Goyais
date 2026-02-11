@@ -35,14 +35,8 @@
       </section>
     </div>
 
-    <div
-      v-else-if="windowedEnabled"
-      ref="boardRef"
-      class="ui-window-board ui-bg-host rounded-card border border-ui-border"
-      :class="[`ui-window-board--${effectiveLayout}`]"
-      :style="{ height: `${boardHeight}px` }"
-    >
-      <div class="ui-window-board-toolbar ui-bg-content absolute right-3 top-3 z-50">
+    <div v-else-if="windowedEnabled" class="ui-window-board-frame">
+      <div class="ui-window-board-toolbar">
         <button
           type="button"
           class="ui-control ui-focus-ring ui-pressable h-8 min-h-0 px-2 py-1 text-xs"
@@ -52,21 +46,28 @@
         </button>
       </div>
 
-      <WindowPane
-        v-for="pane in resolvedPanes"
-        :key="pane.id"
-        :pane-id="pane.id"
-        :title="pane.title"
-        :rect="paneRects[pane.id]"
-        :bounds="bounds"
-        :min-width="pane.minWidth"
-        :min-height="pane.minHeight"
-        @focus="bringToFront"
-        @open-new-page="onOpenNewPage"
-        @update:rect="onRectUpdate"
+      <div
+        ref="boardRef"
+        class="ui-window-board ui-bg-host rounded-card border border-ui-border"
+        :class="[`ui-window-board--${effectiveLayout}`]"
+        :style="{ height: `${boardHeight}px` }"
       >
-        <slot :name="pane.id" />
-      </WindowPane>
+        <WindowPane
+          v-for="pane in resolvedPanes"
+          :key="pane.id"
+          :pane-id="pane.id"
+          :title="pane.title"
+          :rect="paneRects[pane.id]"
+          :bounds="bounds"
+          :min-width="pane.minWidth"
+          :min-height="pane.minHeight"
+          @focus="bringToFront"
+          @open-new-page="onOpenNewPage"
+          @update:rect="onRectUpdate"
+        >
+          <slot :name="pane.id" />
+        </WindowPane>
+      </div>
     </div>
 
     <div v-else class="ui-window-flow ui-page">
