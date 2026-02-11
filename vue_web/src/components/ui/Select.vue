@@ -1,9 +1,15 @@
 <template>
-  <Listbox :model-value="modelValue" :disabled="disabled || loading" @update:model-value="onUpdate">
+  <Listbox v-slot="{ open }" :model-value="modelValue" :disabled="disabled || loading" @update:model-value="onUpdate">
     <div class="relative">
       <ListboxButton :class="buttonClasses" :aria-busy="loading || undefined">
         <span class="truncate text-sm">{{ selectedLabel }}</span>
-        <span class="ui-monospace text-xs text-ui-muted">v</span>
+        <Icon
+          name="chevron-down"
+          :size="14"
+          decorative
+          class="text-ui-muted transition-transform duration-120"
+          :class="open ? 'rotate-180' : ''"
+        />
       </ListboxButton>
 
       <transition
@@ -50,6 +56,7 @@
  */
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headlessui/vue'
 import { computed } from 'vue'
+import Icon from '@/components/ui/Icon.vue'
 import { cn } from '@/utils/cn'
 
 export interface SelectOption {

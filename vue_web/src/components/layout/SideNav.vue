@@ -31,7 +31,7 @@
         v-for="item in NAV_ITEMS"
         :key="item.to"
         :to="item.to"
-        class="ui-control ui-focus-ring ui-pressable flex items-center border-transparent text-sm font-medium"
+        class="ui-nav-link ui-focus-ring ui-pressable flex items-center text-sm font-medium"
         :class="collapsed ? 'justify-center px-1' : 'justify-between'"
         :title="collapsed ? t(item.label) : undefined"
         active-class="ui-nav-link-active"

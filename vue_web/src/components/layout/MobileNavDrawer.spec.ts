@@ -49,14 +49,15 @@ describe('MobileNavDrawer', () => {
 
       await nextTick()
 
-      const zhLinks = wrapper.findAll('a.ui-control')
+      const zhLinks = wrapper.findAll('a.ui-nav-link')
       expect(zhLinks).toHaveLength(NAV_LABELS_ZH.length)
       expect(zhLinks.map((link) => link.find('.truncate').text())).toEqual(NAV_LABELS_ZH)
+      expect(zhLinks[0]?.attributes('active-class')).toBe('ui-nav-link-active')
 
       i18n.global.locale.value = 'en-US'
       await nextTick()
 
-      const enLinks = wrapper.findAll('a.ui-control')
+      const enLinks = wrapper.findAll('a.ui-nav-link')
       expect(enLinks.map((link) => link.find('.truncate').text())).toEqual(NAV_LABELS_EN)
 
       wrapper.unmount()

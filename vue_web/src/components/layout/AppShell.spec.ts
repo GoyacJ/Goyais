@@ -11,7 +11,6 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import AppShell from '@/components/layout/AppShell.vue'
 import TopBar from '@/components/layout/TopBar.vue'
-import TopNavBar from '@/components/layout/TopNavBar.vue'
 import SideNav from '@/components/layout/SideNav.vue'
 import i18n from '@/i18n'
 import { __resetLayoutSystemForTests, initLayoutSystem, useLayoutStore } from '@/design-system/layout'
@@ -26,7 +25,7 @@ function createTestRouter() {
         component: view,
         meta: { layoutDefault: 'console', windowManifestKey: 'home' },
       },
-      { path: '/canvas', component: view, meta: { layoutDefault: 'focus', windowManifestKey: 'canvas' } },
+      { path: '/canvas', component: view, meta: { layoutDefault: 'console', windowManifestKey: 'canvas' } },
       { path: '/ai', component: view, meta: { layoutDefault: 'console', windowManifestKey: 'ai-workbench' } },
       { path: '/run-center', component: view, meta: { layoutDefault: 'console', windowManifestKey: 'run-center' } },
       { path: '/commands', component: view, meta: { layoutDefault: 'console', windowManifestKey: 'commands' } },
@@ -36,8 +35,8 @@ function createTestRouter() {
         component: view,
         meta: { layoutDefault: 'console', windowManifestKey: 'algorithm-library' },
       },
-      { path: '/plugins', component: view, meta: { layoutDefault: 'topnav', windowManifestKey: 'plugins' } },
-      { path: '/streams', component: view, meta: { layoutDefault: 'topnav', windowManifestKey: 'streams' } },
+      { path: '/plugins', component: view, meta: { layoutDefault: 'console', windowManifestKey: 'plugins' } },
+      { path: '/streams', component: view, meta: { layoutDefault: 'console', windowManifestKey: 'streams' } },
       {
         path: '/permissions',
         component: view,
@@ -48,12 +47,12 @@ function createTestRouter() {
         component: view,
         meta: { layoutDefault: 'console', windowManifestKey: 'context-bundles' },
       },
-      { path: '/settings', component: view, meta: { layoutDefault: 'topnav', windowManifestKey: 'settings' } },
+      { path: '/settings', component: view, meta: { layoutDefault: 'console', windowManifestKey: 'settings' } },
     ],
   })
 }
 
-describe('AppShell layout switching', () => {
+describe('AppShell console-only layout', () => {
   beforeEach(() => {
     __resetLayoutSystemForTests()
     localStorage.clear()
@@ -76,10 +75,9 @@ describe('AppShell layout switching', () => {
 
     await flushPromises()
     expect(wrapper.findComponent(SideNav).exists()).toBe(true)
-    expect(wrapper.findComponent(TopNavBar).exists()).toBe(false)
   })
 
-  it('renders TopNavBar in topnav mode', async () => {
+  it('keeps side navigation visible even when setting topnav or focus preferences', async () => {
     const router = createTestRouter()
     await router.push('/')
     await router.isReady()
@@ -95,28 +93,11 @@ describe('AppShell layout switching', () => {
     })
 
     await flushPromises()
-    expect(wrapper.findComponent(SideNav).exists()).toBe(false)
-    expect(wrapper.findComponent(TopNavBar).exists()).toBe(true)
-  })
+    expect(wrapper.findComponent(SideNav).exists()).toBe(true)
 
-  it('hides both nav containers in focus mode', async () => {
-    const router = createTestRouter()
-    await router.push('/')
-    await router.isReady()
-    initLayoutSystem(router)
-
-    const { setLayoutPreference } = useLayoutStore()
     setLayoutPreference('focus')
-
-    const wrapper = mount(AppShell, {
-      global: {
-        plugins: [router, i18n],
-      },
-    })
-
     await flushPromises()
-    expect(wrapper.findComponent(SideNav).exists()).toBe(false)
-    expect(wrapper.findComponent(TopNavBar).exists()).toBe(false)
+    expect(wrapper.findComponent(SideNav).exists()).toBe(true)
   })
 
   it('hides shell chrome and enters immersive main mode for valid immersive query', async () => {
@@ -136,7 +117,6 @@ describe('AppShell layout switching', () => {
 
     await flushPromises()
     expect(wrapper.findComponent(SideNav).exists()).toBe(false)
-    expect(wrapper.findComponent(TopNavBar).exists()).toBe(false)
     expect(wrapper.findComponent(TopBar).exists()).toBe(false)
     expect(wrapper.find('main').classes()).toContain('ui-shell-main--immersive')
   })

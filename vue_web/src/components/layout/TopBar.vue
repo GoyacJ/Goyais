@@ -13,16 +13,11 @@
       </button>
 
       <div class="min-w-0">
-        <p class="ui-monospace text-[11px] uppercase tracking-[0.15em] text-ui-muted">{{ t('common.consoleFirst') }}</p>
         <h1 class="truncate text-lg font-semibold">{{ t('common.appName') }}</h1>
       </div>
     </div>
 
     <div class="ui-topbar-controls flex min-w-0 flex-wrap items-center gap-2">
-      <span v-if="focusMode" class="ui-control ui-tone-surface-primary ui-monospace inline-flex h-8 min-h-0 items-center px-2 py-0 text-xs leading-none">
-        {{ t('common.layoutFocus') }}
-      </span>
-
       <span class="ui-control ui-monospace inline-flex h-8 min-h-0 items-center bg-ui-surface2 px-2 py-0 text-xs leading-none text-ui-muted">
         {{ t('common.workspace') }}
       </span>
@@ -31,8 +26,6 @@
         <Icon name="search" :size="14" decorative />
         <span>{{ t('common.searchPlaceholder') }}</span>
       </button>
-
-      <LayoutSwitcher />
 
       <label class="flex items-center gap-2 text-xs text-ui-muted">
         <span>{{ t('common.theme') }}</span>
@@ -64,7 +57,6 @@
  */
 import Dropdown, { type DropdownItem } from '@/components/ui/Dropdown.vue'
 import Icon from '@/components/ui/Icon.vue'
-import LayoutSwitcher from '@/components/layout/LayoutSwitcher.vue'
 import Select from '@/components/ui/Select.vue'
 import { useToast } from '@/composables/useToast'
 import { useThemeStore } from '@/design-system/theme'
@@ -75,11 +67,9 @@ import { useI18n } from 'vue-i18n'
 withDefaults(
   defineProps<{
     showMobileNavButton?: boolean
-    focusMode?: boolean
   }>(),
   {
     showMobileNavButton: false,
-    focusMode: false,
   },
 )
 

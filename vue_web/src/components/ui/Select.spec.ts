@@ -9,6 +9,7 @@
 
 import { mount } from '@vue/test-utils'
 import Select from '@/components/ui/Select.vue'
+import Icon from '@/components/ui/Icon.vue'
 import i18n from '@/i18n'
 
 describe('Select', () => {
@@ -29,6 +30,9 @@ describe('Select', () => {
 
     await wrapper.find('button').trigger('click')
     await wrapper.findAll('li')[1]?.trigger('click')
+
+    expect(wrapper.findComponent(Icon).exists()).toBe(true)
+    expect(wrapper.find('span.ui-monospace').exists()).toBe(false)
 
     const emissions = wrapper.emitted('update:modelValue')
     expect(emissions?.[0]?.[0]).toBe('running')

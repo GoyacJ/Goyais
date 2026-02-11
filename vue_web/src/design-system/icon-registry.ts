@@ -19,6 +19,7 @@ import cloudArrowUpIcon from '@/assets/icons/heroicons/24/outline/cloud-arrow-up
 import shieldExclamationIcon from '@/assets/icons/heroicons/24/outline/shield-exclamation.svg?raw'
 import exclamationTriangleIcon from '@/assets/icons/heroicons/24/outline/exclamation-triangle.svg?raw'
 import magnifyingGlassIcon from '@/assets/icons/heroicons/24/outline/magnifying-glass.svg?raw'
+import chevronDownIcon from '@/assets/icons/heroicons/24/outline/chevron-down.svg?raw'
 
 export type IconName =
   | 'home'
@@ -34,6 +35,7 @@ export type IconName =
   | 'error'
   | 'not-found'
   | 'search'
+  | 'chevron-down'
 
 const registry: Record<IconName, string> = {
   home: homeIcon,
@@ -49,6 +51,7 @@ const registry: Record<IconName, string> = {
   error: exclamationTriangleIcon,
   'not-found': magnifyingGlassIcon,
   search: magnifyingGlassIcon,
+  'chevron-down': chevronDownIcon,
 }
 
 export function resolveIconSvg(name: IconName): string {

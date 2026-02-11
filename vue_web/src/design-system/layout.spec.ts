@@ -16,20 +16,21 @@ describe('layout system', () => {
     localStorage.clear()
   })
 
-  it('uses auto preference by default and follows route default', async () => {
+  it('uses console preference by default and ignores non-console route defaults', async () => {
     initLayoutSystem()
     const store = useLayoutStore()
 
-    expect(store.layoutPreference.value).toBe('auto')
+    expect(store.layoutPreference.value).toBe('console')
     expect(store.effectiveLayout.value).toBe('console')
 
     store.setRouteLayoutDefault('focus')
     await nextTick()
-    expect(store.effectiveLayout.value).toBe('focus')
-    expect(document.documentElement.getAttribute('data-layout')).toBe('focus')
+    expect(store.routeLayoutDefault.value).toBe('console')
+    expect(store.effectiveLayout.value).toBe('console')
+    expect(document.documentElement.getAttribute('data-layout')).toBe('console')
   })
 
-  it('manual selection overrides route defaults and persists', async () => {
+  it('normalizes any manual selection to console and persists console value', async () => {
     initLayoutSystem()
     const store = useLayoutStore()
 
@@ -37,24 +38,26 @@ describe('layout system', () => {
     store.setLayoutPreference('topnav')
     await nextTick()
 
-    expect(store.effectiveLayout.value).toBe('topnav')
-    expect(localStorage.getItem(layoutStorageKey())).toBe('topnav')
+    expect(store.layoutPreference.value).toBe('console')
+    expect(store.effectiveLayout.value).toBe('console')
+    expect(localStorage.getItem(layoutStorageKey())).toBe('console')
 
-    store.setLayoutPreference('auto')
+    store.setLayoutPreference('focus')
     await nextTick()
 
-    expect(store.effectiveLayout.value).toBe('focus')
+    expect(store.layoutPreference.value).toBe('console')
+    expect(store.effectiveLayout.value).toBe('console')
   })
 
-  it('restores stored layout preference', async () => {
+  it('restores stored non-console preference as console', async () => {
     localStorage.setItem(layoutStorageKey(), 'focus')
     initLayoutSystem()
 
     const store = useLayoutStore()
     await nextTick()
 
-    expect(store.layoutPreference.value).toBe('focus')
-    expect(store.effectiveLayout.value).toBe('focus')
-    expect(document.documentElement.getAttribute('data-layout-pref')).toBe('focus')
+    expect(store.layoutPreference.value).toBe('console')
+    expect(store.effectiveLayout.value).toBe('console')
+    expect(document.documentElement.getAttribute('data-layout-pref')).toBe('console')
   })
 })
