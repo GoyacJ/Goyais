@@ -34,6 +34,7 @@
 - API Prefix：`/api/v1`。
 - 写路径：统一 command-first。
 - 错误模型：`error: { code, messageKey, details }`。
+- 鉴权默认：除健康检查外，`/api/v1/**` 默认要求 Bearer Token。
 - 授权顺序：Tenant -> Visibility -> ACL -> RBAC -> Egress。
 - 统一执行上下文：`tenantId/workspaceId/userId/roles/policyVersion/traceId`。
 
@@ -45,22 +46,38 @@
 - `resource-only` 模式：关闭授权端点，仅保留资源服务器能力。
 - 登录方式：password/sms/oidc/social（v0.1 先落地 password+oidc 基础链路）。
 - JWT claims 对齐 ExecutionContext。
+- 开发回退：仅当 `GOYAIS_SECURITY_DEV_HEADER_CONTEXT_ENABLED=true` 时允许 `X-*` 请求头构建 ExecutionContext。
 
 ## 5. 动态权限与数据权限 | Dynamic AuthZ + Data Permission
 
 - 动态权限：`policyVersion` + Redis invalidation。
-- 缓存优先级：Redis -> 本地内存 fallback。
+- 缓存优先级：Redis -> PostgreSQL policy store -> 本地内存 fallback。
 - 失效通道默认：`goyais:policy:invalidate`。
 - 失效事件字段：`tenantId/workspaceId/userId/policyVersion/traceId/changedAt`。
 - 行级数据权限：SQL 层注入过滤，不在 handler/service 手写分支。
+- 行级查询通过 `DataPermissionResolver` 在 repository SQL 中生成谓词。
 
 ## 6. 通用能力封装 | Capability Wrappers
 
 - Cache：`CacheFacade` + `LockFacade`。
 - Policy invalidation：`PolicyInvalidationPublisher` + `PolicyInvalidationSubscriber`。
+- Policy snapshot：`PolicySnapshotProvider` + `PolicySnapshotStore`（Redis 缓存 + DB 回源）。
 - Event：`DomainEventPublisher` + Outbox。
 - Messaging：`MessageBus`（memory default, kafka optional）。
 - Storage：`ObjectStorage`（local default, minio/s3 optional）。
+
+## 7.1 数据持久化落地（2026-02-11）
+
+- Flyway 迁移脚本：`app-api-server/src/main/resources/db/migration/V1__baseline.sql`。
+- 基线表：
+  - `commands`
+  - `audit_events`
+  - `policies`
+  - `acl_entries`
+- 命令与审计落地实现：
+  - `MybatisCommandRepository`
+  - `MybatisAuditEventStore`
+  - `MybatisPolicySnapshotStore`
 
 ## 7. 配置策略 | Configuration Strategy
 
@@ -68,9 +85,15 @@
 - 统一命名：`GOYAIS_*`。
 - 新增关键配置：
   - `GOYAIS_SECURITY_TOPOLOGY_MODE=single|resource-only`
+  - `GOYAIS_SECURITY_DEV_HEADER_CONTEXT_ENABLED=false|true`
   - `GOYAIS_AUTHZ_DYNAMIC_ENABLED=true|false`
   - `GOYAIS_AUTHZ_POLICY_CACHE_TTL=30s`
   - `GOYAIS_AUTHZ_POLICY_INVALIDATION_CHANNEL=goyais:policy:invalidate`
+  - `GOYAIS_DB_URL`
+  - `GOYAIS_DB_USERNAME`
+  - `GOYAIS_DB_PASSWORD`
+  - `GOYAIS_DB_FLYWAY_ENABLED`
+  - `GOYAIS_RESOURCE_SERVER_JWK_SET_URI`
 
 ## 8. 质量门禁 | Quality Gates
 
@@ -78,3 +101,7 @@
 - JavaDoc 检查：`bash java_server/scripts/ci/java_javadoc_check.sh`
 - Java 构建：`mvn -f java_server/pom.xml -DskipTests verify`
 - Java 测试：`mvn -f java_server/pom.xml test`
+- 关键单测覆盖：
+  - `DynamicAuthorizationGateTest`
+  - `CommandPipelineTest`
+  - `RequestExecutionContextFactoryTest`

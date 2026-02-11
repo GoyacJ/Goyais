@@ -23,14 +23,32 @@
 
 ## 3. ACL
 
-- `acl_entries(resource_type, resource_id, subject_type, subject_id, permissions, expires_at, created_by, created_at)`
+- `acl_entries(resource_type, resource_id, subject_id, permissions, created_at)`
 - `permissions` 使用 jsonb 存储。
 
 ## 4. Command and Audit
 
 - `commands`
-- `command_events`
 - `audit_events`
+
+### 4.1 `commands`（已落地）
+
+- `id` (PK)
+- `tenant_id/workspace_id/owner_id`
+- `visibility/status/command_type`
+- `payload_json/result_json` (jsonb)
+- `trace_id`
+- `error_code/error_message_key`
+- `accepted_at/created_at/updated_at`
+
+### 4.2 `audit_events`（已落地）
+
+- `id` (PK)
+- `tenant_id/workspace_id/user_id`
+- `trace_id/event_type/command_type`
+- `decision/reason`
+- `payload_json` (jsonb)
+- `occurred_at`
 
 ## 5. Dynamic AuthZ Cache Model
 
@@ -40,6 +58,12 @@
   - `roles`
   - `deniedCommandTypes`
   - `updatedAt`
+- `policies`（持久化表，已落地）：
+  - `tenant_id/workspace_id/user_id`（唯一键）
+  - `policy_version`
+  - `roles_json`
+  - `denied_command_types_json`
+  - `updated_at`
 - `PolicyInvalidationEvent`（Redis topic payload）：
   - `tenantId/workspaceId/userId/policyVersion/traceId/changedAt`
 

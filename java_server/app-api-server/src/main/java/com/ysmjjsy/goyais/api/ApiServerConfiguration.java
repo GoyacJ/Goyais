@@ -8,11 +8,13 @@
  */
 package com.ysmjjsy.goyais.api;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ysmjjsy.goyais.application.audit.AuditEventStore;
 import com.ysmjjsy.goyais.application.command.CommandHandler;
 import com.ysmjjsy.goyais.application.command.CommandPipeline;
 import com.ysmjjsy.goyais.capability.cache.policy.RedisPolicyInvalidationPublisher;
 import com.ysmjjsy.goyais.capability.cache.policy.RedisPolicyInvalidationSubscriber;
-import com.ysmjjsy.goyais.capability.event.DomainEvent;
+import com.ysmjjsy.goyais.capability.cache.policy.RedisPolicySnapshotProvider;
 import com.ysmjjsy.goyais.capability.event.DomainEventPublisher;
 import com.ysmjjsy.goyais.contract.api.common.CommandCreateRequest;
 import com.ysmjjsy.goyais.kernel.core.ExecutionContext;
@@ -27,9 +29,14 @@ import com.ysmjjsy.goyais.kernel.security.InMemoryPolicySnapshotProvider;
 import com.ysmjjsy.goyais.kernel.security.PolicyInvalidationEvent;
 import com.ysmjjsy.goyais.kernel.security.PolicyInvalidationPublisher;
 import com.ysmjjsy.goyais.kernel.security.PolicyInvalidationSubscriber;
+import com.ysmjjsy.goyais.kernel.security.PolicySnapshot;
+import com.ysmjjsy.goyais.kernel.security.PolicySnapshotProvider;
+import com.ysmjjsy.goyais.kernel.security.PolicySnapshotStore;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
@@ -45,11 +52,30 @@ import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 public class ApiServerConfiguration {
 
     /**
-     * Provides in-memory policy snapshots and acts as Redis-failure fallback cache.
+     * Provides in-memory policy snapshots as Redis-unavailable fallback cache.
      */
     @Bean
-    public InMemoryPolicySnapshotProvider policySnapshotProvider() {
+    public InMemoryPolicySnapshotProvider inMemoryPolicySnapshotProvider() {
         return new InMemoryPolicySnapshotProvider();
+    }
+
+    /**
+     * Selects Redis-first provider with durable-store fallback when Redis is available.
+     */
+    @Bean
+    public PolicySnapshotProvider policySnapshotProvider(
+            ObjectProvider<StringRedisTemplate> redisTemplateProvider,
+            PolicySnapshotStore policySnapshotStore,
+            InMemoryPolicySnapshotProvider inMemoryPolicySnapshotProvider,
+            ObjectMapper objectMapper,
+            @Value("${goyais.security.authz.policy-cache-ttl:30s}") Duration cacheTtl
+    ) {
+        StringRedisTemplate redisTemplate = redisTemplateProvider.getIfAvailable();
+        if (redisTemplate == null) {
+            return inMemoryPolicySnapshotProvider;
+        }
+
+        return new RedisPolicySnapshotProvider(redisTemplate, policySnapshotStore, cacheTtl, objectMapper);
     }
 
     /**
@@ -98,7 +124,7 @@ public class ApiServerConfiguration {
     @Bean
     public ApplicationRunner policyInvalidationListener(
             PolicyInvalidationSubscriber subscriber,
-            InMemoryPolicySnapshotProvider snapshotProvider
+            PolicySnapshotProvider snapshotProvider
     ) {
         return args -> subscriber.start(event -> snapshotProvider.evict(
                 event.tenantId(),
@@ -112,7 +138,7 @@ public class ApiServerConfiguration {
      */
     @Bean
     public AuthorizationGate authorizationGate(
-            InMemoryPolicySnapshotProvider snapshotProvider,
+            PolicySnapshotProvider snapshotProvider,
             @Value("${goyais.security.authz.dynamic-enabled:true}") boolean dynamicEnabled
     ) {
         return new DynamicAuthorizationGate(snapshotProvider, dynamicEnabled);
@@ -148,7 +174,8 @@ public class ApiServerConfiguration {
     @Bean
     public CommandHandler defaultCommandHandler(
             PolicyInvalidationPublisher invalidationPublisher,
-            InMemoryPolicySnapshotProvider snapshotProvider
+            PolicySnapshotProvider snapshotProvider,
+            PolicySnapshotStore policySnapshotStore
     ) {
         return new CommandHandler() {
             /**
@@ -168,6 +195,20 @@ public class ApiServerConfiguration {
                     String newVersion = request.payload() == null || request.payload().get("policyVersion") == null
                             ? context.policyVersion()
                             : String.valueOf(request.payload().get("policyVersion"));
+
+                    Set<String> roles = context.roles() == null ? Set.of() : context.roles();
+                    Set<String> denied = extractStringSet(request.payload(), "deniedCommandTypes");
+                    PolicySnapshot snapshot = new PolicySnapshot(
+                            context.tenantId(),
+                            context.workspaceId(),
+                            context.userId(),
+                            newVersion,
+                            roles,
+                            denied,
+                            Instant.now()
+                    );
+                    policySnapshotStore.upsert(snapshot);
+
                     PolicyInvalidationEvent event = new PolicyInvalidationEvent(
                             context.tenantId(),
                             context.workspaceId(),
@@ -193,6 +234,20 @@ public class ApiServerConfiguration {
                         "status", "executed"
                 );
             }
+
+            private Set<String> extractStringSet(Map<String, Object> payload, String key) {
+                if (payload == null) {
+                    return Set.of();
+                }
+                Object value = payload.get(key);
+                if (!(value instanceof List<?> listValue)) {
+                    return Set.of();
+                }
+                return listValue.stream()
+                        .filter(item -> item != null && !String.valueOf(item).isBlank())
+                        .map(String::valueOf)
+                        .collect(java.util.stream.Collectors.toUnmodifiableSet());
+            }
         };
     }
 
@@ -205,15 +260,16 @@ public class ApiServerConfiguration {
     }
 
     /**
-     * Composes command pipeline with authorization, egress and event publication.
+     * Composes command pipeline with authorization, egress, audit, and event publication.
      */
     @Bean
     public CommandPipeline commandPipeline(
             AuthorizationGate authorizationGate,
             EgressGate egressGate,
             List<CommandHandler> handlers,
-            DomainEventPublisher eventPublisher
+            DomainEventPublisher eventPublisher,
+            AuditEventStore auditEventStore
     ) {
-        return new CommandPipeline(authorizationGate, egressGate, handlers, eventPublisher);
+        return new CommandPipeline(authorizationGate, egressGate, handlers, eventPublisher, auditEventStore);
     }
 }

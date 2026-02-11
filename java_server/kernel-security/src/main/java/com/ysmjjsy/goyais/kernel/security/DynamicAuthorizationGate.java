@@ -60,6 +60,11 @@ public final class DynamicAuthorizationGate implements AuthorizationGate {
             return visibilityDecision;
         }
 
+        AuthorizationDecision aclDecision = checkAcl(request, snapshot);
+        if (!aclDecision.allowed()) {
+            return aclDecision;
+        }
+
         AuthorizationDecision rbacDecision = checkRbac(request, snapshot);
         if (!rbacDecision.allowed()) {
             return rbacDecision;
@@ -101,6 +106,14 @@ public final class DynamicAuthorizationGate implements AuthorizationGate {
             return AuthorizationDecision.deny("rbac.command.blocked");
         }
         return AuthorizationDecision.allow("rbac.allow");
+    }
+
+    private AuthorizationDecision checkAcl(CommandCreateRequest request, PolicySnapshot snapshot) {
+        Object aclState = request.payload() == null ? null : request.payload().get("aclDecision");
+        if (aclState != null && "deny".equalsIgnoreCase(String.valueOf(aclState))) {
+            return AuthorizationDecision.deny("acl.command.denied");
+        }
+        return AuthorizationDecision.allow("acl.allow");
     }
 
     private PolicyVersionState evaluateVersionState(String requestVersion, String effectiveVersion) {

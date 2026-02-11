@@ -19,12 +19,15 @@
 
 - PostgreSQL + Redis + Local file store starts successfully.
 - `GET /api/v1/healthz` and `GET /api/v1/system/healthz` return provider readiness.
+- Flyway baseline migration creates `commands/audit_events/policies/acl_entries`.
 
 ## 4. Security and Auth
 
 - OAuth2.1/OIDC usable for web login。
 - Password/OIDC login paths pass e2e checks。
 - JWT claims map to ExecutionContext without drift。
+- `GET /api/v1/commands` without token returns 401。
+- `GOYAIS_SECURITY_DEV_HEADER_CONTEXT_ENABLED=false` 时，`X-*` 头不会绕过认证。
 
 ## 5. Dynamic Authorization
 
@@ -36,6 +39,7 @@
 
 - Row-level data permission SQL filtering is enforced。
 - owner/WORKSPACE/ACL.READ 三类路径过滤语义正确。
+- SQL 过滤谓词由 `DataPermissionResolver` 在 repository 层注入。
 
 ## 7. Capability Wrappers
 
@@ -47,6 +51,7 @@
 - `bash go_server/scripts/ci/source_header_check.sh` 通过。
 - `bash java_server/scripts/ci/java_javadoc_check.sh` 通过。
 - `bash go_server/scripts/ci/contract_regression.sh` 通过。
+- `mvn -f java_server/pom.xml test` 通过（含 `DynamicAuthorizationGateTest`、`CommandPipelineTest`、`RequestExecutionContextFactoryTest`）。
 
 ## 9. Rollback
 

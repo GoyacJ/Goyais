@@ -4,7 +4,7 @@
  * Author: Goya
  * Created: 2026-02-11
  * Version: v1.0.0
- * Description: In-memory bootstrap command service for API and contract iteration.
+ * Description: Command service backed by repository persistence for contract iteration.
  */
 package com.ysmjjsy.goyais.application.command;
 
@@ -16,13 +16,9 @@ import com.ysmjjsy.goyais.contract.api.common.Visibility;
 import com.ysmjjsy.goyais.contract.api.common.WriteResponse;
 import com.ysmjjsy.goyais.kernel.core.ExecutionContext;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import org.springframework.stereotype.Service;
 
 /**
@@ -30,14 +26,15 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public final class CommandApplicationService {
-    private final ConcurrentMap<String, CommandResource> commands = new ConcurrentHashMap<>();
     private final CommandPipeline pipeline;
+    private final CommandRepository commandRepository;
 
     /**
      * Creates application service with command pipeline dependency.
      */
-    public CommandApplicationService(CommandPipeline pipeline) {
+    public CommandApplicationService(CommandPipeline pipeline, CommandRepository commandRepository) {
         this.pipeline = pipeline;
+        this.commandRepository = commandRepository;
     }
 
     /**
@@ -71,24 +68,22 @@ public final class CommandApplicationService {
                 null
         );
 
-        commands.put(id, command);
+        commandRepository.save(command);
 
         return new WriteResponse<>(command, new CommandRef(id, "accepted", now));
     }
 
     /**
-     * Lists current in-memory command resources with newest-first ordering.
+     * Lists readable command resources with newest-first ordering.
      */
-    public List<CommandResource> list() {
-        List<CommandResource> result = new ArrayList<>(commands.values());
-        result.sort(Comparator.comparing(CommandResource::acceptedAt).reversed());
-        return result;
+    public List<CommandResource> list(ExecutionContext context) {
+        return commandRepository.listReadable(context, 200);
     }
 
     /**
-     * Returns one command resource by identifier.
+     * Returns one readable command resource by identifier.
      */
-    public CommandResource get(String commandId) {
-        return commands.get(commandId);
+    public CommandResource get(String commandId, ExecutionContext context) {
+        return commandRepository.findReadableById(commandId, context);
     }
 }

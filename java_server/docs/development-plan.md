@@ -9,14 +9,30 @@
 
 ## 2. Sprint 路线图
 
-| Sprint | 周期 | Squad-A | Squad-B | 验收门禁 |
-|---|---|---|---|---|
-| S1 | W1-W2 | 单应用拓扑骨架、OIDC 元数据端点 | Maven 模块骨架、`/healthz` | 单应用可启动 |
-| S2 | W3-W4 | password/oidc 登录链路、JWT claims | command baseline + `/api/v1/commands` + error envelope | command 202 合规 |
-| S3 | W5-W6 | `policyVersion + Redis invalidation` | authz gate + row-level data permission | 动态权限即时生效 |
-| S4 | W7-W8 | `single/resource-only` 切换治理 | assets/workflow/shares 同构落地 | 契约字段同构 |
-| S5 | W9-W10 | 安全策略收敛与审计增强 | cache/event/messaging/storage provider 切换 | minimal/full 均可跑 |
-| S6 | W11-W12 | 安全加固与发布策略 | 回归/性能/发布回滚演练 | v0.1 gates 全绿 |
+| Sprint | 周期 | Squad-A | Squad-B | 验收门禁 | 状态 |
+|---|---|---|---|---|---|
+| S1 | W1-W2 | 单应用拓扑骨架、OIDC 元数据端点 | Maven 模块骨架、`/healthz` | 单应用可启动 | Done |
+| S2 | W3-W4 | password/oidc 登录链路、JWT claims | command baseline + `/api/v1/commands` + error envelope | command 202 合规 | Done |
+| S3 | W5-W6 | `policyVersion + Redis invalidation` | authz gate + row-level data permission | 动态权限即时生效 | In Progress (基础落地) |
+| S4 | W7-W8 | `single/resource-only` 切换治理 | assets/workflow/shares 同构落地 | 契约字段同构 | Planned |
+| S5 | W9-W10 | 安全策略收敛与审计增强 | cache/event/messaging/storage provider 切换 | minimal/full 均可跑 | Planned |
+| S6 | W11-W12 | 安全加固与发布策略 | 回归/性能/发布回滚演练 | v0.1 gates 全绿 | Planned |
+
+## 2.1 2026-02-11 执行结果（本次实现）
+
+- 安全：
+  - `/api/v1/**` 默认鉴权（健康检查例外）。
+  - 支持 `single/resource-only` 拓扑下 OAuth2 端点开关。
+  - ExecutionContext 默认从 JWT claims 解析，`GOYAIS_SECURITY_DEV_HEADER_CONTEXT_ENABLED=true` 时可回退 `X-*` 头。
+- 持久化：
+  - 新增 Flyway 基线迁移 `V1__baseline.sql`。
+  - `commands`、`audit_events`、`policies`、`acl_entries` 表落地。
+  - `infra-mybatis` 增加命令、审计、策略快照仓储实现。
+- 动态权限：
+  - `PolicySnapshotProvider` 升级为 Redis 优先 + DB 回源。
+  - 保留 Redis invalidation 广播机制与本地缓存失效。
+- 测试：
+  - 新增 `DynamicAuthorizationGateTest`、`CommandPipelineTest`、`RequestExecutionContextFactoryTest`。
 
 ## 3. 固定 DoD
 

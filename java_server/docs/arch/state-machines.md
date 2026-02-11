@@ -4,6 +4,7 @@
 
 - States: `accepted -> running -> succeeded|failed|canceled`
 - Required audits: `command.authorize`, `command.execute`, `command.egress`
+- Persistence: `commands.status` 与 `audit_events` 同步记录。
 
 ## 2. Policy Refresh (Dynamic AuthZ)
 
@@ -13,7 +14,8 @@
   - `running -> succeeded`（发布 `PolicyInvalidationEvent` 成功）
   - `running -> failed`（发布失败）
 - Side effects:
-  - 本地 snapshot cache evict
+  - 本地/Redis snapshot cache evict
+  - `policies` 表 upsert 新版本策略快照
   - Redis invalidation topic 广播（若可用）
 
 ## 3. WorkflowRun
