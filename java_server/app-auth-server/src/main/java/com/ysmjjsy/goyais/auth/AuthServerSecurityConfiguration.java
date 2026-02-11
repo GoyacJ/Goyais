@@ -53,9 +53,13 @@ public class AuthServerSecurityConfiguration {
     @Order(Ordered.HIGHEST_PRECEDENCE)
     public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
         http
+                // Restrict this chain to OAuth/OIDC endpoints to avoid conflicting with API chain.
+                .securityMatcher("/.well-known/**", "/oauth2/**", "/connect/**")
+                // Register standard OAuth2.1/OIDC endpoint filters in single-topology mode.
+                .oauth2AuthorizationServer(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/.well-known/**", "/oauth2/**", "/connect/**", "/actuator/**").permitAll()
+                        .requestMatchers("/.well-known/**", "/oauth2/**", "/connect/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .formLogin(Customizer.withDefaults());

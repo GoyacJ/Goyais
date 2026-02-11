@@ -81,6 +81,21 @@
   - 覆盖 workflow domain sugar 的关键 deny/allow 路径，降低权限回归风险。
   - 覆盖 patch operations 的受控变更语义，降低图编辑兼容回归风险。
 
+## 2.5 2026-02-11 N6 第二批进展（本次实现）
+
+- 安全拓扑测试补齐：
+  - 新增 `ApiSecuritySingleModeIntegrationTest`，覆盖：
+    - `single` 模式 `GET /api/v1/healthz` 匿名可访问。
+    - `single` 模式 `GET /oauth2/jwks` 可访问。
+    - 受保护 API 无 token 返回 401。
+    - 已认证但业务拒绝返回 403 且统一 error envelope。
+  - 新增 `ApiSecurityResourceOnlyModeIntegrationTest`，覆盖：
+    - `resource-only` 模式 `GET /oauth2/jwks` 不可用（4xx）。
+    - 受保护 API 无 token 返回 401。
+- 安全链路修复：
+  - 修复 `single` 模式双过滤链冲突：授权链增加端点级 `securityMatcher`，避免与 API 链同时匹配 `anyRequest`。
+  - 显式启用 `oauth2AuthorizationServer` 默认配置，确保 OAuth2/OIDC 标准端点在 `single` 模式可用。
+
 ## 3. 固定 DoD
 
 - API/数据模型/状态机文档与实现同变更同步。
