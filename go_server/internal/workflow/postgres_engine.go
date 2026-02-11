@@ -697,13 +697,19 @@ func (r *PostgresRepository) loadStepRunByAttemptFromTx(ctx context.Context, tx 
 }
 
 func (r *PostgresRepository) failStepAttemptFromTx(ctx context.Context, tx *sql.Tx, run WorkflowRun, step StepRun, attempt int, now time.Time) error {
-	output := mustJSONObjectRaw(map[string]any{
-		"handled": false,
-		"mode":    "tool_gate_denied",
-		"stepKey": step.StepKey,
-		"type":    step.StepType,
-		"reason":  "permission_denied",
-	})
+	output := buildStepExecutionOutput(
+		step.StepKey,
+		step.StepType,
+		"tool_gate_denied",
+		StepStatusFailed,
+		attempt,
+		decodeJSONMap(step.InputJSON),
+		"TOOL_GATE_DENIED",
+		"error.workflow.tool_gate_denied",
+		"permission_denied",
+		false,
+		0,
+	)
 	if _, err := tx.ExecContext(
 		ctx,
 		`UPDATE step_runs
@@ -736,12 +742,17 @@ func (r *PostgresRepository) failStepAttemptFromTx(ctx context.Context, tx *sql.
 }
 
 func (r *PostgresRepository) failRunFromTx(ctx context.Context, tx *sql.Tx, run WorkflowRun, now time.Time) error {
-	output := mustJSONObjectRaw(map[string]any{
-		"handled":       false,
-		"mode":          "tool_gate_denied",
-		"deniedStepKey": "",
-		"reason":        "permission_denied",
-	})
+	output := buildRunExecutionOutputFromCounts(
+		"tool_gate_denied",
+		RunStatusFailed,
+		nil,
+		map[string]int{
+			StepStatusFailed: 1,
+		},
+		map[string]any{
+			"reason": "permission_denied",
+		},
+	)
 	if _, err := tx.ExecContext(
 		ctx,
 		`UPDATE workflow_runs

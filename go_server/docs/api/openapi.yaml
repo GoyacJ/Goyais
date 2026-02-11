@@ -2422,9 +2422,64 @@ components:
           type: array
           items:
             type: string
+        score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/AIPlanStep'
+        strategyScores:
+          type: array
+          items:
+            $ref: '#/components/schemas/AIPlanStrategyScore'
         explainability:
           type: object
           additionalProperties: true
+
+    AIPlanStep:
+      type: object
+      required: [order, segment, payload, planner, reason]
+      properties:
+        order:
+          type: integer
+          minimum: 1
+        segment:
+          type: string
+        commandType:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        planner:
+          type: string
+        reason:
+          type: string
+        score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        executable:
+          type: boolean
+
+    AIPlanStrategyScore:
+      type: object
+      required: [strategy, score, selected, reason]
+      properties:
+        strategy:
+          type: string
+        score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        selected:
+          type: boolean
+        reason:
+          type: string
 
     AIPlanPreviewResponse:
       type: object

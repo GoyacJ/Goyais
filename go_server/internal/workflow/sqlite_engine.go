@@ -552,6 +552,7 @@ func (r *SQLiteRepository) ProcessStepQueueOnce(ctx context.Context, workerID st
 			return false, err
 		}
 	}
+	stepInputs := decodeJSONMap(step.InputJSON)
 
 	allowed, reason, err := r.checkToolGateFromConn(ctx, conn, command.RequestContext{
 		TenantID:    run.TenantID,
@@ -563,13 +564,19 @@ func (r *SQLiteRepository) ProcessStepQueueOnce(ctx context.Context, workerID st
 	}
 	if !allowed {
 		reasonText := reasonOrFallback(reason, "permission_denied")
-		if err := r.failStepAttemptFromConn(ctx, conn, run, step, item.Attempt, now, "TOOL_GATE_DENIED", "error.workflow.tool_gate_denied", mustJSONObjectRaw(map[string]any{
-			"handled": false,
-			"mode":    "tool_gate_denied",
-			"stepKey": step.StepKey,
-			"type":    step.StepType,
-			"reason":  reasonText,
-		})); err != nil {
+		if err := r.failStepAttemptFromConn(ctx, conn, run, step, item.Attempt, now, "TOOL_GATE_DENIED", "error.workflow.tool_gate_denied", buildStepExecutionOutput(
+			step.StepKey,
+			step.StepType,
+			"tool_gate_denied",
+			StepStatusFailed,
+			item.Attempt,
+			stepInputs,
+			"TOOL_GATE_DENIED",
+			"error.workflow.tool_gate_denied",
+			reasonText,
+			false,
+			0,
+		)); err != nil {
 			return false, err
 		}
 		if err := r.setQueueStatusFromConn(ctx, conn, item.ID, queueStatusDone, workerID, now); err != nil {
@@ -594,12 +601,18 @@ func (r *SQLiteRepository) ProcessStepQueueOnce(ctx context.Context, workerID st
 		if err := r.cancelPendingQueueFromConn(ctx, conn, run.ID, run.TenantID, run.WorkspaceID, now); err != nil {
 			return false, err
 		}
-		if err := r.failRunFromConn(ctx, conn, run, now, "TOOL_GATE_DENIED", "error.workflow.tool_gate_denied", mustJSONObjectRaw(map[string]any{
-			"handled":       false,
-			"mode":          "tool_gate_denied",
-			"deniedStepKey": step.StepKey,
-			"reason":        reasonText,
-		})); err != nil {
+		if err := r.failRunFromConn(ctx, conn, run, now, "TOOL_GATE_DENIED", "error.workflow.tool_gate_denied", buildRunExecutionOutputFromCounts(
+			"tool_gate_denied",
+			RunStatusFailed,
+			[]string{step.StepKey},
+			map[string]int{
+				StepStatusFailed: 1,
+			},
+			map[string]any{
+				"deniedStepKey": step.StepKey,
+				"reason":        reasonText,
+			},
+		)); err != nil {
 			return false, err
 		}
 		if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
@@ -622,13 +635,28 @@ func (r *SQLiteRepository) ProcessStepQueueOnce(ctx context.Context, workerID st
 
 	shouldFailStep := payload.Mode == RunModeFail && strings.TrimSpace(payload.FailStepKey) == step.StepKey
 	if shouldFailStep {
-		if err := r.failStepAttemptFromConn(ctx, conn, run, step, item.Attempt, now, "WORKFLOW_STEP_FAILED", "error.workflow.step_failed", mustJSONObjectRaw(map[string]any{
-			"handled": false,
-			"mode":    RunModeFail,
-			"stepKey": step.StepKey,
-			"type":    step.StepType,
-			"attempt": item.Attempt,
-		})); err != nil {
+		willRetry := item.Attempt < payload.MaxAttempts
+		retryAfter := 0
+		if willRetry {
+			retryAfter = computeRetryBackoffMS(retryPolicy{
+				MaxAttempts:   payload.MaxAttempts,
+				BaseBackoffMS: payload.BaseBackoffMS,
+				MaxBackoffMS:  payload.MaxBackoffMS,
+			}, item.Attempt)
+		}
+		if err := r.failStepAttemptFromConn(ctx, conn, run, step, item.Attempt, now, "WORKFLOW_STEP_FAILED", "error.workflow.step_failed", buildStepExecutionOutput(
+			step.StepKey,
+			step.StepType,
+			RunModeFail,
+			StepStatusFailed,
+			item.Attempt,
+			stepInputs,
+			"WORKFLOW_STEP_FAILED",
+			"error.workflow.step_failed",
+			"step_execution_failed",
+			willRetry,
+			retryAfter,
+		)); err != nil {
 			return false, err
 		}
 		if err := r.setQueueStatusFromConn(ctx, conn, item.ID, queueStatusDone, workerID, now); err != nil {
@@ -636,11 +664,6 @@ func (r *SQLiteRepository) ProcessStepQueueOnce(ctx context.Context, workerID st
 		}
 		if item.Attempt < payload.MaxAttempts {
 			nextAttempt := item.Attempt + 1
-			retryAfter := computeRetryBackoffMS(retryPolicy{
-				MaxAttempts:   payload.MaxAttempts,
-				BaseBackoffMS: payload.BaseBackoffMS,
-				MaxBackoffMS:  payload.MaxBackoffMS,
-			}, item.Attempt)
 			if err := r.upsertRetryStepRunFromConn(ctx, conn, run, step, nextAttempt, now); err != nil {
 				return false, err
 			}
@@ -691,12 +714,18 @@ func (r *SQLiteRepository) ProcessStepQueueOnce(ctx context.Context, workerID st
 			if err := r.cancelPendingQueueFromConn(ctx, conn, run.ID, run.TenantID, run.WorkspaceID, now); err != nil {
 				return false, err
 			}
-			if err := r.failRunFromConn(ctx, conn, run, now, "WORKFLOW_RUN_FAILED", "error.workflow.run_failed", mustJSONObjectRaw(map[string]any{
-				"handled":       false,
-				"mode":          RunModeFail,
-				"deniedStepKey": step.StepKey,
-				"attempts":      payload.MaxAttempts,
-			})); err != nil {
+			if err := r.failRunFromConn(ctx, conn, run, now, "WORKFLOW_RUN_FAILED", "error.workflow.run_failed", buildRunExecutionOutputFromCounts(
+				RunModeFail,
+				RunStatusFailed,
+				[]string{step.StepKey},
+				map[string]int{
+					StepStatusFailed: 1,
+				},
+				map[string]any{
+					"failedStepKey": step.StepKey,
+					"maxAttempts":   payload.MaxAttempts,
+				},
+			)); err != nil {
 				return false, err
 			}
 		}
@@ -713,12 +742,19 @@ func (r *SQLiteRepository) ProcessStepQueueOnce(ctx context.Context, workerID st
 		 SET status = ?, output = ?, error_code = NULL, message_key = NULL, finished_at = ?, updated_at = ?
 		 WHERE run_id = ? AND tenant_id = ? AND workspace_id = ? AND step_key = ? AND attempt = ?`,
 		StepStatusSucceeded,
-		string(mustJSONObjectRaw(map[string]any{
-			"handled": true,
-			"mode":    payload.Mode,
-			"stepKey": step.StepKey,
-			"type":    step.StepType,
-		})),
+		string(buildStepExecutionOutput(
+			step.StepKey,
+			step.StepType,
+			payload.Mode,
+			StepStatusSucceeded,
+			item.Attempt,
+			stepInputs,
+			"",
+			"",
+			"",
+			false,
+			0,
+		)),
 		now.Format(time.RFC3339Nano),
 		now.Format(time.RFC3339Nano),
 		run.ID,
@@ -1229,11 +1265,15 @@ func (r *SQLiteRepository) maybeFinalizeRunSuccessFromConn(ctx context.Context, 
 		return fmt.Errorf("close succeeded step rows: %w", err)
 	}
 
-	outputs := mustJSONObjectRaw(map[string]any{
-		"handled": true,
-		"mode":    mode,
-		"steps":   stepKeys,
-	})
+	outputs := buildRunExecutionOutputFromCounts(
+		mode,
+		RunStatusSucceeded,
+		stepKeys,
+		map[string]int{
+			StepStatusSucceeded: len(stepKeys),
+		},
+		nil,
+	)
 	if _, err := conn.ExecContext(
 		ctx,
 		`UPDATE workflow_runs
@@ -1333,12 +1373,19 @@ func (r *SQLiteRepository) skipPendingStepsFromConn(ctx context.Context, conn *s
 			 SET status = ?, output = ?, error_code = NULL, message_key = NULL, finished_at = ?, updated_at = ?
 			 WHERE tenant_id = ? AND workspace_id = ? AND run_id = ? AND step_key = ? AND status = ?`,
 			StepStatusSkipped,
-			string(mustJSONObjectRaw(map[string]any{
-				"handled": false,
-				"mode":    reason,
-				"stepKey": stepKey,
-				"reason":  reason,
-			})),
+			string(buildStepExecutionOutput(
+				stepKey,
+				"unknown",
+				reason,
+				StepStatusSkipped,
+				1,
+				map[string]any{},
+				"",
+				"",
+				reason,
+				false,
+				0,
+			)),
 			now.Format(time.RFC3339Nano),
 			now.Format(time.RFC3339Nano),
 			run.TenantID,

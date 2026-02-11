@@ -564,286 +564,90 @@ func newAISessionTurnExecutor(aiService *ai.Service, commandService *command.Ser
 	}
 }
 
-type aiDeterministicCommandPlan struct {
-	CommandType    string
-	Payload        json.RawMessage
-	Planner        string
-	Reason         string
-	Suggestions    []string
-	Explainability map[string]any
-}
-
-func planAIDeterministicCommand(req aiSessionTurnCommandPayload) (aiDeterministicCommandPlan, error) {
+func planAIDeterministicCommand(req aiSessionTurnCommandPayload) (aiplanner.Plan, error) {
 	plan, err := aiplanner.PlanTurn(aiplanner.TurnRequest{
 		Message:           req.Message,
 		IntentCommandType: req.IntentCommandType,
 		IntentPayload:     req.IntentCommandInput,
 	})
 	if err != nil {
-		return aiDeterministicCommandPlan{}, ai.ErrInvalidRequest
+		return aiplanner.Plan{}, ai.ErrInvalidRequest
 	}
-	return aiDeterministicCommandPlan{
+	return cloneAIPlan(plan), nil
+}
+
+func cloneAIPlan(plan aiplanner.Plan) aiplanner.Plan {
+	cloned := aiplanner.Plan{
 		CommandType:    strings.TrimSpace(plan.CommandType),
 		Payload:        objectOrDefault(plan.Payload),
 		Planner:        strings.TrimSpace(plan.Planner),
 		Reason:         strings.TrimSpace(plan.Reason),
 		Suggestions:    append([]string{}, plan.Suggestions...),
 		Explainability: cloneMap(plan.Explainability),
-	}, nil
-}
-
-func parseWorkflowRunIntent(tokens []string, _ string) (aiDeterministicCommandPlan, bool) {
-	if len(tokens) >= 2 && strings.EqualFold(tokens[0], "run") && strings.EqualFold(tokens[1], "workflow") {
-		if len(tokens) < 3 {
-			return aiDeterministicCommandPlan{
-				Planner:     "workflow.run",
-				Reason:      "missing_workflow_template_id",
-				Suggestions: []string{"run workflow <templateId>"},
-			}, true
-		}
-		return buildWorkflowRunPlan(cleanAICommandToken(tokens[2])), true
+		Score:          plan.Score,
 	}
-	if len(tokens) >= 1 && strings.EqualFold(tokens[0], "workflow.run") {
-		if len(tokens) < 2 {
-			return aiDeterministicCommandPlan{
-				Planner:     "workflow.run",
-				Reason:      "missing_workflow_template_id",
-				Suggestions: []string{"workflow.run <templateId>"},
-			}, true
-		}
-		return buildWorkflowRunPlan(cleanAICommandToken(tokens[1])), true
-	}
-	return aiDeterministicCommandPlan{}, false
-}
-
-func parseWorkflowRetryIntent(tokens []string, _ string) (aiDeterministicCommandPlan, bool) {
-	if len(tokens) >= 2 && strings.EqualFold(tokens[0], "retry") && strings.EqualFold(tokens[1], "workflow") {
-		if len(tokens) < 3 {
-			return aiDeterministicCommandPlan{
-				Planner:     "workflow.retry",
-				Reason:      "missing_workflow_run_id",
-				Suggestions: []string{"retry workflow <runId>"},
-			}, true
-		}
-		return buildWorkflowRetryPlan(cleanAICommandToken(tokens[2])), true
-	}
-	if len(tokens) >= 1 && strings.EqualFold(tokens[0], "workflow.retry") {
-		if len(tokens) < 2 {
-			return aiDeterministicCommandPlan{
-				Planner:     "workflow.retry",
-				Reason:      "missing_workflow_run_id",
-				Suggestions: []string{"workflow.retry <runId>"},
-			}, true
-		}
-		return buildWorkflowRetryPlan(cleanAICommandToken(tokens[1])), true
-	}
-	return aiDeterministicCommandPlan{}, false
-}
-
-func parseWorkflowCancelIntent(tokens []string, _ string) (aiDeterministicCommandPlan, bool) {
-	if len(tokens) >= 2 && strings.EqualFold(tokens[0], "cancel") && strings.EqualFold(tokens[1], "workflow") {
-		if len(tokens) < 3 {
-			return aiDeterministicCommandPlan{
-				Planner:     "workflow.cancel",
-				Reason:      "missing_workflow_run_id",
-				Suggestions: []string{"cancel workflow <runId>"},
-			}, true
-		}
-		return buildWorkflowCancelPlan(cleanAICommandToken(tokens[2])), true
-	}
-	if len(tokens) >= 1 && strings.EqualFold(tokens[0], "workflow.cancel") {
-		if len(tokens) < 2 {
-			return aiDeterministicCommandPlan{
-				Planner:     "workflow.cancel",
-				Reason:      "missing_workflow_run_id",
-				Suggestions: []string{"workflow.cancel <runId>"},
-			}, true
-		}
-		return buildWorkflowCancelPlan(cleanAICommandToken(tokens[1])), true
-	}
-	return aiDeterministicCommandPlan{}, false
-}
-
-func parseWorkflowPatchIntent(tokens []string, rawMessage string) (aiDeterministicCommandPlan, bool) {
-	var (
-		templateID string
-		patchRaw   json.RawMessage
-	)
-
-	switch {
-	case len(tokens) >= 1 && strings.EqualFold(tokens[0], "workflow.patch"):
-		if len(tokens) < 2 {
-			return aiDeterministicCommandPlan{
-				Planner:     "workflow.patch",
-				Reason:      "missing_workflow_template_id",
-				Suggestions: []string{"workflow.patch <templateId> {\"operations\":[...]}"}, // controlled patch payload
-			}, true
-		}
-		templateID = cleanAICommandToken(tokens[1])
-		patchRaw = extractJSONPatchFromMessage(rawMessage)
-	case len(tokens) >= 2 && strings.EqualFold(tokens[0], "patch") && strings.EqualFold(tokens[1], "workflow"):
-		if len(tokens) < 3 {
-			return aiDeterministicCommandPlan{
-				Planner:     "workflow.patch",
-				Reason:      "missing_workflow_template_id",
-				Suggestions: []string{"patch workflow <templateId> {\"operations\":[...]}"}, // controlled patch payload
-			}, true
-		}
-		templateID = cleanAICommandToken(tokens[2])
-		patchRaw = extractJSONPatchFromMessage(rawMessage)
-	default:
-		return aiDeterministicCommandPlan{}, false
-	}
-
-	if templateID == "" {
-		return aiDeterministicCommandPlan{
-			Planner:     "workflow.patch",
-			Reason:      "missing_workflow_template_id",
-			Suggestions: []string{"patch workflow <templateId> {\"operations\":[...]}"}, // controlled patch payload
-		}, true
-	}
-	return buildWorkflowPatchPlan(templateID, patchRaw), true
-}
-
-func buildWorkflowRunPlan(templateID string) aiDeterministicCommandPlan {
-	if templateID == "" {
-		return aiDeterministicCommandPlan{
-			Planner:     "workflow.run",
-			Reason:      "missing_workflow_template_id",
-			Suggestions: []string{"run workflow <templateId>"},
+	if len(plan.Steps) > 0 {
+		cloned.Steps = make([]aiplanner.PlanStep, 0, len(plan.Steps))
+		for _, step := range plan.Steps {
+			cloned.Steps = append(cloned.Steps, aiplanner.PlanStep{
+				Order:       step.Order,
+				Segment:     step.Segment,
+				CommandType: strings.TrimSpace(step.CommandType),
+				Payload:     objectOrDefault(step.Payload),
+				Planner:     strings.TrimSpace(step.Planner),
+				Reason:      strings.TrimSpace(step.Reason),
+				Score:       step.Score,
+				Executable:  step.Executable,
+			})
 		}
 	}
-	payload, _ := json.Marshal(map[string]any{
-		"templateId": templateID,
-		"mode":       "sync",
-		"inputs":     map[string]any{},
-	})
-	return aiDeterministicCommandPlan{
-		CommandType: "workflow.run",
-		Payload:     payload,
-		Planner:     "workflow.run",
-		Reason:      "matched_workflow_run",
-	}
-}
-
-func buildWorkflowRetryPlan(runID string) aiDeterministicCommandPlan {
-	if runID == "" {
-		return aiDeterministicCommandPlan{
-			Planner:     "workflow.retry",
-			Reason:      "missing_workflow_run_id",
-			Suggestions: []string{"retry workflow <runId>"},
+	if len(plan.StrategyScores) > 0 {
+		cloned.StrategyScores = make([]aiplanner.PlanStrategyScore, 0, len(plan.StrategyScores))
+		for _, score := range plan.StrategyScores {
+			cloned.StrategyScores = append(cloned.StrategyScores, aiplanner.PlanStrategyScore{
+				Strategy: strings.TrimSpace(score.Strategy),
+				Score:    score.Score,
+				Selected: score.Selected,
+				Reason:   strings.TrimSpace(score.Reason),
+			})
 		}
 	}
-	payload, _ := json.Marshal(map[string]any{
-		"runId": runID,
-		"mode":  "sync",
-	})
-	return aiDeterministicCommandPlan{
-		CommandType: "workflow.retry",
-		Payload:     payload,
-		Planner:     "workflow.retry",
-		Reason:      "matched_workflow_retry",
-	}
+	return cloned
 }
 
-func buildWorkflowCancelPlan(runID string) aiDeterministicCommandPlan {
-	if runID == "" {
-		return aiDeterministicCommandPlan{
-			Planner:     "workflow.cancel",
-			Reason:      "missing_workflow_run_id",
-			Suggestions: []string{"cancel workflow <runId>"},
-		}
-	}
-	payload, _ := json.Marshal(map[string]any{
-		"runId": runID,
-	})
-	return aiDeterministicCommandPlan{
-		CommandType: "workflow.cancel",
-		Payload:     payload,
-		Planner:     "workflow.cancel",
-		Reason:      "matched_workflow_cancel",
-	}
-}
-
-func buildWorkflowPatchPlan(templateID string, patchRaw json.RawMessage) aiDeterministicCommandPlan {
-	patch := patchRaw
-	if !isJSONObjectRaw(patch) {
-		patch, _ = json.Marshal(map[string]any{
-			"operations": []map[string]any{
-				{
-					"op":   "annotate",
-					"path": "/ui_state/ai_patch",
-					"value": map[string]any{
-						"source":  "ai.intent.plan",
-						"message": "Provide explicit patch JSON for deterministic graph updates.",
-					},
-				},
-			},
-		})
-	}
-	payload, _ := json.Marshal(map[string]any{
-		"templateId": templateID,
-		"patch":      json.RawMessage(patch),
-	})
-	return aiDeterministicCommandPlan{
-		CommandType: "workflow.patch",
-		Payload:     payload,
-		Planner:     "workflow.patch",
-		Reason:      "matched_workflow_patch",
-	}
-}
-
-func cleanAICommandToken(raw string) string {
-	token := strings.TrimSpace(raw)
-	token = strings.Trim(token, "`\"'.,;:()[]{}")
-	return token
-}
-
-func extractJSONPatchFromMessage(raw string) json.RawMessage {
-	message := strings.TrimSpace(raw)
-	start := strings.Index(message, "{")
-	end := strings.LastIndex(message, "}")
-	if start < 0 || end <= start {
-		return nil
-	}
-	candidate := json.RawMessage(strings.TrimSpace(message[start : end+1]))
-	if !isJSONObjectRaw(candidate) {
-		return nil
-	}
-	return candidate
-}
-
-func isJSONObjectRaw(raw json.RawMessage) bool {
-	var value map[string]any
-	return json.Unmarshal(raw, &value) == nil
-}
-
-func buildAIPlanAssistantMessage(plan aiDeterministicCommandPlan) string {
+func buildAIPlanAssistantMessage(plan aiplanner.Plan) string {
 	if strings.TrimSpace(plan.CommandType) == "" {
 		return buildAIRejectAssistantMessage(plan)
 	}
 	explainText := summarizeAIExplainability(plan)
+	stepText := ""
+	if len(plan.Steps) > 1 {
+		stepText = fmt.Sprintf(" steps=%d", len(plan.Steps))
+	}
 	return fmt.Sprintf(
-		"Planned command %s via %s (reason=%s) with payload %s%s",
+		"Planned command %s via %s (reason=%s score=%.2f%s) with payload %s%s",
 		plan.CommandType,
 		defaultAIPlanPlanner(plan),
 		defaultAIPlanReason(plan),
+		defaultAIPlanScore(plan),
+		stepText,
 		string(plan.Payload),
 		explainText,
 	)
 }
 
-func buildAIRejectAssistantMessage(plan aiDeterministicCommandPlan) string {
+func buildAIRejectAssistantMessage(plan aiplanner.Plan) string {
 	explainText := summarizeAIExplainability(plan)
 	return fmt.Sprintf(
-		"No executable intent detected (reason=%s). Suggestions: %s%s",
+		"No executable intent detected (reason=%s score=%.2f). Suggestions: %s%s",
 		defaultAIPlanReason(plan),
+		defaultAIPlanScore(plan),
 		strings.Join(defaultAIPlanSuggestionsFor(plan), " | "),
 		explainText,
 	)
 }
 
-func buildAIExecuteAssistantMessage(commandType string, cmd command.Command, plan aiDeterministicCommandPlan) string {
+func buildAIExecuteAssistantMessage(commandType string, cmd command.Command, plan aiplanner.Plan) string {
 	if runID := extractWorkflowRunID(cmd.Result); runID != "" {
 		return fmt.Sprintf(
 			"Executed %s via command %s (planner=%s, workflowRun=%s, status=%s).",
@@ -863,7 +667,7 @@ func buildAIExecuteAssistantMessage(commandType string, cmd command.Command, pla
 	)
 }
 
-func defaultAIPlanPlanner(plan aiDeterministicCommandPlan) string {
+func defaultAIPlanPlanner(plan aiplanner.Plan) string {
 	value := strings.TrimSpace(plan.Planner)
 	if value == "" {
 		return "deterministic"
@@ -871,12 +675,23 @@ func defaultAIPlanPlanner(plan aiDeterministicCommandPlan) string {
 	return value
 }
 
-func defaultAIPlanReason(plan aiDeterministicCommandPlan) string {
+func defaultAIPlanReason(plan aiplanner.Plan) string {
 	value := strings.TrimSpace(plan.Reason)
 	if value == "" {
 		return "unsupported_intent"
 	}
 	return value
+}
+
+func defaultAIPlanScore(plan aiplanner.Plan) float64 {
+	score := plan.Score
+	if score < 0 {
+		return 0
+	}
+	if score > 1 {
+		return 1
+	}
+	return score
 }
 
 func defaultAIPlanSuggestions() []string {
@@ -888,14 +703,14 @@ func defaultAIPlanSuggestions() []string {
 	}
 }
 
-func defaultAIPlanSuggestionsFor(plan aiDeterministicCommandPlan) []string {
+func defaultAIPlanSuggestionsFor(plan aiplanner.Plan) []string {
 	if len(plan.Suggestions) > 0 {
 		return append([]string{}, plan.Suggestions...)
 	}
 	return defaultAIPlanSuggestions()
 }
 
-func summarizeAIExplainability(plan aiDeterministicCommandPlan) string {
+func summarizeAIExplainability(plan aiplanner.Plan) string {
 	if len(plan.Explainability) == 0 {
 		return ""
 	}
@@ -906,20 +721,46 @@ func summarizeAIExplainability(plan aiDeterministicCommandPlan) string {
 	return " explainability=" + string(raw)
 }
 
-func toAIPlanResultPayload(plan aiDeterministicCommandPlan) map[string]any {
+func toAIPlanResultPayload(plan aiplanner.Plan) map[string]any {
 	payload := map[string]any{
 		"commandType": strings.TrimSpace(plan.CommandType),
 		"planner":     defaultAIPlanPlanner(plan),
 		"reason":      defaultAIPlanReason(plan),
 		"suggestions": defaultAIPlanSuggestionsFor(plan),
+		"score":       defaultAIPlanScore(plan),
 	}
-	if isJSONObjectRaw(plan.Payload) {
-		payload["payload"] = decodeJSON(plan.Payload, map[string]any{})
-	} else {
-		payload["payload"] = map[string]any{}
-	}
+	payload["payload"] = decodeJSON(plan.Payload, map[string]any{})
 	if len(plan.Explainability) > 0 {
 		payload["explainability"] = cloneMap(plan.Explainability)
+	}
+	if len(plan.Steps) > 0 {
+		steps := make([]map[string]any, 0, len(plan.Steps))
+		for _, step := range plan.Steps {
+			stepPayload := map[string]any{
+				"order":       step.Order,
+				"segment":     strings.TrimSpace(step.Segment),
+				"commandType": strings.TrimSpace(step.CommandType),
+				"planner":     strings.TrimSpace(step.Planner),
+				"reason":      strings.TrimSpace(step.Reason),
+				"score":       step.Score,
+				"executable":  step.Executable,
+			}
+			stepPayload["payload"] = decodeJSON(step.Payload, map[string]any{})
+			steps = append(steps, stepPayload)
+		}
+		payload["steps"] = steps
+	}
+	if len(plan.StrategyScores) > 0 {
+		scores := make([]map[string]any, 0, len(plan.StrategyScores))
+		for _, item := range plan.StrategyScores {
+			scores = append(scores, map[string]any{
+				"strategy": strings.TrimSpace(item.Strategy),
+				"score":    item.Score,
+				"selected": item.Selected,
+				"reason":   strings.TrimSpace(item.Reason),
+			})
+		}
+		payload["strategyScores"] = scores
 	}
 	return payload
 }
