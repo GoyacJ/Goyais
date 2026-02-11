@@ -22,6 +22,14 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright (c) 2026 Goya
+ * Author: Goya
+ * Created: 2026-02-11
+ * Version: v1.0.0
+ * Description: Goyais source file.
+ */
 import EmptyState from '@/components/layout/EmptyState.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import WindowBoard from '@/components/layout/WindowBoard.vue'

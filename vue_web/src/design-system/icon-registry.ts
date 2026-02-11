@@ -1,3 +1,12 @@
+/**
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright (c) 2026 Goya
+ * Author: Goya
+ * Created: 2026-02-11
+ * Version: v1.0.0
+ * Description: Goyais source file.
+ */
+
 import homeIcon from '@/assets/icons/heroicons/24/outline/home.svg?raw'
 import squares2x2Icon from '@/assets/icons/heroicons/24/outline/squares-2x2.svg?raw'
 import commandLineIcon from '@/assets/icons/heroicons/24/outline/command-line.svg?raw'

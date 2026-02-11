@@ -12,6 +12,7 @@
 - `06-design-phase-java-python-flutter.md`
 - `07-quality-gates.md`
 - `08-doc-language-and-open-source.md`
+- `09-source-header-and-comments.md`
 
 ## Required Section Format
 

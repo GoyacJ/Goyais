@@ -1,3 +1,12 @@
+/**
+ * SPDX-License-Identifier: Apache-2.0
+ * Copyright (c) 2026 Goya
+ * Author: Goya
+ * Created: 2026-02-11
+ * Version: v1.0.0
+ * Description: Goyais source file.
+ */
+
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'

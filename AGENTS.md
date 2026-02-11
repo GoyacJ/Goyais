@@ -113,3 +113,18 @@
 - 禁止未同步契约文档就合入契约变更。
 - 禁止在主工作树日常开发。
 - 禁止提交构建产物、大型二进制、数据库文件。
+
+## 13. Source Header 与注释规范（MUST）
+
+- 每个源码文件必须包含文件头注释，字段顺序固定：
+  - `SPDX-License-Identifier: Apache-2.0`
+  - `Copyright (c) 2026 Goya`
+  - `Author: Goya`
+  - `Created: 2026-02-11`
+  - `Version: v1.0.0`
+  - `Description: <一句话职责>`
+- 语言注释风格：
+  - Go/Dart 使用 `//`
+  - TS/JS/Java/Vue script 使用 `/** ... */`
+  - Python 使用 `#`
+- 代码内注释必须解释“为什么”（边界、权限、兼容、性能/安全取舍），禁止低价值逐行翻译式注释。
