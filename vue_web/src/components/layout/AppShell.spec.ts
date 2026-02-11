@@ -28,10 +28,26 @@ function createTestRouter() {
       },
       { path: '/canvas', component: view, meta: { layoutDefault: 'focus', windowManifestKey: 'canvas' } },
       { path: '/ai', component: view, meta: { layoutDefault: 'console', windowManifestKey: 'ai-workbench' } },
+      { path: '/run-center', component: view, meta: { layoutDefault: 'console', windowManifestKey: 'run-center' } },
       { path: '/commands', component: view, meta: { layoutDefault: 'console', windowManifestKey: 'commands' } },
       { path: '/assets', component: view, meta: { layoutDefault: 'console', windowManifestKey: 'assets' } },
+      {
+        path: '/algorithm-library',
+        component: view,
+        meta: { layoutDefault: 'console', windowManifestKey: 'algorithm-library' },
+      },
       { path: '/plugins', component: view, meta: { layoutDefault: 'topnav', windowManifestKey: 'plugins' } },
       { path: '/streams', component: view, meta: { layoutDefault: 'topnav', windowManifestKey: 'streams' } },
+      {
+        path: '/permissions',
+        component: view,
+        meta: { layoutDefault: 'console', windowManifestKey: 'permission-management' },
+      },
+      {
+        path: '/context-bundles',
+        component: view,
+        meta: { layoutDefault: 'console', windowManifestKey: 'context-bundles' },
+      },
       { path: '/settings', component: view, meta: { layoutDefault: 'topnav', windowManifestKey: 'settings' } },
     ],
   })

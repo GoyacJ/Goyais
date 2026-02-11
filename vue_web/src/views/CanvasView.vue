@@ -182,11 +182,32 @@
           <div class="rounded-lg border border-ui-border bg-ui-panel p-3 text-xs">
             <div class="mb-2 font-medium text-ui-text">{{ t('page.canvas.patchDiffTitle') }}</div>
             <div class="space-y-1 text-ui-muted">
+              <div>{{ t('page.canvas.patchSource') }}: {{ patchSourceLabel }}</div>
               <div>{{ t('page.canvas.patchAddedNodes') }}: {{ patchDiff.addedNodes.length }}</div>
               <div>{{ t('page.canvas.patchRemovedNodes') }}: {{ patchDiff.removedNodes.length }}</div>
               <div>{{ t('page.canvas.patchChangedNodes') }}: {{ patchDiff.changedNodes.length }}</div>
               <div>{{ t('page.canvas.patchAddedEdges') }}: {{ patchDiff.addedEdges.length }}</div>
               <div>{{ t('page.canvas.patchRemovedEdges') }}: {{ patchDiff.removedEdges.length }}</div>
+            </div>
+            <Button class="mt-3" variant="secondary" :disabled="!selectedTemplateId || isBusy" @click="onApplyAIPatch">
+              {{ t('page.canvas.actionApplyAIPatch') }}
+            </Button>
+            <div v-if="patchValidationMessage" class="mt-2 text-[11px]" :class="patchValidationToneClass">
+              {{ patchValidationMessage }}
+            </div>
+          </div>
+
+          <div class="rounded-lg border border-ui-border bg-ui-panel p-3">
+            <div class="mb-2 text-xs font-medium text-ui-text">{{ t('page.canvas.eventsTitle') }}</div>
+            <div class="space-y-1 text-xs text-ui-muted">
+              <div v-for="event in runEventLines" :key="event.id" class="rounded border border-ui-border px-2 py-1">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="ui-monospace text-[11px] text-ui-fg">{{ event.eventType }}</span>
+                  <span class="text-[11px]">{{ event.createdAt }}</span>
+                </div>
+                <div class="mt-1 text-[11px]">{{ event.summary }}</div>
+              </div>
+              <div v-if="runEventLines.length === 0">{{ t('page.canvas.eventsEmptyDescription') }}</div>
             </div>
           </div>
 
@@ -238,12 +259,13 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
 import { ApiHttpError, isMockEnabled } from '@/api/http'
-import type { ApiError, StepRunDTO, WorkflowRunDTO, WorkflowTemplateDTO } from '@/api/types'
+import type { ApiError, ApiObject, StepRunDTO, WorkflowRunDTO, WorkflowRunEventDTO, WorkflowTemplateDTO } from '@/api/types'
 import {
   cancelWorkflowRun,
   createWorkflowRun,
   createWorkflowTemplate,
   getWorkflowRun,
+  getWorkflowRunEvents,
   getWorkflowTemplate,
   listWorkflowRuns,
   listWorkflowStepRuns,
@@ -298,15 +320,19 @@ const useMock = isMockEnabled()
 const nodeTypes = { typed: TypedPortNode }
 
 const nodePresets: NodePreset[] = [
-  { nodeType: 'source.text', label: 'Text Source', inputType: 'none', outputType: 'text' },
-  { nodeType: 'transform.json', label: 'JSON Transform', inputType: 'text', outputType: 'json' },
-  { nodeType: 'tool.http', label: 'HTTP Tool', inputType: 'json', outputType: 'json' },
-  { nodeType: 'sink.asset', label: 'Asset Sink', inputType: 'json', outputType: 'any' },
+  { nodeType: 'input.text', label: 'Input · Text', inputType: 'none', outputType: 'text' },
+  { nodeType: 'tool.http', label: 'Tool · HTTP', inputType: 'json', outputType: 'json' },
+  { nodeType: 'model.llm', label: 'Model · LLM', inputType: 'text', outputType: 'text' },
+  { nodeType: 'algorithm.detect', label: 'Algorithm · Detect', inputType: 'json', outputType: 'json' },
+  { nodeType: 'transform.json', label: 'Transform · JSON', inputType: 'text', outputType: 'json' },
+  { nodeType: 'control.branch', label: 'Control · Branch', inputType: 'json', outputType: 'json' },
+  { nodeType: 'output.asset', label: 'Output · Asset', inputType: 'json', outputType: 'any' },
 ]
 
 const templates = ref<WorkflowTemplateDTO[]>([])
 const runs = ref<WorkflowRunDTO[]>([])
 const steps = ref<StepRunDTO[]>([])
+const runEvents = ref<WorkflowRunEventDTO[]>([])
 const graphNodes = ref<Node<GraphNodeData>[]>([])
 const graphEdges = ref<Edge[]>([])
 const baseGraph = ref<GraphSnapshot>({ nodes: [], edges: [] })
@@ -322,6 +348,9 @@ const stepsLoading = ref(false)
 const isBusy = ref(false)
 const apiError = ref<ApiError | null>(null)
 const connectionError = ref('')
+const lastPatchSource = ref<'manual' | 'ai.intent.plan'>('manual')
+const patchValidationMessage = ref('')
+const patchValidationTone = ref<'neutral' | 'success' | 'error'>('neutral')
 
 const historyStack = ref<string[]>([])
 const historyIndex = ref(-1)
@@ -366,6 +395,30 @@ const selectedNodeRuntime = computed<CanvasStepRuntime | null>(() => {
   }
   return stepRuntimeByKey.value[selectedNodeId.value] ?? null
 })
+const patchSourceLabel = computed(() =>
+  lastPatchSource.value === 'ai.intent.plan' ? t('page.canvas.patchSourceAI') : t('page.canvas.patchSourceManual'),
+)
+const patchValidationToneClass = computed(() => {
+  if (patchValidationTone.value === 'success') {
+    return 'text-ui-success'
+  }
+  if (patchValidationTone.value === 'error') {
+    return 'text-ui-danger'
+  }
+  return 'text-ui-muted'
+})
+const runEventLines = computed(() =>
+  runEvents.value.map((item, index) => {
+    const payload = asObject(item.data)
+    const summary = summarizeRunEventPayload(payload)
+    return {
+      id: item.id || `event_${index + 1}`,
+      eventType: item.event || 'workflow.event',
+      createdAt: readString(payload, 'createdAt') || readString(payload, 'ts') || '-',
+      summary,
+    }
+  }),
+)
 
 provide(canvasStepRuntimeByKeyKey, stepRuntimeByKey)
 
@@ -394,6 +447,7 @@ watch(selectedRunId, (runId) => {
   stopRunRuntimePolling()
   if (!runId) {
     steps.value = []
+    runEvents.value = []
     return
   }
   void refreshSelectedRunRuntime(runId)
@@ -487,11 +541,24 @@ async function loadSteps(runId: string): Promise<void> {
   }
 }
 
+async function loadRunEvents(runId: string): Promise<void> {
+  try {
+    if (useMock) {
+      runEvents.value = []
+      return
+    }
+    runEvents.value = await getWorkflowRunEvents(runId)
+  } catch (error) {
+    apiError.value = asApiError(error)
+    runEvents.value = []
+  }
+}
+
 async function refreshSelectedRunRuntime(runId: string): Promise<void> {
   if (useMock || selectedRunId.value !== runId) {
     return
   }
-  await Promise.all([loadRunByID(runId), loadSteps(runId)])
+  await Promise.all([loadRunByID(runId), loadSteps(runId), loadRunEvents(runId)])
   const run = runs.value.find((item) => item.id === runId)
   if (!run || isRunTerminal(run.status)) {
     stopRunRuntimePolling()
@@ -549,6 +616,7 @@ async function loadTemplateGraph(templateId: string): Promise<void> {
       graphNodes.value = []
       graphEdges.value = []
       baseGraph.value = { nodes: [], edges: [] }
+      markPatchSourceManual()
       resetHistory()
       return
     }
@@ -558,12 +626,14 @@ async function loadTemplateGraph(templateId: string): Promise<void> {
     graphEdges.value = graph.edges
     selectedNodeId.value = graph.nodes[0]?.id ?? null
     baseGraph.value = cloneGraph(graph)
+    markPatchSourceManual()
     resetHistory()
   } catch (error) {
     apiError.value = asApiError(error)
     graphNodes.value = []
     graphEdges.value = []
     baseGraph.value = { nodes: [], edges: [] }
+    markPatchSourceManual()
     resetHistory()
   }
 }
@@ -589,6 +659,7 @@ function onSelectStep(stepKey: string): void {
 }
 
 function onConnect(connection: Connection): void {
+  markPatchSourceManual()
   connectionError.value = ''
   if (!connection.source || !connection.target) {
     return
@@ -617,6 +688,7 @@ function onConnect(connection: Connection): void {
 }
 
 function onAddNode(preset: NodePreset): void {
+  markPatchSourceManual()
   const id = `node_${Date.now()}_${Math.floor(Math.random() * 1000)}`
   const index = graphNodes.value.length
   const node: Node<GraphNodeData> = {
@@ -635,6 +707,7 @@ function onAddNode(preset: NodePreset): void {
 }
 
 function onRemoveSelectedNode(): void {
+  markPatchSourceManual()
   if (!selectedNodeId.value) {
     return
   }
@@ -642,6 +715,57 @@ function onRemoveSelectedNode(): void {
   graphNodes.value = graphNodes.value.filter((node) => node.id !== target)
   graphEdges.value = graphEdges.value.filter((edge) => edge.source !== target && edge.target !== target)
   selectedNodeId.value = null
+}
+
+function onApplyAIPatch(): void {
+  if (!selectedTemplateId.value || isBusy.value) {
+    return
+  }
+  const sourceNode = selectedNode.value ?? graphNodes.value[graphNodes.value.length - 1]
+  if (!sourceNode) {
+    patchValidationTone.value = 'error'
+    patchValidationMessage.value = t('page.canvas.patchApplyFailedNoNode')
+    return
+  }
+
+  const sourceData = normalizeNodeData(sourceNode.data, sourceNode.id, sourceNode.type ?? 'typed')
+  const aiPreset = nodePresets.find((item) => item.nodeType === 'control.branch') ?? nodePresets[0]
+  if (!aiPreset || !isTypeCompatible(sourceData.outputType, aiPreset.inputType)) {
+    patchValidationTone.value = 'error'
+    patchValidationMessage.value = t('page.canvas.patchApplyFailedTypeMismatch', {
+      sourceType: sourceData.outputType,
+      targetType: aiPreset?.inputType ?? 'unknown',
+    })
+    return
+  }
+
+  const nodeID = `ai_patch_${Date.now()}`
+  const patchNode: Node<GraphNodeData> = {
+    id: nodeID,
+    type: 'typed',
+    position: {
+      x: sourceNode.position.x + 220,
+      y: sourceNode.position.y + 40,
+    },
+    data: {
+      label: `${aiPreset.label} (AI)`,
+      inputType: aiPreset.inputType,
+      outputType: aiPreset.outputType,
+      nodeType: aiPreset.nodeType,
+    },
+  }
+  const patchEdge: Edge = {
+    id: `e_${sourceNode.id}_${nodeID}_${Date.now()}`,
+    source: sourceNode.id,
+    target: nodeID,
+  }
+
+  graphNodes.value = [...graphNodes.value, patchNode]
+  graphEdges.value = [...graphEdges.value, patchEdge]
+  selectedNodeId.value = nodeID
+  lastPatchSource.value = 'ai.intent.plan'
+  patchValidationTone.value = 'success'
+  patchValidationMessage.value = t('page.canvas.patchApplySuccess')
 }
 
 async function onCreateTemplate(): Promise<void> {
@@ -817,6 +941,7 @@ async function onCancelRun(): Promise<void> {
 }
 
 function onUndo(): void {
+  markPatchSourceManual()
   if (!canUndo.value) {
     return
   }
@@ -824,6 +949,7 @@ function onUndo(): void {
 }
 
 function onRedo(): void {
+  markPatchSourceManual()
   if (!canRedo.value) {
     return
   }
@@ -932,13 +1058,25 @@ function normalizeEdge(raw: any): Edge {
 }
 
 function inferPortTypes(nodeType: string): { inputType: string; outputType: string } {
-  if (nodeType.includes('source')) {
+  if (nodeType.includes('input')) {
     return { inputType: 'none', outputType: 'text' }
+  }
+  if (nodeType.includes('tool')) {
+    return { inputType: 'json', outputType: 'json' }
+  }
+  if (nodeType.includes('model')) {
+    return { inputType: 'text', outputType: 'text' }
+  }
+  if (nodeType.includes('algorithm')) {
+    return { inputType: 'json', outputType: 'json' }
   }
   if (nodeType.includes('transform')) {
     return { inputType: 'text', outputType: 'json' }
   }
-  if (nodeType.includes('sink')) {
+  if (nodeType.includes('control')) {
+    return { inputType: 'json', outputType: 'json' }
+  }
+  if (nodeType.includes('output')) {
     return { inputType: 'json', outputType: 'any' }
   }
   return { inputType: 'any', outputType: 'any' }
@@ -1008,6 +1146,48 @@ function cloneGraph(graph: GraphSnapshot): GraphSnapshot {
     })),
     edges: graph.edges.map((edge) => ({ ...edge })),
   }
+}
+
+function markPatchSourceManual(): void {
+  lastPatchSource.value = 'manual'
+  patchValidationTone.value = 'neutral'
+  patchValidationMessage.value = ''
+}
+
+function summarizeRunEventPayload(payload: ApiObject): string {
+  const stepKey = readString(payload, 'stepKey')
+  const runID = readString(payload, 'runId')
+  const status = readString(payload, 'status')
+  const commandType = readString(payload, 'commandType')
+  const parts: string[] = []
+  if (runID) {
+    parts.push(`runId=${runID}`)
+  }
+  if (stepKey) {
+    parts.push(`stepKey=${stepKey}`)
+  }
+  if (status) {
+    parts.push(`status=${status}`)
+  }
+  if (commandType) {
+    parts.push(`commandType=${commandType}`)
+  }
+  if (parts.length > 0) {
+    return parts.join(' · ')
+  }
+  return Object.keys(payload).length > 0 ? JSON.stringify(payload) : '-'
+}
+
+function readString(payload: ApiObject, key: string): string {
+  const raw = payload[key]
+  return typeof raw === 'string' ? raw.trim() : ''
+}
+
+function asObject(value: unknown): ApiObject {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  return value as ApiObject
 }
 
 function asApiError(error: unknown): ApiError {

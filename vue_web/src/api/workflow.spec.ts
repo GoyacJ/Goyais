@@ -12,6 +12,7 @@ import {
   cancelWorkflowRun,
   createWorkflowRun,
   createWorkflowTemplate,
+  getWorkflowRunEvents,
   listWorkflowRuns,
   listWorkflowStepRuns,
   listWorkflowTemplates,
@@ -23,6 +24,24 @@ const apiRequestMock = vi.fn()
 
 vi.mock('@/api/http', () => ({
   apiRequest: (...args: unknown[]) => apiRequestMock(...args),
+  ApiHttpError: class ApiHttpError extends Error {
+    status: number
+    error: { code: string; messageKey: string; details?: Record<string, unknown> }
+    constructor(status: number, error: { code: string; messageKey: string; details?: Record<string, unknown> }) {
+      super(error.messageKey)
+      this.name = 'ApiHttpError'
+      this.status = status
+      this.error = error
+    }
+  },
+  getApiRuntimeConfig: () => ({
+    apiBaseUrl: '/api/v1',
+    tenantId: 'tenant-demo',
+    workspaceId: 'workspace-demo',
+    userId: 'user-demo',
+    roles: 'admin',
+    policyVersion: 'v1',
+  }),
 }))
 
 describe('workflow api', () => {
@@ -63,5 +82,37 @@ describe('workflow api', () => {
     })
     expect(apiRequestMock.mock.calls[2]?.[0]).toBe('/workflow-runs/run_1:cancel')
     expect(apiRequestMock.mock.calls[3]?.[0]).toBe('/workflow-runs/run_1/steps')
+  })
+
+  it('parses sse payload from workflow run events endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () =>
+        Promise.resolve(
+          [
+            'id: evt_1',
+            'event: workflow.step.running',
+            'data: {"runId":"run_1","stepKey":"s1"}',
+            '',
+            'id: evt_2',
+            'event: workflow.run.succeeded',
+            'data: {"runId":"run_1","status":"succeeded"}',
+            '',
+          ].join('\n'),
+        ),
+    })
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch
+
+    try {
+      const events = await getWorkflowRunEvents('run_1')
+      expect(fetchMock).toHaveBeenCalledWith('/api/v1/workflow-runs/run_1/events', expect.any(Object))
+      expect(events).toHaveLength(2)
+      expect(events[0]?.event).toBe('workflow.step.running')
+      expect(events[1]?.event).toBe('workflow.run.succeeded')
+    } finally {
+      globalThis.fetch = originalFetch
+    }
   })
 })

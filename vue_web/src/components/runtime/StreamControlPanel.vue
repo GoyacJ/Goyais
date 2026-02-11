@@ -39,6 +39,11 @@
       </div>
       <p v-else class="mt-2 text-sm text-ui-muted">{{ t('page.streams.selectionEmpty') }}</p>
 
+      <div class="mt-3 space-y-2">
+        <p class="text-xs text-ui-muted">{{ t('page.streams.fieldAuthRule') }}</p>
+        <Textarea v-model="authRuleRaw" :rows="4" :placeholder="t('page.streams.fieldAuthRulePlaceholder')" />
+      </div>
+
       <div class="mt-3 flex flex-wrap gap-2">
         <Button variant="secondary" :disabled="busy || !selectedStream" @click="$emit('recordStart')">
           {{ t('page.streams.actionRecordStart') }}
@@ -48,6 +53,12 @@
         </Button>
         <Button variant="ghost" :disabled="busy || !selectedStream" @click="$emit('kick')">
           {{ t('page.streams.actionKick') }}
+        </Button>
+        <Button variant="secondary" :disabled="busy || !selectedStream" @click="$emit('updateAuth', { raw: authRuleRaw })">
+          {{ t('page.streams.actionUpdateAuth') }}
+        </Button>
+        <Button variant="destructive" :disabled="busy || !selectedStream" @click="$emit('delete')">
+          {{ t('page.streams.actionDelete') }}
         </Button>
       </div>
     </section>
@@ -68,6 +79,7 @@ import Badge from '@/components/ui/Badge.vue'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
+import Textarea from '@/components/ui/Textarea.vue'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -77,6 +89,10 @@ export interface StreamCreateFormValue {
   source: string
   visibility: string
   onPublishTemplateId?: string
+}
+
+export interface StreamAuthFormValue {
+  raw: string
 }
 
 const props = withDefaults(
@@ -94,6 +110,8 @@ const emit = defineEmits<{
   (e: 'recordStart'): void
   (e: 'recordStop'): void
   (e: 'kick'): void
+  (e: 'updateAuth', payload: StreamAuthFormValue): void
+  (e: 'delete'): void
 }>()
 
 const { t } = useI18n({ useScope: 'global' })
@@ -103,6 +121,7 @@ const protocol = ref('rtmp')
 const source = ref('push')
 const visibility = ref('PRIVATE')
 const onPublishTemplateId = ref('')
+const authRuleRaw = ref('{\\n  \"mode\": \"token\",\\n  \"token\": \"\"\\n}')
 
 const protocolOptions = computed(() => [
   { value: 'rtsp', label: 'rtsp' },

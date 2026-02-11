@@ -153,6 +153,12 @@ export interface StepRunDTO extends ResourceBase {
   error?: ApiError
 }
 
+export interface WorkflowRunEventDTO {
+  id?: string
+  event?: string
+  data: ApiObject | string | null
+}
+
 export interface CapabilityDTO extends ResourceBase {
   name: string
   kind: string
@@ -203,6 +209,16 @@ export interface StreamDTO extends ResourceBase {
   source: string
   endpoints: ApiObject
   state: ApiObject
+}
+
+export interface ContextBundleDTO extends ResourceBase {
+  scopeType: string
+  scopeId: string
+  facts: ApiObject
+  summaries: ApiObject
+  refs: ApiObject
+  embeddingsIndexRefs: unknown[]
+  timeline: ApiObject[]
 }
 
 export interface StreamRecordingDTO {
@@ -325,6 +341,8 @@ export interface StreamCreateRequest {
   visibility?: Visibility
   metadata?: ApiObject
 }
+
+export type StreamUpdateAuthRequest = ApiObject
 
 export interface AlgorithmRunRequest {
   inputs: ApiObject

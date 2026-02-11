@@ -77,6 +77,27 @@ func TestLoadDefaultsMinimal(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultsFullProfileEnablesAIWorkbench(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte(""), 0o644); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+
+	t.Setenv("GOYAIS_CONFIG_FILE", configPath)
+	t.Setenv("GOYAIS_PROFILE", ProfileFull)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.Profile != ProfileFull {
+		t.Fatalf("expected profile=%s got=%s", ProfileFull, cfg.Profile)
+	}
+	if !cfg.Feature.AIWorkbench {
+		t.Fatalf("expected full profile to enable feature.ai_workbench by default")
+	}
+}
+
 func TestLoadEnvOverridesProviderConfigs(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(configPath, []byte("profile: minimal\n"), 0o644); err != nil {

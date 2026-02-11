@@ -31,6 +31,8 @@
               @record-start="onRecordStart"
               @record-stop="onRecordStop"
               @kick="onKickStream"
+              @update-auth="onUpdateAuth"
+              @delete="onDeleteStream"
             />
           </div>
         </SectionCard>
@@ -56,13 +58,25 @@
  */
 import { listCommands } from '@/api/commands'
 import { ApiHttpError, isMockEnabled } from '@/api/http'
-import { createStream, getStream, kickStream, listStreams, startStreamRecording, stopStreamRecording } from '@/api/streams'
+import {
+  createStream,
+  deleteStream,
+  getStream,
+  kickStream,
+  listStreams,
+  startStreamRecording,
+  stopStreamRecording,
+  updateStreamAuth,
+} from '@/api/streams'
 import type { ApiError, ApiObject, CommandDTO, StreamCreateRequest, StreamDTO } from '@/api/types'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import SectionCard from '@/components/layout/SectionCard.vue'
 import WindowBoard from '@/components/layout/WindowBoard.vue'
 import StreamCommandLog, { type StreamCommandLogEvent } from '@/components/runtime/StreamCommandLog.vue'
-import StreamControlPanel, { type StreamCreateFormValue } from '@/components/runtime/StreamControlPanel.vue'
+import StreamControlPanel, {
+  type StreamAuthFormValue,
+  type StreamCreateFormValue,
+} from '@/components/runtime/StreamControlPanel.vue'
 import Button from '@/components/ui/Button.vue'
 import Icon from '@/components/ui/Icon.vue'
 import Table, { type TableColumn } from '@/components/ui/Table.vue'
@@ -249,6 +263,71 @@ async function onKickStream(): Promise<void> {
   await runStreamAction(t('page.streams.actionKick'), kickStream)
 }
 
+async function onUpdateAuth(form: StreamAuthFormValue): Promise<void> {
+  const streamId = selectedStreamId.value
+  if (!streamId || useMock || isActionBusy.value) {
+    return
+  }
+  let authRule: ApiObject
+  try {
+    authRule = parseAuthRule(form.raw)
+  } catch {
+    pushToast({
+      title: t('page.streams.actionUpdateAuth'),
+      message: t('error.request.invalid_json'),
+      tone: 'error',
+    })
+    return
+  }
+
+  isActionBusy.value = true
+  try {
+    const response = await updateStreamAuth(streamId, authRule)
+    pushToast({
+      title: t('page.streams.actionUpdateAuth'),
+      message: `${t('page.streams.fieldCommandId')}: ${response.commandRef.commandId}`,
+      tone: 'success',
+    })
+    await loadData()
+    await refreshSelectedStream()
+  } catch (error) {
+    notifyActionError(t('page.streams.actionUpdateAuth'), error)
+  } finally {
+    isActionBusy.value = false
+  }
+}
+
+async function onDeleteStream(): Promise<void> {
+  const stream = selectedStream.value
+  if (!stream || useMock || isActionBusy.value) {
+    return
+  }
+  if (!isStreamDeletable(stream.status)) {
+    pushToast({
+      title: t('page.streams.actionDelete'),
+      message: t('page.streams.deleteStatusGuard', { status: stream.status }),
+      tone: 'error',
+    })
+    return
+  }
+
+  isActionBusy.value = true
+  try {
+    const response = await deleteStream(stream.id)
+    pushToast({
+      title: t('page.streams.actionDelete'),
+      message: `${t('page.streams.fieldCommandId')}: ${response.commandRef.commandId}`,
+      tone: 'success',
+    })
+    await loadData()
+    await refreshSelectedStream()
+  } catch (error) {
+    notifyActionError(t('page.streams.actionDelete'), error)
+  } finally {
+    isActionBusy.value = false
+  }
+}
+
 async function runStreamAction(
   title: string,
   action: (streamId: string) => Promise<{ commandRef: { commandId: string } }>,
@@ -319,6 +398,23 @@ function asApiError(value: unknown): ApiError {
     code: 'INTERNAL_ERROR',
     messageKey: 'error.common.internal',
   }
+}
+
+function parseAuthRule(raw: string): ApiObject {
+  const trimmed = raw.trim()
+  if (trimmed.length === 0) {
+    return {}
+  }
+  const parsed = JSON.parse(trimmed) as unknown
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('invalid_auth_rule')
+  }
+  return parsed as ApiObject
+}
+
+function isStreamDeletable(status: string): boolean {
+  const normalized = status.trim().toLowerCase()
+  return normalized === 'offline' || normalized === 'error'
 }
 
 function asObject(value: unknown): ApiObject {

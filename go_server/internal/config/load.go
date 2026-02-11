@@ -133,6 +133,7 @@ func defaultsForProfile(profile string) Config {
 		cfg.ObjectStore.AccessKey = "minioadmin"
 		cfg.ObjectStore.SecretKey = "minioadmin"
 		cfg.ObjectStore.UseSSL = false
+		cfg.Feature.AIWorkbench = true
 	}
 
 	return cfg
