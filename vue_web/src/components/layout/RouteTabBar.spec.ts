@@ -4,7 +4,7 @@
  * Author: Goya
  * Created: 2026-02-11
  * Version: v1.0.0
- * Description: Verify RouteTabBar rendering and add-tab interaction.
+ * Description: Verify RouteTabBar rendering, mobile trigger, and add-tab interaction.
  */
 
 import { flushPromises, mount } from '@vue/test-utils'
@@ -47,6 +47,7 @@ describe('RouteTabBar', () => {
     })
 
     expect(wrapper.text()).toContain('Home')
+    expect(wrapper.findAll('[data-testid="route-tab-item"]').length).toBe(1)
 
     await wrapper.get('button[aria-label="Open new tab menu"]').trigger('click')
 
@@ -58,5 +59,30 @@ describe('RouteTabBar', () => {
 
     expect(router.currentRoute.value.path).toBe('/plugins')
     expect(wrapper.text()).toContain('Plugins')
+  })
+
+  it('emits mobile nav toggle and keeps close button inside tab item container', async () => {
+    const router = createTestRouter()
+    await router.push('/')
+    await router.isReady()
+
+    initRouteTabsSystem(router)
+
+    const wrapper = mount(RouteTabBar, {
+      props: {
+        showMobileNavButton: true,
+      },
+      global: {
+        plugins: [router, i18n],
+      },
+    })
+
+    await wrapper.get('button[aria-label="Open navigation"]').trigger('click')
+    expect(wrapper.emitted('toggleMobileNav')).toHaveLength(1)
+
+    const firstTabItem = wrapper.find('[data-testid="route-tab-item"]')
+    expect(firstTabItem.find('[data-testid="route-tab-trigger"]').exists()).toBe(true)
+    expect(firstTabItem.find('[data-testid="route-tab-close"]').exists()).toBe(true)
+    expect(firstTabItem.find('[data-testid="route-tab-close"]').classes()).not.toContain('ui-control')
   })
 })

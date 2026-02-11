@@ -5,9 +5,9 @@
     @mouseenter="hovering = true"
     @mouseleave="hovering = false"
   >
-    <div class="flex h-[4.5rem] shrink-0 items-center gap-2 border-b border-ui-border px-3 py-2">
+    <header class="flex h-[4.75rem] shrink-0 items-center gap-2 border-b border-ui-border px-3 py-2" data-testid="sidenav-workspace">
       <div class="min-w-0 flex-1">
-        <WorkspaceAccountMenu :collapsed="collapsed" />
+        <WorkspaceSwitcherMenu :collapsed="collapsed" />
       </div>
       <button
         type="button"
@@ -18,9 +18,9 @@
       >
         <Icon :name="pinned ? 'sidebar-collapse' : 'sidebar-expand'" :size="14" decorative />
       </button>
-    </div>
+    </header>
 
-    <nav class="ui-page min-h-0 flex-1 overflow-auto p-3">
+    <nav class="ui-page min-h-0 flex-1 overflow-auto p-3" data-testid="sidenav-nav">
       <RouterLink
         v-for="item in NAV_ITEMS"
         :key="item.to"
@@ -36,6 +36,10 @@
         </span>
       </RouterLink>
     </nav>
+
+    <footer class="shrink-0 border-t border-ui-border px-3 py-2" data-testid="sidenav-user">
+      <UserAccountMenu :collapsed="collapsed" />
+    </footer>
   </aside>
 </template>
 
@@ -46,10 +50,11 @@
  * Author: Goya
  * Created: 2026-02-11
  * Version: v1.0.0
- * Description: Goyais source file.
+ * Description: Render desktop side navigation with pinned-floating and three-zone layout.
  */
 import Icon from '@/components/ui/Icon.vue'
-import WorkspaceAccountMenu from '@/components/layout/WorkspaceAccountMenu.vue'
+import WorkspaceSwitcherMenu from '@/components/layout/WorkspaceSwitcherMenu.vue'
+import UserAccountMenu from '@/components/layout/UserAccountMenu.vue'
 import { NAV_ITEMS } from '@/design-system/navigation'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

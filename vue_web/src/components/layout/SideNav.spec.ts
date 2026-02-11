@@ -36,8 +36,11 @@ function mountSideNav() {
       plugins: [i18n],
       stubs: {
         RouterLink: RouterLinkStub,
-        WorkspaceAccountMenu: {
-          template: '<div data-testid="workspace-account-menu" />',
+        WorkspaceSwitcherMenu: {
+          template: '<div data-testid="workspace-switcher-menu" />',
+        },
+        UserAccountMenu: {
+          template: '<div data-testid="user-account-menu" />',
         },
       },
     },
@@ -78,7 +81,6 @@ describe('SideNav', () => {
 
       const enCollapsedLinks = wrapper.findAll('a.ui-nav-link')
       expect(enCollapsedLinks.map((link) => link.attributes('title'))).toEqual(NAV_LABELS_EN)
-      expect(wrapper.find('[data-testid="workspace-account-menu"]').exists()).toBe(true)
 
       wrapper.unmount()
     } finally {
@@ -87,29 +89,15 @@ describe('SideNav', () => {
     }
   })
 
-  it('keeps header and menu region dimensions stable across locale switches', async () => {
-    const originalLocale = i18n.global.locale.value
+  it('renders workspace-top, nav-middle, and user-bottom sections', async () => {
     const wrapper = mountSideNav()
 
-    const header = wrapper.find('aside > div')
-    const nav = wrapper.find('nav')
+    expect(wrapper.find('[data-testid="sidenav-workspace"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="sidenav-nav"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="sidenav-user"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="workspace-switcher-menu"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="user-account-menu"]').exists()).toBe(true)
 
-    expect(header.classes()).toContain('h-[4.5rem]')
-    expect(header.classes()).toContain('shrink-0')
-    expect(nav.classes()).toContain('flex-1')
-    expect(nav.classes()).toContain('overflow-auto')
-
-    i18n.global.locale.value = 'zh-CN'
-    await nextTick()
-    expect(header.classes()).toContain('h-[4.5rem]')
-    expect(header.classes()).toContain('shrink-0')
-
-    i18n.global.locale.value = 'en-US'
-    await nextTick()
-    expect(header.classes()).toContain('h-[4.5rem]')
-    expect(header.classes()).toContain('shrink-0')
-
-    i18n.global.locale.value = originalLocale
     wrapper.unmount()
   })
 

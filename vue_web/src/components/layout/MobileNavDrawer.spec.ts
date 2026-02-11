@@ -4,7 +4,7 @@
  * Author: Goya
  * Created: 2026-02-11
  * Version: v1.0.0
- * Description: Verify MobileNavDrawer locale sync and account menu render.
+ * Description: Verify MobileNavDrawer locale sync and three-zone layout render.
  */
 
 import { mount, RouterLinkStub } from '@vue/test-utils'
@@ -29,7 +29,7 @@ const NAV_LABELS_EN = [
 ]
 
 describe('MobileNavDrawer', () => {
-  it('renders localized menu labels and updates immediately when locale changes', async () => {
+  it('renders localized menu labels and workspace/user zones', async () => {
     const originalLocale = i18n.global.locale.value
 
     try {
@@ -43,8 +43,11 @@ describe('MobileNavDrawer', () => {
           plugins: [i18n],
           stubs: {
             RouterLink: RouterLinkStub,
-            WorkspaceAccountMenu: {
-              template: '<div data-testid="workspace-account-menu" />',
+            WorkspaceSwitcherMenu: {
+              template: '<div data-testid="workspace-switcher-menu" />',
+            },
+            UserAccountMenu: {
+              template: '<div data-testid="user-account-menu" />',
             },
           },
         },
@@ -56,7 +59,8 @@ describe('MobileNavDrawer', () => {
       expect(zhLinks).toHaveLength(NAV_LABELS_ZH.length)
       expect(zhLinks.map((link) => link.find('.truncate').text())).toEqual(NAV_LABELS_ZH)
       expect(zhLinks[0]?.attributes('active-class')).toBe('ui-nav-link-active')
-      expect(wrapper.find('[data-testid="workspace-account-menu"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="workspace-switcher-menu"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="user-account-menu"]').exists()).toBe(true)
 
       i18n.global.locale.value = 'en-US'
       await nextTick()

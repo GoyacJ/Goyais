@@ -8,12 +8,11 @@
     />
 
     <div class="ui-bg-content flex min-w-0 flex-1 flex-col">
-      <TopBar
+      <RouteTabBar
         v-if="!isImmersiveRoute"
         :show-mobile-nav-button="!isDesktop"
         @toggle-mobile-nav="openMobileNav"
       />
-      <RouteTabBar v-if="!isImmersiveRoute" />
 
       <main :class="mainClass">
         <RouterView />
@@ -36,7 +35,6 @@
 import MobileNavDrawer from '@/components/layout/MobileNavDrawer.vue'
 import RouteTabBar from '@/components/layout/RouteTabBar.vue'
 import SideNav from '@/components/layout/SideNav.vue'
-import TopBar from '@/components/layout/TopBar.vue'
 import ToastViewport from '@/components/ui/ToastViewport.vue'
 import { windowManifestFor } from '@/design-system/window-manifests'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'

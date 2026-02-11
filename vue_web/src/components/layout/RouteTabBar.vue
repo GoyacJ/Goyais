@@ -1,16 +1,27 @@
 <template>
   <header class="ui-surface flex items-center gap-2 rounded-none border-x-0 border-t-0 px-3 py-2">
+    <button
+      v-if="showMobileNavButton"
+      type="button"
+      class="ui-control ui-focus-ring ui-pressable inline-flex h-9 w-9 min-h-0 shrink-0 items-center justify-center p-0 lg:hidden"
+      :aria-label="t('common.openNavigation')"
+      @click="emit('toggleMobileNav')"
+    >
+      <Icon name="sidebar-expand" :size="14" decorative />
+    </button>
+
     <div class="ui-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
       <div
         v-for="tab in resolvedTabs"
         :key="tab.to"
-        class="group inline-flex h-9 shrink-0 items-center rounded-button border border-transparent"
-        :class="tab.to === activeTabPath ? 'ui-state-selected' : ''"
+        data-testid="route-tab-item"
+        class="ui-route-tab group inline-flex h-9 shrink-0 items-center rounded-button border"
+        :class="tab.to === activeTabPath ? 'ui-state-selected border-transparent' : 'border-transparent'"
       >
         <button
           type="button"
-          class="ui-focus-ring ui-pressable inline-flex h-full items-center gap-2 rounded-button border border-transparent px-3 text-sm"
-          :class="tab.to === activeTabPath ? 'border-transparent' : ''"
+          data-testid="route-tab-trigger"
+          class="ui-route-tab-trigger ui-focus-ring inline-flex h-full items-center gap-2 rounded-button px-3 text-sm text-ui-fg"
           @click="navigateTab(tab.to)"
         >
           <Icon :name="tab.icon" :size="14" decorative class="text-ui-muted" />
@@ -19,7 +30,8 @@
 
         <button
           type="button"
-          class="ui-focus-ring ui-pressable mr-1 inline-flex h-7 w-7 items-center justify-center rounded-button border border-transparent text-ui-muted"
+          data-testid="route-tab-close"
+          class="ui-route-tab-close ui-focus-ring mr-1 inline-flex h-6 w-6 items-center justify-center rounded-button text-ui-muted"
           :aria-label="t('common.closeTab')"
           :disabled="tabs.length === 1"
           @click="closeTab(tab.to)"
@@ -71,7 +83,7 @@
  * Author: Goya
  * Created: 2026-02-11
  * Version: v1.0.0
- * Description: Render dynamic route tabs with close and add actions.
+ * Description: Render dynamic route tabs with close, add, and mobile drawer trigger actions.
  */
 import Icon from '@/components/ui/Icon.vue'
 import { NAV_ITEMS } from '@/design-system/navigation'
@@ -79,6 +91,19 @@ import { useRouteTabsStore } from '@/design-system/route-tabs'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+withDefaults(
+  defineProps<{
+    showMobileNavButton?: boolean
+  }>(),
+  {
+    showMobileNavButton: false,
+  },
+)
+
+const emit = defineEmits<{
+  (e: 'toggleMobileNav'): void
+}>()
 
 const { t } = useI18n({ useScope: 'global' })
 const { tabs, activeTabPath, availableNavItems, navigateTab, openTab, closeTab } = useRouteTabsStore()
