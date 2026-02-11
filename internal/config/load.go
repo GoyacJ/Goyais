@@ -77,6 +77,13 @@ func defaultsForProfile(profile string) Config {
 		Vector: VectorConfig{
 			RedisAddr: "127.0.0.1:6379",
 		},
+		Stream: StreamConfig{
+			MediaMTX: StreamMediaMTXConfig{
+				Enabled:        false,
+				APIBaseURL:     "http://127.0.0.1:9997",
+				RequestTimeout: 3 * time.Second,
+			},
+		},
 		EventBus: EventBusConfig{
 			Kafka: EventBusKafkaConfig{
 				Brokers:       []string{"127.0.0.1:9092"},
@@ -195,6 +202,23 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	if v := strings.ToLower(strings.TrimSpace(fc.Stream.Provider)); v != "" {
 		cfg.Providers.Stream = v
 	}
+	if fc.Stream.MediaMTX.Enabled != nil {
+		cfg.Stream.MediaMTX.Enabled = *fc.Stream.MediaMTX.Enabled
+	}
+	if v := strings.TrimSpace(fc.Stream.MediaMTX.APIBaseURL); v != "" {
+		cfg.Stream.MediaMTX.APIBaseURL = v
+	}
+	if v := strings.TrimSpace(fc.Stream.MediaMTX.APIUser); v != "" {
+		cfg.Stream.MediaMTX.APIUser = v
+	}
+	if v := strings.TrimSpace(fc.Stream.MediaMTX.APIPassword); v != "" {
+		cfg.Stream.MediaMTX.APIPassword = v
+	}
+	if v := strings.TrimSpace(fc.Stream.MediaMTX.RequestTimeout); v != "" {
+		if dur, err := time.ParseDuration(v); err == nil {
+			cfg.Stream.MediaMTX.RequestTimeout = dur
+		}
+	}
 	if v := strings.ToLower(strings.TrimSpace(fc.EventBus.Provider)); v != "" {
 		cfg.Providers.EventBus = v
 	}
@@ -310,6 +334,25 @@ func applyEnvOverrides(cfg *Config) {
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_STREAM_PROVIDER"))); v != "" {
 		cfg.Providers.Stream = v
 	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_STREAM_MEDIAMTX_ENABLED")); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			cfg.Stream.MediaMTX.Enabled = parsed
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_STREAM_MEDIAMTX_API_BASE_URL")); v != "" {
+		cfg.Stream.MediaMTX.APIBaseURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_STREAM_MEDIAMTX_API_USER")); v != "" {
+		cfg.Stream.MediaMTX.APIUser = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_STREAM_MEDIAMTX_API_PASSWORD")); v != "" {
+		cfg.Stream.MediaMTX.APIPassword = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOYAIS_STREAM_MEDIAMTX_REQUEST_TIMEOUT")); v != "" {
+		if dur, err := time.ParseDuration(v); err == nil {
+			cfg.Stream.MediaMTX.RequestTimeout = dur
+		}
+	}
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_EVENT_BUS_PROVIDER"))); v != "" {
 		cfg.Providers.EventBus = v
 	}
@@ -351,6 +394,12 @@ func applyDerivedDefaults(cfg *Config) {
 	}
 	if strings.TrimSpace(cfg.ObjectStore.Region) == "" {
 		cfg.ObjectStore.Region = "us-east-1"
+	}
+	if strings.TrimSpace(cfg.Stream.MediaMTX.APIBaseURL) == "" {
+		cfg.Stream.MediaMTX.APIBaseURL = "http://127.0.0.1:9997"
+	}
+	if cfg.Stream.MediaMTX.RequestTimeout <= 0 {
+		cfg.Stream.MediaMTX.RequestTimeout = 3 * time.Second
 	}
 	if len(cfg.EventBus.Kafka.Brokers) == 0 {
 		cfg.EventBus.Kafka.Brokers = []string{"127.0.0.1:9092"}
@@ -424,6 +473,12 @@ func validate(cfg Config) error {
 	}
 	if !contains([]string{"mediamtx"}, cfg.Providers.Stream) {
 		return fmt.Errorf("invalid stream provider: %s", cfg.Providers.Stream)
+	}
+	if cfg.Stream.MediaMTX.Enabled && strings.TrimSpace(cfg.Stream.MediaMTX.APIBaseURL) == "" {
+		return errors.New("stream.mediamtx.api_base_url cannot be empty when stream.mediamtx.enabled=true")
+	}
+	if cfg.Stream.MediaMTX.RequestTimeout <= 0 {
+		return errors.New("stream.mediamtx.request_timeout must be positive")
 	}
 	if !contains([]string{"memory", "kafka"}, cfg.Providers.EventBus) {
 		return fmt.Errorf("invalid event_bus provider: %s", cfg.Providers.EventBus)

@@ -24,7 +24,7 @@ type commandSubmitter interface {
 	) (command.Command, error)
 }
 
-type streamOnPublishEvent struct {
+type streamTriggerEvent struct {
 	EventType   string `json:"eventType"`
 	EventID     string `json:"eventId"`
 	TenantID    string `json:"tenantId"`
@@ -33,6 +33,7 @@ type streamOnPublishEvent struct {
 	TraceID     string `json:"traceId"`
 	StreamID    string `json:"streamId"`
 	RecordingID string `json:"recordingId"`
+	AssetID     string `json:"assetId"`
 	TemplateID  string `json:"templateId"`
 	Visibility  string `json:"visibility"`
 }
@@ -72,7 +73,7 @@ func startKafkaStreamConsumer(
 				time.Sleep(200 * time.Millisecond)
 				continue
 			}
-			if err := handleStreamOnPublishMessage(ctx, submitter, msg); err != nil {
+			if err := handleStreamTriggerMessage(ctx, submitter, msg); err != nil {
 				logger.Printf("WARN: event bus stream consumer handle failed: %v", err)
 			}
 			if err := reader.CommitMessages(ctx, msg); err != nil {
@@ -89,21 +90,21 @@ func startKafkaStreamConsumer(
 	}, nil
 }
 
-func handleStreamOnPublishMessage(ctx context.Context, submitter commandSubmitter, msg kafka.Message) error {
+func handleStreamTriggerMessage(ctx context.Context, submitter commandSubmitter, msg kafka.Message) error {
 	if submitter == nil {
 		return nil
 	}
-	var event streamOnPublishEvent
+	var event streamTriggerEvent
 	if err := json.Unmarshal(msg.Value, &event); err != nil {
 		return err
 	}
-	if strings.TrimSpace(event.EventType) != "stream.on_publish" {
+	_, idempotencyPrefix, inputs, idempotencySuffix := buildWorkflowTriggerPayload(event)
+	if len(inputs) == 0 {
 		return nil
 	}
 	templateID := strings.TrimSpace(event.TemplateID)
-	recordingID := strings.TrimSpace(event.RecordingID)
 	streamID := strings.TrimSpace(event.StreamID)
-	if templateID == "" || recordingID == "" || streamID == "" {
+	if templateID == "" || streamID == "" {
 		return nil
 	}
 	reqCtx := command.RequestContext{
@@ -123,15 +124,83 @@ func handleStreamOnPublishMessage(ctx context.Context, submitter commandSubmitte
 	}
 	payload, _ := json.Marshal(map[string]any{
 		"templateId": templateID,
-		"inputs": map[string]any{
-			"streamId":    streamID,
-			"recordingId": recordingID,
-			"trigger":     "stream.onPublish",
-		},
+		"inputs":     inputs,
 		"visibility": visibility,
 		"mode":       "sync",
 	})
-	idempotencyKey := "stream-onpublish-" + recordingID
+	idempotencyKey := idempotencyPrefix + idempotencySuffix
+	if idempotencySuffix == "" {
+		return nil
+	}
 	_, err := submitter.Submit(ctx, reqCtx, "workflow.run", payload, idempotencyKey, visibility)
 	return err
+}
+
+func handleStreamOnPublishMessage(ctx context.Context, submitter commandSubmitter, msg kafka.Message) error {
+	return handleStreamTriggerMessage(ctx, submitter, msg)
+}
+
+func buildWorkflowTriggerPayload(event streamTriggerEvent) (string, string, map[string]any, string) {
+	eventType := strings.TrimSpace(event.EventType)
+	streamID := strings.TrimSpace(event.StreamID)
+	eventID := strings.TrimSpace(event.EventID)
+	recordingID := strings.TrimSpace(event.RecordingID)
+	assetID := strings.TrimSpace(event.AssetID)
+	if streamID == "" {
+		return "", "", nil, ""
+	}
+
+	switch eventType {
+	case "stream.on_publish":
+		if recordingID == "" {
+			return "", "", nil, ""
+		}
+		return "stream.onPublish", "stream-onpublish-", map[string]any{
+			"streamId":    streamID,
+			"recordingId": recordingID,
+			"trigger":     "stream.onPublish",
+		}, recordingID
+	case "stream.on_read":
+		if eventID == "" {
+			return "", "", nil, ""
+		}
+		return "stream.onRead", "stream-onread-", map[string]any{
+			"streamId": streamID,
+			"eventId":  eventID,
+			"trigger":  "stream.onRead",
+		}, eventID
+	case "stream.on_connect":
+		if eventID == "" {
+			return "", "", nil, ""
+		}
+		return "stream.onConnect", "stream-onconnect-", map[string]any{
+			"streamId": streamID,
+			"eventId":  eventID,
+			"trigger":  "stream.onConnect",
+		}, eventID
+	case "stream.on_record_finish":
+		idSuffix := recordingID
+		if idSuffix == "" {
+			idSuffix = eventID
+		}
+		if idSuffix == "" {
+			return "", "", nil, ""
+		}
+		inputs := map[string]any{
+			"streamId": streamID,
+			"trigger":  "stream.onRecordFinish",
+		}
+		if recordingID != "" {
+			inputs["recordingId"] = recordingID
+		}
+		if eventID != "" {
+			inputs["eventId"] = eventID
+		}
+		if assetID != "" {
+			inputs["assetId"] = assetID
+		}
+		return "stream.onRecordFinish", "stream-onrecordfinish-", inputs, idSuffix
+	default:
+		return "", "", nil, ""
+	}
 }

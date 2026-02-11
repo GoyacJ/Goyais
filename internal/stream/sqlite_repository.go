@@ -57,11 +57,24 @@ func (r *SQLiteRepository) CreateStream(ctx context.Context, in CreateStreamInpu
 }
 
 func (r *SQLiteRepository) GetStreamForAccess(ctx context.Context, req command.RequestContext, streamID string) (Stream, error) {
+	return r.getStreamForAccess(ctx, req, streamID, false)
+}
+
+func (r *SQLiteRepository) getStreamForAccess(
+	ctx context.Context,
+	req command.RequestContext,
+	streamID string,
+	includeDeleted bool,
+) (Stream, error) {
+	deletedFilter := "AND COALESCE(json_extract(state_json, '$.deleted'), 0) != 1"
+	if includeDeleted {
+		deletedFilter = ""
+	}
 	row := r.db.QueryRowContext(
 		ctx,
 		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json, path, protocol, source, endpoints_json, state_json, status, created_at, updated_at
 		 FROM streaming_assets
-		 WHERE id = ? AND tenant_id = ? AND workspace_id = ?`,
+		 WHERE id = ? AND tenant_id = ? AND workspace_id = ? `+deletedFilter,
 		streamID,
 		req.TenantID,
 		req.WorkspaceID,
@@ -92,6 +105,7 @@ func (r *SQLiteRepository) ListStreams(ctx context.Context, params StreamListPar
 
 	baseFilter := `FROM streaming_assets s
 		WHERE s.tenant_id = ? AND s.workspace_id = ?
+		  AND COALESCE(json_extract(s.state_json, '$.deleted'), 0) != 1
 		  AND (
 		    s.owner_id = ?
 		    OR s.visibility = 'WORKSPACE'
@@ -231,11 +245,46 @@ func (r *SQLiteRepository) UpdateStreamStatus(ctx context.Context, in UpdateStre
 		return Stream{}, fmt.Errorf("update stream rows affected: %w", err)
 	}
 	if affected == 0 {
-		if _, err := r.GetStreamForAccess(ctx, in.Context, in.StreamID); err != nil {
+		if _, err := r.getStreamForAccess(ctx, in.Context, in.StreamID, true); err != nil {
 			return Stream{}, err
 		}
 	}
-	return r.GetStreamForAccess(ctx, in.Context, in.StreamID)
+	return r.getStreamForAccess(ctx, in.Context, in.StreamID, true)
+}
+
+func (r *SQLiteRepository) UpsertStreamAuthRule(ctx context.Context, in UpsertStreamAuthRuleInput) error {
+	now := in.Now.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	ruleStatus := strings.TrimSpace(in.Status)
+	if ruleStatus == "" {
+		ruleStatus = "active"
+	}
+	ruleID := newID("sar")
+	if _, err := r.db.ExecContext(
+		ctx,
+		`INSERT INTO stream_auth_rules(
+			id, tenant_id, workspace_id, stream_id, rule, status, updated_by, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(tenant_id, workspace_id, stream_id) DO UPDATE SET
+			rule = excluded.rule,
+			status = excluded.status,
+			updated_by = excluded.updated_by,
+			updated_at = excluded.updated_at`,
+		ruleID,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+		in.StreamID,
+		string(in.Rule),
+		ruleStatus,
+		in.Context.UserID,
+		now.Format(time.RFC3339Nano),
+		now.Format(time.RFC3339Nano),
+	); err != nil {
+		return fmt.Errorf("upsert stream auth rule: %w", err)
+	}
+	return nil
 }
 
 func (r *SQLiteRepository) CreateRecording(ctx context.Context, in CreateRecordingInput) (Recording, error) {
@@ -499,14 +548,14 @@ func scanStream(row rowScanner) (Stream, error) {
 
 func scanRecording(row rowScanner) (Recording, error) {
 	var (
-		item         Recording
-		assetIDRaw   sql.NullString
-		errorCodeRaw sql.NullString
+		item          Recording
+		assetIDRaw    sql.NullString
+		errorCodeRaw  sql.NullString
 		messageKeyRaw sql.NullString
-		startedAtRaw string
+		startedAtRaw  string
 		finishedAtRaw sql.NullString
-		createdAtRaw string
-		updatedAtRaw string
+		createdAtRaw  string
+		updatedAtRaw  string
 	)
 	if err := row.Scan(
 		&item.ID,

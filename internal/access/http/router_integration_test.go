@@ -1582,8 +1582,17 @@ func TestAPIContractRegression(t *testing.T) {
 		respUpdateAuthCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+updateAuthCommandID, headersWithContext("u1"), nil)
 		defer respUpdateAuthCommand.Body.Close()
 		assertStatus(t, respUpdateAuthCommand, http.StatusOK)
-		if got := readJSONPath(t, respUpdateAuthCommand.Body, "commandType"); got != "stream.updateAuth" {
+		var updateAuthCommandPayload map[string]any
+		mustDecodeJSON(t, respUpdateAuthCommand.Body, &updateAuthCommandPayload)
+		if got, _ := updateAuthCommandPayload["commandType"].(string); got != "stream.updateAuth" {
 			t.Fatalf("unexpected stream update-auth command type: %v", got)
+		}
+		updateAuthResult, _ := updateAuthCommandPayload["result"].(map[string]any)
+		updateAuthStream, _ := updateAuthResult["stream"].(map[string]any)
+		updateAuthState, _ := updateAuthStream["state"].(map[string]any)
+		authRule, _ := updateAuthState["authRule"].(map[string]any)
+		if gotMode, _ := authRule["mode"].(string); gotMode != "allowlist" {
+			t.Fatalf("unexpected stream authRule.mode after update-auth: %v", gotMode)
 		}
 
 		respStop := mustRequestJSON(t, client, http.MethodPost, baseURL+"/api/v1/streams/"+streamID+":record-stop", headersWithJSONContext("u1"), map[string]any{})
@@ -1638,9 +1647,22 @@ func TestAPIContractRegression(t *testing.T) {
 		respDeleteCommand := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/commands/"+deleteCommandID, headersWithContext("u1"), nil)
 		defer respDeleteCommand.Body.Close()
 		assertStatus(t, respDeleteCommand, http.StatusOK)
-		if got := readJSONPath(t, respDeleteCommand.Body, "commandType"); got != "stream.delete" {
+		var deleteCommandPayload map[string]any
+		mustDecodeJSON(t, respDeleteCommand.Body, &deleteCommandPayload)
+		if got, _ := deleteCommandPayload["commandType"].(string); got != "stream.delete" {
 			t.Fatalf("unexpected stream delete command type: %v", got)
 		}
+		deleteResult, _ := deleteCommandPayload["result"].(map[string]any)
+		deleteStream, _ := deleteResult["stream"].(map[string]any)
+		deleteState, _ := deleteStream["state"].(map[string]any)
+		deleted, _ := deleteState["deleted"].(bool)
+		if !deleted {
+			t.Fatalf("expected stream state.deleted=true after delete")
+		}
+
+		respGetDeleted := mustRequest(t, client, http.MethodGet, baseURL+"/api/v1/streams/"+streamID, headersWithContext("u1"), nil)
+		defer respGetDeleted.Body.Close()
+		assertStatus(t, respGetDeleted, http.StatusNotFound)
 
 	})
 

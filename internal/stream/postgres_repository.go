@@ -57,11 +57,24 @@ func (r *PostgresRepository) CreateStream(ctx context.Context, in CreateStreamIn
 }
 
 func (r *PostgresRepository) GetStreamForAccess(ctx context.Context, req command.RequestContext, streamID string) (Stream, error) {
+	return r.getStreamForAccess(ctx, req, streamID, false)
+}
+
+func (r *PostgresRepository) getStreamForAccess(
+	ctx context.Context,
+	req command.RequestContext,
+	streamID string,
+	includeDeleted bool,
+) (Stream, error) {
+	deletedFilter := "AND COALESCE(state_json->>'deleted', 'false') <> 'true'"
+	if includeDeleted {
+		deletedFilter = ""
+	}
 	row := r.db.QueryRowContext(
 		ctx,
 		`SELECT id, tenant_id, workspace_id, owner_id, visibility, acl_json::text, path, protocol, source, endpoints_json::text, state_json::text, status, created_at, updated_at
 		 FROM streaming_assets
-		 WHERE id = $1 AND tenant_id = $2 AND workspace_id = $3`,
+		 WHERE id = $1 AND tenant_id = $2 AND workspace_id = $3 `+deletedFilter,
 		streamID,
 		req.TenantID,
 		req.WorkspaceID,
@@ -92,6 +105,7 @@ func (r *PostgresRepository) ListStreams(ctx context.Context, params StreamListP
 
 	baseFilter := `FROM streaming_assets s
 		WHERE s.tenant_id = $1 AND s.workspace_id = $2
+		  AND COALESCE(s.state_json->>'deleted', 'false') <> 'true'
 		  AND (
 		    s.owner_id = $3
 		    OR s.visibility = 'WORKSPACE'
@@ -228,11 +242,46 @@ func (r *PostgresRepository) UpdateStreamStatus(ctx context.Context, in UpdateSt
 		return Stream{}, fmt.Errorf("update stream rows affected: %w", err)
 	}
 	if affected == 0 {
-		if _, err := r.GetStreamForAccess(ctx, in.Context, in.StreamID); err != nil {
+		if _, err := r.getStreamForAccess(ctx, in.Context, in.StreamID, true); err != nil {
 			return Stream{}, err
 		}
 	}
-	return r.GetStreamForAccess(ctx, in.Context, in.StreamID)
+	return r.getStreamForAccess(ctx, in.Context, in.StreamID, true)
+}
+
+func (r *PostgresRepository) UpsertStreamAuthRule(ctx context.Context, in UpsertStreamAuthRuleInput) error {
+	now := in.Now.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	ruleStatus := strings.TrimSpace(in.Status)
+	if ruleStatus == "" {
+		ruleStatus = "active"
+	}
+	ruleID := newID("sar")
+	if _, err := r.db.ExecContext(
+		ctx,
+		`INSERT INTO stream_auth_rules(
+			id, tenant_id, workspace_id, stream_id, rule, status, updated_by, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9)
+		ON CONFLICT(tenant_id, workspace_id, stream_id) DO UPDATE SET
+			rule = EXCLUDED.rule,
+			status = EXCLUDED.status,
+			updated_by = EXCLUDED.updated_by,
+			updated_at = EXCLUDED.updated_at`,
+		ruleID,
+		in.Context.TenantID,
+		in.Context.WorkspaceID,
+		in.StreamID,
+		string(in.Rule),
+		ruleStatus,
+		in.Context.UserID,
+		now,
+		now,
+	); err != nil {
+		return fmt.Errorf("upsert stream auth rule: %w", err)
+	}
+	return nil
 }
 
 func (r *PostgresRepository) CreateRecording(ctx context.Context, in CreateRecordingInput) (Recording, error) {
