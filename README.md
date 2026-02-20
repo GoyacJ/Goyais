@@ -163,9 +163,12 @@ Desktop trigger:
 
 - Settings page -> `Sync now`
 
-## Hub server (Control Plane Phase 1)
+## Hub server (Control Plane + Remote Domain Data)
 
-`hub-server` 提供 remote workspace 的控制面能力：bootstrap admin、登录鉴权、工作区列表、导航与权限下发。
+`hub-server` 提供 remote workspace 能力：
+
+- Phase 1（控制面）：bootstrap admin、登录鉴权、工作区列表、导航与权限下发
+- Phase 2（远端数据面）：Projects / Model Configs（workspace 隔离 + RBAC 强制）
 
 目录：`/Users/goya/Repo/Git/Goyais/server/hub-server`
 
@@ -175,7 +178,14 @@ Desktop trigger:
 export GOYAIS_HUB_DB_PATH=./data/hub.sqlite
 export GOYAIS_BOOTSTRAP_TOKEN=change-me-bootstrap-token
 export GOYAIS_ALLOW_PUBLIC_SIGNUP=false
+export GOYAIS_HUB_SECRET_KEY=<base64-32-byte-key>
 export GOYAIS_SERVER_PORT=8787
+```
+
+可用下面方式生成 `GOYAIS_HUB_SECRET_KEY`：
+
+```bash
+export GOYAIS_HUB_SECRET_KEY="$(openssl rand -base64 32)"
 ```
 
 ### Start hub
@@ -209,6 +219,46 @@ curl -sS http://127.0.0.1:8787/v1/me -H "Authorization: Bearer <token>"
 curl -sS http://127.0.0.1:8787/v1/workspaces -H "Authorization: Bearer <token>"
 curl -sS "http://127.0.0.1:8787/v1/me/navigation?workspace_id=<workspace_id>" -H "Authorization: Bearer <token>"
 ```
+
+### Hub Phase 2 domain API curl
+
+```bash
+# Projects
+curl -sS "http://127.0.0.1:8787/v1/projects?workspace_id=<workspace_id>" \
+  -H "Authorization: Bearer <token>"
+
+curl -sS -X POST "http://127.0.0.1:8787/v1/projects?workspace_id=<workspace_id>" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Demo Remote Project","root_uri":"repo://demo/main"}'
+
+curl -sS -X DELETE "http://127.0.0.1:8787/v1/projects/<project_id>?workspace_id=<workspace_id>" \
+  -H "Authorization: Bearer <token>"
+
+# Model Configs (api_key write-only)
+curl -sS "http://127.0.0.1:8787/v1/model-configs?workspace_id=<workspace_id>" \
+  -H "Authorization: Bearer <token>"
+
+curl -sS -X POST "http://127.0.0.1:8787/v1/model-configs?workspace_id=<workspace_id>" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"provider":"openai","model":"gpt-4.1-mini","temperature":0,"max_tokens":2048,"api_key":"sk-remote-xxx"}'
+
+curl -sS -X PUT "http://127.0.0.1:8787/v1/model-configs/<model_config_id>?workspace_id=<workspace_id>" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4.1","api_key":"sk-remote-new"}'
+
+curl -sS -X DELETE "http://127.0.0.1:8787/v1/model-configs/<model_config_id>?workspace_id=<workspace_id>" \
+  -H "Authorization: Bearer <token>"
+```
+
+安全说明（Phase 2）：
+
+- `api_key` 只允许 create/update 时写入，不会在 GET 响应中返回。
+- `secrets.value_encrypted` 始终存密文字符串。
+- 缺少或非法 `GOYAIS_HUB_SECRET_KEY` 时，model-config create/update 会失败（默认拒绝）。
+- 所有 domain endpoint 都要求 `workspace_id` 并校验 active membership + permission。
 
 所有 hub 响应（成功/失败）都会回传 `X-Trace-Id`。
 
