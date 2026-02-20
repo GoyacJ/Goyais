@@ -9,7 +9,7 @@ import { HubDatabase } from "../src/db";
 
 const migrationsDir = path.resolve(process.cwd(), "migrations");
 
-describe("hub-server bootstrap scaffold", () => {
+describe("hub-server schema migrations", () => {
   let app: Awaited<ReturnType<typeof createApp>> | undefined;
 
   afterEach(async () => {
@@ -19,15 +19,20 @@ describe("hub-server bootstrap scaffold", () => {
     }
   });
 
-  it("applies 0001 migration and seeds required data", () => {
+  it("applies base + domain migrations and seeds required data", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "goyais-hub-"));
     const db = new HubDatabase(path.join(tempDir, "hub.sqlite"));
 
+    db.migrate(migrationsDir);
     db.migrate(migrationsDir);
 
     const userCount = db.scalar<number>("SELECT COUNT(*) FROM users");
     const permsCount = db.scalar<number>("SELECT COUNT(*) FROM permissions");
     const menusCount = db.scalar<number>("SELECT COUNT(*) FROM menus");
+    const projectsCount = db.scalar<number>("SELECT COUNT(*) FROM projects");
+    const modelConfigsCount = db.scalar<number>("SELECT COUNT(*) FROM model_configs");
+    const secretsCount = db.scalar<number>("SELECT COUNT(*) FROM secrets");
+    const migrationCount = db.scalar<number>("SELECT COUNT(*) FROM schema_migrations");
     const setupCompleted = db.scalar<number>(
       "SELECT setup_completed FROM system_state WHERE singleton_id = 1"
     );
@@ -35,6 +40,10 @@ describe("hub-server bootstrap scaffold", () => {
     expect(userCount).toBe(0);
     expect(permsCount).toBeGreaterThanOrEqual(11);
     expect(menusCount).toBe(5);
+    expect(projectsCount).toBe(0);
+    expect(modelConfigsCount).toBe(0);
+    expect(secretsCount).toBe(0);
+    expect(migrationCount).toBeGreaterThanOrEqual(2);
     expect(setupCompleted).toBe(0);
   });
 

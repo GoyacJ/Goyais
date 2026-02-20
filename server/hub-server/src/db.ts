@@ -64,6 +64,37 @@ export interface MembershipRole {
   role_name: string;
 }
 
+export interface ProjectRecord {
+  project_id: string;
+  workspace_id: string;
+  name: string;
+  root_uri: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ModelConfigRecord {
+  model_config_id: string;
+  workspace_id: string;
+  provider: string;
+  model: string;
+  base_url: string | null;
+  temperature: number;
+  max_tokens: number | null;
+  secret_ref: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SecretRecord {
+  secret_ref: string;
+  workspace_id: string;
+  kind: "api_key";
+  value_encrypted: string;
+  created_by: string;
+  created_at: string;
+}
+
 export class HubDatabase {
   private readonly db: DatabaseSync;
 
