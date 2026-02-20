@@ -7,6 +7,7 @@ import type { HubDatabase } from "./db";
 import { TRACE_HEADER, errorFromUnknown } from "./errors";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerBootstrapRoutes } from "./routes/bootstrap";
+import { registerInternalSecretsRoutes } from "./routes/internal-secrets";
 import { registerMeRoutes } from "./routes/me";
 import { registerModelConfigRoutes } from "./routes/model-configs";
 import { registerNavigationRoutes } from "./routes/navigation";
@@ -92,6 +93,11 @@ export function createApp(options: CreateAppOptions): FastifyInstance {
   registerModelConfigRoutes(app, {
     db: options.db,
     hubSecretKey: options.hubSecretKey ?? ""
+  });
+  registerInternalSecretsRoutes(app, {
+    db: options.db,
+    hubSecretKey: options.hubSecretKey ?? "",
+    runtimeSharedSecret: options.hubRuntimeSharedSecret ?? ""
   });
   registerNavigationRoutes(app, { db: options.db });
   registerProjectRoutes(app, { db: options.db });
