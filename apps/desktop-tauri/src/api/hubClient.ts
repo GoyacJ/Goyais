@@ -61,6 +61,48 @@ export interface NavigationResponse {
   feature_flags: Record<string, boolean>;
 }
 
+export interface HubProject {
+  project_id: string;
+  workspace_id: string;
+  name: string;
+  root_uri: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HubProjectsResponse {
+  projects: HubProject[];
+}
+
+export interface HubProjectResponse {
+  project: HubProject;
+}
+
+export interface HubModelConfig {
+  model_config_id: string;
+  workspace_id: string;
+  provider: "openai" | "anthropic";
+  model: string;
+  base_url: string | null;
+  temperature: number;
+  max_tokens: number | null;
+  secret_ref: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HubModelConfigsResponse {
+  model_configs: HubModelConfig[];
+}
+
+export interface HubModelConfigResponse {
+  model_config: HubModelConfig;
+}
+
+export interface HubDeleteResponse {
+  ok: true;
+}
+
 function normalizeServerUrl(serverUrl: string): string {
   return serverUrl.trim().replace(/\/+$/, "");
 }
@@ -147,4 +189,140 @@ export async function getNavigation(
 ): Promise<NavigationResponse> {
   const query = encodeURIComponent(workspaceId);
   return requestJson<NavigationResponse>(serverUrl, `/v1/me/navigation?workspace_id=${query}`, undefined, token);
+}
+
+export async function listProjects(
+  serverUrl: string,
+  token: string,
+  workspaceId: string
+): Promise<HubProjectsResponse> {
+  const query = encodeURIComponent(workspaceId);
+  return requestJson<HubProjectsResponse>(serverUrl, `/v1/projects?workspace_id=${query}`, undefined, token);
+}
+
+export async function createProject(
+  serverUrl: string,
+  token: string,
+  workspaceId: string,
+  payload: {
+    name: string;
+    root_uri: string;
+  }
+): Promise<HubProjectResponse> {
+  const query = encodeURIComponent(workspaceId);
+  return requestJson<HubProjectResponse>(
+    serverUrl,
+    `/v1/projects?workspace_id=${query}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    },
+    token
+  );
+}
+
+export async function deleteProject(
+  serverUrl: string,
+  token: string,
+  workspaceId: string,
+  projectId: string
+): Promise<HubDeleteResponse> {
+  const query = encodeURIComponent(workspaceId);
+  const encodedProjectId = encodeURIComponent(projectId);
+  return requestJson<HubDeleteResponse>(
+    serverUrl,
+    `/v1/projects/${encodedProjectId}?workspace_id=${query}`,
+    {
+      method: "DELETE"
+    },
+    token
+  );
+}
+
+export async function listModelConfigs(
+  serverUrl: string,
+  token: string,
+  workspaceId: string
+): Promise<HubModelConfigsResponse> {
+  const query = encodeURIComponent(workspaceId);
+  return requestJson<HubModelConfigsResponse>(serverUrl, `/v1/model-configs?workspace_id=${query}`, undefined, token);
+}
+
+export async function createModelConfig(
+  serverUrl: string,
+  token: string,
+  workspaceId: string,
+  payload: {
+    provider: "openai" | "anthropic";
+    model: string;
+    base_url?: string | null;
+    temperature?: number;
+    max_tokens?: number | null;
+    api_key: string;
+  }
+): Promise<HubModelConfigResponse> {
+  const query = encodeURIComponent(workspaceId);
+  return requestJson<HubModelConfigResponse>(
+    serverUrl,
+    `/v1/model-configs?workspace_id=${query}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    },
+    token
+  );
+}
+
+export async function updateModelConfig(
+  serverUrl: string,
+  token: string,
+  workspaceId: string,
+  modelConfigId: string,
+  payload: {
+    provider?: "openai" | "anthropic";
+    model?: string;
+    base_url?: string | null;
+    temperature?: number;
+    max_tokens?: number | null;
+    api_key?: string;
+  }
+): Promise<HubModelConfigResponse> {
+  const query = encodeURIComponent(workspaceId);
+  const encodedModelConfigId = encodeURIComponent(modelConfigId);
+  return requestJson<HubModelConfigResponse>(
+    serverUrl,
+    `/v1/model-configs/${encodedModelConfigId}?workspace_id=${query}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    },
+    token
+  );
+}
+
+export async function deleteModelConfig(
+  serverUrl: string,
+  token: string,
+  workspaceId: string,
+  modelConfigId: string
+): Promise<HubDeleteResponse> {
+  const query = encodeURIComponent(workspaceId);
+  const encodedModelConfigId = encodeURIComponent(modelConfigId);
+  return requestJson<HubDeleteResponse>(
+    serverUrl,
+    `/v1/model-configs/${encodedModelConfigId}?workspace_id=${query}`,
+    {
+      method: "DELETE"
+    },
+    token
+  );
 }
