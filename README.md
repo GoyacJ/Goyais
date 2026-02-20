@@ -9,6 +9,11 @@ Local-first AI-assisted coding desktop app.
 
 License: Apache-2.0.
 
+## Breaking change notice
+
+- Protocol has been upgraded to `2.0.0`.
+- Older clients expecting `protocol_version=1.0.0`, legacy `payload.message`, or HTTP `detail` are not supported.
+
 ## What MVP-1 includes
 
 - SSE timeline: `plan`, `tool_call`, `tool_result`, `patch`, `error`, `done`
@@ -16,6 +21,7 @@ License: Apache-2.0.
 - Sensitive tool confirmation + audit logs
 - SQLite persistence (`projects/sessions/runs/events/artifacts/model_configs/audit_logs/tool_confirmations`)
 - Single-user push/pull sync with bearer token and server-assigned `server_seq`
+- Protocol v2 (`2.0.0`) with unified `GoyaisError` + required `trace_id`
 
 ## Prerequisites
 
@@ -106,8 +112,25 @@ Sample task:
 - `GET /v1/runs?session_id=...`
 - `GET /v1/runs/{run_id}/events/replay`
 - `GET /v1/system-events?since_global_seq=...`
+- `GET /v1/health`
+- `GET /v1/version`
+- `GET /v1/metrics`
+- `GET /v1/diagnostics/run/{run_id}` (requires `X-Runtime-Token`)
 
-Event envelope always includes `protocol_version`.
+Event envelope always includes `protocol_version=2.0.0` and `trace_id`.
+
+Error response shape (Runtime + Sync):
+
+```json
+{
+  "error": {
+    "code": "E_INTERNAL",
+    "message": "Internal server error.",
+    "trace_id": "....",
+    "retryable": false
+  }
+}
+```
 
 ## Sync server (single-user P0)
 
@@ -129,8 +152,12 @@ Sync API:
 
 - `POST /v1/sync/push` with `since_global_seq`
 - `GET /v1/sync/pull?since_server_seq=...`
+- `GET /v1/health`
+- `GET /v1/version`
+- `GET /v1/metrics`
 
 Server assigns monotonic `server_seq` (server-authoritative append-only).
+Request/response both support `X-Trace-Id`.
 
 Desktop trigger:
 
