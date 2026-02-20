@@ -1,0 +1,15 @@
+{
+  "$id": "goyais.protocol.v2.event-payload-plan",
+  "type": "object",
+  "required": ["summary", "trace_id"],
+  "properties": {
+    "summary": { "type": "string", "minLength": 1 },
+    "steps": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "trace_id": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": false
+}

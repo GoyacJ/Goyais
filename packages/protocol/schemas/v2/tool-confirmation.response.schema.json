@@ -1,0 +1,9 @@
+{
+  "$id": "goyais.protocol.v2.tool-confirmation.response",
+  "type": "object",
+  "required": ["ok"],
+  "properties": {
+    "ok": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}

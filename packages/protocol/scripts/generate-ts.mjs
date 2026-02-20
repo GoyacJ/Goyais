@@ -3,10 +3,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 const root = path.resolve(process.cwd());
-const schemaDir = path.join(root, "schemas", "v1");
+const schemaDir = path.join(root, "schemas", "v2");
 const outFile = path.join(root, "generated", "ts", "protocol.d.ts");
 
 const schemaFiles = [
+  "goyais-error.schema.json",
   "run-create.request.schema.json",
   "run-create.response.schema.json",
   "tool-confirmation.request.schema.json",
@@ -25,7 +26,8 @@ await fs.mkdir(path.dirname(outFile), { recursive: true });
 const envelopeBlock = `export type EventType = "plan" | "tool_call" | "tool_result" | "patch" | "error" | "done";
 
 export interface EventEnvelope {
-  protocol_version: "1.0.0";
+  protocol_version: "2.0.0";
+  trace_id: string;
   event_id: string;
   run_id: string;
   seq: number;

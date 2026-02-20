@@ -1,0 +1,11 @@
+{
+  "$id": "goyais.protocol.v2.tool-confirmation.request",
+  "type": "object",
+  "required": ["run_id", "call_id", "approved"],
+  "properties": {
+    "run_id": { "type": "string", "minLength": 1 },
+    "call_id": { "type": "string", "minLength": 1 },
+    "approved": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}
