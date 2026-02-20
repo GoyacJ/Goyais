@@ -4,6 +4,7 @@ interface PermissionDecision {
   runId: string;
   callId: string;
   approved: boolean;
+  mode: "once" | "always" | "deny";
   decidedAt: string;
 }
 

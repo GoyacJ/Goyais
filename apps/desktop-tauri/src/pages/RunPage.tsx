@@ -1,101 +1,182 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
-import { confirmToolCall, createRun } from "../api/runtimeClient";
-import { DiffPanel } from "../components/DiffPanel";
-import { EventTimeline } from "../components/EventTimeline";
-import { PermissionCenter } from "../components/PermissionCenter";
-import { PermissionModal } from "../components/PermissionModal";
-import { useRunEvents } from "../hooks/useRunEvents";
-import { usePermissionStore } from "../stores/permissionStore";
-import { useRunStore } from "../stores/runStore";
+import { confirmToolCall, createRun } from "@/api/runtimeClient";
+import { ContextPanel } from "@/components/domain/context/ContextPanel";
+import { DiffPanel } from "@/components/domain/diff/DiffPanel";
+import { CapabilityPromptDialog } from "@/components/domain/permission/CapabilityPromptDialog";
+import { PermissionQueueCenter } from "@/components/domain/permission/PermissionQueueCenter";
+import { RunComposerPanel } from "@/components/domain/run/RunComposerPanel";
+import { TimelinePanel } from "@/components/domain/timeline/TimelinePanel";
+import { ToolDetailsDrawer } from "@/components/domain/tools/ToolDetailsDrawer";
+import { useToast } from "@/components/ui/toast";
+import { useRunEvents } from "@/hooks/useRunEvents";
+import { isEditableElement } from "@/lib/shortcuts";
+import { usePermissionStore } from "@/stores/permissionStore";
+import { useRunStore } from "@/stores/runStore";
 
 export function RunPage() {
-  const [projectId, setProjectId] = useState("project-demo");
-  const [sessionId, setSessionId] = useState("session-demo");
-  const [modelConfigId, setModelConfigId] = useState("model-demo");
-  const [workspacePath, setWorkspacePath] = useState("/Users/goya/Repo/Git/Goyais");
-  const [taskInput, setTaskInput] = useState("把 README 的标题改成 MVP-1 Demo");
+  const { t } = useTranslation();
+
+  const [values, setValues] = useState({
+    projectId: "project-demo",
+    sessionId: "session-demo",
+    modelConfigId: "model-demo",
+    workspacePath: "/Users/goya/Repo/Git/Goyais",
+    taskInput: t("run.defaultTask")
+  });
+  const [selectedEventId, setSelectedEventId] = useState<string>();
+  const [selectedPermissionCallId, setSelectedPermissionCallId] = useState<string>();
+  const [isStarting, setIsStarting] = useState(false);
 
   const runId = useRunStore((state) => state.runId);
   const setRunId = useRunStore((state) => state.setRunId);
+  const setContext = useRunStore((state) => state.setContext);
   const resetRun = useRunStore((state) => state.reset);
   const events = useRunStore((state) => state.events);
   const pendingConfirmations = useRunStore((state) => state.pendingConfirmations);
   const lastPatch = useRunStore((state) => state.lastPatch);
+  const toolCalls = useRunStore((state) => state.toolCalls);
+  const selectedToolCallId = useRunStore((state) => state.selectedToolCallId);
+  const setSelectedToolCallId = useRunStore((state) => state.setSelectedToolCallId);
+  const resolvePendingConfirmation = useRunStore((state) => state.resolvePendingConfirmation);
 
   const addDecision = usePermissionStore((state) => state.addDecision);
+  const { addToast } = useToast();
 
   useRunEvents(runId);
 
-  const activeConfirmation = useMemo(() => pendingConfirmations[0], [pendingConfirmations]);
+  const activeConfirmation = useMemo(() => {
+    if (selectedPermissionCallId) {
+      return pendingConfirmations.find((item) => item.callId === selectedPermissionCallId) ?? pendingConfirmations[0];
+    }
+    return pendingConfirmations[0];
+  }, [pendingConfirmations, selectedPermissionCallId]);
 
   const onStart = async (event: FormEvent) => {
     event.preventDefault();
-    resetRun();
-    const result = await createRun({
-      project_id: projectId,
-      session_id: sessionId,
-      input: taskInput,
-      model_config_id: modelConfigId,
-      workspace_path: workspacePath,
-      options: { use_worktree: false }
-    });
-    setRunId(result.run_id);
+    setIsStarting(true);
+    try {
+      resetRun();
+      setContext({
+        projectId: values.projectId,
+        modelConfigId: values.modelConfigId,
+        workspacePath: values.workspacePath,
+        sessionId: values.sessionId
+      });
+      const result = await createRun({
+        project_id: values.projectId,
+        session_id: values.sessionId,
+        input: values.taskInput,
+        model_config_id: values.modelConfigId,
+        workspace_path: values.workspacePath,
+        options: { use_worktree: false }
+      });
+      setRunId(result.run_id);
+      addToast({
+        title: t("run.startSuccess"),
+        description: result.run_id,
+        variant: "info"
+      });
+    } catch (error) {
+      addToast({
+        title: t("run.startFailed"),
+        description: (error as Error).message,
+        diagnostic: (error as Error).message,
+        variant: "error"
+      });
+    } finally {
+      setIsStarting(false);
+    }
   };
 
-  const onDecision = async (approved: boolean) => {
+  const onDecision = useCallback(
+    async (mode: "once" | "always" | "deny") => {
+      if (!activeConfirmation) return;
+      const approved = mode !== "deny";
+      try {
+        await confirmToolCall(activeConfirmation.runId, activeConfirmation.callId, approved);
+        addDecision({
+          runId: activeConfirmation.runId,
+          callId: activeConfirmation.callId,
+          approved,
+          mode,
+          decidedAt: new Date().toISOString()
+        });
+        resolvePendingConfirmation(activeConfirmation.callId, approved);
+        setSelectedPermissionCallId(undefined);
+        addToast({
+          title: approved ? t("run.permissionApproved") : t("run.permissionDenied"),
+          description: `${activeConfirmation.toolName} · ${t(`run.mode.${mode}`)}`,
+          variant: approved ? "success" : "warning"
+        });
+      } catch (error) {
+        addToast({
+          title: t("run.permissionActionFailed"),
+          description: (error as Error).message,
+          diagnostic: (error as Error).message,
+          variant: "error"
+        });
+      }
+    },
+    [activeConfirmation, addDecision, resolvePendingConfirmation, addToast, t]
+  );
+
+  useEffect(() => {
     if (!activeConfirmation) return;
-    await confirmToolCall(activeConfirmation.runId, activeConfirmation.callId, approved);
-    addDecision({
-      runId: activeConfirmation.runId,
-      callId: activeConfirmation.callId,
-      approved,
-      decidedAt: new Date().toISOString()
-    });
-    useRunStore.setState((state) => ({ pendingConfirmations: state.pendingConfirmations.slice(1) }));
-  };
+
+    const onKeydown = (event: KeyboardEvent) => {
+      if (isEditableElement(event.target)) return;
+      const key = event.key.toLowerCase();
+      if (key === "y") {
+        event.preventDefault();
+        void onDecision("once");
+      }
+      if (key === "a") {
+        event.preventDefault();
+        void onDecision("always");
+      }
+      if (key === "n") {
+        event.preventDefault();
+        void onDecision("deny");
+      }
+    };
+
+    window.addEventListener("keydown", onKeydown);
+    return () => window.removeEventListener("keydown", onKeydown);
+  }, [activeConfirmation, onDecision]);
 
   return (
-    <div className="grid two-columns">
-      <section className="panel">
-        <h2>Run</h2>
-        <form onSubmit={onStart} className="form-grid">
-          <label>
-            Project ID
-            <input value={projectId} onChange={(e) => setProjectId(e.target.value)} />
-          </label>
-          <label>
-            Session ID
-            <input value={sessionId} onChange={(e) => setSessionId(e.target.value)} />
-          </label>
-          <label>
-            Model Config ID
-            <input value={modelConfigId} onChange={(e) => setModelConfigId(e.target.value)} />
-          </label>
-          <label>
-            Workspace Path
-            <input value={workspacePath} onChange={(e) => setWorkspacePath(e.target.value)} />
-          </label>
-          <label>
-            Task
-            <textarea value={taskInput} onChange={(e) => setTaskInput(e.target.value)} rows={4} />
-          </label>
-          <button type="submit">Start run</button>
-        </form>
+    <div className="grid h-full min-h-[calc(100vh-8rem)] grid-cols-[18rem_minmax(0,1fr)_22rem] gap-panel">
+      <RunComposerPanel
+        values={values}
+        running={isStarting}
+        onSubmit={onStart}
+        onChange={(next) => setValues((state) => ({ ...state, ...next }))}
+      />
+
+      <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_22rem] gap-panel">
+        <TimelinePanel
+          events={events}
+          selectedEventId={selectedEventId}
+          onSelectEvent={setSelectedEventId}
+          onSelectToolCall={setSelectedToolCallId}
+        />
+        <DiffPanel unifiedDiff={lastPatch} />
+      </div>
+
+      <section className="min-h-0 space-y-panel overflow-auto pr-1 scrollbar-subtle">
+        <ContextPanel workspacePath={values.workspacePath} taskInput={values.taskInput} eventsCount={events.length} />
+        <ToolDetailsDrawer toolCalls={toolCalls} selectedCallId={selectedToolCallId} onSelectCallId={setSelectedToolCallId} />
+        <PermissionQueueCenter queue={pendingConfirmations} onOpen={(callId) => setSelectedPermissionCallId(callId)} />
       </section>
 
-      <PermissionCenter />
-      <EventTimeline events={events} />
-      <DiffPanel unifiedDiff={lastPatch} />
-
-      {activeConfirmation && (
-        <PermissionModal
-          toolName={activeConfirmation.toolName}
-          args={activeConfirmation.args}
-          onApprove={() => void onDecision(true)}
-          onDeny={() => void onDecision(false)}
-        />
-      )}
+      <CapabilityPromptDialog
+        item={activeConfirmation}
+        open={Boolean(activeConfirmation)}
+        onClose={() => setSelectedPermissionCallId(undefined)}
+        onDecision={(mode) => void onDecision(mode)}
+      />
     </div>
   );
 }

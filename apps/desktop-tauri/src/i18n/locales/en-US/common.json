@@ -1,0 +1,237 @@
+{
+  "app": {
+    "brand": "Goyais",
+    "locale": {
+      "zh-CN": "简体中文",
+      "en-US": "English"
+    },
+    "nav": {
+      "run": "Run",
+      "projects": "Projects",
+      "models": "Model Configs",
+      "replay": "Replay",
+      "settings": "Settings"
+    },
+    "sidebar": {
+      "expand": "Expand sidebar",
+      "collapse": "Collapse sidebar"
+    },
+    "topbar": {
+      "project": "Project",
+      "model": "Model",
+      "runtime": "Runtime",
+      "checking": "Checking",
+      "online": "Online",
+      "offline": "Offline",
+      "toggleTheme": "Toggle theme",
+      "language": "Language"
+    }
+  },
+  "sync": {
+    "syncNow": "Sync now",
+    "syncNowCompact": "Sync Now",
+    "completedTitle": "Sync completed",
+    "failedTitle": "Sync failed",
+    "status": "pushed={{pushed}} pulled={{pulled}}"
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Single-user sync and runtime preferences.",
+    "syncSection": "Sync",
+    "languageSection": "Language",
+    "languageLabel": "Language",
+    "languageHelp": "Choose your interface language."
+  },
+  "run": {
+    "defaultTask": "Rename README title to MVP-1 Demo",
+    "startSuccess": "Run started",
+    "startFailed": "Failed to start run",
+    "permissionActionFailed": "Permission action failed",
+    "permissionApproved": "Permission approved",
+    "permissionDenied": "Permission denied",
+    "mode": {
+      "once": "allow once",
+      "always": "always allow",
+      "deny": "deny"
+    },
+    "composer": {
+      "title": "Run Composer",
+      "projectId": "Project ID",
+      "sessionId": "Session ID",
+      "modelConfigId": "Model Config ID",
+      "workspacePath": "Workspace Path",
+      "task": "Task",
+      "startRun": "Start Run",
+      "running": "Running..."
+    }
+  },
+  "timeline": {
+    "title": "Timeline",
+    "types": {
+      "plan": "plan",
+      "tool_call": "tool_call",
+      "tool_result": "tool_result",
+      "patch": "patch",
+      "error": "error",
+      "done": "done"
+    },
+    "noEventsTitle": "No timeline events",
+    "noEventsDescription": "Start a run to stream plan, tool calls, patch, and diagnostics.",
+    "result": {
+      "ok": "ok",
+      "error": "error",
+      "finished": "finished"
+    },
+    "autoFollow": "Auto-follow {{state}}",
+    "state": {
+      "on": "on",
+      "off": "off"
+    },
+    "actions": {
+      "title": "Actions",
+      "copyPayload": "Copy payload",
+      "pinItem": "Pin item",
+      "retry": "Retry",
+      "showMore": "Show more",
+      "showLess": "Show less"
+    },
+    "summary": {
+      "toolCall": "Tool call: {{toolName}}",
+      "toolResult": "Tool result: {{callId}} ({{status}})",
+      "patch": "Patch generated",
+      "error": "Error: {{message}}",
+      "done": "Run {{status}}",
+      "planDefault": "Plan updated"
+    }
+  },
+  "permission": {
+    "queueTitle": "Permission Queue",
+    "noPending": "No pending confirmations.",
+    "riskLabel": "risk: {{risk}}",
+    "callId": "Call ID: {{id}}",
+    "review": "Review",
+    "dialog": {
+      "title": "Capability Confirmation Required",
+      "description": "{{toolName}} requires explicit approval before execution.",
+      "none": "No pending capability confirmation.",
+      "reviewHint": "Review command, paths, and network targets before approving.",
+      "details": "Details",
+      "command": "Command",
+      "cwd": "cwd: {{cwd}}",
+      "paths": "Paths",
+      "outsideWorkspace": "Potential out-of-workspace path detected.",
+      "domains": "Domains",
+      "deny": "Deny",
+      "always": "Always Allow",
+      "once": "Allow Once"
+    }
+  },
+  "toolDetails": {
+    "title": "Tool Details",
+    "noCalls": "No tool calls yet.",
+    "toolCall": "Tool call",
+    "toolCallOption": "{{toolName}} · {{callId}}",
+    "copyDiagnostics": "Copy diagnostics",
+    "exportDiagnostics": "Export diagnostics",
+    "tabs": {
+      "input": "Input",
+      "output": "Output",
+      "logs": "Logs",
+      "timing": "Timing"
+    },
+    "noOutputYet": "No output yet",
+    "pending": "pending"
+  },
+  "diff": {
+    "title": "Diff",
+    "titleStrategy": "Diff (Diff-first)",
+    "noPatch": "No patch yet.",
+    "copyRaw": "Copy raw diff",
+    "apply": "Apply",
+    "applySelected": "Apply selected ({{count}})",
+    "acceptAll": "Accept all",
+    "acceptConfirm": "Accept all hunks?",
+    "clear": "Clear"
+  },
+  "context": {
+    "title": "Context",
+    "latestEvents": "Latest {{count}} events",
+    "source": {
+      "file": "file",
+      "retrieval": "retrieval",
+      "pasted": "pasted"
+    },
+    "bytes": "{{count}} bytes",
+    "tokens": "~{{count}} tokens",
+    "remove": "Remove",
+    "budget": "Context budget estimate: ~{{count}} tokens. More context increases cost and can reduce response focus."
+  },
+  "commandPalette": {
+    "title": "Command Palette",
+    "searchPlaceholder": "Search commands...",
+    "recent": "Recent",
+    "allCommands": "All commands",
+    "group": {
+      "project": "project",
+      "model": "model",
+      "tool": "tool",
+      "settings": "settings"
+    },
+    "commands": {
+      "runLabel": "Go to Run",
+      "runHint": "Open main run page",
+      "projectsLabel": "Go to Projects",
+      "projectsHint": "Manage workspaces",
+      "modelsLabel": "Go to Model Configs",
+      "modelsHint": "Switch model presets",
+      "replayLabel": "Go to Replay",
+      "replayHint": "Inspect run timeline",
+      "settingsLabel": "Go to Settings",
+      "settingsHint": "Runtime and sync",
+      "themeDark": "Theme: Dark",
+      "themeLight": "Theme: Light"
+    }
+  },
+  "projects": {
+    "title": "Projects",
+    "listTitle": "Project List",
+    "name": "Name",
+    "workspacePath": "Workspace Path",
+    "create": "Create Project",
+    "loading": "Loading projects...",
+    "loadFailed": "Failed to load projects",
+    "createSuccess": "Project created",
+    "createFailed": "Create project failed",
+    "projectId": "id: {{id}}"
+  },
+  "models": {
+    "title": "Model Configs",
+    "listTitle": "Registered Models",
+    "provider": "Provider",
+    "model": "Model",
+    "secretRef": "Secret Ref",
+    "save": "Save Model Config",
+    "loadFailed": "Failed to load model configs",
+    "saveSuccess": "Model config saved",
+    "saveFailed": "Save failed"
+  },
+  "replay": {
+    "title": "Replay",
+    "sessionId": "Session ID",
+    "loadRuns": "Load Runs",
+    "loadFailed": "Load runs failed",
+    "loading": "Loading replay...",
+    "timeline": "Timeline",
+    "timelineRun": "Timeline · {{runId}}"
+  },
+  "toast": {
+    "diagnostics": "Diagnostics",
+    "copyDiagnostics": "Copy diagnostics"
+  },
+  "feedback": {
+    "loading": "Loading...",
+    "errorTitle": "Something went wrong",
+    "copyDiagnostics": "Copy diagnostics",
+    "retry": "Retry"
+  }
+}

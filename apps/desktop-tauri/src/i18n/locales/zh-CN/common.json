@@ -1,0 +1,237 @@
+{
+  "app": {
+    "brand": "Goyais",
+    "locale": {
+      "zh-CN": "简体中文",
+      "en-US": "English"
+    },
+    "nav": {
+      "run": "运行",
+      "projects": "项目",
+      "models": "模型配置",
+      "replay": "回放",
+      "settings": "设置"
+    },
+    "sidebar": {
+      "expand": "展开侧边栏",
+      "collapse": "收起侧边栏"
+    },
+    "topbar": {
+      "project": "项目",
+      "model": "模型",
+      "runtime": "Runtime",
+      "checking": "检查中",
+      "online": "在线",
+      "offline": "离线",
+      "toggleTheme": "切换主题",
+      "language": "语言"
+    }
+  },
+  "sync": {
+    "syncNow": "立即同步",
+    "syncNowCompact": "Sync Now",
+    "completedTitle": "同步完成",
+    "failedTitle": "同步失败",
+    "status": "pushed={{pushed}} pulled={{pulled}}"
+  },
+  "settings": {
+    "title": "设置",
+    "description": "单用户同步与运行时偏好设置。",
+    "syncSection": "同步",
+    "languageSection": "语言",
+    "languageLabel": "界面语言",
+    "languageHelp": "选择界面显示语言。"
+  },
+  "run": {
+    "defaultTask": "把 README 的标题改成 MVP-1 Demo",
+    "startSuccess": "Run 已启动",
+    "startFailed": "启动 Run 失败",
+    "permissionActionFailed": "权限操作失败",
+    "permissionApproved": "权限已通过",
+    "permissionDenied": "权限已拒绝",
+    "mode": {
+      "once": "仅本次允许",
+      "always": "总是允许",
+      "deny": "拒绝"
+    },
+    "composer": {
+      "title": "运行配置",
+      "projectId": "Project ID",
+      "sessionId": "Session ID",
+      "modelConfigId": "Model Config ID",
+      "workspacePath": "工作区路径",
+      "task": "任务",
+      "startRun": "启动 Run",
+      "running": "运行中..."
+    }
+  },
+  "timeline": {
+    "title": "时间线",
+    "types": {
+      "plan": "plan",
+      "tool_call": "tool_call",
+      "tool_result": "tool_result",
+      "patch": "patch",
+      "error": "error",
+      "done": "done"
+    },
+    "noEventsTitle": "暂无时间线事件",
+    "noEventsDescription": "启动一次运行后即可看到 plan、tool call、patch 与诊断事件。",
+    "result": {
+      "ok": "成功",
+      "error": "失败",
+      "finished": "结束"
+    },
+    "autoFollow": "自动跟随 {{state}}",
+    "state": {
+      "on": "开",
+      "off": "关"
+    },
+    "actions": {
+      "title": "操作",
+      "copyPayload": "复制 payload",
+      "pinItem": "固定条目",
+      "retry": "重试",
+      "showMore": "展开更多",
+      "showLess": "收起"
+    },
+    "summary": {
+      "toolCall": "工具调用：{{toolName}}",
+      "toolResult": "工具结果：{{callId}}（{{status}}）",
+      "patch": "已生成补丁",
+      "error": "错误：{{message}}",
+      "done": "运行{{status}}",
+      "planDefault": "计划已更新"
+    }
+  },
+  "permission": {
+    "queueTitle": "权限队列",
+    "noPending": "暂无待确认请求。",
+    "riskLabel": "风险：{{risk}}",
+    "callId": "调用 ID：{{id}}",
+    "review": "查看",
+    "dialog": {
+      "title": "需要能力权限确认",
+      "description": "{{toolName}} 执行前需要明确授权。",
+      "none": "当前没有待确认的能力请求。",
+      "reviewHint": "请先检查命令、路径与网络目标后再授权。",
+      "details": "详情",
+      "command": "命令",
+      "cwd": "cwd：{{cwd}}",
+      "paths": "路径",
+      "outsideWorkspace": "检测到可能越出工作区的路径。",
+      "domains": "域名",
+      "deny": "拒绝",
+      "always": "总是允许",
+      "once": "允许一次"
+    }
+  },
+  "toolDetails": {
+    "title": "工具详情",
+    "noCalls": "暂无工具调用。",
+    "toolCall": "工具调用",
+    "toolCallOption": "{{toolName}} · {{callId}}",
+    "copyDiagnostics": "复制诊断信息",
+    "exportDiagnostics": "导出诊断信息",
+    "tabs": {
+      "input": "输入",
+      "output": "输出",
+      "logs": "日志",
+      "timing": "耗时"
+    },
+    "noOutputYet": "暂无输出",
+    "pending": "处理中"
+  },
+  "diff": {
+    "title": "Diff",
+    "titleStrategy": "Diff（Diff-first）",
+    "noPatch": "暂无补丁。",
+    "copyRaw": "复制原始 diff",
+    "apply": "应用",
+    "applySelected": "应用选中（{{count}}）",
+    "acceptAll": "全部接受",
+    "acceptConfirm": "确认接受所有 hunk？",
+    "clear": "清空"
+  },
+  "context": {
+    "title": "上下文",
+    "latestEvents": "最近 {{count}} 条事件",
+    "source": {
+      "file": "文件",
+      "retrieval": "检索",
+      "pasted": "粘贴"
+    },
+    "bytes": "{{count}} 字节",
+    "tokens": "约 {{count}} tokens",
+    "remove": "移除",
+    "budget": "上下文预算预估：约 {{count}} tokens。上下文越多，成本越高且可能影响聚焦。"
+  },
+  "commandPalette": {
+    "title": "命令面板",
+    "searchPlaceholder": "搜索命令...",
+    "recent": "最近使用",
+    "allCommands": "全部命令",
+    "group": {
+      "project": "项目",
+      "model": "模型",
+      "tool": "工具",
+      "settings": "设置"
+    },
+    "commands": {
+      "runLabel": "前往 Run",
+      "runHint": "打开主运行页",
+      "projectsLabel": "前往 Projects",
+      "projectsHint": "管理工作区",
+      "modelsLabel": "前往 Model Configs",
+      "modelsHint": "切换模型预设",
+      "replayLabel": "前往 Replay",
+      "replayHint": "查看运行时间线",
+      "settingsLabel": "前往 Settings",
+      "settingsHint": "运行时与同步",
+      "themeDark": "主题：深色",
+      "themeLight": "主题：浅色"
+    }
+  },
+  "projects": {
+    "title": "项目",
+    "listTitle": "项目列表",
+    "name": "名称",
+    "workspacePath": "工作区路径",
+    "create": "创建项目",
+    "loading": "正在加载项目...",
+    "loadFailed": "加载项目失败",
+    "createSuccess": "项目创建成功",
+    "createFailed": "项目创建失败",
+    "projectId": "id：{{id}}"
+  },
+  "models": {
+    "title": "模型配置",
+    "listTitle": "已注册模型",
+    "provider": "Provider",
+    "model": "模型",
+    "secretRef": "Secret Ref",
+    "save": "保存模型配置",
+    "loadFailed": "加载模型配置失败",
+    "saveSuccess": "模型配置已保存",
+    "saveFailed": "保存失败"
+  },
+  "replay": {
+    "title": "回放",
+    "sessionId": "Session ID",
+    "loadRuns": "加载 Runs",
+    "loadFailed": "加载运行列表失败",
+    "loading": "回放加载中...",
+    "timeline": "时间线",
+    "timelineRun": "时间线 · {{runId}}"
+  },
+  "toast": {
+    "diagnostics": "诊断信息",
+    "copyDiagnostics": "复制诊断信息"
+  },
+  "feedback": {
+    "loading": "加载中...",
+    "errorTitle": "发生错误",
+    "copyDiagnostics": "复制诊断信息",
+    "retry": "重试"
+  }
+}

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
-import { subscribeRunEvents } from "../api/runtimeClient";
 import { assertEventEnvelope } from "../api/protocolValidators";
+import { subscribeRunEvents } from "../api/runtimeClient";
 import { useRunStore } from "../stores/runStore";
 
 export function useRunEvents(runId?: string) {

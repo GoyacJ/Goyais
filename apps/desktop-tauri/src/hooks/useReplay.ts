@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-import type { EventEnvelope } from "../types/generated";
 import { replayRunEvents } from "../api/runtimeClient";
+import type { EventEnvelope } from "../types/generated";
 
 export function useReplay(runId?: string) {
   const [events, setEvents] = useState<EventEnvelope[]>([]);

@@ -1,12 +1,25 @@
+import "./styles/globals.css";
+
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 
+import { AppProviders } from "./app/providers";
+import { initializeI18n } from "./i18n";
 import { router } from "./router";
-import "./styles/app.css";
+import { useSettingsStore } from "./stores/settingsStore";
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <RouterProvider router={router} />
-  </StrictMode>
-);
+async function bootstrap() {
+  await useSettingsStore.getState().hydrateLocale();
+  await initializeI18n(useSettingsStore.getState().locale);
+
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <AppProviders>
+        <RouterProvider router={router} />
+      </AppProviders>
+    </StrictMode>
+  );
+}
+
+void bootstrap();
