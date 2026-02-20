@@ -1,5 +1,13 @@
 export const TRACE_HEADER = "X-Trace-Id";
 
+export const DOMAIN_ERROR_CODES = {
+  VALIDATION: "E_VALIDATION",
+  UNAUTHORIZED: "E_UNAUTHORIZED",
+  FORBIDDEN: "E_FORBIDDEN",
+  NOT_FOUND: "E_NOT_FOUND",
+  INTERNAL: "E_INTERNAL"
+} as const;
+
 export interface GoyaisError {
   code: string;
   message: string;

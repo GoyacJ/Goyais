@@ -139,6 +139,10 @@ export class HubDatabase {
     return row[Object.keys(row)[0]];
   }
 
+  execute(sql: string, ...params: SQLInputValue[]): void {
+    this.db.prepare(sql).run(...params);
+  }
+
   getSetupStatus(): { setupMode: boolean; usersCount: number; setupCompleted: number } {
     const usersCount = Number(this.scalar<number>("SELECT COUNT(*) AS total FROM users"));
     const setupCompleted = Number(
@@ -455,6 +459,22 @@ export class HubDatabase {
       .all(roleId) as Array<{ perm_key: string }>;
 
     return rows.map((row) => row.perm_key);
+  }
+
+  roleHasPermission(roleId: string, permKey: string): boolean {
+    const row = this.db
+      .prepare(
+        `
+        SELECT 1 AS granted
+        FROM role_permissions
+        WHERE role_id = ?
+          AND perm_key = ?
+        LIMIT 1
+      `
+      )
+      .get(roleId, permKey) as { granted: number } | undefined;
+
+    return Boolean(row?.granted);
   }
 
   listMenusForRole(roleId: string): MenuRecord[] {

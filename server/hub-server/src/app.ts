@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import Fastify, { type FastifyInstance } from "fastify";
 
+import type { MembershipRole } from "./db";
 import type { HubDatabase } from "./db";
 import { TRACE_HEADER, errorFromUnknown } from "./errors";
 import { registerAuthRoutes } from "./routes/auth";
@@ -14,6 +15,8 @@ declare module "fastify" {
   interface FastifyRequest {
     trace_id: string;
     request_start_ms: number;
+    auth_workspace_id?: string;
+    auth_membership?: MembershipRole;
   }
 }
 
