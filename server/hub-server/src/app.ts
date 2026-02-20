@@ -11,7 +11,10 @@ import { registerMeRoutes } from "./routes/me";
 import { registerModelConfigRoutes } from "./routes/model-configs";
 import { registerNavigationRoutes } from "./routes/navigation";
 import { registerProjectRoutes } from "./routes/projects";
+import { registerRuntimeAdminRoutes } from "./routes/runtime-admin";
+import { registerRuntimeGatewayRoutes } from "./routes/runtime-gateway";
 import { registerWorkspaceRoutes } from "./routes/workspaces";
+import { loadProtocolVersionFromSchema } from "./protocol-version";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -26,8 +29,10 @@ interface CreateAppOptions {
   db: HubDatabase;
   bootstrapToken?: string;
   hubSecretKey?: string;
+  hubRuntimeSharedSecret?: string;
   allowPublicSignup?: boolean;
   tokenTtlSeconds?: number;
+  protocolVersion?: string;
 }
 
 function normalizeTraceHeader(value: unknown): string {
@@ -90,6 +95,14 @@ export function createApp(options: CreateAppOptions): FastifyInstance {
   });
   registerNavigationRoutes(app, { db: options.db });
   registerProjectRoutes(app, { db: options.db });
+  registerRuntimeAdminRoutes(app, {
+    db: options.db,
+    runtimeSharedSecret: options.hubRuntimeSharedSecret ?? ""
+  });
+  registerRuntimeGatewayRoutes(app, {
+    db: options.db,
+    runtimeSharedSecret: options.hubRuntimeSharedSecret ?? ""
+  });
   registerWorkspaceRoutes(app, { db: options.db });
 
   app.get("/v1/health", async () => ({
@@ -102,7 +115,7 @@ export function createApp(options: CreateAppOptions): FastifyInstance {
   app.get("/v1/version", async () => ({
     service: "hub-server",
     version: "0.1.0",
-    protocol_version: "1.0.0"
+    protocol_version: options.protocolVersion ?? loadProtocolVersionFromSchema()
   }));
 
   app.get("/healthz", async () => ({ ok: true }));

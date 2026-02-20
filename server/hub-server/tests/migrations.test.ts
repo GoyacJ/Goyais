@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { createApp } from "../src/app";
 import { HubDatabase } from "../src/db";
+import { loadProtocolVersionFromSchema } from "../src/protocol-version";
 
 const migrationsDir = path.resolve(process.cwd(), "migrations");
 
@@ -32,18 +33,24 @@ describe("hub-server schema migrations", () => {
     const projectsCount = db.scalar<number>("SELECT COUNT(*) FROM projects");
     const modelConfigsCount = db.scalar<number>("SELECT COUNT(*) FROM model_configs");
     const secretsCount = db.scalar<number>("SELECT COUNT(*) FROM secrets");
+    const runtimesCount = db.scalar<number>("SELECT COUNT(*) FROM workspace_runtimes");
+    const runIndexCount = db.scalar<number>("SELECT COUNT(*) FROM run_index");
+    const auditIndexCount = db.scalar<number>("SELECT COUNT(*) FROM audit_index");
     const migrationCount = db.scalar<number>("SELECT COUNT(*) FROM schema_migrations");
     const setupCompleted = db.scalar<number>(
       "SELECT setup_completed FROM system_state WHERE singleton_id = 1"
     );
 
     expect(userCount).toBe(0);
-    expect(permsCount).toBeGreaterThanOrEqual(11);
+    expect(permsCount).toBeGreaterThanOrEqual(13);
     expect(menusCount).toBe(5);
     expect(projectsCount).toBe(0);
     expect(modelConfigsCount).toBe(0);
     expect(secretsCount).toBe(0);
-    expect(migrationCount).toBeGreaterThanOrEqual(2);
+    expect(runtimesCount).toBe(0);
+    expect(runIndexCount).toBe(0);
+    expect(auditIndexCount).toBe(0);
+    expect(migrationCount).toBeGreaterThanOrEqual(3);
     expect(setupCompleted).toBe(0);
   });
 
@@ -76,7 +83,7 @@ describe("hub-server schema migrations", () => {
     expect(version.json()).toMatchObject({
       service: "hub-server",
       version: "0.1.0",
-      protocol_version: "1.0.0"
+      protocol_version: loadProtocolVersionFromSchema()
     });
   });
 });
