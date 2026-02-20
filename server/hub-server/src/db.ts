@@ -95,6 +95,13 @@ export interface SecretRecord {
   created_at: string;
 }
 
+interface CreateProjectInput {
+  workspaceId: string;
+  name: string;
+  rootUri: string;
+  createdBy: string;
+}
+
 export class HubDatabase {
   private readonly db: DatabaseSync;
 
@@ -475,6 +482,81 @@ export class HubDatabase {
       .get(roleId, permKey) as { granted: number } | undefined;
 
     return Boolean(row?.granted);
+  }
+
+  listProjects(workspaceId: string): ProjectRecord[] {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT
+          project_id,
+          workspace_id,
+          name,
+          root_uri,
+          created_at,
+          updated_at
+        FROM projects
+        WHERE workspace_id = ?
+        ORDER BY created_at DESC, project_id ASC
+      `
+      )
+      .all(workspaceId) as unknown as ProjectRecord[];
+
+    return rows;
+  }
+
+  createProject(input: CreateProjectInput): ProjectRecord {
+    const projectId = randomUUID();
+    const now = new Date().toISOString();
+
+    try {
+      this.db
+        .prepare(
+          `
+          INSERT INTO projects(project_id, workspace_id, name, root_uri, created_by, created_at, updated_at)
+          VALUES(?, ?, ?, ?, ?, ?, ?)
+        `
+        )
+        .run(projectId, input.workspaceId, input.name, input.rootUri, input.createdBy, now, now);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.includes("UNIQUE constraint failed: projects.workspace_id, projects.name")
+      ) {
+        throw new HubServerError({
+          code: "E_VALIDATION",
+          message: "Project name already exists in workspace.",
+          retryable: false,
+          statusCode: 400,
+          causeType: "project_name_conflict"
+        });
+      }
+
+      throw error;
+    }
+
+    return {
+      project_id: projectId,
+      workspace_id: input.workspaceId,
+      name: input.name,
+      root_uri: input.rootUri,
+      created_at: now,
+      updated_at: now
+    };
+  }
+
+  deleteProject(workspaceId: string, projectId: string): boolean {
+    const result = this.db
+      .prepare(
+        `
+        DELETE FROM projects
+        WHERE workspace_id = ?
+          AND project_id = ?
+      `
+      )
+      .run(workspaceId, projectId);
+
+    return result.changes > 0;
   }
 
   listMenusForRole(roleId: string): MenuRecord[] {
