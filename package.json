@@ -9,6 +9,7 @@
     "dev:runtime": "pnpm --filter @goyais/python-agent dev",
     "dev:desktop": "pnpm --filter @goyais/desktop-tauri tauri dev",
     "dev:sync": "pnpm --filter @goyais/sync-server dev",
+    "dev:hub": "pnpm --filter @goyais/hub-server dev",
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
