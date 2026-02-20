@@ -1,0 +1,41 @@
+{
+  "$id": "goyais.protocol.v1.event-envelope",
+  "type": "object",
+  "required": ["protocol_version", "event_id", "run_id", "seq", "ts", "type", "payload"],
+  "properties": {
+    "protocol_version": { "const": "1.0.0" },
+    "event_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "seq": { "type": "integer", "minimum": 1 },
+    "ts": { "type": "string", "format": "date-time" },
+    "type": { "enum": ["plan", "tool_call", "tool_result", "patch", "error", "done"] },
+    "payload": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "plan" } }, "required": ["type"] },
+      "then": { "properties": { "payload": { "$ref": "goyais.protocol.v1.event-payload-plan" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "tool_call" } }, "required": ["type"] },
+      "then": { "properties": { "payload": { "$ref": "goyais.protocol.v1.event-payload-tool-call" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "tool_result" } }, "required": ["type"] },
+      "then": { "properties": { "payload": { "$ref": "goyais.protocol.v1.event-payload-tool-result" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "patch" } }, "required": ["type"] },
+      "then": { "properties": { "payload": { "$ref": "goyais.protocol.v1.event-payload-patch" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "error" } }, "required": ["type"] },
+      "then": { "properties": { "payload": { "$ref": "goyais.protocol.v1.event-payload-error" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "done" } }, "required": ["type"] },
+      "then": { "properties": { "payload": { "$ref": "goyais.protocol.v1.event-payload-done" } } }
+    }
+  ],
+  "additionalProperties": false
+}

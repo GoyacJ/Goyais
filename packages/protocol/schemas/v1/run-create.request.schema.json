@@ -1,0 +1,21 @@
+{
+  "$id": "goyais.protocol.v1.run-create.request",
+  "type": "object",
+  "required": ["project_id", "session_id", "input", "model_config_id", "workspace_path", "options"],
+  "properties": {
+    "project_id": { "type": "string", "minLength": 1 },
+    "session_id": { "type": "string", "minLength": 1 },
+    "input": { "type": "string", "minLength": 1 },
+    "model_config_id": { "type": "string", "minLength": 1 },
+    "workspace_path": { "type": "string", "minLength": 1 },
+    "options": {
+      "type": "object",
+      "required": ["use_worktree"],
+      "properties": {
+        "use_worktree": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,11 @@
+{
+  "$id": "goyais.protocol.v1.event-payload-tool-result",
+  "type": "object",
+  "required": ["call_id", "ok", "output"],
+  "properties": {
+    "call_id": { "type": "string", "minLength": 1 },
+    "ok": { "type": "boolean" },
+    "output": {}
+  },
+  "additionalProperties": true
+}

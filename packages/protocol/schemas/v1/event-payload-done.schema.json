@@ -1,0 +1,10 @@
+{
+  "$id": "goyais.protocol.v1.event-payload-done",
+  "type": "object",
+  "required": ["status"],
+  "properties": {
+    "status": { "enum": ["completed", "failed", "cancelled"] },
+    "message": { "type": "string" }
+  },
+  "additionalProperties": false
+}

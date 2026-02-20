@@ -1,0 +1,9 @@
+{
+  "$id": "goyais.protocol.v1.event-payload-patch",
+  "type": "object",
+  "required": ["unified_diff"],
+  "properties": {
+    "unified_diff": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": true
+}
