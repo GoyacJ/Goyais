@@ -117,7 +117,7 @@ Sample task:
 - `GET /v1/metrics`
 - `GET /v1/diagnostics/run/{run_id}` (requires `X-Runtime-Token`)
 
-Event envelope always includes `protocol_version=2.0.0` and `trace_id`.
+Event envelope always includes `protocol_version` (loaded from `packages/protocol/schemas/**/protocol-version.json`) and `trace_id`.
 
 Error response shape (Runtime + Sync):
 
@@ -169,6 +169,7 @@ Desktop trigger:
 
 - Phase 1（控制面）：bootstrap admin、登录鉴权、工作区列表、导航与权限下发
 - Phase 2（远端数据面）：Projects / Model Configs（workspace 隔离 + RBAC 强制）
+- Phase 3（runtime gateway）：remote runs/SSE/tool confirmations 统一经 Hub 代理
 
 目录：`/Users/goya/Repo/Git/Goyais/server/hub-server`
 
@@ -179,6 +180,7 @@ export GOYAIS_HUB_DB_PATH=./data/hub.sqlite
 export GOYAIS_BOOTSTRAP_TOKEN=change-me-bootstrap-token
 export GOYAIS_ALLOW_PUBLIC_SIGNUP=false
 export GOYAIS_HUB_SECRET_KEY=<base64-32-byte-key>
+export GOYAIS_HUB_RUNTIME_SHARED_SECRET=<required-shared-secret>
 export GOYAIS_SERVER_PORT=8787
 ```
 
@@ -261,6 +263,60 @@ curl -sS -X DELETE "http://127.0.0.1:8787/v1/model-configs/<model_config_id>?wor
 - 所有 domain endpoint 都要求 `workspace_id` 并校验 active membership + permission。
 
 所有 hub 响应（成功/失败）都会回传 `X-Trace-Id`。
+
+### Hub Phase 3 runtime gateway quickstart
+
+1) 启动 remote runtime（示例）：
+
+```bash
+cd /Users/goya/Repo/Git/Goyais/runtime/python-agent
+GOYAIS_RUNTIME_REQUIRE_HUB_AUTH=true \
+GOYAIS_RUNTIME_SHARED_SECRET=<required-shared-secret> \
+GOYAIS_RUNTIME_WORKSPACE_ID=<workspace_id> \
+GOYAIS_RUNTIME_WORKSPACE_ROOT=/srv/workspaces/<workspace_id> \
+GOYAIS_HUB_BASE_URL=http://127.0.0.1:8787 \
+GOYAIS_RUNTIME_PORT=19001 \
+pnpm dev
+```
+
+2) 在 hub 注册 runtime（需要 `workspace:manage`）：
+
+```bash
+curl -sS -X POST "http://127.0.0.1:8787/v1/admin/workspaces/<workspace_id>/runtime" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"runtime_base_url":"http://127.0.0.1:19001"}'
+```
+
+3) 通过 Hub Gateway 发起 run / 订阅事件 / 确认：
+
+```bash
+curl -sS -X POST "http://127.0.0.1:8787/v1/runtime/runs?workspace_id=<workspace_id>" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"project-demo","session_id":"session-demo","input":"update readme","model_config_id":"model-demo","workspace_path":"/ignored/by-remote","options":{"use_worktree":false}}'
+
+curl -N "http://127.0.0.1:8787/v1/runtime/runs/<run_id>/events?workspace_id=<workspace_id>" \
+  -H "Authorization: Bearer <token>"
+
+curl -sS -X POST "http://127.0.0.1:8787/v1/runtime/tool-confirmations?workspace_id=<workspace_id>" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"run_id":"<run_id>","call_id":"<call_id>","approved":true}'
+```
+
+4) 权限要求（服务端强制）：
+
+- `POST /v1/runtime/runs` -> `run:create`
+- `GET /v1/runtime/runs*` / `events` / `replay` -> `run:read`
+- `POST /v1/runtime/tool-confirmations` -> `confirm:write`
+
+5) 安全约束（Phase 3）：
+
+- remote desktop 不直连 runtime，只能走 hub `/v1/runtime/*`
+- hub 会探活并校验 runtime 自报 `workspace_id` 必须与 registry 一致，不一致返回 `E_RUNTIME_MISCONFIGURED`
+- runtime 在 `GOYAIS_RUNTIME_REQUIRE_HUB_AUTH=true` 下，必须校验 `X-Hub-Auth` / `X-User-Id` / `X-Trace-Id`
+- secret `secret:*` 仅由 runtime 通过 hub internal resolve 一次性解密，不回传到 desktop，不落盘
 
 ## Security model (MVP-1)
 
