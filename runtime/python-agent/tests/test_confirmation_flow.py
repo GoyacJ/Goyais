@@ -55,6 +55,9 @@ class _RecoveryRepo:
         self._seq += 1
         return self._seq
 
+    async def get_run_trace_id(self, run_id):
+        return "trace-recovery"
+
     async def insert_event(self, event):
         self.events.append(event)
 

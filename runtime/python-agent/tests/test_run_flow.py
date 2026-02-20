@@ -61,7 +61,7 @@ async def _run_with_confirmation(workspace: Path, db_path: Path, approved: bool)
             "options": {"use_worktree": False},
         }
 
-        task = asyncio.create_task(service.start_run(run_id, payload))
+        task = asyncio.create_task(service.start_run(run_id, payload, f"trace-{run_id}"))
         call_id = await _wait_for_apply_call_id(repo, run_id)
         await confirmation.resolve(run_id, call_id, approved)
         await task
@@ -141,7 +141,7 @@ def test_run_command_allowlist_denial_after_approval(tmp_path: Path):
                 "options": {"use_worktree": False, "run_tests": "ls -la"},
             }
 
-            task = asyncio.create_task(service.start_run(run_id, payload))
+            task = asyncio.create_task(service.start_run(run_id, payload, f"trace-{run_id}"))
             apply_call_id = await _wait_for_tool_call_id(repo, run_id, "apply_patch")
             await confirmation.resolve(run_id, apply_call_id, True)
 
@@ -155,7 +155,7 @@ def test_run_command_allowlist_denial_after_approval(tmp_path: Path):
             ]
             assert command_results
             assert command_results[-1]["payload"]["ok"] is False
-            assert "allowlist" in str(command_results[-1]["payload"]["output"]).lower()
+            assert command_results[-1]["payload"]["error"]["code"] == "E_TOOL_DENIED"
             assert events[-1]["type"] == "done"
             assert events[-1]["payload"]["status"] == "failed"
         finally:

@@ -5,6 +5,8 @@ from typing import Any
 import httpx
 
 from app.db.repositories import Repository
+from app.observability.metrics import get_runtime_metrics
+from app.trace import TRACE_HEADER, get_current_trace_id
 
 
 class SyncService:
@@ -15,6 +17,8 @@ class SyncService:
         self.device_id = device_id
 
     async def sync_now(self) -> dict[str, Any]:
+        metrics = get_runtime_metrics()
+        trace_id = get_current_trace_id()
         state = await self.repo.get_sync_state()
         local_since = int(state["last_pushed_global_seq"])
         remote_since = int(state["last_pulled_server_seq"])
@@ -27,7 +31,10 @@ class SyncService:
             "artifacts_meta": [],
         }
 
-        headers = {"Authorization": f"Bearer {self.token}"}
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            TRACE_HEADER: trace_id,
+        }
 
         async with httpx.AsyncClient(timeout=30) as client:
             push_resp = await client.post(f"{self.sync_server_url}/v1/sync/push", json=push_payload, headers=headers)
@@ -59,9 +66,15 @@ class SyncService:
             last_pulled_server_seq=max_server_seq,
         )
 
+        pushed = int(push_data.get("inserted", 0))
+        pulled = len(pull_data.get("events", []))
+        metrics.sync_push_total += pushed
+        metrics.sync_pull_total += pulled
+
         return {
-            "pushed": int(push_data.get("inserted", 0)),
-            "pulled": len(pull_data.get("events", [])),
+            "pushed": pushed,
+            "pulled": pulled,
             "last_pushed_global_seq": new_last_pushed_global_seq,
             "last_pulled_server_seq": max_server_seq,
+            "trace_id": trace_id,
         }

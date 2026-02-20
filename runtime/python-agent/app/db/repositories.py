@@ -36,7 +36,7 @@ class Repository:
         )
         await self.conn.commit()
 
-    async def create_run(self, payload: dict[str, Any], run_id: str) -> None:
+    async def create_run(self, payload: dict[str, Any], run_id: str, trace_id: str) -> None:
         model_config_id = payload.get("model_config_id") or None
         if model_config_id:
             cursor = await self.conn.execute(
@@ -48,8 +48,8 @@ class Repository:
 
         await self.conn.execute(
             """
-            INSERT INTO runs(run_id, project_id, session_id, model_config_id, input, workspace_path, status, created_at, started_at)
-            VALUES(?, ?, ?, ?, ?, ?, 'running', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+            INSERT INTO runs(run_id, project_id, session_id, model_config_id, input, workspace_path, trace_id, status, created_at, started_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?, 'running', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
             """,
             (
                 run_id,
@@ -58,6 +58,7 @@ class Repository:
                 model_config_id,
                 payload["input"],
                 payload["workspace_path"],
+                trace_id,
             ),
         )
         await self.conn.commit()
@@ -80,20 +81,28 @@ class Repository:
             return None
         return str(row["status"])
 
+    async def get_run_trace_id(self, run_id: str) -> str | None:
+        cursor = await self.conn.execute("SELECT trace_id FROM runs WHERE run_id=?", (run_id,))
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return str(row["trace_id"])
+
     async def next_seq(self, run_id: str) -> int:
         cursor = await self.conn.execute("SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM events WHERE run_id=?", (run_id,))
         row = await cursor.fetchone()
         return int(row["seq"])
 
     async def insert_event(self, event: dict[str, Any]) -> None:
-        protocol_version = str(event.get("protocol_version", "1.0.0"))
+        protocol_version = str(event.get("protocol_version", "2.0.0"))
         await self.conn.execute(
             """
-            INSERT INTO events(protocol_version, event_id, run_id, seq, ts, type, payload_json, created_at)
-            VALUES(?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+            INSERT INTO events(protocol_version, trace_id, event_id, run_id, seq, ts, type, payload_json, created_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
             """,
             (
                 protocol_version,
+                event["trace_id"],
                 event["event_id"],
                 event["run_id"],
                 event["seq"],
@@ -106,13 +115,14 @@ class Repository:
 
     async def list_events_by_run(self, run_id: str) -> list[dict[str, Any]]:
         cursor = await self.conn.execute(
-            "SELECT protocol_version, event_id, run_id, seq, ts, type, payload_json FROM events WHERE run_id=? ORDER BY seq ASC",
+            "SELECT protocol_version, trace_id, event_id, run_id, seq, ts, type, payload_json FROM events WHERE run_id=? ORDER BY seq ASC",
             (run_id,),
         )
         rows = await cursor.fetchall()
         return [
             {
                 "protocol_version": row["protocol_version"],
+                "trace_id": row["trace_id"],
                 "event_id": row["event_id"],
                 "run_id": row["run_id"],
                 "seq": row["seq"],
@@ -125,10 +135,26 @@ class Repository:
 
     async def list_runs_by_session(self, session_id: str) -> list[dict[str, Any]]:
         cursor = await self.conn.execute(
-            "SELECT run_id, status, created_at, input FROM runs WHERE session_id=? ORDER BY created_at DESC", (session_id,)
+            "SELECT run_id, trace_id, status, created_at, input FROM runs WHERE session_id=? ORDER BY created_at DESC",
+            (session_id,),
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+    async def get_run(self, run_id: str) -> dict[str, Any] | None:
+        cursor = await self.conn.execute(
+            """
+            SELECT run_id, project_id, session_id, model_config_id, input, workspace_path, trace_id, status,
+                   created_at, started_at, completed_at
+            FROM runs
+            WHERE run_id=?
+            """,
+            (run_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return dict(row)
 
     async def upsert_model_config(self, data: dict[str, Any]) -> None:
         await self.conn.execute(
@@ -181,6 +207,7 @@ class Repository:
         self,
         *,
         audit_id: str,
+        trace_id: str,
         run_id: str | None,
         event_id: str | None,
         call_id: str | None,
@@ -195,16 +222,17 @@ class Repository:
         await self.conn.execute(
             """
             INSERT INTO audit_logs(
-              audit_id, run_id, event_id, call_id, action, tool_name, args_json, result_json,
+              audit_id, trace_id, run_id, event_id, call_id, action, tool_name, args_json, result_json,
               requires_confirmation, user_decision, decision_ts, outcome, created_at
             ) VALUES(
-              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
               CASE WHEN ? != 'n/a' THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE NULL END,
               ?, strftime('%Y-%m-%dT%H:%M:%fZ','now')
             )
             """,
             (
                 audit_id,
+                trace_id,
                 run_id,
                 event_id,
                 call_id,
@@ -339,6 +367,27 @@ class Repository:
         )
         await self.conn.commit()
 
+    async def list_audit_logs_by_run(self, run_id: str, limit: int = 200) -> list[dict[str, Any]]:
+        cursor = await self.conn.execute(
+            """
+            SELECT trace_id, audit_id, run_id, event_id, call_id, action, tool_name, args_json, result_json,
+                   requires_confirmation, user_decision, decision_ts, outcome, created_at
+            FROM audit_logs
+            WHERE run_id=?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (run_id, limit),
+        )
+        rows = await cursor.fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["args"] = json.loads(item.pop("args_json") or "{}")
+            item["result"] = json.loads(item.pop("result_json") or "{}")
+            result.append(item)
+        return result
+
     async def get_sync_state(self) -> dict[str, Any]:
         cursor = await self.conn.execute(
             "SELECT device_id, last_pushed_global_seq, last_pulled_server_seq FROM sync_state WHERE singleton_id=1"
@@ -349,7 +398,7 @@ class Repository:
     async def list_unsynced_events(self, since_global_seq: int) -> list[dict[str, Any]]:
         cursor = await self.conn.execute(
             """
-            SELECT global_seq, protocol_version, event_id, run_id, seq, ts, type, payload_json
+            SELECT global_seq, protocol_version, trace_id, event_id, run_id, seq, ts, type, payload_json
             FROM events
             WHERE global_seq > ?
             ORDER BY global_seq ASC
@@ -361,6 +410,7 @@ class Repository:
             {
                 "global_seq": row["global_seq"],
                 "protocol_version": row["protocol_version"],
+                "trace_id": row["trace_id"],
                 "event_id": row["event_id"],
                 "run_id": row["run_id"],
                 "seq": row["seq"],
@@ -392,7 +442,8 @@ class Repository:
 
         await self.insert_event(
             {
-                "protocol_version": event.get("protocol_version", "1.0.0"),
+                "protocol_version": event.get("protocol_version", "2.0.0"),
+                "trace_id": event["trace_id"],
                 "event_id": event["event_id"],
                 "run_id": event["run_id"],
                 "seq": event["seq"],

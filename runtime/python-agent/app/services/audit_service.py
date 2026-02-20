@@ -13,6 +13,7 @@ class AuditService:
     async def record(
         self,
         *,
+        trace_id: str,
         run_id: str | None,
         event_id: str | None,
         call_id: str | None,
@@ -26,6 +27,7 @@ class AuditService:
     ) -> None:
         await self.repo.insert_audit(
             audit_id=str(uuid.uuid4()),
+            trace_id=trace_id,
             run_id=run_id,
             event_id=event_id,
             call_id=call_id,

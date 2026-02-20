@@ -18,15 +18,21 @@ class FakeRepo:
     async def ensure_session(self, session_id, project_id):
         return None
 
-    async def create_run(self, payload, run_id):
+    async def create_run(self, payload, run_id, trace_id):
         return None
 
     async def update_run_status(self, run_id, status):
         self.status_updates.append((run_id, status))
 
+    async def get_run_status(self, run_id):
+        return "running"
+
     async def next_seq(self, run_id):
         self.seq += 1
         return self.seq
+
+    async def get_run_trace_id(self, run_id):
+        return "trace-graph"
 
     async def insert_event(self, event):
         self.events.append(event)
@@ -57,10 +63,10 @@ def test_graph_mode_emits_error_when_model_config_missing():
         "options": {"use_worktree": False},
     }
 
-    asyncio.run(service.start_run("run-1", payload))
+    asyncio.run(service.start_run("run-1", payload, "trace-graph"))
 
     assert repo.status_updates[-1] == ("run-1", "failed")
     assert repo.events[-2]["type"] == "error"
-    assert "model_config_id is required" in repo.events[-2]["payload"]["message"]
+    assert "model_config_id is required" in repo.events[-2]["payload"]["error"]["message"]
     assert repo.events[-1]["type"] == "done"
     assert repo.events[-1]["payload"]["status"] == "failed"

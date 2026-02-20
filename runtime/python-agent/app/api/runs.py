@@ -3,19 +3,21 @@ from __future__ import annotations
 import asyncio
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sse_starlette.sse import EventSourceResponse
 
 from app.deps import get_repo, get_run_service
 from app.services.run_service import stream_as_sse
+from app.trace import get_current_trace_id
 
 router = APIRouter(prefix="/v1", tags=["runs"])
 
 
 @router.post("/runs")
-async def create_run(payload: dict, repo=Depends(get_repo), run_service=Depends(get_run_service)):
+async def create_run(payload: dict, request: Request, repo=Depends(get_repo), run_service=Depends(get_run_service)):
     run_id = str(uuid.uuid4())
-    asyncio.create_task(run_service.start_run(run_id, payload))
+    trace_id = str(getattr(request.state, "trace_id", get_current_trace_id()))
+    asyncio.create_task(run_service.start_run(run_id, payload, trace_id))
     return {"run_id": run_id}
 
 

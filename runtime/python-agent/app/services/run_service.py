@@ -18,6 +18,9 @@ from app.agent.prompts import (
 from app.agent.provider_router import build_provider
 from app.agent.providers.base import ProviderRequest
 from app.db.repositories import Repository
+from app.errors import build_goyais_error, error_from_exception
+from app.observability.logging import get_runtime_logger
+from app.observability.metrics import get_runtime_metrics
 from app.services.audit_service import AuditService
 from app.services.confirmation_service import ConfirmationService
 from app.sse.event_bus import EventBus
@@ -25,9 +28,12 @@ from app.tools.command_tools import run_command
 from app.tools.file_tools import read_file
 from app.tools.patch_tools import apply_patch
 from app.tools.policy import requires_confirmation
+from app.trace import generate_trace_id
 from unidiff import PatchSet
 
-PROTOCOL_VERSION = "1.0.0"
+PROTOCOL_VERSION = "2.0.0"
+logger = get_runtime_logger()
+metrics = get_runtime_metrics()
 
 
 class RunService:
@@ -45,23 +51,33 @@ class RunService:
         self.confirmation_service = confirmation_service
         self.audit_service = audit_service
         self.agent_mode = agent_mode
+        self._run_traces: dict[str, str] = {}
 
     async def recover_pending_confirmations_after_restart(self) -> None:
         pending = await self.repo.list_pending_confirmations()
         for item in pending:
             run_id = str(item["run_id"])
             call_id = str(item["call_id"])
+            trace_id = await self._trace_id_for_run(run_id)
             await self.repo.upsert_tool_confirmation_status(run_id, call_id, "denied", decided_by="system")
             await self.repo.update_run_status(run_id, "failed")
 
+            runtime_error = build_goyais_error(
+                code="E_INTERNAL",
+                message="Runtime restarted while waiting for confirmation.",
+                trace_id=trace_id,
+                retryable=False,
+                cause="confirmation_recovery",
+            )
             error_event = await self.emit_event(
                 run_id,
                 "error",
                 {
-                    "message": f"Pending confirmation '{call_id}' failed because runtime restarted before decision."
+                    "error": runtime_error,
                 },
             )
             await self.audit_service.record(
+                trace_id=trace_id,
                 run_id=run_id,
                 event_id=error_event["event_id"],
                 call_id=call_id,
@@ -82,11 +98,13 @@ class RunService:
                 },
             )
 
-    async def start_run(self, run_id: str, payload: dict[str, Any]) -> None:
+    async def start_run(self, run_id: str, payload: dict[str, Any], trace_id: str) -> None:
+        metrics.runs_total += 1
+        self._run_traces[run_id] = trace_id
         try:
             await self.repo.ensure_project(payload["project_id"], payload["workspace_path"])
             await self.repo.ensure_session(payload["session_id"], payload["project_id"])
-            await self.repo.create_run(payload, run_id)
+            await self.repo.create_run(payload, run_id, trace_id)
 
             if self.agent_mode in {"graph", "deepagents"}:
                 await self._execute_graph(run_id, payload)
@@ -94,11 +112,33 @@ class RunService:
                 await self._execute_mock(run_id, payload)
 
             await self.repo.update_run_status(run_id, "completed")
-            await self.emit_event(run_id, "done", {"status": "completed", "message": "run finished"})
+            await self.emit_event(
+                run_id,
+                "done",
+                {"status": "completed", "message": "run finished"},
+            )
         except Exception as exc:  # noqa: BLE001
+            metrics.runs_failed_total += 1
+            run_status = await self.repo.get_run_status(run_id)
+            if run_status is None:
+                return
             await self.repo.update_run_status(run_id, "failed")
-            await self.emit_event(run_id, "error", {"message": str(exc)})
-            await self.emit_event(run_id, "done", {"status": "failed", "message": str(exc)})
+            _, error_payload = error_from_exception(exc, trace_id)
+            await self.emit_event(
+                run_id,
+                "error",
+                {
+                    "error": error_payload["error"],
+                },
+            )
+            await self.emit_event(
+                run_id,
+                "done",
+                {
+                    "status": "failed",
+                    "message": str(error_payload["error"]["message"]),
+                },
+            )
 
     async def _execute_graph(self, run_id: str, payload: dict[str, Any]) -> None:
         provider, model_config, api_key = await self._resolve_provider(payload)
@@ -107,9 +147,9 @@ class RunService:
         await self._emit_tool_call(run_id, read_call_id, "read_file", {"path": "README.md"}, requires_confirmation("read_file"))
         try:
             readme_content = read_file(payload["workspace_path"], "README.md")
-            await self._emit_tool_result(run_id, read_call_id, True, {"content_preview": readme_content[:200]})
+            await self._emit_tool_result(run_id, read_call_id, ok=True, output={"content_preview": readme_content[:200]})
         except Exception as exc:  # noqa: BLE001
-            await self._emit_tool_result(run_id, read_call_id, False, {"message": str(exc)})
+            await self._emit_tool_result(run_id, read_call_id, ok=False, exc=exc)
             raise
 
         async def plan_builder(state: AgentState) -> dict[str, Any]:
@@ -275,9 +315,9 @@ class RunService:
         await self._emit_tool_call(run_id, read_call_id, "read_file", {"path": "README.md"}, requires_confirmation("read_file"))
         try:
             content = read_file(payload["workspace_path"], "README.md")
-            await self._emit_tool_result(run_id, read_call_id, True, {"content_preview": content[:200]})
+            await self._emit_tool_result(run_id, read_call_id, ok=True, output={"content_preview": content[:200]})
         except Exception as exc:  # noqa: BLE001
-            await self._emit_tool_result(run_id, read_call_id, False, {"message": str(exc)})
+            await self._emit_tool_result(run_id, read_call_id, ok=False, exc=exc)
             raise
 
         patch = compute_readme_patch(payload["workspace_path"], payload["input"])
@@ -299,18 +339,29 @@ class RunService:
             approved = await self.confirmation_service.wait_for(run_id, apply_call_id)
         except asyncio.TimeoutError as exc:
             await self.repo.upsert_tool_confirmation_status(run_id, apply_call_id, "denied", decided_by="system")
-            await self._emit_tool_result(run_id, apply_call_id, False, {"message": "confirmation timeout"})
+            await self._emit_tool_result(run_id, apply_call_id, ok=False, exc=exc)
             raise RuntimeError("Timed out waiting for apply_patch confirmation") from exc
 
         if not approved:
-            await self._emit_tool_result(run_id, apply_call_id, False, {"message": "user denied"})
+            await self._emit_tool_result(
+                run_id,
+                apply_call_id,
+                ok=False,
+                error=build_goyais_error(
+                    code="E_TOOL_DENIED",
+                    message="User denied apply_patch confirmation.",
+                    trace_id=await self._trace_id_for_run(run_id),
+                    retryable=False,
+                    cause="user_denied",
+                ),
+            )
             return
 
         try:
             output = apply_patch(payload["workspace_path"], patch)
-            await self._emit_tool_result(run_id, apply_call_id, True, {"message": output})
+            await self._emit_tool_result(run_id, apply_call_id, ok=True, output={"message": output})
         except Exception as exc:  # noqa: BLE001
-            await self._emit_tool_result(run_id, apply_call_id, False, {"message": str(exc)})
+            await self._emit_tool_result(run_id, apply_call_id, ok=False, exc=exc)
             raise
 
         if payload.get("options", {}).get("run_tests"):
@@ -321,24 +372,38 @@ class RunService:
                 command_approved = await self.confirmation_service.wait_for(run_id, command_call_id)
             except asyncio.TimeoutError as exc:
                 await self.repo.upsert_tool_confirmation_status(run_id, command_call_id, "denied", decided_by="system")
-                await self._emit_tool_result(run_id, command_call_id, False, {"message": "confirmation timeout"})
+                await self._emit_tool_result(run_id, command_call_id, ok=False, exc=exc)
                 raise RuntimeError("Timed out waiting for run_command confirmation") from exc
             if command_approved:
                 try:
                     result = run_command(payload["workspace_path"], cmd, ".")
-                    await self._emit_tool_result(run_id, command_call_id, True, result)
+                    await self._emit_tool_result(run_id, command_call_id, ok=True, output=result)
                 except Exception as exc:  # noqa: BLE001
-                    await self._emit_tool_result(run_id, command_call_id, False, {"message": str(exc)})
+                    await self._emit_tool_result(run_id, command_call_id, ok=False, exc=exc)
                     raise
             else:
-                await self._emit_tool_result(run_id, command_call_id, False, {"message": "user denied"})
+                await self._emit_tool_result(
+                    run_id,
+                    command_call_id,
+                    ok=False,
+                    error=build_goyais_error(
+                        code="E_TOOL_DENIED",
+                        message="User denied run_command confirmation.",
+                        trace_id=await self._trace_id_for_run(run_id),
+                        retryable=False,
+                        cause="user_denied",
+                    ),
+                )
 
     async def _emit_tool_call(
         self, run_id: str, call_id: str, tool_name: str, args: dict[str, Any], must_confirm: bool
     ) -> None:
+        trace_id = await self._trace_id_for_run(run_id)
+        metrics.increment_tool_call(tool_name)
         if must_confirm:
             await self.repo.upsert_tool_confirmation_status(run_id, call_id, "pending", decided_by="system")
             await self.repo.update_run_status(run_id, "waiting_confirmation")
+            metrics.confirmations_pending += 1
 
         event = await self.emit_event(
             run_id,
@@ -351,6 +416,7 @@ class RunService:
             },
         )
         await self.audit_service.record(
+            trace_id=trace_id,
             run_id=run_id,
             event_id=event["event_id"],
             call_id=call_id,
@@ -362,48 +428,116 @@ class RunService:
             user_decision="n/a",
             outcome="requested",
         )
+        logger.info(
+            "tool_call",
+            extra={
+                "trace_id": trace_id,
+                "run_id": run_id,
+                "event_id": event["event_id"],
+                "tool_name": tool_name,
+                "outcome": "requested",
+            },
+        )
 
-    async def _emit_tool_result(self, run_id: str, call_id: str, ok: bool, output: Any) -> None:
+    async def _emit_tool_result(
+        self,
+        run_id: str,
+        call_id: str,
+        *,
+        ok: bool,
+        output: Any | None = None,
+        error: dict[str, Any] | None = None,
+        exc: Exception | None = None,
+    ) -> None:
+        trace_id = await self._trace_id_for_run(run_id)
         current_status = await self.repo.get_run_status(run_id)
         if current_status == "waiting_confirmation":
             await self.repo.update_run_status(run_id, "running")
+            if metrics.confirmations_pending > 0:
+                metrics.confirmations_pending -= 1
 
-        event = await self.emit_event(
-            run_id,
-            "tool_result",
-            {
-                "call_id": call_id,
-                "ok": ok,
-                "output": output,
-            },
-        )
+        payload: dict[str, Any] = {
+            "call_id": call_id,
+            "ok": ok,
+        }
+
+        audit_result: Any
+        if ok:
+            payload["output"] = output
+            audit_result = output
+        else:
+            if error is None:
+                if exc is not None:
+                    _, payload_error = error_from_exception(exc, trace_id)
+                    error = payload_error["error"]
+                else:
+                    error = build_goyais_error(
+                        code="E_INTERNAL",
+                        message="Tool execution failed.",
+                        trace_id=trace_id,
+                        retryable=False,
+                    )
+            payload["error"] = error
+            audit_result = error
+
+        event = await self.emit_event(run_id, "tool_result", payload)
         await self.audit_service.record(
+            trace_id=trace_id,
             run_id=run_id,
             event_id=event["event_id"],
             call_id=call_id,
             action="tool_result",
             tool_name=None,
             args=None,
-            result=output,
+            result=audit_result,
             requires_confirmation=False,
             user_decision="n/a",
             outcome="ok" if ok else "error",
         )
+        logger.info(
+            "tool_result",
+            extra={
+                "trace_id": trace_id,
+                "run_id": run_id,
+                "event_id": event["event_id"],
+                "outcome": "ok" if ok else "error",
+            },
+        )
 
     async def emit_event(self, run_id: str, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+        trace_id = await self._trace_id_for_run(run_id)
         seq = await self.repo.next_seq(run_id)
+
+        payload_with_trace = dict(payload)
+        payload_with_trace["trace_id"] = trace_id
+
         event = {
             "protocol_version": PROTOCOL_VERSION,
+            "trace_id": trace_id,
             "event_id": str(uuid.uuid4()),
             "run_id": run_id,
             "seq": seq,
             "ts": datetime.now(tz=timezone.utc).isoformat(),
             "type": event_type,
-            "payload": payload,
+            "payload": payload_with_trace,
         }
         await self.repo.insert_event(event)
         await self.bus.publish(run_id, event)
         return event
+
+    async def _trace_id_for_run(self, run_id: str) -> str:
+        cached = self._run_traces.get(run_id)
+        if cached:
+            return cached
+
+        trace_id = await self.repo.get_run_trace_id(run_id)
+        if trace_id:
+            self._run_traces[run_id] = trace_id
+            return trace_id
+
+        generated = generate_trace_id()
+        self._run_traces[run_id] = generated
+        return generated
 
 
 async def stream_as_sse(event: dict[str, Any]) -> dict[str, str]:
