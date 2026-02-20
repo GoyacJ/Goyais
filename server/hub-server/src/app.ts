@@ -7,6 +7,7 @@ import { TRACE_HEADER, errorFromUnknown } from "./errors";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerBootstrapRoutes } from "./routes/bootstrap";
 import { registerMeRoutes } from "./routes/me";
+import { registerNavigationRoutes } from "./routes/navigation";
 import { registerWorkspaceRoutes } from "./routes/workspaces";
 
 declare module "fastify" {
@@ -77,6 +78,7 @@ export function createApp(options: CreateAppOptions): FastifyInstance {
     tokenTtlSeconds: options.tokenTtlSeconds ?? 7 * 24 * 60 * 60
   });
   registerMeRoutes(app, { db: options.db });
+  registerNavigationRoutes(app, { db: options.db });
   registerWorkspaceRoutes(app, { db: options.db });
 
   app.get("/v1/health", async () => ({

@@ -4,6 +4,7 @@ import path from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 
 import { HubServerError } from "./errors";
+import type { MenuRecord } from "./services/navigation";
 
 export interface UserSummary {
   user_id: string;
@@ -55,6 +56,11 @@ export interface WorkspaceMembershipSummary {
   workspace_id: string;
   name: string;
   slug: string;
+  role_name: string;
+}
+
+export interface MembershipRole {
+  role_id: string;
   role_name: string;
 }
 
@@ -381,6 +387,63 @@ export class HubDatabase {
       `
       )
       .all(userId) as unknown as WorkspaceMembershipSummary[];
+
+    return rows;
+  }
+
+  getMembershipRole(userId: string, workspaceId: string): MembershipRole | null {
+    const row = this.db
+      .prepare(
+        `
+        SELECT
+          r.role_id,
+          r.name AS role_name
+        FROM workspace_members wm
+        JOIN roles r ON r.role_id = wm.role_id
+        WHERE wm.user_id = ?
+          AND wm.workspace_id = ?
+          AND wm.status = 'active'
+        LIMIT 1
+      `
+      )
+      .get(userId, workspaceId) as MembershipRole | undefined;
+
+    return row ?? null;
+  }
+
+  listPermissionsForRole(roleId: string): string[] {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT perm_key
+        FROM role_permissions
+        WHERE role_id = ?
+        ORDER BY perm_key ASC
+      `
+      )
+      .all(roleId) as Array<{ perm_key: string }>;
+
+    return rows.map((row) => row.perm_key);
+  }
+
+  listMenusForRole(roleId: string): MenuRecord[] {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT
+          m.menu_id,
+          m.parent_id,
+          m.sort_order,
+          m.route,
+          m.icon_key,
+          m.i18n_key
+        FROM role_menus rm
+        JOIN menus m ON m.menu_id = rm.menu_id
+        WHERE rm.role_id = ?
+        ORDER BY m.sort_order ASC, m.menu_id ASC
+      `
+      )
+      .all(roleId) as unknown as MenuRecord[];
 
     return rows;
   }
