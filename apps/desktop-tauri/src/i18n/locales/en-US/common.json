@@ -23,6 +23,9 @@
       "checking": "Checking",
       "online": "Online",
       "offline": "Offline",
+      "local": "Local",
+      "remote": "Remote",
+      "endpoint": "Endpoint",
       "toggleTheme": "Toggle theme",
       "language": "Language"
     }

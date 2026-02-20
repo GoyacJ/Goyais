@@ -23,6 +23,9 @@
       "checking": "检查中",
       "online": "在线",
       "offline": "离线",
+      "local": "本地",
+      "remote": "远端",
+      "endpoint": "端点",
       "toggleTheme": "切换主题",
       "language": "语言"
     }

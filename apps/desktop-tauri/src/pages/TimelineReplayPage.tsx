@@ -1,20 +1,20 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { listRuns } from "@/api/runtimeClient";
+import { getRunDataSource } from "@/api/runDataSource";
 import { LoadingState } from "@/components/domain/feedback/LoadingState";
 import { TimelinePanel } from "@/components/domain/timeline/TimelinePanel";
-import { RemotePlaceholder } from "@/components/domain/workspace/RemotePlaceholder";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { useReplay } from "@/hooks/useReplay";
-import { selectCurrentWorkspaceKind, useWorkspaceStore } from "@/stores/workspaceStore";
+import { selectCurrentProfile, useWorkspaceStore } from "@/stores/workspaceStore";
 
 export function ReplayPage() {
   const { t } = useTranslation();
-  const workspaceKind = useWorkspaceStore(selectCurrentWorkspaceKind);
+  const currentProfile = useWorkspaceStore(selectCurrentProfile);
+  const runDataSource = useMemo(() => getRunDataSource(currentProfile), [currentProfile]);
   const [sessionId, setSessionId] = useState("session-demo");
   const [runs, setRuns] = useState<Array<Record<string, string>>>([]);
   const [runId, setRunId] = useState<string>();
@@ -26,7 +26,7 @@ export function ReplayPage() {
   const onLoadRuns = async (event: FormEvent) => {
     event.preventDefault();
     try {
-      const payload = await listRuns(sessionId);
+      const payload = await runDataSource.listRuns(sessionId);
       setRuns(payload.runs);
     } catch (error) {
       addToast({
@@ -37,10 +37,6 @@ export function ReplayPage() {
       });
     }
   };
-
-  if (workspaceKind === "remote") {
-    return <RemotePlaceholder section="replay" />;
-  }
 
   return (
     <div className="grid gap-panel lg:grid-cols-[20rem_minmax(0,1fr)]">

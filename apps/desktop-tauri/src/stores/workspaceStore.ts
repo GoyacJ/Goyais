@@ -274,6 +274,8 @@ export function selectCurrentPermissions(state: WorkspaceStoreState): string[] {
       "project:read",
       "project:write",
       "run:create",
+      "run:read",
+      "confirm:write",
       "audit:read"
     ];
   }

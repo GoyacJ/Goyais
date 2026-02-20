@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { confirmToolCall, createRun } from "@/api/runtimeClient";
+import { getRunDataSource } from "@/api/runDataSource";
 import { ContextPanel } from "@/components/domain/context/ContextPanel";
 import { DiffPanel } from "@/components/domain/diff/DiffPanel";
 import { CapabilityPromptDialog } from "@/components/domain/permission/CapabilityPromptDialog";
@@ -9,17 +9,17 @@ import { PermissionQueueCenter } from "@/components/domain/permission/Permission
 import { RunComposerPanel } from "@/components/domain/run/RunComposerPanel";
 import { TimelinePanel } from "@/components/domain/timeline/TimelinePanel";
 import { ToolDetailsDrawer } from "@/components/domain/tools/ToolDetailsDrawer";
-import { RemotePlaceholder } from "@/components/domain/workspace/RemotePlaceholder";
 import { useToast } from "@/components/ui/toast";
 import { useRunEvents } from "@/hooks/useRunEvents";
 import { isEditableElement } from "@/lib/shortcuts";
 import { usePermissionStore } from "@/stores/permissionStore";
 import { useRunStore } from "@/stores/runStore";
-import { selectCurrentWorkspaceKind, useWorkspaceStore } from "@/stores/workspaceStore";
+import { selectCurrentProfile, useWorkspaceStore } from "@/stores/workspaceStore";
 
 export function RunPage() {
   const { t } = useTranslation();
-  const workspaceKind = useWorkspaceStore(selectCurrentWorkspaceKind);
+  const currentProfile = useWorkspaceStore(selectCurrentProfile);
+  const runDataSource = useMemo(() => getRunDataSource(currentProfile), [currentProfile]);
 
   const [values, setValues] = useState({
     projectId: "project-demo",
@@ -67,7 +67,7 @@ export function RunPage() {
         workspacePath: values.workspacePath,
         sessionId: values.sessionId
       });
-      const result = await createRun({
+      const result = await runDataSource.createRun({
         project_id: values.projectId,
         session_id: values.sessionId,
         input: values.taskInput,
@@ -98,7 +98,7 @@ export function RunPage() {
       if (!activeConfirmation) return;
       const approved = mode !== "deny";
       try {
-        await confirmToolCall(activeConfirmation.runId, activeConfirmation.callId, approved);
+        await runDataSource.confirmToolCall(activeConfirmation.runId, activeConfirmation.callId, approved);
         addDecision({
           runId: activeConfirmation.runId,
           callId: activeConfirmation.callId,
@@ -122,7 +122,7 @@ export function RunPage() {
         });
       }
     },
-    [activeConfirmation, addDecision, resolvePendingConfirmation, addToast, t]
+    [activeConfirmation, addDecision, resolvePendingConfirmation, addToast, runDataSource, t]
   );
 
   useEffect(() => {
@@ -148,10 +148,6 @@ export function RunPage() {
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
   }, [activeConfirmation, onDecision]);
-
-  if (workspaceKind === "remote") {
-    return <RemotePlaceholder section="run" />;
-  }
 
   return (
     <div className="grid h-full min-h-[calc(100vh-8rem)] grid-cols-[18rem_minmax(0,1fr)_22rem] gap-panel">

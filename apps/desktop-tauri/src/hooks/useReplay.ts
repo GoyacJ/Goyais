@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { replayRunEvents } from "../api/runtimeClient";
+import { getRunDataSource } from "@/api/runDataSource";
+import { selectCurrentProfile, useWorkspaceStore } from "@/stores/workspaceStore";
+
 import type { EventEnvelope } from "../types/generated";
 
 export function useReplay(runId?: string) {
+  const currentProfile = useWorkspaceStore(selectCurrentProfile);
+  const runDataSource = useMemo(() => getRunDataSource(currentProfile), [currentProfile]);
   const [events, setEvents] = useState<EventEnvelope[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -14,10 +18,11 @@ export function useReplay(runId?: string) {
     }
 
     setLoading(true);
-    replayRunEvents(runId)
+    runDataSource
+      .replayRunEvents(runId)
       .then((payload) => setEvents(payload.events))
       .finally(() => setLoading(false));
-  }, [runId]);
+  }, [runId, runDataSource]);
 
   return { events, loading };
 }

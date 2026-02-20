@@ -1,12 +1,16 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+
+import { getRunDataSource } from "@/api/runDataSource";
 
 import { assertEventEnvelope } from "../api/protocolValidators";
-import { subscribeRunEvents } from "../api/runtimeClient";
 import { useRunStore } from "../stores/runStore";
+import { selectCurrentProfile, useWorkspaceStore } from "../stores/workspaceStore";
 
 export function useRunEvents(runId?: string) {
   const appendEvent = useRunStore((state) => state.appendEvent);
-  const sourceRef = useRef<EventSource | null>(null);
+  const currentProfile = useWorkspaceStore(selectCurrentProfile);
+  const runDataSource = useMemo(() => getRunDataSource(currentProfile), [currentProfile]);
+  const sourceRef = useRef<{ close: () => void } | null>(null);
 
   useEffect(() => {
     if (!runId) {
@@ -15,16 +19,18 @@ export function useRunEvents(runId?: string) {
       return;
     }
 
-    const source = subscribeRunEvents(runId, (event) => {
-      if (!assertEventEnvelope(event)) {
-        return;
+    const source = runDataSource.subscribeRunEvents(
+      runId,
+      (event) => {
+        if (!assertEventEnvelope(event)) {
+          return;
+        }
+        appendEvent(event);
+      },
+      () => {
+        sourceRef.current?.close();
       }
-      appendEvent(event);
-    });
-
-    source.onerror = () => {
-      source.close();
-    };
+    );
 
     sourceRef.current = source;
 
@@ -34,5 +40,5 @@ export function useRunEvents(runId?: string) {
         sourceRef.current = null;
       }
     };
-  }, [runId, appendEvent]);
+  }, [runId, appendEvent, runDataSource]);
 }
