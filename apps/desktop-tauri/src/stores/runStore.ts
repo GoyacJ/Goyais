@@ -100,9 +100,10 @@ export const useRunStore = create<RunState>((set, get) => ({
       const callId = String(event.payload.call_id ?? "");
       const current = nextToolCalls[callId];
       if (current) {
+        const output = event.payload.ok === true ? event.payload.output : event.payload.error;
         nextToolCalls[callId] = {
           ...current,
-          output: event.payload.output,
+          output,
           finishedAt: event.ts,
           status: event.payload.ok === true ? "completed" : "failed"
         };

@@ -61,7 +61,8 @@ function summaryLabel(event: RunEventViewModel, t: (key: string, options?: Recor
   }
 
   if (event.type === "error") {
-    return t("timeline.summary.error", { message: String(payload.message ?? "unknown") });
+    const error = payload.error as Record<string, unknown> | undefined;
+    return t("timeline.summary.error", { message: String(error?.message ?? "unknown") });
   }
 
   if (event.type === "done") {
