@@ -27,6 +27,37 @@ interface CreateBootstrapAdminInput {
   tokenExpiresAt: string;
 }
 
+export interface UserAuthRecord {
+  user_id: string;
+  email: string;
+  password_hash: string;
+  display_name: string;
+  status: "active" | "disabled";
+}
+
+export interface AuthTokenRecord {
+  token_id: string;
+  user_id: string;
+  expires_at: string;
+  email: string;
+  display_name: string;
+  user_status: "active" | "disabled";
+}
+
+export interface MembershipSummary {
+  workspace_id: string;
+  workspace_name: string;
+  workspace_slug: string;
+  role_name: string;
+}
+
+export interface WorkspaceMembershipSummary {
+  workspace_id: string;
+  name: string;
+  slug: string;
+  role_name: string;
+}
+
 export class HubDatabase {
   private readonly db: DatabaseSync;
 
@@ -244,5 +275,113 @@ export class HubDatabase {
 
       throw error;
     }
+  }
+
+  getUserByEmail(email: string): UserAuthRecord | null {
+    const row = this.db
+      .prepare(
+        `
+        SELECT user_id, email, password_hash, display_name, status
+        FROM users
+        WHERE email = ?
+      `
+      )
+      .get(email) as UserAuthRecord | undefined;
+
+    return row ?? null;
+  }
+
+  createAuthToken(params: {
+    tokenId: string;
+    tokenHash: string;
+    userId: string;
+    expiresAt: string;
+    createdAt: string;
+  }): void {
+    this.db
+      .prepare(
+        `
+        INSERT INTO auth_tokens(token_id, token_hash, user_id, expires_at, created_at)
+        VALUES(?, ?, ?, ?, ?)
+      `
+      )
+      .run(params.tokenId, params.tokenHash, params.userId, params.expiresAt, params.createdAt);
+  }
+
+  getAuthTokenByHash(tokenHash: string): AuthTokenRecord | null {
+    const row = this.db
+      .prepare(
+        `
+        SELECT
+          t.token_id,
+          t.user_id,
+          t.expires_at,
+          u.email,
+          u.display_name,
+          u.status AS user_status
+        FROM auth_tokens t
+        JOIN users u ON u.user_id = t.user_id
+        WHERE t.token_hash = ?
+      `
+      )
+      .get(tokenHash) as AuthTokenRecord | undefined;
+
+    return row ?? null;
+  }
+
+  touchAuthToken(tokenId: string): void {
+    this.db
+      .prepare(
+        `
+        UPDATE auth_tokens
+        SET last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+        WHERE token_id = ?
+      `
+      )
+      .run(tokenId);
+  }
+
+  listMemberships(userId: string): MembershipSummary[] {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT
+          wm.workspace_id,
+          w.name AS workspace_name,
+          w.slug AS workspace_slug,
+          r.name AS role_name
+        FROM workspace_members wm
+        JOIN workspaces w ON w.workspace_id = wm.workspace_id
+        JOIN roles r ON r.role_id = wm.role_id
+        WHERE wm.user_id = ?
+          AND wm.status = 'active'
+        ORDER BY w.created_at ASC
+      `
+      )
+      .all(userId) as unknown as MembershipSummary[];
+
+    return rows;
+  }
+
+  listWorkspacesForUser(userId: string): WorkspaceMembershipSummary[] {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT
+          wm.workspace_id,
+          w.name,
+          w.slug,
+          r.name AS role_name
+        FROM workspace_members wm
+        JOIN workspaces w ON w.workspace_id = wm.workspace_id
+        JOIN roles r ON r.role_id = wm.role_id
+        WHERE wm.user_id = ?
+          AND wm.status = 'active'
+        ORDER BY w.created_at ASC
+      `
+      )
+      .all(userId) as unknown as WorkspaceMembershipSummary[];
+
+    return rows;
   }
 }

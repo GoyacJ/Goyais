@@ -4,7 +4,10 @@ import Fastify, { type FastifyInstance } from "fastify";
 
 import type { HubDatabase } from "./db";
 import { TRACE_HEADER, errorFromUnknown } from "./errors";
+import { registerAuthRoutes } from "./routes/auth";
 import { registerBootstrapRoutes } from "./routes/bootstrap";
+import { registerMeRoutes } from "./routes/me";
+import { registerWorkspaceRoutes } from "./routes/workspaces";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -69,6 +72,12 @@ export function createApp(options: CreateAppOptions): FastifyInstance {
     allowPublicSignup: options.allowPublicSignup ?? false,
     tokenTtlSeconds: options.tokenTtlSeconds ?? 7 * 24 * 60 * 60
   });
+  registerAuthRoutes(app, {
+    db: options.db,
+    tokenTtlSeconds: options.tokenTtlSeconds ?? 7 * 24 * 60 * 60
+  });
+  registerMeRoutes(app, { db: options.db });
+  registerWorkspaceRoutes(app, { db: options.db });
 
   app.get("/v1/health", async () => ({
     ok: true,
