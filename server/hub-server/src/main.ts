@@ -14,7 +14,12 @@ if (process.argv.includes("--migrate-only")) {
   process.exit(0);
 }
 
-const app = createApp({ db });
+const app = createApp({
+  db,
+  bootstrapToken: config.bootstrapToken,
+  allowPublicSignup: config.allowPublicSignup,
+  tokenTtlSeconds: config.tokenTtlSeconds
+});
 
 app.listen({ host: config.host, port: config.port }).catch((error) => {
   app.log.error(error);

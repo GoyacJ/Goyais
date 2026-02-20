@@ -4,6 +4,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 
 import type { HubDatabase } from "./db";
 import { TRACE_HEADER, errorFromUnknown } from "./errors";
+import { registerBootstrapRoutes } from "./routes/bootstrap";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -14,6 +15,9 @@ declare module "fastify" {
 
 interface CreateAppOptions {
   db: HubDatabase;
+  bootstrapToken?: string;
+  allowPublicSignup?: boolean;
+  tokenTtlSeconds?: number;
 }
 
 function normalizeTraceHeader(value: unknown): string {
@@ -57,6 +61,13 @@ export function createApp(options: CreateAppOptions): FastifyInstance {
   app.setErrorHandler((error, request, reply) => {
     const mapped = errorFromUnknown(error, request.trace_id || randomUUID());
     reply.status(mapped.statusCode).send({ error: mapped.error });
+  });
+
+  registerBootstrapRoutes(app, {
+    db: options.db,
+    bootstrapToken: options.bootstrapToken ?? "",
+    allowPublicSignup: options.allowPublicSignup ?? false,
+    tokenTtlSeconds: options.tokenTtlSeconds ?? 7 * 24 * 60 * 60
   });
 
   app.get("/v1/health", async () => ({
