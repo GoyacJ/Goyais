@@ -102,6 +102,29 @@ interface CreateProjectInput {
   createdBy: string;
 }
 
+interface CreateModelConfigInput {
+  workspaceId: string;
+  provider: string;
+  model: string;
+  baseUrl: string | null;
+  temperature: number;
+  maxTokens: number | null;
+  createdBy: string;
+  encryptedApiKey: string;
+}
+
+interface UpdateModelConfigInput {
+  workspaceId: string;
+  modelConfigId: string;
+  provider?: string;
+  model?: string;
+  baseUrl?: string | null;
+  temperature?: number;
+  maxTokens?: number | null;
+  createdBy: string;
+  encryptedApiKey?: string;
+}
+
 export class HubDatabase {
   private readonly db: DatabaseSync;
 
@@ -557,6 +580,246 @@ export class HubDatabase {
       .run(workspaceId, projectId);
 
     return result.changes > 0;
+  }
+
+  listModelConfigs(workspaceId: string): ModelConfigRecord[] {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT
+          model_config_id,
+          workspace_id,
+          provider,
+          model,
+          base_url,
+          temperature,
+          max_tokens,
+          secret_ref,
+          created_at,
+          updated_at
+        FROM model_configs
+        WHERE workspace_id = ?
+        ORDER BY created_at DESC, model_config_id ASC
+      `
+      )
+      .all(workspaceId) as unknown as ModelConfigRecord[];
+
+    return rows;
+  }
+
+  createModelConfigWithSecret(input: CreateModelConfigInput): ModelConfigRecord {
+    const modelConfigId = randomUUID();
+    const secretRef = `secret:${randomUUID()}`;
+    const now = new Date().toISOString();
+
+    try {
+      this.db.exec("BEGIN IMMEDIATE");
+      this.db
+        .prepare(
+          `
+          INSERT INTO secrets(secret_ref, workspace_id, kind, value_encrypted, created_by, created_at)
+          VALUES(?, ?, 'api_key', ?, ?, ?)
+        `
+        )
+        .run(secretRef, input.workspaceId, input.encryptedApiKey, input.createdBy, now);
+
+      this.db
+        .prepare(
+          `
+          INSERT INTO model_configs(
+            model_config_id, workspace_id, provider, model, base_url, temperature, max_tokens, secret_ref, created_by, created_at, updated_at
+          )
+          VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+        )
+        .run(
+          modelConfigId,
+          input.workspaceId,
+          input.provider,
+          input.model,
+          input.baseUrl,
+          input.temperature,
+          input.maxTokens,
+          secretRef,
+          input.createdBy,
+          now,
+          now
+        );
+
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+
+    return {
+      model_config_id: modelConfigId,
+      workspace_id: input.workspaceId,
+      provider: input.provider,
+      model: input.model,
+      base_url: input.baseUrl,
+      temperature: input.temperature,
+      max_tokens: input.maxTokens,
+      secret_ref: secretRef,
+      created_at: now,
+      updated_at: now
+    };
+  }
+
+  updateModelConfigWithOptionalSecretRotation(input: UpdateModelConfigInput): ModelConfigRecord | null {
+    const current = this.db
+      .prepare(
+        `
+        SELECT
+          model_config_id,
+          workspace_id,
+          provider,
+          model,
+          base_url,
+          temperature,
+          max_tokens,
+          secret_ref,
+          created_at,
+          updated_at
+        FROM model_configs
+        WHERE workspace_id = ?
+          AND model_config_id = ?
+        LIMIT 1
+      `
+      )
+      .get(input.workspaceId, input.modelConfigId) as ModelConfigRecord | undefined;
+
+    if (!current) {
+      return null;
+    }
+
+    const nextSecretRef = input.encryptedApiKey ? `secret:${randomUUID()}` : current.secret_ref;
+    const nextProvider = input.provider ?? current.provider;
+    const nextModel = input.model ?? current.model;
+    const nextBaseUrl = input.baseUrl !== undefined ? input.baseUrl : current.base_url;
+    const nextTemperature = input.temperature ?? current.temperature;
+    const nextMaxTokens = input.maxTokens !== undefined ? input.maxTokens : current.max_tokens;
+    const updatedAt = new Date().toISOString();
+
+    try {
+      this.db.exec("BEGIN IMMEDIATE");
+
+      if (input.encryptedApiKey) {
+        this.db
+          .prepare(
+            `
+            INSERT INTO secrets(secret_ref, workspace_id, kind, value_encrypted, created_by, created_at)
+            VALUES(?, ?, 'api_key', ?, ?, ?)
+          `
+          )
+          .run(nextSecretRef, input.workspaceId, input.encryptedApiKey, input.createdBy, updatedAt);
+      }
+
+      this.db
+        .prepare(
+          `
+          UPDATE model_configs
+          SET
+            provider = ?,
+            model = ?,
+            base_url = ?,
+            temperature = ?,
+            max_tokens = ?,
+            secret_ref = ?,
+            updated_at = ?
+          WHERE workspace_id = ?
+            AND model_config_id = ?
+        `
+        )
+        .run(
+          nextProvider,
+          nextModel,
+          nextBaseUrl,
+          nextTemperature,
+          nextMaxTokens,
+          nextSecretRef,
+          updatedAt,
+          input.workspaceId,
+          input.modelConfigId
+        );
+
+      if (input.encryptedApiKey) {
+        this.db
+          .prepare(
+            `
+            DELETE FROM secrets
+            WHERE workspace_id = ?
+              AND secret_ref = ?
+          `
+          )
+          .run(input.workspaceId, current.secret_ref);
+      }
+
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+
+    return {
+      model_config_id: current.model_config_id,
+      workspace_id: current.workspace_id,
+      provider: nextProvider,
+      model: nextModel,
+      base_url: nextBaseUrl,
+      temperature: nextTemperature,
+      max_tokens: nextMaxTokens,
+      secret_ref: nextSecretRef,
+      created_at: current.created_at,
+      updated_at: updatedAt
+    };
+  }
+
+  deleteModelConfigAndSecret(workspaceId: string, modelConfigId: string): boolean {
+    const current = this.db
+      .prepare(
+        `
+        SELECT secret_ref
+        FROM model_configs
+        WHERE workspace_id = ?
+          AND model_config_id = ?
+        LIMIT 1
+      `
+      )
+      .get(workspaceId, modelConfigId) as { secret_ref: string } | undefined;
+
+    if (!current) {
+      return false;
+    }
+
+    try {
+      this.db.exec("BEGIN IMMEDIATE");
+      this.db
+        .prepare(
+          `
+          DELETE FROM model_configs
+          WHERE workspace_id = ?
+            AND model_config_id = ?
+        `
+        )
+        .run(workspaceId, modelConfigId);
+
+      this.db
+        .prepare(
+          `
+          DELETE FROM secrets
+          WHERE workspace_id = ?
+            AND secret_ref = ?
+        `
+        )
+        .run(workspaceId, current.secret_ref);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+
+    return true;
   }
 
   listMenusForRole(roleId: string): MenuRecord[] {

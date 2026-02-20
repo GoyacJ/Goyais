@@ -8,6 +8,7 @@ import { TRACE_HEADER, errorFromUnknown } from "./errors";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerBootstrapRoutes } from "./routes/bootstrap";
 import { registerMeRoutes } from "./routes/me";
+import { registerModelConfigRoutes } from "./routes/model-configs";
 import { registerNavigationRoutes } from "./routes/navigation";
 import { registerProjectRoutes } from "./routes/projects";
 import { registerWorkspaceRoutes } from "./routes/workspaces";
@@ -24,6 +25,7 @@ declare module "fastify" {
 interface CreateAppOptions {
   db: HubDatabase;
   bootstrapToken?: string;
+  hubSecretKey?: string;
   allowPublicSignup?: boolean;
   tokenTtlSeconds?: number;
 }
@@ -82,6 +84,10 @@ export function createApp(options: CreateAppOptions): FastifyInstance {
     tokenTtlSeconds: options.tokenTtlSeconds ?? 7 * 24 * 60 * 60
   });
   registerMeRoutes(app, { db: options.db });
+  registerModelConfigRoutes(app, {
+    db: options.db,
+    hubSecretKey: options.hubSecretKey ?? ""
+  });
   registerNavigationRoutes(app, { db: options.db });
   registerProjectRoutes(app, { db: options.db });
   registerWorkspaceRoutes(app, { db: options.db });

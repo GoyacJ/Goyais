@@ -77,4 +77,20 @@ describe("trace headers", () => {
 
     expect(payload.error.trace_id).toBe(response.headers["x-trace-id"]);
   });
+
+  it("returns X-Trace-Id for domain data endpoints", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "goyais-hub-"));
+    const db = new HubDatabase(path.join(tempDir, "hub.sqlite"));
+    db.migrate(migrationsDir);
+
+    app = createApp({ db, bootstrapToken: "bootstrap-123", allowPublicSignup: false, tokenTtlSeconds: 604800 });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/model-configs?workspace_id=ws-1"
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.headers["x-trace-id"]).toBeTruthy();
+  });
 });

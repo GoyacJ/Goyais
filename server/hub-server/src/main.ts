@@ -17,6 +17,7 @@ if (process.argv.includes("--migrate-only")) {
 const app = createApp({
   db,
   bootstrapToken: config.bootstrapToken,
+  hubSecretKey: config.hubSecretKey,
   allowPublicSignup: config.allowPublicSignup,
   tokenTtlSeconds: config.tokenTtlSeconds
 });

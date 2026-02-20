@@ -1,6 +1,7 @@
 export interface HubServerConfig {
   dbPath: string;
   bootstrapToken: string;
+  hubSecretKey: string;
   allowPublicSignup: boolean;
   tokenTtlSeconds: number;
   port: number;
@@ -29,6 +30,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HubServerConfi
   return {
     dbPath: env.GOYAIS_HUB_DB_PATH ?? "./data/hub.sqlite",
     bootstrapToken: env.GOYAIS_BOOTSTRAP_TOKEN ?? "",
+    hubSecretKey: env.GOYAIS_HUB_SECRET_KEY ?? "",
     allowPublicSignup: parseBoolean(env.GOYAIS_ALLOW_PUBLIC_SIGNUP, false),
     tokenTtlSeconds: Number.isFinite(tokenTtlSeconds) && tokenTtlSeconds > 0 ? tokenTtlSeconds : 7 * 24 * 60 * 60,
     port: Number(env.GOYAIS_SERVER_PORT ?? 8787),
