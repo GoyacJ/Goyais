@@ -95,3 +95,7 @@ export function requirePermission(db: HubDatabase, roleId: string, permKey: stri
     });
   }
 }
+
+export function requireWorkspaceManagePermission(db: HubDatabase, roleId: string): void {
+  requirePermission(db, roleId, "workspace:manage");
+}

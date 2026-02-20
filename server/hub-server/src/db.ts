@@ -95,6 +95,15 @@ export interface SecretRecord {
   created_at: string;
 }
 
+export interface WorkspaceRuntimeRecord {
+  workspace_id: string;
+  runtime_base_url: string;
+  runtime_status: "online" | "offline";
+  last_heartbeat_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface CreateProjectInput {
   workspaceId: string;
   name: string;
@@ -261,7 +270,14 @@ export class HubDatabase {
         )
         .run(ownerRoleId);
 
-      const memberPermissions = ["workspace:read", "project:read", "run:create", "modelconfig:read"];
+      const memberPermissions = [
+        "workspace:read",
+        "project:read",
+        "run:create",
+        "run:read",
+        "confirm:write",
+        "modelconfig:read"
+      ];
       for (const permKey of memberPermissions) {
         this.db
           .prepare(
@@ -273,7 +289,7 @@ export class HubDatabase {
           .run(memberRoleId, permKey);
       }
 
-      const memberMenus = ["nav_projects", "nav_run", "nav_models"];
+      const memberMenus = ["nav_projects", "nav_run", "nav_models", "nav_replay"];
       for (const menuId of memberMenus) {
         this.db
           .prepare(
@@ -607,6 +623,28 @@ export class HubDatabase {
     return rows;
   }
 
+  getSecretByRef(workspaceId: string, secretRef: string): SecretRecord | null {
+    const row = this.db
+      .prepare(
+        `
+        SELECT
+          secret_ref,
+          workspace_id,
+          kind,
+          value_encrypted,
+          created_by,
+          created_at
+        FROM secrets
+        WHERE workspace_id = ?
+          AND secret_ref = ?
+        LIMIT 1
+      `
+      )
+      .get(workspaceId, secretRef) as SecretRecord | undefined;
+
+    return row ?? null;
+  }
+
   createModelConfigWithSecret(input: CreateModelConfigInput): ModelConfigRecord {
     const modelConfigId = randomUUID();
     const secretRef = `secret:${randomUUID()}`;
@@ -820,6 +858,141 @@ export class HubDatabase {
     }
 
     return true;
+  }
+
+  upsertWorkspaceRuntime(input: {
+    workspaceId: string;
+    runtimeBaseUrl: string;
+    runtimeStatus: "online" | "offline";
+    lastHeartbeatAt?: string | null;
+  }): WorkspaceRuntimeRecord {
+    const now = new Date().toISOString();
+    const normalizedBaseUrl = input.runtimeBaseUrl.trim().replace(/\/+$/, "");
+
+    this.db
+      .prepare(
+        `
+        INSERT INTO workspace_runtimes(
+          workspace_id, runtime_base_url, runtime_status, last_heartbeat_at, created_at, updated_at
+        )
+        VALUES(?, ?, ?, ?, ?, ?)
+        ON CONFLICT(workspace_id) DO UPDATE SET
+          runtime_base_url = excluded.runtime_base_url,
+          runtime_status = excluded.runtime_status,
+          last_heartbeat_at = excluded.last_heartbeat_at,
+          updated_at = excluded.updated_at
+      `
+      )
+      .run(
+        input.workspaceId,
+        normalizedBaseUrl,
+        input.runtimeStatus,
+        input.lastHeartbeatAt ?? null,
+        now,
+        now
+      );
+
+    const row = this.getWorkspaceRuntime(input.workspaceId);
+    if (!row) {
+      throw new HubServerError({
+        code: "E_INTERNAL",
+        message: "Failed to persist workspace runtime registry.",
+        retryable: false,
+        statusCode: 500,
+        causeType: "workspace_runtime_upsert"
+      });
+    }
+
+    return row;
+  }
+
+  getWorkspaceRuntime(workspaceId: string): WorkspaceRuntimeRecord | null {
+    const row = this.db
+      .prepare(
+        `
+        SELECT
+          workspace_id,
+          runtime_base_url,
+          runtime_status,
+          last_heartbeat_at,
+          created_at,
+          updated_at
+        FROM workspace_runtimes
+        WHERE workspace_id = ?
+        LIMIT 1
+      `
+      )
+      .get(workspaceId) as WorkspaceRuntimeRecord | undefined;
+
+    return row ?? null;
+  }
+
+  setWorkspaceRuntimeStatus(input: {
+    workspaceId: string;
+    runtimeStatus: "online" | "offline";
+    lastHeartbeatAt?: string | null;
+  }): void {
+    this.db
+      .prepare(
+        `
+        UPDATE workspace_runtimes
+        SET
+          runtime_status = ?,
+          last_heartbeat_at = ?,
+          updated_at = ?
+        WHERE workspace_id = ?
+      `
+      )
+      .run(input.runtimeStatus, input.lastHeartbeatAt ?? null, new Date().toISOString(), input.workspaceId);
+  }
+
+  insertRunIndex(input: {
+    runId: string;
+    workspaceId: string;
+    createdBy: string;
+    status: string;
+    traceId: string;
+    createdAt?: string;
+  }): void {
+    const createdAt = input.createdAt ?? new Date().toISOString();
+    this.db
+      .prepare(
+        `
+        INSERT OR REPLACE INTO run_index(run_id, workspace_id, created_by, status, trace_id, created_at)
+        VALUES(?, ?, ?, ?, ?, ?)
+      `
+      )
+      .run(input.runId, input.workspaceId, input.createdBy, input.status, input.traceId, createdAt);
+  }
+
+  insertAuditIndex(input: {
+    auditId: string;
+    workspaceId: string;
+    runId?: string | null;
+    userId: string;
+    action: string;
+    toolName?: string | null;
+    outcome: string;
+    createdAt?: string;
+  }): void {
+    const createdAt = input.createdAt ?? new Date().toISOString();
+    this.db
+      .prepare(
+        `
+        INSERT OR REPLACE INTO audit_index(audit_id, workspace_id, run_id, user_id, action, tool_name, outcome, created_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+      `
+      )
+      .run(
+        input.auditId,
+        input.workspaceId,
+        input.runId ?? null,
+        input.userId,
+        input.action,
+        input.toolName ?? null,
+        input.outcome,
+        createdAt
+      );
   }
 
   listMenusForRole(roleId: string): MenuRecord[] {
