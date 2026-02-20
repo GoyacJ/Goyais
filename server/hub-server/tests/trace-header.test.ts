@@ -53,4 +53,28 @@ describe("trace headers", () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers["x-trace-id"]).toBeTruthy();
   });
+
+  it("returns trace header and error.trace_id on error responses", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "goyais-hub-"));
+    const db = new HubDatabase(path.join(tempDir, "hub.sqlite"));
+    db.migrate(migrationsDir);
+
+    app = createApp({ db, bootstrapToken: "bootstrap-123", allowPublicSignup: false, tokenTtlSeconds: 604800 });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/me"
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.headers["x-trace-id"]).toBeTruthy();
+
+    const payload = response.json() as {
+      error: {
+        trace_id: string;
+      };
+    };
+
+    expect(payload.error.trace_id).toBe(response.headers["x-trace-id"]);
+  });
 });

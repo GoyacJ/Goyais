@@ -163,6 +163,55 @@ Desktop trigger:
 
 - Settings page -> `Sync now`
 
+## Hub server (Control Plane Phase 1)
+
+`hub-server` 提供 remote workspace 的控制面能力：bootstrap admin、登录鉴权、工作区列表、导航与权限下发。
+
+目录：`/Users/goya/Repo/Git/Goyais/server/hub-server`
+
+### Hub env
+
+```bash
+export GOYAIS_HUB_DB_PATH=./data/hub.sqlite
+export GOYAIS_BOOTSTRAP_TOKEN=change-me-bootstrap-token
+export GOYAIS_ALLOW_PUBLIC_SIGNUP=false
+export GOYAIS_SERVER_PORT=8787
+```
+
+### Start hub
+
+```bash
+cd /Users/goya/Repo/Git/Goyais
+pnpm dev:hub
+```
+
+### Hub quickstart curl
+
+```bash
+# 1) setup status
+curl -i http://127.0.0.1:8787/v1/auth/bootstrap/status
+
+# 2) bootstrap admin (only once, requires bootstrap token)
+curl -sS -X POST http://127.0.0.1:8787/v1/auth/bootstrap/admin \
+  -H 'Content-Type: application/json' \
+  -d '{"bootstrap_token":"change-me-bootstrap-token","email":"admin@example.com","password":"Passw0rd!","display_name":"Admin"}'
+
+# 3) login
+curl -sS -X POST http://127.0.0.1:8787/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"Passw0rd!"}'
+```
+
+返回 token 后可继续调用：
+
+```bash
+curl -sS http://127.0.0.1:8787/v1/me -H "Authorization: Bearer <token>"
+curl -sS http://127.0.0.1:8787/v1/workspaces -H "Authorization: Bearer <token>"
+curl -sS "http://127.0.0.1:8787/v1/me/navigation?workspace_id=<workspace_id>" -H "Authorization: Bearer <token>"
+```
+
+所有 hub 响应（成功/失败）都会回传 `X-Trace-Id`。
+
 ## Security model (MVP-1)
 
 - Runtime is the single SQLite writer; Host never writes SQLite directly
