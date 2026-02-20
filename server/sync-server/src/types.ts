@@ -1,5 +1,6 @@
 export interface SyncEventEnvelope {
-  protocol_version: "1.0.0";
+  protocol_version: "2.0.0";
+  trace_id: string;
   event_id: string;
   run_id: string;
   seq: number;

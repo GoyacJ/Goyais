@@ -17,7 +17,8 @@ describe("pull", () => {
       since_global_seq: 0,
       events: [
         {
-          protocol_version: "1.0.0",
+          protocol_version: "2.0.0",
+          trace_id: "trace-1",
           event_id: "evt-1",
           run_id: "run-1",
           seq: 1,
@@ -26,7 +27,8 @@ describe("pull", () => {
           payload: { summary: "first" }
         },
         {
-          protocol_version: "1.0.0",
+          protocol_version: "2.0.0",
+          trace_id: "trace-1",
           event_id: "evt-2",
           run_id: "run-1",
           seq: 2,

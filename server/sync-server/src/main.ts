@@ -1,10 +1,7 @@
 import path from "node:path";
 
-import Fastify from "fastify";
-
+import { createApp } from "./app";
 import { SyncDatabase } from "./db";
-import { registerPullRoute } from "./routes/pull";
-import { registerPushRoute } from "./routes/push";
 
 const port = Number(process.env.SYNC_SERVER_PORT ?? 8140);
 const host = process.env.SYNC_SERVER_HOST ?? "127.0.0.1";
@@ -19,11 +16,7 @@ if (process.argv.includes("--migrate-only")) {
   process.exit(0);
 }
 
-const app = Fastify({ logger: true });
-registerPushRoute(app, db, token);
-registerPullRoute(app, db, token);
-
-app.get("/healthz", async () => ({ ok: true }));
+const app = createApp({ db, token });
 
 app.listen({ host, port }).catch((error) => {
   app.log.error(error);

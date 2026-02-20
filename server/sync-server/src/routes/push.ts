@@ -4,13 +4,16 @@ import type { FastifyInstance } from "fastify";
 
 import { assertToken } from "../auth";
 import type { SyncDatabase } from "../db";
+import { SyncServerError } from "../errors";
+import type { SyncMetrics } from "../metrics";
 
 const pushSchema = z.object({
   device_id: z.string().min(1),
   since_global_seq: z.number().int().nonnegative(),
   events: z.array(
     z.object({
-      protocol_version: z.literal("1.0.0"),
+      protocol_version: z.literal("2.0.0"),
+      trace_id: z.string().min(1),
       event_id: z.string().min(1),
       run_id: z.string().min(1),
       seq: z.number().int().positive(),
@@ -22,20 +25,30 @@ const pushSchema = z.object({
   artifacts_meta: z.array(z.record(z.any()))
 });
 
-export function registerPushRoute(app: FastifyInstance, db: SyncDatabase, token: string) {
+export function registerPushRoute(app: FastifyInstance, db: SyncDatabase, token: string, metrics: SyncMetrics) {
   app.post("/v1/sync/push", async (request, reply) => {
-    try {
-      assertToken(request, token);
-    } catch (error) {
-      return reply.status(401).send({ error: (error as Error).message });
-    }
+    metrics.push_requests_total += 1;
+    assertToken(request, token);
 
     const parsed = pushSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.status(400).send({ error: parsed.error.format() });
+      throw new SyncServerError({
+        code: "E_SCHEMA_INVALID",
+        message: "Invalid push payload.",
+        retryable: false,
+        statusCode: 400,
+        details: { issues: parsed.error.issues },
+        causeType: "push_schema"
+      });
     }
 
     const result = db.push(parsed.data);
+    request.log.info({
+      trace_id: request.trace_id,
+      inserted_count: result.inserted,
+      max_server_seq: result.max_server_seq,
+      route: "/v1/sync/push"
+    });
     return reply.send(result);
   });
 }

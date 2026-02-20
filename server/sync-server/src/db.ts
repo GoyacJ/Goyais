@@ -45,14 +45,15 @@ export class SyncDatabase {
   push(payload: PushRequest): { inserted: number; max_server_seq: number } {
     const insert = this.db.prepare(`
       INSERT OR IGNORE INTO events(
-        protocol_version, event_id, run_id, run_seq, ts, type, payload_json, source_device, created_at
-      ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        protocol_version, trace_id, event_id, run_id, run_seq, ts, type, payload_json, source_device, created_at
+      ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     `);
 
     let inserted = 0;
     for (const event of payload.events) {
       const result = insert.run(
         event.protocol_version,
+        event.trace_id,
         event.event_id,
         event.run_id,
         event.seq,
@@ -74,11 +75,12 @@ export class SyncDatabase {
   pull(sinceSeq: number): { events: Array<SyncEventEnvelope & { server_seq: number }>; max_server_seq: number } {
     const rows = this.db
       .prepare(
-        "SELECT server_seq, protocol_version, event_id, run_id, run_seq, ts, type, payload_json FROM events WHERE server_seq > ? ORDER BY server_seq ASC"
+        "SELECT server_seq, protocol_version, trace_id, event_id, run_id, run_seq, ts, type, payload_json FROM events WHERE server_seq > ? ORDER BY server_seq ASC"
       )
       .all(sinceSeq) as Array<{
       server_seq: number;
-      protocol_version: "1.0.0";
+      protocol_version: "2.0.0";
+      trace_id: string;
       event_id: string;
       run_id: string;
       run_seq: number;
@@ -90,6 +92,7 @@ export class SyncDatabase {
     const events = rows.map((row) => ({
       server_seq: row.server_seq,
       protocol_version: row.protocol_version,
+      trace_id: row.trace_id,
       event_id: row.event_id,
       run_id: row.run_id,
       seq: row.run_seq,
@@ -100,5 +103,10 @@ export class SyncDatabase {
 
     const max_server_seq = rows.length > 0 ? rows[rows.length - 1].server_seq : sinceSeq;
     return { events, max_server_seq };
+  }
+
+  countEvents(): number {
+    const row = this.db.prepare("SELECT COUNT(*) AS total FROM events").get() as { total: number };
+    return Number(row.total);
   }
 }
