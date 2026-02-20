@@ -5,6 +5,9 @@ import uuid
 from typing import Any
 
 import aiosqlite
+from app.protocol_version import load_protocol_version
+
+PROTOCOL_VERSION = load_protocol_version()
 
 
 class Repository:
@@ -48,8 +51,8 @@ class Repository:
 
         await self.conn.execute(
             """
-            INSERT INTO runs(run_id, project_id, session_id, model_config_id, input, workspace_path, trace_id, status, created_at, started_at)
-            VALUES(?, ?, ?, ?, ?, ?, ?, 'running', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+            INSERT INTO runs(run_id, project_id, session_id, model_config_id, input, workspace_path, trace_id, created_by, status, created_at, started_at)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'running', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
             """,
             (
                 run_id,
@@ -59,6 +62,7 @@ class Repository:
                 payload["input"],
                 payload["workspace_path"],
                 trace_id,
+                payload.get("user_id", "user"),
             ),
         )
         await self.conn.commit()
@@ -94,7 +98,7 @@ class Repository:
         return int(row["seq"])
 
     async def insert_event(self, event: dict[str, Any]) -> None:
-        protocol_version = str(event.get("protocol_version", "2.0.0"))
+        protocol_version = str(event.get("protocol_version", PROTOCOL_VERSION))
         await self.conn.execute(
             """
             INSERT INTO events(protocol_version, trace_id, event_id, run_id, seq, ts, type, payload_json, created_at)
@@ -208,6 +212,7 @@ class Repository:
         *,
         audit_id: str,
         trace_id: str,
+        user_id: str,
         run_id: str | None,
         event_id: str | None,
         call_id: str | None,
@@ -222,10 +227,10 @@ class Repository:
         await self.conn.execute(
             """
             INSERT INTO audit_logs(
-              audit_id, trace_id, run_id, event_id, call_id, action, tool_name, args_json, result_json,
+              audit_id, trace_id, user_id, run_id, event_id, call_id, action, tool_name, args_json, result_json,
               requires_confirmation, user_decision, decision_ts, outcome, created_at
             ) VALUES(
-              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
               CASE WHEN ? != 'n/a' THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE NULL END,
               ?, strftime('%Y-%m-%dT%H:%M:%fZ','now')
             )
@@ -233,6 +238,7 @@ class Repository:
             (
                 audit_id,
                 trace_id,
+                user_id,
                 run_id,
                 event_id,
                 call_id,
@@ -278,6 +284,33 @@ class Repository:
             (run_id, call_id, status, status, decided_by),
         )
         await self.conn.commit()
+
+    async def resolve_pending_tool_confirmation(
+        self,
+        run_id: str,
+        call_id: str,
+        status: str,
+        *,
+        decided_by: str,
+    ) -> bool:
+        if status not in {"approved", "denied"}:
+            raise ValueError(f"Invalid confirmation status: {status}")
+        cursor = await self.conn.execute(
+            """
+            UPDATE tool_confirmations
+            SET
+              status = ?,
+              decided_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+              decided_by = ?,
+              updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            WHERE run_id = ?
+              AND call_id = ?
+              AND status = 'pending'
+            """,
+            (status, decided_by, run_id, call_id),
+        )
+        await self.conn.commit()
+        return cursor.rowcount > 0
 
     async def get_tool_confirmation_status(self, run_id: str, call_id: str) -> str | None:
         cursor = await self.conn.execute(
@@ -371,7 +404,7 @@ class Repository:
         cursor = await self.conn.execute(
             """
             SELECT trace_id, audit_id, run_id, event_id, call_id, action, tool_name, args_json, result_json,
-                   requires_confirmation, user_decision, decision_ts, outcome, created_at
+                   requires_confirmation, user_id, user_decision, decision_ts, outcome, created_at
             FROM audit_logs
             WHERE run_id=?
             ORDER BY created_at DESC
@@ -442,7 +475,7 @@ class Repository:
 
         await self.insert_event(
             {
-                "protocol_version": event.get("protocol_version", "2.0.0"),
+                "protocol_version": event.get("protocol_version", PROTOCOL_VERSION),
                 "trace_id": event["trace_id"],
                 "event_id": event["event_id"],
                 "run_id": event["run_id"],

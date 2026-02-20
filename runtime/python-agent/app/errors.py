@@ -231,6 +231,17 @@ def error_from_exception(exc: Exception, trace_id: str) -> tuple[int, dict[str, 
                 cause="provider_auth",
             ),
         )
+    if "failed to resolve secret_ref via hub" in message:
+        return (
+            401,
+            error_response(
+                code="E_PROVIDER_AUTH",
+                message="Provider credentials could not be resolved.",
+                trace_id=trace_id,
+                retryable=False,
+                cause="provider_secret_resolve",
+            ),
+        )
 
     if isinstance(exc, (KeyError, ValueError, TypeError)):
         return (

@@ -1,5 +1,8 @@
 import asyncio
 
+import pytest
+
+from app.errors import GoyaisApiError
 from app.services.audit_service import AuditService
 from app.services.confirmation_service import ConfirmationService
 from app.services.run_service import RunService
@@ -16,9 +19,17 @@ class FakeRepo:
     async def upsert_tool_confirmation_status(self, run_id, call_id, status, decided_by="user"):
         self.values[(run_id, call_id)] = status
 
+    async def resolve_pending_tool_confirmation(self, run_id, call_id, status, decided_by="user"):
+        key = (run_id, call_id)
+        if self.values.get(key) not in {None, "pending"}:
+            return False
+        self.values[key] = status
+        return True
+
 
 def test_confirmation_wait_and_resolve():
     repo = FakeRepo()
+    repo.values[("run1", "call1")] = "pending"
     service = ConfirmationService(repo)
 
     async def waiter():
@@ -31,6 +42,20 @@ def test_confirmation_wait_and_resolve():
         return await task
 
     assert asyncio.run(run()) is True
+
+
+def test_confirmation_conflict_raises_error():
+    repo = FakeRepo()
+    repo.values[("run1", "call1")] = "approved"
+    service = ConfirmationService(repo)
+
+    async def run():
+        with pytest.raises(GoyaisApiError) as exc:
+            await service.resolve("run1", "call1", True)
+        assert exc.value.code == "E_CONFIRMATION_ALREADY_DECIDED"
+        assert exc.value.status_code == 409
+
+    asyncio.run(run())
 
 
 class _RecoveryRepo:
@@ -47,6 +72,10 @@ class _RecoveryRepo:
 
     async def upsert_tool_confirmation_status(self, run_id, call_id, status, decided_by="user"):
         self.values[(run_id, call_id)] = status
+
+    async def resolve_pending_tool_confirmation(self, run_id, call_id, status, decided_by="user"):
+        self.values[(run_id, call_id)] = status
+        return True
 
     async def update_run_status(self, run_id, status):
         self.run_updates.append((run_id, status))

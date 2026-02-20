@@ -24,6 +24,7 @@ async def _seed_run_with_sensitive_audit(run_id: str, trace_id: str, workspace_p
     await repo.insert_audit(
         audit_id=str(uuid.uuid4()),
         trace_id=trace_id,
+        user_id="diag-user",
         run_id=run_id,
         event_id=None,
         call_id="call-redact",

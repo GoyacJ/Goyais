@@ -6,18 +6,25 @@ import uuid
 from fastapi import APIRouter, Depends, Request
 from sse_starlette.sse import EventSourceResponse
 
+from app.config import load_settings
 from app.deps import get_repo, get_run_service
 from app.services.run_service import stream_as_sse
 from app.trace import get_current_trace_id
 
 router = APIRouter(prefix="/v1", tags=["runs"])
+settings = load_settings()
 
 
 @router.post("/runs")
 async def create_run(payload: dict, request: Request, repo=Depends(get_repo), run_service=Depends(get_run_service)):
     run_id = str(uuid.uuid4())
     trace_id = str(getattr(request.state, "trace_id", get_current_trace_id()))
-    asyncio.create_task(run_service.start_run(run_id, payload, trace_id))
+    run_payload = dict(payload)
+    run_payload["user_id"] = str(getattr(request.state, "user_id", "user"))
+    if settings.runtime_require_hub_auth:
+        run_payload["workspace_path"] = str(settings.runtime_workspace_root)
+        run_payload["workspace_id"] = settings.runtime_workspace_id
+    asyncio.create_task(run_service.start_run(run_id, run_payload, trace_id))
     return {"run_id": run_id}
 
 

@@ -14,6 +14,7 @@ class AuditService:
         self,
         *,
         trace_id: str,
+        user_id: str = "user",
         run_id: str | None,
         event_id: str | None,
         call_id: str | None,
@@ -28,6 +29,7 @@ class AuditService:
         await self.repo.insert_audit(
             audit_id=str(uuid.uuid4()),
             trace_id=trace_id,
+            user_id=user_id,
             run_id=run_id,
             event_id=event_id,
             call_id=call_id,

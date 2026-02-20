@@ -10,11 +10,12 @@ from fastapi.responses import JSONResponse
 
 from app.api import diagnostics, model_configs, ops, projects, replay, runs, secrets, sync_client, system_events, tool_confirmations
 from app.config import load_settings
+from app.context import set_current_user_id
 from app.deps import set_dependencies
 from app.db.connection import open_connection
 from app.db.migrations import apply_migrations
 from app.db.repositories import Repository
-from app.errors import error_from_exception
+from app.errors import error_from_exception, error_response
 from app.observability.logging import get_runtime_logger
 from app.services.audit_service import AuditService
 from app.services.confirmation_service import ConfirmationService
@@ -63,9 +64,34 @@ app.add_middleware(
 
 @app.middleware("http")
 async def trace_middleware(request: Request, call_next):
-    trace_id = normalize_trace_id(request.headers.get(TRACE_HEADER))
+    incoming_trace_header = request.headers.get(TRACE_HEADER)
+    trace_id = normalize_trace_id(incoming_trace_header)
     request.state.trace_id = trace_id
+    request.state.workspace_id = settings.runtime_workspace_id
     set_current_trace_id(trace_id)
+    user_id_header = str(request.headers.get("X-User-Id", "")).strip()
+    request.state.user_id = user_id_header or "user"
+    set_current_user_id(request.state.user_id)
+
+    if settings.runtime_require_hub_auth:
+        provided_hub_auth = str(request.headers.get("X-Hub-Auth", "")).strip()
+        if (
+            not provided_hub_auth
+            or provided_hub_auth != settings.runtime_shared_secret
+            or not user_id_header
+            or not incoming_trace_header
+        ):
+            payload = error_response(
+                code="E_UNAUTHORIZED",
+                message="Unauthorized.",
+                trace_id=trace_id,
+                retryable=False,
+                cause="hub_auth",
+            )
+            response = JSONResponse(status_code=401, content=payload)
+            response.headers[TRACE_HEADER] = trace_id
+            return response
+
     started = datetime.now(tz=timezone.utc)
     try:
         response = await call_next(request)
@@ -77,6 +103,8 @@ async def trace_middleware(request: Request, call_next):
         "http_request",
         extra={
             "trace_id": trace_id,
+            "user_id": request.state.user_id,
+            "workspace_id": request.state.workspace_id,
             "path": request.url.path,
             "method": request.method,
             "status": response.status_code,

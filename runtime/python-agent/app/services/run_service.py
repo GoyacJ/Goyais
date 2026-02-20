@@ -21,8 +21,10 @@ from app.db.repositories import Repository
 from app.errors import build_goyais_error, error_from_exception
 from app.observability.logging import get_runtime_logger
 from app.observability.metrics import get_runtime_metrics
+from app.protocol_version import load_protocol_version
 from app.services.audit_service import AuditService
 from app.services.confirmation_service import ConfirmationService
+from app.services.secret_resolver import resolve_secret_via_hub
 from app.sse.event_bus import EventBus
 from app.tools.command_tools import run_command
 from app.tools.file_tools import read_file
@@ -31,7 +33,7 @@ from app.tools.policy import requires_confirmation
 from app.trace import generate_trace_id
 from unidiff import PatchSet
 
-PROTOCOL_VERSION = "2.0.0"
+PROTOCOL_VERSION = load_protocol_version()
 logger = get_runtime_logger()
 metrics = get_runtime_metrics()
 
@@ -52,6 +54,7 @@ class RunService:
         self.audit_service = audit_service
         self.agent_mode = agent_mode
         self._run_traces: dict[str, str] = {}
+        self._run_users: dict[str, str] = {}
 
     async def recover_pending_confirmations_after_restart(self) -> None:
         pending = await self.repo.list_pending_confirmations()
@@ -78,6 +81,7 @@ class RunService:
             )
             await self.audit_service.record(
                 trace_id=trace_id,
+                user_id="system",
                 run_id=run_id,
                 event_id=error_event["event_id"],
                 call_id=call_id,
@@ -101,6 +105,7 @@ class RunService:
     async def start_run(self, run_id: str, payload: dict[str, Any], trace_id: str) -> None:
         metrics.runs_total += 1
         self._run_traces[run_id] = trace_id
+        self._run_users[run_id] = str(payload.get("user_id", "user"))
         try:
             await self.repo.ensure_project(payload["project_id"], payload["workspace_path"])
             await self.repo.ensure_session(payload["session_id"], payload["project_id"])
@@ -141,7 +146,7 @@ class RunService:
             )
 
     async def _execute_graph(self, run_id: str, payload: dict[str, Any]) -> None:
-        provider, model_config, api_key = await self._resolve_provider(payload)
+        provider, model_config, api_key = await self._resolve_provider(run_id, payload)
 
         read_call_id = new_call_id()
         await self._emit_tool_call(run_id, read_call_id, "read_file", {"path": "README.md"}, requires_confirmation("read_file"))
@@ -182,7 +187,7 @@ class RunService:
         await self.emit_event(run_id, "plan", plan_payload)
         await self._emit_patch_flow(run_id, payload, patch)
 
-    async def _resolve_provider(self, payload: dict[str, Any]):
+    async def _resolve_provider(self, run_id: str, payload: dict[str, Any]):
         model_config_id = (payload.get("model_config_id") or "").strip()
         if not model_config_id:
             raise RuntimeError("model_config_id is required when GOYAIS_AGENT_MODE is graph/deepagents")
@@ -192,7 +197,7 @@ class RunService:
             raise RuntimeError(f"model config not found: {model_config_id}")
 
         secret_ref = str(model_config.get("secret_ref", "")).strip()
-        api_key = self._resolve_secret_ref(secret_ref)
+        api_key = await self._resolve_secret_ref(secret_ref, trace_id=await self._trace_id_for_run(run_id))
         provider = build_provider(
             str(model_config["provider"]),
             api_key,
@@ -200,9 +205,12 @@ class RunService:
         )
         return provider, model_config, api_key
 
-    def _resolve_secret_ref(self, secret_ref: str) -> str:
+    async def _resolve_secret_ref(self, secret_ref: str, *, trace_id: str) -> str:
         if not secret_ref:
             raise RuntimeError("missing secret_ref in model config")
+
+        if secret_ref.startswith("secret:"):
+            return await resolve_secret_via_hub(secret_ref, trace_id)
 
         if secret_ref.startswith("env:"):
             env_key = secret_ref.split(":", 1)[1]
@@ -417,6 +425,7 @@ class RunService:
         )
         await self.audit_service.record(
             trace_id=trace_id,
+            user_id=self._user_id_for_run(run_id),
             run_id=run_id,
             event_id=event["event_id"],
             call_id=call_id,
@@ -483,6 +492,7 @@ class RunService:
         event = await self.emit_event(run_id, "tool_result", payload)
         await self.audit_service.record(
             trace_id=trace_id,
+            user_id=self._user_id_for_run(run_id),
             run_id=run_id,
             event_id=event["event_id"],
             call_id=call_id,
@@ -538,6 +548,9 @@ class RunService:
         generated = generate_trace_id()
         self._run_traces[run_id] = generated
         return generated
+
+    def _user_id_for_run(self, run_id: str) -> str:
+        return self._run_users.get(run_id, "user")
 
 
 async def stream_as_sse(event: dict[str, Any]) -> dict[str, str]:

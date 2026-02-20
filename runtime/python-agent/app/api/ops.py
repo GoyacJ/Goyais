@@ -4,10 +4,12 @@ import os
 
 from fastapi import APIRouter
 
+from app.config import load_settings
 from app.observability.metrics import get_runtime_metrics
 from app.services.run_service import PROTOCOL_VERSION
 
 router = APIRouter(prefix="/v1", tags=["ops"])
+settings = load_settings()
 
 
 @router.get("/health")
@@ -16,6 +18,7 @@ async def health():
         "ok": True,
         "version": "0.1.0",
         "protocol_version": PROTOCOL_VERSION,
+        "workspace_id": settings.runtime_workspace_id,
         "runtime_status": "ok",
     }
 
