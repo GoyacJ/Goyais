@@ -2,13 +2,16 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { createProject, listProjects } from "@/api/runtimeClient";
+import { RemotePlaceholder } from "@/components/domain/workspace/RemotePlaceholder";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { selectCurrentWorkspaceKind, useWorkspaceStore } from "@/stores/workspaceStore";
 
 export function ProjectsPage() {
   const { t } = useTranslation();
+  const workspaceKind = useWorkspaceStore(selectCurrentWorkspaceKind);
   const [name, setName] = useState("Demo Project");
   const [workspacePath, setWorkspacePath] = useState("/Users/goya/Repo/Git/Goyais");
   const [projects, setProjects] = useState<Array<Record<string, string>>>([]);
@@ -55,6 +58,10 @@ export function ProjectsPage() {
       });
     }
   };
+
+  if (workspaceKind === "remote") {
+    return <RemotePlaceholder section="projects" />;
+  }
 
   return (
     <div className="grid gap-panel lg:grid-cols-[22rem_minmax(0,1fr)]">

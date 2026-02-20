@@ -19,6 +19,8 @@ pub fn run() {
             commands::runtime_process::runtime_status,
             commands::secret_store::secret_get,
             commands::secret_store::secret_set,
+            commands::secret_store::store_token,
+            commands::secret_store::load_token,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

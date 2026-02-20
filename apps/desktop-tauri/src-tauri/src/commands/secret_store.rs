@@ -13,3 +13,13 @@ pub fn secret_get(provider: String, profile: String) -> Result<Option<String>, S
     let service = format!("com.goyais.secrets.{provider}");
     keychain::get_secret(&service, &profile)
 }
+
+#[command]
+pub fn store_token(profile_id: String, token: String) -> Result<(), String> {
+    keychain::set_secret("com.goyais.hub.tokens", &profile_id, &token)
+}
+
+#[command]
+pub fn load_token(profile_id: String) -> Result<Option<String>, String> {
+    keychain::get_secret("com.goyais.hub.tokens", &profile_id)
+}

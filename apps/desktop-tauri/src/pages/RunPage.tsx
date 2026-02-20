@@ -9,14 +9,17 @@ import { PermissionQueueCenter } from "@/components/domain/permission/Permission
 import { RunComposerPanel } from "@/components/domain/run/RunComposerPanel";
 import { TimelinePanel } from "@/components/domain/timeline/TimelinePanel";
 import { ToolDetailsDrawer } from "@/components/domain/tools/ToolDetailsDrawer";
+import { RemotePlaceholder } from "@/components/domain/workspace/RemotePlaceholder";
 import { useToast } from "@/components/ui/toast";
 import { useRunEvents } from "@/hooks/useRunEvents";
 import { isEditableElement } from "@/lib/shortcuts";
 import { usePermissionStore } from "@/stores/permissionStore";
 import { useRunStore } from "@/stores/runStore";
+import { selectCurrentWorkspaceKind, useWorkspaceStore } from "@/stores/workspaceStore";
 
 export function RunPage() {
   const { t } = useTranslation();
+  const workspaceKind = useWorkspaceStore(selectCurrentWorkspaceKind);
 
   const [values, setValues] = useState({
     projectId: "project-demo",
@@ -145,6 +148,10 @@ export function RunPage() {
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
   }, [activeConfirmation, onDecision]);
+
+  if (workspaceKind === "remote") {
+    return <RemotePlaceholder section="run" />;
+  }
 
   return (
     <div className="grid h-full min-h-[calc(100vh-8rem)] grid-cols-[18rem_minmax(0,1fr)_22rem] gap-panel">

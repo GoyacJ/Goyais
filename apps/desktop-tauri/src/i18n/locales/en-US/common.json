@@ -233,5 +233,61 @@
     "errorTitle": "Something went wrong",
     "copyDiagnostics": "Copy diagnostics",
     "retry": "Retry"
+  },
+  "nav": {
+    "run": "Run",
+    "projects": "Projects",
+    "models": "Model Configs",
+    "replay": "Replay",
+    "settings": "Settings"
+  },
+  "workspace": {
+    "unknown": "Unknown workspace",
+    "localGroup": "Local Workspaces",
+    "remoteGroup": "Remote Servers",
+    "noRemote": "No remote server configured",
+    "noWorkspace": "No workspaces available",
+    "addRemote": "Add Remote Server",
+    "cancel": "Cancel",
+    "loading": "Loading...",
+    "tokenMissing": "Token not found in keychain. Please login again.",
+    "errorTitle": "Workspace switch failed",
+    "remoteLogin": {
+      "title": "Remote Login",
+      "description": "Connect to a hub server and sign in.",
+      "serverUrl": "Server URL",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Login"
+    },
+    "setupAdmin": {
+      "title": "Setup Admin",
+      "description": "Server {{serverUrl}} requires initial admin setup.",
+      "bootstrapToken": "Bootstrap Token",
+      "displayName": "Display Name",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Create Admin"
+    },
+    "remotePlaceholder": {
+      "description": "Remote backend data APIs will be available in Phase 2.",
+      "nextStep": "You can switch menus and permissions now. Data pages are placeholder-only in this phase.",
+      "run": {
+        "title": "Remote Run (Phase 2 Placeholder)"
+      },
+      "projects": {
+        "title": "Remote Projects (Phase 2 Placeholder)"
+      },
+      "models": {
+        "title": "Remote Models (Phase 2 Placeholder)"
+      },
+      "replay": {
+        "title": "Remote Replay (Phase 2 Placeholder)"
+      }
+    },
+    "noPermission": {
+      "title": "No permission",
+      "message": "Your role in this workspace does not allow this page."
+    }
   }
 }

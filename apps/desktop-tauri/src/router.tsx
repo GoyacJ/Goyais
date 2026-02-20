@@ -1,6 +1,7 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import { AppShell } from "./App";
+import { PermissionGate } from "./components/domain/workspace/PermissionGate";
 import { ModelConfigsPage } from "./pages/ModelConfigsPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { RunPage } from "./pages/RunPage";
@@ -12,11 +13,50 @@ export const router = createBrowserRouter([
     path: "/",
     element: <AppShell />,
     children: [
-      { index: true, element: <RunPage /> },
-      { path: "projects", element: <ProjectsPage /> },
-      { path: "models", element: <ModelConfigsPage /> },
-      { path: "replay", element: <ReplayPage /> },
-      { path: "settings", element: <SettingsPage /> }
+      {
+        index: true,
+        element: <Navigate to="/run" replace />
+      },
+      {
+        path: "run",
+        element: (
+          <PermissionGate routePath="/run">
+            <RunPage />
+          </PermissionGate>
+        )
+      },
+      {
+        path: "projects",
+        element: (
+          <PermissionGate routePath="/projects">
+            <ProjectsPage />
+          </PermissionGate>
+        )
+      },
+      {
+        path: "models",
+        element: (
+          <PermissionGate routePath="/models">
+            <ModelConfigsPage />
+          </PermissionGate>
+        )
+      },
+      {
+        path: "replay",
+        element: (
+          <PermissionGate routePath="/replay">
+            <ReplayPage />
+          </PermissionGate>
+        )
+      },
+      {
+        path: "settings",
+        element: (
+          <PermissionGate routePath="/settings">
+            <SettingsPage />
+          </PermissionGate>
+        )
+      }
     ]
   }
 ]);

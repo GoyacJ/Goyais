@@ -2,13 +2,16 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { createModelConfig, listModelConfigs } from "@/api/runtimeClient";
+import { RemotePlaceholder } from "@/components/domain/workspace/RemotePlaceholder";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { selectCurrentWorkspaceKind, useWorkspaceStore } from "@/stores/workspaceStore";
 
 export function ModelConfigsPage() {
   const { t } = useTranslation();
+  const workspaceKind = useWorkspaceStore(selectCurrentWorkspaceKind);
   const [provider, setProvider] = useState("openai");
   const [model, setModel] = useState("gpt-4.1-mini");
   const [secretRef, setSecretRef] = useState("keychain:openai:default");
@@ -52,6 +55,10 @@ export function ModelConfigsPage() {
       });
     }
   };
+
+  if (workspaceKind === "remote") {
+    return <RemotePlaceholder section="models" />;
+  }
 
   return (
     <div className="grid gap-panel lg:grid-cols-[22rem_minmax(0,1fr)]">
