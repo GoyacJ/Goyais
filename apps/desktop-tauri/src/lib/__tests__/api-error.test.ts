@@ -32,4 +32,10 @@ describe("api-error", () => {
     expect(error.code).toBe("NETWORK_OR_RUNTIME_ERROR");
     expect(error.retryable).toBe(true);
   });
+
+  it("maps browser load failures to actionable network message", () => {
+    const error = normalizeUnknownError(new Error("Load failed"));
+    expect(error.message).toContain("Network request failed");
+    expect(error.code).toBe("NETWORK_OR_RUNTIME_ERROR");
+  });
 });

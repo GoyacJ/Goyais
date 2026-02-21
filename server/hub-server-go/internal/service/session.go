@@ -156,9 +156,9 @@ func (s *SessionService) Update(ctx context.Context, workspaceID, sessionID stri
 	return s.Get(ctx, workspaceID, sessionID)
 }
 
-func (s *SessionService) Archive(ctx context.Context, workspaceID, sessionID string) error {
+func (s *SessionService) Delete(ctx context.Context, workspaceID, sessionID string) error {
 	_, err := s.db.ExecContext(ctx, `
-		UPDATE sessions SET archived_at = datetime('now'), updated_at = datetime('now')
+		DELETE FROM sessions
 		WHERE session_id = ? AND workspace_id = ?`, sessionID, workspaceID)
 	return err
 }

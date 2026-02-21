@@ -83,6 +83,18 @@ export async function normalizeHttpError(response: Response): Promise<ApiError> 
   return new ApiError(await parseResponseError(response));
 }
 
+function normalizeRuntimeMessage(message: string): string {
+  const normalized = message.trim().toLowerCase();
+  if (
+    normalized === "load failed"
+    || normalized === "failed to fetch"
+    || normalized.includes("networkerror")
+  ) {
+    return "Network request failed. Please verify the Hub server URL and make sure the service is running.";
+  }
+  return message;
+}
+
 export function normalizeUnknownError(error: unknown): ApiError {
   if (error instanceof ApiError) {
     return error;
@@ -91,7 +103,7 @@ export function normalizeUnknownError(error: unknown): ApiError {
   if (error instanceof Error) {
     return new ApiError({
       code: "NETWORK_OR_RUNTIME_ERROR",
-      message: error.message,
+      message: normalizeRuntimeMessage(error.message),
       retryable: true,
       detail: error.stack
     });

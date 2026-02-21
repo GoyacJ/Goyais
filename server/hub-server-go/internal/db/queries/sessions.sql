@@ -37,7 +37,6 @@ SET title = COALESCE(?, title),
 WHERE session_id = ? AND workspace_id = ?
 RETURNING *;
 
--- name: ArchiveSession :exec
-UPDATE sessions
-SET archived_at = datetime('now'), updated_at = datetime('now')
+-- name: DeleteSession :exec
+DELETE FROM sessions
 WHERE session_id = ? AND workspace_id = ?;

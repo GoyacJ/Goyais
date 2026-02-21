@@ -365,11 +365,6 @@
       "password": "Password",
       "submit": "Login"
     },
-    "localUnlock": {
-      "title": "Unlock Local Workspace",
-      "description": "Legacy local data detected. Enter local account credentials once to unlock. Future sign-in will be automatic.",
-      "submit": "Unlock"
-    },
     "setupAdmin": {
       "title": "Setup Admin",
       "description": "Server {{serverUrl}} requires initial admin setup.",
@@ -418,6 +413,8 @@
     "sessionWorktree": "Worktree",
     "sessionWorktreeOn": "on",
     "sessionWorktreeOff": "off",
+    "quickActions": "More actions",
+    "quickActionComingSoon": "More capabilities are coming soon",
     "planApprovalTitle": "Approve Execution Plan",
     "planApprovalDescription": "Review the agent's plan before it executes.",
     "planSummary": "Plan summary",
@@ -436,6 +433,10 @@
     "modelRequired": "Please configure and select a model first",
     "rename": "Rename",
     "renameFailed": "Rename failed",
+    "deleteAction": "Delete thread",
+    "deleteConfirm": "Delete thread \"{{title}}\"?",
+    "deleteSuccess": "Thread deleted",
+    "deleteFailed": "Failed to delete thread",
     "noProjectTitle": "No projects yet",
     "noProjectDescription": "Create a project in the sidebar to start a conversation.",
     "selectedProject": "Selected project",

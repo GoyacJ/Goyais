@@ -365,11 +365,6 @@
       "password": "密码",
       "submit": "登录"
     },
-    "localUnlock": {
-      "title": "本地工作区解锁",
-      "description": "检测到历史本地数据，需要一次性输入本地账号完成解锁。后续将自动登录。",
-      "submit": "解锁"
-    },
     "setupAdmin": {
       "title": "初始化管理员",
       "description": "服务器 {{serverUrl}} 需要先完成管理员初始化。",
@@ -418,6 +413,8 @@
     "sessionWorktree": "Worktree",
     "sessionWorktreeOn": "开启",
     "sessionWorktreeOff": "关闭",
+    "quickActions": "更多操作",
+    "quickActionComingSoon": "更多能力即将支持",
     "planApprovalTitle": "确认执行计划",
     "planApprovalDescription": "执行前请检查 Agent 的计划。",
     "planSummary": "计划摘要",
@@ -436,6 +433,10 @@
     "modelRequired": "请先配置并选择模型",
     "rename": "重命名",
     "renameFailed": "重命名失败",
+    "deleteAction": "删除对话",
+    "deleteConfirm": "确认删除对话“{{title}}”？",
+    "deleteSuccess": "对话已删除",
+    "deleteFailed": "删除对话失败",
     "noProjectTitle": "暂无项目",
     "noProjectDescription": "请先在左侧创建一个项目，然后开始对话。",
     "selectedProject": "已选择项目",

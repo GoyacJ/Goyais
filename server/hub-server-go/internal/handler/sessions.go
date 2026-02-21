@@ -93,11 +93,11 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"session": sess})
 }
 
-// DELETE /v1/sessions/{session_id}?workspace_id=...  (archive, not physical delete)
-func (h *SessionHandler) Archive(w http.ResponseWriter, r *http.Request) {
+// DELETE /v1/sessions/{session_id}?workspace_id=... (physical delete)
+func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	wsID := r.URL.Query().Get("workspace_id")
 	sessionID := chi.URLParam(r, "session_id")
-	if err := h.svc.Archive(r.Context(), wsID, sessionID); err != nil {
+	if err := h.svc.Delete(r.Context(), wsID, sessionID); err != nil {
 		writeError(w, http.StatusInternalServerError, "E_INTERNAL", err.Error())
 		return
 	}

@@ -19,6 +19,7 @@ interface ConversationStoreState {
   setSelectedSession: (projectId: string, sessionId?: string) => void;
   setSessions: (projectId: string, sessions: ConversationSessionSummary[]) => void;
   upsertSession: (session: ConversationSessionSummary) => void;
+  removeSession: (projectId: string, sessionId: string) => void;
   touchSessionExecution: (sessionId: string, patch: Partial<ConversationSessionSummary>) => void;
   reset: () => void;
 }
@@ -81,6 +82,24 @@ export const useConversationStore = create<ConversationStoreState>()(
               ...state.sessionsByProjectId,
               [session.project_id]: sortSessions(next)
             }
+          };
+        });
+      },
+      removeSession: (projectId, sessionId) => {
+        set((state) => {
+          const current = state.sessionsByProjectId[projectId] ?? [];
+          const next = current.filter((session) => session.session_id !== sessionId);
+          const selectedSessionId =
+            state.selectedProjectId === projectId && state.selectedSessionId === sessionId
+              ? next[0]?.session_id
+              : state.selectedSessionId;
+
+          return {
+            sessionsByProjectId: {
+              ...state.sessionsByProjectId,
+              [projectId]: next
+            },
+            selectedSessionId
           };
         });
       },

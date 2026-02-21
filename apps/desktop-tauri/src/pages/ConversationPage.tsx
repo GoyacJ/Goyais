@@ -96,7 +96,6 @@ export function ConversationPage() {
   const [input, setInput] = useState("");
   const [modelConfigId, setModelConfigId] = useState<string>();
   const [sessionMode, setSessionMode] = useState<"plan" | "agent">("agent");
-  const [sessionUseWorktree, setSessionUseWorktree] = useState(true);
   const [selectedEventId, setSelectedEventId] = useState<string>();
   const [selectedPermissionCallId, setSelectedPermissionCallId] = useState<string>();
   const [isStarting, setIsStarting] = useState(false);
@@ -252,7 +251,7 @@ export function ConversationPage() {
           title: t("conversation.newThread"),
           model_config_id: activeModelId,
           mode: sessionMode,
-          use_worktree: sessionUseWorktree
+          use_worktree: true
         });
         upsertSession(created.session);
         sessionId = created.session.session_id;
@@ -465,14 +464,12 @@ export function ConversationPage() {
             modelOptions={modelOptions}
             running={isStarting}
             sessionMode={sessionMode}
-            sessionUseWorktree={sessionUseWorktree}
             onInputChange={setInput}
             onModelChange={(value) => {
               setModelConfigId(value);
               setDefaultModelConfigId(value);
             }}
             onSessionModeChange={setSessionMode}
-            onSessionUseWorktreeChange={setSessionUseWorktree}
             onSubmit={onSubmit}
           />
         </div>

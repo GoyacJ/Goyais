@@ -57,4 +57,29 @@ describe("conversationStore", () => {
     expect(useConversationStore.getState().sessionsByProjectId.p1[0].last_execution_id).toBe("exec-1");
     expect(useConversationStore.getState().sessionsByProjectId.p1[0].last_status).toBe("executing");
   });
+
+  it("removes session and updates selected session", () => {
+    const store = useConversationStore.getState();
+    store.setSessions("p1", [
+      {
+        session_id: "s1",
+        project_id: "p1",
+        title: "thread-1",
+        updated_at: "2026-01-02T00:00:00.000Z"
+      },
+      {
+        session_id: "s2",
+        project_id: "p1",
+        title: "thread-2",
+        updated_at: "2026-01-01T00:00:00.000Z"
+      }
+    ]);
+    store.setSelectedProject("p1");
+    expect(useConversationStore.getState().selectedSessionId).toBe("s1");
+
+    store.removeSession("p1", "s1");
+    expect(useConversationStore.getState().sessionsByProjectId.p1).toHaveLength(1);
+    expect(useConversationStore.getState().sessionsByProjectId.p1[0].session_id).toBe("s2");
+    expect(useConversationStore.getState().selectedSessionId).toBe("s2");
+  });
 });

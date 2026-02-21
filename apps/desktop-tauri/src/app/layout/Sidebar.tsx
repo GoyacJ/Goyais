@@ -2,8 +2,6 @@ import { open } from "@tauri-apps/plugin-dialog";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
-  ChevronLeft,
-  ChevronRight,
   Circle,
   FolderKanban,
   FolderOpen,
@@ -61,6 +59,7 @@ interface SidebarProjectSectionProps {
   onSelectProject: (projectId: string) => void;
   onSelectSession: (projectId: string, sessionId: string) => void;
   onNewThread: (projectId: string) => void;
+  onDeleteSession?: (projectId: string, session: ConversationSessionSummary) => void;
   onRemoveProject?: (project: DataProject) => void;
   onSync?: (projectId: string) => void;
   isSyncing?: boolean;
@@ -82,10 +81,12 @@ function SidebarProjectSection({
   onSelectProject,
   onSelectSession,
   onNewThread,
+  onDeleteSession,
   onRemoveProject,
   onSync,
   isSyncing
 }: SidebarProjectSectionProps) {
+  const { t } = useTranslation();
   const isActiveProject = selectedProjectId === project.project_id;
   const isGitProject = !!project.repo_url;
 
@@ -156,20 +157,35 @@ function SidebarProjectSection({
             </p>
           ) : null}
           {sessions.map((session) => (
-            <button
-              key={session.session_id}
-              type="button"
-              className={cn(
-                "flex w-full items-center gap-2 rounded-control px-2 py-1 text-left text-small transition-colors",
-                selectedSessionId === session.session_id
-                  ? "bg-accent/20 text-accent"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-              onClick={() => onSelectSession(project.project_id, session.session_id)}
-            >
-              <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{session.title}</span>
-            </button>
+            <div key={session.session_id} className="group flex items-center gap-1">
+              <button
+                type="button"
+                className={cn(
+                  "flex min-w-0 flex-1 items-center gap-2 rounded-control px-2 py-1 text-left text-small transition-colors",
+                  selectedSessionId === session.session_id
+                    ? "bg-accent/20 text-accent"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+                onClick={() => onSelectSession(project.project_id, session.session_id)}
+              >
+                <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{session.title}</span>
+              </button>
+              {onDeleteSession ? (
+                <button
+                  type="button"
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-control text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-destructive group-hover:opacity-100"
+                  aria-label={t("conversation.deleteAction")}
+                  title={t("conversation.deleteAction")}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDeleteSession(project.project_id, session);
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
           ))}
         </div>
       ) : null}
@@ -234,7 +250,6 @@ export function Sidebar() {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const collapsed = useUiStore((state) => state.sidebarCollapsed);
-  const toggleSidebar = useUiStore((state) => state.toggleSidebar);
 
   const workspaceKind = useWorkspaceStore(selectCurrentWorkspaceKind);
   const currentProfile = useWorkspaceStore(selectCurrentProfile);
@@ -248,6 +263,7 @@ export function Sidebar() {
   const setSelectedProject = useConversationStore((state) => state.setSelectedProject);
   const setSelectedSession = useConversationStore((state) => state.setSelectedSession);
   const setSessions = useConversationStore((state) => state.setSessions);
+  const removeSession = useConversationStore((state) => state.removeSession);
   const upsertSession = useConversationStore((state) => state.upsertSession);
 
   const projectsClient = useMemo(() => getProjectsClient(currentProfile), [currentProfile]);
@@ -320,6 +336,32 @@ export function Sidebar() {
       setSelectedSession(projectId, fallback.session_id);
     }
   };
+
+  const onDeleteSession = useCallback(
+    async (projectId: string, session: ConversationSessionSummary) => {
+      const confirmed = window.confirm(t("conversation.deleteConfirm", { title: session.title }));
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        await sessionDataSource.archiveSession(session.session_id);
+        removeSession(projectId, session.session_id);
+        addToast({
+          title: t("conversation.deleteSuccess"),
+          variant: "success"
+        });
+      } catch (error) {
+        addToast({
+          title: t("conversation.deleteFailed"),
+          description: (error as Error).message,
+          diagnostic: (error as Error).message,
+          variant: "error"
+        });
+      }
+    },
+    [addToast, removeSession, sessionDataSource, t]
+  );
 
   const onCreateProjectFromLocation = useCallback(
     async (rawLocation: string) => {
@@ -495,18 +537,8 @@ export function Sidebar() {
           collapsed ? "w-sidebar-collapsed" : "w-sidebar"
         )}
       >
-        <div className="mb-3 flex items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <WorkspaceSwitcher collapsed={collapsed} />
-          </div>
-          <button
-            type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-control text-small text-muted-foreground hover:bg-muted"
-            onClick={toggleSidebar}
-            aria-label={collapsed ? t("app.sidebar.expand") : t("app.sidebar.collapse")}
-          >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </button>
+        <div className="mb-3">
+          <WorkspaceSwitcher collapsed={collapsed} />
         </div>
 
         <div className="mb-3">
@@ -578,6 +610,7 @@ export function Sidebar() {
               onSelectProject={setSelectedProject}
               onSelectSession={setSelectedSession}
               onNewThread={(projectId) => { void onNewThread(projectId); }}
+              onDeleteSession={(projectId, session) => { void onDeleteSession(projectId, session); }}
               onRemoveProject={projectsClient.supportsDelete ? (project) => { void onRemoveProject(project); } : undefined}
               onSync={projectsClient.supportsGit ? (projectId) => { void onSyncProject(projectId); } : undefined}
               isSyncing={syncingProjectId === project.project_id}
