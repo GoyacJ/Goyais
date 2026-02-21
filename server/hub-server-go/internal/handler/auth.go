@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/goyais/hub/internal/service"
 )
@@ -76,6 +77,10 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	user, err := h.svc.Me(r.Context())
 	if err != nil {
+		if strings.Contains(err.Error(), "not authenticated") {
+			writeError(w, http.StatusUnauthorized, "E_UNAUTHORIZED", err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "E_INTERNAL", err.Error())
 		return
 	}
@@ -85,8 +90,16 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 // GET /v1/me/navigation
 func (h *AuthHandler) Navigation(w http.ResponseWriter, r *http.Request) {
 	wsID := r.URL.Query().Get("workspace_id")
+	if strings.TrimSpace(wsID) == "" {
+		writeError(w, http.StatusBadRequest, "E_BAD_REQUEST", "workspace_id is required")
+		return
+	}
 	nav, err := h.svc.Navigation(r.Context(), wsID)
 	if err != nil {
+		if strings.Contains(err.Error(), "not authenticated") {
+			writeError(w, http.StatusUnauthorized, "E_UNAUTHORIZED", err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "E_INTERNAL", err.Error())
 		return
 	}

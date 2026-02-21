@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/goyais/hub/internal/middleware"
 	"github.com/goyais/hub/internal/model"
 	"github.com/goyais/hub/internal/service"
 )
@@ -103,9 +104,9 @@ func (h *InternalEventsHandler) ReceiveEvents(w http.ResponseWriter, r *http.Req
 		case "confirmation_request":
 			// Create tool_confirmations record + update session status
 			var confPayload struct {
-				CallID     string `json:"call_id"`
-				ToolName   string `json:"tool_name"`
-				RiskLevel  string `json:"risk_level"`
+				CallID        string `json:"call_id"`
+				ToolName      string `json:"tool_name"`
+				RiskLevel     string `json:"risk_level"`
 				ParamsSummary string `json:"parameters_summary"`
 			}
 			_ = json.Unmarshal(ev.Payload, &confPayload)
@@ -130,13 +131,24 @@ func (h *InternalEventsHandler) ReceiveEvents(w http.ResponseWriter, r *http.Req
 
 // POST /v1/confirmations?workspace_id=...
 type ConfirmationHandler struct {
-	db        *sql.DB
-	sseMan    *service.SSEManager
-	workerURL string
+	db           *sql.DB
+	sseMan       *service.SSEManager
+	workerURL    string
+	sharedSecret string
 }
 
-func NewConfirmationHandler(db *sql.DB, sseMan *service.SSEManager, workerURL string) *ConfirmationHandler {
-	return &ConfirmationHandler{db: db, sseMan: sseMan, workerURL: workerURL}
+func NewConfirmationHandler(
+	db *sql.DB,
+	sseMan *service.SSEManager,
+	workerURL string,
+	sharedSecret string,
+) *ConfirmationHandler {
+	return &ConfirmationHandler{
+		db:           db,
+		sseMan:       sseMan,
+		workerURL:    workerURL,
+		sharedSecret: sharedSecret,
+	}
 }
 
 func (h *ConfirmationHandler) Decide(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +169,11 @@ func (h *ConfirmationHandler) Decide(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
-	user := userIDFromCtx(ctx)
+	userModel := middleware.UserFromCtx(ctx)
+	user := ""
+	if userModel != nil {
+		user = userModel.UserID
+	}
 	if _, err := h.db.ExecContext(ctx, `
 		UPDATE tool_confirmations SET status = ?, decided_by = ?, decided_at = ?
 		WHERE execution_id = ? AND call_id = ? AND status = 'pending'`,
@@ -173,10 +189,14 @@ func (h *ConfirmationHandler) Decide(w http.ResponseWriter, r *http.Request) {
 
 	// Forward decision to worker
 	if h.workerURL != "" {
-		_ = postJSON(h.workerURL+"/internal/confirmations", map[string]string{
+		_ = postJSONWithHeaders(h.workerURL+"/internal/confirmations", map[string]string{
 			"execution_id": body.ExecutionID,
 			"call_id":      body.CallID,
 			"decision":     body.Decision,
+		}, map[string]string{
+			"X-Hub-Auth": h.sharedSecret,
+			"X-User-Id":  user,
+			"X-Trace-Id": middleware.TraceIDFromCtx(ctx),
 		})
 	}
 
@@ -202,8 +222,4 @@ func coalesceStr(a, b string) string {
 		return a
 	}
 	return b
-}
-
-func userIDFromCtx(r interface{ Value(any) any }) string {
-	return ""
 }

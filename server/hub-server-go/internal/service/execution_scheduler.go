@@ -35,15 +35,23 @@ type ExecutionScheduler struct {
 	db                      *sql.DB
 	sseManager              *SSEManager
 	workerBaseURL           string
-	maxConcurrentExecutions int // per workspace; 0 = unlimited
+	runtimeSharedSecret     string
+	maxConcurrentExecutions int        // per workspace; 0 = unlimited
 	mu                      sync.Mutex // protects in-flight dispatch calls
 }
 
-func NewExecutionScheduler(db *sql.DB, sseManager *SSEManager, workerBaseURL string, maxConcurrentExecutions int) *ExecutionScheduler {
+func NewExecutionScheduler(
+	db *sql.DB,
+	sseManager *SSEManager,
+	workerBaseURL string,
+	runtimeSharedSecret string,
+	maxConcurrentExecutions int,
+) *ExecutionScheduler {
 	return &ExecutionScheduler{
 		db:                      db,
 		sseManager:              sseManager,
 		workerBaseURL:           workerBaseURL,
+		runtimeSharedSecret:     runtimeSharedSecret,
 		maxConcurrentExecutions: maxConcurrentExecutions,
 	}
 }
@@ -258,7 +266,15 @@ func (s *ExecutionScheduler) dispatchToWorker(execCtx *ExecutionContext) {
 		return
 	}
 
-	err := postJSON(s.workerBaseURL+"/internal/executions", execCtx)
+	headers := map[string]string{
+		"X-User-Id":  execCtx.UserID,
+		"X-Trace-Id": execCtx.TraceID,
+	}
+	if s.runtimeSharedSecret != "" {
+		headers["X-Hub-Auth"] = s.runtimeSharedSecret
+	}
+
+	err := postJSONWithHeaders(s.workerBaseURL+"/internal/executions", execCtx, headers)
 	if err != nil {
 		now := time.Now().UTC().Format(time.RFC3339Nano)
 		s.sseManager.Publish(execCtx.ExecutionID, &model.ExecutionEvent{

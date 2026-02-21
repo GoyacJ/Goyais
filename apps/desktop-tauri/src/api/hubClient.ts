@@ -70,6 +70,14 @@ export interface NavigationResponse {
   feature_flags: Record<string, boolean>;
 }
 
+export interface RuntimeHealthResponse {
+  workspace_id: string;
+  runtime_base_url?: string;
+  runtime_status: "online" | "offline" | string;
+  upstream?: Record<string, unknown>;
+  error?: string;
+}
+
 export interface HubProject {
   project_id: string;
   workspace_id: string;
@@ -476,13 +484,36 @@ export async function listRuntimeModelCatalog(
   serverUrl: string,
   token: string,
   workspaceId: string,
-  modelConfigId: string
+  modelConfigId: string,
+  options?: {
+    apiKeyOverride?: string;
+  }
 ): Promise<ModelCatalogResponse> {
   const query = encodeURIComponent(workspaceId);
   const encodedModelConfigId = encodeURIComponent(modelConfigId);
+  const headers: Record<string, string> = {};
+  if (options?.apiKeyOverride?.trim()) {
+    headers["X-Api-Key-Override"] = options.apiKeyOverride.trim();
+  }
   return requestJson<ModelCatalogResponse>(
     serverUrl,
     `/v1/runtime/model-configs/${encodedModelConfigId}/models?workspace_id=${query}`,
+    {
+      headers
+    },
+    token
+  );
+}
+
+export async function getRuntimeHealth(
+  serverUrl: string,
+  token: string,
+  workspaceId: string
+): Promise<RuntimeHealthResponse> {
+  const query = encodeURIComponent(workspaceId);
+  return requestJson<RuntimeHealthResponse>(
+    serverUrl,
+    `/v1/runtime/health?workspace_id=${query}`,
     undefined,
     token
   );

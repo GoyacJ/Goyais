@@ -8,11 +8,9 @@ import {
   getModelConfigsClient,
   type UpdateModelConfigInput
 } from "@/api/dataSource";
-import { setProviderSecret } from "@/api/secretStoreClient";
 import { McpPanel } from "@/components/settings/McpPanel";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SkillsPanel } from "@/components/settings/SkillsPanel";
-import { SyncNowButton } from "@/components/SyncNowButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -28,7 +26,6 @@ import { useToast } from "@/components/ui/toast";
 import type { SupportedLocale } from "@/i18n/types";
 import { cn } from "@/lib/cn";
 import {
-  normalizeRuntimeUrl,
   type ThemeMode,
   useSettingsStore
 } from "@/stores/settingsStore";
@@ -97,6 +94,20 @@ function parseOptionalInt(value: string): number | null {
   return parsed;
 }
 
+function normalizeHttpUrl(input: string): string {
+  const normalized = input.trim();
+  if (!normalized) {
+    return "";
+  }
+
+  const parsed = new URL(normalized);
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("URL must use http or https");
+  }
+
+  return parsed.toString().replace(/\/+$/, "");
+}
+
 function modelDraftFromConfig(item: DataModelConfig): ModelDraft {
   return {
     provider: item.provider,
@@ -139,7 +150,7 @@ function validateModelDraft(draft: ModelDraft): { payload: UpdateModelConfigInpu
 
   if (normalizedBaseUrl) {
     try {
-      normalizeRuntimeUrl(normalizedBaseUrl);
+      normalizeHttpUrl(normalizedBaseUrl);
     } catch {
       return { payload: {}, error: "Base URL must be a valid http/https URL" };
     }
@@ -207,7 +218,6 @@ interface ModelConfigDialogFieldsProps {
   hint?: string;
   state: RowSaveState;
   disabled: boolean;
-  modelConfigsClientKind: "local" | "remote";
 }
 
 function ModelConfigDialogFields({
@@ -217,8 +227,7 @@ function ModelConfigDialogFields({
   modelListId,
   hint,
   state,
-  disabled,
-  modelConfigsClientKind
+  disabled
 }: ModelConfigDialogFieldsProps) {
   const { t } = useTranslation();
 
@@ -282,9 +291,7 @@ function ModelConfigDialogFields({
             }}
           />
           <p className="text-xs text-muted-foreground">
-            {modelConfigsClientKind === "local"
-              ? t("models.apiKeyKeychainDescription")
-              : t("models.apiKeyDescription")}
+            {t("models.apiKeyDescription")}
           </p>
         </div>
 
@@ -346,11 +353,9 @@ export function SettingsPage() {
 
   const locale = useSettingsStore((state) => state.locale);
   const theme = useSettingsStore((state) => state.theme);
-  const runtimeUrl = useSettingsStore((state) => state.runtimeUrl);
   const defaultModelConfigId = useSettingsStore((state) => state.defaultModelConfigId);
   const setLocale = useSettingsStore((state) => state.setLocale);
   const setTheme = useSettingsStore((state) => state.setTheme);
-  const setRuntimeUrl = useSettingsStore((state) => state.setRuntimeUrl);
   const setDefaultModelConfigId = useSettingsStore((state) => state.setDefaultModelConfigId);
 
   const workspaceKind = useWorkspaceStore(selectCurrentWorkspaceKind);
@@ -358,10 +363,6 @@ export function SettingsPage() {
   const permissions = useWorkspaceStore(selectCurrentPermissions);
   const modelConfigsClient = useMemo(() => getModelConfigsClient(currentProfile), [currentProfile]);
   const writable = canManageModelConfigs(workspaceKind, permissions);
-
-  const [runtimeDraft, setRuntimeDraft] = useState(runtimeUrl);
-  const [runtimeState, setRuntimeState] = useState<RowSaveState>("idle");
-  const [runtimeHint, setRuntimeHint] = useState<string | undefined>(undefined);
 
   const [loadingModelConfigs, setLoadingModelConfigs] = useState(false);
   const [modelConfigs, setModelConfigs] = useState<DataModelConfig[]>([]);
@@ -383,10 +384,6 @@ export function SettingsPage() {
       navigate("/settings/general", { replace: true });
     }
   }, [navigate, params.section]);
-
-  useEffect(() => {
-    setRuntimeDraft(runtimeUrl);
-  }, [runtimeUrl]);
 
   const refreshModelConfigs = useCallback(async () => {
     setLoadingModelConfigs(true);
@@ -414,26 +411,6 @@ export function SettingsPage() {
   useEffect(() => {
     void refreshModelConfigs();
   }, [refreshModelConfigs]);
-
-  const commitRuntimeUrl = useCallback(() => {
-    setRuntimeState("saving");
-    setRuntimeHint(t("settings.saveState.saving"));
-    try {
-      setRuntimeUrl(runtimeDraft);
-      setRuntimeState("idle");
-      setRuntimeHint(undefined);
-    } catch (error) {
-      setRuntimeDraft(runtimeUrl);
-      setRuntimeState("error");
-      setRuntimeHint((error as Error).message);
-      addToast({
-        title: t("settings.runtimeUrlInvalid"),
-        description: (error as Error).message,
-        diagnostic: (error as Error).message,
-        variant: "error"
-      });
-    }
-  }, [addToast, runtimeDraft, runtimeUrl, setRuntimeUrl, t]);
 
   const resetAddDraft = useCallback((provider: ProviderKey = "openai") => {
     setAddDraft(defaultModelDraft(provider));
@@ -476,7 +453,7 @@ export function SettingsPage() {
       return;
     }
 
-    if (modelConfigsClient.kind === "remote" && !addDraft.api_key.trim()) {
+    if (!addDraft.api_key.trim()) {
       setAddState("error");
       setAddHint(t("models.apiKeyRequired"));
       return;
@@ -486,26 +463,12 @@ export function SettingsPage() {
     setAddHint(t("settings.saveState.saving"));
 
     try {
-      if (modelConfigsClient.kind === "remote") {
-        await modelConfigsClient.create({
-          ...validation.payload,
-          provider: addDraft.provider,
-          model: addDraft.model.trim(),
-          api_key: addDraft.api_key.trim()
-        });
-      } else {
-        const modelConfigId = crypto.randomUUID();
-        await modelConfigsClient.create({
-          model_config_id: modelConfigId,
-          ...validation.payload,
-          provider: addDraft.provider,
-          model: addDraft.model.trim(),
-          secret_ref: `keychain:${addDraft.provider}:${modelConfigId}`
-        });
-        if (addDraft.api_key.trim()) {
-          await setProviderSecret(addDraft.provider, modelConfigId, addDraft.api_key.trim());
-        }
-      }
+      await modelConfigsClient.create({
+        ...validation.payload,
+        provider: addDraft.provider,
+        model: addDraft.model.trim(),
+        api_key: addDraft.api_key.trim()
+      });
 
       await refreshModelConfigs();
       setAddDialogOpen(false);
@@ -544,21 +507,10 @@ export function SettingsPage() {
     setEditHint(t("settings.saveState.saving"));
 
     try {
-      if (modelConfigsClient.kind === "local") {
-        const apiKey = editDraft.api_key.trim();
-        if (apiKey) {
-          await setProviderSecret(editDraft.provider, editingModelConfigId, apiKey);
-        }
-        await modelConfigsClient.update(editingModelConfigId, {
-          ...validation.payload,
-          secret_ref: `keychain:${editDraft.provider}:${editingModelConfigId}`
-        });
-      } else {
-        await modelConfigsClient.update(editingModelConfigId, {
-          ...validation.payload,
-          api_key: editDraft.api_key.trim() || undefined
-        });
-      }
+      await modelConfigsClient.update(editingModelConfigId, {
+        ...validation.payload,
+        api_key: editDraft.api_key.trim() || undefined
+      });
 
       await refreshModelConfigs();
       setEditDialogOpen(false);
@@ -699,29 +651,27 @@ export function SettingsPage() {
           <CardContent>
             <div className="divide-y divide-border-subtle rounded-panel border border-border-subtle bg-background/40">
               <SettingRow
-                title={t("settings.runtimeUrlLabel")}
-                description={t("settings.runtimeUrlHelp")}
-                status={runtimeState}
-                statusLabel={runtimeHint}
+                title={t("settings.workspaceScope")}
+                description={t("settings.workspaceScopeDescription")}
                 control={
-                  <Input
-                    className="h-9"
-                    value={runtimeDraft}
-                    onChange={(event) => setRuntimeDraft(event.target.value)}
-                    onBlur={commitRuntimeUrl}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        commitRuntimeUrl();
-                      }
-                    }}
-                  />
+                  <p className="truncate text-small text-foreground" title={workspaceScope}>
+                    {workspaceScope}
+                  </p>
                 }
               />
               <SettingRow
-                title={t("settings.syncSection")}
-                description={t("settings.syncDescription")}
-                control={<SyncNowButton />}
+                title={t("settings.workspacePermission")}
+                description={t("settings.workspacePermissionDescription")}
+                control={
+                  <p
+                    className={cn(
+                      "text-small font-medium",
+                      writable ? "text-success" : "text-muted-foreground"
+                    )}
+                  >
+                    {writable ? t("settings.permissionWritable") : t("settings.permissionReadonly")}
+                  </p>
+                }
               />
             </div>
           </CardContent>
@@ -882,7 +832,6 @@ export function SettingsPage() {
                 hint={addHint}
                 state={addState}
                 disabled={!writable || addState === "saving"}
-                modelConfigsClientKind={modelConfigsClient.kind}
               />
 
               <DialogFooter>
@@ -924,7 +873,6 @@ export function SettingsPage() {
                 hint={editHint}
                 state={editState}
                 disabled={!writable || editState === "saving"}
-                modelConfigsClientKind={modelConfigsClient.kind}
               />
 
               <DialogFooter>

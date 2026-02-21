@@ -1,12 +1,6 @@
 import * as hubClient from "@/api/hubClient";
-import {
-  deleteToken,
-  loadLocalHubCredentials,
-  loadToken,
-  type LocalHubCredentials,
-  storeLocalHubCredentials,
-  storeToken
-} from "@/api/secretStoreClient";
+import { invoke } from "@tauri-apps/api/core";
+import { deleteToken, loadToken } from "@/api/secretStoreClient";
 import { ApiError } from "@/lib/api-error";
 import type { WorkspaceProfile } from "@/stores/workspaceStore";
 
@@ -52,16 +46,190 @@ export interface SessionDataSource {
 }
 
 export const LOCAL_HUB_STORAGE_KEY = "goyais.localHubUrl";
-export const DEFAULT_LOCAL_HUB_URL = import.meta.env.VITE_LOCAL_HUB_URL ?? "http://127.0.0.1:8080";
+export const DEFAULT_LOCAL_HUB_URL = import.meta.env.VITE_LOCAL_HUB_URL ?? "http://127.0.0.1:8787";
 export const LOCAL_TOKEN_PROFILE_ID = "local-default";
 export const LOCAL_WORKSPACE_STORAGE_KEY = "goyais.localWorkspaceId";
-const LOCAL_AUTO_EMAIL = "local-admin@goyais.local";
-const LOCAL_AUTO_DISPLAY_NAME = "Local Admin";
-const LOCAL_UNLOCK_REQUIRED_CODE = "E_LOCAL_HUB_UNLOCK_REQUIRED";
-const LOCAL_UNLOCK_REQUIRED_MESSAGE = "Local workspace needs one-time unlock. Please enter local account credentials.";
+const LEGACY_LOCAL_AUTO_PASSWORD_STORAGE_KEY = "goyais.localAutoPassword";
+const WORKSPACE_STORE_KEY = "goyais.workspace.registry.v1";
+const LOCAL_HUB_START_WAIT_MS = 6_000;
+const LOCAL_HUB_START_POLL_MS = 250;
+
+let localHubStartInFlight: Promise<boolean> | null = null;
+let localLegacyCleanupDone = false;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function normalizeHubUrl(url: string): string {
+  return url.trim().replace(/\/+$/, "");
+}
+
+function withHubUrlScheme(url: string): string {
+  const normalized = normalizeHubUrl(url);
+  if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+    return normalized;
+  }
+  return `http://${normalized}`;
+}
+
+function dedupeUrls(urls: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const url of urls) {
+    if (seen.has(url)) {
+      continue;
+    }
+    seen.add(url);
+    out.push(url);
+  }
+  return out;
+}
+
+function buildLocalHubCandidates(preferredUrl: string): string[] {
+  return dedupeUrls([preferredUrl, withHubUrlScheme(DEFAULT_LOCAL_HUB_URL)]);
+}
+
+function persistLocalHubBaseUrl(serverUrl: string) {
+  localStorage.setItem(LOCAL_HUB_STORAGE_KEY, withHubUrlScheme(serverUrl));
+}
+
+function inferWorkspaceRootFromStore(): string | null {
+  const raw = localStorage.getItem(WORKSPACE_STORE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    const snapshots: Array<{ profiles?: Array<{ id?: string; kind?: string; local?: { rootPath?: string } }>; currentProfileId?: string }> = [];
+
+    if (isRecord(parsed)) {
+      snapshots.push(parsed);
+      if (isRecord(parsed.state)) {
+        snapshots.push(parsed.state);
+      }
+    }
+
+    for (const snapshot of snapshots) {
+      const profiles = Array.isArray(snapshot.profiles) ? snapshot.profiles : [];
+      if (profiles.length === 0) {
+        continue;
+      }
+
+      const byCurrentId = snapshot.currentProfileId
+        ? profiles.find((profile) => profile.id === snapshot.currentProfileId && profile.kind === "local")
+        : undefined;
+      const localProfile = byCurrentId ?? profiles.find((profile) => profile.kind === "local");
+      const rootPath = localProfile?.local?.rootPath?.trim();
+      if (rootPath) {
+        return rootPath;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function buildLocalHubStartCommand(): string {
+  const custom = import.meta.env.VITE_LOCAL_HUB_START_COMMAND as string | undefined;
+  if (custom && custom.trim()) {
+    return custom.trim();
+  }
+
+  return [
+    "if command -v goyais-hub >/dev/null 2>&1; then",
+    "  PORT=8787 GOYAIS_AUTH_MODE=local_open goyais-hub",
+    "elif [ -f ./server/hub-server-go/cmd/hub/main.go ] && command -v go >/dev/null 2>&1; then",
+    "  cd ./server/hub-server-go && PORT=8787 GOYAIS_AUTH_MODE=local_open GOYAIS_DB_PATH=./data/hub.db go run cmd/hub/main.go",
+    "elif [ -f ./package.json ] && command -v pnpm >/dev/null 2>&1; then",
+    "  PORT=8787 GOYAIS_AUTH_MODE=local_open pnpm dev:hub",
+    "else",
+    "  exit 127",
+    "fi"
+  ].join("\n");
+}
+
+function resolveLocalHubStartCwd(): string {
+  const configured = import.meta.env.VITE_LOCAL_HUB_START_CWD as string | undefined;
+  if (configured && configured.trim()) {
+    return configured.trim();
+  }
+  return inferWorkspaceRootFromStore() ?? ".";
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function isLocalHubReachable(serverUrl: string): Promise<boolean> {
+  try {
+    await hubClient.getHealth(serverUrl);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForLocalHub(candidates: string[]): Promise<boolean> {
+  const deadline = Date.now() + LOCAL_HUB_START_WAIT_MS;
+  while (Date.now() < deadline) {
+    for (const candidate of candidates) {
+      if (await isLocalHubReachable(candidate)) {
+        return true;
+      }
+    }
+    await delay(LOCAL_HUB_START_POLL_MS);
+  }
+  return false;
+}
+
+function isTauriRuntime(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return Object.prototype.hasOwnProperty.call(window, "__TAURI_INTERNALS__");
+}
+
+async function ensureLocalHubProcessRunning(candidates: string[]): Promise<boolean> {
+  if (!isTauriRuntime()) {
+    return false;
+  }
+
+  if (!localHubStartInFlight) {
+    localHubStartInFlight = (async () => {
+      try {
+        const existingPid = await invoke<number | null>("runtime_status");
+        if (!existingPid) {
+          await invoke<number>("runtime_start", {
+            command: buildLocalHubStartCommand(),
+            cwd: resolveLocalHubStartCwd()
+          });
+        }
+        return waitForLocalHub(candidates);
+      } catch {
+        return false;
+      }
+    })();
+  }
+
+  try {
+    return await localHubStartInFlight;
+  } finally {
+    localHubStartInFlight = null;
+  }
+}
 
 export function localHubBaseUrl(): string {
-  return localStorage.getItem(LOCAL_HUB_STORAGE_KEY) ?? DEFAULT_LOCAL_HUB_URL;
+  const saved = localStorage.getItem(LOCAL_HUB_STORAGE_KEY);
+  if (saved && saved.trim()) {
+    return withHubUrlScheme(saved);
+  }
+  return withHubUrlScheme(DEFAULT_LOCAL_HUB_URL);
 }
 
 function toError(shape: {
@@ -84,61 +252,6 @@ export interface HubContext {
   workspaceId: string;
 }
 
-export interface EnsureLocalHubAuthOptions {
-  unlockCredentials?: {
-    email: string;
-    password: string;
-    displayName?: string;
-  };
-}
-
-function normalizeLocalCredentials(credentials: {
-  email: string;
-  password: string;
-  displayName?: string;
-}): LocalHubCredentials {
-  return {
-    email: credentials.email.trim().toLowerCase(),
-    password: credentials.password,
-    displayName: credentials.displayName?.trim() || LOCAL_AUTO_DISPLAY_NAME
-  };
-}
-
-function generateLocalPassword(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return `${crypto.randomUUID()}${crypto.randomUUID()}`;
-  }
-  return `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-function createAutoLocalCredentials(): LocalHubCredentials {
-  return {
-    email: LOCAL_AUTO_EMAIL,
-    password: generateLocalPassword(),
-    displayName: LOCAL_AUTO_DISPLAY_NAME
-  };
-}
-
-function isUnauthorized(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 401;
-}
-
-function isSetupCompletedConflict(error: unknown): boolean {
-  return error instanceof ApiError && (
-    error.status === 409
-    || error.code === "E_ALREADY_BOOTSTRAPPED"
-    || error.code === "E_SETUP_COMPLETED"
-  );
-}
-
-function buildLocalUnlockRequiredError(): ApiError {
-  return toError({
-    code: LOCAL_UNLOCK_REQUIRED_CODE,
-    message: LOCAL_UNLOCK_REQUIRED_MESSAGE,
-    status: 401
-  });
-}
-
 function pickWorkspaceId(workspaces: Array<{ workspace_id: string }>): string {
   const cachedWorkspaceId = localStorage.getItem(LOCAL_WORKSPACE_STORAGE_KEY);
   const selectedWorkspaceId =
@@ -152,82 +265,58 @@ function pickWorkspaceId(workspaces: Array<{ workspace_id: string }>): string {
   return selectedWorkspaceId;
 }
 
-async function resolveWorkspaceId(serverUrl: string, token: string): Promise<string> {
-  const resp = await hubClient.listWorkspaces(serverUrl, token);
+function cleanupLegacyLocalAuthArtifacts(): void {
+  if (localLegacyCleanupDone) {
+    return;
+  }
+  localLegacyCleanupDone = true;
+  localStorage.removeItem(LEGACY_LOCAL_AUTO_PASSWORD_STORAGE_KEY);
+  void deleteToken(LOCAL_TOKEN_PROFILE_ID).catch(() => undefined);
+}
+
+async function resolveLocalWorkspaceId(serverUrl: string): Promise<string> {
+  const resp = await hubClient.listWorkspaces(serverUrl, "");
   return pickWorkspaceId(resp.workspaces);
 }
 
-export async function ensureLocalHubAuth(options: EnsureLocalHubAuthOptions = {}): Promise<HubContext> {
-  const serverUrl = localHubBaseUrl();
-  const providedCredentials = options.unlockCredentials
-    ? normalizeLocalCredentials(options.unlockCredentials)
-    : null;
+async function resolveLocalHubContextInternal(allowAutoStart: boolean): Promise<HubContext> {
+  cleanupLegacyLocalAuthArtifacts();
 
-  const existingToken = await loadToken(LOCAL_TOKEN_PROFILE_ID);
-  if (existingToken) {
+  const preferredServerUrl = localHubBaseUrl();
+  const candidates = buildLocalHubCandidates(preferredServerUrl);
+
+  for (const serverUrl of candidates) {
     try {
-      const workspaceId = await resolveWorkspaceId(serverUrl, existingToken);
-      return { serverUrl, token: existingToken, workspaceId };
-    } catch (error) {
-      if (!isUnauthorized(error)) {
-        throw error;
-      }
-      await deleteToken(LOCAL_TOKEN_PROFILE_ID).catch(() => undefined);
-      localStorage.removeItem(LOCAL_WORKSPACE_STORAGE_KEY);
+      await hubClient.getHealth(serverUrl);
+      const workspaceId = await resolveLocalWorkspaceId(serverUrl);
+      persistLocalHubBaseUrl(serverUrl);
+      return { serverUrl, token: "", workspaceId };
+    } catch {
+      // continue to next candidate
     }
   }
 
-  const status = await hubClient.getBootstrapStatus(serverUrl);
-
-  if (status.setup_mode) {
-    const savedCredentials = await loadLocalHubCredentials();
-    const bootstrapCredentials = providedCredentials ?? savedCredentials ?? createAutoLocalCredentials();
-
-    try {
-      const bootstrapResponse = await hubClient.bootstrapAdmin(serverUrl, {
-        email: bootstrapCredentials.email,
-        password: bootstrapCredentials.password,
-        display_name: bootstrapCredentials.displayName
-      });
-      await storeToken(LOCAL_TOKEN_PROFILE_ID, bootstrapResponse.token);
-      await storeLocalHubCredentials(bootstrapCredentials);
-      const workspaceId = bootstrapResponse.workspace?.workspace_id ?? await resolveWorkspaceId(serverUrl, bootstrapResponse.token);
-      localStorage.setItem(LOCAL_WORKSPACE_STORAGE_KEY, workspaceId);
-      return { serverUrl, token: bootstrapResponse.token, workspaceId };
-    } catch (error) {
-      if (!isSetupCompletedConflict(error)) {
-        throw error;
-      }
+  if (allowAutoStart) {
+    const started = await ensureLocalHubProcessRunning(candidates);
+    if (started) {
+      return resolveLocalHubContextInternal(false);
     }
   }
 
-  const loginCredentials = providedCredentials ?? await loadLocalHubCredentials();
-  if (!loginCredentials) {
-    throw buildLocalUnlockRequiredError();
-  }
-
-  try {
-    const loginResponse = await hubClient.login(serverUrl, {
-      email: loginCredentials.email,
-      password: loginCredentials.password
-    });
-    await storeToken(LOCAL_TOKEN_PROFILE_ID, loginResponse.token);
-    await storeLocalHubCredentials(loginCredentials);
-    const workspaceId = await resolveWorkspaceId(serverUrl, loginResponse.token);
-    return { serverUrl, token: loginResponse.token, workspaceId };
-  } catch (error) {
-    if (providedCredentials) {
-      throw error;
-    }
-    if (isUnauthorized(error)) {
-      throw buildLocalUnlockRequiredError();
-    }
-    throw error;
-  }
+  throw toError({
+    code: "NETWORK_OR_RUNTIME_ERROR",
+    message: "Local hub is unreachable. Please ensure Hub is running.",
+    retryable: true
+  });
 }
 
-async function resolveLocalHubContext(): Promise<HubContext> {
-  return ensureLocalHubAuth();
+export async function ensureLocalHubContext(): Promise<HubContext> {
+  return resolveLocalHubContextInternal(true);
+}
+
+// Backward-compatible export name; local mode no longer performs auth/login.
+export async function ensureLocalHubAuth(): Promise<HubContext> {
+  return ensureLocalHubContext();
 }
 
 async function resolveRemoteHubContext(profile: WorkspaceProfile): Promise<HubContext> {
@@ -347,8 +436,8 @@ function makeHubSessionDataSource(
 
     runtimeHealth: async () => {
       const ctx = await resolveCtx();
-      const payload = await hubClient.getHealth(ctx.serverUrl);
-      return { ok: payload.status === "ok" };
+      const payload = await hubClient.getRuntimeHealth(ctx.serverUrl, ctx.token, ctx.workspaceId);
+      return { ok: payload.runtime_status === "online" };
     },
 
     commitExecution: async (executionId, message) => {
@@ -370,14 +459,14 @@ function makeHubSessionDataSource(
 
 export async function resolveHubContext(profile: WorkspaceProfile | undefined): Promise<HubContext> {
   if (!profile || profile.kind === "local") {
-    return resolveLocalHubContext();
+    return ensureLocalHubContext();
   }
   return resolveRemoteHubContext(profile);
 }
 
 export function getSessionDataSource(profile: WorkspaceProfile | undefined): SessionDataSource {
   if (!profile || profile.kind === "local") {
-    return makeHubSessionDataSource("local", resolveLocalHubContext);
+    return makeHubSessionDataSource("local", ensureLocalHubContext);
   }
 
   return makeHubSessionDataSource("remote", () => resolveRemoteHubContext(profile));

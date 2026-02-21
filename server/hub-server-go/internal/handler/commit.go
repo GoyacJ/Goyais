@@ -15,12 +15,13 @@ import (
 
 // CommitHandler handles /v1/executions/{id}/commit and /v1/executions/{id}/patch.
 type CommitHandler struct {
-	db        *sql.DB
-	workerURL string
+	db           *sql.DB
+	workerURL    string
+	sharedSecret string
 }
 
-func NewCommitHandler(db *sql.DB, workerURL string) *CommitHandler {
-	return &CommitHandler{db: db, workerURL: workerURL}
+func NewCommitHandler(db *sql.DB, workerURL, sharedSecret string) *CommitHandler {
+	return &CommitHandler{db: db, workerURL: workerURL, sharedSecret: sharedSecret}
 }
 
 // POST /v1/executions/{execution_id}/commit?workspace_id=...
@@ -77,7 +78,16 @@ func (h *CommitHandler) Commit(w http.ResponseWriter, r *http.Request) {
 	var resp struct {
 		CommitSHA string `json:"commit_sha"`
 	}
-	if err := workerPostJSON(h.workerURL+"/internal/executions/"+executionID+"/commit", commitReq, &resp); err != nil {
+	if err := workerPostJSON(
+		h.workerURL+"/internal/executions/"+executionID+"/commit",
+		commitReq,
+		&resp,
+		map[string]string{
+			"X-Hub-Auth": h.sharedSecret,
+			"X-User-Id":  user.UserID,
+			"X-Trace-Id": middleware.TraceIDFromCtx(r.Context()),
+		},
+	); err != nil {
 		writeError(w, http.StatusBadGateway, "E_WORKER_ERROR", err.Error())
 		return
 	}
@@ -188,7 +198,16 @@ func (h *CommitHandler) Discard(w http.ResponseWriter, r *http.Request) {
 		"execution_id": executionID,
 		"repo_root":    repoRoot,
 	}
-	if err := workerPostJSON(h.workerURL+"/internal/executions/"+executionID+"/discard", discardReq, nil); err != nil {
+	if err := workerPostJSON(
+		h.workerURL+"/internal/executions/"+executionID+"/discard",
+		discardReq,
+		nil,
+		map[string]string{
+			"X-Hub-Auth": h.sharedSecret,
+			"X-User-Id":  user.UserID,
+			"X-Trace-Id": middleware.TraceIDFromCtx(r.Context()),
+		},
+	); err != nil {
 		writeError(w, http.StatusBadGateway, "E_WORKER_ERROR", err.Error())
 		return
 	}
@@ -208,13 +227,21 @@ func (h *CommitHandler) Discard(w http.ResponseWriter, r *http.Request) {
 }
 
 // workerPostJSON POSTs JSON to the worker and optionally decodes the response.
-func workerPostJSON(url string, body, dst any) error {
+func workerPostJSON(url string, body, dst any, headers map[string]string) error {
 	data, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Post(url, "application/json", bytes.NewReader(data))
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("post %s: %w", url, err)
 	}

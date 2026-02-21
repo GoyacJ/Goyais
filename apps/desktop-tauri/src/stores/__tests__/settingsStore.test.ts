@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { RUNTIME_URL_STORAGE_KEY, useSettingsStore } from "@/stores/settingsStore";
+import { useSettingsStore } from "@/stores/settingsStore";
 
 describe("settingsStore", () => {
   beforeEach(() => {
     localStorage.clear();
     useSettingsStore.setState({
-      runtimeUrl: "http://127.0.0.1:8040",
       locale: "zh-CN",
       theme: "dark",
       defaultModelConfigId: undefined
@@ -20,18 +19,6 @@ describe("settingsStore", () => {
     expect(localStorage.getItem("goyais.locale")).toBe("en-US");
   });
 
-  it("setRuntimeUrl persists value", () => {
-    useSettingsStore.getState().setRuntimeUrl("http://127.0.0.1:9000");
-
-    expect(useSettingsStore.getState().runtimeUrl).toBe("http://127.0.0.1:9000");
-    expect(localStorage.getItem(RUNTIME_URL_STORAGE_KEY)).toBe("http://127.0.0.1:9000");
-  });
-
-  it("rejects invalid runtime url", () => {
-    expect(() => useSettingsStore.getState().setRuntimeUrl("ftp://127.0.0.1:9000")).toThrow();
-    expect(useSettingsStore.getState().runtimeUrl).toBe("http://127.0.0.1:8040");
-  });
-
   it("hydrates locale from storage", async () => {
     localStorage.setItem("goyais.locale", "en-US");
 
@@ -43,5 +30,20 @@ describe("settingsStore", () => {
   it("updates theme", () => {
     useSettingsStore.getState().setTheme("light");
     expect(useSettingsStore.getState().theme).toBe("light");
+  });
+
+  it("updates default model config", () => {
+    useSettingsStore.getState().setDefaultModelConfigId("mc-1");
+    expect(useSettingsStore.getState().defaultModelConfigId).toBe("mc-1");
+  });
+
+  it("removes legacy runtime/local auth keys during hydrate", async () => {
+    localStorage.setItem("goyais.runtimeUrl", "http://127.0.0.1:8040");
+    localStorage.setItem("goyais.localAutoPassword", "legacy");
+
+    await useSettingsStore.getState().hydrate();
+
+    expect(localStorage.getItem("goyais.runtimeUrl")).toBeNull();
+    expect(localStorage.getItem("goyais.localAutoPassword")).toBeNull();
   });
 });

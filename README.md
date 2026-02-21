@@ -12,13 +12,16 @@ License: Apache-2.0.
 ## Breaking change notice (v0.2.0)
 
 - **Architecture Shift**: "Run-Centric" has been fully replaced by "Session-Centric + Hub-First".
+- **Auth Mode Split**:
+  - `local_open`: local workspace, no desktop token/login flow.
+  - `remote_auth`: bearer auth + membership + RBAC.
 - **Hub Server Authority**: The Hub (now written in Go) is the source of truth for Sessions, Executions, Events, Skills, MCP, and remote Git projects.
 - **Local SQLite DB**: Local mode now runs a local Hub which manages the SQLite database. The Python Runtime no longer holds any persisted state (memory buffer only).
 - **Execution Mutex**: Only one execution can be active per session at any time.
 
 ## What v0.2.0 includes
 
-- **Hub-First Executions**: Desktop -> Go Hub -> Python Worker -> SSE -> Desktop
+- **Hub-First Only**: Desktop -> Go Hub -> Runtime/Worker (desktop no direct runtime calls)
 - **Session Modes**: Agent mode (autonomous execution with confirmation for sensitive tools) and Plan mode (design plan first, require approval, then execute).
 - **Worktree Isolation**: Operations run in an isolated Git worktree `goyais-exec-<id>` and support proper local Git commits via UI.
 - **Skills & MCP Integration**: Full CRUD and execution injection for custom Skills and Model Context Protocol (MCP) servers.
@@ -60,6 +63,8 @@ cp /Users/goya/Repo/Git/Goyais/runtime/python-agent/.env.example /Users/goya/Rep
 Important variables:
 
 - `GOYAIS_HUB_BASE_URL=http://127.0.0.1:8787` (The Python worker must point to the Go Hub)
+- `GOYAIS_RUNTIME_REQUIRE_HUB_AUTH=true|false`
+- `GOYAIS_RUNTIME_SHARED_SECRET=<shared with hub>`
 - `GOYAIS_AGENT_MODE=plan|agent`
 
 ### Model API keys (`secret_ref`)
@@ -77,14 +82,14 @@ Terminal 1 (Go Hub):
 
 ```bash
 cd /Users/goya/Repo/Git/Goyais
-pnpm dev:hub
+GOYAIS_AUTH_MODE=local_open GOYAIS_RUNTIME_SHARED_SECRET=dev-shared pnpm dev:hub
 ```
 
 Terminal 2 (Python Worker):
 
 ```bash
 cd /Users/goya/Repo/Git/Goyais
-pnpm dev:runtime
+GOYAIS_RUNTIME_REQUIRE_HUB_AUTH=true GOYAIS_RUNTIME_SHARED_SECRET=dev-shared GOYAIS_HUB_BASE_URL=http://127.0.0.1:8787 pnpm dev:runtime
 ```
 
 Terminal 3 (Tauri Desktop):
@@ -111,6 +116,9 @@ In UI:
 - `GET /v1/executions/{id}/patch`
 - `POST /v1/confirmations`
 - `GET/POST/DELETE /v1/projects` & `POST /v1/projects/{id}/sync`
+- `GET/POST/PUT/DELETE /v1/model-configs`
+- `GET /v1/runtime/model-configs/{id}/models`
+- `GET /v1/runtime/health`
 - `GET/POST/PUT/DELETE /v1/skill-sets` & `skills`
 - `GET/POST/PUT/DELETE /v1/mcp-connectors`
 

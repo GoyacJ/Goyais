@@ -14,11 +14,38 @@ const (
 	ctxUser contextKey = "user"
 )
 
-// AuthMiddleware validates Bearer token and injects user into context.
-// tokenValidator is a func injected at wire-up time (avoids circular deps).
-func AuthMiddleware(validateToken func(token string) (*model.AuthUser, error)) func(http.Handler) http.Handler {
+const (
+	AuthModeLocalOpen  = "local_open"
+	AuthModeRemoteAuth = "remote_auth"
+)
+
+type LocalUserResolver func(ctx context.Context) (*model.AuthUser, error)
+
+// AuthMiddleware injects the current principal into request context.
+// - remote_auth: requires Authorization: Bearer <token>
+// - local_open: accepts unauthenticated requests and injects a local principal
+func AuthMiddleware(
+	authMode string,
+	validateToken func(token string) (*model.AuthUser, error),
+	resolveLocalUser LocalUserResolver,
+) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if authMode == AuthModeLocalOpen {
+				if resolveLocalUser == nil {
+					http.Error(w, `{"error":{"code":"E_INTERNAL","message":"local principal resolver is not configured"}}`, http.StatusInternalServerError)
+					return
+				}
+				user, err := resolveLocalUser(r.Context())
+				if err != nil {
+					http.Error(w, `{"error":{"code":"E_INTERNAL","message":"failed to resolve local principal"}}`, http.StatusInternalServerError)
+					return
+				}
+				ctx := context.WithValue(r.Context(), ctxUser, user)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
 			header := r.Header.Get("Authorization")
 			if !strings.HasPrefix(header, "Bearer ") {
 				http.Error(w, `{"error":{"code":"E_UNAUTHORIZED","message":"missing token"}}`, http.StatusUnauthorized)

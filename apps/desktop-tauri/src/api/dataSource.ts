@@ -1,6 +1,5 @@
 import * as hubClient from "@/api/hubClient";
-import * as runtimeClient from "@/api/runtimeClient";
-import { loadToken } from "@/api/secretStoreClient";
+import { resolveHubContext } from "@/api/sessionDataSource";
 import { ApiError } from "@/lib/api-error";
 import type { WorkspaceProfile } from "@/stores/workspaceStore";
 import type { ModelCatalogResponse, ProviderKey } from "@/types/modelCatalog";
@@ -20,42 +19,23 @@ function toError(shape: {
   });
 }
 
-async function resolveRemoteContext(profile: WorkspaceProfile): Promise<{
+async function resolveContext(profile: WorkspaceProfile | undefined): Promise<{
   workspaceId: string;
   serverUrl: string;
   token: string;
 }> {
-  if (profile.kind !== "remote" || !profile.remote) {
+  const ctx = await resolveHubContext(profile);
+  if (!ctx.workspaceId) {
     throw toError({
       code: "E_VALIDATION",
-      message: "Remote workspace profile is required",
+      message: "Workspace is not selected",
       status: 400
     });
   }
-
-  const workspaceId = profile.remote.selectedWorkspaceId;
-  if (!workspaceId) {
-    throw toError({
-      code: "E_VALIDATION",
-      message: "Remote workspace is not selected",
-      status: 400
-    });
-  }
-
-  const tokenRef = profile.remote.tokenRef || profile.id;
-  const token = await loadToken(tokenRef);
-  if (!token) {
-    throw toError({
-      code: "E_UNAUTHORIZED",
-      message: "Token not found in keychain. Please login again.",
-      status: 401
-    });
-  }
-
   return {
-    workspaceId,
-    serverUrl: profile.remote.serverUrl,
-    token
+    workspaceId: ctx.workspaceId,
+    serverUrl: ctx.serverUrl,
+    token: ctx.token
   };
 }
 
@@ -77,13 +57,6 @@ function parseProvider(value: unknown): ProviderKey {
     return value;
   }
   return "openai";
-}
-
-const LOCAL_TEST_PROJECT_ID_PATTERNS = [/^project-sessions/i, /^project-rename/i, /^diag-project-diag-execution-/i];
-
-function shouldIgnoreLocalProject(project: Record<string, unknown>): boolean {
-  const projectId = String(project.project_id ?? "");
-  return LOCAL_TEST_PROJECT_ID_PATTERNS.some((pattern) => pattern.test(projectId));
 }
 
 export interface DataProject {
@@ -114,66 +87,21 @@ export interface ProjectsClient {
 }
 
 export function getProjectsClient(profile: WorkspaceProfile | undefined): ProjectsClient {
-  if (!profile || profile.kind === "local") {
-    const notSupported = async () => {
-      throw toError({ code: "E_VALIDATION", message: "Local data source does not support this operation", status: 400 });
-    };
-    return {
-      kind: "local",
-      supportsDelete: true,
-      supportsGit: false,
-      list: async () => {
-        const payload = await runtimeClient.listProjects();
-        const deduped = new Map<string, DataProject>();
-        payload.projects
-          .filter((project) => !shouldIgnoreLocalProject(project))
-          .forEach((project, index) => {
-            const projectId = String(project.project_id ?? `local-project-${index}`);
-            if (deduped.has(projectId)) {
-              return;
-            }
-            deduped.set(projectId, {
-              project_id: projectId,
-              workspace_id: null,
-              name: String(project.name ?? ""),
-              root_uri: null,
-              workspace_path: String(project.workspace_path ?? ""),
-              repo_url: null,
-              branch: null,
-              sync_status: null,
-              sync_error: null,
-              last_synced_at: null,
-              created_at: null,
-              updated_at: null,
-              source: "local"
-            });
-          });
-        return [...deduped.values()];
-      },
-      create: async ({ name, location }) => {
-        await runtimeClient.createProject({ name, workspace_path: location });
-      },
-      createGit: notSupported,
-      delete: async (projectId) => {
-        await runtimeClient.deleteProject(projectId);
-      },
-      sync: notSupported
-    };
-  }
+  const kind = !profile || profile.kind === "local" ? "local" : "remote";
 
   return {
-    kind: "remote",
+    kind,
     supportsDelete: true,
     supportsGit: true,
     list: async () => {
-      const remote = await resolveRemoteContext(profile);
-      const payload = await hubClient.listProjects(remote.serverUrl, remote.token, remote.workspaceId);
+      const ctx = await resolveContext(profile);
+      const payload = await hubClient.listProjects(ctx.serverUrl, ctx.token, ctx.workspaceId);
       return payload.projects.map((project) => ({
         project_id: project.project_id,
-        workspace_id: project.workspace_id,
+        workspace_id: project.workspace_id ?? null,
         name: project.name,
         root_uri: project.root_uri ?? null,
-        workspace_path: null,
+        workspace_path: project.root_uri ?? null,
         repo_url: project.repo_url ?? null,
         branch: project.branch ?? null,
         sync_status: project.sync_status ?? null,
@@ -181,24 +109,24 @@ export function getProjectsClient(profile: WorkspaceProfile | undefined): Projec
         last_synced_at: project.last_synced_at ?? null,
         created_at: project.created_at,
         updated_at: project.updated_at,
-        source: "remote"
+        source: kind
       }));
     },
     create: async ({ name, location }) => {
-      const remote = await resolveRemoteContext(profile);
-      await hubClient.createProject(remote.serverUrl, remote.token, remote.workspaceId, { name, root_uri: location });
+      const ctx = await resolveContext(profile);
+      await hubClient.createProject(ctx.serverUrl, ctx.token, ctx.workspaceId, { name, root_uri: location });
     },
     createGit: async ({ name, repo_url, branch, auth_ref }) => {
-      const remote = await resolveRemoteContext(profile);
-      await hubClient.createProject(remote.serverUrl, remote.token, remote.workspaceId, { name, repo_url, branch, auth_ref });
+      const ctx = await resolveContext(profile);
+      await hubClient.createProject(ctx.serverUrl, ctx.token, ctx.workspaceId, { name, repo_url, branch, auth_ref });
     },
     delete: async (projectId) => {
-      const remote = await resolveRemoteContext(profile);
-      await hubClient.deleteProject(remote.serverUrl, remote.token, remote.workspaceId, projectId);
+      const ctx = await resolveContext(profile);
+      await hubClient.deleteProject(ctx.serverUrl, ctx.token, ctx.workspaceId, projectId);
     },
     sync: async (projectId) => {
-      const remote = await resolveRemoteContext(profile);
-      await hubClient.syncProject(remote.serverUrl, remote.token, remote.workspaceId, projectId);
+      const ctx = await resolveContext(profile);
+      await hubClient.syncProject(ctx.serverUrl, ctx.token, ctx.workspaceId, projectId);
     }
   };
 }
@@ -251,129 +179,71 @@ export interface ModelConfigsClient {
 }
 
 export function getModelConfigsClient(profile: WorkspaceProfile | undefined): ModelConfigsClient {
-  if (!profile || profile.kind === "local") {
-    return {
-      kind: "local",
-      supportsWrite: true,
-      supportsDelete: true,
-      supportsModelCatalog: true,
-      list: async () => {
-        const payload = await runtimeClient.listModelConfigs();
-        return payload.model_configs.map((item, index) => ({
-          model_config_id: String(item.model_config_id ?? `local-model-config-${index}`),
-          workspace_id: null,
-          provider: parseProvider(item.provider),
-          model: String(item.model ?? ""),
-          base_url: typeof item.base_url === "string" ? item.base_url : null,
-          temperature: parseOptionalNumber(item.temperature),
-          max_tokens: parseOptionalNumber(item.max_tokens),
-          secret_ref: String(item.secret_ref ?? ""),
-          created_at: typeof item.created_at === "string" ? item.created_at : null,
-          updated_at: typeof item.updated_at === "string" ? item.updated_at : null,
-          source: "local"
-        }));
-      },
-      create: async (input) => {
-        const modelConfigId = input.model_config_id ?? crypto.randomUUID();
-        await runtimeClient.createModelConfig({
-          model_config_id: modelConfigId,
-          provider: input.provider,
-          model: input.model,
-          base_url: input.base_url ?? undefined,
-          temperature: input.temperature ?? undefined,
-          max_tokens: input.max_tokens ?? undefined,
-          secret_ref: input.secret_ref ?? `keychain:${input.provider}:${modelConfigId}`
-        });
-      },
-      update: async (modelConfigId, input) => {
-        const secretRef =
-          input.secret_ref !== undefined
-            ? input.secret_ref
-            : input.provider
-              ? `keychain:${input.provider}:${modelConfigId}`
-              : undefined;
-        await runtimeClient.updateModelConfig(modelConfigId, {
-          provider: input.provider,
-          model: input.model,
-          base_url: input.base_url ?? undefined,
-          temperature: input.temperature ?? undefined,
-          max_tokens: input.max_tokens ?? undefined,
-          secret_ref: secretRef
-        });
-      },
-      delete: async (modelConfigId) => {
-        await runtimeClient.deleteModelConfig(modelConfigId);
-      },
-      listModels: async (modelConfigId, options) =>
-        runtimeClient.listModelCatalog(modelConfigId, {
-          apiKeyOverride: options?.apiKeyOverride
-        })
-    };
-  }
+  const kind = !profile || profile.kind === "local" ? "local" : "remote";
 
   return {
-    kind: "remote",
+    kind,
     supportsWrite: true,
     supportsDelete: true,
     supportsModelCatalog: true,
     list: async () => {
-      const remote = await resolveRemoteContext(profile);
-      const payload = await hubClient.listModelConfigs(remote.serverUrl, remote.token, remote.workspaceId);
+      const ctx = await resolveContext(profile);
+      const payload = await hubClient.listModelConfigs(ctx.serverUrl, ctx.token, ctx.workspaceId);
       return payload.model_configs.map((item) => ({
         model_config_id: item.model_config_id,
         workspace_id: item.workspace_id,
         provider: parseProvider(item.provider),
         model: item.model,
         base_url: item.base_url,
-        temperature: item.temperature,
-        max_tokens: item.max_tokens,
+        temperature: parseOptionalNumber(item.temperature),
+        max_tokens: parseOptionalNumber(item.max_tokens),
         secret_ref: item.secret_ref,
         created_at: item.created_at,
         updated_at: item.updated_at,
-        source: "remote"
+        source: kind
       }));
     },
     create: async (input) => {
-      if (!input.api_key) {
+      if (!input.api_key?.trim()) {
         throw toError({
           code: "E_VALIDATION",
-          message: "api_key is required for remote model configs",
+          message: "api_key is required",
           status: 400
         });
       }
-
-      const remote = await resolveRemoteContext(profile);
-      await hubClient.createModelConfig(remote.serverUrl, remote.token, remote.workspaceId, {
+      const ctx = await resolveContext(profile);
+      await hubClient.createModelConfig(ctx.serverUrl, ctx.token, ctx.workspaceId, {
         provider: input.provider,
         model: input.model,
         base_url: input.base_url ?? null,
         temperature: input.temperature ?? undefined,
         max_tokens: input.max_tokens ?? null,
-        api_key: input.api_key
+        api_key: input.api_key.trim()
       });
     },
     update: async (modelConfigId, input) => {
-      const remote = await resolveRemoteContext(profile);
-      await hubClient.updateModelConfig(remote.serverUrl, remote.token, remote.workspaceId, modelConfigId, {
+      const ctx = await resolveContext(profile);
+      await hubClient.updateModelConfig(ctx.serverUrl, ctx.token, ctx.workspaceId, modelConfigId, {
         provider: input.provider,
         model: input.model,
         base_url: input.base_url ?? null,
         temperature: input.temperature ?? undefined,
         max_tokens: input.max_tokens ?? null,
-        api_key: input.api_key
+        api_key: input.api_key?.trim() || undefined
       });
     },
     delete: async (modelConfigId) => {
-      const remote = await resolveRemoteContext(profile);
-      await hubClient.deleteModelConfig(remote.serverUrl, remote.token, remote.workspaceId, modelConfigId);
+      const ctx = await resolveContext(profile);
+      await hubClient.deleteModelConfig(ctx.serverUrl, ctx.token, ctx.workspaceId, modelConfigId);
     },
-    listModels: async (modelConfigId) => {
-      const remote = await resolveRemoteContext(profile);
+    listModels: async (modelConfigId, options) => {
+      const ctx = await resolveContext(profile);
       return hubClient.listRuntimeModelCatalog(
-        remote.serverUrl,
-        remote.token,
-        remote.workspaceId,
-        modelConfigId
+        ctx.serverUrl,
+        ctx.token,
+        ctx.workspaceId,
+        modelConfigId,
+        options
       );
     }
   };

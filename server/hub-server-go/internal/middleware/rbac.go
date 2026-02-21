@@ -17,7 +17,12 @@ func RequirePerm(perm string) func(http.Handler) http.Handler {
 				http.Error(w, `{"error":{"code":"E_UNAUTHORIZED"}}`, http.StatusUnauthorized)
 				return
 			}
-			if !user.HasPerm(perm) {
+			wsID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
+			if wsID == "" {
+				http.Error(w, `{"error":{"code":"E_BAD_REQUEST","message":"workspace_id is required"}}`, http.StatusBadRequest)
+				return
+			}
+			if !user.HasPermIn(wsID, perm) {
 				http.Error(w, `{"error":{"code":"E_FORBIDDEN","message":"insufficient permissions"}}`, http.StatusForbidden)
 				return
 			}

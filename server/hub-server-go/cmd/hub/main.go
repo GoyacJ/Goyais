@@ -30,10 +30,24 @@ func main() {
 	}
 	log.Println("database migrations applied")
 
+	if cfg.AuthMode == "local_open" {
+		authSvc := service.NewAuthService(database, cfg.TokenExpiryHours)
+		if err := authSvc.EnsureLocalOpenBootstrap(context.Background()); err != nil {
+			log.Fatalf("local_open bootstrap: %v", err)
+		}
+		log.Println("local_open principal/workspace initialized")
+	}
+
 	// Create shared services so that the watchdog and the HTTP handler use the
 	// same SSEManager and ExecutionScheduler instances.
 	sseMan := service.NewSSEManager()
-	scheduler := service.NewExecutionScheduler(database, sseMan, cfg.WorkerBaseURL, cfg.MaxConcurrentExecutions)
+	scheduler := service.NewExecutionScheduler(
+		database,
+		sseMan,
+		cfg.WorkerBaseURL,
+		cfg.RuntimeSharedSecret,
+		cfg.MaxConcurrentExecutions,
+	)
 	watchdog := service.NewWatchdog(database, sseMan)
 
 	handler := router.New(cfg, database, sseMan, scheduler)
@@ -57,7 +71,7 @@ func main() {
 	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		log.Printf("goyais hub listening on :%s (driver=%s)", cfg.Port, cfg.DBDriver)
+		log.Printf("goyais hub listening on :%s (driver=%s auth_mode=%s)", cfg.Port, cfg.DBDriver, cfg.AuthMode)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen: %v", err)
 		}

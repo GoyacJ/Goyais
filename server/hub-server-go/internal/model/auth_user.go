@@ -28,6 +28,11 @@ func (u *AuthUser) GrantPerm(workspaceID, permKey string) {
 	u.workspaces[workspaceID] = struct{}{}
 }
 
+// AddWorkspace records workspace membership when role has no explicit permissions.
+func (u *AuthUser) AddWorkspace(workspaceID string) {
+	u.workspaces[workspaceID] = struct{}{}
+}
+
 // HasPerm checks for a global perm (any workspace). Caller should use
 // HasPermIn for workspace-scoped checks.
 func (u *AuthUser) HasPerm(permKey string) bool {

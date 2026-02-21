@@ -3,21 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api-error";
 import type { WorkspaceProfile } from "@/stores/workspaceStore";
 
-const runtimeClientMock = vi.hoisted(() => ({
-  listProjects: vi.fn(),
-  createProject: vi.fn(),
-  deleteProject: vi.fn(),
-  listModelConfigs: vi.fn(),
-  createModelConfig: vi.fn(),
-  updateModelConfig: vi.fn(),
-  deleteModelConfig: vi.fn(),
-  listModelCatalog: vi.fn()
-}));
-
 const hubClientMock = vi.hoisted(() => ({
   listProjects: vi.fn(),
   createProject: vi.fn(),
   deleteProject: vi.fn(),
+  syncProject: vi.fn(),
   listModelConfigs: vi.fn(),
   createModelConfig: vi.fn(),
   updateModelConfig: vi.fn(),
@@ -25,13 +15,12 @@ const hubClientMock = vi.hoisted(() => ({
   listRuntimeModelCatalog: vi.fn()
 }));
 
-const secretStoreMock = vi.hoisted(() => ({
-  loadToken: vi.fn()
+const sessionDataSourceMock = vi.hoisted(() => ({
+  resolveHubContext: vi.fn()
 }));
 
-vi.mock("@/api/runtimeClient", () => runtimeClientMock);
 vi.mock("@/api/hubClient", () => hubClientMock);
-vi.mock("@/api/secretStoreClient", () => secretStoreMock);
+vi.mock("@/api/sessionDataSource", () => sessionDataSourceMock);
 
 import { getModelConfigsClient, getProjectsClient } from "@/api/dataSource";
 
@@ -67,46 +56,44 @@ describe("dataSource", () => {
     localStorage.clear();
   });
 
-  it("uses runtime client for local projects", async () => {
-    runtimeClientMock.listProjects.mockResolvedValue({
-      projects: [{ project_id: "p-local", name: "Local Project", workspace_path: "/tmp/local" }]
+  it("uses hub client for local projects", async () => {
+    sessionDataSourceMock.resolveHubContext.mockResolvedValue({
+      serverUrl: "http://127.0.0.1:8787",
+      token: "",
+      workspaceId: "ws-local"
+    });
+    hubClientMock.listProjects.mockResolvedValue({
+      projects: [{ project_id: "p-local", workspace_id: "ws-local", name: "Local Project", root_uri: "/tmp/local" }]
     });
 
     const client = getProjectsClient(makeLocalProfile());
     const result = await client.list();
 
     expect(client.kind).toBe("local");
-    expect(runtimeClientMock.listProjects).toHaveBeenCalledTimes(1);
-    expect(hubClientMock.listProjects).not.toHaveBeenCalled();
+    expect(hubClientMock.listProjects).toHaveBeenCalledWith("http://127.0.0.1:8787", "", "ws-local");
     expect(result[0]?.workspace_path).toBe("/tmp/local");
   });
 
-  it("supports removing local projects from tracking list", async () => {
+  it("supports deleting local projects via hub", async () => {
+    sessionDataSourceMock.resolveHubContext.mockResolvedValue({
+      serverUrl: "http://127.0.0.1:8787",
+      token: "",
+      workspaceId: "ws-local"
+    });
+
     const client = getProjectsClient(makeLocalProfile());
     await client.delete("p-local");
 
     expect(client.supportsDelete).toBe(true);
-    expect(runtimeClientMock.deleteProject).toHaveBeenCalledWith("p-local");
-  });
-
-  it("filters known local diagnostic/test projects from list", async () => {
-    runtimeClientMock.listProjects.mockResolvedValue({
-      projects: [
-        { project_id: "project-sessions-abcd", name: "Session Project", workspace_path: "/tmp/s1" },
-        { project_id: "project-rename-abcd", name: "Session Project", workspace_path: "/tmp/s2" },
-        { project_id: "diag-project-diag-execution-abcd", name: "diag", workspace_path: "/tmp/s3" },
-        { project_id: "real-1", name: "Real One", workspace_path: "/tmp/real" },
-      ]
-    });
-
-    const client = getProjectsClient(makeLocalProfile());
-    const result = await client.list();
-
-    expect(result.map((item) => item.project_id)).toEqual(["real-1"]);
+    expect(hubClientMock.deleteProject).toHaveBeenCalledWith("http://127.0.0.1:8787", "", "ws-local", "p-local");
   });
 
   it("uses hub client for remote projects", async () => {
-    secretStoreMock.loadToken.mockResolvedValue("token-abc");
+    sessionDataSourceMock.resolveHubContext.mockResolvedValue({
+      serverUrl: "http://127.0.0.1:8787",
+      token: "token-abc",
+      workspaceId: "ws-1"
+    });
     hubClientMock.listProjects.mockResolvedValue({
       projects: [
         {
@@ -124,23 +111,17 @@ describe("dataSource", () => {
     const result = await client.list();
 
     expect(client.kind).toBe("remote");
-    expect(secretStoreMock.loadToken).toHaveBeenCalledWith("profile-1");
     expect(hubClientMock.listProjects).toHaveBeenCalledWith("http://127.0.0.1:8787", "token-abc", "ws-1");
     expect(result[0]?.root_uri).toBe("repo://demo/main");
   });
 
-  it("throws unauthorized when remote token is missing", async () => {
-    secretStoreMock.loadToken.mockResolvedValue(null);
-
-    const client = getProjectsClient(makeRemoteProfile());
-    const request = client.list();
-    await expect(request).rejects.toBeInstanceOf(ApiError);
-    await expect(request).rejects.toMatchObject({ code: "E_UNAUTHORIZED" });
-  });
-
-  it("does not write api_key into localStorage on remote create", async () => {
+  it("does not write api_key into localStorage on create", async () => {
     localStorage.setItem("workspace", "stable");
-    secretStoreMock.loadToken.mockResolvedValue("token-abc");
+    sessionDataSourceMock.resolveHubContext.mockResolvedValue({
+      serverUrl: "http://127.0.0.1:8787",
+      token: "token-abc",
+      workspaceId: "ws-1"
+    });
     hubClientMock.createModelConfig.mockResolvedValue({
       model_config: {
         model_config_id: "mc-1",
@@ -175,8 +156,29 @@ describe("dataSource", () => {
     );
   });
 
-  it("requests model catalog from runtime gateway for remote profile", async () => {
-    secretStoreMock.loadToken.mockResolvedValue("token-abc");
+  it("requires api_key when creating model config", async () => {
+    sessionDataSourceMock.resolveHubContext.mockResolvedValue({
+      serverUrl: "http://127.0.0.1:8787",
+      token: "",
+      workspaceId: "ws-local"
+    });
+
+    const client = getModelConfigsClient(makeLocalProfile());
+    const request = client.create({
+      provider: "openai",
+      model: "gpt-4.1-mini"
+    });
+
+    await expect(request).rejects.toBeInstanceOf(ApiError);
+    await expect(request).rejects.toMatchObject({ code: "E_VALIDATION" });
+  });
+
+  it("requests model catalog from hub runtime gateway and forwards api override", async () => {
+    sessionDataSourceMock.resolveHubContext.mockResolvedValue({
+      serverUrl: "http://127.0.0.1:8787",
+      token: "token-abc",
+      workspaceId: "ws-1"
+    });
     hubClientMock.listRuntimeModelCatalog.mockResolvedValue({
       provider: "openai",
       items: [],
@@ -185,27 +187,14 @@ describe("dataSource", () => {
     });
 
     const client = getModelConfigsClient(makeRemoteProfile());
-    await client.listModels("mc-1");
+    await client.listModels("mc-1", { apiKeyOverride: "sk-override" });
 
     expect(hubClientMock.listRuntimeModelCatalog).toHaveBeenCalledWith(
       "http://127.0.0.1:8787",
       "token-abc",
       "ws-1",
-      "mc-1"
+      "mc-1",
+      { apiKeyOverride: "sk-override" }
     );
-  });
-
-  it("passes api key override when listing local model catalog", async () => {
-    runtimeClientMock.listModelCatalog.mockResolvedValue({
-      provider: "openai",
-      items: [],
-      fetched_at: "2026-02-20T00:00:00.000Z",
-      fallback_used: false
-    });
-
-    const client = getModelConfigsClient(makeLocalProfile());
-    await client.listModels("mc-local", { apiKeyOverride: "sk-override" });
-
-    expect(runtimeClientMock.listModelCatalog).toHaveBeenCalledWith("mc-local", { apiKeyOverride: "sk-override" });
   });
 });

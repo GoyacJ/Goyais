@@ -3,6 +3,7 @@ package router
 import (
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -45,6 +46,12 @@ func TestExecutionCommitAndPatchRoutesRegistered(t *testing.T) {
 		"POST /v1/projects",
 		"DELETE /v1/projects/{project_id}",
 		"POST /v1/projects/{project_id}/sync",
+		"GET /v1/model-configs",
+		"POST /v1/model-configs",
+		"PUT /v1/model-configs/{model_config_id}",
+		"DELETE /v1/model-configs/{model_config_id}",
+		"GET /v1/runtime/model-configs/{model_config_id}/models",
+		"GET /v1/runtime/health",
 	} {
 		if !registered[route] {
 			t.Fatalf("missing route %s", route)
@@ -68,5 +75,34 @@ func TestExecutionCommitAndPatchRoutesRegistered(t *testing.T) {
 		if !registered[route] {
 			t.Fatalf("missing route %s", route)
 		}
+	}
+}
+
+func TestCORSPreflightForHealthEndpoint(t *testing.T) {
+	cfg := &config.Config{
+		TokenExpiryHours:  24,
+		HubInternalSecret: "internal-secret",
+	}
+	handler := New(cfg, nil, nil, nil)
+
+	req := httptest.NewRequest(http.MethodOptions, "/v1/health", nil)
+	req.Header.Set("Origin", "tauri://localhost")
+	req.Header.Set("Access-Control-Request-Method", "GET")
+	req.Header.Set("Access-Control-Request-Headers", "authorization,content-type,x-trace-id")
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("expected status 204 for preflight, got %d", rr.Code)
+	}
+	if rr.Header().Get("Access-Control-Allow-Origin") != "tauri://localhost" {
+		t.Fatalf("missing Access-Control-Allow-Origin echo")
+	}
+	if rr.Header().Get("Access-Control-Allow-Methods") == "" {
+		t.Fatalf("missing Access-Control-Allow-Methods")
+	}
+	if rr.Header().Get("Access-Control-Allow-Headers") == "" {
+		t.Fatalf("missing Access-Control-Allow-Headers")
 	}
 }

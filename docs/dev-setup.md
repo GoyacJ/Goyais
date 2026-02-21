@@ -4,79 +4,68 @@
 
 - `pnpm install`
 - `pnpm protocol:generate`
+- `pnpm dev:hub`
 - `pnpm dev:runtime`
 - `pnpm dev:desktop`
-- `pnpm dev:sync`
-- `pnpm dev:hub`
 - `pnpm test`
 
-## Runtime env
+## v0.2.0 auth modes
 
-Copy `runtime/python-agent/.env.example` and adjust values.
+Hub supports exactly two modes:
 
-## Hub env (Phase 1 + Phase 2)
+- `GOYAIS_AUTH_MODE=local_open`
+  - desktop local workspace does **not** use token/login
+  - single local workspace returned from `/v1/workspaces`
+- `GOYAIS_AUTH_MODE=remote_auth`
+  - desktop remote workspace must provide bearer token
+  - workspace membership + RBAC enforced on workspace-scoped routes
 
-Set hub env before running `pnpm dev:hub`:
+## Local development (recommended)
 
-- `GOYAIS_HUB_DB_PATH=./data/hub.sqlite`
-- `GOYAIS_BOOTSTRAP_TOKEN=<required>`
-- `GOYAIS_ALLOW_PUBLIC_SIGNUP=false` (default)
-- `GOYAIS_HUB_SECRET_KEY=<required for model-config create/update>`
-- `GOYAIS_HUB_RUNTIME_SHARED_SECRET=<required for runtime gateway>`
-- `GOYAIS_SERVER_PORT=8787`
+### 1) Start Hub in `local_open`
 
-Example key generation:
+```bash
+GOYAIS_AUTH_MODE=local_open \
+GOYAIS_RUNTIME_SHARED_SECRET=dev-shared \
+pnpm dev:hub
+```
 
-- `export GOYAIS_HUB_SECRET_KEY="$(openssl rand -base64 32)"`
+### 2) Start Runtime (Hub-auth only)
 
-Bootstrap status:
+```bash
+GOYAIS_RUNTIME_REQUIRE_HUB_AUTH=true \
+GOYAIS_RUNTIME_SHARED_SECRET=dev-shared \
+GOYAIS_HUB_BASE_URL=http://127.0.0.1:8787 \
+pnpm dev:runtime
+```
 
-- `GET /v1/auth/bootstrap/status`
-- `POST /v1/auth/bootstrap/admin` (requires valid `bootstrap_token`)
+### 3) Start Desktop
 
-Phase 2 domain endpoints (all require `Authorization` + `workspace_id` query):
+```bash
+pnpm dev:desktop
+```
 
-- `GET|POST /v1/projects?workspace_id=...`
-- `DELETE /v1/projects/{project_id}?workspace_id=...`
-- `GET|POST /v1/model-configs?workspace_id=...`
-- `PUT|DELETE /v1/model-configs/{model_config_id}?workspace_id=...`
+## Hub-first routing rules
 
-RBAC enforcement:
+- Desktop must only call Hub APIs.
+- Hub forwards runtime requests with headers:
+  - `X-Hub-Auth`
+  - `X-User-Id`
+  - `X-Trace-Id`
+- Runtime should reject direct desktop calls when `GOYAIS_RUNTIME_REQUIRE_HUB_AUTH=true`.
 
-- Projects: `project:read` / `project:write`
-- Model Configs: `modelconfig:read` / `modelconfig:manage`
-- 服务端强制校验 member + permission，前端仅做 UI 级 gating。
+## Key Hub APIs (workspace-scoped)
 
-## Runtime gateway env (Phase 3)
+All routes below require `workspace_id` query and RBAC in `remote_auth` mode:
 
-Remote runtime（由 hub 代理访问）建议最小配置：
+- `GET|POST /v1/projects`
+- `DELETE /v1/projects/{project_id}`
+- `GET|POST|PUT|DELETE /v1/model-configs`
+- `GET /v1/runtime/model-configs/{model_config_id}/models`
+- `GET /v1/runtime/health`
 
-- `GOYAIS_RUNTIME_REQUIRE_HUB_AUTH=true`
-- `GOYAIS_RUNTIME_SHARED_SECRET=<must match GOYAIS_HUB_RUNTIME_SHARED_SECRET>`
-- `GOYAIS_RUNTIME_WORKSPACE_ID=<workspace_id>`
-- `GOYAIS_RUNTIME_WORKSPACE_ROOT=<workspace_root_path>`
-- `GOYAIS_HUB_BASE_URL=http://127.0.0.1:8787`
-- `GOYAIS_RUNTIME_PORT=<workspace_runtime_port>`
+## Notes
 
-注意：
-
-- `workspace_id` 仅通过 Hub 外部 API query 参数传递（`?workspace_id=...`）。
-- Hub 到 runtime 的上下文通过 header 注入（`X-Hub-Auth`、`X-User-Id`、`X-Trace-Id`）。
-- runtime `/v1/health` 必须返回当前 `workspace_id`，Hub 会校验与 registry 一致，不一致会拒绝流量。
-
-## Phase 3 quick path
-
-1. 启动 hub：`pnpm dev:hub`
-2. 启动 workspace runtime（按上述 env）
-3. 注册 runtime：
-   `POST /v1/admin/workspaces/{workspace_id}/runtime` with `runtime_base_url`
-4. 验证 gateway：
-   - `GET /v1/runtime/health?workspace_id=...`
-   - `POST /v1/runtime/runs?workspace_id=...`
-   - `GET /v1/runtime/runs/{run_id}/events?workspace_id=...`
-   - `POST /v1/runtime/tool-confirmations?workspace_id=...`
-
-## SQLite ownership
-
-Runtime is the single writer for run/event/audit state.
-Host reads/writes via runtime APIs only.
+- Local mode removes old local token/bootstrap/auto-login flow.
+- Desktop settings no longer expose Runtime URL or SyncNow entry.
+- If you need remote auth testing, switch Hub to `GOYAIS_AUTH_MODE=remote_auth` and log in via remote workspace profile.

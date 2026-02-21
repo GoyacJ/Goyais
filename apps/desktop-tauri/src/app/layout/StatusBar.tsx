@@ -2,15 +2,13 @@ import { CircleCheck, CircleX } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { getSessionDataSource } from "@/api/sessionDataSource";
+import { getSessionDataSource, localHubBaseUrl } from "@/api/sessionDataSource";
 import { Badge } from "@/components/ui/badge";
-import { useSettingsStore } from "@/stores/settingsStore";
 import { selectCurrentProfile, useWorkspaceStore } from "@/stores/workspaceStore";
 
 export function StatusBar() {
   const { t } = useTranslation();
   const currentProfile = useWorkspaceStore(selectCurrentProfile);
-  const runtimeUrl = useSettingsStore((state) => state.runtimeUrl);
   const sessionDataSource = useMemo(() => getSessionDataSource(currentProfile), [currentProfile]);
   const [runtimeOk, setRuntimeOk] = useState<boolean | null>(null);
 
@@ -34,7 +32,7 @@ export function StatusBar() {
 
   const executionKind = currentProfile?.kind ?? "local";
   const executionTarget =
-    executionKind === "remote" ? currentProfile?.remote?.serverUrl ?? "n/a" : runtimeUrl;
+    executionKind === "remote" ? currentProfile?.remote?.serverUrl ?? "n/a" : localHubBaseUrl();
 
   return (
     <footer className="flex h-8 items-center justify-between border-t border-border-subtle px-page text-small text-muted-foreground">

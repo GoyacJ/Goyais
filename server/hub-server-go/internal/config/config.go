@@ -15,12 +15,14 @@ type Config struct {
 	DBUrl    string // Postgres DSN
 
 	// Auth
+	AuthMode               string // "local_open" | "remote_auth"
 	BootstrapAdminEmail    string
 	BootstrapAdminPassword string
 	TokenExpiryHours       int
 
 	// Security
-	HubInternalSecret string // shared secret for worker → hub internal API
+	HubInternalSecret   string // shared secret for worker → hub internal API
+	RuntimeSharedSecret string // shared secret for hub → runtime API
 
 	// Worker
 	WorkerBaseURL string
@@ -34,15 +36,17 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		Port:                   getEnv("PORT", "8080"),
-		DBDriver:               getEnv("GOYAIS_DB_DRIVER", "sqlite"),
-		DBPath:                 getEnv("GOYAIS_DB_PATH", "./data/hub.db"),
-		DBUrl:                  getEnv("GOYAIS_DATABASE_URL", ""),
-		BootstrapAdminEmail:    getEnv("GOYAIS_BOOTSTRAP_EMAIL", "admin@local"),
-		BootstrapAdminPassword: getEnv("GOYAIS_BOOTSTRAP_PASSWORD", ""),
-		TokenExpiryHours:       getEnvInt("GOYAIS_TOKEN_EXPIRY_HOURS", 720),
-		HubInternalSecret:      getEnv("GOYAIS_HUB_INTERNAL_SECRET", ""),
-		WorkerBaseURL:           getEnv("GOYAIS_WORKER_BASE_URL", ""),
+		Port:                    getEnv("PORT", "8080"),
+		DBDriver:                getEnv("GOYAIS_DB_DRIVER", "sqlite"),
+		DBPath:                  getEnv("GOYAIS_DB_PATH", "./data/hub.db"),
+		DBUrl:                   getEnv("GOYAIS_DATABASE_URL", ""),
+		AuthMode:                getEnv("GOYAIS_AUTH_MODE", "remote_auth"),
+		BootstrapAdminEmail:     getEnv("GOYAIS_BOOTSTRAP_EMAIL", "admin@local"),
+		BootstrapAdminPassword:  getEnv("GOYAIS_BOOTSTRAP_PASSWORD", ""),
+		TokenExpiryHours:        getEnvInt("GOYAIS_TOKEN_EXPIRY_HOURS", 720),
+		HubInternalSecret:       getEnv("GOYAIS_HUB_INTERNAL_SECRET", ""),
+		RuntimeSharedSecret:     getEnv("GOYAIS_RUNTIME_SHARED_SECRET", getEnv("GOYAIS_HUB_RUNTIME_SHARED_SECRET", "")),
+		WorkerBaseURL:           getEnv("GOYAIS_WORKER_BASE_URL", "http://127.0.0.1:8040"),
 		MaxConcurrentExecutions: getEnvInt("GOYAIS_MAX_CONCURRENT_EXECUTIONS", 5),
 		LogLevel:                getEnv("LOG_LEVEL", "info"),
 	}
