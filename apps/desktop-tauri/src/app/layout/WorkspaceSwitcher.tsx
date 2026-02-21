@@ -2,7 +2,7 @@ import { Globe2, HardDrive, Plus, Server } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { bootstrapAdmin, getBootstrapStatus, getNavigation, listWorkspaces, login } from "@/api/hubClient";
+import { bootstrapAdmin, getBootstrapStatus, getNavigation, listWorkspaces, login, me } from "@/api/hubClient";
 import { loadToken, storeToken } from "@/api/secretStoreClient";
 import { RemoteLoginDialog } from "@/components/domain/workspace/RemoteLoginDialog";
 import { SetupAdminDialog } from "@/components/domain/workspace/SetupAdminDialog";
@@ -45,6 +45,7 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
   const setRemoteSelectedWorkspace = useWorkspaceStore((state) => state.setRemoteSelectedWorkspace);
   const setRemoteNavigation = useWorkspaceStore((state) => state.setRemoteNavigation);
   const setRemoteNavigationLoading = useWorkspaceStore((state) => state.setRemoteNavigationLoading);
+  const setRemoteUser = useWorkspaceStore((state) => state.setRemoteUser);
 
   const [loginOpen, setLoginOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
@@ -129,6 +130,8 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
       });
 
       await storeToken(profileId, loginResponse.token);
+      const mePayload = await me(payload.serverUrl, loginResponse.token);
+      setRemoteUser(profileId, mePayload.user);
 
       const profile = useWorkspaceStore.getState().profiles.find((item) => item.id === profileId);
       if (profile) {
@@ -171,6 +174,8 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
       });
 
       await storeToken(profileId, response.token);
+      const mePayload = await me(pendingSetupServerUrl, response.token);
+      setRemoteUser(profileId, mePayload.user);
 
       const profile = useWorkspaceStore.getState().profiles.find((item) => item.id === profileId);
       if (profile) {
@@ -201,6 +206,10 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
         setLoginOpen(true);
         setErrorMessage(t("workspace.tokenMissing"));
         return;
+      }
+      if (!useWorkspaceStore.getState().remoteUsersByProfileId[profile.id]) {
+        const mePayload = await me(profile.remote.serverUrl, token);
+        setRemoteUser(profile.id, mePayload.user);
       }
 
       const key = workspaceKey(profile.id, workspaceId);

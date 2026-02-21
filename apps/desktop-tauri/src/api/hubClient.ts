@@ -1,4 +1,5 @@
 import { normalizeHttpError, normalizeUnknownError } from "@/lib/api-error";
+import type { ModelCatalogResponse, ProviderKey } from "@/types/modelCatalog";
 
 export interface BootstrapStatusResponse {
   setup_mode: boolean;
@@ -81,7 +82,7 @@ export interface HubProjectResponse {
 export interface HubModelConfig {
   model_config_id: string;
   workspace_id: string;
-  provider: "openai" | "anthropic";
+  provider: ProviderKey;
   model: string;
   base_url: string | null;
   temperature: number;
@@ -256,7 +257,7 @@ export async function createModelConfig(
   token: string,
   workspaceId: string,
   payload: {
-    provider: "openai" | "anthropic";
+    provider: ProviderKey;
     model: string;
     base_url?: string | null;
     temperature?: number;
@@ -285,7 +286,7 @@ export async function updateModelConfig(
   workspaceId: string,
   modelConfigId: string,
   payload: {
-    provider?: "openai" | "anthropic";
+    provider?: ProviderKey;
     model?: string;
     base_url?: string | null;
     temperature?: number;
@@ -323,6 +324,22 @@ export async function deleteModelConfig(
     {
       method: "DELETE"
     },
+    token
+  );
+}
+
+export async function listRuntimeModelCatalog(
+  serverUrl: string,
+  token: string,
+  workspaceId: string,
+  modelConfigId: string
+): Promise<ModelCatalogResponse> {
+  const query = encodeURIComponent(workspaceId);
+  const encodedModelConfigId = encodeURIComponent(modelConfigId);
+  return requestJson<ModelCatalogResponse>(
+    serverUrl,
+    `/v1/runtime/model-configs/${encodedModelConfigId}/models?workspace_id=${query}`,
+    undefined,
     token
   );
 }

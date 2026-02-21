@@ -242,6 +242,17 @@ def error_from_exception(exc: Exception, trace_id: str) -> tuple[int, dict[str, 
                 cause="provider_secret_resolve",
             ),
         )
+    if "Unsupported provider for run execution: google" in message:
+        return (
+            400,
+            error_response(
+                code="E_PROVIDER_UNSUPPORTED",
+                message="Google provider is not yet supported for run execution.",
+                trace_id=trace_id,
+                retryable=False,
+                cause="provider_google_unsupported",
+            ),
+        )
 
     if isinstance(exc, (KeyError, ValueError, TypeError)):
         return (

@@ -27,7 +27,8 @@ describe("workspaceStore", () => {
       currentProfileId: "local-default",
       remoteWorkspacesByProfileId: {},
       remoteNavigationByWorkspaceKey: {},
-      remoteNavigationLoadingByWorkspaceKey: {}
+      remoteNavigationLoadingByWorkspaceKey: {},
+      remoteUsersByProfileId: {}
     });
   });
 
@@ -58,5 +59,28 @@ describe("workspaceStore", () => {
     const state = useWorkspaceStore.getState();
     expect(state.remoteNavigationByWorkspaceKey[workspaceKey(profileId, "ws-1")]).toBeDefined();
     expect(selectCurrentPermissions(state)).toEqual(["project:read", "run:create"]);
+  });
+
+  it("returns stable permissions reference for local workspace", () => {
+    const state = useWorkspaceStore.getState();
+
+    const first = selectCurrentPermissions(state);
+    const second = selectCurrentPermissions(state);
+
+    expect(first).toBe(second);
+  });
+
+  it("returns stable empty permissions reference for remote workspace without navigation", () => {
+    const profileId = useWorkspaceStore.getState().upsertRemoteProfile({
+      serverUrl: "http://127.0.0.1:8787"
+    });
+    useWorkspaceStore.getState().setCurrentProfile(profileId);
+
+    const state = useWorkspaceStore.getState();
+    const first = selectCurrentPermissions(state);
+    const second = selectCurrentPermissions(state);
+
+    expect(first).toBe(second);
+    expect(first).toEqual([]);
   });
 });

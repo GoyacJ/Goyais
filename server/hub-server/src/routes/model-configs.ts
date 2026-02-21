@@ -12,7 +12,18 @@ import type { HubDatabase } from "../db";
 import { HubServerError } from "../errors";
 import { encryptApiKey } from "../services/secretCrypto";
 
-const providerSchema = z.enum(["openai", "anthropic"]);
+const providerSchema = z.enum([
+  "deepseek",
+  "minimax_cn",
+  "minimax_intl",
+  "zhipu",
+  "qwen",
+  "doubao",
+  "openai",
+  "anthropic",
+  "google",
+  "custom"
+]);
 
 const createModelConfigSchema = z.object({
   provider: providerSchema,

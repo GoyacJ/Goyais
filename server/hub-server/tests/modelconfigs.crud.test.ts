@@ -199,4 +199,29 @@ describe("model-configs crud + secret storage", () => {
       expect(item).not.toHaveProperty("api_key");
     }
   });
+
+  it("accepts extended provider enum values", async () => {
+    const { token, workspaceId } = await buildAppAndLogin();
+
+    const response = await app!.inject({
+      method: "POST",
+      url: `/v1/model-configs?workspace_id=${workspaceId}`,
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      payload: {
+        provider: "deepseek",
+        model: "deepseek-chat",
+        api_key: "sk-deepseek"
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as {
+      model_config: {
+        provider: string;
+      };
+    };
+    expect(payload.model_config.provider).toBe("deepseek");
+  });
 });

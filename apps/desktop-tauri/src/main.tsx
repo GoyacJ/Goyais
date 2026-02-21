@@ -10,7 +10,7 @@ import { router } from "./router";
 import { useSettingsStore } from "./stores/settingsStore";
 
 async function bootstrap() {
-  await useSettingsStore.getState().hydrateLocale();
+  await useSettingsStore.getState().hydrate();
   await initializeI18n(useSettingsStore.getState().locale);
 
   createRoot(document.getElementById("root")!).render(

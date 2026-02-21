@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { primaryShortcutLabel } from "@/lib/shortcuts";
-import { useUiStore } from "@/stores/uiStore";
+import { useSettingsStore } from "@/stores/settingsStore";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -25,37 +25,16 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const setTheme = useUiStore((state) => state.setTheme);
+  const setTheme = useSettingsStore((state) => state.setTheme);
 
   const commands = useMemo<PaletteCommand[]>(
     () => [
       {
-        id: "run",
-        label: t("commandPalette.commands.runLabel"),
+        id: "conversation",
+        label: t("commandPalette.commands.conversationLabel"),
         group: "project",
-        hint: t("commandPalette.commands.runHint"),
+        hint: t("commandPalette.commands.conversationHint"),
         action: () => navigate("/")
-      },
-      {
-        id: "projects",
-        label: t("commandPalette.commands.projectsLabel"),
-        group: "project",
-        hint: t("commandPalette.commands.projectsHint"),
-        action: () => navigate("/projects")
-      },
-      {
-        id: "models",
-        label: t("commandPalette.commands.modelsLabel"),
-        group: "model",
-        hint: t("commandPalette.commands.modelsHint"),
-        action: () => navigate("/models")
-      },
-      {
-        id: "replay",
-        label: t("commandPalette.commands.replayLabel"),
-        group: "tool",
-        hint: t("commandPalette.commands.replayHint"),
-        action: () => navigate("/replay")
       },
       {
         id: "settings",

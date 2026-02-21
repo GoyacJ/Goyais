@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   confirmToolCall,
   createRun,
+  createSession,
+  listSessions,
+  renameSession,
   subscribeRunEvents
 } from "@/api/runtimeGatewayClient";
 
@@ -49,6 +52,32 @@ describe("runtimeGatewayClient", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("http://127.0.0.1:8787/v1/runtime/tool-confirmations?workspace_id=ws-2");
     expect(init.method).toBe("POST");
+  });
+
+  it("routes session list/create/rename to runtime gateway", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ sessions: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          })
+        )
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await listSessions("http://127.0.0.1:8787", "token-abc", "ws-1", "project-1");
+    await createSession("http://127.0.0.1:8787", "token-abc", "ws-1", { project_id: "project-1", title: "Thread" });
+    await renameSession("http://127.0.0.1:8787", "token-abc", "ws-1", "session-1", "Renamed");
+
+    const listUrl = fetchMock.mock.calls[0]?.[0] as string;
+    const createUrl = fetchMock.mock.calls[1]?.[0] as string;
+    const renameUrl = fetchMock.mock.calls[2]?.[0] as string;
+
+    expect(listUrl).toBe("http://127.0.0.1:8787/v1/runtime/sessions?project_id=project-1&workspace_id=ws-1");
+    expect(createUrl).toBe("http://127.0.0.1:8787/v1/runtime/sessions?workspace_id=ws-1");
+    expect(renameUrl).toBe("http://127.0.0.1:8787/v1/runtime/sessions/session-1?workspace_id=ws-1");
   });
 
   it("parses SSE stream events from hub gateway", async () => {

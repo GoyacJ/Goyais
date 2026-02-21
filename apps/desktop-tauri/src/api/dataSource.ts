@@ -3,8 +3,8 @@ import * as runtimeClient from "@/api/runtimeClient";
 import { loadToken } from "@/api/secretStoreClient";
 import { ApiError } from "@/lib/api-error";
 import type { WorkspaceProfile } from "@/stores/workspaceStore";
-
-type Provider = "openai" | "anthropic";
+import type { ModelCatalogResponse, ProviderKey } from "@/types/modelCatalog";
+import { isProviderKey } from "@/types/modelCatalog";
 
 function toError(shape: {
   code: string;
@@ -72,11 +72,15 @@ function parseOptionalNumber(value: unknown): number | null {
   return null;
 }
 
-function parseProvider(value: unknown): Provider {
-  if (value === "anthropic") {
-    return "anthropic";
+function parseProvider(value: unknown): ProviderKey {
+  if (typeof value === "string" && isProviderKey(value)) {
+    return value;
   }
   return "openai";
+}
+
+function defaultLocalSecretRef(provider: ProviderKey): string {
+  return `keychain:${provider}:default`;
 }
 
 export interface DataProject {
@@ -166,7 +170,7 @@ export function getProjectsClient(profile: WorkspaceProfile | undefined): Projec
 export interface DataModelConfig {
   model_config_id: string;
   workspace_id: string | null;
-  provider: Provider;
+  provider: ProviderKey;
   model: string;
   base_url: string | null;
   temperature: number | null;
@@ -178,7 +182,7 @@ export interface DataModelConfig {
 }
 
 export interface CreateModelConfigInput {
-  provider: Provider;
+  provider: ProviderKey;
   model: string;
   base_url?: string | null;
   temperature?: number | null;
@@ -188,11 +192,12 @@ export interface CreateModelConfigInput {
 }
 
 export interface UpdateModelConfigInput {
-  provider?: Provider;
+  provider?: ProviderKey;
   model?: string;
   base_url?: string | null;
   temperature?: number | null;
   max_tokens?: number | null;
+  secret_ref?: string;
   api_key?: string;
 }
 
@@ -200,10 +205,12 @@ export interface ModelConfigsClient {
   kind: "local" | "remote";
   supportsWrite: boolean;
   supportsDelete: boolean;
+  supportsModelCatalog: boolean;
   list: () => Promise<DataModelConfig[]>;
   create: (input: CreateModelConfigInput) => Promise<void>;
   update: (modelConfigId: string, input: UpdateModelConfigInput) => Promise<void>;
   delete: (modelConfigId: string) => Promise<void>;
+  listModels: (modelConfigId: string) => Promise<ModelCatalogResponse>;
 }
 
 export function getModelConfigsClient(profile: WorkspaceProfile | undefined): ModelConfigsClient {
@@ -211,7 +218,8 @@ export function getModelConfigsClient(profile: WorkspaceProfile | undefined): Mo
     return {
       kind: "local",
       supportsWrite: true,
-      supportsDelete: false,
+      supportsDelete: true,
+      supportsModelCatalog: true,
       list: async () => {
         const payload = await runtimeClient.listModelConfigs();
         return payload.model_configs.map((item, index) => ({
@@ -223,21 +231,23 @@ export function getModelConfigsClient(profile: WorkspaceProfile | undefined): Mo
           temperature: parseOptionalNumber(item.temperature),
           max_tokens: parseOptionalNumber(item.max_tokens),
           secret_ref: String(item.secret_ref ?? ""),
-          created_at: null,
-          updated_at: null,
+          created_at: typeof item.created_at === "string" ? item.created_at : null,
+          updated_at: typeof item.updated_at === "string" ? item.updated_at : null,
           source: "local"
         }));
       },
       create: async (input) => {
-        if (!input.secret_ref) {
-          throw toError({
-            code: "E_VALIDATION",
-            message: "secret_ref is required for local model configs",
-            status: 400
-          });
-        }
-
         await runtimeClient.createModelConfig({
+          provider: input.provider,
+          model: input.model,
+          base_url: input.base_url ?? undefined,
+          temperature: input.temperature ?? undefined,
+          max_tokens: input.max_tokens ?? undefined,
+          secret_ref: input.secret_ref ?? defaultLocalSecretRef(input.provider)
+        });
+      },
+      update: async (modelConfigId, input) => {
+        await runtimeClient.updateModelConfig(modelConfigId, {
           provider: input.provider,
           model: input.model,
           base_url: input.base_url ?? undefined,
@@ -246,20 +256,10 @@ export function getModelConfigsClient(profile: WorkspaceProfile | undefined): Mo
           secret_ref: input.secret_ref
         });
       },
-      update: async () => {
-        throw toError({
-          code: "E_VALIDATION",
-          message: "Local data source does not support updating model configs",
-          status: 400
-        });
+      delete: async (modelConfigId) => {
+        await runtimeClient.deleteModelConfig(modelConfigId);
       },
-      delete: async () => {
-        throw toError({
-          code: "E_VALIDATION",
-          message: "Local data source does not support deleting model configs",
-          status: 400
-        });
-      }
+      listModels: async (modelConfigId) => runtimeClient.listModelCatalog(modelConfigId)
     };
   }
 
@@ -267,13 +267,14 @@ export function getModelConfigsClient(profile: WorkspaceProfile | undefined): Mo
     kind: "remote",
     supportsWrite: true,
     supportsDelete: true,
+    supportsModelCatalog: true,
     list: async () => {
       const remote = await resolveRemoteContext(profile);
       const payload = await hubClient.listModelConfigs(remote.serverUrl, remote.token, remote.workspaceId);
       return payload.model_configs.map((item) => ({
         model_config_id: item.model_config_id,
         workspace_id: item.workspace_id,
-        provider: item.provider,
+        provider: parseProvider(item.provider),
         model: item.model,
         base_url: item.base_url,
         temperature: item.temperature,
@@ -317,6 +318,15 @@ export function getModelConfigsClient(profile: WorkspaceProfile | undefined): Mo
     delete: async (modelConfigId) => {
       const remote = await resolveRemoteContext(profile);
       await hubClient.deleteModelConfig(remote.serverUrl, remote.token, remote.workspaceId, modelConfigId);
+    },
+    listModels: async (modelConfigId) => {
+      const remote = await resolveRemoteContext(profile);
+      return hubClient.listRuntimeModelCatalog(
+        remote.serverUrl,
+        remote.token,
+        remote.workspaceId,
+        modelConfigId
+      );
     }
   };
 }

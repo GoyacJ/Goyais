@@ -13,6 +13,7 @@ use commands::app_state::RuntimeState;
 pub fn run() {
     tauri::Builder::default()
         .manage(RuntimeState::default())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             commands::runtime_process::runtime_start,
@@ -21,6 +22,7 @@ pub fn run() {
             commands::secret_store::secret_set,
             commands::secret_store::store_token,
             commands::secret_store::load_token,
+            commands::secret_store::delete_token,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -40,10 +40,36 @@
   "settings": {
     "title": "设置",
     "description": "单用户同步与运行时偏好设置。",
+    "backToApp": "返回应用",
+    "sections": {
+      "general": "通用",
+      "generalDescription": "语言与主题等界面偏好",
+      "runtime": "运行时",
+      "runtimeDescription": "Runtime 地址和同步行为",
+      "models": "模型",
+      "modelsDescription": "模型配置与默认模型"
+    },
     "syncSection": "同步",
     "languageSection": "语言",
     "languageLabel": "界面语言",
-    "languageHelp": "选择界面显示语言。"
+    "languageHelp": "选择界面显示语言。",
+    "themeLabel": "主题",
+    "theme": {
+      "dark": "深色",
+      "light": "浅色"
+    },
+    "runtimeUrlLabel": "Runtime 地址",
+    "modelSectionDescription": "统一管理模型配置并设置对话默认模型。",
+    "defaultModel": "默认模型",
+    "noDefaultModel": "不指定默认模型",
+    "themeDescription": "在深色与浅色主题之间切换。",
+    "runtimeUrlHelp": "失焦或按 Enter 后生效，必须是 http/https。",
+    "syncDescription": "手动触发一次与当前 Runtime 的同步。",
+    "runtimeUrlInvalid": "Runtime 地址无效",
+    "defaultModelDescription": "新对话默认使用该模型配置。",
+    "saveState": {
+      "saving": "保存中..."
+    }
   },
   "run": {
     "defaultTask": "把 README 的标题改成 MVP-1 Demo",
@@ -192,7 +218,9 @@
       "settingsLabel": "前往 Settings",
       "settingsHint": "运行时与同步",
       "themeDark": "主题：深色",
-      "themeLight": "主题：浅色"
+      "themeLight": "主题：浅色",
+      "conversationLabel": "前往对话",
+      "conversationHint": "打开对话主页"
     }
   },
   "projects": {
@@ -202,6 +230,12 @@
     "workspacePath": "工作区路径",
     "rootUri": "远端 Root URI",
     "create": "创建项目",
+    "addFromFolder": "从文件夹新增",
+    "addFromFile": "从文件新增",
+    "pickFolderTitle": "选择项目文件夹",
+    "pickFileTitle": "选择项目文件",
+    "pickerFailed": "打开文件管理器失败",
+    "defaultName": "新项目",
     "delete": "删除",
     "loading": "正在加载项目...",
     "loadFailed": "加载项目失败",
@@ -210,7 +244,8 @@
     "deleteSuccess": "项目删除成功",
     "deleteFailed": "项目删除失败",
     "projectId": "id：{{id}}",
-    "remoteHint": "远端工作区的项目数据以 Hub Server 为权威来源。"
+    "remoteHint": "远端工作区的项目数据以 Hub Server 为权威来源。",
+    "createDescription": "创建项目后可在该项目下开启多个对话。"
   },
   "models": {
     "title": "模型配置",
@@ -236,7 +271,22 @@
     "deleteSuccess": "模型配置删除成功",
     "deleteFailed": "删除失败",
     "remoteHint": "远端模型配置的 API Key 为只写，服务端不会返回明文。",
-    "secretRefLabel": "Secret Ref：{{secretRef}}"
+    "secretRefLabel": "Secret Ref：{{secretRef}}",
+    "add": "新增配置",
+    "apiKeyPrompt": "请输入新模型配置的 API Key",
+    "apiKeyRequired": "必须填写 API Key",
+    "modelConfigId": "模型配置 ID：{{id}}",
+    "providerDescription": "选择模型厂商。",
+    "catalogFallback": "模型列表来自快照",
+    "catalogLive": "模型列表来自厂商接口",
+    "latest": "最新",
+    "baseUrlDescription": "按需覆盖 API 地址。",
+    "temperatureDescription": "取值范围 0 到 2。",
+    "maxTokensDescription": "仅支持正整数。",
+    "secretRefDescription": "Runtime 读取密钥的引用。",
+    "apiKeyDescription": "可选，仅在需要轮换密钥时填写。",
+    "apiKeyPlaceholder": "留空表示不更新现有密钥",
+    "empty": "暂无模型配置。"
   },
   "replay": {
     "title": "回放",
@@ -245,7 +295,8 @@
     "loadFailed": "加载运行列表失败",
     "loading": "回放加载中...",
     "timeline": "时间线",
-    "timelineRun": "时间线 · {{runId}}"
+    "timelineRun": "时间线 · {{runId}}",
+    "selectRun": "选择 Run"
   },
   "toast": {
     "diagnostics": "诊断信息",
@@ -311,6 +362,24 @@
     "noPermission": {
       "title": "无权限访问",
       "message": "你在当前工作区的角色不允许访问该页面。"
-    }
+    },
+    "logout": "退出",
+    "logoutSuccess": "已退出当前远端账号",
+    "logoutFailed": "退出失败",
+    "localAccount": "本地账户",
+    "extensions": "工作区扩展"
+  },
+  "conversation": {
+    "newThread": "新对话",
+    "inputPlaceholder": "描述你想完成的任务...",
+    "send": "发送",
+    "sending": "发送中...",
+    "startSuccess": "对话运行已启动",
+    "startFailed": "启动失败",
+    "modelRequired": "请先配置并选择模型",
+    "rename": "重命名",
+    "renameFailed": "重命名失败",
+    "noProjectTitle": "暂无项目",
+    "noProjectDescription": "请先在左侧创建一个项目，然后开始对话。"
   }
 }

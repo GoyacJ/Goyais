@@ -23,3 +23,8 @@ pub fn store_token(profile_id: String, token: String) -> Result<(), String> {
 pub fn load_token(profile_id: String) -> Result<Option<String>, String> {
     keychain::get_secret("com.goyais.hub.tokens", &profile_id)
 }
+
+#[command]
+pub fn delete_token(profile_id: String) -> Result<(), String> {
+    keychain::delete_secret("com.goyais.hub.tokens", &profile_id)
+}

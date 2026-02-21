@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { PROVIDER_ORDER, providerLabel, type ProviderKey } from "@/types/modelCatalog";
 import {
   selectCurrentPermissions,
   selectCurrentProfile,
@@ -38,7 +39,7 @@ export function ModelConfigsPage() {
   const modelConfigsClient = useMemo(() => getModelConfigsClient(currentProfile), [currentProfile]);
   const writable = canManageModelConfigs(workspaceKind, permissions);
 
-  const [provider, setProvider] = useState<"openai" | "anthropic">("openai");
+  const [provider, setProvider] = useState<ProviderKey>("openai");
   const [model, setModel] = useState("gpt-4.1-mini");
   const [baseUrl, setBaseUrl] = useState("");
   const [temperature, setTemperature] = useState("0");
@@ -197,11 +198,14 @@ export function ModelConfigsPage() {
               {t("models.provider")}
               <select
                 value={provider}
-                onChange={(event) => setProvider(event.target.value as "openai" | "anthropic")}
+                onChange={(event) => setProvider(event.target.value as ProviderKey)}
                 className="h-10 rounded-control border border-border bg-background px-2"
               >
-                <option value="openai">openai</option>
-                <option value="anthropic">anthropic</option>
+                {PROVIDER_ORDER.map((key) => (
+                  <option key={key} value={key}>
+                    {providerLabel(key)}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="grid gap-1 text-small text-muted-foreground">

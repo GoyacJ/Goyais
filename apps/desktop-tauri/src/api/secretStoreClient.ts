@@ -13,3 +13,9 @@ export async function loadToken(profileId: string): Promise<string | null> {
   });
   return token ?? null;
 }
+
+export async function deleteToken(profileId: string): Promise<void> {
+  await invoke("delete_token", {
+    profileId
+  });
+}

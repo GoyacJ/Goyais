@@ -13,3 +13,12 @@ pub fn get_secret(service: &str, account: &str) -> Result<Option<String>, String
         Err(error) => Err(error.to_string()),
     }
 }
+
+pub fn delete_secret(service: &str, account: &str) -> Result<(), String> {
+    let entry = Entry::new(service, account).map_err(|e| e.to_string())?;
+    match entry.delete_credential() {
+        Ok(()) => Ok(()),
+        Err(keyring::Error::NoEntry) => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}

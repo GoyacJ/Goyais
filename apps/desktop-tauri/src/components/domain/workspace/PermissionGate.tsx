@@ -17,10 +17,6 @@ interface PermissionGateProps {
 
 const ROUTE_PERMISSION_MAP: Record<string, string | undefined> = {
   "/": "run:create",
-  "/run": "run:create",
-  "/projects": "project:read",
-  "/models": "modelconfig:read",
-  "/replay": "run:read",
   "/settings": "workspace:read"
 };
 

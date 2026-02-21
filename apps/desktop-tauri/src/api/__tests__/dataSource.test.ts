@@ -7,7 +7,10 @@ const runtimeClientMock = vi.hoisted(() => ({
   listProjects: vi.fn(),
   createProject: vi.fn(),
   listModelConfigs: vi.fn(),
-  createModelConfig: vi.fn()
+  createModelConfig: vi.fn(),
+  updateModelConfig: vi.fn(),
+  deleteModelConfig: vi.fn(),
+  listModelCatalog: vi.fn()
 }));
 
 const hubClientMock = vi.hoisted(() => ({
@@ -17,7 +20,8 @@ const hubClientMock = vi.hoisted(() => ({
   listModelConfigs: vi.fn(),
   createModelConfig: vi.fn(),
   updateModelConfig: vi.fn(),
-  deleteModelConfig: vi.fn()
+  deleteModelConfig: vi.fn(),
+  listRuntimeModelCatalog: vi.fn()
 }));
 
 const secretStoreMock = vi.hoisted(() => ({
@@ -143,6 +147,26 @@ describe("dataSource", () => {
       expect.objectContaining({
         api_key: "sk-live-123"
       })
+    );
+  });
+
+  it("requests model catalog from runtime gateway for remote profile", async () => {
+    secretStoreMock.loadToken.mockResolvedValue("token-abc");
+    hubClientMock.listRuntimeModelCatalog.mockResolvedValue({
+      provider: "openai",
+      items: [],
+      fetched_at: "2026-02-20T00:00:00.000Z",
+      fallback_used: false
+    });
+
+    const client = getModelConfigsClient(makeRemoteProfile());
+    await client.listModels("mc-1");
+
+    expect(hubClientMock.listRuntimeModelCatalog).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787",
+      "token-abc",
+      "ws-1",
+      "mc-1"
     );
   });
 });

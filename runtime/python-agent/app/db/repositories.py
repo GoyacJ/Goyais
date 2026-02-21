@@ -145,6 +145,77 @@ class Repository:
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
+    async def list_sessions_by_project(self, project_id: str) -> list[dict[str, Any]]:
+        cursor = await self.conn.execute(
+            """
+            SELECT
+              s.session_id,
+              s.project_id,
+              s.title,
+              s.updated_at,
+              r.run_id AS last_run_id,
+              r.status AS last_status,
+              CASE
+                WHEN r.input IS NULL THEN NULL
+                ELSE substr(r.input, 1, 160)
+              END AS last_input_preview
+            FROM sessions s
+            LEFT JOIN runs r ON r.run_id = (
+              SELECT run_id
+              FROM runs
+              WHERE session_id = s.session_id
+              ORDER BY created_at DESC
+              LIMIT 1
+            )
+            WHERE s.project_id=?
+            ORDER BY s.updated_at DESC
+            """,
+            (project_id,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def create_session(self, session_id: str, project_id: str, title: str) -> dict[str, Any]:
+        await self.conn.execute(
+            """
+            INSERT INTO sessions(session_id, project_id, title, created_at, updated_at)
+            VALUES(?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+            """,
+            (session_id, project_id, title),
+        )
+        await self.conn.commit()
+        cursor = await self.conn.execute(
+            """
+            SELECT session_id, project_id, title, updated_at, NULL AS last_run_id, NULL AS last_status, NULL AS last_input_preview
+            FROM sessions
+            WHERE session_id=?
+            """,
+            (session_id,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else {}
+
+    async def rename_session(self, session_id: str, title: str) -> dict[str, Any] | None:
+        await self.conn.execute(
+            """
+            UPDATE sessions
+            SET title=?, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            WHERE session_id=?
+            """,
+            (title, session_id),
+        )
+        await self.conn.commit()
+        cursor = await self.conn.execute(
+            """
+            SELECT session_id, project_id, title, updated_at
+            FROM sessions
+            WHERE session_id=?
+            """,
+            (session_id,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
     async def get_run(self, run_id: str) -> dict[str, Any] | None:
         cursor = await self.conn.execute(
             """
@@ -196,7 +267,7 @@ class Repository:
     async def get_model_config(self, model_config_id: str) -> dict[str, Any] | None:
         cursor = await self.conn.execute(
             """
-            SELECT model_config_id, provider, model, base_url, temperature, max_tokens, secret_ref
+            SELECT model_config_id, provider, model, base_url, temperature, max_tokens, secret_ref, created_at, updated_at
             FROM model_configs
             WHERE model_config_id=?
             """,
@@ -206,6 +277,14 @@ class Repository:
         if row is None:
             return None
         return dict(row)
+
+    async def delete_model_config(self, model_config_id: str) -> bool:
+        cursor = await self.conn.execute(
+            "DELETE FROM model_configs WHERE model_config_id=?",
+            (model_config_id,),
+        )
+        await self.conn.commit()
+        return cursor.rowcount > 0
 
     async def insert_audit(
         self,

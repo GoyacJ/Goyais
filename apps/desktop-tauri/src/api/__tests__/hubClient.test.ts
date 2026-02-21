@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createModelConfig, getBootstrapStatus, getNavigation, listProjects } from "@/api/hubClient";
+import {
+  createModelConfig,
+  getBootstrapStatus,
+  getNavigation,
+  listProjects,
+  listRuntimeModelCatalog
+} from "@/api/hubClient";
 
 describe("hubClient", () => {
   afterEach(() => {
@@ -114,5 +120,32 @@ describe("hubClient", () => {
     expect(url).toBe("http://127.0.0.1:8787/v1/model-configs?workspace_id=ws-1");
     expect(requestInit.method).toBe("POST");
     expect(requestInit.body).toContain("sk-test");
+  });
+
+  it("requests runtime model catalog with workspace query", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          provider: "openai",
+          items: [],
+          fetched_at: "2026-02-20T00:00:00.000Z",
+          fallback_used: false
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json"
+          }
+        }
+      )
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await listRuntimeModelCatalog("http://127.0.0.1:8787", "token-abc", "ws-1", "mc-1");
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "http://127.0.0.1:8787/v1/runtime/model-configs/mc-1/models?workspace_id=ws-1"
+    );
   });
 });

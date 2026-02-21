@@ -40,10 +40,36 @@
   "settings": {
     "title": "Settings",
     "description": "Single-user sync and runtime preferences.",
+    "backToApp": "Back to app",
+    "sections": {
+      "general": "General",
+      "generalDescription": "Language and theme preferences",
+      "runtime": "Runtime",
+      "runtimeDescription": "Runtime endpoint and sync controls",
+      "models": "Models",
+      "modelsDescription": "Model configs and default model"
+    },
     "syncSection": "Sync",
     "languageSection": "Language",
     "languageLabel": "Language",
-    "languageHelp": "Choose your interface language."
+    "languageHelp": "Choose your interface language.",
+    "themeLabel": "Theme",
+    "theme": {
+      "dark": "Dark",
+      "light": "Light"
+    },
+    "runtimeUrlLabel": "Runtime URL",
+    "modelSectionDescription": "Manage model configs and set conversation default model.",
+    "defaultModel": "Default model",
+    "noDefaultModel": "No default model",
+    "themeDescription": "Switch between dark and light appearance.",
+    "runtimeUrlHelp": "Applied on blur or Enter. Must use http/https.",
+    "syncDescription": "Trigger a manual sync with current runtime context.",
+    "runtimeUrlInvalid": "Invalid runtime URL",
+    "defaultModelDescription": "Use this model config by default for new conversations.",
+    "saveState": {
+      "saving": "Saving..."
+    }
   },
   "run": {
     "defaultTask": "Rename README title to MVP-1 Demo",
@@ -192,7 +218,9 @@
       "settingsLabel": "Go to Settings",
       "settingsHint": "Runtime and sync",
       "themeDark": "Theme: Dark",
-      "themeLight": "Theme: Light"
+      "themeLight": "Theme: Light",
+      "conversationLabel": "Go to Conversation",
+      "conversationHint": "Open conversation home"
     }
   },
   "projects": {
@@ -202,6 +230,12 @@
     "workspacePath": "Workspace Path",
     "rootUri": "Remote Root URI",
     "create": "Create Project",
+    "addFromFolder": "Add from folder",
+    "addFromFile": "Add from file",
+    "pickFolderTitle": "Select project folder",
+    "pickFileTitle": "Select project file",
+    "pickerFailed": "Failed to open file picker",
+    "defaultName": "New Project",
     "delete": "Delete",
     "loading": "Loading projects...",
     "loadFailed": "Failed to load projects",
@@ -210,7 +244,8 @@
     "deleteSuccess": "Project deleted",
     "deleteFailed": "Delete project failed",
     "projectId": "id: {{id}}",
-    "remoteHint": "Remote workspace uses Hub server as authoritative project source."
+    "remoteHint": "Remote workspace uses Hub server as authoritative project source.",
+    "createDescription": "Create a project and open multiple conversations under it."
   },
   "models": {
     "title": "Model Configs",
@@ -236,7 +271,22 @@
     "deleteSuccess": "Model config deleted",
     "deleteFailed": "Delete failed",
     "remoteHint": "Remote model config API key is write-only and never returned by server.",
-    "secretRefLabel": "Secret Ref: {{secretRef}}"
+    "secretRefLabel": "Secret Ref: {{secretRef}}",
+    "add": "Add config",
+    "apiKeyPrompt": "Enter API Key for new model config",
+    "apiKeyRequired": "API key is required",
+    "modelConfigId": "Model Config ID: {{id}}",
+    "providerDescription": "Select model provider vendor.",
+    "catalogFallback": "Model list from snapshot",
+    "catalogLive": "Model list from provider",
+    "latest": "latest",
+    "baseUrlDescription": "Override API endpoint when needed.",
+    "temperatureDescription": "Range 0 to 2.",
+    "maxTokensDescription": "Positive integer only.",
+    "secretRefDescription": "Secret reference used by runtime.",
+    "apiKeyDescription": "Optional. Fill only when rotating key.",
+    "apiKeyPlaceholder": "Leave empty to keep current key",
+    "empty": "No model configs yet."
   },
   "replay": {
     "title": "Replay",
@@ -245,7 +295,8 @@
     "loadFailed": "Load runs failed",
     "loading": "Loading replay...",
     "timeline": "Timeline",
-    "timelineRun": "Timeline · {{runId}}"
+    "timelineRun": "Timeline · {{runId}}",
+    "selectRun": "Select run"
   },
   "toast": {
     "diagnostics": "Diagnostics",
@@ -311,6 +362,24 @@
     "noPermission": {
       "title": "No permission",
       "message": "Your role in this workspace does not allow this page."
-    }
+    },
+    "logout": "Log out",
+    "logoutSuccess": "Signed out from current remote account",
+    "logoutFailed": "Logout failed",
+    "localAccount": "Local account",
+    "extensions": "Workspace Extensions"
+  },
+  "conversation": {
+    "newThread": "New thread",
+    "inputPlaceholder": "Describe what you want to build...",
+    "send": "Send",
+    "sending": "Sending...",
+    "startSuccess": "Conversation run started",
+    "startFailed": "Failed to start conversation run",
+    "modelRequired": "Please configure and select a model first",
+    "rename": "Rename",
+    "renameFailed": "Rename failed",
+    "noProjectTitle": "No projects yet",
+    "noProjectDescription": "Create a project in the sidebar to start a conversation."
   }
 }

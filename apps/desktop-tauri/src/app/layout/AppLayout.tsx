@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 
+import { SettingsSidebar } from "@/app/layout/SettingsSidebar";
 import { Sidebar } from "@/app/layout/Sidebar";
-import { Topbar } from "@/app/layout/Topbar";
+import { StatusBar } from "@/app/layout/StatusBar";
 import { CommandPalette } from "@/components/domain/command/CommandPalette";
+import { cn } from "@/lib/cn";
 import { isEditableElement, isPaletteShortcut } from "@/lib/shortcuts";
-import { useUiStore } from "@/stores/uiStore";
+import { useSettingsStore } from "@/stores/settingsStore";
 
 export function AppLayout() {
-  const theme = useUiStore((state) => state.theme);
+  const location = useLocation();
+  const theme = useSettingsStore((state) => state.theme);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const isSettingsRoute = location.pathname === "/settings" || location.pathname.startsWith("/settings/");
 
   useEffect(() => {
     const root = document.documentElement;
@@ -36,12 +40,17 @@ export function AppLayout() {
 
   return (
     <div className="flex h-full bg-background text-foreground">
-      <Sidebar />
+      {isSettingsRoute ? <SettingsSidebar /> : <Sidebar />}
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar />
-        <main className="min-h-0 flex-1 overflow-auto p-page scrollbar-subtle">
+        <main
+          className={cn(
+            "min-h-0 flex-1 overflow-auto scrollbar-subtle",
+            isSettingsRoute ? "p-0" : "p-page"
+          )}
+        >
           <Outlet />
         </main>
+        <StatusBar />
       </div>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>

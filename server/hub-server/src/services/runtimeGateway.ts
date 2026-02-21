@@ -160,7 +160,7 @@ export async function resolveRuntimeForWorkspace(options: ResolveRuntimeOptions)
 interface ForwardRuntimeRequestOptions {
   runtimeBaseUrl: string;
   runtimePath: string;
-  method: "GET" | "POST";
+  method: "GET" | "POST" | "PATCH";
   userId: string;
   traceId: string;
   runtimeSharedSecret: string;

@@ -38,12 +38,19 @@ export interface RemoteNavigationBucket {
   feature_flags: Record<string, boolean>;
 }
 
+export interface RemoteUserProfile {
+  user_id: string;
+  email: string;
+  display_name: string;
+}
+
 interface WorkspaceStoreState {
   profiles: WorkspaceProfile[];
   currentProfileId: string;
   remoteWorkspacesByProfileId: Record<string, RemoteWorkspaceSummary[]>;
   remoteNavigationByWorkspaceKey: Record<string, RemoteNavigationBucket>;
   remoteNavigationLoadingByWorkspaceKey: Record<string, boolean>;
+  remoteUsersByProfileId: Record<string, RemoteUserProfile>;
   ensureLocalProfile: () => void;
   upsertRemoteProfile: (params: { serverUrl: string; name?: string }) => string;
   setCurrentProfile: (profileId: string) => void;
@@ -52,10 +59,25 @@ interface WorkspaceStoreState {
   setRemoteSelectedWorkspace: (profileId: string, workspaceId: string) => void;
   setRemoteNavigation: (profileId: string, workspaceId: string, bucket: RemoteNavigationBucket) => void;
   setRemoteNavigationLoading: (profileId: string, workspaceId: string, loading: boolean) => void;
+  setRemoteUser: (profileId: string, user: RemoteUserProfile) => void;
+  clearRemoteAuth: (profileId: string) => void;
 }
 
 const DEFAULT_LOCAL_PROFILE_ID = "local-default";
 const DEFAULT_LOCAL_ROOT = "/Users/goya/Repo/Git/Goyais";
+const LOCAL_PERMISSIONS: string[] = [
+  "workspace:read",
+  "workspace:manage",
+  "modelconfig:read",
+  "modelconfig:manage",
+  "project:read",
+  "project:write",
+  "run:create",
+  "run:read",
+  "confirm:write",
+  "audit:read"
+];
+const EMPTY_PERMISSIONS: string[] = [];
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -85,6 +107,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
       remoteWorkspacesByProfileId: {},
       remoteNavigationByWorkspaceKey: {},
       remoteNavigationLoadingByWorkspaceKey: {},
+      remoteUsersByProfileId: {},
       ensureLocalProfile: () => {
         const hasLocal = get().profiles.some((profile) => profile.kind === "local");
         if (hasLocal) {
@@ -214,6 +237,55 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
             [key]: loading
           }
         }));
+      },
+      setRemoteUser: (profileId, user) => {
+        set((state) => ({
+          remoteUsersByProfileId: {
+            ...state.remoteUsersByProfileId,
+            [profileId]: user
+          }
+        }));
+      },
+      clearRemoteAuth: (profileId) => {
+        set((state) => {
+          const profile = state.profiles.find((item) => item.id === profileId);
+          const selectedWorkspaceId =
+            profile?.kind === "remote" ? profile.remote?.selectedWorkspaceId : undefined;
+          const nextUsers = { ...state.remoteUsersByProfileId };
+          const nextWorkspaces = { ...state.remoteWorkspacesByProfileId };
+          const nextNavigation = { ...state.remoteNavigationByWorkspaceKey };
+          const nextLoading = { ...state.remoteNavigationLoadingByWorkspaceKey };
+          delete nextUsers[profileId];
+          delete nextWorkspaces[profileId];
+          if (selectedWorkspaceId) {
+            const key = makeWorkspaceKey(profileId, selectedWorkspaceId);
+            delete nextNavigation[key];
+            delete nextLoading[key];
+          }
+
+          return {
+            profiles: state.profiles.map((item) => {
+              if (item.id !== profileId || item.kind !== "remote" || !item.remote) {
+                return item;
+              }
+              return {
+                ...item,
+                remote: {
+                  ...item.remote,
+                  selectedWorkspaceId: undefined
+                }
+              };
+            }),
+            currentProfileId:
+              state.currentProfileId === profileId
+                ? state.profiles.find((item) => item.kind === "local")?.id ?? state.currentProfileId
+                : state.currentProfileId,
+            remoteUsersByProfileId: nextUsers,
+            remoteWorkspacesByProfileId: nextWorkspaces,
+            remoteNavigationByWorkspaceKey: nextNavigation,
+            remoteNavigationLoadingByWorkspaceKey: nextLoading
+          };
+        });
       }
     }),
     {
@@ -223,7 +295,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
         profiles: state.profiles,
         currentProfileId: state.currentProfileId,
         remoteWorkspacesByProfileId: state.remoteWorkspacesByProfileId,
-        remoteNavigationByWorkspaceKey: state.remoteNavigationByWorkspaceKey
+        remoteNavigationByWorkspaceKey: state.remoteNavigationByWorkspaceKey,
+        remoteUsersByProfileId: state.remoteUsersByProfileId
       })
     }
   )
@@ -266,21 +339,10 @@ export function selectCurrentNavigation(state: WorkspaceStoreState): RemoteNavig
 
 export function selectCurrentPermissions(state: WorkspaceStoreState): string[] {
   if (selectCurrentWorkspaceKind(state) === "local") {
-    return [
-      "workspace:read",
-      "workspace:manage",
-      "modelconfig:read",
-      "modelconfig:manage",
-      "project:read",
-      "project:write",
-      "run:create",
-      "run:read",
-      "confirm:write",
-      "audit:read"
-    ];
+    return LOCAL_PERMISSIONS;
   }
 
-  return selectCurrentNavigation(state)?.permissions ?? [];
+  return selectCurrentNavigation(state)?.permissions ?? EMPTY_PERMISSIONS;
 }
 
 useWorkspaceStore.getState().ensureLocalProfile();

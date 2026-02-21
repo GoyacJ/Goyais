@@ -67,6 +67,9 @@ export interface RunDataSource {
   createRun: (payload: runtimeClient.RunCreateRequest) => Promise<{ run_id: string }>;
   confirmToolCall: (runId: string, callId: string, approved: boolean) => Promise<void>;
   listRuns: (sessionId: string) => Promise<{ runs: Array<Record<string, string>> }>;
+  listSessions: (projectId: string) => Promise<{ sessions: runtimeClient.RuntimeSessionSummary[] }>;
+  createSession: (payload: { project_id: string; title?: string }) => Promise<{ session: runtimeClient.RuntimeSessionSummary }>;
+  renameSession: (sessionId: string, title: string) => Promise<{ session: runtimeClient.RuntimeSessionSummary }>;
   replayRunEvents: (runId: string) => Promise<{ events: EventEnvelope[] }>;
   runtimeHealth: () => Promise<{ ok: boolean }>;
   subscribeRunEvents: (
@@ -83,6 +86,9 @@ export function getRunDataSource(profile: WorkspaceProfile | undefined): RunData
       createRun: (payload) => runtimeClient.createRun(payload),
       confirmToolCall: (runId, callId, approved) => runtimeClient.confirmToolCall(runId, callId, approved),
       listRuns: (sessionId) => runtimeClient.listRuns(sessionId),
+      listSessions: (projectId) => runtimeClient.listSessions(projectId),
+      createSession: (payload) => runtimeClient.createSession(payload),
+      renameSession: (sessionId, title) => runtimeClient.renameSession(sessionId, title),
       replayRunEvents: (runId) => runtimeClient.replayRunEvents(runId),
       runtimeHealth: () => runtimeClient.runtimeHealth(),
       subscribeRunEvents: (runId, onEvent) => {
@@ -109,6 +115,18 @@ export function getRunDataSource(profile: WorkspaceProfile | undefined): RunData
     listRuns: async (sessionId) => {
       const remote = await resolveRemoteContext(profile);
       return runtimeGatewayClient.listRuns(remote.serverUrl, remote.token, remote.workspaceId, sessionId);
+    },
+    listSessions: async (projectId) => {
+      const remote = await resolveRemoteContext(profile);
+      return runtimeGatewayClient.listSessions(remote.serverUrl, remote.token, remote.workspaceId, projectId);
+    },
+    createSession: async (payload) => {
+      const remote = await resolveRemoteContext(profile);
+      return runtimeGatewayClient.createSession(remote.serverUrl, remote.token, remote.workspaceId, payload);
+    },
+    renameSession: async (sessionId, title) => {
+      const remote = await resolveRemoteContext(profile);
+      return runtimeGatewayClient.renameSession(remote.serverUrl, remote.token, remote.workspaceId, sessionId, title);
     },
     replayRunEvents: async (runId) => {
       const remote = await resolveRemoteContext(profile);

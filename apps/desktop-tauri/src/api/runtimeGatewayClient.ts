@@ -1,4 +1,5 @@
 import { normalizeHttpError, normalizeUnknownError } from "@/lib/api-error";
+import type { ModelCatalogResponse } from "@/types/modelCatalog";
 import type { EventEnvelope } from "@/types/generated";
 
 function normalizeServerUrl(serverUrl: string): string {
@@ -58,6 +59,16 @@ export interface RuntimeGatewayRunCreateRequest {
     use_worktree: boolean;
     run_tests?: string;
   };
+}
+
+export interface RuntimeGatewaySessionSummary {
+  session_id: string;
+  project_id: string;
+  title: string;
+  updated_at: string;
+  last_run_id?: string;
+  last_status?: string;
+  last_input_preview?: string;
 }
 
 export function createRun(
@@ -120,6 +131,56 @@ export function runtimeHealth(
   workspaceId: string
 ): Promise<{ runtime_status: string; upstream: { ok: boolean } }> {
   return requestJson(serverUrl, token, workspaceId, "/health");
+}
+
+export function listSessions(
+  serverUrl: string,
+  token: string,
+  workspaceId: string,
+  projectId: string
+): Promise<{ sessions: RuntimeGatewaySessionSummary[] }> {
+  return requestJson(serverUrl, token, workspaceId, `/sessions?project_id=${encodeURIComponent(projectId)}`);
+}
+
+export function createSession(
+  serverUrl: string,
+  token: string,
+  workspaceId: string,
+  payload: { project_id: string; title?: string }
+): Promise<{ session: RuntimeGatewaySessionSummary }> {
+  return requestJson(serverUrl, token, workspaceId, "/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
+export function renameSession(
+  serverUrl: string,
+  token: string,
+  workspaceId: string,
+  sessionId: string,
+  title: string
+): Promise<{ session: RuntimeGatewaySessionSummary }> {
+  return requestJson(serverUrl, token, workspaceId, `/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title })
+  });
+}
+
+export function listModelCatalog(
+  serverUrl: string,
+  token: string,
+  workspaceId: string,
+  modelConfigId: string
+): Promise<ModelCatalogResponse> {
+  return requestJson(
+    serverUrl,
+    token,
+    workspaceId,
+    `/model-configs/${encodeURIComponent(modelConfigId)}/models`
+  );
 }
 
 function parseSseData(buffer: string, onEvent: (event: EventEnvelope) => void): string {

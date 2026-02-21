@@ -232,6 +232,106 @@ describe("runtime proxy auth and permission enforcement", () => {
     });
   });
 
+  it("requires run:read for sessions listing", async () => {
+    const { token, userId, workspaceId } = await buildAppAndLogin();
+    const membership = db!.getMembershipRole(userId, workspaceId);
+    expect(membership).toBeTruthy();
+    db!.execute("DELETE FROM role_permissions WHERE role_id = ? AND perm_key = 'run:read'", membership!.role_id);
+
+    const response = await app!.inject({
+      method: "GET",
+      url: `/v1/runtime/sessions?workspace_id=${workspaceId}&project_id=project-demo`,
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "E_FORBIDDEN",
+        details: {
+          perm_key: "run:read"
+        }
+      }
+    });
+  });
+
+  it("requires modelconfig:read for runtime model catalog listing", async () => {
+    const { token, userId, workspaceId } = await buildAppAndLogin();
+    const membership = db!.getMembershipRole(userId, workspaceId);
+    expect(membership).toBeTruthy();
+    db!.execute("DELETE FROM role_permissions WHERE role_id = ? AND perm_key = 'modelconfig:read'", membership!.role_id);
+
+    const response = await app!.inject({
+      method: "GET",
+      url: `/v1/runtime/model-configs/model-config-1/models?workspace_id=${workspaceId}`,
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({
+      error: {
+        code: "E_FORBIDDEN",
+        details: {
+          perm_key: "modelconfig:read"
+        }
+      }
+    });
+  });
+
+  it("requires run:create for session create and rename", async () => {
+    const { token, userId, workspaceId } = await buildAppAndLogin();
+    const membership = db!.getMembershipRole(userId, workspaceId);
+    expect(membership).toBeTruthy();
+    db!.execute("DELETE FROM role_permissions WHERE role_id = ? AND perm_key = 'run:create'", membership!.role_id);
+
+    const createResponse = await app!.inject({
+      method: "POST",
+      url: `/v1/runtime/sessions?workspace_id=${workspaceId}`,
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      payload: {
+        project_id: "project-demo",
+        title: "New thread"
+      }
+    });
+
+    expect(createResponse.statusCode).toBe(403);
+    expect(createResponse.json()).toMatchObject({
+      error: {
+        code: "E_FORBIDDEN",
+        details: {
+          perm_key: "run:create"
+        }
+      }
+    });
+
+    const renameResponse = await app!.inject({
+      method: "PATCH",
+      url: `/v1/runtime/sessions/session-1?workspace_id=${workspaceId}`,
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      payload: {
+        title: "Renamed thread"
+      }
+    });
+
+    expect(renameResponse.statusCode).toBe(403);
+    expect(renameResponse.json()).toMatchObject({
+      error: {
+        code: "E_FORBIDDEN",
+        details: {
+          perm_key: "run:create"
+        }
+      }
+    });
+  });
+
   it("requires confirm:write for tool confirmations (no run:create fallback)", async () => {
     const { token, userId, workspaceId } = await buildAppAndLogin();
     const membership = db!.getMembershipRole(userId, workspaceId);

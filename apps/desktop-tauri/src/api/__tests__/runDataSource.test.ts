@@ -7,6 +7,9 @@ const runtimeClientMock = vi.hoisted(() => ({
   createRun: vi.fn(),
   confirmToolCall: vi.fn(),
   listRuns: vi.fn(),
+  listSessions: vi.fn(),
+  createSession: vi.fn(),
+  renameSession: vi.fn(),
   replayRunEvents: vi.fn(),
   runtimeHealth: vi.fn(),
   subscribeRunEvents: vi.fn()
@@ -16,6 +19,9 @@ const runtimeGatewayClientMock = vi.hoisted(() => ({
   createRun: vi.fn(),
   confirmToolCall: vi.fn(),
   listRuns: vi.fn(),
+  listSessions: vi.fn(),
+  createSession: vi.fn(),
+  renameSession: vi.fn(),
   replayRunEvents: vi.fn(),
   runtimeHealth: vi.fn(),
   subscribeRunEvents: vi.fn()
@@ -119,6 +125,52 @@ describe("runDataSource", () => {
       "run-7",
       "call-9",
       true
+    );
+  });
+
+  it("routes session list/create/rename through the active data source", async () => {
+    secretStoreMock.loadToken.mockResolvedValue("token-sessions");
+    runtimeGatewayClientMock.listSessions.mockResolvedValue({ sessions: [] });
+    runtimeGatewayClientMock.createSession.mockResolvedValue({
+      session: {
+        session_id: "s1",
+        project_id: "p1",
+        title: "Thread",
+        updated_at: "2026-02-20T00:00:00.000Z"
+      }
+    });
+    runtimeGatewayClientMock.renameSession.mockResolvedValue({
+      session: {
+        session_id: "s1",
+        project_id: "p1",
+        title: "Renamed",
+        updated_at: "2026-02-20T00:00:00.000Z"
+      }
+    });
+
+    const source = getRunDataSource(makeRemoteProfile());
+    await source.listSessions("p1");
+    await source.createSession({ project_id: "p1", title: "Thread" });
+    await source.renameSession("s1", "Renamed");
+
+    expect(runtimeGatewayClientMock.listSessions).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787",
+      "token-sessions",
+      "ws-1",
+      "p1"
+    );
+    expect(runtimeGatewayClientMock.createSession).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787",
+      "token-sessions",
+      "ws-1",
+      { project_id: "p1", title: "Thread" }
+    );
+    expect(runtimeGatewayClientMock.renameSession).toHaveBeenCalledWith(
+      "http://127.0.0.1:8787",
+      "token-sessions",
+      "ws-1",
+      "s1",
+      "Renamed"
     );
   });
 });

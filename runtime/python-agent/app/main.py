@@ -8,7 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import diagnostics, model_configs, ops, projects, replay, runs, secrets, sync_client, system_events, tool_confirmations
+from app.api import diagnostics, model_configs, ops, projects, replay, runs, secrets, sessions, sync_client, system_events, tool_confirmations
 from app.config import load_settings
 from app.context import set_current_user_id
 from app.deps import set_dependencies
@@ -134,6 +134,7 @@ app.include_router(runs.router)
 app.include_router(tool_confirmations.router)
 app.include_router(projects.router)
 app.include_router(model_configs.router)
+app.include_router(sessions.router)
 app.include_router(replay.router)
 app.include_router(ops.router)
 app.include_router(diagnostics.router)
