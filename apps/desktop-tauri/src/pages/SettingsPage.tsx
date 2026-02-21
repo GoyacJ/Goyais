@@ -38,6 +38,7 @@ import {
 import {
   PROVIDER_METADATA,
   PROVIDER_ORDER,
+  type ModelCatalogItem,
   type ProviderKey,
   providerLabel
 } from "@/types/modelCatalog";
@@ -194,6 +195,18 @@ export function buildModelSuggestions(modelConfigs: DataModelConfig[], provider:
       .map((item) => item.model.trim())
       .filter(Boolean)
   )].sort((left, right) => left.localeCompare(right));
+}
+
+function normalizeModelId(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+export function isModelAvailableInCatalog(model: string, items: Pick<ModelCatalogItem, "model_id">[]): boolean {
+  const configuredModelId = normalizeModelId(model);
+  if (!configuredModelId) {
+    return false;
+  }
+  return items.some((item) => normalizeModelId(item.model_id) === configuredModelId);
 }
 
 function formatOptionalNumber(value: number | null): string {
@@ -377,6 +390,7 @@ export function SettingsPage() {
   const [editDraft, setEditDraft] = useState<EditModelDraft>(() => defaultModelDraft());
   const [editState, setEditState] = useState<RowSaveState>("idle");
   const [editHint, setEditHint] = useState<string | undefined>(undefined);
+  const [checkingModelConfigId, setCheckingModelConfigId] = useState<string | null>(null);
 
   useEffect(() => {
     const valid = ["general", "runtime", "models", "skills", "mcp"];
@@ -559,6 +573,46 @@ export function SettingsPage() {
       }
     },
     [addToast, defaultModelConfigId, modelConfigsClient, refreshModelConfigs, setDefaultModelConfigId, t, writable]
+  );
+
+  const onConnectModel = useCallback(
+    async (item: DataModelConfig) => {
+      if (!modelConfigsClient.supportsModelCatalog || checkingModelConfigId) {
+        return;
+      }
+
+      setCheckingModelConfigId(item.model_config_id);
+      try {
+        const catalog = await modelConfigsClient.listModels(item.model_config_id);
+        const catalogItems = Array.isArray(catalog.items) ? catalog.items : [];
+        const available = isModelAvailableInCatalog(item.model, catalogItems);
+        if (available) {
+          addToast({
+            title: t("models.connectSuccess"),
+            description: `${providerLabel(item.provider)}: ${item.model}`,
+            variant: "success"
+          });
+          return;
+        }
+
+        addToast({
+          title: t("models.connectUnavailable"),
+          description: t("models.connectUnavailableDescription", { model: item.model }),
+          variant: "warning"
+        });
+      } catch (error) {
+        const message = (error as Error).message;
+        addToast({
+          title: t("models.connectFailed"),
+          description: message,
+          diagnostic: message,
+          variant: "error"
+        });
+      } finally {
+        setCheckingModelConfigId(null);
+      }
+    },
+    [addToast, checkingModelConfigId, modelConfigsClient, t]
   );
 
   const sectionMeta = useMemo(
@@ -779,6 +833,18 @@ export function SettingsPage() {
                                 onClick={() => onOpenEditModelDialog(item)}
                               >
                                 {t("models.edit")}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={!modelConfigsClient.supportsModelCatalog || checkingModelConfigId !== null}
+                                onClick={() => void onConnectModel(item)}
+                              >
+                                {checkingModelConfigId === item.model_config_id ? (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : null}
+                                {t("models.connect")}
                               </Button>
                               <Button
                                 type="button"

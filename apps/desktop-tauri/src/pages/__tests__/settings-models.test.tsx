@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { DataModelConfig } from "@/api/dataSource";
 import {
   buildModelSuggestions,
+  isModelAvailableInCatalog,
   SETTINGS_MODEL_LIST_COLUMNS,
   SETTINGS_MODEL_VISIBLE_FIELDS
 } from "@/pages/SettingsPage";
@@ -40,5 +41,20 @@ describe("settings model fields", () => {
       "gpt-5",
       "gpt-5-mini"
     ]);
+  });
+
+  it("matches configured model against catalog model_id case-insensitively", () => {
+    expect(
+      isModelAvailableInCatalog("GPT-5-mini ", [
+        { model_id: "gpt-5" },
+        { model_id: "gpt-5-mini" }
+      ])
+    ).toBe(true);
+    expect(
+      isModelAvailableInCatalog("gpt-4.1", [
+        { model_id: "gpt-5" },
+        { model_id: "gpt-5-mini" }
+      ])
+    ).toBe(false);
   });
 });
