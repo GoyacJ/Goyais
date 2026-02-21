@@ -11,7 +11,7 @@ class _DummyRepo:
 
 
 class _DummyReporter:
-    def __init__(self, *args, **kwargs) -> None:  # noqa: D401, ANN002, ANN003
+    def __init__(self, *args, **kwargs) -> None:
         del args, kwargs
 
     def start(self) -> None:
@@ -20,7 +20,7 @@ class _DummyReporter:
     async def stop(self) -> None:
         return None
 
-    async def report(self, event_type: str, payload: dict) -> dict:  # noqa: ANN001
+    async def report(self, event_type: str, payload: dict) -> dict:
         return {"type": event_type, "payload": payload}
 
 
@@ -37,13 +37,13 @@ async def test_execute_uses_worktree_root_when_enabled(monkeypatch: pytest.Monke
 
     monkeypatch.setattr(execution_service_module.WorktreeManager, "create", classmethod(fake_create))
 
-    async def fake_execute_mock(self, execution_id: str, context: dict, workspace_path: str, reporter) -> None:  # noqa: ANN001
+    async def fake_execute_agent(self, execution_id: str, context: dict, workspace_path: str, reporter) -> None:
         del self, execution_id, context, reporter
         captured["workspace_path"] = workspace_path
 
-    monkeypatch.setattr(ExecutionService, "_execute_mock", fake_execute_mock)
+    monkeypatch.setattr(ExecutionService, "_execute_agent", fake_execute_agent)
 
-    service = ExecutionService(repo=_DummyRepo(), agent_mode="mock")
+    service = ExecutionService(repo=_DummyRepo(), agent_mode="vanilla")
     await service.execute(
         {
             "execution_id": "e1",
@@ -66,19 +66,19 @@ async def test_execute_uses_repo_root_when_worktree_disabled(monkeypatch: pytest
 
     monkeypatch.setattr(execution_service_module, "HubReporter", _DummyReporter)
 
-    async def fake_create(cls, repo_root: str, execution_id: str) -> str:  # pragma: no cover - should not run
+    async def fake_create(cls, repo_root: str, execution_id: str) -> str:  # pragma: no cover
         del cls, repo_root, execution_id
         raise AssertionError("WorktreeManager.create should not be called when use_worktree is false")
 
     monkeypatch.setattr(execution_service_module.WorktreeManager, "create", classmethod(fake_create))
 
-    async def fake_execute_mock(self, execution_id: str, context: dict, workspace_path: str, reporter) -> None:  # noqa: ANN001
+    async def fake_execute_agent(self, execution_id: str, context: dict, workspace_path: str, reporter) -> None:
         del self, execution_id, context, reporter
         captured["workspace_path"] = workspace_path
 
-    monkeypatch.setattr(ExecutionService, "_execute_mock", fake_execute_mock)
+    monkeypatch.setattr(ExecutionService, "_execute_agent", fake_execute_agent)
 
-    service = ExecutionService(repo=_DummyRepo(), agent_mode="mock")
+    service = ExecutionService(repo=_DummyRepo(), agent_mode="vanilla")
     await service.execute(
         {
             "execution_id": "e2",

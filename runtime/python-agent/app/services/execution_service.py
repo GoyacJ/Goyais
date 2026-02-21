@@ -1,41 +1,41 @@
 """
-execution_service.py — v0.2.0 受控 Worker 执行服务
+execution_service.py — v0.3.0 Agentic Worker
 
-替代旧执行编排实现。Worker 不再自治管理 session/execution，
-而是接受 Hub 调度，执行 agent，通过 HubReporter 上报事件。
+Replaces the old linear plan→patch pipeline with a true agentic loop.
+The LLM calls tools autonomously, receives results, and loops until done.
 
-关键改变：
-- 接收 ExecutionContext（来自 Hub POST /internal/executions）
-- 通过 HubReporter 上报事件，不使用本地 EventBus
-- 执行结束时发送 done 事件，由 Hub 负责清理 session mutex
+Two backends switchable via GOYAIS_AGENT_MODE:
+  - "vanilla"   (default): pure asyncio while-loop (app/agent/loop.py)
+  - "langgraph"           : LangGraph ReAct StateGraph
+
+Preserved from v0.2.0:
+  - HubReporter event protocol
+  - WorktreeManager git isolation
+  - receive_confirmation() / _wait_for_confirmation() asyncio.Future flow
+  - _await_plan_confirmation() plan approval
+  - _resolve_provider() / _resolve_secret() key resolution
+  - Error handling / done event shape
 """
 from __future__ import annotations
 
 import asyncio
 import json
 import os
+import uuid
 from typing import Any
 
-from app.agent.graph_agent import AgentState, build_graph, build_plan_with_deepagents
-from app.agent.mock_agent import build_mock_plan, compute_readme_patch, new_call_id
-from app.agent.prompts import (
-    PATCH_SYSTEM_PROMPT,
-    PLAN_SYSTEM_PROMPT,
-    build_patch_prompt,
-    build_plan_prompt,
-)
+from app.agent.loop import LoopCallbacks, agent_loop
+from app.agent.messages import Message, ToolCall
 from app.agent.provider_router import build_provider
-from app.agent.providers.base import ProviderRequest
+from app.agent.system_prompts import build_system_prompt
+from app.agent.tool_registry import ToolRegistry, build_builtin_tools
 from app.db.repositories import Repository
-from app.errors import build_goyais_error, error_from_exception
+from app.errors import error_from_exception
 from app.observability.logging import get_runtime_logger
 from app.services.hub_reporter import HubReporter
 from app.services.secret_resolver import resolve_secret_via_hub
+from app.services.tool_injector import ToolInjector
 from app.services.worktree_manager import WorktreeManager
-from app.tools.file_tools import read_file
-from app.tools.patch_tools import apply_patch
-from app.tools.policy import requires_confirmation
-from unidiff import PatchSet
 
 logger = get_runtime_logger()
 
@@ -48,18 +48,14 @@ class PlanRejectedError(Exception):
 
 class ExecutionService:
     """
-    受控 Worker：接收 Hub 调度的 ExecutionContext，执行 agent，
-    通过 HubReporter 上报事件流。
-
-    每次 execute() 调用对应 Hub 侧一个 execution 记录。
+    Controlled Worker: receives Hub-scheduled ExecutionContext, runs the
+    agentic loop, and streams events back via HubReporter.
     """
 
     def __init__(self, *, repo: Repository, agent_mode: str) -> None:
         self.repo = repo
-        self.agent_mode = agent_mode
-        # execution_id → HubReporter
+        self.agent_mode = agent_mode  # "vanilla" | "langgraph"
         self._reporters: dict[str, HubReporter] = {}
-        # execution_id → confirmation futures
         self._confirmation_futures: dict[str, asyncio.Future] = {}
 
     async def execute(self, context: dict[str, Any]) -> None:
@@ -85,11 +81,7 @@ class ExecutionService:
             if use_worktree:
                 workspace_path = await WorktreeManager.create(repo_root, execution_id)
 
-            if self.agent_mode in {"graph", "deepagents"}:
-                await self._execute_graph(execution_id, context, workspace_path, reporter)
-            else:
-                await self._execute_mock(execution_id, context, workspace_path, reporter)
-
+            await self._execute_agent(execution_id, context, workspace_path, reporter)
             await reporter.report("done", {"status": "completed", "message": "execution finished"})
 
         except PlanRejectedError:
@@ -112,130 +104,158 @@ class ExecutionService:
         if fut and not fut.done():
             fut.set_result(approved)
 
-    # ------------------------------------------------------------------ graph
+    # ------------------------------------------------------------------ core
 
-    async def _execute_graph(
+    async def _execute_agent(
         self,
         execution_id: str,
         context: dict[str, Any],
         workspace_path: str,
         reporter: HubReporter,
     ) -> None:
-        provider, model_config, api_key = await self._resolve_provider(context)
+        provider, model_config, _ = await self._resolve_provider(context)
+        model = str(model_config["model"])
+        mode = context.get("mode", "auto")
 
-        read_call_id = new_call_id()
-        await self._emit_tool_call(execution_id, read_call_id, "read_file", {"path": "README.md"}, False, reporter)
+        # Build tool registry
+        registry = ToolRegistry()
+        for td in build_builtin_tools(workspace_path):
+            registry.register(td)
+
+        # Inject Hub Skills / MCP tools
         try:
-            readme_content = read_file(workspace_path, "README.md")
-            await self._emit_tool_result(execution_id, read_call_id, ok=True, output={"content_preview": readme_content[:200]}, reporter=reporter)
+            injector = ToolInjector(self._hub_base_url(), self._hub_secret())
+            hub_tools = await injector.resolve_tools(context)
+            for td in hub_tools:
+                registry.register(td)
         except Exception as exc:  # noqa: BLE001
-            await self._emit_tool_result(execution_id, read_call_id, ok=False, exc=exc, reporter=reporter)
-            raise
+            logger.warning("tool injection failed, continuing without hub tools: %s", exc)
 
-        async def plan_builder(state: AgentState) -> dict[str, Any]:
-            return await self._generate_plan(
-                task_input=state.task_input,
-                readme_content=state.readme_content,
-                model_config=model_config,
-                provider=provider,
-                api_key=api_key,
-            )
-
-        async def patch_builder(state: AgentState) -> str:
-            return await self._generate_patch(
-                workspace_path=state.workspace_path,
-                task_input=state.task_input,
-                readme_content=state.readme_content,
-                model_config=model_config,
-                provider=provider,
-            )
-
-        compiled = build_graph(plan_builder=plan_builder, patch_builder=patch_builder)
-        state = AgentState(
-            task_input=context["user_message"],
+        # Build system prompt
+        system_prompt = build_system_prompt(
+            mode=mode,
             workspace_path=workspace_path,
-            readme_content=readme_content,
+            tool_registry=registry,
         )
-        result = await compiled.ainvoke(state)
-        plan_payload = result.plan or build_mock_plan(context["user_message"])
-        patch = result.patch or compute_readme_patch(workspace_path, context["user_message"])
 
-        await reporter.report("plan", plan_payload)
+        user_msg = context["user_message"]
 
-        if context.get("mode") == "plan":
-            await self._await_plan_confirmation(execution_id, context, plan_payload, reporter)
-
-        await self._emit_patch_flow(execution_id, context, workspace_path, patch, reporter)
-
-    # ------------------------------------------------------------------ mock
-
-    async def _execute_mock(
-        self,
-        execution_id: str,
-        context: dict[str, Any],
-        workspace_path: str,
-        reporter: HubReporter,
-    ) -> None:
-        plan_payload = build_mock_plan(context["user_message"])
-        await reporter.report("plan", plan_payload)
-
-        if context.get("mode") == "plan":
-            await self._await_plan_confirmation(execution_id, context, plan_payload, reporter)
-
-        read_call_id = new_call_id()
-        await self._emit_tool_call(execution_id, read_call_id, "read_file", {"path": "README.md"}, False, reporter)
-        try:
-            content = read_file(workspace_path, "README.md")
-            await self._emit_tool_result(execution_id, read_call_id, ok=True, output={"content_preview": content[:200]}, reporter=reporter)
-        except Exception as exc:  # noqa: BLE001
-            await self._emit_tool_result(execution_id, read_call_id, ok=False, exc=exc, reporter=reporter)
-            raise
-
-        patch = compute_readme_patch(workspace_path, context["user_message"])
-        await self._emit_patch_flow(execution_id, context, workspace_path, patch, reporter)
-
-    # ------------------------------------------------------------------ patch flow
-
-    async def _emit_patch_flow(
-        self,
-        execution_id: str,
-        context: dict[str, Any],
-        workspace_path: str,
-        patch: str,
-        reporter: HubReporter,
-    ) -> None:
-        await reporter.report("patch", {"unified_diff": patch})
-
-        apply_call_id = new_call_id()
-        must_confirm = requires_confirmation("apply_patch")
-        await self._emit_tool_call(execution_id, apply_call_id, "apply_patch", {"unified_diff": patch[:200]}, must_confirm, reporter)
-
-        approved = True
-        if must_confirm:
-            approved = await self._wait_for_confirmation(execution_id, apply_call_id)
-
-        if not approved:
-            await self._emit_tool_result(
-                execution_id, apply_call_id, ok=False,
-                error=build_goyais_error(
-                    code="E_TOOL_DENIED",
-                    message="User denied apply_patch confirmation.",
-                    trace_id=context.get("trace_id", ""),
-                    retryable=False,
-                    cause="user_denied",
-                ),
-                reporter=reporter,
+        if self.agent_mode == "langgraph":
+            await self._run_langgraph(
+                execution_id, context, provider, model,
+                registry, system_prompt, user_msg, reporter,
             )
-            return
+        else:
+            await self._run_vanilla(
+                execution_id, context, provider, model,
+                registry, system_prompt, user_msg, reporter,
+            )
 
-        try:
-            output = apply_patch(workspace_path, patch)
-            await self._emit_tool_result(execution_id, apply_call_id, ok=True, output={"message": output}, reporter=reporter)
-        except Exception as exc:  # noqa: BLE001
-            await self._emit_tool_result(execution_id, apply_call_id, ok=False, exc=exc, reporter=reporter)
-            raise
+    # ------------------------------------------------------------------ vanilla
 
-    # ------------------------------------------------------------------ helpers
+    async def _run_vanilla(
+        self,
+        execution_id: str,
+        context: dict[str, Any],
+        provider: Any,
+        model: str,
+        registry: ToolRegistry,
+        system_prompt: str,
+        user_msg: str,
+        reporter: HubReporter,
+    ) -> None:
+        messages: list[Message] = [Message(role="user", content=user_msg)]
+        callbacks = self._build_callbacks(execution_id, reporter)
+
+        if context.get("mode") == "plan":
+            plan_response = await agent_loop(
+                provider=provider,
+                model=model,
+                system_prompt=system_prompt,
+                messages=messages,
+                tools=registry,
+                callbacks=callbacks,
+            )
+            plan_payload = {
+                "summary": plan_response.text[:400],
+                "full_text": plan_response.text,
+            }
+            await reporter.report("plan", plan_payload)
+            await self._await_plan_confirmation(execution_id, context, plan_payload, reporter)
+            messages.append(Message(role="user", content="Plan approved. Now implement it."))
+
+        await agent_loop(
+            provider=provider,
+            model=model,
+            system_prompt=system_prompt,
+            messages=messages,
+            tools=registry,
+            callbacks=callbacks,
+        )
+
+    # ------------------------------------------------------------------ langgraph
+
+    async def _run_langgraph(
+        self,
+        execution_id: str,
+        context: dict[str, Any],
+        provider: Any,
+        model: str,
+        registry: ToolRegistry,
+        system_prompt: str,
+        user_msg: str,
+        reporter: HubReporter,
+    ) -> None:
+        from langchain_core.messages import HumanMessage
+
+        from app.agent.langgraph_graph import build_react_graph
+
+        graph = build_react_graph()
+
+        lg_config: dict[str, Any] = {"configurable": {
+            "provider": provider,
+            "model": model,
+            "system_prompt": system_prompt,
+            "tool_registry": registry,
+            "reporter": reporter,
+            "execution_id": execution_id,
+            "confirmation_handler": lambda tc: self._wait_for_tool_confirmation(execution_id, tc),
+        }}
+
+        initial_state: dict[str, Any] = {
+            "messages": [HumanMessage(content=user_msg)],
+            "workspace_path": context.get("repo_root", ""),
+            "mode": context.get("mode", "auto"),
+            "iteration_count": 0,
+        }
+
+        if context.get("mode") == "plan":
+            result = await graph.ainvoke(initial_state, config=lg_config)
+            last_msgs = result.get("messages", [])
+            plan_text = last_msgs[-1].content if last_msgs else ""
+            plan_payload = {"summary": str(plan_text)[:400], "full_text": str(plan_text)}
+            await reporter.report("plan", plan_payload)
+            await self._await_plan_confirmation(execution_id, context, plan_payload, reporter)
+            # Append approval and re-run for execution
+            result["messages"].append(HumanMessage(content="Plan approved. Now implement it."))
+            await graph.ainvoke(result, config=lg_config)
+        else:
+            await graph.ainvoke(initial_state, config=lg_config)
+
+    # ------------------------------------------------------------------ callbacks
+
+    def _build_callbacks(self, execution_id: str, reporter: HubReporter) -> LoopCallbacks:
+        return LoopCallbacks(
+            on_tool_call=lambda tc, needs_confirm: self._emit_tool_call(
+                execution_id, tc, needs_confirm, reporter
+            ),
+            on_tool_result=lambda call_id, output, is_err: self._emit_tool_result(
+                execution_id, call_id, output, is_err, reporter
+            ),
+            on_confirmation_needed=lambda tc: self._wait_for_tool_confirmation(execution_id, tc),
+        )
+
+    # ------------------------------------------------------------------ plan confirmation
 
     async def _await_plan_confirmation(
         self,
@@ -244,21 +264,58 @@ class ExecutionService:
         plan_payload: dict[str, Any],
         reporter: HubReporter,
     ) -> None:
-        """Send a plan confirmation_request and wait for the user decision.
-
-        Raises PlanRejectedError if the user denies the plan.
-        Only called when context["mode"] == "plan".
-        """
         await reporter.report("confirmation_request", {
             "call_id": PLAN_APPROVAL_CALL_ID,
             "tool_name": "plan_approval",
             "risk_level": "medium",
             "parameters_summary": json.dumps(plan_payload)[:500],
         })
-        # Wait up to 10 minutes for the user to approve / reject the plan
         approved = await self._wait_for_confirmation(execution_id, PLAN_APPROVAL_CALL_ID, timeout=600.0)
         if not approved:
             raise PlanRejectedError("User rejected the execution plan.")
+
+    # ------------------------------------------------------------------ tool events
+
+    async def _emit_tool_call(
+        self,
+        execution_id: str,
+        tc: ToolCall,
+        needs_confirm: bool,
+        reporter: HubReporter,
+    ) -> None:
+        if needs_confirm:
+            await reporter.report("confirmation_request", {
+                "call_id": tc.id,
+                "tool_name": tc.name,
+                "risk_level": "high",
+                "parameters_summary": json.dumps(tc.input)[:200],
+            })
+        await reporter.report("tool_call", {
+            "call_id": tc.id,
+            "tool_name": tc.name,
+            "args": tc.input,
+            "requires_confirmation": needs_confirm,
+        })
+
+    async def _emit_tool_result(
+        self,
+        execution_id: str,
+        call_id: str,
+        output: str,
+        is_error: bool,
+        reporter: HubReporter,
+    ) -> None:
+        payload: dict[str, Any] = {"call_id": call_id, "ok": not is_error}
+        if is_error:
+            payload["error"] = {"code": "E_TOOL_FAILED", "message": output[:500]}
+        else:
+            payload["output"] = {"result": output[:2000]}
+        await reporter.report("tool_result", payload)
+
+    # ------------------------------------------------------------------ confirmation futures
+
+    async def _wait_for_tool_confirmation(self, execution_id: str, tc: ToolCall) -> bool:
+        return await self._wait_for_confirmation(execution_id, tc.id, timeout=300.0)
 
     async def _wait_for_confirmation(self, execution_id: str, call_id: str, timeout: float = 300.0) -> bool:
         key = f"{execution_id}:{call_id}"
@@ -272,60 +329,18 @@ class ExecutionService:
         finally:
             self._confirmation_futures.pop(key, None)
 
-    async def _emit_tool_call(
-        self,
-        execution_id: str,
-        call_id: str,
-        tool_name: str,
-        args: dict[str, Any],
-        must_confirm: bool,
-        reporter: HubReporter,
-    ) -> None:
-        payload: dict[str, Any] = {
-            "call_id": call_id,
-            "tool_name": tool_name,
-            "args": args,
-            "requires_confirmation": must_confirm,
-        }
-        if must_confirm:
-            # Signal Hub to create execution_confirmations record
-            await reporter.report("confirmation_request", {
-                "call_id": call_id,
-                "tool_name": tool_name,
-                "risk_level": "high",
-                "parameters_summary": json.dumps(args)[:200],
-            })
-        await reporter.report("tool_call", payload)
-
-    async def _emit_tool_result(
-        self,
-        execution_id: str,
-        call_id: str,
-        *,
-        ok: bool,
-        output: Any | None = None,
-        error: dict[str, Any] | None = None,
-        exc: Exception | None = None,
-        reporter: HubReporter,
-    ) -> None:
-        payload: dict[str, Any] = {"call_id": call_id, "ok": ok}
-        if ok:
-            payload["output"] = output
-        else:
-            if error is None and exc is not None:
-                _, err_payload = error_from_exception(exc, "")
-                error = err_payload["error"]
-            payload["error"] = error or {"code": "E_INTERNAL", "message": "Tool failed"}
-        await reporter.report("tool_result", payload)
+    # ------------------------------------------------------------------ provider resolution
 
     async def _resolve_provider(self, context: dict[str, Any]):
         model_config_id = (context.get("model_config_id") or "").strip()
         if not model_config_id:
-            raise RuntimeError("model_config_id is required for graph/deepagents mode")
+            raise RuntimeError("model_config_id is required")
         model_config = await self.repo.get_model_config(model_config_id)
         if model_config is None:
             raise RuntimeError(f"model config not found: {model_config_id}")
-        api_key = await self._resolve_secret(str(model_config.get("secret_ref", "")), context.get("trace_id", ""))
+        api_key = await self._resolve_secret(
+            str(model_config.get("secret_ref", "")), context.get("trace_id", "")
+        )
         provider = build_provider(str(model_config["provider"]), api_key, model_config.get("base_url"))
         return provider, model_config, api_key
 
@@ -340,8 +355,8 @@ class ExecutionService:
             parts = secret_ref.split(":")
             if len(parts) != 3:
                 raise RuntimeError(f"invalid secret_ref: {secret_ref}")
-            provider, profile = parts[1], parts[2]
-            env_key = f"GOYAIS_SECRET_{provider.upper()}_{profile.upper()}"
+            prov, profile = parts[1], parts[2]
+            env_key = f"GOYAIS_SECRET_{prov.upper()}_{profile.upper()}"
         else:
             env_key = secret_ref
         value = os.getenv(env_key)
@@ -349,67 +364,7 @@ class ExecutionService:
             raise RuntimeError(f"API key not found for '{secret_ref}', set env '{env_key}'")
         return value
 
-    async def _generate_plan(self, *, task_input, readme_content, model_config, provider, api_key) -> dict[str, Any]:
-        if self.agent_mode == "deepagents":
-            try:
-                return await build_plan_with_deepagents(
-                    task_input,
-                    provider=str(model_config["provider"]),
-                    model=str(model_config["model"]),
-                    api_key=api_key,
-                )
-            except Exception:  # noqa: BLE001
-                pass
-        plan_text = await provider.complete(
-            ProviderRequest(
-                model=str(model_config["model"]),
-                input_text=build_plan_prompt(task_input, readme_content[:1500]),
-                system_prompt=PLAN_SYSTEM_PROMPT,
-                max_tokens=model_config.get("max_tokens"),
-                temperature=float(model_config.get("temperature", 0)),
-            )
-        )
-        lines = [line.strip("- ").strip() for line in plan_text.splitlines() if line.strip()]
-        if not lines:
-            return build_mock_plan(task_input)
-        return {"summary": lines[0][:400], "steps": lines[1:6] or build_mock_plan(task_input)["steps"]}
-
-    async def _generate_patch(self, *, workspace_path, task_input, readme_content, model_config, provider) -> str:
-        patch_text = await provider.complete(
-            ProviderRequest(
-                model=str(model_config["model"]),
-                input_text=build_patch_prompt(task_input, readme_content),
-                system_prompt=PATCH_SYSTEM_PROMPT,
-                max_tokens=model_config.get("max_tokens"),
-                temperature=float(model_config.get("temperature", 0)),
-            )
-        )
-        candidate = self._extract_unified_diff(patch_text)
-        try:
-            if PatchSet(candidate):
-                return candidate
-        except Exception:  # noqa: BLE001
-            pass
-        return compute_readme_patch(workspace_path, task_input)
-
-    def _extract_unified_diff(self, text: str) -> str:
-        candidate = text.strip()
-        if "```" in candidate:
-            for segment in candidate.split("```"):
-                stripped = segment.strip()
-                if stripped.startswith("diff"):
-                    stripped = stripped[4:].lstrip()
-                if stripped.startswith("--- "):
-                    candidate = stripped
-                    break
-        if not candidate.startswith("--- "):
-            for i, line in enumerate(candidate.splitlines()):
-                if line.startswith("--- "):
-                    candidate = "\n".join(candidate.splitlines()[i:])
-                    break
-        if not candidate.endswith("\n"):
-            candidate += "\n"
-        return candidate
+    # ------------------------------------------------------------------ statics
 
     @staticmethod
     def _hub_base_url() -> str:

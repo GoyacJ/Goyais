@@ -52,7 +52,7 @@ def load_settings() -> Settings:
         db_path=db_path,
         runtime_host=os.getenv("GOYAIS_RUNTIME_HOST", "127.0.0.1"),
         runtime_port=int(os.getenv("GOYAIS_RUNTIME_PORT", "8040")),
-        agent_mode=os.getenv("GOYAIS_AGENT_MODE", "mock"),
+        agent_mode=os.getenv("GOYAIS_AGENT_MODE", "vanilla"),
         sync_server_url=os.getenv("GOYAIS_SYNC_SERVER_URL", "http://127.0.0.1:8140"),
         sync_token=os.getenv("GOYAIS_SYNC_TOKEN", "change-me"),
         sync_device_id=os.getenv("GOYAIS_SYNC_DEVICE_ID", "local-device"),

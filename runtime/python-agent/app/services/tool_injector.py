@@ -1,12 +1,8 @@
 """
-tool_injector.py — Phase 6: Skills/MCP tool injection
+tool_injector.py — Skills/MCP tool injection
 
-Loads skill_sets and mcp_connectors from the Hub execution context
-and injects their tools into the agent before execution begins.
-
-Current implementation: loads skill/MCP definitions from Hub and
-registers them as no-op stubs. Full MCP transport integration
-(stdio/sse/streamable_http) is a follow-up in Phase 6b.
+Loads skill_sets and mcp_connectors from Hub execution context and injects
+them into the ToolRegistry as ToolDef objects (with callable wrappers).
 """
 from __future__ import annotations
 
@@ -16,18 +12,22 @@ from typing import Any
 
 import httpx
 
+from app.agent.tool_registry import ToolDef
+
 logger = logging.getLogger(__name__)
 
 
 class ToolInjector:
     """
-    Injects Skills and MCP tools into an agent based on ExecutionContext.
+    Resolves Skills and MCP tools from the Hub and returns ToolDef objects
+    ready for registration in a ToolRegistry.
 
     Usage::
 
         injector = ToolInjector(hub_base_url, hub_internal_secret)
-        tools = await injector.resolve_tools(context)
-        # tools is a list of callables or tool descriptors to add to the agent
+        tool_defs = await injector.resolve_tools(context)
+        for td in tool_defs:
+            registry.register(td)
     """
 
     def __init__(self, hub_base_url: str, hub_internal_secret: str) -> None:
@@ -38,100 +38,85 @@ class ToolInjector:
             "Content-Type": "application/json",
         }
 
-    async def resolve_tools(self, context: dict[str, Any]) -> list[dict[str, Any]]:
+    async def resolve_tools(self, context: dict[str, Any]) -> list[ToolDef]:
         """
         Resolve all tools from the execution context's skill_set_ids and
-        mcp_connector_ids. Returns a list of tool descriptors.
-
-        Args:
-            context: ExecutionContext dict from Hub scheduler. Expected keys:
-                - skill_set_ids: JSON array string or list of skill set IDs
-                - mcp_connector_ids: JSON array string or list of connector IDs
-                - workspace_id: workspace identifier
-
-        Returns:
-            List of tool descriptor dicts (name, description, type, config).
+        mcp_connector_ids. Returns a list of ToolDef objects.
         """
-        tools: list[dict[str, Any]] = []
-
+        tools: list[ToolDef] = []
         workspace_id = context.get("workspace_id", "")
 
-        # Resolve skill set tools
         skill_set_ids = _parse_id_list(context.get("skill_set_ids", "[]"))
         for skill_set_id in skill_set_ids:
             try:
                 skill_tools = await self._load_skill_tools(workspace_id, skill_set_id)
                 tools.extend(skill_tools)
             except Exception as exc:
-                logger.warning(
-                    "Failed to load skill set %s: %s", skill_set_id, exc
-                )
+                logger.warning("Failed to load skill set %s: %s", skill_set_id, exc)
 
-        # Resolve MCP connector tools
         mcp_connector_ids = _parse_id_list(context.get("mcp_connector_ids", "[]"))
         for connector_id in mcp_connector_ids:
             try:
                 mcp_tools = await self._load_mcp_tools(workspace_id, connector_id)
                 tools.extend(mcp_tools)
             except Exception as exc:
-                logger.warning(
-                    "Failed to load MCP connector %s: %s", connector_id, exc
-                )
+                logger.warning("Failed to load MCP connector %s: %s", connector_id, exc)
 
         return tools
 
-    async def _load_skill_tools(
-        self, workspace_id: str, skill_set_id: str
-    ) -> list[dict[str, Any]]:
-        """Fetch skills for a skill set from the Hub and convert to tool descriptors."""
-        url = (
-            f"{self._hub_base_url}/v1/skill-sets/{skill_set_id}/skills"
-            f"?workspace_id={workspace_id}"
-        )
+    async def _load_skill_tools(self, workspace_id: str, skill_set_id: str) -> list[ToolDef]:
+        """Fetch skills for a skill set from Hub and return ToolDef objects."""
+        url = f"{self._hub_base_url}/v1/skill-sets/{skill_set_id}/skills?workspace_id={workspace_id}"
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(url, headers=self._headers)
             resp.raise_for_status()
             data = resp.json()
 
-        skill_tools = []
+        result: list[ToolDef] = []
         for skill in data.get("skills", []):
-            config = {}
+            config: dict = {}
             try:
                 config = json.loads(skill.get("config_json", "{}"))
             except json.JSONDecodeError:
                 pass
 
-            skill_tools.append(
-                {
-                    "name": skill["name"],
-                    "description": f"Skill: {skill['name']} (type={skill['type']})",
-                    "type": "skill",
-                    "skill_type": skill["type"],
-                    "config": config,
-                    "skill_id": skill["skill_id"],
-                    "skill_set_id": skill_set_id,
-                }
-            )
-            logger.debug("Loaded skill tool: %s", skill["name"])
+            skill_name: str = skill["name"]
+            skill_type: str = skill.get("type", "unknown")
 
-        return skill_tools
+            # Capture loop variables for the closure
+            captured_name = skill_name
+            captured_config = dict(config)
 
-    async def _load_mcp_tools(
-        self, workspace_id: str, connector_id: str
-    ) -> list[dict[str, Any]]:
+            async def _skill_handler(captured_name=captured_name, captured_config=captured_config, **kwargs: Any) -> str:
+                # Phase 6b: actual skill execution via transport
+                return json.dumps({
+                    "status": "not_implemented",
+                    "skill": captured_name,
+                    "note": "Skill transport (Phase 6b) not yet implemented.",
+                })
+
+            result.append(ToolDef(
+                name=skill_name,
+                description=f"Skill: {skill_name} (type={skill_type})",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "input": {"type": "string", "description": "Input for the skill"},
+                    },
+                },
+                handler=_skill_handler,
+                requires_confirmation=False,
+            ))
+            logger.debug("Loaded skill tool: %s", skill_name)
+
+        return result
+
+    async def _load_mcp_tools(self, workspace_id: str, connector_id: str) -> list[ToolDef]:
         """
-        Fetch MCP connector config from Hub and resolve available tools.
-
-        For stdio transport: spawns subprocess (not yet implemented).
-        For sse/streamable_http: connects via HTTP SSE (not yet implemented).
-
-        Current: returns a single placeholder descriptor for the connector.
-        Full transport implementation is Phase 6b.
+        Fetch MCP connector config from Hub.
+        Phase 6b: actual transport (stdio/sse/streamable_http) not yet implemented.
         """
-        url = (
-            f"{self._hub_base_url}/v1/mcp-connectors/{connector_id}"
-            f"?workspace_id={workspace_id}"
-        )
+        url = f"{self._hub_base_url}/v1/mcp-connectors/{connector_id}?workspace_id={workspace_id}"
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(url, headers=self._headers)
             resp.raise_for_status()
@@ -139,34 +124,41 @@ class ToolInjector:
 
         connector = data.get("mcp_connector", {})
         if not connector.get("enabled", False):
-            logger.info(
-                "MCP connector %s is disabled, skipping", connector_id
-            )
+            logger.info("MCP connector %s is disabled, skipping", connector_id)
             return []
 
-        # Placeholder: in Phase 6b, actually connect via transport and list_tools()
+        connector_name: str = connector.get("name", connector_id)
+        transport: str = connector.get("transport", "unknown")
+
         logger.info(
-            "MCP connector %s (%s) loaded (transport=%s) — "
-            "tool enumeration not yet implemented",
-            connector.get("name"),
-            connector_id,
-            connector.get("transport"),
+            "MCP connector %s (%s) loaded (transport=%s) — tool enumeration not yet implemented",
+            connector_name, connector_id, transport,
         )
-        return [
-            {
-                "name": f"mcp_{connector.get('name', connector_id)}",
-                "description": f"MCP connector: {connector.get('name')} ({connector.get('transport')})",
-                "type": "mcp_connector",
-                "connector_id": connector_id,
-                "transport": connector.get("transport"),
-                "endpoint": connector.get("endpoint"),
-            }
-        ]
+
+        captured_name = connector_name
+
+        async def _mcp_handler(captured_name=captured_name, **kwargs: Any) -> str:
+            return json.dumps({
+                "status": "not_implemented",
+                "connector": captured_name,
+                "note": "MCP transport (Phase 6b) not yet implemented.",
+            })
+
+        return [ToolDef(
+            name=f"mcp_{connector_name}",
+            description=f"MCP connector: {connector_name} ({transport})",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "input": {"type": "string", "description": "Input for the MCP connector"},
+                },
+            },
+            handler=_mcp_handler,
+            requires_confirmation=False,
+        )]
 
 
 def _parse_id_list(value: Any) -> list[str]:
-    """Parse a skill_set_ids / mcp_connector_ids value that may be a JSON
-    array string or already a Python list."""
     if isinstance(value, list):
         return [str(v) for v in value if v]
     if isinstance(value, str) and value.strip():
