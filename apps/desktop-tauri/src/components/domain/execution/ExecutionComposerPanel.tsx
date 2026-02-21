@@ -37,12 +37,12 @@ export function ExecutionComposerPanel({
   const { t } = useTranslation();
 
   return (
-    <div className="bg-muted/10 p-1.5">
+    <div className="bg-muted/10 p-1">
       <form onSubmit={onSubmit}>
         <div className="relative overflow-hidden rounded-panel border border-border-subtle bg-background/70">
           <Textarea
             rows={3}
-            className="min-h-[108px] max-h-44 resize-y border-0 bg-transparent pb-12 pr-14 focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="min-h-[96px] max-h-44 resize-y border-0 bg-transparent pb-12 pr-14 focus-visible:ring-0 focus-visible:ring-offset-0"
             placeholder={t("conversation.inputPlaceholder")}
             value={input}
             onChange={(event) => onInputChange(event.target.value)}

@@ -438,8 +438,8 @@ export function ConversationPage() {
 
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_22rem]">
-      <section className="min-h-0 p-3">
-        <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto_auto] gap-panel">
+      <section className="min-h-0 px-3 pb-2 pt-3">
+        <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto_auto] gap-2">
           <ConversationTranscriptPanel
             title={t("conversation.transcriptTitle")}
             emptyTitle={t("conversation.transcriptEmptyTitle")}

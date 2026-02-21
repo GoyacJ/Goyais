@@ -643,8 +643,8 @@ export function SettingsPage() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-4xl p-page">
-      <div className="mb-4">
+    <div className="w-full px-3 py-2 md:px-4 md:py-3">
+      <div className="mb-3">
         <h1 className="text-title font-semibold text-foreground">{sectionMeta.label}</h1>
         <p className="text-small text-muted-foreground">{sectionMeta.description}</p>
       </div>
