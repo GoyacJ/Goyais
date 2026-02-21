@@ -20,20 +20,20 @@ import (
 // ─────────────────────────────────────────────────────────────────────────────
 
 type ProjectSummary struct {
-	ProjectID      string  `json:"project_id"`
-	WorkspaceID    string  `json:"workspace_id"`
-	Name           string  `json:"name"`
-	RootURI        *string `json:"root_uri,omitempty"`
-	RepoURL        *string `json:"repo_url,omitempty"`
-	Branch         string  `json:"branch"`
-	AuthRef        *string `json:"auth_ref,omitempty"`
-	RepoCachePath  *string `json:"repo_cache_path,omitempty"`
-	SyncStatus     string  `json:"sync_status"`
-	SyncError      *string `json:"sync_error,omitempty"`
-	LastSyncedAt   *string `json:"last_synced_at,omitempty"`
-	CreatedBy      string  `json:"created_by"`
-	CreatedAt      string  `json:"created_at"`
-	UpdatedAt      string  `json:"updated_at"`
+	ProjectID     string  `json:"project_id"`
+	WorkspaceID   string  `json:"workspace_id"`
+	Name          string  `json:"name"`
+	RootURI       *string `json:"root_uri,omitempty"`
+	RepoURL       *string `json:"repo_url,omitempty"`
+	Branch        string  `json:"branch"`
+	AuthRef       *string `json:"auth_ref,omitempty"`
+	RepoCachePath *string `json:"repo_cache_path,omitempty"`
+	SyncStatus    string  `json:"sync_status"`
+	SyncError     *string `json:"sync_error,omitempty"`
+	LastSyncedAt  *string `json:"last_synced_at,omitempty"`
+	CreatedBy     string  `json:"created_by"`
+	CreatedAt     string  `json:"created_at"`
+	UpdatedAt     string  `json:"updated_at"`
 }
 
 type CreateProjectInput struct {
@@ -67,7 +67,7 @@ func (s *ProjectService) List(ctx context.Context, workspaceID string) ([]Projec
 	}
 	defer rows.Close()
 
-	var out []ProjectSummary
+	out := make([]ProjectSummary, 0)
 	for rows.Next() {
 		p, err := scanProject(rows)
 		if err != nil {
@@ -288,11 +288,23 @@ func scanProject(row projectScanner) (*ProjectSummary, error) {
 	); err != nil {
 		return nil, err
 	}
-	if rootURI.Valid { p.RootURI = &rootURI.String }
-	if repoURL.Valid { p.RepoURL = &repoURL.String }
-	if authRef.Valid { p.AuthRef = &authRef.String }
-	if repoCachePath.Valid { p.RepoCachePath = &repoCachePath.String }
-	if syncError.Valid { p.SyncError = &syncError.String }
-	if lastSyncedAt.Valid { p.LastSyncedAt = &lastSyncedAt.String }
+	if rootURI.Valid {
+		p.RootURI = &rootURI.String
+	}
+	if repoURL.Valid {
+		p.RepoURL = &repoURL.String
+	}
+	if authRef.Valid {
+		p.AuthRef = &authRef.String
+	}
+	if repoCachePath.Valid {
+		p.RepoCachePath = &repoCachePath.String
+	}
+	if syncError.Valid {
+		p.SyncError = &syncError.String
+	}
+	if lastSyncedAt.Valid {
+		p.LastSyncedAt = &lastSyncedAt.String
+	}
 	return &p, nil
 }

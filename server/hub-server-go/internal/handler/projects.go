@@ -28,6 +28,9 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
 		return
 	}
+	if projects == nil {
+		projects = []service.ProjectSummary{}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"projects": projects})
 }
 
