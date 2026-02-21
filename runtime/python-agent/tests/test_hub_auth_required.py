@@ -54,4 +54,19 @@ def test_accepts_request_with_required_hub_headers(hub_auth_client: TestClient):
     )
     assert response.status_code == 200
     body = response.json()
+    assert body["version"] == "0.2.0"
     assert body["workspace_id"] == "ws-test"
+
+
+def test_version_endpoint_reports_runtime_version(hub_auth_client: TestClient):
+    response = hub_auth_client.get(
+        "/v1/version",
+        headers={
+            "X-Hub-Auth": "hub-runtime-secret",
+            "X-User-Id": "u1",
+            "X-Trace-Id": "trace-2",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["runtime_version"] == "0.2.0"

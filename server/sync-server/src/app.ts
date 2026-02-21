@@ -69,7 +69,7 @@ export function createApp(options: CreateAppOptions): FastifyInstance {
   registerPullRoute(app, options.db, options.token, metrics);
 
   app.get("/v1/health", async () => ({ ok: true, runtime_status: "ok" }));
-  app.get("/v1/version", async () => ({ protocol_version: "2.0.0", runtime_version: "0.1.0" }));
+  app.get("/v1/version", async () => ({ protocol_version: "2.0.0", runtime_version: "0.2.0" }));
   app.get("/v1/metrics", async () => metricsSnapshot(options.db, metrics));
 
   app.get("/healthz", async () => ({ ok: true }));

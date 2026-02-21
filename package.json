@@ -1,7 +1,7 @@
 {
   "name": "goyais",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "packageManager": "pnpm@10.11.0",
   "scripts": {
     "build": "turbo run build",
@@ -10,6 +10,9 @@
     "dev:desktop": "pnpm --filter @goyais/desktop-tauri tauri dev",
     "dev:sync": "pnpm --filter @goyais/sync-server dev",
     "dev:hub": "cd server/hub-server-go && go run cmd/hub/main.go",
+    "version:sync": "node scripts/version-sync.mjs",
+    "version:check": "node scripts/version-sync.mjs --check",
+    "version:set": "node scripts/version-sync.mjs --set",
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",

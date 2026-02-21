@@ -17,7 +17,7 @@ PROTOCOL_VERSION = load_protocol_version()
 async def health():
     return {
         "ok": True,
-        "version": "0.1.0",
+        "version": "0.2.0",
         "protocol_version": PROTOCOL_VERSION,
         "workspace_id": settings.runtime_workspace_id,
         "runtime_status": "ok",
@@ -28,7 +28,7 @@ async def health():
 async def version():
     return {
         "protocol_version": PROTOCOL_VERSION,
-        "runtime_version": "0.1.0",
+        "runtime_version": "0.2.0",
         "build": os.getenv("GOYAIS_BUILD"),
         "commit": os.getenv("GOYAIS_COMMIT"),
     }

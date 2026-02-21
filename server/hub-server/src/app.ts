@@ -114,13 +114,13 @@ export function createApp(options: CreateAppOptions): FastifyInstance {
   app.get("/v1/health", async () => ({
     ok: true,
     service: "hub-server",
-    version: "0.1.0",
+    version: "0.2.0",
     ts: new Date().toISOString()
   }));
 
   app.get("/v1/version", async () => ({
     service: "hub-server",
-    version: "0.1.0",
+    version: "0.2.0",
     protocol_version: options.protocolVersion ?? loadProtocolVersionFromSchema()
   }));
 

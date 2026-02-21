@@ -67,7 +67,7 @@ describe("hub-server schema migrations", () => {
     expect(health.json()).toMatchObject({
       ok: true,
       service: "hub-server",
-      version: "0.1.0"
+      version: "0.2.0"
     });
 
     const version = await app.inject({
@@ -82,7 +82,7 @@ describe("hub-server schema migrations", () => {
     expect(version.headers["x-trace-id"]).toBe("trace-hub-1");
     expect(version.json()).toMatchObject({
       service: "hub-server",
-      version: "0.1.0",
+      version: "0.2.0",
       protocol_version: loadProtocolVersionFromSchema()
     });
   });
