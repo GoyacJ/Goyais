@@ -1,143 +1,182 @@
-# Goyais v0.2.0
+<p align="right">
+  <strong>English</strong> | <a href="./README.zh-CN.md">中文</a>
+</p>
 
-Local-first + Hub-First AI-assisted coding desktop app.
+<p align="center">
+  <img src="./logo.png" alt="Goyais logo" width="160" />
+</p>
 
-- Host: Tauri v2 + React (`/Users/goya/Repo/Git/Goyais/apps/desktop-tauri`)
-- Hub Server: Go 1.23+ + chi + sqlc (`/Users/goya/Repo/Git/Goyais/server/hub-server-go`)
-- Runtime: Python FastAPI + LangGraph (`/Users/goya/Repo/Git/Goyais/runtime/python-agent`)
-- Protocol: JSON Schema + generated TS/Python/Go types (`/Users/goya/Repo/Git/Goyais/packages/protocol`)
+<h1 align="center">Goyais</h1>
 
-License: Apache-2.0.
+<p align="center">
+  Open-source, Hub-First, Session-Centric, local-first AI-assisted coding desktop platform.
+</p>
 
-## Breaking change notice (v0.2.0)
+<p align="center">
+  <a href="./README.zh-CN.md">Read this in Chinese (中文文档)</a>
+</p>
 
-- **Architecture Shift**: "Run-Centric" has been fully replaced by "Session-Centric + Hub-First".
-- **Auth Mode Split**:
-  - `local_open`: local workspace, no desktop token/login flow.
-  - `remote_auth`: bearer auth + membership + RBAC.
-- **Hub Server Authority**: The Hub (now written in Go) is the source of truth for Sessions, Executions, Events, Skills, MCP, and remote Git projects.
-- **Local SQLite DB**: Local mode now runs a local Hub which manages the SQLite database. The Python Runtime no longer holds any persisted state (memory buffer only).
-- **Execution Mutex**: Only one execution can be active per session at any time.
+<p align="center">
+  <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
+  <a href="https://github.com/GoyacJ/Goyais/releases"><img alt="Version" src="https://img.shields.io/badge/version-0.2.0-0A7EA4"></a>
+  <a href="https://github.com/GoyacJ/Goyais/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/GoyacJ/Goyais/actions/workflows/ci.yml/badge.svg"></a>
+</p>
 
-## What v0.2.0 includes
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#documentation">Docs</a> ·
+  <a href="#contributing">Contributing</a> ·
+  <a href="#security">Security</a>
+</p>
 
-- **Hub-First Only**: Desktop -> Go Hub -> Runtime/Worker (desktop no direct runtime calls)
-- **Session Modes**: Agent mode (autonomous execution with confirmation for sensitive tools) and Plan mode (design plan first, require approval, then execute).
-- **Worktree Isolation**: Operations run in an isolated Git worktree `goyais-exec-<id>` and support proper local Git commits via UI.
-- **Skills & MCP Integration**: Full CRUD and execution injection for custom Skills and Model Context Protocol (MCP) servers.
-- **Remote Git Projects**: Full sync/clone support for remote repositories via Git URL and Auth References.
-- **Robustness**: Watchdog timeouts for stalled executions, SSE auto-reconnect, detailed Audit Logs.
+---
 
-## Prerequisites
+## Overview
+
+Goyais is an AI coding desktop application designed for safe and controllable execution.
+It combines a desktop shell, a Hub control plane, and a runtime worker so execution state,
+permissions, and audit events remain consistent.
+
+The current stable architecture is **v0.2.0** with **Hub-First** routing and
+**Session-Centric** scheduling. A session can run only one active execution at a time,
+with explicit user confirmation for risky operations.
+
+Goyais supports both **local_open** mode and **remote_auth** server mode.
+In remote mode, desktop clients connect to a remote Hub with workspace-scoped access control,
+and runtime workers can run on centralized server infrastructure.
+
+## Features
+
+- **Hub-First control plane**: desktop interacts with Hub APIs as the single source of truth.
+- **Local + remote server deployment**: supports local-first development and remote multi-workspace collaboration.
+- **Workspace-level isolation and RBAC**: workspace-scoped routes and permissions in `remote_auth` mode.
+- **Session-Centric execution**: one active execution per session with clear conflict handling.
+- **Plan mode and Agent mode**:
+  - Plan mode generates a plan first and waits for approval before execution.
+  - Agent mode runs autonomously with confirmation gates for risky actions.
+- **Isolated Git worktree execution**: each execution runs in an isolated worktree (`goyais-exec-<id>`).
+- **Mainstream model integration**: configurable model endpoints and keys, with OpenAI/Anthropic-style provider compatibility.
+- **Human-in-the-loop safety**: high-risk capabilities (`write_fs`, `exec`, `network`, `delete`) require confirmation.
+- **Skills and MCP extensibility**: dynamic skill sets and MCP connectors can be injected at runtime.
+- **Operational resilience**: SSE event streaming, watchdog lock recovery, and audit logging.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  UI[Desktop App\nTauri + React] -->|HTTP /v1/* + SSE| HUB[Hub Server\nGo]
+  HUB -->|Internal execution APIs| RUNTIME[Runtime Worker\nPython FastAPI + LangGraph]
+  HUB --> DB[(SQLite/Postgres)]
+  RUNTIME --> WT[Git Worktree Sandbox]
+```
+
+### Deployment modes
+
+- **Local mode (`local_open`)**: desktop + local Hub + local runtime worker, optimized for local development.
+- **Remote mode (`remote_auth`)**: desktop connects to remote Hub with bearer auth, workspace isolation, and RBAC.
+
+### Core modules
+
+- `apps/desktop-tauri`: desktop UI and local shell.
+- `server/hub-server-go`: primary Hub control plane.
+- `runtime/python-agent`: runtime worker for task execution.
+- `packages/protocol`: JSON schema and generated TS/Python protocol artifacts.
+
+> Note: `server/hub-server` and `server/sync-server` remain in repo for compatibility/testing,
+> but are not the primary v0.2.0 runtime path.
+
+## Quick Start
+
+### Requirements
 
 - Node.js 22+
 - pnpm 10+
 - Python 3.11+
-- Go 1.23+
-- Rust stable
-- `uv` for Python package/runtime management
+- [uv](https://docs.astral.sh/uv/)
+- Go 1.24+
+- Rust stable (for Tauri desktop)
 
-Install `uv`:
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-## Install
+Install dependencies:
 
 ```bash
-cd /Users/goya/Repo/Git/Goyais
 pnpm install
 pnpm protocol:generate
-cd server/hub-server-go && make migrate-up
 ```
 
-## Runtime configuration
+Start 3 processes in separate terminals:
 
-Copy runtime env file:
+1. Hub (Go):
 
 ```bash
-cp /Users/goya/Repo/Git/Goyais/runtime/python-agent/.env.example /Users/goya/Repo/Git/Goyais/runtime/python-agent/.env
+PORT=8787 GOYAIS_AUTH_MODE=local_open GOYAIS_RUNTIME_SHARED_SECRET=dev-shared pnpm dev:hub
 ```
 
-Important variables:
-
-- `GOYAIS_HUB_BASE_URL=http://127.0.0.1:8787` (The Python worker must point to the Go Hub)
-- `GOYAIS_RUNTIME_REQUIRE_HUB_AUTH=true|false`
-- `GOYAIS_RUNTIME_SHARED_SECRET=<shared with hub>`
-- `GOYAIS_AGENT_MODE=plan|agent`
-
-### Model API keys (`secret_ref`)
-
-`model_configs.secret_ref` supports:
-
-- `env:OPENAI_API_KEY`
-- `env:ANTHROPIC_API_KEY`
-- `keychain:openai:default` -> resolves env `GOYAIS_SECRET_OPENAI_DEFAULT`
-- `keychain:anthropic:default` -> resolves env `GOYAIS_SECRET_ANTHROPIC_DEFAULT`
-
-## Start demo (macOS)
-
-Terminal 1 (Go Hub):
+2. Runtime worker (Python):
 
 ```bash
-cd /Users/goya/Repo/Git/Goyais
-GOYAIS_AUTH_MODE=local_open GOYAIS_RUNTIME_SHARED_SECRET=dev-shared pnpm dev:hub
-```
-
-Terminal 2 (Python Worker):
-
-```bash
-cd /Users/goya/Repo/Git/Goyais
 GOYAIS_RUNTIME_REQUIRE_HUB_AUTH=true GOYAIS_RUNTIME_SHARED_SECRET=dev-shared GOYAIS_HUB_BASE_URL=http://127.0.0.1:8787 pnpm dev:runtime
 ```
 
-Terminal 3 (Tauri Desktop):
+3. Desktop app:
 
 ```bash
-cd /Users/goya/Repo/Git/Goyais
 pnpm dev:desktop
 ```
 
-In UI:
+Then create a session in the desktop app (Plan mode or Agent mode), run a task, review patch,
+and commit/discard changes.
 
-1. Add a Local or Remote Git Project.
-2. Configure Settings -> Models (Provider + secret_ref).
-3. Optionally configure Skills & MCP servers.
-4. Create a new Session (choose Mode, Model, Skills).
-5. Submit a task, review Plan (if in Plan mode), inspect diff, commit or discard changes.
+### Remote server mode (summary)
 
-## Hub Server API (Go)
+1. Deploy Hub and runtime worker services in your server environment.
+2. Set Hub auth mode to `GOYAIS_AUTH_MODE=remote_auth`.
+3. Connect desktop clients to the remote workspace and use workspace-scoped access control.
 
-- `GET/POST/PATCH/DELETE /v1/sessions`
-- `POST /v1/sessions/{id}/execute` -> Returns 409 if busy
-- `GET /v1/sessions/{id}/events` (SSE)
-- `POST /v1/executions/{id}/commit`
-- `GET /v1/executions/{id}/patch`
-- `POST /v1/confirmations`
-- `GET/POST/DELETE /v1/projects` & `POST /v1/projects/{id}/sync`
-- `GET/POST/PUT/DELETE /v1/model-configs`
-- `GET /v1/runtime/model-configs/{id}/models`
-- `GET /v1/runtime/health`
-- `GET/POST/PUT/DELETE /v1/skill-sets` & `skills`
-- `GET/POST/PUT/DELETE /v1/mcp-connectors`
+## Repository Layout
 
-## Security model (v0.2.0)
+```text
+apps/desktop-tauri        # Desktop UI and local shell
+server/hub-server-go      # Primary Hub control plane (Go)
+runtime/python-agent      # Runtime worker (FastAPI + LangGraph)
+packages/protocol         # Protocol schemas and generated types
+docs/                     # PRD, architecture, setup, and plans
+```
 
-- Go Hub is the single database writer and authority.
-- `write_fs`, `exec`, `network`, `delete` require explicit confirmation (Agent Mode).
-- Git operations are isolated in ephemeral worktrees to prevent accidental destruction of uncommitted work.
-- Hub watchdog automatically reclaims session mutexes from crashed Python workers.
-- All operations (session CRUD, git commit, project sync, tool calls, confirmations) are recorded in `audit_logs`.
-
-## Test and verification
+## Development Commands
 
 ```bash
-cd /Users/goya/Repo/Git/Goyais
+pnpm version:check
+pnpm protocol:generate
 pnpm typecheck
 pnpm test
-
-# Test Go Hub
-cd server/hub-server-go
-go test ./...
+cd server/hub-server-go && go test ./...
 ```
+
+## Documentation
+
+- Chinese documentation: [`README.zh-CN.md`](./README.zh-CN.md)
+- Product requirements: [`docs/PRD.md`](./docs/PRD.md)
+- Technical architecture: [`docs/TECH-ARCHITECTURE.md`](./docs/TECH-ARCHITECTURE.md)
+- Development setup: [`docs/dev-setup.md`](./docs/dev-setup.md)
+- UI guidelines: [`docs/ui-guidelines.md`](./docs/ui-guidelines.md)
+- ADRs: [`docs/ADR/`](./docs/ADR)
+
+## Contributing
+
+Contributions are welcome. Please read [`CONTRIBUTING.md`](./CONTRIBUTING.md) before opening a pull request.
+
+## Security
+
+Please report vulnerabilities via GitHub Private Vulnerability Reporting.
+See [`SECURITY.md`](./SECURITY.md) for the disclosure policy.
+
+## Code of Conduct
+
+This project follows a community code of conduct.
+See [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md).
+
+## License
+
+Licensed under the Apache License 2.0. See [`LICENSE`](./LICENSE).
