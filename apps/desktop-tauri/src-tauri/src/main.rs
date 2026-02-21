@@ -1,5 +1,6 @@
 mod commands {
     pub mod app_state;
+    pub mod git;
     pub mod runtime_process;
     pub mod secret_store;
 }
@@ -23,6 +24,7 @@ pub fn run() {
             commands::secret_store::store_token,
             commands::secret_store::load_token,
             commands::secret_store::delete_token,
+            commands::git::git_current_branch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

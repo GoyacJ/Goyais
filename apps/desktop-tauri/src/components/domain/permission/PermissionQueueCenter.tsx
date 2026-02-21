@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatTimeByLocale } from "@/lib/format";
 import { classifyToolRisk } from "@/lib/risk";
-import type { PendingConfirmation } from "@/stores/runStore";
+import type { PendingConfirmation } from "@/stores/executionStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 
 interface PermissionQueueCenterProps {

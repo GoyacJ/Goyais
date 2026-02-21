@@ -26,7 +26,7 @@ export type RunStreamState = "idle" | "streaming" | "waiting_confirmation" | "co
 export interface RunEventViewModel {
   id: string;
   seq: number;
-  runId: string;
+  executionId: string;
   ts: string;
   type: EventType;
   payload: Record<string, unknown>;

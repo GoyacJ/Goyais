@@ -43,9 +43,18 @@ describe("conversationStore", () => {
     expect(useConversationStore.getState().selectedSessionId).toBe("s1");
   });
 
-  it("stores selected run by session", () => {
+  it("stores execution metadata by session", () => {
     const store = useConversationStore.getState();
-    store.setSelectedRunId("s1", "run-1");
-    expect(useConversationStore.getState().detailBySessionId.s1.selectedRunId).toBe("run-1");
+    store.setSessions("p1", [
+      {
+        session_id: "s1",
+        project_id: "p1",
+        title: "thread",
+        updated_at: "2026-01-01T00:00:00.000Z"
+      }
+    ]);
+    store.touchSessionExecution("s1", { last_execution_id: "exec-1", last_status: "executing" });
+    expect(useConversationStore.getState().sessionsByProjectId.p1[0].last_execution_id).toBe("exec-1");
+    expect(useConversationStore.getState().sessionsByProjectId.p1[0].last_status).toBe("executing");
   });
 });

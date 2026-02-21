@@ -1,6 +1,5 @@
 import { normalizeHttpError, normalizeUnknownError } from "@/lib/api-error";
 import type { ModelCatalogResponse, ProviderKey } from "@/types/modelCatalog";
-import type { EventEnvelope } from "@/types/generated";
 
 const DEFAULT_RUNTIME_URL = import.meta.env.VITE_RUNTIME_URL ?? "http://127.0.0.1:8040";
 const RUNTIME_URL_STORAGE_KEY = "goyais.runtimeUrl";
@@ -41,43 +40,6 @@ async function requestJson<T>(path: string, init?: RequestInit, options?: Reques
   }
 
   throw new Error("Unreachable request state");
-}
-
-export interface RunCreateRequest {
-  project_id: string;
-  session_id: string;
-  input: string;
-  model_config_id: string;
-  workspace_path: string;
-  options: {
-    use_worktree: boolean;
-    run_tests?: string;
-  };
-}
-
-export async function createRun(payload: RunCreateRequest): Promise<{ run_id: string }> {
-  return requestJson("/v1/runs", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-}
-
-export function subscribeRunEvents(runId: string, onEvent: (event: EventEnvelope) => void): EventSource {
-  const source = new EventSource(`${runtimeBaseUrl()}/v1/runs/${runId}/events`);
-  source.onmessage = (message) => {
-    const parsed = JSON.parse(message.data) as EventEnvelope;
-    onEvent(parsed);
-  };
-  return source;
-}
-
-export async function confirmToolCall(run_id: string, call_id: string, approved: boolean): Promise<void> {
-  await requestJson("/v1/tool-confirmations", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ run_id, call_id, approved })
-  });
 }
 
 export async function listProjects(): Promise<{ projects: Array<Record<string, string>> }> {
@@ -136,46 +98,19 @@ export async function deleteModelConfig(modelConfigId: string) {
   });
 }
 
-export async function listModelCatalog(modelConfigId: string): Promise<ModelCatalogResponse> {
-  return requestJson(`/v1/model-configs/${encodeURIComponent(modelConfigId)}/models`, undefined, { retries: 1 });
-}
-
-export async function listRuns(sessionId: string): Promise<{ runs: Array<Record<string, string>> }> {
-  return requestJson(`/v1/runs?session_id=${encodeURIComponent(sessionId)}`, undefined, { retries: 1 });
-}
-
-export interface RuntimeSessionSummary {
-  session_id: string;
-  project_id: string;
-  title: string;
-  updated_at: string;
-  last_run_id?: string;
-  last_status?: string;
-  last_input_preview?: string;
-}
-
-export async function listSessions(projectId: string): Promise<{ sessions: RuntimeSessionSummary[] }> {
-  return requestJson(`/v1/sessions?project_id=${encodeURIComponent(projectId)}`, undefined, { retries: 1 });
-}
-
-export async function createSession(payload: { project_id: string; title?: string }): Promise<{ session: RuntimeSessionSummary }> {
-  return requestJson("/v1/sessions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-}
-
-export async function renameSession(sessionId: string, title: string): Promise<{ session: RuntimeSessionSummary }> {
-  return requestJson(`/v1/sessions/${encodeURIComponent(sessionId)}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title })
-  });
-}
-
-export async function replayRunEvents(runId: string): Promise<{ events: EventEnvelope[] }> {
-  return requestJson(`/v1/runs/${runId}/events/replay`, undefined, { retries: 1 });
+export async function listModelCatalog(
+  modelConfigId: string,
+  options?: { apiKeyOverride?: string }
+): Promise<ModelCatalogResponse> {
+  const init =
+    options?.apiKeyOverride
+      ? {
+          headers: {
+            "X-Api-Key-Override": options.apiKeyOverride
+          }
+        }
+      : undefined;
+  return requestJson(`/v1/model-configs/${encodeURIComponent(modelConfigId)}/models`, init, { retries: 1 });
 }
 
 export async function syncNow(): Promise<Record<string, number>> {

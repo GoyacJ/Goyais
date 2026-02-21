@@ -8,7 +8,7 @@ export function PermissionCenter() {
       <h3>Permission Center</h3>
       <ul>
         {decisions.map((item) => (
-          <li key={`${item.runId}:${item.callId}`}>
+          <li key={`${item.executionId}:${item.callId}`}>
             <code>{item.callId}</code> - {item.approved ? "approved" : "denied"} @ {item.decidedAt}
           </li>
         ))}

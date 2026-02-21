@@ -6,8 +6,10 @@ from pydantic import BaseModel
 
 
 class EventEnvelope(BaseModel):
+  protocol_version: str
+  trace_id: str
   event_id: str
-  run_id: str
+  execution_id: str
   seq: int
   ts: str
   type: str

@@ -1,11 +1,18 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import type { LucideIcon } from "lucide-react";
 import {
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
   Circle,
   FolderKanban,
+  FolderOpen,
+  GitBranch,
+  Loader2,
   LogOut,
   MessageSquare,
   Plus,
+  RefreshCw,
   Settings2,
   Sparkles,
   UserCircle2
@@ -15,10 +22,11 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { type DataProject, getProjectsClient } from "@/api/dataSource";
-import { getRunDataSource } from "@/api/runDataSource";
+import { getSessionDataSource } from "@/api/sessionDataSource";
 import { deleteToken } from "@/api/secretStoreClient";
 import { WorkspaceSwitcher } from "@/app/layout/WorkspaceSwitcher";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +34,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { normalizeUnknownError } from "@/lib/api-error";
 import { cn } from "@/lib/cn";
@@ -51,6 +60,15 @@ interface SidebarProjectSectionProps {
   onSelectProject: (projectId: string) => void;
   onSelectSession: (projectId: string, sessionId: string) => void;
   onNewThread: (projectId: string) => void;
+  onSync?: (projectId: string) => void;
+  isSyncing?: boolean;
+}
+
+function SyncStatusIcon({ status }: { status: DataProject["sync_status"] }) {
+  if (status === "syncing") return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
+  if (status === "error") return <AlertCircle className="h-3 w-3 text-destructive" />;
+  if (status === "pending") return <Loader2 className="h-3 w-3 text-muted-foreground/60" />;
+  return null;
 }
 
 function SidebarProjectSection({
@@ -61,9 +79,12 @@ function SidebarProjectSection({
   selectedSessionId,
   onSelectProject,
   onSelectSession,
-  onNewThread
+  onNewThread,
+  onSync,
+  isSyncing
 }: SidebarProjectSectionProps) {
   const isActiveProject = selectedProjectId === project.project_id;
+  const isGitProject = !!project.repo_url;
 
   return (
     <section className="space-y-1">
@@ -82,22 +103,45 @@ function SidebarProjectSection({
           onClick={() => onSelectProject(project.project_id)}
         >
           <FolderKanban className="h-4 w-4 shrink-0" />
-          {!collapsed ? <span className="truncate">{project.name}</span> : null}
+          {!collapsed ? (
+            <>
+              <span className="truncate">{project.name}</span>
+              {isGitProject ? <SyncStatusIcon status={project.sync_status} /> : null}
+            </>
+          ) : null}
         </button>
         {!collapsed ? (
-          <button
-            type="button"
-            className="inline-flex h-6 w-6 items-center justify-center rounded-control text-muted-foreground hover:bg-background hover:text-foreground"
-            onClick={() => onNewThread(project.project_id)}
-            aria-label="new-thread"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-0.5">
+            {isGitProject && onSync ? (
+              <button
+                type="button"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-control text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-40"
+                onClick={() => onSync(project.project_id)}
+                disabled={isSyncing || project.sync_status === "syncing"}
+                aria-label="sync-project"
+              >
+                <RefreshCw className="h-3 w-3" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-control text-muted-foreground hover:bg-background hover:text-foreground"
+              onClick={() => onNewThread(project.project_id)}
+              aria-label="new-thread"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </div>
         ) : null}
       </div>
 
       {!collapsed && isActiveProject ? (
         <div className="ml-5 space-y-1 border-l border-border-subtle pl-2">
+          {isGitProject && project.sync_error ? (
+            <p className="px-2 text-xs text-destructive" title={project.sync_error}>
+              {project.sync_error}
+            </p>
+          ) : null}
           {sessions.map((session) => (
             <button
               key={session.session_id}
@@ -194,11 +238,18 @@ export function Sidebar() {
   const upsertSession = useConversationStore((state) => state.upsertSession);
 
   const projectsClient = useMemo(() => getProjectsClient(currentProfile), [currentProfile]);
-  const runDataSource = useMemo(() => getRunDataSource(currentProfile), [currentProfile]);
+  const sessionDataSource = useMemo(() => getSessionDataSource(currentProfile), [currentProfile]);
 
   const [projects, setProjects] = useState<DataProject[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [syncingProjectId, setSyncingProjectId] = useState<string | null>(null);
+
+  // Git repo add dialog
+  const [gitDialogOpen, setGitDialogOpen] = useState(false);
+  const [gitRepoUrl, setGitRepoUrl] = useState("");
+  const [gitBranch, setGitBranch] = useState("");
+  const [gitName, setGitName] = useState("");
 
   const extensionItems = useMemo(() => flattenRemoteMenus(currentNavigation?.menus ?? []), [currentNavigation]);
 
@@ -229,17 +280,17 @@ export function Sidebar() {
   useEffect(() => {
     if (!selectedProjectId) return;
 
-    runDataSource
+    sessionDataSource
       .listSessions(selectedProjectId)
       .then((payload) => setSessions(selectedProjectId, payload.sessions))
       .catch(() => {
         // Phase-1 fallback: keep local cache if session API is temporarily unavailable.
       });
-  }, [runDataSource, selectedProjectId, setSessions]);
+  }, [selectedProjectId, sessionDataSource, setSessions]);
 
   const onNewThread = async (projectId: string) => {
     try {
-      const payload = await runDataSource.createSession({
+      const payload = await sessionDataSource.createSession({
         project_id: projectId,
         title: t("conversation.newThread")
       });
@@ -318,6 +369,50 @@ export function Sidebar() {
     }
   }, [addToast, onCreateProjectFromLocation, t]);
 
+  const onCreateGitProject = useCallback(async () => {
+    const repoUrl = gitRepoUrl.trim();
+    if (!repoUrl) return;
+    const name = gitName.trim() || deriveProjectName(repoUrl, t("projects.defaultName"));
+    const branch = gitBranch.trim() || undefined;
+    setCreatingProject(true);
+    try {
+      await projectsClient.createGit({ name, repo_url: repoUrl, branch });
+      setGitDialogOpen(false);
+      setGitRepoUrl("");
+      setGitBranch("");
+      setGitName("");
+      await refreshProjects();
+      addToast({ title: t("projects.createSuccess"), description: name, variant: "success" });
+    } catch (error) {
+      addToast({
+        title: t("projects.createFailed"),
+        description: (error as Error).message,
+        diagnostic: (error as Error).message,
+        variant: "error"
+      });
+    } finally {
+      setCreatingProject(false);
+    }
+  }, [addToast, gitBranch, gitName, gitRepoUrl, projectsClient, refreshProjects, t]);
+
+  const onSyncProject = useCallback(async (projectId: string) => {
+    setSyncingProjectId(projectId);
+    try {
+      await projectsClient.sync(projectId);
+      // Brief polling: after 1s refresh to show syncing state
+      setTimeout(() => { void refreshProjects(); }, 1000);
+    } catch (error) {
+      addToast({
+        title: t("projects.syncFailed"),
+        description: (error as Error).message,
+        diagnostic: (error as Error).message,
+        variant: "error"
+      });
+    } finally {
+      setSyncingProjectId(null);
+    }
+  }, [addToast, projectsClient, refreshProjects, t]);
+
   const onLogout = async () => {
     if (!currentProfile || currentProfile.kind !== "remote") {
       return;
@@ -366,7 +461,7 @@ export function Sidebar() {
             onClick={toggleSidebar}
             aria-label={collapsed ? t("app.sidebar.expand") : t("app.sidebar.collapse")}
           >
-            {collapsed ? ">" : "<"}
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </button>
         </div>
 
@@ -389,17 +484,40 @@ export function Sidebar() {
 
         <div className="mb-2 flex items-center justify-between px-1 text-small text-muted-foreground">
           {!collapsed ? <span>{t("projects.title")}</span> : null}
-          <button
-            type="button"
-            className="inline-flex h-6 w-6 items-center justify-center rounded-control hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="add-project"
-            disabled={creatingProject}
-            onClick={() => {
-              void onPickProjectLocation();
-            }}
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
+          {projectsClient.supportsGit ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-control hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="add-project"
+                  disabled={creatingProject}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="right" align="start" className="w-44">
+                <DropdownMenuItem onClick={() => { void onPickProjectLocation(); }}>
+                  <FolderOpen className="mr-2 h-4 w-4" />
+                  <span>{t("projects.addFolder")}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setGitDialogOpen(true)}>
+                  <GitBranch className="mr-2 h-4 w-4" />
+                  <span>{t("projects.addGitRepo")}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <button
+              type="button"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-control hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="add-project"
+              disabled={creatingProject}
+              onClick={() => { void onPickProjectLocation(); }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
         <div className="min-h-0 flex-1 space-y-1 overflow-auto scrollbar-subtle">
@@ -415,9 +533,9 @@ export function Sidebar() {
               selectedSessionId={selectedSessionId}
               onSelectProject={setSelectedProject}
               onSelectSession={setSelectedSession}
-              onNewThread={(projectId) => {
-                void onNewThread(projectId);
-              }}
+              onNewThread={(projectId) => { void onNewThread(projectId); }}
+              onSync={projectsClient.supportsGit ? (projectId) => { void onSyncProject(projectId); } : undefined}
+              isSyncing={syncingProjectId === project.project_id}
             />
           ))}
 
@@ -497,6 +615,49 @@ export function Sidebar() {
           </DropdownMenu>
         </div>
       </aside>
+
+      {/* Git repo add dialog */}
+      <Dialog open={gitDialogOpen} onOpenChange={setGitDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("projects.addGitRepo")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="mb-1 block text-small text-muted-foreground">{t("projects.gitRepoUrl")}</label>
+              <Input
+                placeholder="https://github.com/org/repo.git"
+                value={gitRepoUrl}
+                onChange={(e) => setGitRepoUrl(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-small text-muted-foreground">{t("projects.gitBranch")}</label>
+              <Input
+                placeholder="main"
+                value={gitBranch}
+                onChange={(e) => setGitBranch(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-small text-muted-foreground">{t("projects.nameOptional")}</label>
+              <Input
+                placeholder={t("projects.nameDerivedFromUrl")}
+                value={gitName}
+                onChange={(e) => setGitName(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGitDialogOpen(false)}>{t("workspace.cancel")}</Button>
+            <Button onClick={() => { void onCreateGitProject(); }} disabled={!gitRepoUrl.trim() || creatingProject}>
+              {creatingProject ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t("projects.addGitRepo")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

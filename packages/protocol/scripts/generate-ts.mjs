@@ -8,10 +8,10 @@ const outFile = path.join(root, "generated", "ts", "protocol.d.ts");
 
 const schemaFiles = [
   "goyais-error.schema.json",
-  "run-create.request.schema.json",
-  "run-create.response.schema.json",
-  "tool-confirmation.request.schema.json",
-  "tool-confirmation.response.schema.json"
+  "execution-create.request.schema.json",
+  "execution-create.response.schema.json",
+  "confirmation-decision.request.schema.json",
+  "confirmation-decision.response.schema.json"
 ];
 
 const blocks = [];
@@ -23,13 +23,24 @@ for (const file of schemaFiles) {
 }
 
 await fs.mkdir(path.dirname(outFile), { recursive: true });
-const envelopeBlock = `export type EventType = "plan" | "tool_call" | "tool_result" | "patch" | "error" | "done";
+const envelopeBlock = `export type EventType =
+  | "plan"
+  | "tool_call"
+  | "tool_result"
+  | "patch"
+  | "error"
+  | "done"
+  | "text_delta"
+  | "heartbeat"
+  | "confirmation_request"
+  | "confirmation_decision"
+  | "cancelled";
 
 export interface EventEnvelope {
   protocol_version: "2.0.0";
   trace_id: string;
   event_id: string;
-  run_id: string;
+  execution_id: string;
   seq: number;
   ts: string;
   type: EventType;

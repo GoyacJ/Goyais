@@ -12,20 +12,20 @@ class DiagnosticsService:
     def __init__(self, repo: Repository):
         self.repo = repo
 
-    async def export_run(self, run_id: str, limit: int = 200) -> dict[str, Any]:
-        run = await self.repo.get_run(run_id)
-        if run is None:
+    async def export_execution(self, execution_id: str, limit: int = 200) -> dict[str, Any]:
+        execution = await self.repo.get_execution(execution_id)
+        if execution is None:
             raise GoyaisApiError(
                 code="E_SCHEMA_INVALID",
-                message="Run not found.",
+                message="Execution not found.",
                 retryable=False,
                 status_code=404,
-                cause="run_not_found",
+                cause="execution_not_found",
             )
 
-        events = await self.repo.list_events_by_run(run_id)
+        events = await self.repo.list_events_by_execution(execution_id)
         trimmed_events = events[-limit:]
-        audits = await self.repo.list_audit_logs_by_run(run_id, limit=limit)
+        audits = await self.repo.list_audit_logs_by_execution(execution_id, limit=limit)
 
         error_events = [
             event
@@ -38,7 +38,7 @@ class DiagnosticsService:
         outcome_counter = Counter(str(item.get("outcome", "unknown")) for item in audits)
 
         diagnostics = {
-            "run": run,
+            "execution": execution,
             "events": trimmed_events,
             "audit_summary": {
                 "count": len(audits),

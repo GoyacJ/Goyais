@@ -2,7 +2,7 @@ import { CircleCheck, CircleX } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { getRunDataSource } from "@/api/runDataSource";
+import { getSessionDataSource } from "@/api/sessionDataSource";
 import { Badge } from "@/components/ui/badge";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { selectCurrentProfile, useWorkspaceStore } from "@/stores/workspaceStore";
@@ -11,17 +11,17 @@ export function StatusBar() {
   const { t } = useTranslation();
   const currentProfile = useWorkspaceStore(selectCurrentProfile);
   const runtimeUrl = useSettingsStore((state) => state.runtimeUrl);
-  const runDataSource = useMemo(() => getRunDataSource(currentProfile), [currentProfile]);
+  const sessionDataSource = useMemo(() => getSessionDataSource(currentProfile), [currentProfile]);
   const [runtimeOk, setRuntimeOk] = useState<boolean | null>(null);
 
   const checkRuntime = useCallback(async () => {
     try {
-      const payload = await runDataSource.runtimeHealth();
+      const payload = await sessionDataSource.runtimeHealth();
       setRuntimeOk(Boolean(payload.ok));
     } catch {
       setRuntimeOk(false);
     }
-  }, [runDataSource]);
+  }, [sessionDataSource]);
 
   useEffect(() => {
     void checkRuntime();

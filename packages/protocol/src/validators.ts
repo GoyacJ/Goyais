@@ -1,10 +1,10 @@
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
 import envelopeSchema from "../schemas/v2/event-envelope.schema.json";
-import runCreateRequestSchema from "../schemas/v2/run-create.request.schema.json";
-import runCreateResponseSchema from "../schemas/v2/run-create.response.schema.json";
-import toolConfirmationRequestSchema from "../schemas/v2/tool-confirmation.request.schema.json";
-import toolConfirmationResponseSchema from "../schemas/v2/tool-confirmation.response.schema.json";
+import executionCreateRequestSchema from "../schemas/v2/execution-create.request.schema.json";
+import executionCreateResponseSchema from "../schemas/v2/execution-create.response.schema.json";
+import confirmationDecisionRequestSchema from "../schemas/v2/confirmation-decision.request.schema.json";
+import confirmationDecisionResponseSchema from "../schemas/v2/confirmation-decision.response.schema.json";
 import goyaisErrorSchema from "../schemas/v2/goyais-error.schema.json";
 import eventPayloadPlanSchema from "../schemas/v2/event-payload-plan.schema.json";
 import eventPayloadToolCallSchema from "../schemas/v2/event-payload-tool-call.schema.json";
@@ -24,46 +24,46 @@ addFormats(ajv);
   eventPayloadPatchSchema,
   eventPayloadErrorSchema,
   eventPayloadDoneSchema,
-  runCreateRequestSchema,
-  runCreateResponseSchema,
-  toolConfirmationRequestSchema,
-  toolConfirmationResponseSchema,
+  executionCreateRequestSchema,
+  executionCreateResponseSchema,
+  confirmationDecisionRequestSchema,
+  confirmationDecisionResponseSchema,
   envelopeSchema
 ].forEach((schema) => ajv.addSchema(schema));
 
-const runCreateRequestValidator = ajv.getSchema("goyais.protocol.v2.run-create.request")!;
-const runCreateResponseValidator = ajv.getSchema("goyais.protocol.v2.run-create.response")!;
+const executionCreateRequestValidator = ajv.getSchema("goyais.protocol.v2.execution-create.request")!;
+const executionCreateResponseValidator = ajv.getSchema("goyais.protocol.v2.execution-create.response")!;
 const eventEnvelopeValidator = ajv.getSchema("goyais.protocol.v2.event-envelope")!;
-const toolConfirmationRequestValidator = ajv.getSchema("goyais.protocol.v2.tool-confirmation.request")!;
-const toolConfirmationResponseValidator = ajv.getSchema("goyais.protocol.v2.tool-confirmation.response")!;
+const confirmationDecisionRequestValidator = ajv.getSchema("goyais.protocol.v2.confirmation-decision.request")!;
+const confirmationDecisionResponseValidator = ajv.getSchema("goyais.protocol.v2.confirmation-decision.response")!;
 
-export function validateRunCreateRequest(payload: unknown): boolean {
-  return !!runCreateRequestValidator(payload);
+export function validateExecutionCreateRequest(payload: unknown): boolean {
+  return !!executionCreateRequestValidator(payload);
 }
 
-export function validateRunCreateResponse(payload: unknown): boolean {
-  return !!runCreateResponseValidator(payload);
+export function validateExecutionCreateResponse(payload: unknown): boolean {
+  return !!executionCreateResponseValidator(payload);
 }
 
 export function validateEventEnvelope(payload: unknown): boolean {
   return !!eventEnvelopeValidator(payload);
 }
 
-export function validateToolConfirmationRequest(payload: unknown): boolean {
-  return !!toolConfirmationRequestValidator(payload);
+export function validateConfirmationDecisionRequest(payload: unknown): boolean {
+  return !!confirmationDecisionRequestValidator(payload);
 }
 
-export function validateToolConfirmationResponse(payload: unknown): boolean {
-  return !!toolConfirmationResponseValidator(payload);
+export function validateConfirmationDecisionResponse(payload: unknown): boolean {
+  return !!confirmationDecisionResponseValidator(payload);
 }
 
 export function getValidationErrors(): string[] {
   const errors = [
-    runCreateRequestValidator.errors,
-    runCreateResponseValidator.errors,
+    executionCreateRequestValidator.errors,
+    executionCreateResponseValidator.errors,
     eventEnvelopeValidator.errors,
-    toolConfirmationRequestValidator.errors,
-    toolConfirmationResponseValidator.errors
+    confirmationDecisionRequestValidator.errors,
+    confirmationDecisionResponseValidator.errors
   ]
     .flat()
     .filter((error): error is NonNullable<typeof error> => Boolean(error));

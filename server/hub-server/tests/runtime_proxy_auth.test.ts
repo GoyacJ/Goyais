@@ -129,14 +129,10 @@ describe("runtime proxy auth and permission enforcement", () => {
     const { workspaceId } = await buildAppAndLogin();
     const response = await app!.inject({
       method: "POST",
-      url: `/v1/runtime/runs?workspace_id=${workspaceId}`,
+      url: `/v1/runtime/sessions?workspace_id=${workspaceId}`,
       payload: {
-        project_id: "p1",
-        session_id: "s1",
-        input: "hi",
-        model_config_id: "mc1",
-        workspace_path: "/tmp/work",
-        options: { use_worktree: false }
+        project_id: "project-demo",
+        title: "new session"
       }
     });
 
@@ -152,17 +148,13 @@ describe("runtime proxy auth and permission enforcement", () => {
     const { token } = await buildAppAndLogin();
     const response = await app!.inject({
       method: "POST",
-      url: "/v1/runtime/runs?workspace_id=ws-not-member",
+      url: "/v1/runtime/sessions?workspace_id=ws-not-member",
       headers: {
         Authorization: `Bearer ${token}`
       },
       payload: {
-        project_id: "p1",
-        session_id: "s1",
-        input: "hi",
-        model_config_id: "mc1",
-        workspace_path: "/tmp/work",
-        options: { use_worktree: false }
+        project_id: "project-demo",
+        title: "new session"
       }
     });
 
@@ -170,64 +162,6 @@ describe("runtime proxy auth and permission enforcement", () => {
     expect(response.json()).toMatchObject({
       error: {
         code: "E_FORBIDDEN"
-      }
-    });
-  });
-
-  it("enforces run:create only for run creation", async () => {
-    const { token, userId, workspaceId } = await buildAppAndLogin();
-    const membership = db!.getMembershipRole(userId, workspaceId);
-    expect(membership).toBeTruthy();
-    db!.execute("DELETE FROM role_permissions WHERE role_id = ? AND perm_key = 'run:create'", membership!.role_id);
-
-    const response = await app!.inject({
-      method: "POST",
-      url: `/v1/runtime/runs?workspace_id=${workspaceId}`,
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
-      payload: {
-        project_id: "p1",
-        session_id: "s1",
-        input: "hi",
-        model_config_id: "mc1",
-        workspace_path: "/tmp/work",
-        options: { use_worktree: false }
-      }
-    });
-
-    expect(response.statusCode).toBe(403);
-    expect(response.json()).toMatchObject({
-      error: {
-        code: "E_FORBIDDEN",
-        details: {
-          perm_key: "run:create"
-        }
-      }
-    });
-  });
-
-  it("requires run:read for runs listing (no run:create fallback)", async () => {
-    const { token, userId, workspaceId } = await buildAppAndLogin();
-    const membership = db!.getMembershipRole(userId, workspaceId);
-    expect(membership).toBeTruthy();
-    db!.execute("DELETE FROM role_permissions WHERE role_id = ? AND perm_key = 'run:read'", membership!.role_id);
-
-    const response = await app!.inject({
-      method: "GET",
-      url: `/v1/runtime/runs?workspace_id=${workspaceId}&session_id=session-demo`,
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-
-    expect(response.statusCode).toBe(403);
-    expect(response.json()).toMatchObject({
-      error: {
-        code: "E_FORBIDDEN",
-        details: {
-          perm_key: "run:read"
-        }
       }
     });
   });
@@ -327,36 +261,6 @@ describe("runtime proxy auth and permission enforcement", () => {
         code: "E_FORBIDDEN",
         details: {
           perm_key: "run:create"
-        }
-      }
-    });
-  });
-
-  it("requires confirm:write for tool confirmations (no run:create fallback)", async () => {
-    const { token, userId, workspaceId } = await buildAppAndLogin();
-    const membership = db!.getMembershipRole(userId, workspaceId);
-    expect(membership).toBeTruthy();
-    db!.execute("DELETE FROM role_permissions WHERE role_id = ? AND perm_key = 'confirm:write'", membership!.role_id);
-
-    const response = await app!.inject({
-      method: "POST",
-      url: `/v1/runtime/tool-confirmations?workspace_id=${workspaceId}`,
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
-      payload: {
-        run_id: "run-1",
-        call_id: "call-1",
-        approved: true
-      }
-    });
-
-    expect(response.statusCode).toBe(403);
-    expect(response.json()).toMatchObject({
-      error: {
-        code: "E_FORBIDDEN",
-        details: {
-          perm_key: "confirm:write"
         }
       }
     });

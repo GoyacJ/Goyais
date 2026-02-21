@@ -23,15 +23,9 @@ export interface GoyaisProtocolV2GoyaisError {
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface GoyaisProtocolV2RunCreateRequest {
-  project_id: string;
+export interface GoyaisProtocolV2ExecutionCreateRequest {
   session_id: string;
-  input: string;
-  model_config_id: string;
-  workspace_path: string;
-  options: {
-    use_worktree: boolean;
-  };
+  message: string;
 }
 
 
@@ -42,8 +36,11 @@ export interface GoyaisProtocolV2RunCreateRequest {
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface GoyaisProtocolV2RunCreateResponse {
-  run_id: string;
+export interface GoyaisProtocolV2ExecutionCreateResponse {
+  execution_id: string;
+  trace_id: string;
+  session_id: string;
+  state: "pending" | "executing" | "waiting_confirmation" | "completed" | "failed" | "cancelled";
 }
 
 
@@ -54,10 +51,10 @@ export interface GoyaisProtocolV2RunCreateResponse {
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface GoyaisProtocolV2ToolConfirmationRequest {
-  run_id: string;
+export interface GoyaisProtocolV2ConfirmationDecisionRequest {
+  execution_id: string;
   call_id: string;
-  approved: boolean;
+  decision: "approved" | "denied";
 }
 
 
@@ -68,18 +65,29 @@ export interface GoyaisProtocolV2ToolConfirmationRequest {
  * and run json-schema-to-typescript to regenerate this file.
  */
 
-export interface GoyaisProtocolV2ToolConfirmationResponse {
+export interface GoyaisProtocolV2ConfirmationDecisionResponse {
   ok: boolean;
 }
 
 
-export type EventType = "plan" | "tool_call" | "tool_result" | "patch" | "error" | "done";
+export type EventType =
+  | "plan"
+  | "tool_call"
+  | "tool_result"
+  | "patch"
+  | "error"
+  | "done"
+  | "text_delta"
+  | "heartbeat"
+  | "confirmation_request"
+  | "confirmation_decision"
+  | "cancelled";
 
 export interface EventEnvelope {
   protocol_version: "2.0.0";
   trace_id: string;
   event_id: string;
-  run_id: string;
+  execution_id: string;
   seq: number;
   ts: string;
   type: EventType;

@@ -6,13 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { PROVIDER_ORDER, providerLabel, type ProviderKey } from "@/types/modelCatalog";
 import {
   selectCurrentPermissions,
   selectCurrentProfile,
   selectCurrentWorkspaceKind,
   useWorkspaceStore
 } from "@/stores/workspaceStore";
+import { PROVIDER_ORDER, type ProviderKey,providerLabel } from "@/types/modelCatalog";
 
 function parseOptionalNumber(value: string): number | null {
   const trimmed = value.trim();

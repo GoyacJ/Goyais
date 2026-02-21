@@ -33,7 +33,7 @@ function summaryFrom(event: EventEnvelope): string {
     return `Error: ${String(error?.message ?? "unknown")}`;
   }
   if (event.type === "done") {
-    return `Run ${String(payload.status ?? "finished")}`;
+    return `Execution ${String(payload.status ?? "finished")}`;
   }
   if (event.type === "plan") {
     return String(payload.summary ?? "Plan updated");
@@ -46,7 +46,7 @@ export function normalizeEventEnvelope(event: EventEnvelope): RunEventViewModel 
   return {
     id: event.event_id,
     seq: event.seq,
-    runId: event.run_id,
+    executionId: event.execution_id,
     ts: event.ts,
     type: event.type,
     payload,

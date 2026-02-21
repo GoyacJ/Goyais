@@ -6,34 +6,20 @@ export interface ConversationSessionSummary {
   project_id: string;
   title: string;
   updated_at: string;
-  last_run_id?: string;
+  last_execution_id?: string;
   last_status?: string;
   last_input_preview?: string;
-}
-
-export interface ConversationRunSummary {
-  run_id: string;
-  trace_id?: string;
-  status: string;
-  created_at: string;
-  input?: string;
-}
-
-export interface ConversationDetailState {
-  selectedRunId?: string;
 }
 
 interface ConversationStoreState {
   selectedProjectId?: string;
   selectedSessionId?: string;
   sessionsByProjectId: Record<string, ConversationSessionSummary[]>;
-  detailBySessionId: Record<string, ConversationDetailState>;
   setSelectedProject: (projectId?: string) => void;
   setSelectedSession: (projectId: string, sessionId?: string) => void;
   setSessions: (projectId: string, sessions: ConversationSessionSummary[]) => void;
   upsertSession: (session: ConversationSessionSummary) => void;
-  touchSessionRun: (sessionId: string, patch: Partial<ConversationSessionSummary>) => void;
-  setSelectedRunId: (sessionId: string, runId?: string) => void;
+  touchSessionExecution: (sessionId: string, patch: Partial<ConversationSessionSummary>) => void;
   reset: () => void;
 }
 
@@ -47,7 +33,6 @@ export const useConversationStore = create<ConversationStoreState>()(
       selectedProjectId: undefined,
       selectedSessionId: undefined,
       sessionsByProjectId: {},
-      detailBySessionId: {},
       setSelectedProject: (projectId) => {
         const firstSessionId = projectId ? get().sessionsByProjectId[projectId]?.[0]?.session_id : undefined;
         set({
@@ -56,16 +41,10 @@ export const useConversationStore = create<ConversationStoreState>()(
         });
       },
       setSelectedSession: (projectId, sessionId) => {
-        set((state) => ({
+        set({
           selectedProjectId: projectId,
-          selectedSessionId: sessionId,
-          detailBySessionId: sessionId
-            ? {
-                ...state.detailBySessionId,
-                [sessionId]: state.detailBySessionId[sessionId] ?? {}
-              }
-            : state.detailBySessionId
-        }));
+          selectedSessionId: sessionId
+        });
       },
       setSessions: (projectId, sessions) => {
         const sorted = sortSessions(sessions);
@@ -105,7 +84,7 @@ export const useConversationStore = create<ConversationStoreState>()(
           };
         });
       },
-      touchSessionRun: (sessionId, patch) => {
+      touchSessionExecution: (sessionId, patch) => {
         set((state) => {
           const sessionsByProjectId: Record<string, ConversationSessionSummary[]> = {};
           for (const [projectId, sessions] of Object.entries(state.sessionsByProjectId)) {
@@ -126,34 +105,21 @@ export const useConversationStore = create<ConversationStoreState>()(
           };
         });
       },
-      setSelectedRunId: (sessionId, runId) => {
-        set((state) => ({
-          detailBySessionId: {
-            ...state.detailBySessionId,
-            [sessionId]: {
-              ...state.detailBySessionId[sessionId],
-              selectedRunId: runId
-            }
-          }
-        }));
-      },
       reset: () => {
         set({
           selectedProjectId: undefined,
           selectedSessionId: undefined,
-          sessionsByProjectId: {},
-          detailBySessionId: {}
+          sessionsByProjectId: {}
         });
       }
     }),
     {
-      name: "goyais.conversations.v1",
+      name: "goyais.conversations.v2",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         selectedProjectId: state.selectedProjectId,
         selectedSessionId: state.selectedSessionId,
-        sessionsByProjectId: state.sessionsByProjectId,
-        detailBySessionId: state.detailBySessionId
+        sessionsByProjectId: state.sessionsByProjectId
       })
     }
   )

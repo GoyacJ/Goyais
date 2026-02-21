@@ -6,7 +6,7 @@
       "en-US": "English"
     },
     "nav": {
-      "run": "Run",
+      "run": "Execution",
       "projects": "Projects",
       "models": "Model Configs",
       "replay": "Replay",
@@ -47,7 +47,11 @@
       "runtime": "Runtime",
       "runtimeDescription": "Runtime endpoint and sync controls",
       "models": "Models",
-      "modelsDescription": "Model configs and default model"
+      "modelsDescription": "Model configs and default model",
+      "skills": "Skills",
+      "skillsDescription": "Manage workspace skill sets",
+      "mcp": "MCP Connectors",
+      "mcpDescription": "Manage MCP server connectors"
     },
     "syncSection": "Sync",
     "languageSection": "Language",
@@ -69,12 +73,18 @@
     "defaultModelDescription": "Use this model config by default for new conversations.",
     "saveState": {
       "saving": "Saving..."
-    }
+    },
+    "workspaceScope": "Workspace scope",
+    "workspaceScopeDescription": "Model configs are scoped to the current workspace.",
+    "workspacePermission": "Edit permission",
+    "workspacePermissionDescription": "Editability is controlled by your role in this workspace.",
+    "permissionWritable": "Writable",
+    "permissionReadonly": "Read-only"
   },
   "run": {
     "defaultTask": "Rename README title to MVP-1 Demo",
-    "startSuccess": "Run started",
-    "startFailed": "Failed to start run",
+    "startSuccess": "Execution started",
+    "startFailed": "Failed to start execution",
     "permissionActionFailed": "Permission action failed",
     "permissionApproved": "Permission approved",
     "permissionDenied": "Permission denied",
@@ -84,14 +94,14 @@
       "deny": "deny"
     },
     "composer": {
-      "title": "Run Composer",
+      "title": "Execution Composer",
       "projectId": "Project ID",
       "sessionId": "Session ID",
       "modelConfigId": "Model Config ID",
       "workspacePath": "Workspace Path",
       "task": "Task",
-      "startRun": "Start Run",
-      "running": "Running..."
+      "startRun": "Start Execution",
+      "running": "Executing..."
     }
   },
   "timeline": {
@@ -105,7 +115,7 @@
       "done": "done"
     },
     "noEventsTitle": "No timeline events",
-    "noEventsDescription": "Start a run to stream plan, tool calls, patch, and diagnostics.",
+    "noEventsDescription": "Start an execution to stream plan, tool calls, patch, and diagnostics.",
     "result": {
       "ok": "ok",
       "error": "error",
@@ -129,7 +139,7 @@
       "toolResult": "Tool result: {{callId}} ({{status}})",
       "patch": "Patch generated",
       "error": "Error: {{message}}",
-      "done": "Run {{status}}",
+      "done": "Execution {{status}}",
       "planDefault": "Plan updated"
     }
   },
@@ -207,14 +217,14 @@
       "settings": "settings"
     },
     "commands": {
-      "runLabel": "Go to Run",
-      "runHint": "Open main run page",
+      "runLabel": "Go to Execution",
+      "runHint": "Open main execution page",
       "projectsLabel": "Go to Projects",
       "projectsHint": "Manage workspaces",
       "modelsLabel": "Go to Model Configs",
       "modelsHint": "Switch model presets",
       "replayLabel": "Go to Replay",
-      "replayHint": "Inspect run timeline",
+      "replayHint": "Inspect execution timeline",
       "settingsLabel": "Go to Settings",
       "settingsHint": "Runtime and sync",
       "themeDark": "Theme: Dark",
@@ -243,9 +253,22 @@
     "createFailed": "Create project failed",
     "deleteSuccess": "Project deleted",
     "deleteFailed": "Delete project failed",
+    "syncFailed": "Sync project failed",
     "projectId": "id: {{id}}",
     "remoteHint": "Remote workspace uses Hub server as authoritative project source.",
-    "createDescription": "Create a project and open multiple conversations under it."
+    "createDescription": "Create a project and open multiple conversations under it.",
+    "addFolder": "Add Folder",
+    "addGitRepo": "Add Git Repo",
+    "gitRepoUrl": "Repository URL",
+    "gitBranch": "Branch (optional)",
+    "nameOptional": "Name (optional)",
+    "nameDerivedFromUrl": "Derived from URL",
+    "syncStatus": {
+      "pending": "Pending sync",
+      "syncing": "Syncing...",
+      "ready": "Ready",
+      "error": "Sync error"
+    }
   },
   "models": {
     "title": "Model Configs",
@@ -261,6 +284,7 @@
     "update": "Update Model Config",
     "cancelEdit": "Cancel Edit",
     "edit": "Edit",
+    "actions": "Actions",
     "delete": "Delete",
     "loading": "Loading model configs...",
     "loadFailed": "Failed to load model configs",
@@ -285,18 +309,21 @@
     "maxTokensDescription": "Positive integer only.",
     "secretRefDescription": "Secret reference used by runtime.",
     "apiKeyDescription": "Optional. Fill only when rotating key.",
+    "apiKeyKeychainDescription": "Saved to system keychain only and never written to local runtime DB.",
     "apiKeyPlaceholder": "Leave empty to keep current key",
-    "empty": "No model configs yet."
+    "empty": "No model configs yet.",
+    "addDescription": "Fill the model config fields and click Save to create it.",
+    "editDescription": "Update model config fields and click Save to apply changes."
   },
   "replay": {
     "title": "Replay",
     "sessionId": "Session ID",
-    "loadRuns": "Load Runs",
-    "loadFailed": "Load runs failed",
+    "loadRuns": "Load Executions",
+    "loadFailed": "Load executions failed",
     "loading": "Loading replay...",
     "timeline": "Timeline",
     "timelineRun": "Timeline · {{runId}}",
-    "selectRun": "Select run"
+    "selectRun": "Select execution"
   },
   "toast": {
     "diagnostics": "Diagnostics",
@@ -309,7 +336,7 @@
     "retry": "Retry"
   },
   "nav": {
-    "run": "Run",
+    "run": "Execution",
     "projects": "Projects",
     "models": "Model Configs",
     "replay": "Replay",
@@ -347,7 +374,7 @@
       "description": "Remote backend data APIs will be available in Phase 2.",
       "nextStep": "You can switch menus and permissions now. Data pages are placeholder-only in this phase.",
       "run": {
-        "title": "Remote Run (Phase 2 Placeholder)"
+        "title": "Remote Execution (Phase 2 Placeholder)"
       },
       "projects": {
         "title": "Remote Projects (Phase 2 Placeholder)"
@@ -374,12 +401,104 @@
     "inputPlaceholder": "Describe what you want to build...",
     "send": "Send",
     "sending": "Sending...",
-    "startSuccess": "Conversation run started",
-    "startFailed": "Failed to start conversation run",
+    "sessionMode": "Mode",
+    "sessionModeAgent": "Agent",
+    "sessionModeAgentDescription": "Auto-executes tools; sensitive actions require confirmation.",
+    "sessionModePlan": "Plan",
+    "sessionModePlanDescription": "Shows a plan for your approval before executing.",
+    "sessionWorktree": "Worktree",
+    "sessionWorktreeOn": "on",
+    "sessionWorktreeOff": "off",
+    "planApprovalTitle": "Approve Execution Plan",
+    "planApprovalDescription": "Review the agent's plan before it executes.",
+    "planSummary": "Plan summary",
+    "planSteps": "Steps",
+    "planApprove": "Approve Plan",
+    "planReject": "Reject Plan",
+    "transcriptTitle": "Conversation",
+    "transcriptEmptyTitle": "No conversation yet",
+    "transcriptEmptyDescription": "After you send a message, user/assistant turns will appear here.",
+    "modelSelectorTitle": "Model",
+    "executionStatus": "Execution status: {{status}}",
+    "planUpdated": "Plan updated",
+    "patchGenerated": "Patch generated",
+    "startSuccess": "Conversation execution started",
+    "startFailed": "Failed to start conversation execution",
     "modelRequired": "Please configure and select a model first",
     "rename": "Rename",
     "renameFailed": "Rename failed",
     "noProjectTitle": "No projects yet",
-    "noProjectDescription": "Create a project in the sidebar to start a conversation."
+    "noProjectDescription": "Create a project in the sidebar to start a conversation.",
+    "selectedProject": "Selected project",
+    "headerProject": "Project",
+    "headerSession": "Conversation",
+    "headerBranch": "Git branch",
+    "branchLoading": "Loading...",
+    "branchUnavailable": "—",
+    "executionActionsTitle": "Execution Actions",
+    "executionIdLabel": "Execution",
+    "commitMessagePlaceholder": "Commit message (optional)",
+    "commitAction": "Commit",
+    "exportPatchAction": "Export Patch",
+    "discardAction": "Discard",
+    "commitShaLabel": "Commit SHA",
+    "commitSuccess": "Commit created",
+    "commitFailed": "Commit failed",
+    "patchExportSuccess": "Patch exported",
+    "patchExportFailed": "Patch export failed",
+    "discardConfirm": "Discard this execution worktree changes?",
+    "discardSuccess": "Worktree changes discarded",
+    "discardFailed": "Discard failed"
+  },
+  "skills": {
+    "title": "Skill Sets",
+    "description": "Define reusable skill sets for sessions in this workspace.",
+    "add": "Add Skill Set",
+    "addDescription": "Create a new skill set to group related tools.",
+    "edit": "Edit Skill Set",
+    "save": "Save",
+    "colName": "Name",
+    "colDescription": "Description",
+    "namePlaceholder": "e.g. Web Researcher",
+    "descriptionPlaceholder": "Optional description",
+    "empty": "No skill sets yet. Add one to get started.",
+    "loading": "Loading skill sets...",
+    "loadFailed": "Failed to load skill sets",
+    "createSuccess": "Skill set created",
+    "createFailed": "Failed to create skill set",
+    "updateSuccess": "Skill set updated",
+    "updateFailed": "Failed to update skill set",
+    "deleteSuccess": "Skill set deleted",
+    "deleteFailed": "Failed to delete skill set"
+  },
+  "mcp": {
+    "title": "MCP Connectors",
+    "description": "Connect MCP servers to make their tools available in sessions.",
+    "add": "Add Connector",
+    "addDescription": "Configure a new MCP server connection.",
+    "edit": "Edit Connector",
+    "save": "Save",
+    "colName": "Name",
+    "colTransport": "Transport",
+    "colEndpoint": "Endpoint",
+    "colStatus": "Status",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "enable": "Enable",
+    "disable": "Disable",
+    "namePlaceholder": "e.g. GitHub MCP",
+    "endpointPlaceholder": "e.g. https://mcp.example.com/sse",
+    "secretRef": "Secret Reference",
+    "secretRefPlaceholder": "e.g. secret:my-token",
+    "secretRefHelp": "Optional reference to a stored secret for authentication.",
+    "empty": "No MCP connectors yet. Add one to get started.",
+    "loading": "Loading connectors...",
+    "loadFailed": "Failed to load MCP connectors",
+    "createSuccess": "Connector created",
+    "createFailed": "Failed to create connector",
+    "updateSuccess": "Connector updated",
+    "updateFailed": "Failed to update connector",
+    "deleteSuccess": "Connector deleted",
+    "deleteFailed": "Failed to delete connector"
   }
 }

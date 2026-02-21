@@ -1,19 +1,31 @@
-from fastapi.testclient import TestClient
-
-from app.main import app
-
-
-def test_create_run_returns_run_id():
+def test_dispatch_internal_execution_returns_accepted(isolated_client):
     payload = {
-        "project_id": "project_1",
-        "session_id": "session_1",
-        "input": "update readme",
-        "model_config_id": "model_1",
-        "workspace_path": ".",
-        "options": {"use_worktree": False},
+        "execution_id": "exec-1",
+        "trace_id": "trace-1",
+        "workspace_id": "ws-local",
+        "project_id": "project-1",
+        "session_id": "session-1",
+        "user_message": "update readme",
+        "repo_root": ".",
+        "use_worktree": False,
     }
-    with TestClient(app) as client:
-        resp = client.post("/v1/runs", json=payload)
+    resp = isolated_client.post("/internal/executions", json=payload)
+
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["execution_id"] == "exec-1"
+    assert body["status"] == "accepted"
+
+
+def test_internal_confirmation_returns_ok(isolated_client):
+    resp = isolated_client.post(
+        "/internal/confirmations",
+        json={
+            "execution_id": "exec-1",
+            "call_id": "call-1",
+            "decision": "approved",
+        },
+    )
 
     assert resp.status_code == 200
-    assert "run_id" in resp.json()
+    assert resp.json()["status"] == "ok"

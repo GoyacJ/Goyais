@@ -13,7 +13,8 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { classifyToolRisk } from "@/lib/risk";
-import type { PendingConfirmation } from "@/stores/runStore";
+import { useExecutionStore } from "@/stores/executionStore";
+import type { PendingConfirmation } from "@/stores/executionStore";
 
 interface CapabilityPromptDialogProps {
   item?: PendingConfirmation;
@@ -25,6 +26,66 @@ interface CapabilityPromptDialogProps {
 export function CapabilityPromptDialog({ item, open, onClose, onDecision }: CapabilityPromptDialogProps) {
   const { t } = useTranslation();
   const risk = useMemo(() => (item ? classifyToolRisk(item.toolName, item.args) : null), [item]);
+  const lastPlan = useExecutionStore((state) => state.lastPlan);
+
+  const isPlanApproval = item?.toolName === "plan_approval";
+
+  if (isPlanApproval) {
+    return (
+      <Dialog open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
+        <DialogContent
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              onDecision("deny");
+            }
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onDecision("once");
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4 text-info" />
+              {t("conversation.planApprovalTitle")}
+            </DialogTitle>
+            <DialogDescription>{t("conversation.planApprovalDescription")}</DialogDescription>
+          </DialogHeader>
+
+          {lastPlan ? (
+            <div className="space-y-3">
+              {lastPlan.summary ? (
+                <div>
+                  <p className="mb-1 text-xs font-medium text-foreground">{t("conversation.planSummary")}</p>
+                  <p className="rounded-control border border-border-subtle bg-background/60 p-2 text-small text-muted-foreground">
+                    {lastPlan.summary}
+                  </p>
+                </div>
+              ) : null}
+              {lastPlan.steps && lastPlan.steps.length > 0 ? (
+                <div>
+                  <p className="mb-1 text-xs font-medium text-foreground">{t("conversation.planSteps")}</p>
+                  <ol className="list-decimal space-y-1 pl-4 text-small text-muted-foreground">
+                    {lastPlan.steps.map((step, idx) => (
+                      <li key={idx}>{step}</li>
+                    ))}
+                  </ol>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onDecision("deny")}>
+              {t("conversation.planReject")}
+            </Button>
+            <Button onClick={() => onDecision("once")}>{t("conversation.planApprove")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? undefined : onClose())}>

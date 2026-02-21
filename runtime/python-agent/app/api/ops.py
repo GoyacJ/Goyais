@@ -6,10 +6,11 @@ from fastapi import APIRouter
 
 from app.config import load_settings
 from app.observability.metrics import get_runtime_metrics
-from app.services.run_service import PROTOCOL_VERSION
+from app.protocol_version import load_protocol_version
 
 router = APIRouter(prefix="/v1", tags=["ops"])
 settings = load_settings()
+PROTOCOL_VERSION = load_protocol_version()
 
 
 @router.get("/health")

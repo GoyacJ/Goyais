@@ -45,7 +45,7 @@ export function AppLayout() {
         <main
           className={cn(
             "min-h-0 flex-1 overflow-auto scrollbar-subtle",
-            isSettingsRoute ? "p-0" : "p-page"
+            "p-0"
           )}
         >
           <Outlet />

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SCHEMA_DIR="$ROOT_DIR/schemas/v1"
+SCHEMA_DIR="$ROOT_DIR/schemas/v2"
 OUT_DIR="$ROOT_DIR/generated/python/src/goyais_protocol"
 OUT_FILE="$OUT_DIR/models.py"
 
@@ -24,8 +24,10 @@ from pydantic import BaseModel
 
 
 class EventEnvelope(BaseModel):
+  protocol_version: str
+  trace_id: str
   event_id: str
-  run_id: str
+  execution_id: str
   seq: int
   ts: str
   type: str

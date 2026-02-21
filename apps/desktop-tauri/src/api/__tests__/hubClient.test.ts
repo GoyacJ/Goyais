@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  commitExecution,
   createModelConfig,
+  discardExecution,
+  exportExecutionPatch,
   getBootstrapStatus,
   getNavigation,
   listProjects,
@@ -147,5 +150,60 @@ describe("hubClient", () => {
     expect(fetchMock.mock.calls[0][0]).toBe(
       "http://127.0.0.1:8787/v1/runtime/model-configs/mc-1/models?workspace_id=ws-1"
     );
+  });
+
+  it("posts execution commit payload to workspace endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ commit_sha: "abc123" }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await commitExecution("http://127.0.0.1:8787", "token-abc", "ws-1", "exec-1", "feat: msg");
+    expect(result.commit_sha).toBe("abc123");
+    expect(fetchMock.mock.calls[0][0]).toBe("http://127.0.0.1:8787/v1/executions/exec-1/commit?workspace_id=ws-1");
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe("POST");
+    expect(String(init.body)).toContain("feat: msg");
+  });
+
+  it("downloads execution patch from workspace endpoint", async () => {
+    const patchText = "--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-hello\n+world\n";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(patchText, {
+        status: 200,
+        headers: {
+          "content-type": "text/plain; charset=utf-8"
+        }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await exportExecutionPatch("http://127.0.0.1:8787", "token-abc", "ws-1", "exec-1");
+    expect(result).toBe(patchText);
+    expect(fetchMock.mock.calls[0][0]).toBe("http://127.0.0.1:8787/v1/executions/exec-1/patch?workspace_id=ws-1");
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe("GET");
+  });
+
+  it("calls execution discard endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await discardExecution("http://127.0.0.1:8787", "token-abc", "ws-1", "exec-1");
+    expect(fetchMock.mock.calls[0][0]).toBe("http://127.0.0.1:8787/v1/executions/exec-1/discard?workspace_id=ws-1");
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe("DELETE");
   });
 });

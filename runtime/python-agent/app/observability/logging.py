@@ -16,7 +16,7 @@ class JsonFormatter(logging.Formatter):
 
         for key in (
             "trace_id",
-            "run_id",
+            "execution_id",
             "event_id",
             "tool_name",
             "duration_ms",

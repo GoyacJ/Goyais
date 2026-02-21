@@ -13,13 +13,13 @@ interface SettingRowProps {
 
 export function SettingRow({ title, description, control, status = "idle", statusLabel, compact = false }: SettingRowProps) {
   return (
-    <div className={cn("flex items-start justify-between gap-4 px-4 py-3", compact ? "" : "min-h-[76px]") }>
+    <div className={cn("flex items-start justify-between gap-3 px-3 py-2.5", compact ? "" : "min-h-[68px]")}>
       <div className="min-w-0 flex-1">
         <p className="text-body font-medium text-foreground">{title}</p>
         {description ? <p className="mt-0.5 text-small text-muted-foreground">{description}</p> : null}
       </div>
-      <div className="flex min-w-[220px] flex-col items-end gap-1">
-        <div className="w-full max-w-[280px]">{control}</div>
+      <div className="flex min-w-[200px] flex-col items-end gap-1">
+        <div className="w-full max-w-[260px]">{control}</div>
         {status !== "idle" || statusLabel ? (
           <p
             className={cn(

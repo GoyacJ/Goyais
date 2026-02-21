@@ -79,8 +79,11 @@ function parseProvider(value: unknown): ProviderKey {
   return "openai";
 }
 
-function defaultLocalSecretRef(provider: ProviderKey): string {
-  return `keychain:${provider}:default`;
+const LOCAL_TEST_PROJECT_ID_PATTERNS = [/^project-sessions/i, /^project-rename/i, /^diag-project-diag-execution-/i];
+
+function shouldIgnoreLocalProject(project: Record<string, unknown>): boolean {
+  const projectId = String(project.project_id ?? "");
+  return LOCAL_TEST_PROJECT_ID_PATTERNS.some((pattern) => pattern.test(projectId));
 }
 
 export interface DataProject {
@@ -89,6 +92,11 @@ export interface DataProject {
   name: string;
   root_uri: string | null;
   workspace_path: string | null;
+  repo_url: string | null;
+  branch: string | null;
+  sync_status: "pending" | "syncing" | "ready" | "error" | null;
+  sync_error: string | null;
+  last_synced_at: string | null;
   created_at: string | null;
   updated_at: string | null;
   source: "local" | "remote";
@@ -97,48 +105,64 @@ export interface DataProject {
 export interface ProjectsClient {
   kind: "local" | "remote";
   supportsDelete: boolean;
+  supportsGit: boolean;
   list: () => Promise<DataProject[]>;
   create: (input: { name: string; location: string }) => Promise<void>;
+  createGit: (input: { name: string; repo_url: string; branch?: string; auth_ref?: string }) => Promise<void>;
   delete: (projectId: string) => Promise<void>;
+  sync: (projectId: string) => Promise<void>;
 }
 
 export function getProjectsClient(profile: WorkspaceProfile | undefined): ProjectsClient {
   if (!profile || profile.kind === "local") {
+    const notSupported = async () => {
+      throw toError({ code: "E_VALIDATION", message: "Local data source does not support this operation", status: 400 });
+    };
     return {
       kind: "local",
       supportsDelete: false,
+      supportsGit: false,
       list: async () => {
         const payload = await runtimeClient.listProjects();
-        return payload.projects.map((project, index) => ({
-          project_id: String(project.project_id ?? `local-project-${index}`),
-          workspace_id: null,
-          name: String(project.name ?? ""),
-          root_uri: null,
-          workspace_path: String(project.workspace_path ?? ""),
-          created_at: null,
-          updated_at: null,
-          source: "local"
-        }));
+        const deduped = new Map<string, DataProject>();
+        payload.projects
+          .filter((project) => !shouldIgnoreLocalProject(project))
+          .forEach((project, index) => {
+            const projectId = String(project.project_id ?? `local-project-${index}`);
+            if (deduped.has(projectId)) {
+              return;
+            }
+            deduped.set(projectId, {
+              project_id: projectId,
+              workspace_id: null,
+              name: String(project.name ?? ""),
+              root_uri: null,
+              workspace_path: String(project.workspace_path ?? ""),
+              repo_url: null,
+              branch: null,
+              sync_status: null,
+              sync_error: null,
+              last_synced_at: null,
+              created_at: null,
+              updated_at: null,
+              source: "local"
+            });
+          });
+        return [...deduped.values()];
       },
       create: async ({ name, location }) => {
-        await runtimeClient.createProject({
-          name,
-          workspace_path: location
-        });
+        await runtimeClient.createProject({ name, workspace_path: location });
       },
-      delete: async () => {
-        throw toError({
-          code: "E_VALIDATION",
-          message: "Local data source does not support deleting projects",
-          status: 400
-        });
-      }
+      createGit: notSupported,
+      delete: notSupported,
+      sync: notSupported
     };
   }
 
   return {
     kind: "remote",
     supportsDelete: true,
+    supportsGit: true,
     list: async () => {
       const remote = await resolveRemoteContext(profile);
       const payload = await hubClient.listProjects(remote.serverUrl, remote.token, remote.workspaceId);
@@ -146,8 +170,13 @@ export function getProjectsClient(profile: WorkspaceProfile | undefined): Projec
         project_id: project.project_id,
         workspace_id: project.workspace_id,
         name: project.name,
-        root_uri: project.root_uri,
+        root_uri: project.root_uri ?? null,
         workspace_path: null,
+        repo_url: project.repo_url ?? null,
+        branch: project.branch ?? null,
+        sync_status: project.sync_status ?? null,
+        sync_error: project.sync_error ?? null,
+        last_synced_at: project.last_synced_at ?? null,
         created_at: project.created_at,
         updated_at: project.updated_at,
         source: "remote"
@@ -155,14 +184,19 @@ export function getProjectsClient(profile: WorkspaceProfile | undefined): Projec
     },
     create: async ({ name, location }) => {
       const remote = await resolveRemoteContext(profile);
-      await hubClient.createProject(remote.serverUrl, remote.token, remote.workspaceId, {
-        name,
-        root_uri: location
-      });
+      await hubClient.createProject(remote.serverUrl, remote.token, remote.workspaceId, { name, root_uri: location });
+    },
+    createGit: async ({ name, repo_url, branch, auth_ref }) => {
+      const remote = await resolveRemoteContext(profile);
+      await hubClient.createProject(remote.serverUrl, remote.token, remote.workspaceId, { name, repo_url, branch, auth_ref });
     },
     delete: async (projectId) => {
       const remote = await resolveRemoteContext(profile);
       await hubClient.deleteProject(remote.serverUrl, remote.token, remote.workspaceId, projectId);
+    },
+    sync: async (projectId) => {
+      const remote = await resolveRemoteContext(profile);
+      await hubClient.syncProject(remote.serverUrl, remote.token, remote.workspaceId, projectId);
     }
   };
 }
@@ -182,6 +216,7 @@ export interface DataModelConfig {
 }
 
 export interface CreateModelConfigInput {
+  model_config_id?: string;
   provider: ProviderKey;
   model: string;
   base_url?: string | null;
@@ -210,7 +245,7 @@ export interface ModelConfigsClient {
   create: (input: CreateModelConfigInput) => Promise<void>;
   update: (modelConfigId: string, input: UpdateModelConfigInput) => Promise<void>;
   delete: (modelConfigId: string) => Promise<void>;
-  listModels: (modelConfigId: string) => Promise<ModelCatalogResponse>;
+  listModels: (modelConfigId: string, options?: { apiKeyOverride?: string }) => Promise<ModelCatalogResponse>;
 }
 
 export function getModelConfigsClient(profile: WorkspaceProfile | undefined): ModelConfigsClient {
@@ -237,29 +272,40 @@ export function getModelConfigsClient(profile: WorkspaceProfile | undefined): Mo
         }));
       },
       create: async (input) => {
+        const modelConfigId = input.model_config_id ?? crypto.randomUUID();
         await runtimeClient.createModelConfig({
+          model_config_id: modelConfigId,
           provider: input.provider,
           model: input.model,
           base_url: input.base_url ?? undefined,
           temperature: input.temperature ?? undefined,
           max_tokens: input.max_tokens ?? undefined,
-          secret_ref: input.secret_ref ?? defaultLocalSecretRef(input.provider)
+          secret_ref: input.secret_ref ?? `keychain:${input.provider}:${modelConfigId}`
         });
       },
       update: async (modelConfigId, input) => {
+        const secretRef =
+          input.secret_ref !== undefined
+            ? input.secret_ref
+            : input.provider
+              ? `keychain:${input.provider}:${modelConfigId}`
+              : undefined;
         await runtimeClient.updateModelConfig(modelConfigId, {
           provider: input.provider,
           model: input.model,
           base_url: input.base_url ?? undefined,
           temperature: input.temperature ?? undefined,
           max_tokens: input.max_tokens ?? undefined,
-          secret_ref: input.secret_ref
+          secret_ref: secretRef
         });
       },
       delete: async (modelConfigId) => {
         await runtimeClient.deleteModelConfig(modelConfigId);
       },
-      listModels: async (modelConfigId) => runtimeClient.listModelCatalog(modelConfigId)
+      listModels: async (modelConfigId, options) =>
+        runtimeClient.listModelCatalog(modelConfigId, {
+          apiKeyOverride: options?.apiKeyOverride
+        })
     };
   }
 

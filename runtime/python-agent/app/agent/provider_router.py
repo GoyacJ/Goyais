@@ -22,5 +22,5 @@ def build_provider(provider: str, api_key: str, base_url: str | None = None) -> 
     if provider == "anthropic":
         return AnthropicProvider(api_key=api_key)
     if provider == "google":
-        raise ValueError("Unsupported provider for run execution: google")
+        raise ValueError("Unsupported provider for execution: google")
     raise ValueError(f"Unsupported provider: {provider}")

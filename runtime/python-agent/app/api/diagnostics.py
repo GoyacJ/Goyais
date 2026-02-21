@@ -11,8 +11,13 @@ router = APIRouter(prefix="/v1", tags=["diagnostics"])
 settings = load_settings()
 
 
-@router.get("/diagnostics/run/{run_id}")
-async def diagnostics_by_run(run_id: str, limit: int = 200, x_runtime_token: str = Header(default=""), repo=Depends(get_repo)):
+@router.get("/diagnostics/execution/{execution_id}")
+async def diagnostics_by_execution(
+    execution_id: str,
+    limit: int = 200,
+    x_runtime_token: str = Header(default=""),
+    repo=Depends(get_repo),
+):
     if x_runtime_token != settings.runtime_secret_token:
         raise GoyaisApiError(
             code="E_SYNC_AUTH",
@@ -24,4 +29,4 @@ async def diagnostics_by_run(run_id: str, limit: int = 200, x_runtime_token: str
 
     bounded_limit = max(1, min(limit, 1000))
     service = DiagnosticsService(repo)
-    return await service.export_run(run_id, bounded_limit)
+    return await service.export_execution(execution_id, bounded_limit)

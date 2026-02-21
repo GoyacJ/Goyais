@@ -160,11 +160,12 @@ export async function resolveRuntimeForWorkspace(options: ResolveRuntimeOptions)
 interface ForwardRuntimeRequestOptions {
   runtimeBaseUrl: string;
   runtimePath: string;
-  method: "GET" | "POST" | "PATCH";
+  method: "GET" | "POST" | "PATCH" | "DELETE";
   userId: string;
   traceId: string;
   runtimeSharedSecret: string;
   payload?: unknown;
+  extraHeaders?: Record<string, string>;
   timeoutMs?: number;
 }
 
@@ -179,6 +180,11 @@ export async function forwardRuntimeRequest(options: ForwardRuntimeRequestOption
       "X-User-Id": options.userId,
       "X-Trace-Id": options.traceId
     });
+    if (options.extraHeaders) {
+      Object.entries(options.extraHeaders).forEach(([key, value]) => {
+        headers.set(key, value);
+      });
+    }
 
     let body: string | undefined;
     if (options.payload !== undefined) {

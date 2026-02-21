@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Header, Request
 
 from app.deps import get_repo
 from app.errors import GoyaisApiError
@@ -247,7 +247,12 @@ async def delete_model_config(model_config_id: str, repo=Depends(get_repo)):
 
 
 @router.get("/model-configs/{model_config_id}/models")
-async def list_provider_models(model_config_id: str, request: Request, repo=Depends(get_repo)):
+async def list_provider_models(
+    model_config_id: str,
+    request: Request,
+    x_api_key_override: str = Header(default=""),
+    repo=Depends(get_repo),
+):
     model_config = await repo.get_model_config(model_config_id)
     if model_config is None:
         raise GoyaisApiError(
@@ -259,4 +264,9 @@ async def list_provider_models(model_config_id: str, request: Request, repo=Depe
         )
 
     trace_id = str(getattr(request.state, "trace_id", ""))
-    return await list_models_for_model_config(model_config, trace_id=trace_id)
+    api_key_override = x_api_key_override.strip() or None
+    return await list_models_for_model_config(
+        model_config,
+        trace_id=trace_id,
+        api_key_override=api_key_override,
+    )

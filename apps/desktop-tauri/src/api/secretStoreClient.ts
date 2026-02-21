@@ -19,3 +19,19 @@ export async function deleteToken(profileId: string): Promise<void> {
     profileId
   });
 }
+
+export async function setProviderSecret(provider: string, profile: string, value: string): Promise<void> {
+  await invoke("secret_set", {
+    provider,
+    profile,
+    value
+  });
+}
+
+export async function getProviderSecret(provider: string, profile: string): Promise<string | null> {
+  const value = await invoke<string | null>("secret_get", {
+    provider,
+    profile
+  });
+  return value ?? null;
+}

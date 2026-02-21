@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 interface PermissionDecision {
-  runId: string;
+  executionId: string;
   callId: string;
   approved: boolean;
   mode: "once" | "always" | "deny";

@@ -1,11 +1,5 @@
-from fastapi.testclient import TestClient
-
-from app.main import app
-
-
-def test_secret_endpoint_returns_goyais_error_shape():
-    with TestClient(app) as client:
-        response = client.get("/v1/secrets/openai/default")
+def test_secret_endpoint_returns_goyais_error_shape(isolated_client):
+    response = isolated_client.get("/v1/secrets/openai/default")
 
     assert response.status_code == 401
     payload = response.json()

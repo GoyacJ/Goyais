@@ -1,9 +1,9 @@
-ALTER TABLE runs ADD COLUMN created_by TEXT;
+ALTER TABLE executions ADD COLUMN created_by TEXT;
 
-UPDATE runs
+UPDATE executions
 SET created_by = COALESCE(created_by, 'user');
 
-CREATE INDEX IF NOT EXISTS idx_runs_created_by ON runs(created_by);
+CREATE INDEX IF NOT EXISTS idx_executions_created_by ON executions(created_by);
 
 ALTER TABLE audit_logs ADD COLUMN user_id TEXT;
 

@@ -80,6 +80,22 @@ describe("dataSource", () => {
     expect(result[0]?.workspace_path).toBe("/tmp/local");
   });
 
+  it("filters known local diagnostic/test projects from list", async () => {
+    runtimeClientMock.listProjects.mockResolvedValue({
+      projects: [
+        { project_id: "project-sessions-abcd", name: "Session Project", workspace_path: "/tmp/s1" },
+        { project_id: "project-rename-abcd", name: "Session Project", workspace_path: "/tmp/s2" },
+        { project_id: "diag-project-diag-execution-abcd", name: "diag", workspace_path: "/tmp/s3" },
+        { project_id: "real-1", name: "Real One", workspace_path: "/tmp/real" },
+      ]
+    });
+
+    const client = getProjectsClient(makeLocalProfile());
+    const result = await client.list();
+
+    expect(result.map((item) => item.project_id)).toEqual(["real-1"]);
+  });
+
   it("uses hub client for remote projects", async () => {
     secretStoreMock.loadToken.mockResolvedValue("token-abc");
     hubClientMock.listProjects.mockResolvedValue({
@@ -168,5 +184,19 @@ describe("dataSource", () => {
       "ws-1",
       "mc-1"
     );
+  });
+
+  it("passes api key override when listing local model catalog", async () => {
+    runtimeClientMock.listModelCatalog.mockResolvedValue({
+      provider: "openai",
+      items: [],
+      fetched_at: "2026-02-20T00:00:00.000Z",
+      fallback_used: false
+    });
+
+    const client = getModelConfigsClient(makeLocalProfile());
+    await client.listModels("mc-local", { apiKeyOverride: "sk-override" });
+
+    expect(runtimeClientMock.listModelCatalog).toHaveBeenCalledWith("mc-local", { apiKeyOverride: "sk-override" });
   });
 });

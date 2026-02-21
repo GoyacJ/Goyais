@@ -9,7 +9,7 @@ describe("normalizeEventEnvelope", () => {
       protocol_version: "2.0.0",
       trace_id: "trace-1",
       event_id: "e-1",
-      run_id: "r-1",
+      execution_id: "exec-1",
       seq: 2,
       ts: "2026-02-20T10:00:00Z",
       type: "tool_call",
@@ -23,6 +23,7 @@ describe("normalizeEventEnvelope", () => {
     };
 
     const result = normalizeEventEnvelope(event);
+    expect(result.executionId).toBe("exec-1");
     expect(result.streamState).toBe("waiting_confirmation");
     expect(result.summary).toContain("run_command");
   });
@@ -32,7 +33,7 @@ describe("normalizeEventEnvelope", () => {
       protocol_version: "2.0.0",
       trace_id: "trace-1",
       event_id: "e-2",
-      run_id: "r-1",
+      execution_id: "exec-1",
       seq: 3,
       ts: "2026-02-20T10:00:01Z",
       type: "done",

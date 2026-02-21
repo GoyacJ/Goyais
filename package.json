@@ -9,7 +9,7 @@
     "dev:runtime": "pnpm --filter @goyais/python-agent dev",
     "dev:desktop": "pnpm --filter @goyais/desktop-tauri tauri dev",
     "dev:sync": "pnpm --filter @goyais/sync-server dev",
-    "dev:hub": "pnpm --filter @goyais/hub-server dev",
+    "dev:hub": "cd server/hub-server-go && go run cmd/hub/main.go",
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",

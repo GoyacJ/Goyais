@@ -6,7 +6,7 @@
       "en-US": "English"
     },
     "nav": {
-      "run": "运行",
+      "run": "执行",
       "projects": "项目",
       "models": "模型配置",
       "replay": "回放",
@@ -47,7 +47,11 @@
       "runtime": "运行时",
       "runtimeDescription": "Runtime 地址和同步行为",
       "models": "模型",
-      "modelsDescription": "模型配置与默认模型"
+      "modelsDescription": "模型配置与默认模型",
+      "skills": "技能集",
+      "skillsDescription": "管理工作区技能集",
+      "mcp": "MCP 连接器",
+      "mcpDescription": "管理 MCP 服务器连接器"
     },
     "syncSection": "同步",
     "languageSection": "语言",
@@ -69,12 +73,18 @@
     "defaultModelDescription": "新对话默认使用该模型配置。",
     "saveState": {
       "saving": "保存中..."
-    }
+    },
+    "workspaceScope": "作用工作区",
+    "workspaceScopeDescription": "模型配置在当前工作区范围内生效。",
+    "workspacePermission": "编辑权限",
+    "workspacePermissionDescription": "根据当前工作区角色控制模型配置是否可编辑。",
+    "permissionWritable": "可编辑",
+    "permissionReadonly": "只读"
   },
   "run": {
     "defaultTask": "把 README 的标题改成 MVP-1 Demo",
-    "startSuccess": "Run 已启动",
-    "startFailed": "启动 Run 失败",
+    "startSuccess": "执行已启动",
+    "startFailed": "启动执行失败",
     "permissionActionFailed": "权限操作失败",
     "permissionApproved": "权限已通过",
     "permissionDenied": "权限已拒绝",
@@ -84,14 +94,14 @@
       "deny": "拒绝"
     },
     "composer": {
-      "title": "运行配置",
+      "title": "执行配置",
       "projectId": "Project ID",
       "sessionId": "Session ID",
       "modelConfigId": "Model Config ID",
       "workspacePath": "工作区路径",
       "task": "任务",
-      "startRun": "启动 Run",
-      "running": "运行中..."
+      "startRun": "启动执行",
+      "running": "执行中..."
     }
   },
   "timeline": {
@@ -105,7 +115,7 @@
       "done": "done"
     },
     "noEventsTitle": "暂无时间线事件",
-    "noEventsDescription": "启动一次运行后即可看到 plan、tool call、patch 与诊断事件。",
+    "noEventsDescription": "启动一次执行后即可看到 plan、tool call、patch 与诊断事件。",
     "result": {
       "ok": "成功",
       "error": "失败",
@@ -129,7 +139,7 @@
       "toolResult": "工具结果：{{callId}}（{{status}}）",
       "patch": "已生成补丁",
       "error": "错误：{{message}}",
-      "done": "运行{{status}}",
+      "done": "执行{{status}}",
       "planDefault": "计划已更新"
     }
   },
@@ -207,14 +217,14 @@
       "settings": "设置"
     },
     "commands": {
-      "runLabel": "前往 Run",
-      "runHint": "打开主运行页",
+      "runLabel": "前往执行页",
+      "runHint": "打开主执行页",
       "projectsLabel": "前往 Projects",
       "projectsHint": "管理工作区",
       "modelsLabel": "前往 Model Configs",
       "modelsHint": "切换模型预设",
       "replayLabel": "前往 Replay",
-      "replayHint": "查看运行时间线",
+      "replayHint": "查看执行时间线",
       "settingsLabel": "前往 Settings",
       "settingsHint": "运行时与同步",
       "themeDark": "主题：深色",
@@ -243,9 +253,22 @@
     "createFailed": "项目创建失败",
     "deleteSuccess": "项目删除成功",
     "deleteFailed": "项目删除失败",
+    "syncFailed": "项目同步失败",
     "projectId": "id：{{id}}",
     "remoteHint": "远端工作区的项目数据以 Hub Server 为权威来源。",
-    "createDescription": "创建项目后可在该项目下开启多个对话。"
+    "createDescription": "创建项目后可在该项目下开启多个对话。",
+    "addFolder": "添加文件夹",
+    "addGitRepo": "添加 Git 仓库",
+    "gitRepoUrl": "仓库地址",
+    "gitBranch": "分支（可选）",
+    "nameOptional": "名称（可选）",
+    "nameDerivedFromUrl": "从 URL 中提取",
+    "syncStatus": {
+      "pending": "等待同步",
+      "syncing": "同步中...",
+      "ready": "就绪",
+      "error": "同步失败"
+    }
   },
   "models": {
     "title": "模型配置",
@@ -261,6 +284,7 @@
     "update": "更新模型配置",
     "cancelEdit": "取消编辑",
     "edit": "编辑",
+    "actions": "操作",
     "delete": "删除",
     "loading": "正在加载模型配置...",
     "loadFailed": "加载模型配置失败",
@@ -285,18 +309,21 @@
     "maxTokensDescription": "仅支持正整数。",
     "secretRefDescription": "Runtime 读取密钥的引用。",
     "apiKeyDescription": "可选，仅在需要轮换密钥时填写。",
+    "apiKeyKeychainDescription": "输入后会保存到系统密钥链，不会写入本地数据库。",
     "apiKeyPlaceholder": "留空表示不更新现有密钥",
-    "empty": "暂无模型配置。"
+    "empty": "暂无模型配置。",
+    "addDescription": "填写模型配置后点击保存创建。",
+    "editDescription": "更新模型配置后点击保存应用。"
   },
   "replay": {
     "title": "回放",
     "sessionId": "Session ID",
-    "loadRuns": "加载 Runs",
-    "loadFailed": "加载运行列表失败",
+    "loadRuns": "加载执行列表",
+    "loadFailed": "加载执行列表失败",
     "loading": "回放加载中...",
     "timeline": "时间线",
     "timelineRun": "时间线 · {{runId}}",
-    "selectRun": "选择 Run"
+    "selectRun": "选择执行"
   },
   "toast": {
     "diagnostics": "诊断信息",
@@ -309,7 +336,7 @@
     "retry": "重试"
   },
   "nav": {
-    "run": "运行",
+    "run": "执行",
     "projects": "项目",
     "models": "模型配置",
     "replay": "回放",
@@ -347,7 +374,7 @@
       "description": "远端数据 API 将在 Phase 2 提供。",
       "nextStep": "本阶段已支持菜单和权限切换，数据页面先以占位形式呈现。",
       "run": {
-        "title": "远端运行（Phase 2 占位）"
+        "title": "远端执行（Phase 2 占位）"
       },
       "projects": {
         "title": "远端项目（Phase 2 占位）"
@@ -374,12 +401,104 @@
     "inputPlaceholder": "描述你想完成的任务...",
     "send": "发送",
     "sending": "发送中...",
-    "startSuccess": "对话运行已启动",
-    "startFailed": "启动失败",
+    "sessionMode": "模式",
+    "sessionModeAgent": "Agent",
+    "sessionModeAgentDescription": "自动执行工具，敏感操作需要确认。",
+    "sessionModePlan": "Plan",
+    "sessionModePlanDescription": "先展示计划，用户确认后再执行。",
+    "sessionWorktree": "Worktree",
+    "sessionWorktreeOn": "开启",
+    "sessionWorktreeOff": "关闭",
+    "planApprovalTitle": "确认执行计划",
+    "planApprovalDescription": "执行前请检查 Agent 的计划。",
+    "planSummary": "计划摘要",
+    "planSteps": "执行步骤",
+    "planApprove": "批准计划",
+    "planReject": "拒绝计划",
+    "transcriptTitle": "对话",
+    "transcriptEmptyTitle": "暂无对话内容",
+    "transcriptEmptyDescription": "发送第一条消息后，这里会显示用户和 AI 的对话记录。",
+    "modelSelectorTitle": "模型选择",
+    "executionStatus": "执行状态：{{status}}",
+    "planUpdated": "计划已更新",
+    "patchGenerated": "已生成补丁",
+    "startSuccess": "对话执行已启动",
+    "startFailed": "启动对话执行失败",
     "modelRequired": "请先配置并选择模型",
     "rename": "重命名",
     "renameFailed": "重命名失败",
     "noProjectTitle": "暂无项目",
-    "noProjectDescription": "请先在左侧创建一个项目，然后开始对话。"
+    "noProjectDescription": "请先在左侧创建一个项目，然后开始对话。",
+    "selectedProject": "已选择项目",
+    "headerProject": "项目",
+    "headerSession": "对话",
+    "headerBranch": "Git 分支",
+    "branchLoading": "加载中...",
+    "branchUnavailable": "—",
+    "executionActionsTitle": "执行操作",
+    "executionIdLabel": "执行 ID",
+    "commitMessagePlaceholder": "提交信息（可选）",
+    "commitAction": "提交 Commit",
+    "exportPatchAction": "导出 Patch",
+    "discardAction": "丢弃变更",
+    "commitShaLabel": "Commit SHA",
+    "commitSuccess": "Commit 创建成功",
+    "commitFailed": "Commit 失败",
+    "patchExportSuccess": "Patch 已导出",
+    "patchExportFailed": "Patch 导出失败",
+    "discardConfirm": "确认丢弃此次执行 worktree 的变更？",
+    "discardSuccess": "已丢弃 worktree 变更",
+    "discardFailed": "丢弃失败"
+  },
+  "skills": {
+    "title": "技能集",
+    "description": "为工作区会话定义可复用的技能集。",
+    "add": "添加技能集",
+    "addDescription": "创建新技能集以分组相关工具。",
+    "edit": "编辑技能集",
+    "save": "保存",
+    "colName": "名称",
+    "colDescription": "描述",
+    "namePlaceholder": "如：网页研究员",
+    "descriptionPlaceholder": "可选描述",
+    "empty": "暂无技能集，点击添加开始使用。",
+    "loading": "加载技能集中…",
+    "loadFailed": "加载技能集失败",
+    "createSuccess": "技能集已创建",
+    "createFailed": "创建技能集失败",
+    "updateSuccess": "技能集已更新",
+    "updateFailed": "更新技能集失败",
+    "deleteSuccess": "技能集已删除",
+    "deleteFailed": "删除技能集失败"
+  },
+  "mcp": {
+    "title": "MCP 连接器",
+    "description": "连接 MCP 服务器，使其工具在会话中可用。",
+    "add": "添加连接器",
+    "addDescription": "配置新的 MCP 服务器连接。",
+    "edit": "编辑连接器",
+    "save": "保存",
+    "colName": "名称",
+    "colTransport": "传输协议",
+    "colEndpoint": "端点地址",
+    "colStatus": "状态",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "enable": "启用",
+    "disable": "禁用",
+    "namePlaceholder": "如：GitHub MCP",
+    "endpointPlaceholder": "如：https://mcp.example.com/sse",
+    "secretRef": "密钥引用",
+    "secretRefPlaceholder": "如：secret:my-token",
+    "secretRefHelp": "可选，用于身份验证的已存储密钥引用。",
+    "empty": "暂无 MCP 连接器，点击添加开始使用。",
+    "loading": "加载连接器中…",
+    "loadFailed": "加载 MCP 连接器失败",
+    "createSuccess": "连接器已创建",
+    "createFailed": "创建连接器失败",
+    "updateSuccess": "连接器已更新",
+    "updateFailed": "更新连接器失败",
+    "deleteSuccess": "连接器已删除",
+    "deleteFailed": "删除连接器失败"
   }
 }

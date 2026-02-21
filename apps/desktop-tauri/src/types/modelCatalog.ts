@@ -72,8 +72,8 @@ export const PROVIDER_METADATA: Record<ProviderKey, ProviderMetadata> = {
     openaiCompatible: true,
     docsUrl: "https://platform.minimaxi.com/document",
     fallbackModels: fallback("minimax_cn", [
-      { id: "MiniMax-M1", name: "MiniMax M1", latest: true },
-      { id: "abab6.5-chat", name: "abab6.5 Chat" }
+      { id: "MiniMax-M2.5", name: "MiniMax M2.5", latest: true },
+      { id: "MiniMax-Text-01", name: "MiniMax Text 01" }
     ])
   },
   minimax_intl: {
@@ -84,8 +84,8 @@ export const PROVIDER_METADATA: Record<ProviderKey, ProviderMetadata> = {
     openaiCompatible: true,
     docsUrl: "https://platform.minimax.io/docs",
     fallbackModels: fallback("minimax_intl", [
-      { id: "MiniMax-M1", name: "MiniMax M1", latest: true },
-      { id: "abab6.5-chat", name: "abab6.5 Chat" }
+      { id: "MiniMax-M2.5", name: "MiniMax M2.5", latest: true },
+      { id: "MiniMax-Text-01", name: "MiniMax Text 01" }
     ])
   },
   zhipu: {
@@ -96,8 +96,8 @@ export const PROVIDER_METADATA: Record<ProviderKey, ProviderMetadata> = {
     openaiCompatible: true,
     docsUrl: "https://docs.bigmodel.cn/cn/guide/models",
     fallbackModels: fallback("zhipu", [
-      { id: "glm-4-plus", name: "GLM-4-Plus", latest: true },
-      { id: "glm-4-air", name: "GLM-4-Air" }
+      { id: "glm-5", name: "GLM-5", latest: true },
+      { id: "glm-4.5", name: "GLM-4.5" }
     ])
   },
   qwen: {
@@ -109,6 +109,7 @@ export const PROVIDER_METADATA: Record<ProviderKey, ProviderMetadata> = {
     docsUrl: "https://www.alibabacloud.com/help/en/model-studio/",
     fallbackModels: fallback("qwen", [
       { id: "qwen-plus-latest", name: "Qwen Plus Latest", latest: true },
+      { id: "qwen-max-latest", name: "Qwen Max Latest" },
       { id: "qwen-turbo-latest", name: "Qwen Turbo Latest" }
     ])
   },
@@ -120,8 +121,9 @@ export const PROVIDER_METADATA: Record<ProviderKey, ProviderMetadata> = {
     openaiCompatible: true,
     docsUrl: "https://www.volcengine.com/docs",
     fallbackModels: fallback("doubao", [
-      { id: "doubao-1.5-pro-32k", name: "Doubao 1.5 Pro 32k", latest: true },
-      { id: "doubao-1.5-lite-32k", name: "Doubao 1.5 Lite 32k" }
+      { id: "doubao-seed-1-8-251228", name: "Doubao Seed 1.8", latest: true },
+      { id: "doubao-seed-1-6-250615", name: "Doubao Seed 1.6" },
+      { id: "doubao-seed-1-6-flash-250715", name: "Doubao Seed 1.6 Flash" }
     ])
   },
   openai: {
@@ -132,7 +134,8 @@ export const PROVIDER_METADATA: Record<ProviderKey, ProviderMetadata> = {
     openaiCompatible: false,
     docsUrl: "https://platform.openai.com/docs/models",
     fallbackModels: fallback("openai", [
-      { id: "gpt-5", name: "GPT-5", latest: true },
+      { id: "gpt-5.2", name: "GPT-5.2", latest: true },
+      { id: "gpt-5", name: "GPT-5" },
       { id: "gpt-5-mini", name: "GPT-5 Mini" },
       { id: "gpt-4.1", name: "GPT-4.1" }
     ])
@@ -145,8 +148,8 @@ export const PROVIDER_METADATA: Record<ProviderKey, ProviderMetadata> = {
     openaiCompatible: false,
     docsUrl: "https://docs.anthropic.com/en/docs/about-claude/models/all-models",
     fallbackModels: fallback("anthropic", [
-      { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", latest: true },
-      { id: "claude-opus-4-1", name: "Claude Opus 4.1" }
+      { id: "claude-opus-4-1-20250805", name: "Claude Opus 4.1", latest: true },
+      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4" }
     ])
   },
   google: {
@@ -158,7 +161,8 @@ export const PROVIDER_METADATA: Record<ProviderKey, ProviderMetadata> = {
     docsUrl: "https://ai.google.dev/gemini-api/docs/models",
     fallbackModels: fallback("google", [
       { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", latest: true },
-      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" }
+      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+      { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash Lite" }
     ])
   },
   custom: {

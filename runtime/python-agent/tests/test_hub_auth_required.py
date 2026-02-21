@@ -7,7 +7,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.api.ops as ops_module
-import app.api.runs as runs_module
 import app.main as main_module
 import app.services.secret_resolver as secret_resolver_module
 
@@ -23,7 +22,6 @@ def hub_auth_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     module = importlib.reload(main_module)
     ops_module.settings = module.settings
-    runs_module.settings = module.settings
     secret_resolver_module.settings = module.settings
     with TestClient(module.app) as client:
         yield client
@@ -35,7 +33,6 @@ def hub_auth_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("GOYAIS_HUB_BASE_URL", raising=False)
     module = importlib.reload(main_module)
     ops_module.settings = module.settings
-    runs_module.settings = module.settings
     secret_resolver_module.settings = module.settings
 
 

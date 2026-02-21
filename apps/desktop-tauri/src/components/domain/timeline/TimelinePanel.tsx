@@ -23,7 +23,12 @@ function defaultFilters(): Record<EventType, boolean> {
     tool_result: true,
     patch: true,
     error: true,
-    done: true
+    done: true,
+    text_delta: false,
+    heartbeat: false,
+    confirmation_request: true,
+    confirmation_decision: true,
+    cancelled: true
   };
 }
 

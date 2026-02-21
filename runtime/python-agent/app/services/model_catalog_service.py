@@ -54,37 +54,41 @@ FALLBACK_MODELS: dict[ProviderKey, list[dict[str, Any]]] = {
         {"model_id": "deepseek-reasoner", "display_name": "DeepSeek Reasoner", "is_latest": False},
     ],
     "minimax_cn": [
-        {"model_id": "MiniMax-M1", "display_name": "MiniMax M1", "is_latest": True},
-        {"model_id": "abab6.5-chat", "display_name": "abab6.5 Chat", "is_latest": False},
+        {"model_id": "MiniMax-M2.5", "display_name": "MiniMax M2.5", "is_latest": True},
+        {"model_id": "MiniMax-Text-01", "display_name": "MiniMax Text 01", "is_latest": False},
     ],
     "minimax_intl": [
-        {"model_id": "MiniMax-M1", "display_name": "MiniMax M1", "is_latest": True},
-        {"model_id": "abab6.5-chat", "display_name": "abab6.5 Chat", "is_latest": False},
+        {"model_id": "MiniMax-M2.5", "display_name": "MiniMax M2.5", "is_latest": True},
+        {"model_id": "MiniMax-Text-01", "display_name": "MiniMax Text 01", "is_latest": False},
     ],
     "zhipu": [
-        {"model_id": "glm-4-plus", "display_name": "GLM-4 Plus", "is_latest": True},
-        {"model_id": "glm-4-air", "display_name": "GLM-4 Air", "is_latest": False},
+        {"model_id": "glm-5", "display_name": "GLM-5", "is_latest": True},
+        {"model_id": "glm-4.5", "display_name": "GLM-4.5", "is_latest": False},
     ],
     "qwen": [
         {"model_id": "qwen-plus-latest", "display_name": "Qwen Plus Latest", "is_latest": True},
+        {"model_id": "qwen-max-latest", "display_name": "Qwen Max Latest", "is_latest": False},
         {"model_id": "qwen-turbo-latest", "display_name": "Qwen Turbo Latest", "is_latest": False},
     ],
     "doubao": [
-        {"model_id": "doubao-1.5-pro-32k", "display_name": "Doubao 1.5 Pro 32k", "is_latest": True},
-        {"model_id": "doubao-1.5-lite-32k", "display_name": "Doubao 1.5 Lite 32k", "is_latest": False},
+        {"model_id": "doubao-seed-1-8-251228", "display_name": "Doubao Seed 1.8", "is_latest": True},
+        {"model_id": "doubao-seed-1-6-250615", "display_name": "Doubao Seed 1.6", "is_latest": False},
+        {"model_id": "doubao-seed-1-6-flash-250715", "display_name": "Doubao Seed 1.6 Flash", "is_latest": False},
     ],
     "openai": [
-        {"model_id": "gpt-5", "display_name": "GPT-5", "is_latest": True},
+        {"model_id": "gpt-5.2", "display_name": "GPT-5.2", "is_latest": True},
+        {"model_id": "gpt-5", "display_name": "GPT-5", "is_latest": False},
         {"model_id": "gpt-5-mini", "display_name": "GPT-5 Mini", "is_latest": False},
         {"model_id": "gpt-4.1", "display_name": "GPT-4.1", "is_latest": False},
     ],
     "anthropic": [
-        {"model_id": "claude-sonnet-4-5", "display_name": "Claude Sonnet 4.5", "is_latest": True},
-        {"model_id": "claude-opus-4-1", "display_name": "Claude Opus 4.1", "is_latest": False},
+        {"model_id": "claude-opus-4-1-20250805", "display_name": "Claude Opus 4.1", "is_latest": True},
+        {"model_id": "claude-sonnet-4-20250514", "display_name": "Claude Sonnet 4", "is_latest": False},
     ],
     "google": [
         {"model_id": "gemini-2.5-pro", "display_name": "Gemini 2.5 Pro", "is_latest": True},
         {"model_id": "gemini-2.5-flash", "display_name": "Gemini 2.5 Flash", "is_latest": False},
+        {"model_id": "gemini-2.5-flash-lite", "display_name": "Gemini 2.5 Flash Lite", "is_latest": False},
     ],
     "custom": [],
 }
@@ -290,7 +294,12 @@ async def _fetch_google_models(provider: ProviderKey, base_url: str, api_key: st
     return _sort_items(items)
 
 
-async def list_models_for_model_config(model_config: dict[str, Any], *, trace_id: str) -> dict[str, Any]:
+async def list_models_for_model_config(
+    model_config: dict[str, Any],
+    *,
+    trace_id: str,
+    api_key_override: str | None = None,
+) -> dict[str, Any]:
     provider = str(model_config.get("provider") or "").strip()
     if not is_supported_provider(provider):
         return _fallback_response("custom", f"unsupported provider: {provider}")
@@ -298,10 +307,13 @@ async def list_models_for_model_config(model_config: dict[str, Any], *, trace_id
     provider_key: ProviderKey = provider
     base_url = _normalize_base_url(provider_key, model_config.get("base_url"))
 
-    try:
-        api_key = await resolve_api_key(str(model_config.get("secret_ref") or ""), trace_id=trace_id)
-    except Exception as exc:  # noqa: BLE001
-        return _fallback_response(provider_key, str(exc))
+    if api_key_override and api_key_override.strip():
+        api_key = api_key_override.strip()
+    else:
+        try:
+            api_key = await resolve_api_key(str(model_config.get("secret_ref") or ""), trace_id=trace_id)
+        except Exception as exc:  # noqa: BLE001
+            return _fallback_response(provider_key, str(exc))
 
     try:
         if provider_key in OPENAI_COMPATIBLE_PROVIDERS:

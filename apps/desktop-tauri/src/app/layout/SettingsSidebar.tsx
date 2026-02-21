@@ -1,4 +1,4 @@
-import { ArrowLeft, Bot, Gauge, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Bot, Gauge, Plug, Sparkles, SlidersHorizontal } from "lucide-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -8,14 +8,16 @@ import { cn } from "@/lib/cn";
 const SETTINGS_SECTIONS = [
   { id: "general", icon: SlidersHorizontal },
   { id: "runtime", icon: Gauge },
-  { id: "models", icon: Bot }
+  { id: "models", icon: Bot },
+  { id: "skills", icon: Sparkles },
+  { id: "mcp", icon: Plug }
 ] as const;
 
 type SettingsSectionKey = (typeof SETTINGS_SECTIONS)[number]["id"];
 
 function asSection(pathname: string): SettingsSectionKey {
   const section = pathname.split("/")[2] ?? "general";
-  if (section === "runtime" || section === "models") {
+  if (section === "runtime" || section === "models" || section === "skills" || section === "mcp") {
     return section;
   }
   return "general";

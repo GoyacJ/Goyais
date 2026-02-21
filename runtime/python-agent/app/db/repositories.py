@@ -39,7 +39,7 @@ class Repository:
         )
         await self.conn.commit()
 
-    async def create_run(self, payload: dict[str, Any], run_id: str, trace_id: str) -> None:
+    async def create_execution(self, payload: dict[str, Any], execution_id: str, trace_id: str) -> None:
         model_config_id = payload.get("model_config_id") or None
         if model_config_id:
             cursor = await self.conn.execute(
@@ -51,11 +51,27 @@ class Repository:
 
         await self.conn.execute(
             """
-            INSERT INTO runs(run_id, project_id, session_id, model_config_id, input, workspace_path, trace_id, created_by, status, created_at, started_at)
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'running', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+            INSERT INTO executions(
+              execution_id,
+              project_id,
+              session_id,
+              model_config_id,
+              input,
+              workspace_path,
+              trace_id,
+              created_by,
+              status,
+              created_at,
+              started_at
+            )
+            VALUES(
+              ?, ?, ?, ?, ?, ?, ?, ?, 'executing',
+              strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+              strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            )
             """,
             (
-                run_id,
+                execution_id,
                 payload["project_id"],
                 payload["session_id"],
                 model_config_id,
@@ -67,33 +83,36 @@ class Repository:
         )
         await self.conn.commit()
 
-    async def update_run_status(self, run_id: str, status: str) -> None:
+    async def update_execution_status(self, execution_id: str, status: str) -> None:
         await self.conn.execute(
             """
-            UPDATE runs
+            UPDATE executions
             SET status=?, completed_at=CASE WHEN ? IN ('completed', 'failed', 'cancelled') THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE completed_at END
-            WHERE run_id=?
+            WHERE execution_id=?
             """,
-            (status, status, run_id),
+            (status, status, execution_id),
         )
         await self.conn.commit()
 
-    async def get_run_status(self, run_id: str) -> str | None:
-        cursor = await self.conn.execute("SELECT status FROM runs WHERE run_id=?", (run_id,))
+    async def get_execution_status(self, execution_id: str) -> str | None:
+        cursor = await self.conn.execute("SELECT status FROM executions WHERE execution_id=?", (execution_id,))
         row = await cursor.fetchone()
         if row is None:
             return None
         return str(row["status"])
 
-    async def get_run_trace_id(self, run_id: str) -> str | None:
-        cursor = await self.conn.execute("SELECT trace_id FROM runs WHERE run_id=?", (run_id,))
+    async def get_execution_trace_id(self, execution_id: str) -> str | None:
+        cursor = await self.conn.execute("SELECT trace_id FROM executions WHERE execution_id=?", (execution_id,))
         row = await cursor.fetchone()
         if row is None:
             return None
         return str(row["trace_id"])
 
-    async def next_seq(self, run_id: str) -> int:
-        cursor = await self.conn.execute("SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM events WHERE run_id=?", (run_id,))
+    async def next_execution_seq(self, execution_id: str) -> int:
+        cursor = await self.conn.execute(
+            "SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM execution_events WHERE execution_id=?",
+            (execution_id,),
+        )
         row = await cursor.fetchone()
         return int(row["seq"])
 
@@ -101,14 +120,24 @@ class Repository:
         protocol_version = str(event.get("protocol_version", PROTOCOL_VERSION))
         await self.conn.execute(
             """
-            INSERT INTO events(protocol_version, trace_id, event_id, run_id, seq, ts, type, payload_json, created_at)
+            INSERT INTO execution_events(
+              protocol_version,
+              trace_id,
+              event_id,
+              execution_id,
+              seq,
+              ts,
+              type,
+              payload_json,
+              created_at
+            )
             VALUES(?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
             """,
             (
                 protocol_version,
                 event["trace_id"],
                 event["event_id"],
-                event["run_id"],
+                event["execution_id"],
                 event["seq"],
                 event["ts"],
                 event["type"],
@@ -117,10 +146,10 @@ class Repository:
         )
         await self.conn.commit()
 
-    async def list_events_by_run(self, run_id: str) -> list[dict[str, Any]]:
+    async def list_events_by_execution(self, execution_id: str) -> list[dict[str, Any]]:
         cursor = await self.conn.execute(
-            "SELECT protocol_version, trace_id, event_id, run_id, seq, ts, type, payload_json FROM events WHERE run_id=? ORDER BY seq ASC",
-            (run_id,),
+            "SELECT protocol_version, trace_id, event_id, execution_id, seq, ts, type, payload_json FROM execution_events WHERE execution_id=? ORDER BY seq ASC",
+            (execution_id,),
         )
         rows = await cursor.fetchall()
         return [
@@ -128,7 +157,7 @@ class Repository:
                 "protocol_version": row["protocol_version"],
                 "trace_id": row["trace_id"],
                 "event_id": row["event_id"],
-                "run_id": row["run_id"],
+                "execution_id": row["execution_id"],
                 "seq": row["seq"],
                 "ts": row["ts"],
                 "type": row["type"],
@@ -137,9 +166,9 @@ class Repository:
             for row in rows
         ]
 
-    async def list_runs_by_session(self, session_id: str) -> list[dict[str, Any]]:
+    async def list_executions_by_session(self, session_id: str) -> list[dict[str, Any]]:
         cursor = await self.conn.execute(
-            "SELECT run_id, trace_id, status, created_at, input FROM runs WHERE session_id=? ORDER BY created_at DESC",
+            "SELECT execution_id, trace_id, status, created_at, input FROM executions WHERE session_id=? ORDER BY created_at DESC",
             (session_id,),
         )
         rows = await cursor.fetchall()
@@ -153,16 +182,16 @@ class Repository:
               s.project_id,
               s.title,
               s.updated_at,
-              r.run_id AS last_run_id,
-              r.status AS last_status,
+              e.execution_id AS last_execution_id,
+              e.status AS last_status,
               CASE
-                WHEN r.input IS NULL THEN NULL
-                ELSE substr(r.input, 1, 160)
+                WHEN e.input IS NULL THEN NULL
+                ELSE substr(e.input, 1, 160)
               END AS last_input_preview
             FROM sessions s
-            LEFT JOIN runs r ON r.run_id = (
-              SELECT run_id
-              FROM runs
+            LEFT JOIN executions e ON e.execution_id = (
+              SELECT execution_id
+              FROM executions
               WHERE session_id = s.session_id
               ORDER BY created_at DESC
               LIMIT 1
@@ -186,7 +215,7 @@ class Repository:
         await self.conn.commit()
         cursor = await self.conn.execute(
             """
-            SELECT session_id, project_id, title, updated_at, NULL AS last_run_id, NULL AS last_status, NULL AS last_input_preview
+            SELECT session_id, project_id, title, updated_at, NULL AS last_execution_id, NULL AS last_status, NULL AS last_input_preview
             FROM sessions
             WHERE session_id=?
             """,
@@ -216,15 +245,25 @@ class Repository:
         row = await cursor.fetchone()
         return dict(row) if row else None
 
-    async def get_run(self, run_id: str) -> dict[str, Any] | None:
+    async def get_execution(self, execution_id: str) -> dict[str, Any] | None:
         cursor = await self.conn.execute(
             """
-            SELECT run_id, project_id, session_id, model_config_id, input, workspace_path, trace_id, status,
-                   created_at, started_at, completed_at
-            FROM runs
-            WHERE run_id=?
+            SELECT
+              execution_id,
+              project_id,
+              session_id,
+              model_config_id,
+              input,
+              workspace_path,
+              trace_id,
+              status,
+              created_at,
+              started_at,
+              completed_at
+            FROM executions
+            WHERE execution_id=?
             """,
-            (run_id,),
+            (execution_id,),
         )
         row = await cursor.fetchone()
         if row is None:
@@ -292,7 +331,7 @@ class Repository:
         audit_id: str,
         trace_id: str,
         user_id: str,
-        run_id: str | None,
+        execution_id: str | None,
         event_id: str | None,
         call_id: str | None,
         action: str,
@@ -306,7 +345,7 @@ class Repository:
         await self.conn.execute(
             """
             INSERT INTO audit_logs(
-              audit_id, trace_id, user_id, run_id, event_id, call_id, action, tool_name, args_json, result_json,
+              audit_id, trace_id, user_id, execution_id, event_id, call_id, action, tool_name, args_json, result_json,
               requires_confirmation, user_decision, decision_ts, outcome, created_at
             ) VALUES(
               ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
@@ -318,7 +357,7 @@ class Repository:
                 audit_id,
                 trace_id,
                 user_id,
-                run_id,
+                execution_id,
                 event_id,
                 call_id,
                 action,
@@ -333,9 +372,9 @@ class Repository:
         )
         await self.conn.commit()
 
-    async def upsert_tool_confirmation_status(
+    async def upsert_confirmation_status(
         self,
-        run_id: str,
+        execution_id: str,
         call_id: str,
         status: str,
         *,
@@ -346,7 +385,7 @@ class Repository:
 
         await self.conn.execute(
             """
-            INSERT INTO tool_confirmations(run_id, call_id, status, decided_at, decided_by, created_at, updated_at)
+            INSERT INTO execution_confirmations(execution_id, call_id, status, decided_at, decided_by, created_at, updated_at)
             VALUES(
               ?, ?, ?,
               CASE WHEN ? = 'pending' THEN NULL ELSE strftime('%Y-%m-%dT%H:%M:%fZ','now') END,
@@ -354,19 +393,19 @@ class Repository:
               strftime('%Y-%m-%dT%H:%M:%fZ','now'),
               strftime('%Y-%m-%dT%H:%M:%fZ','now')
             )
-            ON CONFLICT(run_id, call_id) DO UPDATE SET
+            ON CONFLICT(execution_id, call_id) DO UPDATE SET
               status=excluded.status,
               decided_at=excluded.decided_at,
               decided_by=excluded.decided_by,
               updated_at=excluded.updated_at
             """,
-            (run_id, call_id, status, status, decided_by),
+            (execution_id, call_id, status, status, decided_by),
         )
         await self.conn.commit()
 
-    async def resolve_pending_tool_confirmation(
+    async def resolve_pending_confirmation(
         self,
-        run_id: str,
+        execution_id: str,
         call_id: str,
         status: str,
         *,
@@ -376,25 +415,25 @@ class Repository:
             raise ValueError(f"Invalid confirmation status: {status}")
         cursor = await self.conn.execute(
             """
-            UPDATE tool_confirmations
+            UPDATE execution_confirmations
             SET
               status = ?,
               decided_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
               decided_by = ?,
               updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-            WHERE run_id = ?
+            WHERE execution_id = ?
               AND call_id = ?
               AND status = 'pending'
             """,
-            (status, decided_by, run_id, call_id),
+            (status, decided_by, execution_id, call_id),
         )
         await self.conn.commit()
         return cursor.rowcount > 0
 
-    async def get_tool_confirmation_status(self, run_id: str, call_id: str) -> str | None:
+    async def get_confirmation_status(self, execution_id: str, call_id: str) -> str | None:
         cursor = await self.conn.execute(
-            "SELECT status FROM tool_confirmations WHERE run_id=? AND call_id=?",
-            (run_id, call_id),
+            "SELECT status FROM execution_confirmations WHERE execution_id=? AND call_id=?",
+            (execution_id, call_id),
         )
         row = await cursor.fetchone()
         if row is None:
@@ -404,11 +443,11 @@ class Repository:
     async def list_pending_confirmations(self) -> list[dict[str, Any]]:
         cursor = await self.conn.execute(
             """
-            SELECT tc.run_id, tc.call_id
-            FROM tool_confirmations tc
-            JOIN runs r ON r.run_id = tc.run_id
-            WHERE tc.status='pending' AND r.status IN ('running', 'waiting_confirmation')
-            ORDER BY r.created_at ASC
+            SELECT ec.execution_id, ec.call_id
+            FROM execution_confirmations ec
+            JOIN executions e ON e.execution_id = ec.execution_id
+            WHERE ec.status='pending' AND e.status IN ('executing', 'waiting_confirmation')
+            ORDER BY e.created_at ASC
             """
         )
         rows = await cursor.fetchall()
@@ -479,17 +518,17 @@ class Repository:
         )
         await self.conn.commit()
 
-    async def list_audit_logs_by_run(self, run_id: str, limit: int = 200) -> list[dict[str, Any]]:
+    async def list_audit_logs_by_execution(self, execution_id: str, limit: int = 200) -> list[dict[str, Any]]:
         cursor = await self.conn.execute(
             """
-            SELECT trace_id, audit_id, run_id, event_id, call_id, action, tool_name, args_json, result_json,
+            SELECT trace_id, audit_id, execution_id, event_id, call_id, action, tool_name, args_json, result_json,
                    requires_confirmation, user_id, user_decision, decision_ts, outcome, created_at
             FROM audit_logs
-            WHERE run_id=?
+            WHERE execution_id=?
             ORDER BY created_at DESC
             LIMIT ?
             """,
-            (run_id, limit),
+            (execution_id, limit),
         )
         rows = await cursor.fetchall()
         result: list[dict[str, Any]] = []
@@ -510,8 +549,8 @@ class Repository:
     async def list_unsynced_events(self, since_global_seq: int) -> list[dict[str, Any]]:
         cursor = await self.conn.execute(
             """
-            SELECT global_seq, protocol_version, trace_id, event_id, run_id, seq, ts, type, payload_json
-            FROM events
+            SELECT global_seq, protocol_version, trace_id, event_id, execution_id, seq, ts, type, payload_json
+            FROM execution_events
             WHERE global_seq > ?
             ORDER BY global_seq ASC
             """,
@@ -524,7 +563,7 @@ class Repository:
                 "protocol_version": row["protocol_version"],
                 "trace_id": row["trace_id"],
                 "event_id": row["event_id"],
-                "run_id": row["run_id"],
+                "execution_id": row["execution_id"],
                 "seq": row["seq"],
                 "ts": row["ts"],
                 "type": row["type"],
@@ -547,7 +586,7 @@ class Repository:
         await self.conn.commit()
 
     async def insert_event_if_missing(self, event: dict[str, Any]) -> bool:
-        cursor = await self.conn.execute("SELECT 1 FROM events WHERE event_id=?", (event["event_id"],))
+        cursor = await self.conn.execute("SELECT 1 FROM execution_events WHERE event_id=?", (event["event_id"],))
         row = await cursor.fetchone()
         if row:
             return False
@@ -557,7 +596,7 @@ class Repository:
                 "protocol_version": event.get("protocol_version", PROTOCOL_VERSION),
                 "trace_id": event["trace_id"],
                 "event_id": event["event_id"],
-                "run_id": event["run_id"],
+                "execution_id": event["execution_id"],
                 "seq": event["seq"],
                 "ts": event["ts"],
                 "type": event["type"],
