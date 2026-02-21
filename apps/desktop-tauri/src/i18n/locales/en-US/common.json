@@ -30,22 +30,15 @@
       "language": "Language"
     }
   },
-  "sync": {
-    "syncNow": "Sync now",
-    "syncNowCompact": "Sync Now",
-    "completedTitle": "Sync completed",
-    "failedTitle": "Sync failed",
-    "status": "pushed={{pushed}} pulled={{pulled}}"
-  },
   "settings": {
     "title": "Settings",
-    "description": "Single-user sync and runtime preferences.",
+    "description": "Runtime and interface preferences.",
     "backToApp": "Back to app",
     "sections": {
       "general": "General",
       "generalDescription": "Language and theme preferences",
       "runtime": "Runtime",
-      "runtimeDescription": "Runtime endpoint and sync controls",
+      "runtimeDescription": "Runtime endpoint settings",
       "models": "Models",
       "modelsDescription": "Model configs and default model",
       "skills": "Skills",
@@ -53,7 +46,6 @@
       "mcp": "MCP Connectors",
       "mcpDescription": "Manage MCP server connectors"
     },
-    "syncSection": "Sync",
     "languageSection": "Language",
     "languageLabel": "Language",
     "languageHelp": "Choose your interface language.",
@@ -68,7 +60,6 @@
     "noDefaultModel": "No default model",
     "themeDescription": "Switch between dark and light appearance.",
     "runtimeUrlHelp": "Applied on blur or Enter. Must use http/https.",
-    "syncDescription": "Trigger a manual sync with current runtime context.",
     "runtimeUrlInvalid": "Invalid runtime URL",
     "defaultModelDescription": "Use this model config by default for new conversations.",
     "saveState": {

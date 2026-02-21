@@ -12,7 +12,6 @@ import { setProviderSecret } from "@/api/secretStoreClient";
 import { McpPanel } from "@/components/settings/McpPanel";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SkillsPanel } from "@/components/settings/SkillsPanel";
-import { SyncNowButton } from "@/components/SyncNowButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -717,11 +716,6 @@ export function SettingsPage() {
                     }}
                   />
                 }
-              />
-              <SettingRow
-                title={t("settings.syncSection")}
-                description={t("settings.syncDescription")}
-                control={<SyncNowButton />}
               />
             </div>
           </CardContent>

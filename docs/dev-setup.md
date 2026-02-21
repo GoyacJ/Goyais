@@ -6,7 +6,6 @@
 - `pnpm protocol:generate`
 - `pnpm dev:runtime`
 - `pnpm dev:desktop`
-- `pnpm dev:sync`
 - `pnpm dev:hub`
 - `pnpm test`
 
