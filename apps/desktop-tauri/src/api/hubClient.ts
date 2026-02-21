@@ -188,7 +188,21 @@ async function requestJson<T>(
       throw await normalizeHttpError(response);
     }
 
-    return (await response.json()) as T;
+    if (response.status === 204 || response.status === 205) {
+      return undefined as T;
+    }
+
+    const contentLength = response.headers.get("content-length");
+    if (contentLength === "0") {
+      return undefined as T;
+    }
+
+    const raw = await response.text();
+    if (!raw.trim()) {
+      return undefined as T;
+    }
+
+    return JSON.parse(raw) as T;
   } catch (error) {
     throw normalizeUnknownError(error);
   }

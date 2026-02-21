@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  archiveSession,
   bootstrapAdmin,
   commitExecution,
   createModelConfig,
+  deleteProject,
   discardExecution,
   exportExecutionPatch,
   getBootstrapStatus,
@@ -252,5 +254,25 @@ describe("hubClient", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("http://127.0.0.1:8787/v1/executions/exec-1/discard?workspace_id=ws-1");
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect(init.method).toBe("DELETE");
+  });
+
+  it("handles 204 response for project deletion", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, { status: 204 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await deleteProject("http://127.0.0.1:8787", "token-abc", "ws-1", "project-1");
+    expect(fetchMock.mock.calls[0][0]).toBe("http://127.0.0.1:8787/v1/projects/project-1?workspace_id=ws-1");
+  });
+
+  it("handles 204 response for session deletion", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, { status: 204 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await archiveSession("http://127.0.0.1:8787", "token-abc", "ws-1", "session-1");
+    expect(fetchMock.mock.calls[0][0]).toBe("http://127.0.0.1:8787/v1/sessions/session-1?workspace_id=ws-1");
   });
 });
