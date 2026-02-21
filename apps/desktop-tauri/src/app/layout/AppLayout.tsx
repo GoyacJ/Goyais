@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
+import { AppTopBar } from "@/app/layout/AppTopBar";
 import { SettingsSidebar } from "@/app/layout/SettingsSidebar";
 import { Sidebar } from "@/app/layout/Sidebar";
 import { StatusBar } from "@/app/layout/StatusBar";
@@ -39,18 +40,22 @@ export function AppLayout() {
   }, []);
 
   return (
-    <div className="flex h-full bg-background text-foreground">
-      {isSettingsRoute ? <SettingsSidebar /> : <Sidebar />}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <main
-          className={cn(
-            "min-h-0 flex-1 overflow-auto scrollbar-subtle",
-            "p-0"
-          )}
-        >
-          <Outlet />
-        </main>
-        <StatusBar />
+    <div className="flex h-full flex-col bg-background text-foreground">
+      <AppTopBar />
+
+      <div className="flex min-h-0 flex-1">
+        {isSettingsRoute ? <SettingsSidebar /> : <Sidebar />}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <main
+            className={cn(
+              "min-h-0 flex-1 overflow-auto scrollbar-subtle",
+              "p-0"
+            )}
+          >
+            <Outlet />
+          </main>
+          <StatusBar />
+        </div>
       </div>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>

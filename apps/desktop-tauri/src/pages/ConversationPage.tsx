@@ -1,13 +1,12 @@
-import { FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { type DataProject, getModelConfigsClient, getProjectsClient } from "@/api/dataSource";
-import { getGitCurrentBranch } from "@/api/gitClient";
-import { getSessionDataSource } from "@/api/sessionDataSource";
 import { getProviderSecret } from "@/api/secretStoreClient";
+import { getSessionDataSource } from "@/api/sessionDataSource";
 import { ContextPanel } from "@/components/domain/context/ContextPanel";
-import { ExecutionActions } from "@/components/domain/conversation/ExecutionActions";
 import { ConversationTranscriptPanel } from "@/components/domain/conversation/ConversationTranscriptPanel";
+import { ExecutionActions } from "@/components/domain/conversation/ExecutionActions";
 import { DiffPanel } from "@/components/domain/diff/DiffPanel";
 import { ExecutionComposerPanel } from "@/components/domain/execution/ExecutionComposerPanel";
 import { EmptyState } from "@/components/domain/feedback/EmptyState";
@@ -16,7 +15,6 @@ import { PermissionQueueCenter } from "@/components/domain/permission/Permission
 import { TimelinePanel } from "@/components/domain/timeline/TimelinePanel";
 import { ToolDetailsDrawer } from "@/components/domain/tools/ToolDetailsDrawer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { useExecutionEvents } from "@/hooks/useExecutionEvents";
 import { useConversationStore } from "@/stores/conversationStore";
@@ -103,9 +101,6 @@ export function ConversationPage() {
   const [selectedEventId, setSelectedEventId] = useState<string>();
   const [selectedPermissionCallId, setSelectedPermissionCallId] = useState<string>();
   const [isStarting, setIsStarting] = useState(false);
-  const [titleDraft, setTitleDraft] = useState("");
-  const [gitBranch, setGitBranch] = useState<string | null>(null);
-  const [gitBranchLoading, setGitBranchLoading] = useState(false);
   const [commitSha, setCommitSha] = useState<string>();
   const [actionsBusy, setActionsBusy] = useState(false);
   const [turnsBySession, setTurnsBySession] = useState<Record<string, SessionTurn[]>>({});
@@ -114,10 +109,6 @@ export function ConversationPage() {
     () => sessionsByProjectId[selectedProjectId ?? ""]?.find((item) => item.session_id === selectedSessionId),
     [selectedProjectId, selectedSessionId, sessionsByProjectId]
   );
-
-  useEffect(() => {
-    setTitleDraft(selectedSession?.title ?? "");
-  }, [selectedSession?.title]);
 
   useEffect(() => {
     setCommitSha(undefined);
@@ -146,28 +137,22 @@ export function ConversationPage() {
     () => projects.find((item) => item.project_id === selectedProjectId),
     [projects, selectedProjectId]
   );
-  const localWorkspacePath = useMemo(
-    () => (selectedProject?.workspace_path ? String(selectedProject.workspace_path) : undefined),
-    [selectedProject?.workspace_path]
-  );
 
-  const sessionTurns = selectedSessionId ? turnsBySession[selectedSessionId] ?? [] : [];
-  const transcriptTurns = useMemo(
-    () =>
-      [...sessionTurns]
-        .reverse()
-        .map((turn) => ({
-          executionId: turn.executionId,
-          status: turn.status,
-          createdAt: turn.createdAt,
-          userText: turn.userText,
-          assistantText:
-            turn.executionId === executionId
-              ? summarizeAssistantByEvents(events, turn.status, t)
-              : t("conversation.executionStatus", { status: turn.status })
-        })),
-    [events, executionId, sessionTurns, t]
-  );
+  const transcriptTurns = useMemo(() => {
+    const sessionTurns = selectedSessionId ? turnsBySession[selectedSessionId] ?? [] : [];
+    return [...sessionTurns]
+      .reverse()
+      .map((turn) => ({
+        executionId: turn.executionId,
+        status: turn.status,
+        createdAt: turn.createdAt,
+        userText: turn.userText,
+        assistantText:
+          turn.executionId === executionId
+            ? summarizeAssistantByEvents(events, turn.status, t)
+            : t("conversation.executionStatus", { status: turn.status })
+      }));
+  }, [events, executionId, selectedSessionId, turnsBySession, t]);
 
   const activeConfirmation = useMemo(() => {
     if (selectedPermissionCallId) {
@@ -180,24 +165,6 @@ export function ConversationPage() {
     sessionId: selectedSessionId,
     enabled: Boolean(selectedSessionId && executionId)
   });
-
-  const refreshGitBranch = useCallback(async () => {
-    if (currentProfile?.kind !== "local" || !localWorkspacePath) {
-      setGitBranch(null);
-      setGitBranchLoading(false);
-      return;
-    }
-
-    setGitBranchLoading(true);
-    try {
-      const branch = await getGitCurrentBranch(localWorkspacePath);
-      setGitBranch(branch);
-    } catch {
-      setGitBranch(null);
-    } finally {
-      setGitBranchLoading(false);
-    }
-  }, [currentProfile?.kind, localWorkspacePath]);
 
   const refreshProjects = useCallback(async () => {
     try {
@@ -219,28 +186,6 @@ export function ConversationPage() {
   useEffect(() => {
     void refreshProjects();
   }, [refreshProjects]);
-
-  useEffect(() => {
-    void refreshGitBranch();
-  }, [refreshGitBranch, selectedProjectId, selectedSessionId]);
-
-  useEffect(() => {
-    const onWindowFocus = () => {
-      void refreshGitBranch();
-    };
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void refreshGitBranch();
-      }
-    };
-
-    window.addEventListener("focus", onWindowFocus);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => {
-      window.removeEventListener("focus", onWindowFocus);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [refreshGitBranch]);
 
   useEffect(() => {
     modelConfigsClient
@@ -410,37 +355,6 @@ export function ConversationPage() {
     [activeConfirmation, addDecision, addToast, executionId, resolvePendingConfirmation, sessionDataSource, t]
   );
 
-  const onRenameSession = async (candidateTitle?: string) => {
-    if (!selectedSessionId) return;
-    const nextTitle = (candidateTitle ?? titleDraft).trim();
-    if (!nextTitle) {
-      setTitleDraft(selectedSession?.title ?? t("conversation.newThread"));
-      return;
-    }
-    if (nextTitle === selectedSession?.title) {
-      return;
-    }
-    try {
-      const payload = await sessionDataSource.renameSession(selectedSessionId, nextTitle);
-      upsertSession(payload.session);
-      setTitleDraft(payload.session.title);
-    } catch (error) {
-      setTitleDraft(selectedSession?.title ?? t("conversation.newThread"));
-      addToast({
-        title: t("conversation.renameFailed"),
-        description: (error as Error).message,
-        diagnostic: (error as Error).message,
-        variant: "error"
-      });
-    }
-  };
-
-  const onSessionTitleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
-    void onRenameSession(event.currentTarget.value);
-  };
-
   const onCommitExecution = useCallback(
     async (message: string) => {
       if (!executionId) return;
@@ -527,46 +441,10 @@ export function ConversationPage() {
     return <EmptyState title={t("conversation.noProjectTitle")} description={t("conversation.noProjectDescription")} />;
   }
 
-  const sessionTitle = selectedSession?.title ?? t("conversation.newThread");
-  const projectDisplayName = selectedProject?.name ?? selectedProjectId;
-  const branchLabel = gitBranchLoading
-    ? t("conversation.branchLoading")
-    : gitBranch ?? t("conversation.branchUnavailable");
   const showExecutionActions = Boolean(executionId && events.some((event) => event.type === "done"));
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_22rem] grid-rows-[auto_minmax(0,1fr)]">
-      <header className="col-span-2 flex h-11 items-center gap-3 border-b border-border-subtle px-3">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">{t("conversation.headerProject")}</span>
-          <span className="truncate text-small text-foreground" title={projectDisplayName}>
-            {projectDisplayName}
-          </span>
-        </div>
-        <div className="h-4 w-px shrink-0 bg-border-subtle" />
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">{t("conversation.headerSession")}</span>
-          <Input
-            value={titleDraft}
-            disabled={!selectedSessionId}
-            placeholder={sessionTitle}
-            className="h-7 max-w-[20rem] border-0 bg-transparent px-1 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-            onChange={(event) => setTitleDraft(event.target.value)}
-            onBlur={() => {
-              void onRenameSession();
-            }}
-            onKeyDown={onSessionTitleKeyDown}
-          />
-        </div>
-        <div className="h-4 w-px shrink-0 bg-border-subtle" />
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">{t("conversation.headerBranch")}</span>
-          <span className="truncate text-small text-foreground" title={branchLabel}>
-            {branchLabel}
-          </span>
-        </div>
-      </header>
-
+    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_22rem]">
       <section className="min-h-0 p-3">
         <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto_auto] gap-panel">
           <ConversationTranscriptPanel
