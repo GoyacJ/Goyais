@@ -11,9 +11,6 @@ class Settings:
     runtime_host: str
     runtime_port: int
     agent_mode: str
-    sync_server_url: str
-    sync_token: str
-    sync_device_id: str
     runtime_secret_token: str
     runtime_require_hub_auth: bool
     runtime_shared_secret: str
@@ -53,9 +50,6 @@ def load_settings() -> Settings:
         runtime_host=os.getenv("GOYAIS_RUNTIME_HOST", "127.0.0.1"),
         runtime_port=int(os.getenv("GOYAIS_RUNTIME_PORT", "8040")),
         agent_mode=os.getenv("GOYAIS_AGENT_MODE", "mock"),
-        sync_server_url=os.getenv("GOYAIS_SYNC_SERVER_URL", "http://127.0.0.1:8140"),
-        sync_token=os.getenv("GOYAIS_SYNC_TOKEN", "change-me"),
-        sync_device_id=os.getenv("GOYAIS_SYNC_DEVICE_ID", "local-device"),
         runtime_secret_token=os.getenv("GOYAIS_RUNTIME_SECRET_TOKEN", "dev-secret-token"),
         runtime_require_hub_auth=runtime_require_hub_auth,
         runtime_shared_secret=runtime_shared_secret,

@@ -13,7 +13,6 @@ import {
 } from "@/api/dataSource";
 import { setProviderSecret } from "@/api/secretStoreClient";
 import { SettingRow } from "@/components/settings/SettingRow";
-import { SyncNowButton } from "@/components/SyncNowButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -718,11 +717,6 @@ export function SettingsPage() {
                     }}
                   />
                 }
-              />
-              <SettingRow
-                title={t("settings.syncSection")}
-                description={t("settings.syncDescription")}
-                control={<SyncNowButton />}
               />
             </div>
           </CardContent>
