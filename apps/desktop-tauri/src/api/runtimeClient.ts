@@ -119,6 +119,10 @@ export async function listModelCatalog(
   return requestJson(`/v1/model-configs/${encodeURIComponent(modelConfigId)}/models`, init, { retries: 1 });
 }
 
+export async function syncNow(): Promise<Record<string, number>> {
+  return requestJson("/v1/sync/now", { method: "POST" }, { retries: 1 });
+}
+
 export async function runtimeHealth(): Promise<{ ok: boolean }> {
   return requestJson("/v1/health", undefined, { retries: 1 });
 }

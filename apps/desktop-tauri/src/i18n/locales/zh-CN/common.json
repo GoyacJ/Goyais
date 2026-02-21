@@ -30,15 +30,22 @@
       "language": "语言"
     }
   },
+  "sync": {
+    "syncNow": "立即同步",
+    "syncNowCompact": "Sync Now",
+    "completedTitle": "同步完成",
+    "failedTitle": "同步失败",
+    "status": "pushed={{pushed}} pulled={{pulled}}"
+  },
   "settings": {
     "title": "设置",
-    "description": "运行时与界面偏好设置。",
+    "description": "单用户同步与运行时偏好设置。",
     "backToApp": "返回应用",
     "sections": {
       "general": "通用",
       "generalDescription": "语言与主题等界面偏好",
       "runtime": "运行时",
-      "runtimeDescription": "Runtime 地址设置",
+      "runtimeDescription": "Runtime 地址和同步行为",
       "models": "模型",
       "modelsDescription": "模型配置与默认模型",
       "skills": "技能集",
@@ -46,6 +53,7 @@
       "mcp": "MCP 连接器",
       "mcpDescription": "管理 MCP 服务器连接器"
     },
+    "syncSection": "同步",
     "languageSection": "语言",
     "languageLabel": "界面语言",
     "languageHelp": "选择界面显示语言。",
@@ -60,6 +68,7 @@
     "noDefaultModel": "不指定默认模型",
     "themeDescription": "在深色与浅色主题之间切换。",
     "runtimeUrlHelp": "失焦或按 Enter 后生效，必须是 http/https。",
+    "syncDescription": "手动触发一次与当前 Runtime 的同步。",
     "runtimeUrlInvalid": "Runtime 地址无效",
     "defaultModelDescription": "新对话默认使用该模型配置。",
     "saveState": {

@@ -8,7 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import diagnostics, internal_executions, model_configs, ops, projects, secrets, sessions, system_events
+from app.api import diagnostics, internal_executions, model_configs, ops, projects, secrets, sessions, sync_client, system_events
 from app.config import load_settings
 from app.context import set_current_user_id
 from app.deps import set_dependencies
@@ -18,6 +18,7 @@ from app.db.repositories import Repository
 from app.errors import error_from_exception, error_response
 from app.observability.logging import get_runtime_logger
 from app.services.execution_service import ExecutionService
+from app.services.sync_service import SyncService
 from app.trace import TRACE_HEADER, get_current_trace_id, normalize_trace_id, set_current_trace_id
 
 settings = load_settings()
@@ -30,7 +31,8 @@ async def lifespan(app: FastAPI):
     conn = await open_connection(settings.db_path)
     repo = Repository(conn)
     execution_service = ExecutionService(repo=repo, agent_mode=settings.agent_mode)
-    set_dependencies(repo, execution_service)
+    sync_service = SyncService(repo, settings.sync_server_url, settings.sync_token, settings.sync_device_id)
+    set_dependencies(repo, sync_service, execution_service)
 
     yield
 
@@ -121,5 +123,6 @@ app.include_router(sessions.router)
 app.include_router(ops.router)
 app.include_router(diagnostics.router)
 app.include_router(internal_executions.router)
+app.include_router(sync_client.router)
 app.include_router(secrets.router)
 app.include_router(system_events.router)

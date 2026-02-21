@@ -526,6 +526,17 @@ class Repository:
             for row in rows
         ]
 
+    async def insert_or_update_sync_state(self, *, last_pushed_global_seq: int, last_pulled_server_seq: int) -> None:
+        await self.conn.execute(
+            """
+            UPDATE sync_state
+            SET last_pushed_global_seq=?, last_pulled_server_seq=?, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            WHERE singleton_id=1
+            """,
+            (last_pushed_global_seq, last_pulled_server_seq),
+        )
+        await self.conn.commit()
+
     async def list_audit_logs_by_execution(self, execution_id: str, limit: int = 200) -> list[dict[str, Any]]:
         cursor = await self.conn.execute(
             """
@@ -546,3 +557,69 @@ class Repository:
             item["result"] = json.loads(item.pop("result_json") or "{}")
             result.append(item)
         return result
+
+    async def get_sync_state(self) -> dict[str, Any]:
+        cursor = await self.conn.execute(
+            "SELECT device_id, last_pushed_global_seq, last_pulled_server_seq FROM sync_state WHERE singleton_id=1"
+        )
+        row = await cursor.fetchone()
+        return dict(row)
+
+    async def list_unsynced_events(self, since_global_seq: int) -> list[dict[str, Any]]:
+        cursor = await self.conn.execute(
+            """
+            SELECT global_seq, protocol_version, trace_id, event_id, execution_id, seq, ts, type, payload_json
+            FROM execution_events
+            WHERE global_seq > ?
+            ORDER BY global_seq ASC
+            """,
+            (since_global_seq,),
+        )
+        rows = await cursor.fetchall()
+        return [
+            {
+                "global_seq": row["global_seq"],
+                "protocol_version": row["protocol_version"],
+                "trace_id": row["trace_id"],
+                "event_id": row["event_id"],
+                "execution_id": row["execution_id"],
+                "seq": row["seq"],
+                "ts": row["ts"],
+                "type": row["type"],
+                "payload": json.loads(row["payload_json"]),
+            }
+            for row in rows
+        ]
+
+    async def upsert_synced_event(self, event_id: str, server_seq: int) -> None:
+        await self.conn.execute(
+            """
+            INSERT INTO synced_event_map(event_id, server_seq, synced_at)
+            VALUES(?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+            ON CONFLICT(event_id) DO UPDATE SET
+              server_seq=excluded.server_seq,
+              synced_at=excluded.synced_at
+            """,
+            (event_id, server_seq),
+        )
+        await self.conn.commit()
+
+    async def insert_event_if_missing(self, event: dict[str, Any]) -> bool:
+        cursor = await self.conn.execute("SELECT 1 FROM execution_events WHERE event_id=?", (event["event_id"],))
+        row = await cursor.fetchone()
+        if row:
+            return False
+
+        await self.insert_event(
+            {
+                "protocol_version": event.get("protocol_version", PROTOCOL_VERSION),
+                "trace_id": event["trace_id"],
+                "event_id": event["event_id"],
+                "execution_id": event["execution_id"],
+                "seq": event["seq"],
+                "ts": event["ts"],
+                "type": event["type"],
+                "payload": event["payload"],
+            }
+        )
+        return True
