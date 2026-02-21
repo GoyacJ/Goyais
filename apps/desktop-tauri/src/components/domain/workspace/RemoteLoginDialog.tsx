@@ -9,6 +9,11 @@ interface RemoteLoginDialogProps {
   open: boolean;
   loading: boolean;
   errorMessage?: string;
+  title?: string;
+  description?: string;
+  submitLabel?: string;
+  serverUrlPreset?: string;
+  lockServerUrl?: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (payload: { serverUrl: string; email: string; password: string }) => Promise<void>;
 }
@@ -17,11 +22,16 @@ export function RemoteLoginDialog({
   open,
   loading,
   errorMessage,
+  title,
+  description,
+  submitLabel,
+  serverUrlPreset,
+  lockServerUrl = false,
   onOpenChange,
   onSubmit
 }: RemoteLoginDialogProps) {
   const { t } = useTranslation();
-  const [serverUrl, setServerUrl] = useState("http://127.0.0.1:8787");
+  const [serverUrl, setServerUrl] = useState(serverUrlPreset || "http://127.0.0.1:8787");
   const [email, setEmail] = useState("admin@example.com");
   const [password, setPassword] = useState("");
 
@@ -30,6 +40,12 @@ export function RemoteLoginDialog({
       setPassword("");
     }
   }, [open]);
+
+  useEffect(() => {
+    if (serverUrlPreset) {
+      setServerUrl(serverUrlPreset);
+    }
+  }, [serverUrlPreset]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -44,14 +60,19 @@ export function RemoteLoginDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("workspace.remoteLogin.title")}</DialogTitle>
-          <DialogDescription>{t("workspace.remoteLogin.description")}</DialogDescription>
+          <DialogTitle>{title ?? t("workspace.remoteLogin.title")}</DialogTitle>
+          <DialogDescription>{description ?? t("workspace.remoteLogin.description")}</DialogDescription>
         </DialogHeader>
 
         <form className="space-y-3" onSubmit={(event) => void handleSubmit(event)}>
           <label className="grid gap-1 text-small text-muted-foreground">
             {t("workspace.remoteLogin.serverUrl")}
-            <Input value={serverUrl} onChange={(event) => setServerUrl(event.target.value)} required />
+            <Input
+              value={serverUrl}
+              onChange={(event) => setServerUrl(event.target.value)}
+              disabled={lockServerUrl}
+              required
+            />
           </label>
 
           <label className="grid gap-1 text-small text-muted-foreground">
@@ -71,7 +92,7 @@ export function RemoteLoginDialog({
               {t("workspace.cancel")}
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? t("workspace.loading") : t("workspace.remoteLogin.submit")}
+              {loading ? t("workspace.loading") : submitLabel ?? t("workspace.remoteLogin.submit")}
             </Button>
           </div>
         </form>

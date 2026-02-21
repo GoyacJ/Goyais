@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  bootstrapAdmin,
   commitExecution,
   createModelConfig,
   discardExecution,
@@ -39,6 +40,52 @@ describe("hubClient", () => {
     expect(response.setup_mode).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe("http://127.0.0.1:8787/v1/auth/bootstrap/status");
+  });
+
+  it("normalizes go hub bootstrap status payload", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          setup_completed: false
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json"
+          }
+        }
+      )
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await getBootstrapStatus("http://127.0.0.1:8080");
+    expect(response.setup_mode).toBe(true);
+    expect(response.setup_completed).toBe(false);
+  });
+
+  it("posts bootstrap payload without bootstrap_token when omitted", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ token: "local-token" }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await bootstrapAdmin("http://127.0.0.1:8080", {
+      email: "local-admin@goyais.local",
+      password: "secret",
+      display_name: "Local Admin"
+    });
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(requestInit.body)) as Record<string, string>;
+    expect(body.bootstrap_token).toBeUndefined();
+    expect(body.email).toBe("local-admin@goyais.local");
+    expect(body.display_name).toBe("Local Admin");
   });
 
   it("sends Authorization header for navigation request", async () => {

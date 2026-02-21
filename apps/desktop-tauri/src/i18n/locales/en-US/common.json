@@ -253,6 +253,10 @@
     "createFailed": "Create project failed",
     "deleteSuccess": "Project deleted",
     "deleteFailed": "Delete project failed",
+    "remove": "Remove",
+    "removeSuccess": "Project removed from app",
+    "removeFailed": "Remove project failed",
+    "removeConfirm": "Remove \"{{name}}\" from this app? (Files are not deleted)",
     "syncFailed": "Sync project failed",
     "projectId": "id: {{id}}",
     "remoteHint": "Remote workspace uses Hub server as authoritative project source.",
@@ -360,6 +364,11 @@
       "email": "Email",
       "password": "Password",
       "submit": "Login"
+    },
+    "localUnlock": {
+      "title": "Unlock Local Workspace",
+      "description": "Legacy local data detected. Enter local account credentials once to unlock. Future sign-in will be automatic.",
+      "submit": "Unlock"
     },
     "setupAdmin": {
       "title": "Setup Admin",

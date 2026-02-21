@@ -6,7 +6,6 @@ Worker 产出事件后调用此模块，替代原来的本地 EventBus 发布。
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from collections import deque
 from datetime import datetime, timezone

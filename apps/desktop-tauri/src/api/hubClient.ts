@@ -2,7 +2,10 @@ import { normalizeHttpError, normalizeUnknownError } from "@/lib/api-error";
 import type { ModelCatalogResponse, ProviderKey } from "@/types/modelCatalog";
 
 export interface BootstrapStatusResponse {
+  // Legacy TS hub
   setup_mode: boolean;
+  // Go hub
+  setup_completed?: boolean;
   allow_public_signup: boolean;
   message: string;
 }
@@ -14,7 +17,7 @@ export interface HealthResponse {
 
 export interface LoginResponse {
   token: string;
-  user: {
+  user?: {
     user_id: string;
     email: string;
     display_name: string;
@@ -22,7 +25,7 @@ export interface LoginResponse {
 }
 
 export interface BootstrapAdminResponse extends LoginResponse {
-  workspace: {
+  workspace?: {
     workspace_id: string;
     name: string;
     slug: string;
@@ -213,7 +216,41 @@ async function requestText(
 }
 
 export async function getBootstrapStatus(serverUrl: string): Promise<BootstrapStatusResponse> {
-  return requestJson<BootstrapStatusResponse>(serverUrl, "/v1/auth/bootstrap/status");
+  const payload = await requestJson<Record<string, unknown>>(serverUrl, "/v1/auth/bootstrap/status");
+
+  if (typeof payload.setup_mode === "boolean") {
+    return {
+      setup_mode: payload.setup_mode,
+      allow_public_signup: Boolean(payload.allow_public_signup),
+      message: typeof payload.message === "string" ? payload.message : "",
+      setup_completed:
+        typeof payload.setup_completed === "boolean"
+          ? payload.setup_completed
+          : !payload.setup_mode
+    };
+  }
+
+  if (typeof payload.setup_completed === "boolean") {
+    const setupMode = !payload.setup_completed;
+    return {
+      setup_mode: setupMode,
+      setup_completed: payload.setup_completed,
+      allow_public_signup: Boolean(payload.allow_public_signup),
+      message:
+        typeof payload.message === "string"
+          ? payload.message
+          : setupMode
+            ? "setup required"
+            : "setup completed"
+    };
+  }
+
+  return {
+    setup_mode: false,
+    setup_completed: true,
+    allow_public_signup: false,
+    message: ""
+  };
 }
 
 export async function getHealth(serverUrl: string): Promise<HealthResponse> {
@@ -223,18 +260,27 @@ export async function getHealth(serverUrl: string): Promise<HealthResponse> {
 export async function bootstrapAdmin(
   serverUrl: string,
   payload: {
-    bootstrap_token: string;
+    bootstrap_token?: string;
     email: string;
     password: string;
     display_name: string;
   }
 ): Promise<BootstrapAdminResponse> {
+  const body: Record<string, string> = {
+    email: payload.email,
+    password: payload.password,
+    display_name: payload.display_name
+  };
+  if (payload.bootstrap_token) {
+    body.bootstrap_token = payload.bootstrap_token;
+  }
+
   return requestJson<BootstrapAdminResponse>(serverUrl, "/v1/auth/bootstrap/admin", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(body)
   });
 }
 

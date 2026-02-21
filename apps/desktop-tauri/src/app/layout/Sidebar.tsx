@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Settings2,
   Sparkles,
+  Trash2,
   UserCircle2
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -22,8 +23,8 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { type DataProject, getProjectsClient } from "@/api/dataSource";
-import { getSessionDataSource } from "@/api/sessionDataSource";
 import { deleteToken } from "@/api/secretStoreClient";
+import { getSessionDataSource } from "@/api/sessionDataSource";
 import { WorkspaceSwitcher } from "@/app/layout/WorkspaceSwitcher";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -60,6 +61,7 @@ interface SidebarProjectSectionProps {
   onSelectProject: (projectId: string) => void;
   onSelectSession: (projectId: string, sessionId: string) => void;
   onNewThread: (projectId: string) => void;
+  onRemoveProject?: (project: DataProject) => void;
   onSync?: (projectId: string) => void;
   isSyncing?: boolean;
 }
@@ -80,6 +82,7 @@ function SidebarProjectSection({
   onSelectProject,
   onSelectSession,
   onNewThread,
+  onRemoveProject,
   onSync,
   isSyncing
 }: SidebarProjectSectionProps) {
@@ -131,6 +134,16 @@ function SidebarProjectSection({
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
+            {onRemoveProject ? (
+              <button
+                type="button"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-control text-muted-foreground hover:bg-background hover:text-destructive"
+                onClick={() => onRemoveProject(project)}
+                aria-label="remove-project"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -413,6 +426,37 @@ export function Sidebar() {
     }
   }, [addToast, projectsClient, refreshProjects, t]);
 
+  const onRemoveProject = useCallback(
+    async (project: DataProject) => {
+      if (!projectsClient.supportsDelete) {
+        return;
+      }
+
+      const confirmed = window.confirm(t("projects.removeConfirm", { name: project.name }));
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        await projectsClient.delete(project.project_id);
+        await refreshProjects();
+        addToast({
+          title: t("projects.removeSuccess"),
+          description: project.name,
+          variant: "success"
+        });
+      } catch (error) {
+        addToast({
+          title: t("projects.removeFailed"),
+          description: (error as Error).message,
+          diagnostic: (error as Error).message,
+          variant: "error"
+        });
+      }
+    },
+    [addToast, projectsClient, refreshProjects, t]
+  );
+
   const onLogout = async () => {
     if (!currentProfile || currentProfile.kind !== "remote") {
       return;
@@ -534,6 +578,7 @@ export function Sidebar() {
               onSelectProject={setSelectedProject}
               onSelectSession={setSelectedSession}
               onNewThread={(projectId) => { void onNewThread(projectId); }}
+              onRemoveProject={projectsClient.supportsDelete ? (project) => { void onRemoveProject(project); } : undefined}
               onSync={projectsClient.supportsGit ? (projectId) => { void onSyncProject(projectId); } : undefined}
               isSyncing={syncingProjectId === project.project_id}
             />

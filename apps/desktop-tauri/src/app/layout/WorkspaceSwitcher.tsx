@@ -1,9 +1,10 @@
 import { Globe2, HardDrive, Plus, Server } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { bootstrapAdmin, getBootstrapStatus, getNavigation, listWorkspaces, login, me } from "@/api/hubClient";
 import { loadToken, storeToken } from "@/api/secretStoreClient";
+import { ensureLocalHubAuth, localHubBaseUrl } from "@/api/sessionDataSource";
 import { RemoteLoginDialog } from "@/components/domain/workspace/RemoteLoginDialog";
 import { SetupAdminDialog } from "@/components/domain/workspace/SetupAdminDialog";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,8 @@ interface WorkspaceSwitcherProps {
   collapsed: boolean;
 }
 
+type AuthTarget = "local" | "remote";
+
 export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
   const { t } = useTranslation();
   const { addToast } = useToast();
@@ -52,6 +55,8 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
   const [pendingSetupServerUrl, setPendingSetupServerUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>();
+  const [authTarget, setAuthTarget] = useState<AuthTarget>("remote");
+  const [localUnlockPrompted, setLocalUnlockPrompted] = useState(false);
 
   const localProfiles = useMemo(() => profiles.filter((profile) => profile.kind === "local"), [profiles]);
   const remoteProfiles = useMemo(() => profiles.filter((profile) => profile.kind === "remote"), [profiles]);
@@ -111,6 +116,19 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
     setErrorMessage(undefined);
 
     try {
+      if (authTarget === "local") {
+        await ensureLocalHubAuth({
+          unlockCredentials: {
+            email: payload.email,
+            password: payload.password,
+            displayName: payload.email
+          }
+        });
+        setLocalUnlockPrompted(false);
+        setLoginOpen(false);
+        return;
+      }
+
       const status = await getBootstrapStatus(payload.serverUrl);
       if (status.setup_mode) {
         setPendingSetupServerUrl(payload.serverUrl);
@@ -179,7 +197,12 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
 
       const profile = useWorkspaceStore.getState().profiles.find((item) => item.id === profileId);
       if (profile) {
-        await hydrateRemoteProfile(profileId, profile, response.token, response.workspace.workspace_id);
+        await hydrateRemoteProfile(
+          profileId,
+          profile,
+          response.token,
+          response.workspace?.workspace_id
+        );
       }
 
       setSetupOpen(false);
@@ -192,6 +215,49 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
     }
   };
 
+  const ensureLocalAuth = useCallback(async () => {
+    if (currentProfile?.kind !== "local") {
+      return;
+    }
+
+    const serverUrl = localHubBaseUrl();
+    try {
+      await ensureLocalHubAuth();
+      setLocalUnlockPrompted(false);
+      setErrorMessage(undefined);
+      setLoginOpen(false);
+      setSetupOpen(false);
+    } catch (error) {
+      if (error instanceof ApiError && error.code === "E_LOCAL_HUB_UNLOCK_REQUIRED") {
+        setPendingSetupServerUrl(serverUrl);
+        setAuthTarget("local");
+        if (!localUnlockPrompted) {
+          setErrorMessage(t("workspace.localUnlock.description"));
+          setSetupOpen(false);
+          setLoginOpen(true);
+          setLocalUnlockPrompted(true);
+        }
+        return;
+      }
+
+      addToast({
+        title: t("workspace.errorTitle"),
+        description: (error as Error).message,
+        variant: "error"
+      });
+    }
+  }, [addToast, currentProfile, localUnlockPrompted, t]);
+
+  useEffect(() => {
+    if (currentProfile?.kind !== "local") {
+      setLocalUnlockPrompted(false);
+    }
+  }, [currentProfile?.id, currentProfile?.kind]);
+
+  useEffect(() => {
+    void ensureLocalAuth();
+  }, [ensureLocalAuth]);
+
   const handleSelectRemoteWorkspace = async (profile: WorkspaceProfile, workspaceId: string) => {
     if (profile.kind !== "remote" || !profile.remote) {
       return;
@@ -203,6 +269,7 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
     try {
       const token = await loadToken(profile.id);
       if (!token) {
+        setAuthTarget("remote");
         setLoginOpen(true);
         setErrorMessage(t("workspace.tokenMissing"));
         return;
@@ -241,7 +308,14 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
         <DropdownMenuContent align="start" className="w-72">
           <DropdownMenuLabel>{t("workspace.localGroup")}</DropdownMenuLabel>
           {localProfiles.map((profile) => (
-            <DropdownMenuItem key={profile.id} onClick={() => setCurrentProfile(profile.id)}>
+            <DropdownMenuItem
+              key={profile.id}
+              onClick={() => {
+                setLocalUnlockPrompted(false);
+                setErrorMessage(undefined);
+                setCurrentProfile(profile.id);
+              }}
+            >
               <HardDrive className="mr-2 h-4 w-4" />
               <span>{profile.name}</span>
             </DropdownMenuItem>
@@ -283,6 +357,7 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
           <DropdownMenuItem
             onClick={() => {
               setErrorMessage(undefined);
+              setAuthTarget("remote");
               setLoginOpen(true);
             }}
           >
@@ -296,6 +371,11 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
         open={loginOpen}
         loading={loading}
         errorMessage={errorMessage}
+        title={authTarget === "local" ? t("workspace.localUnlock.title") : undefined}
+        description={authTarget === "local" ? t("workspace.localUnlock.description") : undefined}
+        submitLabel={authTarget === "local" ? t("workspace.localUnlock.submit") : undefined}
+        serverUrlPreset={authTarget === "local" ? pendingSetupServerUrl || localHubBaseUrl() : undefined}
+        lockServerUrl={authTarget === "local"}
         onOpenChange={setLoginOpen}
         onSubmit={handleLoginSubmit}
       />

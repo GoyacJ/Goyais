@@ -1,5 +1,12 @@
 import * as hubClient from "@/api/hubClient";
-import { loadToken } from "@/api/secretStoreClient";
+import {
+  deleteToken,
+  loadLocalHubCredentials,
+  loadToken,
+  type LocalHubCredentials,
+  storeLocalHubCredentials,
+  storeToken
+} from "@/api/secretStoreClient";
 import { ApiError } from "@/lib/api-error";
 import type { WorkspaceProfile } from "@/stores/workspaceStore";
 
@@ -44,12 +51,16 @@ export interface SessionDataSource {
   discardExecution: (executionId: string) => Promise<void>;
 }
 
-const LOCAL_HUB_STORAGE_KEY = "goyais.localHubUrl";
-const DEFAULT_LOCAL_HUB_URL = import.meta.env.VITE_LOCAL_HUB_URL ?? "http://127.0.0.1:8080";
-const LOCAL_TOKEN_PROFILE_ID = "local-default";
-const LOCAL_WORKSPACE_STORAGE_KEY = "goyais.localWorkspaceId";
+export const LOCAL_HUB_STORAGE_KEY = "goyais.localHubUrl";
+export const DEFAULT_LOCAL_HUB_URL = import.meta.env.VITE_LOCAL_HUB_URL ?? "http://127.0.0.1:8080";
+export const LOCAL_TOKEN_PROFILE_ID = "local-default";
+export const LOCAL_WORKSPACE_STORAGE_KEY = "goyais.localWorkspaceId";
+const LOCAL_AUTO_EMAIL = "local-admin@goyais.local";
+const LOCAL_AUTO_DISPLAY_NAME = "Local Admin";
+const LOCAL_UNLOCK_REQUIRED_CODE = "E_LOCAL_HUB_UNLOCK_REQUIRED";
+const LOCAL_UNLOCK_REQUIRED_MESSAGE = "Local workspace needs one-time unlock. Please enter local account credentials.";
 
-function localHubBaseUrl(): string {
+export function localHubBaseUrl(): string {
   return localStorage.getItem(LOCAL_HUB_STORAGE_KEY) ?? DEFAULT_LOCAL_HUB_URL;
 }
 
@@ -73,30 +84,150 @@ export interface HubContext {
   workspaceId: string;
 }
 
-async function resolveLocalHubContext(): Promise<HubContext> {
-  const serverUrl = localHubBaseUrl();
-  const token = await loadToken(LOCAL_TOKEN_PROFILE_ID);
-  if (!token) {
-    throw toError({
-      code: "E_LOCAL_HUB_NOT_BOOTSTRAPPED",
-      message: "Local hub not yet bootstrapped. Please restart the app.",
-      status: 401
-    });
-  }
+export interface EnsureLocalHubAuthOptions {
+  unlockCredentials?: {
+    email: string;
+    password: string;
+    displayName?: string;
+  };
+}
 
+function normalizeLocalCredentials(credentials: {
+  email: string;
+  password: string;
+  displayName?: string;
+}): LocalHubCredentials {
+  return {
+    email: credentials.email.trim().toLowerCase(),
+    password: credentials.password,
+    displayName: credentials.displayName?.trim() || LOCAL_AUTO_DISPLAY_NAME
+  };
+}
+
+function generateLocalPassword(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${crypto.randomUUID()}${crypto.randomUUID()}`;
+  }
+  return `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function createAutoLocalCredentials(): LocalHubCredentials {
+  return {
+    email: LOCAL_AUTO_EMAIL,
+    password: generateLocalPassword(),
+    displayName: LOCAL_AUTO_DISPLAY_NAME
+  };
+}
+
+function isUnauthorized(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
+function isSetupCompletedConflict(error: unknown): boolean {
+  return error instanceof ApiError && (
+    error.status === 409
+    || error.code === "E_ALREADY_BOOTSTRAPPED"
+    || error.code === "E_SETUP_COMPLETED"
+  );
+}
+
+function buildLocalUnlockRequiredError(): ApiError {
+  return toError({
+    code: LOCAL_UNLOCK_REQUIRED_CODE,
+    message: LOCAL_UNLOCK_REQUIRED_MESSAGE,
+    status: 401
+  });
+}
+
+function pickWorkspaceId(workspaces: Array<{ workspace_id: string }>): string {
   const cachedWorkspaceId = localStorage.getItem(LOCAL_WORKSPACE_STORAGE_KEY);
-  if (cachedWorkspaceId) {
-    return { serverUrl, token, workspaceId: cachedWorkspaceId };
-  }
-
-  const resp = await hubClient.listWorkspaces(serverUrl, token);
-  const workspace = resp.workspaces[0];
-  if (!workspace) {
+  const selectedWorkspaceId =
+    cachedWorkspaceId && workspaces.some((workspace) => workspace.workspace_id === cachedWorkspaceId)
+      ? cachedWorkspaceId
+      : workspaces[0]?.workspace_id;
+  if (!selectedWorkspaceId) {
     throw toError({ code: "E_NO_WORKSPACE", message: "No workspace found on local hub." });
   }
+  localStorage.setItem(LOCAL_WORKSPACE_STORAGE_KEY, selectedWorkspaceId);
+  return selectedWorkspaceId;
+}
 
-  localStorage.setItem(LOCAL_WORKSPACE_STORAGE_KEY, workspace.workspace_id);
-  return { serverUrl, token, workspaceId: workspace.workspace_id };
+async function resolveWorkspaceId(serverUrl: string, token: string): Promise<string> {
+  const resp = await hubClient.listWorkspaces(serverUrl, token);
+  return pickWorkspaceId(resp.workspaces);
+}
+
+export async function ensureLocalHubAuth(options: EnsureLocalHubAuthOptions = {}): Promise<HubContext> {
+  const serverUrl = localHubBaseUrl();
+  const providedCredentials = options.unlockCredentials
+    ? normalizeLocalCredentials(options.unlockCredentials)
+    : null;
+
+  const existingToken = await loadToken(LOCAL_TOKEN_PROFILE_ID);
+  if (existingToken) {
+    try {
+      const workspaceId = await resolveWorkspaceId(serverUrl, existingToken);
+      return { serverUrl, token: existingToken, workspaceId };
+    } catch (error) {
+      if (!isUnauthorized(error)) {
+        throw error;
+      }
+      await deleteToken(LOCAL_TOKEN_PROFILE_ID).catch(() => undefined);
+      localStorage.removeItem(LOCAL_WORKSPACE_STORAGE_KEY);
+    }
+  }
+
+  const status = await hubClient.getBootstrapStatus(serverUrl);
+
+  if (status.setup_mode) {
+    const savedCredentials = await loadLocalHubCredentials();
+    const bootstrapCredentials = providedCredentials ?? savedCredentials ?? createAutoLocalCredentials();
+
+    try {
+      const bootstrapResponse = await hubClient.bootstrapAdmin(serverUrl, {
+        email: bootstrapCredentials.email,
+        password: bootstrapCredentials.password,
+        display_name: bootstrapCredentials.displayName
+      });
+      await storeToken(LOCAL_TOKEN_PROFILE_ID, bootstrapResponse.token);
+      await storeLocalHubCredentials(bootstrapCredentials);
+      const workspaceId = bootstrapResponse.workspace?.workspace_id ?? await resolveWorkspaceId(serverUrl, bootstrapResponse.token);
+      localStorage.setItem(LOCAL_WORKSPACE_STORAGE_KEY, workspaceId);
+      return { serverUrl, token: bootstrapResponse.token, workspaceId };
+    } catch (error) {
+      if (!isSetupCompletedConflict(error)) {
+        throw error;
+      }
+    }
+  }
+
+  const loginCredentials = providedCredentials ?? await loadLocalHubCredentials();
+  if (!loginCredentials) {
+    throw buildLocalUnlockRequiredError();
+  }
+
+  try {
+    const loginResponse = await hubClient.login(serverUrl, {
+      email: loginCredentials.email,
+      password: loginCredentials.password
+    });
+    await storeToken(LOCAL_TOKEN_PROFILE_ID, loginResponse.token);
+    await storeLocalHubCredentials(loginCredentials);
+    const workspaceId = await resolveWorkspaceId(serverUrl, loginResponse.token);
+    return { serverUrl, token: loginResponse.token, workspaceId };
+  } catch (error) {
+    if (providedCredentials) {
+      throw error;
+    }
+    if (isUnauthorized(error)) {
+      throw buildLocalUnlockRequiredError();
+    }
+    throw error;
+  }
+}
+
+async function resolveLocalHubContext(): Promise<HubContext> {
+  return ensureLocalHubAuth();
 }
 
 async function resolveRemoteHubContext(profile: WorkspaceProfile): Promise<HubContext> {

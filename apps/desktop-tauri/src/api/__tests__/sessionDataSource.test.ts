@@ -4,6 +4,9 @@ import { ApiError } from "@/lib/api-error";
 import type { WorkspaceProfile } from "@/stores/workspaceStore";
 
 const hubClientMock = vi.hoisted(() => ({
+  getBootstrapStatus: vi.fn(),
+  bootstrapAdmin: vi.fn(),
+  login: vi.fn(),
   listWorkspaces: vi.fn(),
   listSessions: vi.fn(),
   createSession: vi.fn(),
@@ -20,13 +23,17 @@ const hubClientMock = vi.hoisted(() => ({
 }));
 
 const secretStoreMock = vi.hoisted(() => ({
-  loadToken: vi.fn()
+  loadToken: vi.fn(),
+  storeToken: vi.fn(),
+  deleteToken: vi.fn(),
+  loadLocalHubCredentials: vi.fn(),
+  storeLocalHubCredentials: vi.fn()
 }));
 
 vi.mock("@/api/hubClient", () => hubClientMock);
 vi.mock("@/api/secretStoreClient", () => secretStoreMock);
 
-import { getSessionDataSource } from "@/api/sessionDataSource";
+import { ensureLocalHubAuth, getSessionDataSource } from "@/api/sessionDataSource";
 
 function makeLocalProfile(): WorkspaceProfile {
   return {
@@ -58,6 +65,9 @@ describe("sessionDataSource", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    secretStoreMock.storeToken.mockResolvedValue(undefined);
+    secretStoreMock.deleteToken.mockResolvedValue(undefined);
+    secretStoreMock.storeLocalHubCredentials.mockResolvedValue(undefined);
   });
 
   it("uses hub health endpoint in local mode", async () => {
@@ -74,6 +84,110 @@ describe("sessionDataSource", () => {
     expect(payload.ok).toBe(true);
     expect(hubClientMock.getHealth).toHaveBeenCalledTimes(1);
     expect(String(hubClientMock.getHealth.mock.calls[0][0])).toContain("http://127.0.0.1");
+  });
+
+  it("auto bootstraps local hub when setup mode is enabled", async () => {
+    secretStoreMock.loadToken.mockResolvedValue(null);
+    secretStoreMock.loadLocalHubCredentials.mockResolvedValue(null);
+    hubClientMock.getBootstrapStatus.mockResolvedValue({
+      setup_mode: true,
+      setup_completed: false,
+      allow_public_signup: false,
+      message: "setup required"
+    });
+    hubClientMock.bootstrapAdmin.mockResolvedValue({ token: "token-local-bootstrapped" });
+    hubClientMock.listWorkspaces.mockResolvedValue({
+      workspaces: [{ workspace_id: "ws-local", name: "Local", slug: "local", role_name: "owner" }]
+    });
+    hubClientMock.getHealth.mockResolvedValue({ status: "ok", version: "0.2.0" });
+
+    const source = getSessionDataSource(makeLocalProfile());
+    const payload = await source.runtimeHealth();
+
+    expect(payload.ok).toBe(true);
+    expect(hubClientMock.bootstrapAdmin).toHaveBeenCalledTimes(1);
+    expect(secretStoreMock.storeToken).toHaveBeenCalledWith("local-default", "token-local-bootstrapped");
+    expect(secretStoreMock.storeLocalHubCredentials).toHaveBeenCalledTimes(1);
+  });
+
+  it("auto logs in local hub with saved credentials when local token is invalid", async () => {
+    secretStoreMock.loadToken.mockResolvedValue("expired-token");
+    secretStoreMock.loadLocalHubCredentials.mockResolvedValue({
+      email: "admin@local",
+      password: "password123",
+      displayName: "Local Admin"
+    });
+    hubClientMock.listWorkspaces
+      .mockRejectedValueOnce(
+        new ApiError({ code: "E_UNAUTHORIZED", message: "Unauthorized", status: 401, retryable: false })
+      )
+      .mockResolvedValueOnce({
+        workspaces: [{ workspace_id: "ws-local", name: "Local", slug: "local", role_name: "owner" }]
+      });
+    hubClientMock.getBootstrapStatus.mockResolvedValue({
+      setup_mode: false,
+      setup_completed: true,
+      allow_public_signup: false,
+      message: "ok"
+    });
+    hubClientMock.login.mockResolvedValue({ token: "token-local-renewed" });
+    hubClientMock.getHealth.mockResolvedValue({ status: "ok", version: "0.2.0" });
+
+    const source = getSessionDataSource(makeLocalProfile());
+    const payload = await source.runtimeHealth();
+
+    expect(payload.ok).toBe(true);
+    expect(secretStoreMock.deleteToken).toHaveBeenCalledWith("local-default");
+    expect(hubClientMock.login).toHaveBeenCalledWith("http://127.0.0.1:8080", {
+      email: "admin@local",
+      password: "password123"
+    });
+    expect(secretStoreMock.storeToken).toHaveBeenCalledWith("local-default", "token-local-renewed");
+  });
+
+  it("throws unlock required when local hub is setup but credentials are unavailable", async () => {
+    secretStoreMock.loadToken.mockResolvedValue(null);
+    secretStoreMock.loadLocalHubCredentials.mockResolvedValue(null);
+    hubClientMock.getBootstrapStatus.mockResolvedValue({
+      setup_mode: false,
+      setup_completed: true,
+      allow_public_signup: false,
+      message: "ok"
+    });
+
+    const source = getSessionDataSource(makeLocalProfile());
+    await expect(source.runtimeHealth()).rejects.toMatchObject({ code: "E_LOCAL_HUB_UNLOCK_REQUIRED" });
+  });
+
+  it("uses one-time unlock credentials to restore local auth", async () => {
+    secretStoreMock.loadToken.mockResolvedValue(null);
+    secretStoreMock.loadLocalHubCredentials.mockResolvedValue(null);
+    hubClientMock.getBootstrapStatus.mockResolvedValue({
+      setup_mode: false,
+      setup_completed: true,
+      allow_public_signup: false,
+      message: "ok"
+    });
+    hubClientMock.login.mockResolvedValue({ token: "token-local-unlocked" });
+    hubClientMock.listWorkspaces.mockResolvedValue({
+      workspaces: [{ workspace_id: "ws-local", name: "Local", slug: "local", role_name: "owner" }]
+    });
+
+    const ctx = await ensureLocalHubAuth({
+      unlockCredentials: {
+        email: "Admin@Local",
+        password: "password123",
+        displayName: "Local Owner"
+      }
+    });
+
+    expect(ctx.workspaceId).toBe("ws-local");
+    expect(secretStoreMock.storeToken).toHaveBeenCalledWith("local-default", "token-local-unlocked");
+    expect(secretStoreMock.storeLocalHubCredentials).toHaveBeenCalledWith({
+      email: "admin@local",
+      password: "password123",
+      displayName: "Local Owner"
+    });
   });
 
   it("uses hub execution endpoint when workspace is remote", async () => {

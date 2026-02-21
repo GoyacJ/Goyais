@@ -6,6 +6,7 @@ import type { WorkspaceProfile } from "@/stores/workspaceStore";
 const runtimeClientMock = vi.hoisted(() => ({
   listProjects: vi.fn(),
   createProject: vi.fn(),
+  deleteProject: vi.fn(),
   listModelConfigs: vi.fn(),
   createModelConfig: vi.fn(),
   updateModelConfig: vi.fn(),
@@ -78,6 +79,14 @@ describe("dataSource", () => {
     expect(runtimeClientMock.listProjects).toHaveBeenCalledTimes(1);
     expect(hubClientMock.listProjects).not.toHaveBeenCalled();
     expect(result[0]?.workspace_path).toBe("/tmp/local");
+  });
+
+  it("supports removing local projects from tracking list", async () => {
+    const client = getProjectsClient(makeLocalProfile());
+    await client.delete("p-local");
+
+    expect(client.supportsDelete).toBe(true);
+    expect(runtimeClientMock.deleteProject).toHaveBeenCalledWith("p-local");
   });
 
   it("filters known local diagnostic/test projects from list", async () => {

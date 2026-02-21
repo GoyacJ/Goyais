@@ -4,10 +4,9 @@ import { useTranslation } from "react-i18next";
 import { type DataProject, getModelConfigsClient, getProjectsClient } from "@/api/dataSource";
 import { getGitCurrentBranch } from "@/api/gitClient";
 import { getSessionDataSource } from "@/api/sessionDataSource";
-import { getProviderSecret } from "@/api/secretStoreClient";
 import { ContextPanel } from "@/components/domain/context/ContextPanel";
-import { ExecutionActions } from "@/components/domain/conversation/ExecutionActions";
 import { ConversationTranscriptPanel } from "@/components/domain/conversation/ConversationTranscriptPanel";
+import { ExecutionActions } from "@/components/domain/conversation/ExecutionActions";
 import { DiffPanel } from "@/components/domain/diff/DiffPanel";
 import { ExecutionComposerPanel } from "@/components/domain/execution/ExecutionComposerPanel";
 import { EmptyState } from "@/components/domain/feedback/EmptyState";
@@ -326,11 +325,6 @@ export function ConversationPage() {
 
     setIsStarting(true);
     try {
-      const selectedModel = modelOptions.find((item) => item.model_config_id === activeModelId);
-      if (currentProfile?.kind === "local" && selectedModel) {
-        await getProviderSecret(selectedModel.provider, selectedModel.model_config_id);
-      }
-
       resetExecution();
 
       const result = await sessionDataSource.executeSession(sessionId, input.trim());

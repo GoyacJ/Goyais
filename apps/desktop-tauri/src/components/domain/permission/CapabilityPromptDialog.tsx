@@ -13,8 +13,8 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { classifyToolRisk } from "@/lib/risk";
-import { useExecutionStore } from "@/stores/executionStore";
 import type { PendingConfirmation } from "@/stores/executionStore";
+import { useExecutionStore } from "@/stores/executionStore";
 
 interface CapabilityPromptDialogProps {
   item?: PendingConfirmation;

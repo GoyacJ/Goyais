@@ -253,6 +253,10 @@
     "createFailed": "项目创建失败",
     "deleteSuccess": "项目删除成功",
     "deleteFailed": "项目删除失败",
+    "remove": "移除",
+    "removeSuccess": "项目已从本软件移除",
+    "removeFailed": "移除项目失败",
+    "removeConfirm": "从本软件移除“{{name}}”？（不会删除磁盘文件）",
     "syncFailed": "项目同步失败",
     "projectId": "id：{{id}}",
     "remoteHint": "远端工作区的项目数据以 Hub Server 为权威来源。",
@@ -360,6 +364,11 @@
       "email": "邮箱",
       "password": "密码",
       "submit": "登录"
+    },
+    "localUnlock": {
+      "title": "本地工作区解锁",
+      "description": "检测到历史本地数据，需要一次性输入本地账号完成解锁。后续将自动登录。",
+      "submit": "解锁"
     },
     "setupAdmin": {
       "title": "初始化管理员",

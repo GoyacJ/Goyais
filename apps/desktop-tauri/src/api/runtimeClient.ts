@@ -54,6 +54,12 @@ export async function createProject(payload: { project_id?: string; name?: strin
   });
 }
 
+export async function deleteProject(projectId: string) {
+  return requestJson(`/v1/projects/${encodeURIComponent(projectId)}`, {
+    method: "DELETE"
+  });
+}
+
 export async function listModelConfigs(): Promise<{ model_configs: Array<Record<string, string>> }> {
   return requestJson("/v1/model-configs", undefined, { retries: 1 });
 }

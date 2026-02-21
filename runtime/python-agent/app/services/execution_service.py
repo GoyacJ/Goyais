@@ -14,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from datetime import datetime, timezone
 from typing import Any
 
 from app.agent.graph_agent import AgentState, build_graph, build_plan_with_deepagents
@@ -370,7 +369,7 @@ class ExecutionService:
                 temperature=float(model_config.get("temperature", 0)),
             )
         )
-        lines = [l.strip("- ").strip() for l in plan_text.splitlines() if l.strip()]
+        lines = [line.strip("- ").strip() for line in plan_text.splitlines() if line.strip()]
         if not lines:
             return build_mock_plan(task_input)
         return {"summary": lines[0][:400], "steps": lines[1:6] or build_mock_plan(task_input)["steps"]}

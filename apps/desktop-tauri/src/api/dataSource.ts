@@ -120,7 +120,7 @@ export function getProjectsClient(profile: WorkspaceProfile | undefined): Projec
     };
     return {
       kind: "local",
-      supportsDelete: false,
+      supportsDelete: true,
       supportsGit: false,
       list: async () => {
         const payload = await runtimeClient.listProjects();
@@ -154,7 +154,9 @@ export function getProjectsClient(profile: WorkspaceProfile | undefined): Projec
         await runtimeClient.createProject({ name, workspace_path: location });
       },
       createGit: notSupported,
-      delete: notSupported,
+      delete: async (projectId) => {
+        await runtimeClient.deleteProject(projectId);
+      },
       sync: notSupported
     };
   }

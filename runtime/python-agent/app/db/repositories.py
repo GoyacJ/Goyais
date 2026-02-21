@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from typing import Any
+import sqlite3
 
 import aiosqlite
 from app.protocol_version import load_protocol_version
@@ -318,6 +319,16 @@ class Repository:
         return dict(row)
 
     async def delete_model_config(self, model_config_id: str) -> bool:
+        # Keep historical runs but detach them from this model config before delete.
+        try:
+            await self.conn.execute(
+                "UPDATE runs SET model_config_id=NULL WHERE model_config_id=?",
+                (model_config_id,),
+            )
+        except sqlite3.OperationalError as exc:
+            # Newer schemas removed `runs`; ignore this compatibility step.
+            if "no such table: runs" not in str(exc):
+                raise
         cursor = await self.conn.execute(
             "DELETE FROM model_configs WHERE model_config_id=?",
             (model_config_id,),
@@ -469,6 +480,14 @@ class Repository:
             (project_id, name, workspace_path),
         )
         await self.conn.commit()
+
+    async def delete_project(self, project_id: str) -> bool:
+        cursor = await self.conn.execute(
+            "DELETE FROM projects WHERE project_id=?",
+            (project_id,),
+        )
+        await self.conn.commit()
+        return cursor.rowcount > 0
 
     async def insert_system_event(self, event_type: str, payload: dict[str, Any]) -> str:
         event_id = payload.get("event_id")
