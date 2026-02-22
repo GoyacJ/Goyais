@@ -1,0 +1,5094 @@
+{
+  "version": "2.8",
+  "children": [
+    {
+      "type": "frame",
+      "id": "56gR0",
+      "x": 40,
+      "y": 40,
+      "name": "Tokens & Themes",
+      "width": 1600,
+      "fill": "$semantic.bg",
+      "cornerRadius": "$global.radius.16",
+      "stroke": {
+        "align": "inside",
+        "thickness": 1,
+        "fill": "$semantic.border"
+      },
+      "layout": "vertical",
+      "gap": "$global.space.24",
+      "padding": "$global.space.24",
+      "children": [
+        {
+          "type": "text",
+          "id": "d13yT",
+          "name": "tokensTitle",
+          "fill": "$semantic.text",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "Goyais v0.4.0 Tokens & Themes",
+          "fontFamily": "$global.font.family.ui",
+          "fontSize": "$global.font.size.24",
+          "fontWeight": "$global.font.weight.700"
+        },
+        {
+          "type": "text",
+          "id": "gbUMb",
+          "name": "tokensDesc",
+          "fill": "$semantic.text.muted",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "Dark-first macOS style · Light companion · Variables only",
+          "fontFamily": "$global.font.family.ui",
+          "fontSize": "$global.font.size.14",
+          "fontWeight": "$global.font.weight.500"
+        },
+        {
+          "type": "frame",
+          "id": "4lyXN",
+          "name": "Theme Preview",
+          "width": "fill_container",
+          "gap": "$global.space.16",
+          "children": [
+            {
+              "type": "frame",
+              "id": "kKACd",
+              "name": "Theme Dark",
+              "theme": {
+                "theme": "dark"
+              },
+              "width": "fill_container",
+              "height": 180,
+              "fill": "$semantic.surface",
+              "cornerRadius": "$global.radius.12",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$semantic.border"
+              },
+              "layout": "vertical",
+              "gap": "$global.space.8",
+              "padding": "$global.space.16",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "9oj2q",
+                  "name": "darkTitle",
+                  "fill": "$semantic.text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Dark (Primary)",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.16",
+                  "fontWeight": "$global.font.weight.700"
+                },
+                {
+                  "type": "text",
+                  "id": "6kAp0",
+                  "name": "darkMeta",
+                  "fill": "$semantic.text.muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "bg/surface/surface-2 with low-glare separators",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.13",
+                  "fontWeight": "$global.font.weight.500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "xx5ew",
+              "name": "Theme Light",
+              "theme": {
+                "theme": "light"
+              },
+              "width": "fill_container",
+              "height": 180,
+              "fill": "$semantic.surface",
+              "cornerRadius": "$global.radius.12",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$semantic.border"
+              },
+              "layout": "vertical",
+              "gap": "$global.space.8",
+              "padding": "$global.space.16",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "lOm0S",
+                  "name": "lightTitle",
+                  "fill": "$semantic.text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Light (Companion)",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.16",
+                  "fontWeight": "$global.font.weight.700"
+                },
+                {
+                  "type": "text",
+                  "id": "appFS",
+                  "name": "lightMeta",
+                  "fill": "$semantic.text.muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "semantic mirror for readability and parity",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.13",
+                  "fontWeight": "$global.font.weight.500"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "3A92s",
+          "name": "Global Tokens",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": "$global.space.12",
+          "children": [
+            {
+              "type": "text",
+              "id": "KFYQN",
+              "name": "globalTitle",
+              "fill": "$semantic.text",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Global Tokens",
+              "fontFamily": "$global.font.family.ui",
+              "fontSize": "$global.font.size.20",
+              "fontWeight": "$global.font.weight.700"
+            },
+            {
+              "type": "frame",
+              "id": "Ofo65",
+              "name": "globalCards",
+              "width": "fill_container",
+              "gap": "$global.space.12",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "9kLbW",
+                  "name": "gColor",
+                  "width": "fill_container",
+                  "height": 220,
+                  "fill": "$semantic.surface",
+                  "cornerRadius": "$global.radius.12",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$semantic.border"
+                  },
+                  "layout": "vertical",
+                  "gap": "$global.space.8",
+                  "padding": "$global.space.12",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "uJslf",
+                      "name": "gColorTitle",
+                      "fill": "$semantic.text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Color Palette",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.14",
+                      "fontWeight": "$global.font.weight.600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "yNe8O",
+                      "name": "gColorBody",
+                      "fill": "$semantic.text.muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "neutral 0-1000\nprimary 100-700\ndanger/success/warning 300-600",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.12",
+                      "fontWeight": "$global.font.weight.500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Z5D2H",
+                  "name": "gType",
+                  "width": "fill_container",
+                  "height": 220,
+                  "fill": "$semantic.surface",
+                  "cornerRadius": "$global.radius.12",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$semantic.border"
+                  },
+                  "layout": "vertical",
+                  "gap": "$global.space.8",
+                  "padding": "$global.space.12",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "TUUYV",
+                      "name": "gTypeTitle",
+                      "fill": "$semantic.text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Typography",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.14",
+                      "fontWeight": "$global.font.weight.600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "L3gsH",
+                      "name": "gTypeBody",
+                      "fill": "$semantic.text.muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "size 11/12/13/14/16/18/20/24/28\nline-height tight/normal/relaxed\nweight 400/500/600/700",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.12",
+                      "fontWeight": "$global.font.weight.500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "OS05u",
+                  "name": "gSpace",
+                  "width": "fill_container",
+                  "height": 220,
+                  "fill": "$semantic.surface",
+                  "cornerRadius": "$global.radius.12",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$semantic.border"
+                  },
+                  "layout": "vertical",
+                  "gap": "$global.space.8",
+                  "padding": "$global.space.12",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Cf2lN",
+                      "name": "gSpaceTitle",
+                      "fill": "$semantic.text",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Spacing / Radius / Shadow",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.14",
+                      "fontWeight": "$global.font.weight.600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "aWAHt",
+                      "name": "gSpaceBody",
+                      "fill": "$semantic.text.muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "space 4/8/12/16/24/32/40\nradius 8/12/16\nshadow 1/2/3 + divider alpha",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.12",
+                      "fontWeight": "$global.font.weight.500"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "DKsxD",
+          "name": "Semantic Tokens",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": "$global.space.12",
+          "children": [
+            {
+              "type": "text",
+              "id": "GOXsi",
+              "name": "semanticTitle",
+              "fill": "$semantic.text",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Semantic Tokens",
+              "fontFamily": "$global.font.family.ui",
+              "fontSize": "$global.font.size.20",
+              "fontWeight": "$global.font.weight.700"
+            },
+            {
+              "type": "text",
+              "id": "700HU",
+              "name": "semanticBody",
+              "fill": "$semantic.text.muted",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "bg/surface/surface-2/overlay · text/muted/subtle · border/divider · primary/danger/success/warning · focus-ring",
+              "fontFamily": "$global.font.family.ui",
+              "fontSize": "$global.font.size.13",
+              "fontWeight": "$global.font.weight.500"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "faXyB",
+          "name": "Component Tokens",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": "$global.space.12",
+          "children": [
+            {
+              "type": "text",
+              "id": "bhfee",
+              "name": "componentTitle",
+              "fill": "$semantic.text",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Component Tokens",
+              "fontFamily": "$global.font.family.ui",
+              "fontSize": "$global.font.size.20",
+              "fontWeight": "$global.font.weight.700"
+            },
+            {
+              "type": "text",
+              "id": "p9gi7",
+              "name": "componentBody",
+              "fill": "$semantic.text.muted",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "button/input/select/badge/card/sidebar/topbar/modal/toast/table/list\nall component visual values route through semantic tokens",
+              "fontFamily": "$global.font.family.ui",
+              "fontSize": "$global.font.size.13",
+              "fontWeight": "$global.font.weight.500"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Zyod3",
+      "x": 1700,
+      "y": 40,
+      "name": "UI Kit",
+      "width": 2200,
+      "fill": "$semantic.bg",
+      "cornerRadius": "$global.radius.16",
+      "stroke": {
+        "align": "inside",
+        "thickness": 1,
+        "fill": "$semantic.border"
+      },
+      "layout": "vertical",
+      "gap": "$global.space.24",
+      "padding": "$global.space.24",
+      "children": [
+        {
+          "type": "text",
+          "id": "Hji5Z",
+          "name": "uiKitTitle",
+          "fill": "$semantic.text",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "UI Kit · Components",
+          "fontFamily": "$global.font.family.ui",
+          "fontSize": "$global.font.size.24",
+          "fontWeight": "$global.font.weight.700"
+        },
+        {
+          "type": "text",
+          "id": "RIFic",
+          "name": "uiKitDesc",
+          "fill": "$semantic.text.muted",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "Each component includes Use Case / State Matrix / Token References",
+          "fontFamily": "$global.font.family.ui",
+          "fontSize": "$global.font.size.14",
+          "fontWeight": "$global.font.weight.500"
+        },
+        {
+          "type": "text",
+          "id": "opI0D",
+          "name": "defsTitle",
+          "fill": "$semantic.text",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "Reusable Component Definitions",
+          "fontFamily": "$global.font.family.ui",
+          "fontSize": "$global.font.size.20",
+          "fontWeight": "$global.font.weight.700"
+        },
+        {
+          "type": "text",
+          "id": "02Xi9",
+          "name": "defsHint",
+          "fill": "$semantic.text.muted",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "Base components used by variant showcases and screens",
+          "fontFamily": "$global.font.family.ui",
+          "fontSize": "$global.font.size.13",
+          "fontWeight": "$global.font.weight.500"
+        },
+        {
+          "type": "frame",
+          "id": "wGHxX",
+          "name": "defsRack",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": "$global.space.16",
+          "children": [
+            {
+              "type": "frame",
+              "id": "pPro1",
+              "name": "defsRowA",
+              "width": "fill_container",
+              "gap": "$global.space.16",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "oFlER",
+                  "name": "Component/Button/Base",
+                  "reusable": true,
+                  "fill": "$component.button.primary.bg",
+                  "cornerRadius": "$component.button.radius",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$component.button.primary.border"
+                  },
+                  "gap": "$global.space.8",
+                  "padding": [
+                    "$component.button.padding.y",
+                    "$component.button.padding.x"
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "eAKVN",
+                      "name": "buttonIcon",
+                      "width": 12,
+                      "height": 12,
+                      "fill": "$component.button.primary.fg",
+                      "cornerRadius": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "dlCgt",
+                      "name": "buttonText",
+                      "fill": "$component.button.primary.fg",
+                      "textGrowth": "fixed-width",
+                      "width": 90,
+                      "content": "按钮 Button",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$component.button.font.size",
+                      "fontWeight": "$global.font.weight.600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "kBJrs",
+                  "name": "Component/Input/Base",
+                  "reusable": true,
+                  "width": 280,
+                  "height": 40,
+                  "fill": "$component.input.bg",
+                  "cornerRadius": "$component.input.radius",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$component.input.border"
+                  },
+                  "padding": [
+                    0,
+                    "$global.space.12"
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "0GA6y",
+                      "name": "inputText",
+                      "fill": "$component.input.placeholder",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "输入 Input / Placeholder",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.13",
+                      "fontWeight": "$global.font.weight.500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "sDN56",
+                  "name": "Component/Select/Base",
+                  "reusable": true,
+                  "width": 280,
+                  "height": 40,
+                  "fill": "$component.select.trigger.bg",
+                  "cornerRadius": "$component.input.radius",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$component.select.trigger.border"
+                  },
+                  "padding": [
+                    0,
+                    "$global.space.12"
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "S8t04",
+                      "name": "selectText",
+                      "fill": "$component.select.trigger.fg",
+                      "textGrowth": "fixed-width",
+                      "width": 120,
+                      "content": "选择 Select",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.13",
+                      "fontWeight": "$global.font.weight.500"
+                    },
+                    {
+                      "type": "icon_font",
+                      "id": "ki4CF",
+                      "name": "selectIcon",
+                      "width": 14,
+                      "height": 14,
+                      "iconFontName": "chevron-down",
+                      "iconFontFamily": "lucide",
+                      "fill": "$semantic.text.subtle"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ORuic",
+                  "name": "Component/Badge/Base",
+                  "reusable": true,
+                  "fill": "$component.badge.execution.running.bg",
+                  "cornerRadius": "$component.badge.radius",
+                  "padding": [
+                    4,
+                    8
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "EytgW",
+                      "name": "badgeText",
+                      "fill": "$component.badge.execution.running.fg",
+                      "textGrowth": "fixed-width",
+                      "width": 72,
+                      "content": "running",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$component.badge.font.size",
+                      "fontWeight": "$global.font.weight.600"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "RIyyZ",
+              "name": "defsRowB",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": "$global.space.12",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Ggt3v",
+                  "name": "Component/Card/Base",
+                  "reusable": true,
+                  "width": 420,
+                  "fill": "$component.card.bg",
+                  "cornerRadius": "$component.card.radius",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$component.card.border"
+                  },
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "yM2Lq",
+                      "name": "Header Slot",
+                      "slot": [],
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": "$global.space.4",
+                      "padding": [
+                        "$global.space.12",
+                        "$global.space.16"
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ORax9",
+                          "name": "cardHeaderText",
+                          "fill": "$component.card.header.fg",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Card Header",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.14",
+                          "fontWeight": "$global.font.weight.600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "QBFOH",
+                      "name": "Body Slot",
+                      "slot": [],
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": "$global.space.8",
+                      "padding": [
+                        "$global.space.12",
+                        "$global.space.16"
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "FEV9A",
+                          "name": "cardBodyText",
+                          "fill": "$component.card.body.fg",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Body content, form rows, list items, or metrics.",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.13",
+                          "fontWeight": "$global.font.weight.500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "1G2lz",
+                      "name": "Footer Slot",
+                      "slot": [],
+                      "width": "fill_container",
+                      "fill": "$component.card.footer.bg",
+                      "padding": [
+                        "$global.space.12",
+                        "$global.space.16"
+                      ],
+                      "justifyContent": "end",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "zsKbe",
+                          "name": "cardFooterText",
+                          "fill": "$semantic.text.subtle",
+                          "textGrowth": "fixed-width",
+                          "width": 96,
+                          "content": "Footer Actions",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.12",
+                          "fontWeight": "$global.font.weight.500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "8yKnQ",
+                  "name": "Component/SidebarItem/Base",
+                  "reusable": true,
+                  "width": 260,
+                  "fill": "$component.sidebar.item.bg.hover",
+                  "cornerRadius": "$global.radius.8",
+                  "gap": "$global.space.8",
+                  "padding": [
+                    "$global.space.8",
+                    "$global.space.12"
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "zJGJ1",
+                      "name": "sidebarIcon",
+                      "width": 14,
+                      "height": 14,
+                      "iconFontName": "message-square",
+                      "iconFontFamily": "lucide",
+                      "fill": "$component.sidebar.item.fg"
+                    },
+                    {
+                      "type": "text",
+                      "id": "nQIiF",
+                      "name": "sidebarText",
+                      "fill": "$component.sidebar.item.fg",
+                      "textGrowth": "fixed-width",
+                      "width": 130,
+                      "content": "Conversation",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.13",
+                      "fontWeight": "$global.font.weight.500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "sq8od",
+                  "name": "Component/Topbar/Base",
+                  "reusable": true,
+                  "width": 620,
+                  "fill": "$component.topbar.bg",
+                  "cornerRadius": "$global.radius.12",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$component.topbar.border"
+                  },
+                  "padding": [
+                    "$global.space.8",
+                    "$global.space.16"
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "XQp9O",
+                      "name": "topbarLeft",
+                      "gap": "$global.space.8",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "UWGOI",
+                          "name": "topbarCrumb",
+                          "fill": "$component.topbar.breadcrumb.fg",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Workspace / Goyais",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.12",
+                          "fontWeight": "$global.font.weight.500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "resaA",
+                          "name": "topbarActive",
+                          "fill": "$component.topbar.breadcrumb.fg.active",
+                          "textGrowth": "fixed-width",
+                          "width": 100,
+                          "content": "Conversation",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.12",
+                          "fontWeight": "$global.font.weight.600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "0Um87",
+                      "name": "topbarStatus",
+                      "fill": "$component.topbar.connection.connected",
+                      "textGrowth": "fixed-width",
+                      "width": 90,
+                      "content": "connected",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.12",
+                      "fontWeight": "$global.font.weight.600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "j6yYQ",
+                  "name": "Component/Modal/Base",
+                  "reusable": true,
+                  "width": 420,
+                  "fill": "$component.modal.bg",
+                  "cornerRadius": "$component.modal.radius",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$component.modal.border"
+                  },
+                  "layout": "vertical",
+                  "gap": "$global.space.12",
+                  "padding": "$global.space.16",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "HQ3SH",
+                      "name": "modalTitle",
+                      "fill": "$component.modal.title.fg",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Modal Title",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.16",
+                      "fontWeight": "$global.font.weight.700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "qkwFa",
+                      "name": "modalBody",
+                      "fill": "$component.modal.body.fg",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Modal body for confirmation, details, and keyboard-focused actions.",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.13",
+                      "fontWeight": "$global.font.weight.500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "7Yul4",
+                      "name": "modalActions",
+                      "width": "fill_container",
+                      "height": 36,
+                      "gap": "$global.space.8",
+                      "justifyContent": "end",
+                      "children": [
+                        {
+                          "id": "VFeRf",
+                          "type": "ref",
+                          "ref": "oFlER",
+                          "fill": "$component.button.secondary.bg",
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "$component.button.secondary.border"
+                          },
+                          "name": "modalCancel",
+                          "descendants": {
+                            "eAKVN": {
+                              "enabled": false
+                            },
+                            "dlCgt": {
+                              "content": "Cancel",
+                              "width": 56
+                            }
+                          }
+                        },
+                        {
+                          "id": "IBYuO",
+                          "type": "ref",
+                          "ref": "oFlER",
+                          "fill": "$component.button.primary.bg",
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "$component.button.primary.border"
+                          },
+                          "name": "modalConfirm",
+                          "descendants": {
+                            "eAKVN": {
+                              "enabled": false
+                            },
+                            "dlCgt": {
+                              "content": "Confirm",
+                              "width": 62
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ITVqw",
+                  "name": "Component/RiskConfirm/Base",
+                  "reusable": true,
+                  "width": 420,
+                  "fill": "$component.risk.confirm.bg",
+                  "cornerRadius": "$global.radius.12",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$component.risk.confirm.border"
+                  },
+                  "layout": "vertical",
+                  "gap": "$global.space.8",
+                  "padding": "$global.space.12",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ptMpQ",
+                      "name": "riskTitle",
+                      "fill": "$semantic.danger",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "High-Risk Confirmation",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.14",
+                      "fontWeight": "$global.font.weight.700"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "CophO",
+                      "name": "riskCmd",
+                      "width": "fill_container",
+                      "height": 64,
+                      "fill": "$component.risk.confirm.command.bg",
+                      "cornerRadius": "$global.radius.8",
+                      "layout": "vertical",
+                      "padding": "$global.space.8",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Ku4Hu",
+                          "name": "riskCmdText",
+                          "fill": "$semantic.text.muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "git clean -fdx  # 需要二次确认",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.12",
+                          "fontWeight": "$global.font.weight.500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "FnnEa",
+                  "name": "Component/Toast/Base",
+                  "reusable": true,
+                  "width": 360,
+                  "fill": "$component.toast.error.bg",
+                  "cornerRadius": "$global.radius.12",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$semantic.border"
+                  },
+                  "gap": "$global.space.8",
+                  "padding": [
+                    "$global.space.8",
+                    "$global.space.12"
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "tYB9g",
+                      "name": "toastText",
+                      "fill": "$component.toast.error.fg",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "403 Forbidden · You are not allowed.",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.12",
+                      "fontWeight": "$global.font.weight.600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "O3Ep7",
+                  "name": "Component/TableRow/Base",
+                  "reusable": true,
+                  "width": 740,
+                  "height": 44,
+                  "fill": "$component.table.bg",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": {
+                      "bottom": 1
+                    },
+                    "fill": "$component.table.row.divider"
+                  },
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "FMiv4",
+                      "name": "tableCell1",
+                      "width": 180,
+                      "height": "fill_container",
+                      "padding": [
+                        0,
+                        "$global.space.12"
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "iNN6l",
+                          "name": "cellText1",
+                          "fill": "$component.table.row.fg",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "User",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.12",
+                          "fontWeight": "$global.font.weight.500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "EtEff",
+                      "name": "tableCell2",
+                      "width": 220,
+                      "height": "fill_container",
+                      "padding": [
+                        0,
+                        "$global.space.12"
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "r2EVG",
+                          "name": "cellText2",
+                          "fill": "$component.table.row.fg",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Role",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.12",
+                          "fontWeight": "$global.font.weight.500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "sEWI3",
+                      "name": "tableCell3",
+                      "width": 180,
+                      "height": "fill_container",
+                      "padding": [
+                        0,
+                        "$global.space.12"
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "5YpG3",
+                          "name": "cellText3",
+                          "fill": "$component.table.row.fg",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Scope",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.12",
+                          "fontWeight": "$global.font.weight.500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "hx4g1",
+                      "name": "tableCell4",
+                      "width": 160,
+                      "height": "fill_container",
+                      "padding": [
+                        0,
+                        "$global.space.12"
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "seoyZ",
+                          "name": "cellText4",
+                          "fill": "$component.table.row.fg",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Status",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.12",
+                          "fontWeight": "$global.font.weight.500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "uEtCJ",
+                  "name": "Component/ListItem/Base",
+                  "reusable": true,
+                  "width": 360,
+                  "fill": "$component.list.item.bg.hover",
+                  "cornerRadius": "$global.radius.8",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$component.list.item.border"
+                  },
+                  "padding": [
+                    "$global.space.8",
+                    "$global.space.12"
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "0TnxU",
+                      "name": "listText",
+                      "fill": "$component.list.item.fg",
+                      "textGrowth": "fixed-width",
+                      "width": 140,
+                      "content": "Resource Item",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.13",
+                      "fontWeight": "$global.font.weight.500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "3nkyv",
+                      "name": "listMeta",
+                      "fill": "$component.list.item.fg.meta",
+                      "textGrowth": "fixed-width",
+                      "width": 80,
+                      "content": "shared",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.12",
+                      "fontWeight": "$global.font.weight.500"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "y5hWe",
+          "name": "showcaseTitle",
+          "fill": "$semantic.text",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "UI Kit Variant Showcase",
+          "fontFamily": "$global.font.family.ui",
+          "fontSize": "$global.font.size.20",
+          "fontWeight": "$global.font.weight.700"
+        },
+        {
+          "type": "frame",
+          "id": "mhTdX",
+          "name": "showcaseWrap",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": "$global.space.16",
+          "children": [
+            {
+              "type": "frame",
+              "id": "gbRcO",
+              "name": "buttonCard",
+              "width": "fill_container",
+              "fill": "$semantic.surface",
+              "cornerRadius": "$global.radius.12",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$semantic.border"
+              },
+              "layout": "vertical",
+              "gap": "$global.space.12",
+              "padding": "$global.space.16",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Q28pj",
+                  "name": "buttonTitle",
+                  "fill": "$semantic.text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "1) Button",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.16",
+                  "fontWeight": "$global.font.weight.700"
+                },
+                {
+                  "type": "frame",
+                  "id": "PBtAI",
+                  "name": "buttonRow",
+                  "width": "fill_container",
+                  "gap": "$global.space.8",
+                  "children": [
+                    {
+                      "id": "2qBct",
+                      "type": "ref",
+                      "ref": "oFlER",
+                      "name": "btnPrimary",
+                      "descendants": {
+                        "dlCgt": {
+                          "content": "Primary",
+                          "width": 58
+                        }
+                      }
+                    },
+                    {
+                      "id": "wBADh",
+                      "type": "ref",
+                      "ref": "oFlER",
+                      "fill": "$component.button.secondary.bg",
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "$component.button.secondary.border"
+                      },
+                      "name": "btnSecondary",
+                      "descendants": {
+                        "eAKVN": {
+                          "enabled": false,
+                          "width": 0,
+                          "height": 0
+                        },
+                        "dlCgt": {
+                          "content": "Secondary",
+                          "width": 74
+                        }
+                      }
+                    },
+                    {
+                      "id": "RHbDg",
+                      "type": "ref",
+                      "ref": "oFlER",
+                      "fill": "$component.button.ghost.bg",
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "$component.button.ghost.border"
+                      },
+                      "name": "btnGhost",
+                      "descendants": {
+                        "eAKVN": {
+                          "enabled": false,
+                          "width": 0,
+                          "height": 0
+                        },
+                        "dlCgt": {
+                          "content": "Ghost",
+                          "width": 54,
+                          "fill": "$component.button.ghost.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "AeaGk",
+                      "type": "ref",
+                      "ref": "oFlER",
+                      "fill": "$component.button.danger.bg",
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "$component.button.danger.border"
+                      },
+                      "name": "btnDanger",
+                      "descendants": {
+                        "eAKVN": {
+                          "enabled": false,
+                          "width": 0,
+                          "height": 0
+                        },
+                        "dlCgt": {
+                          "content": "Danger",
+                          "width": 58,
+                          "fill": "$component.button.danger.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "pIfbc",
+                      "type": "ref",
+                      "ref": "oFlER",
+                      "fill": "$component.button.disabled.bg",
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "$component.button.disabled.border"
+                      },
+                      "name": "btnDisabled",
+                      "descendants": {
+                        "eAKVN": {
+                          "enabled": false,
+                          "width": 0,
+                          "height": 0
+                        },
+                        "dlCgt": {
+                          "content": "Disabled",
+                          "width": 66,
+                          "fill": "$component.button.disabled.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "mxh0T",
+                      "type": "ref",
+                      "ref": "oFlER",
+                      "opacity": "$component.button.loading.opacity",
+                      "name": "btnLoading",
+                      "descendants": {
+                        "eAKVN": {
+                          "enabled": false,
+                          "width": 0,
+                          "height": 0
+                        },
+                        "dlCgt": {
+                          "content": "Loading…",
+                          "width": 72
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "gOPD3",
+                  "name": "buttonNote",
+                  "fill": "$semantic.text.muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Use Case: 主流程操作与风险操作\nState Matrix: primary/secondary/ghost/danger/disabled/loading/icon+text\nToken References: component.button.*, semantic.primary/danger/focus.ring",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.12",
+                  "fontWeight": "$global.font.weight.500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "okMy1",
+              "name": "inputCard",
+              "width": "fill_container",
+              "fill": "$semantic.surface",
+              "cornerRadius": "$global.radius.12",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$semantic.border"
+              },
+              "layout": "vertical",
+              "gap": "$global.space.12",
+              "padding": "$global.space.16",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "1Syq4",
+                  "name": "inputTitle",
+                  "fill": "$semantic.text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "2) Input",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.16",
+                  "fontWeight": "$global.font.weight.700"
+                },
+                {
+                  "type": "frame",
+                  "id": "utt2E",
+                  "name": "inputRow",
+                  "width": "fill_container",
+                  "gap": "$global.space.8",
+                  "children": [
+                    {
+                      "id": "O7urN",
+                      "type": "ref",
+                      "ref": "kBJrs",
+                      "name": "inpNormal",
+                      "descendants": {
+                        "0GA6y": {
+                          "content": "normal",
+                          "fill": "$component.input.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "IrIzo",
+                      "type": "ref",
+                      "ref": "kBJrs",
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "$component.input.border.error"
+                      },
+                      "name": "inpError",
+                      "descendants": {
+                        "0GA6y": {
+                          "content": "error",
+                          "fill": "$semantic.danger"
+                        }
+                      }
+                    },
+                    {
+                      "id": "JdVie",
+                      "type": "ref",
+                      "ref": "kBJrs",
+                      "fill": "$component.input.disabled.bg",
+                      "name": "inpDisabled",
+                      "descendants": {
+                        "0GA6y": {
+                          "content": "disabled",
+                          "fill": "$component.input.disabled.fg"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "uzllO",
+                  "name": "inputNote",
+                  "fill": "$semantic.text.muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Use Case: 文本输入、登录与配置\nState Matrix: normal/error/disabled (+ hint)\nToken References: component.input.*, semantic.border/text/danger",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.12",
+                  "fontWeight": "$global.font.weight.500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "zm5QS",
+              "name": "selectCard",
+              "width": "fill_container",
+              "fill": "$semantic.surface",
+              "cornerRadius": "$global.radius.12",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$semantic.border"
+              },
+              "layout": "vertical",
+              "gap": "$global.space.12",
+              "padding": "$global.space.16",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "fJYZe",
+                  "name": "selectTitle",
+                  "fill": "$semantic.text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "3) Select",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.16",
+                  "fontWeight": "$global.font.weight.700"
+                },
+                {
+                  "type": "frame",
+                  "id": "jDr5B",
+                  "name": "selectRow",
+                  "width": "fill_container",
+                  "gap": "$global.space.16",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "w4rOO",
+                      "name": "selClosedWrap",
+                      "width": 320,
+                      "layout": "vertical",
+                      "gap": "$global.space.8",
+                      "children": [
+                        {
+                          "id": "D4rhG",
+                          "type": "ref",
+                          "ref": "sDN56",
+                          "name": "selClosed",
+                          "descendants": {
+                            "S8t04": {
+                              "content": "closed"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "cleZT",
+                      "name": "selOpenWrap",
+                      "width": 320,
+                      "layout": "vertical",
+                      "gap": "$global.space.4",
+                      "children": [
+                        {
+                          "id": "b87rI",
+                          "type": "ref",
+                          "ref": "sDN56",
+                          "name": "selOpen",
+                          "descendants": {
+                            "S8t04": {
+                              "content": "open"
+                            }
+                          }
+                        },
+                        {
+                          "type": "frame",
+                          "id": "E7sEa",
+                          "name": "selPanel",
+                          "width": "fill_container",
+                          "fill": "$component.select.panel.bg",
+                          "cornerRadius": "$global.radius.8",
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "$semantic.border"
+                          },
+                          "layout": "vertical",
+                          "gap": 2,
+                          "padding": "$global.space.4",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "g7oXY",
+                              "name": "selOpt1",
+                              "fill": "$semantic.text.muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Option A",
+                              "fontFamily": "$global.font.family.ui",
+                              "fontSize": "$global.font.size.12",
+                              "fontWeight": "$global.font.weight.500"
+                            },
+                            {
+                              "type": "text",
+                              "id": "ZDlGE",
+                              "name": "selOpt2",
+                              "fill": "$component.select.option.active",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Option B (active)",
+                              "fontFamily": "$global.font.family.ui",
+                              "fontSize": "$global.font.size.12",
+                              "fontWeight": "$global.font.weight.600"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "TdLZU",
+                  "name": "selectNote",
+                  "fill": "$semantic.text.muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Use Case: 资源与模式切换\nState Matrix: closed/open(panel skeleton)\nToken References: component.select.*, semantic.surface/border",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.12",
+                  "fontWeight": "$global.font.weight.500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "xnSzr",
+              "name": "badgeCard",
+              "width": "fill_container",
+              "fill": "$semantic.surface",
+              "cornerRadius": "$global.radius.12",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$semantic.border"
+              },
+              "layout": "vertical",
+              "gap": "$global.space.12",
+              "padding": "$global.space.16",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "ObHfj",
+                  "name": "badgeTitle",
+                  "fill": "$semantic.text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "4) Badge",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.16",
+                  "fontWeight": "$global.font.weight.700"
+                },
+                {
+                  "type": "frame",
+                  "id": "4nYfk",
+                  "name": "badgeRow",
+                  "width": "fill_container",
+                  "gap": "$global.space.8",
+                  "children": [
+                    {
+                      "id": "LuhvY",
+                      "type": "ref",
+                      "ref": "ORuic",
+                      "fill": "$component.badge.execution.queued.bg",
+                      "name": "bQueued",
+                      "descendants": {
+                        "EytgW": {
+                          "content": "queued",
+                          "fill": "$component.badge.execution.queued.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "oDpMF",
+                      "type": "ref",
+                      "ref": "ORuic",
+                      "fill": "$component.badge.execution.running.bg",
+                      "name": "bRunning",
+                      "descendants": {
+                        "EytgW": {
+                          "content": "running",
+                          "fill": "$component.badge.execution.running.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "FMOMM",
+                      "type": "ref",
+                      "ref": "ORuic",
+                      "fill": "$component.badge.execution.confirming.bg",
+                      "name": "bConfirming",
+                      "descendants": {
+                        "EytgW": {
+                          "content": "confirming",
+                          "fill": "$component.badge.execution.confirming.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "PW3oR",
+                      "type": "ref",
+                      "ref": "ORuic",
+                      "fill": "$component.badge.execution.success.bg",
+                      "name": "bSuccess",
+                      "descendants": {
+                        "EytgW": {
+                          "content": "success",
+                          "fill": "$component.badge.execution.success.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "YSxfS",
+                      "type": "ref",
+                      "ref": "ORuic",
+                      "fill": "$component.badge.execution.failed.bg",
+                      "name": "bFailed",
+                      "descendants": {
+                        "EytgW": {
+                          "content": "failed",
+                          "fill": "$component.badge.execution.failed.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "i9SVJ",
+                      "type": "ref",
+                      "ref": "ORuic",
+                      "fill": "$component.badge.execution.cancelled.bg",
+                      "name": "bCancelled",
+                      "descendants": {
+                        "EytgW": {
+                          "content": "cancelled",
+                          "fill": "$component.badge.execution.cancelled.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "gqL1U",
+                      "type": "ref",
+                      "ref": "ORuic",
+                      "fill": "$component.badge.network.connected.bg",
+                      "name": "bConn",
+                      "descendants": {
+                        "EytgW": {
+                          "content": "connected",
+                          "fill": "$component.badge.network.connected.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "nIwQa",
+                      "type": "ref",
+                      "ref": "ORuic",
+                      "fill": "$component.badge.network.disconnected.bg",
+                      "name": "bDisc",
+                      "descendants": {
+                        "EytgW": {
+                          "content": "disconnected",
+                          "fill": "$component.badge.network.disconnected.fg"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "VB3DM",
+                  "name": "badgeNote",
+                  "fill": "$semantic.text.muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Use Case: Execution/Network state chips\nState Matrix: queued/running/confirming/success/failed/cancelled + connected/disconnected\nToken References: component.badge.*",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.12",
+                  "fontWeight": "$global.font.weight.500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "rNZgY",
+              "name": "cardShow",
+              "width": "fill_container",
+              "fill": "$semantic.surface",
+              "cornerRadius": "$global.radius.12",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$semantic.border"
+              },
+              "layout": "vertical",
+              "gap": "$global.space.12",
+              "padding": "$global.space.16",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "krS6A",
+                  "name": "cardShowTitle",
+                  "fill": "$semantic.text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "5) Card",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.16",
+                  "fontWeight": "$global.font.weight.700"
+                },
+                {
+                  "id": "D2zks",
+                  "type": "ref",
+                  "ref": "Ggt3v",
+                  "width": "fill_container",
+                  "name": "cardInst",
+                  "descendants": {
+                    "ORax9": {
+                      "content": "Header / 中文 + English"
+                    },
+                    "FEV9A": {
+                      "content": "Body slot supports forms, lists, and state hints."
+                    },
+                    "zsKbe": {
+                      "content": "Footer Slot"
+                    }
+                  }
+                },
+                {
+                  "type": "text",
+                  "id": "DviI3",
+                  "name": "cardShowNote",
+                  "fill": "$semantic.text.muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Use Case: 模块容器\nState Matrix: header/body/footer slot\nToken References: component.card.*, semantic.surface/border",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.12",
+                  "fontWeight": "$global.font.weight.500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "1CcCZ",
+              "name": "sidebarShow",
+              "width": "fill_container",
+              "fill": "$semantic.surface",
+              "cornerRadius": "$global.radius.12",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$semantic.border"
+              },
+              "layout": "vertical",
+              "gap": "$global.space.12",
+              "padding": "$global.space.16",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "r0otz",
+                  "name": "sidebarShowTitle",
+                  "fill": "$semantic.text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "6) SidebarItem",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.16",
+                  "fontWeight": "$global.font.weight.700"
+                },
+                {
+                  "type": "frame",
+                  "id": "F4imJ",
+                  "name": "sidebarRow",
+                  "width": "fill_container",
+                  "gap": "$global.space.8",
+                  "children": [
+                    {
+                      "id": "wTRlL",
+                      "type": "ref",
+                      "ref": "8yKnQ",
+                      "fill": "$semantic.surface",
+                      "name": "sideDefault",
+                      "descendants": {
+                        "zJGJ1": {
+                          "fill": "$component.sidebar.item.fg"
+                        },
+                        "nQIiF": {
+                          "content": "default",
+                          "fill": "$component.sidebar.item.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "ull8N",
+                      "type": "ref",
+                      "ref": "8yKnQ",
+                      "fill": "$component.sidebar.item.bg.active",
+                      "name": "sideActive",
+                      "descendants": {
+                        "zJGJ1": {
+                          "fill": "$component.sidebar.item.fg.active"
+                        },
+                        "nQIiF": {
+                          "content": "active",
+                          "fill": "$component.sidebar.item.fg.active"
+                        }
+                      }
+                    },
+                    {
+                      "id": "gXc2o",
+                      "type": "ref",
+                      "ref": "8yKnQ",
+                      "opacity": 0.45,
+                      "name": "sideDisabled",
+                      "descendants": {
+                        "zJGJ1": {
+                          "fill": "$component.sidebar.item.fg"
+                        },
+                        "nQIiF": {
+                          "content": "disabled",
+                          "fill": "$component.sidebar.item.fg"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "BWcG4",
+                  "name": "sidebarNote",
+                  "fill": "$semantic.text.muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Use Case: 左导航条目\nState Matrix: default/active/disabled\nToken References: component.sidebar.*, semantic.text",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.12",
+                  "fontWeight": "$global.font.weight.500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "nnkrv",
+              "name": "topbarShow",
+              "width": "fill_container",
+              "fill": "$semantic.surface",
+              "cornerRadius": "$global.radius.12",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$semantic.border"
+              },
+              "layout": "vertical",
+              "gap": "$global.space.12",
+              "padding": "$global.space.16",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "vd6zM",
+                  "name": "topbarShowTitle",
+                  "fill": "$semantic.text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "7) Topbar",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.16",
+                  "fontWeight": "$global.font.weight.700"
+                },
+                {
+                  "type": "frame",
+                  "id": "b9FHO",
+                  "name": "topbarRowShow",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": "$global.space.8",
+                  "children": [
+                    {
+                      "id": "417i3",
+                      "type": "ref",
+                      "ref": "sq8od",
+                      "name": "topConnected",
+                      "descendants": {
+                        "UWGOI": {
+                          "content": "Workspace / Project"
+                        },
+                        "resaA": {
+                          "content": "Conversation"
+                        },
+                        "0Um87": {
+                          "content": "connected",
+                          "fill": "$component.topbar.connection.connected"
+                        }
+                      }
+                    },
+                    {
+                      "id": "JqqMw",
+                      "type": "ref",
+                      "ref": "sq8od",
+                      "name": "topDisconnected",
+                      "descendants": {
+                        "UWGOI": {
+                          "content": "Workspace / Project"
+                        },
+                        "resaA": {
+                          "content": "Conversation"
+                        },
+                        "0Um87": {
+                          "content": "disconnected",
+                          "fill": "$component.topbar.connection.disconnected"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "VDUjt",
+                  "name": "topbarNote",
+                  "fill": "$semantic.text.muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Use Case: 面包屑 + Workspace 切换入口 + 连接状态\nState Matrix: connected/disconnected\nToken References: component.topbar.*, semantic.success/danger",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.12",
+                  "fontWeight": "$global.font.weight.500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "UppnU",
+              "name": "modalShow",
+              "width": "fill_container",
+              "fill": "$semantic.surface",
+              "cornerRadius": "$global.radius.12",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$semantic.border"
+              },
+              "layout": "vertical",
+              "gap": "$global.space.12",
+              "padding": "$global.space.16",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "jXn1X",
+                  "name": "modalShowTitle",
+                  "fill": "$semantic.text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "8) Modal / RiskConfirm",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.16",
+                  "fontWeight": "$global.font.weight.700"
+                },
+                {
+                  "type": "frame",
+                  "id": "IQn6G",
+                  "name": "modalRowShow",
+                  "width": "fill_container",
+                  "gap": "$global.space.12",
+                  "children": [
+                    {
+                      "id": "DpVtL",
+                      "type": "ref",
+                      "ref": "j6yYQ",
+                      "width": "fill_container",
+                      "name": "modalInstShow",
+                      "descendants": {
+                        "HQ3SH": {
+                          "content": "Common Modal"
+                        },
+                        "qkwFa": {
+                          "content": "摘要、审批结果与二次确认动作。"
+                        }
+                      }
+                    },
+                    {
+                      "id": "MtISn",
+                      "type": "ref",
+                      "ref": "ITVqw",
+                      "width": "fill_container",
+                      "name": "riskInstShow",
+                      "descendants": {
+                        "ptMpQ": {
+                          "content": "Risk Confirm"
+                        },
+                        "Ku4Hu": {
+                          "content": "command preview + diff summary"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "WYzIL",
+                  "name": "modalShowNote",
+                  "fill": "$semantic.text.muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Use Case: 通用弹窗与高风险确认\nState Matrix: Modal / RiskConfirm (summary + command/diff preview + confirm/cancel)\nToken References: component.modal.*, component.risk.confirm.*",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.12",
+                  "fontWeight": "$global.font.weight.500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "dKXQP",
+              "name": "toastShow",
+              "width": "fill_container",
+              "fill": "$semantic.surface",
+              "cornerRadius": "$global.radius.12",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$semantic.border"
+              },
+              "layout": "vertical",
+              "gap": "$global.space.12",
+              "padding": "$global.space.16",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "I9JLd",
+                  "name": "toastShowTitle",
+                  "fill": "$semantic.text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "9) Toast / Inline Alert",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.16",
+                  "fontWeight": "$global.font.weight.700"
+                },
+                {
+                  "type": "frame",
+                  "id": "SAEAT",
+                  "name": "toastRow",
+                  "width": "fill_container",
+                  "gap": "$global.space.8",
+                  "children": [
+                    {
+                      "id": "I6jEH",
+                      "type": "ref",
+                      "ref": "FnnEa",
+                      "name": "tError",
+                      "descendants": {
+                        "tYB9g": {
+                          "content": "error: execution failed",
+                          "fill": "$component.toast.error.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "bcknx",
+                      "type": "ref",
+                      "ref": "FnnEa",
+                      "name": "t403",
+                      "descendants": {
+                        "tYB9g": {
+                          "content": "403 forbidden",
+                          "fill": "$component.toast.error.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "vYu0q",
+                      "type": "ref",
+                      "ref": "FnnEa",
+                      "fill": "$component.toast.warning.bg",
+                      "name": "tDisc",
+                      "descendants": {
+                        "tYB9g": {
+                          "content": "disconnected",
+                          "fill": "$component.toast.warning.fg"
+                        }
+                      }
+                    },
+                    {
+                      "id": "acV1h",
+                      "type": "ref",
+                      "ref": "FnnEa",
+                      "fill": "$component.toast.info.bg",
+                      "name": "tRetry",
+                      "descendants": {
+                        "tYB9g": {
+                          "content": "retrying…",
+                          "fill": "$component.toast.info.fg"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "1rdte",
+                  "name": "toastNote",
+                  "fill": "$semantic.text.muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Use Case: error/403/disconnected/retrying feedback\nState Matrix: toast + inline alert severity\nToken References: component.toast.*, semantic.danger/warning/primary",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.12",
+                  "fontWeight": "$global.font.weight.500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "G0hr0",
+              "name": "dataShow",
+              "width": "fill_container",
+              "fill": "$semantic.surface",
+              "cornerRadius": "$global.radius.12",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$semantic.border"
+              },
+              "layout": "vertical",
+              "gap": "$global.space.12",
+              "padding": "$global.space.16",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "J7eZ8",
+                  "name": "dataShowTitle",
+                  "fill": "$semantic.text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Table / List Primitives",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.16",
+                  "fontWeight": "$global.font.weight.700"
+                },
+                {
+                  "type": "frame",
+                  "id": "y6zpd",
+                  "name": "dataRow",
+                  "width": "fill_container",
+                  "gap": "$global.space.12",
+                  "children": [
+                    {
+                      "id": "Uxlir",
+                      "type": "ref",
+                      "ref": "O3Ep7",
+                      "width": "fill_container",
+                      "name": "tableInst",
+                      "descendants": {
+                        "iNN6l": {
+                          "content": "user: alice"
+                        },
+                        "r2EVG": {
+                          "content": "approver"
+                        },
+                        "5YpG3": {
+                          "content": "workspace-A"
+                        },
+                        "seoyZ": {
+                          "content": "pending"
+                        }
+                      }
+                    },
+                    {
+                      "id": "M3xiR",
+                      "type": "ref",
+                      "ref": "uEtCJ",
+                      "width": 360,
+                      "name": "listInst",
+                      "descendants": {
+                        "0TnxU": {
+                          "content": "model:gpt-5.3-codex"
+                        },
+                        "3nkyv": {
+                          "content": "private"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "TKpju",
+                  "name": "dataNote",
+                  "fill": "$semantic.text.muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Token References: component.table.* / component.list.* (for table/list semantic consistency)",
+                  "fontFamily": "$global.font.family.ui",
+                  "fontSize": "$global.font.size.12",
+                  "fontWeight": "$global.font.weight.500"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "I8aBw",
+      "x": -347,
+      "y": 3152,
+      "name": "Screens",
+      "width": 2200,
+      "height": 960,
+      "fill": "$semantic.bg",
+      "cornerRadius": "$global.radius.16",
+      "stroke": {
+        "align": "inside",
+        "thickness": 1,
+        "fill": "$semantic.border"
+      },
+      "layout": "vertical",
+      "gap": "$global.space.24",
+      "padding": "$global.space.24",
+      "children": [
+        {
+          "type": "frame",
+          "id": "1HMoa",
+          "name": "Main Screen",
+          "width": "fill_container",
+          "height": 900,
+          "fill": "$semantic.bg",
+          "cornerRadius": "$global.radius.16",
+          "gap": "$global.space.16",
+          "padding": "$global.space.16",
+          "children": [
+            {
+              "type": "frame",
+              "id": "2kBzI",
+              "name": "Left Sidebar",
+              "width": 340,
+              "height": "fill_container",
+              "fill": "$semantic.surface",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$semantic.border"
+              },
+              "layout": "vertical",
+              "gap": "$global.space.12",
+              "padding": "$global.space.12",
+              "justifyContent": "space_between",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "t1WtG",
+                  "name": "leftWsHeader",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": "$global.space.12",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ydVt3",
+                      "name": "wsTopRow",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "l2gR3",
+                          "name": "wsTitleRow",
+                          "gap": "$global.space.8",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon_font",
+                              "id": "IZLiP",
+                              "name": "wsTitleIcon",
+                              "width": 15,
+                              "height": 0,
+                              "iconFontName": "layout-dashboard",
+                              "iconFontFamily": "lucide",
+                              "fill": "$semantic.text.subtle"
+                            },
+                            {
+                              "type": "text",
+                              "id": "gdWtL",
+                              "name": "wsTitleText",
+                              "fill": "$semantic.text",
+                              "textGrowth": "fixed-width",
+                              "width": "fit_content(0)",
+                              "content": "工作区 Workspace",
+                              "fontFamily": "$global.font.family.ui",
+                              "fontSize": "$global.font.size.13",
+                              "fontWeight": "$global.font.weight.600"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "5fa0u",
+                          "name": "wsCollapse",
+                          "width": 30,
+                          "height": 30,
+                          "fill": "$semantic.surface.2",
+                          "cornerRadius": "$global.radius.8",
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "$semantic.border"
+                          },
+                          "layout": "vertical",
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon_font",
+                              "id": "PyAWF",
+                              "name": "wsCollapseIcon",
+                              "width": 14,
+                              "height": 0,
+                              "iconFontName": "chevrons-left",
+                              "iconFontFamily": "lucide",
+                              "fill": "$semantic.text.subtle"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "UXHUt",
+                      "name": "wsBlock",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": "$global.space.8",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "NVqEy",
+                          "name": "wsBlockLabel",
+                          "fill": "$semantic.text.muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "当前工作区 Current",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.12",
+                          "fontWeight": "$global.font.weight.500"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "7EQ3B",
+                          "name": "wsCurrent",
+                          "width": "fill_container",
+                          "fill": "$semantic.surface.2",
+                          "cornerRadius": "$global.radius.8",
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "$semantic.border"
+                          },
+                          "padding": [
+                            "$global.space.8",
+                            "$global.space.12"
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "KStOD",
+                              "name": "wsCurrentLeft",
+                              "width": "fill_container",
+                              "gap": "$global.space.8",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "UHmeg",
+                                  "name": "wsCurrentIcon",
+                                  "width": 14,
+                                  "height": 0,
+                                  "iconFontName": "building",
+                                  "iconFontFamily": "lucide",
+                                  "fill": "$semantic.text"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "UlMMJ",
+                                  "name": "wsCurrentName",
+                                  "fill": "$semantic.text",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fit_content(0)",
+                                  "content": "本地工作区 Local",
+                                  "fontFamily": "$global.font.family.ui",
+                                  "fontSize": "$global.font.size.13",
+                                  "fontWeight": "$global.font.weight.600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "14Edo",
+                                  "name": "wsCurrentDot",
+                                  "fill": "$semantic.text.subtle",
+                                  "textGrowth": "fixed-width",
+                                  "width": 10,
+                                  "content": "·",
+                                  "fontFamily": "$global.font.family.ui",
+                                  "fontSize": "$global.font.size.12",
+                                  "fontWeight": "$global.font.weight.500"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "0xk1E",
+                                  "name": "wsCurrentScope",
+                                  "fill": "$semantic.text.subtle",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fit_content(0)",
+                                  "content": "Local",
+                                  "fontFamily": "$global.font.family.ui",
+                                  "fontSize": "$global.font.size.12",
+                                  "fontWeight": "$global.font.weight.500"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "icon_font",
+                              "id": "9a6Pm",
+                              "name": "wsCurrentArrow",
+                              "width": 14,
+                              "height": 0,
+                              "iconFontName": "chevron-down",
+                              "iconFontFamily": "lucide",
+                              "fill": "$semantic.text.subtle"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "id": "OWOkp",
+                      "type": "ref",
+                      "ref": "oFlER",
+                      "width": 118,
+                      "name": "wsAddBtn",
+                      "descendants": {
+                        "dlCgt": {
+                          "content": "+ 新增工作区"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "TS9HE",
+                  "name": "projectsGroup",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": "$global.space.12",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "myF7O",
+                      "name": "projectsHeader",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "wqSd4",
+                          "name": "projectsLabel",
+                          "fill": "$semantic.text.muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fit_content(0)",
+                          "content": "项目 Projects",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.12",
+                          "fontWeight": "$global.font.weight.600"
+                        },
+                        {
+                          "id": "mZ3fu",
+                          "type": "ref",
+                          "ref": "oFlER",
+                          "width": 96,
+                          "name": "projectsAddBtn",
+                          "descendants": {
+                            "dlCgt": {
+                              "content": "+ 新增项目"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "eW17h",
+                      "name": "projCardA",
+                      "width": "fill_container",
+                      "fill": "$semantic.bg",
+                      "cornerRadius": "$global.radius.12",
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "$semantic.border"
+                      },
+                      "layout": "vertical",
+                      "gap": "$global.space.8",
+                      "padding": "$global.space.12",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "M3MDy",
+                          "name": "projAHeader",
+                          "width": "fill_container",
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "Vky5i",
+                              "name": "projAHeaderLeft",
+                              "gap": "$global.space.8",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "XG1IA",
+                                  "name": "projAIcon",
+                                  "width": 14,
+                                  "height": 0,
+                                  "iconFontName": "folder-open",
+                                  "iconFontFamily": "lucide",
+                                  "fill": "$component.sidebar.item.fg"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "4KmPX",
+                                  "name": "projAName",
+                                  "fill": "$semantic.text",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fit_content(0)",
+                                  "content": "Project Alpha",
+                                  "fontFamily": "$global.font.family.ui",
+                                  "fontSize": "$global.font.size.13",
+                                  "fontWeight": "$global.font.weight.600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "hKeoq",
+                              "name": "projAQty",
+                              "fill": "$semantic.text.subtle",
+                              "textGrowth": "fixed-width",
+                              "width": "fit_content(0)",
+                              "content": "2 conversations",
+                              "fontFamily": "$global.font.family.ui",
+                              "fontSize": "$global.font.size.11",
+                              "fontWeight": "$global.font.weight.500"
+                            }
+                          ]
+                        },
+                        {
+                          "id": "nqEpx",
+                          "type": "ref",
+                          "ref": "oFlER",
+                          "width": 126,
+                          "name": "projAAdd",
+                          "descendants": {
+                            "dlCgt": {
+                              "content": "+ 新增对话"
+                            }
+                          }
+                        },
+                        {
+                          "type": "frame",
+                          "id": "SJ11L",
+                          "name": "projAConv1",
+                          "width": "fill_container",
+                          "fill": "$semantic.surface",
+                          "cornerRadius": "$global.radius.8",
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "$semantic.border"
+                          },
+                          "padding": [
+                            "$global.space.8",
+                            "$global.space.12"
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "t4FzJ",
+                              "name": "projAConv1Left",
+                              "gap": "$global.space.8",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "MAsZ3",
+                                  "name": "projAConv1Icon",
+                                  "width": 12,
+                                  "height": 0,
+                                  "iconFontName": "message-circle",
+                                  "iconFontFamily": "lucide",
+                                  "fill": "$component.sidebar.item.fg"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "qxxG2",
+                                  "name": "projAConv1Name",
+                                  "fill": "$semantic.text",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "conv-design-main",
+                                  "fontFamily": "$global.font.family.ui",
+                                  "fontSize": "$global.font.size.12",
+                                  "fontWeight": "$global.font.weight.500"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "icon_font",
+                              "id": "1nSrL",
+                              "name": "projAConv1Remove",
+                              "width": 14,
+                              "height": 0,
+                              "iconFontName": "x",
+                              "iconFontFamily": "lucide",
+                              "fill": "$semantic.text.subtle"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "5gnom",
+                          "name": "projAConv2",
+                          "width": "fill_container",
+                          "fill": "$component.sidebar.item.bg.active",
+                          "cornerRadius": "$global.radius.8",
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "$semantic.border"
+                          },
+                          "padding": [
+                            "$global.space.8",
+                            "$global.space.12"
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "L0FyZ",
+                              "name": "projAConv2Left",
+                              "gap": "$global.space.8",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "i5FVH",
+                                  "name": "projAConv2Icon",
+                                  "width": 12,
+                                  "height": 0,
+                                  "iconFontName": "message-circle",
+                                  "iconFontFamily": "lucide",
+                                  "fill": "$component.sidebar.item.fg.active"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "sXWZx",
+                                  "name": "projAConv2Name",
+                                  "fill": "$semantic.text",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "conv-debug-queue",
+                                  "fontFamily": "$global.font.family.ui",
+                                  "fontSize": "$global.font.size.12",
+                                  "fontWeight": "$global.font.weight.500"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "icon_font",
+                              "id": "8q0ZX",
+                              "name": "projAConv2Remove",
+                              "width": 14,
+                              "height": 0,
+                              "iconFontName": "x",
+                              "iconFontFamily": "lucide",
+                              "fill": "$semantic.text.subtle"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "5eoh7",
+                          "name": "projARemove",
+                          "gap": "$global.space.8",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon_font",
+                              "id": "FW4bw",
+                              "name": "projARemoveIcon",
+                              "width": 12,
+                              "height": 0,
+                              "iconFontName": "trash-2",
+                              "iconFontFamily": "lucide",
+                              "fill": "$semantic.text.subtle"
+                            },
+                            {
+                              "type": "text",
+                              "id": "uwHbT",
+                              "name": "projARemoveText",
+                              "fill": "$semantic.text.subtle",
+                              "textGrowth": "fixed-width",
+                              "width": "fit_content(0)",
+                              "content": "移除项目 Remove",
+                              "fontFamily": "$global.font.family.ui",
+                              "fontSize": "$global.font.size.11",
+                              "fontWeight": "$global.font.weight.500"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "5cmGi",
+                      "name": "projCardB",
+                      "width": "fill_container",
+                      "fill": "$semantic.bg",
+                      "cornerRadius": "$global.radius.12",
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "$semantic.border"
+                      },
+                      "layout": "vertical",
+                      "gap": "$global.space.8",
+                      "padding": "$global.space.12",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "rY9yr",
+                          "name": "projBHeader",
+                          "width": "fill_container",
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "L91ub",
+                              "name": "projBTitle",
+                              "fill": "$semantic.text",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Resource Sync",
+                              "fontFamily": "$global.font.family.ui",
+                              "fontSize": "$global.font.size.13",
+                              "fontWeight": "$global.font.weight.600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "CLPLn",
+                              "name": "projBQty",
+                              "fill": "$semantic.text.subtle",
+                              "textGrowth": "fixed-width",
+                              "width": "fit_content(0)",
+                              "content": "1 conversation",
+                              "fontFamily": "$global.font.family.ui",
+                              "fontSize": "$global.font.size.11",
+                              "fontWeight": "$global.font.weight.500"
+                            }
+                          ]
+                        },
+                        {
+                          "id": "syuov",
+                          "type": "ref",
+                          "ref": "oFlER",
+                          "width": 128,
+                          "name": "projBAdd",
+                          "descendants": {
+                            "dlCgt": {
+                              "content": "+ 新增对话"
+                            }
+                          }
+                        },
+                        {
+                          "type": "frame",
+                          "id": "dvlrM",
+                          "name": "projBConv",
+                          "width": "fill_container",
+                          "fill": "$semantic.surface",
+                          "cornerRadius": "$global.radius.8",
+                          "stroke": {
+                            "align": "inside",
+                            "thickness": 1,
+                            "fill": "$semantic.border"
+                          },
+                          "padding": [
+                            "$global.space.8",
+                            "$global.space.12"
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "U95UD",
+                              "name": "projBConvLeft",
+                              "gap": "$global.space.8",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "UW5Lc",
+                                  "name": "projBConvIcon",
+                                  "width": 12,
+                                  "height": 0,
+                                  "iconFontName": "message-circle",
+                                  "iconFontFamily": "lucide",
+                                  "fill": "$component.sidebar.item.fg"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "kDDui",
+                                  "name": "projBConvName",
+                                  "fill": "$semantic.text",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "conv-qa-check",
+                                  "fontFamily": "$global.font.family.ui",
+                                  "fontSize": "$global.font.size.12",
+                                  "fontWeight": "$global.font.weight.500"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "icon_font",
+                              "id": "vteE2",
+                              "name": "projBConvRemove",
+                              "width": 14,
+                              "height": 0,
+                              "iconFontName": "x",
+                              "iconFontFamily": "lucide",
+                              "fill": "$semantic.text.subtle"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "eKfeT",
+                          "name": "projBRemove",
+                          "gap": "$global.space.8",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon_font",
+                              "id": "WBgMv",
+                              "name": "projBRemoveIcon",
+                              "width": 12,
+                              "height": 0,
+                              "iconFontName": "trash-2",
+                              "iconFontFamily": "lucide",
+                              "fill": "$semantic.text.subtle"
+                            },
+                            {
+                              "type": "text",
+                              "id": "ch331",
+                              "name": "projBRemoveText",
+                              "fill": "$semantic.text.subtle",
+                              "textGrowth": "fixed-width",
+                              "width": "fit_content(0)",
+                              "content": "移除项目 Remove",
+                              "fontFamily": "$global.font.family.ui",
+                              "fontSize": "$global.font.size.11",
+                              "fontWeight": "$global.font.weight.500"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "wJMFP",
+                  "name": "accountFooter",
+                  "width": "fill_container",
+                  "fill": "$component.shell.settings.bg",
+                  "cornerRadius": "$global.radius.12",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$component.shell.settings.border"
+                  },
+                  "layout": "vertical",
+                  "gap": "$global.space.8",
+                  "padding": "$global.space.12",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "YIChh",
+                      "name": "accountHeader",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "w5Hu9",
+                          "name": "accountLeft",
+                          "gap": "$global.space.8",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon_font",
+                              "id": "REbe2",
+                              "name": "accountIcon",
+                              "width": 14,
+                              "height": 0,
+                              "iconFontName": "user",
+                              "iconFontFamily": "lucide",
+                              "fill": "$semantic.text"
+                            },
+                            {
+                              "type": "text",
+                              "id": "CbIZH",
+                              "name": "accountTitle",
+                              "fill": "$semantic.text",
+                              "textGrowth": "fixed-width",
+                              "width": "fit_content(0)",
+                              "content": "本地用户 local-user",
+                              "fontFamily": "$global.font.family.ui",
+                              "fontSize": "$global.font.size.12",
+                              "fontWeight": "$global.font.weight.600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "iLWBd",
+                              "name": "accountRole",
+                              "fill": "$semantic.text.subtle",
+                              "textGrowth": "fixed-width",
+                              "width": "fit_content(0)",
+                              "content": "Owner",
+                              "fontFamily": "$global.font.family.ui",
+                              "fontSize": "$global.font.size.11",
+                              "fontWeight": "$global.font.weight.500"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "icon_font",
+                          "id": "NXQvU",
+                          "name": "accountOpen",
+                          "width": 14,
+                          "height": 0,
+                          "iconFontName": "chevron-up",
+                          "iconFontFamily": "lucide",
+                          "fill": "$semantic.text.subtle"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zPF7v",
+                      "name": "accountDetails",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": "$global.space.4",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Y7P2c",
+                          "name": "accountName",
+                          "fill": "$semantic.text.muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "账号名称: local-user@localhost",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.11",
+                          "fontWeight": "$global.font.weight.500"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "woab1",
+                          "name": "accountSetting",
+                          "width": "fill_container",
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "UIZ9B",
+                              "name": "accountSettingText",
+                              "fill": "$semantic.text.subtle",
+                              "textGrowth": "fixed-width",
+                              "width": "fit_content(0)",
+                              "content": "设置 · Settings",
+                              "fontFamily": "$global.font.family.ui",
+                              "fontSize": "$global.font.size.12",
+                              "fontWeight": "$global.font.weight.500"
+                            },
+                            {
+                              "type": "icon_font",
+                              "id": "il8vb",
+                              "name": "accountSettingIcon",
+                              "width": 14,
+                              "height": 0,
+                              "iconFontName": "settings",
+                              "iconFontFamily": "lucide",
+                              "fill": "$semantic.text.subtle"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "47bgj",
+              "name": "Right Content",
+              "width": "fill_container",
+              "height": "fill_container",
+              "fill": "$semantic.bg",
+              "stroke": {
+                "align": "inside",
+                "thickness": 1,
+                "fill": "$semantic.border"
+              },
+              "layout": "vertical",
+              "gap": "$global.space.12",
+              "padding": "$global.space.12",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "yYQAi",
+                  "name": "convHeader",
+                  "width": "fill_container",
+                  "fill": "$semantic.surface",
+                  "cornerRadius": "$global.radius.12",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$semantic.border"
+                  },
+                  "padding": "$global.space.8",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "cwCTm",
+                      "name": "convHeaderLeft",
+                      "gap": "$global.space.12",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "XgtiJ",
+                          "name": "projectCol",
+                          "layout": "vertical",
+                          "gap": "$global.space.4",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "EoEkg",
+                              "name": "projectColLabel",
+                              "fill": "$semantic.text.subtle",
+                              "textGrowth": "fixed-width",
+                              "width": "fit_content(0)",
+                              "content": "项目名称 Project",
+                              "fontFamily": "$global.font.family.ui",
+                              "fontSize": "$global.font.size.11",
+                              "fontWeight": "$global.font.weight.500"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "VcqI3",
+                              "name": "projectRow",
+                              "gap": "$global.space.8",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon_font",
+                                  "id": "s7jII",
+                                  "name": "projectIcon",
+                                  "width": 13,
+                                  "height": 0,
+                                  "iconFontName": "folder-open",
+                                  "iconFontFamily": "lucide",
+                                  "fill": "$semantic.text"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "MwA1H",
+                                  "name": "projectName",
+                                  "fill": "$semantic.text",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fit_content(0)",
+                                  "content": "Project Alpha",
+                                  "fontFamily": "$global.font.family.ui",
+                                  "fontSize": "$global.font.size.16",
+                                  "fontWeight": "$global.font.weight.600"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "LOTxO",
+                          "name": "convCol",
+                          "layout": "vertical",
+                          "gap": "$global.space.4",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Lk0rC",
+                              "name": "convColLabel",
+                              "fill": "$semantic.text.subtle",
+                              "textGrowth": "fixed-width",
+                              "width": "fit_content(0)",
+                              "content": "对话名称 Conversation",
+                              "fontFamily": "$global.font.family.ui",
+                              "fontSize": "$global.font.size.11",
+                              "fontWeight": "$global.font.weight.500"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "auBNU",
+                              "name": "convRow",
+                              "fill": "$semantic.surface.2",
+                              "cornerRadius": "$global.radius.8",
+                              "gap": "$global.space.8",
+                              "padding": [
+                                "$global.space.8",
+                                "$global.space.12"
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "SihNd",
+                                  "name": "convName",
+                                  "fill": "$semantic.text",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fit_content(0)",
+                                  "content": "conv-design-main",
+                                  "fontFamily": "$global.font.family.ui",
+                                  "fontSize": "$global.font.size.14",
+                                  "fontWeight": "$global.font.weight.600"
+                                },
+                                {
+                                  "type": "icon_font",
+                                  "id": "owyMG",
+                                  "name": "convEdit",
+                                  "width": 13,
+                                  "height": 0,
+                                  "iconFontName": "pencil",
+                                  "iconFontFamily": "lucide",
+                                  "fill": "$semantic.text.subtle"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "gHg5j",
+                      "name": "convHeaderStatus",
+                      "layout": "vertical",
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "WXt04",
+                          "name": "convHeaderStatusTop",
+                          "fill": "$semantic.warning",
+                          "textGrowth": "fixed-width",
+                          "width": "fit_content(0)",
+                          "content": "执行中 Running",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.11",
+                          "fontWeight": "$global.font.weight.600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ncFq8",
+                          "name": "convHeaderStatusBottom",
+                          "fill": "$semantic.text.subtle",
+                          "textGrowth": "fixed-width",
+                          "width": "fit_content(0)",
+                          "content": "队列 Queue: 2 · 活跃 Active: 1",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.11",
+                          "fontWeight": "$global.font.weight.500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "HZPUT",
+                  "name": "conversationContent",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "$semantic.bg",
+                  "stroke": {
+                    "align": "inside",
+                    "thickness": 1,
+                    "fill": "$semantic.border"
+                  },
+                  "layout": "vertical",
+                  "gap": "$global.space.8",
+                  "padding": "$global.space.12",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "xXgqs",
+                      "name": "conversationHead",
+                      "fill": "$semantic.text",
+                      "content": "Conversation Stream",
+                      "fontFamily": "$global.font.family.ui",
+                      "fontSize": "$global.font.size.13",
+                      "fontWeight": "$global.font.weight.600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "CgCbH",
+                      "name": "streamLine1",
+                      "width": "fill_container",
+                      "fill": "$semantic.surface",
+                      "cornerRadius": "$global.radius.12",
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "$semantic.border"
+                      },
+                      "gap": "$global.space.8",
+                      "padding": "$global.space.12",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "I3Vu2",
+                          "name": "streamLine1Avatar",
+                          "width": 14,
+                          "height": 0,
+                          "iconFontName": "user",
+                          "iconFontFamily": "lucide",
+                          "fill": "$semantic.text.subtle"
+                        },
+                        {
+                          "type": "text",
+                          "id": "89gaB",
+                          "name": "streamLine1Text",
+                          "fill": "$semantic.text",
+                          "content": "用户提问：需要检查当前项目所有模型执行的队列状态。",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.13",
+                          "fontWeight": "$global.font.weight.400"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "iNTYV",
+                      "name": "streamLine2",
+                      "width": "fill_container",
+                      "fill": "$semantic.surface.2",
+                      "cornerRadius": "$global.radius.12",
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "$semantic.border"
+                      },
+                      "gap": "$global.space.8",
+                      "padding": "$global.space.12",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "BvpKG",
+                          "name": "streamLine2Avatar",
+                          "width": 14,
+                          "height": 0,
+                          "iconFontName": "cpu",
+                          "iconFontFamily": "lucide",
+                          "fill": "$semantic.text.muted"
+                        },
+                        {
+                          "type": "text",
+                          "id": "MRkHJ",
+                          "name": "streamLine2Text",
+                          "fill": "$semantic.text",
+                          "content": "Agent 已确认 1 个待执行任务，正在准备审批摘要。",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.13",
+                          "fontWeight": "$global.font.weight.400"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NUFhb",
+                      "name": "streamLine3",
+                      "width": "fill_container",
+                      "fill": "$semantic.surface.2",
+                      "cornerRadius": "$global.radius.12",
+                      "stroke": {
+                        "align": "inside",
+                        "thickness": 1,
+                        "fill": "$semantic.border"
+                      },
+                      "gap": "$global.space.8",
+                      "padding": "$global.space.12",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "54FpU",
+                          "name": "streamLine3Avatar",
+                          "width": 14,
+                          "height": 0,
+                          "iconFontName": "shield-check",
+                          "iconFontFamily": "lucide",
+                          "fill": "$semantic.success"
+                        },
+                        {
+                          "type": "text",
+                          "id": "8yx0e",
+                          "name": "streamLine3Text",
+                          "fill": "$semantic.text",
+                          "content": "队列状态更新：queued -> running，Hub 连接正常。",
+                          "fontFamily": "$global.font.family.ui",
+                          "fontSize": "$global.font.size.13",
+                          "fontWeight": "$global.font.weight.400"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Yh25y",
+      "x": 0,
+      "y": 0,
+      "name": "wsHeading",
+      "width": "fill_container(0)",
+      "height": "fit_content(0)",
+      "justifyContent": "space_between",
+      "alignItems": "center"
+    }
+  ],
+  "themes": {
+    "0": [
+      "d",
+      "l"
+    ],
+    "1": [
+      "a",
+      "i"
+    ],
+    "2": [
+      "r",
+      "g"
+    ],
+    "3": [
+      "k",
+      "h"
+    ],
+    "4": [
+      "t"
+    ],
+    "theme": [
+      "dark",
+      "light"
+    ]
+  },
+  "variables": {
+    "component.badge.execution.cancelled.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#64748B40",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#94A3B83D",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.badge.execution.cancelled.fg": {
+      "type": "color",
+      "value": "$semantic.text.muted"
+    },
+    "semantic.text.muted": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.neutral.100",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.neutral.500",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.neutral.100": {
+      "type": "color",
+      "value": "#CBD5E1"
+    },
+    "global.color.neutral.500": {
+      "type": "color",
+      "value": "#334155"
+    },
+    "component.badge.execution.confirming.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FBBF2433",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#B4530924",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.badge.execution.confirming.fg": {
+      "type": "color",
+      "value": "$semantic.warning"
+    },
+    "semantic.warning": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.warning.400",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.warning.600",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.warning.400": {
+      "type": "color",
+      "value": "#FBBF24"
+    },
+    "global.color.warning.600": {
+      "type": "color",
+      "value": "#B45309"
+    },
+    "component.badge.execution.failed.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#EF444430",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#B91C1C24",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.badge.execution.failed.fg": {
+      "type": "color",
+      "value": "$semantic.danger"
+    },
+    "semantic.danger": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.danger.400",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.danger.600",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.danger.400": {
+      "type": "color",
+      "value": "#F87171"
+    },
+    "global.color.danger.600": {
+      "type": "color",
+      "value": "#B91C1C"
+    },
+    "component.badge.execution.queued.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FBBF2426",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#F59E0B1F",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.badge.execution.queued.fg": {
+      "type": "color",
+      "value": "$semantic.warning"
+    },
+    "component.badge.execution.running.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#7E9DCE33",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#5E83BD21",
+          "theme": {
+            "theme": "light"
+          }
+        },
+        {
+          "value": "#58637933",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#7E9DCE33",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.badge.execution.running.fg": {
+      "type": "color",
+      "value": "$semantic.primary"
+    },
+    "semantic.primary": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.primary.400",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.primary.600",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.primary.400": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#7E9DCE"
+        },
+        {
+          "value": "#717B8D",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#7E9DCE",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.primary.600": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#46689F"
+        },
+        {
+          "value": "#3B4453",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#46689F",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.badge.execution.success.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#22C55E2B",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#15803D24",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.badge.execution.success.fg": {
+      "type": "color",
+      "value": "$semantic.success"
+    },
+    "semantic.success": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.success.400",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.success.600",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.success.400": {
+      "type": "color",
+      "value": "#4ADE80"
+    },
+    "global.color.success.600": {
+      "type": "color",
+      "value": "#15803D"
+    },
+    "component.badge.font.size": {
+      "type": "number",
+      "value": "$global.font.size.11"
+    },
+    "global.font.size.11": {
+      "type": "number",
+      "value": 11
+    },
+    "component.badge.network.connected.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#22C55E2B",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#15803D24",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.badge.network.connected.fg": {
+      "type": "color",
+      "value": "$semantic.success"
+    },
+    "component.badge.network.disconnected.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#EF444430",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#B91C1C24",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.badge.network.disconnected.fg": {
+      "type": "color",
+      "value": "$semantic.danger"
+    },
+    "component.badge.radius": {
+      "type": "number",
+      "value": 999
+    },
+    "component.button.danger.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$semantic.danger"
+        },
+        {
+          "value": "#6d3030"
+        },
+        {
+          "value": "#6d3030",
+          "theme": {
+            "0": "d",
+            "1": "a",
+            "2": "r",
+            "3": "k"
+          }
+        },
+        {
+          "value": "#6d3030",
+          "theme": {
+            "0": "l",
+            "1": "i",
+            "2": "g",
+            "3": "h",
+            "4": "t"
+          }
+        }
+      ]
+    },
+    "component.button.danger.border": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$semantic.danger"
+        },
+        {
+          "value": "#6d3030"
+        }
+      ]
+    },
+    "component.button.danger.fg": {
+      "type": "color",
+      "value": "$global.color.neutral.0"
+    },
+    "global.color.neutral.0": {
+      "type": "color",
+      "value": "#F8FAFC"
+    },
+    "component.button.disabled.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.neutral.700",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.neutral.50",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.neutral.700": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#2A2A2A"
+        },
+        {
+          "value": "#2a2a2a"
+        }
+      ]
+    },
+    "global.color.neutral.50": {
+      "type": "color",
+      "value": "#E2E8F0"
+    },
+    "component.button.disabled.border": {
+      "type": "color",
+      "value": "$semantic.border"
+    },
+    "semantic.border": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.border.dark",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.border.light",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.border.dark": {
+      "type": "color",
+      "value": "#FFFFFF24"
+    },
+    "global.color.border.light": {
+      "type": "color",
+      "value": "#1F1F1F1F"
+    },
+    "component.button.disabled.fg": {
+      "type": "color",
+      "value": "$semantic.text.subtle"
+    },
+    "semantic.text.subtle": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.neutral.300",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.neutral.400",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.neutral.300": {
+      "type": "color",
+      "value": "#64748B"
+    },
+    "global.color.neutral.400": {
+      "type": "color",
+      "value": "#475569"
+    },
+    "component.button.focus.ring": {
+      "type": "color",
+      "value": "$semantic.focus.ring"
+    },
+    "semantic.focus.ring": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.primary.300",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.primary.500",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.primary.300": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#A4BADF"
+        },
+        {
+          "value": "#959FAF",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#A4BADF",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.primary.500": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#5E83BD"
+        },
+        {
+          "value": "#535A6B",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#5E83BD",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.button.font.size": {
+      "type": "number",
+      "value": "$global.font.size.13"
+    },
+    "global.font.size.13": {
+      "type": "number",
+      "value": 13
+    },
+    "component.button.ghost.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FFFFFF00",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#00000000",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.button.ghost.border": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FFFFFF00",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#00000000",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.button.ghost.fg": {
+      "type": "color",
+      "value": "$semantic.text.muted"
+    },
+    "component.button.height": {
+      "type": "number",
+      "value": 36
+    },
+    "component.button.loading.opacity": {
+      "type": "number",
+      "value": 0.72
+    },
+    "component.button.padding.x": {
+      "type": "number",
+      "value": 12
+    },
+    "component.button.padding.y": {
+      "type": "number",
+      "value": 8
+    },
+    "component.button.primary.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$semantic.primary"
+        },
+        {
+          "value": "$global.color.neutral.500"
+        },
+        {
+          "value": "$global.color.neutral.500",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.neutral.500",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.button.primary.border": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$semantic.primary"
+        },
+        {
+          "value": "$global.color.neutral.500"
+        }
+      ]
+    },
+    "component.button.primary.fg": {
+      "type": "color",
+      "value": "$global.color.neutral.0"
+    },
+    "component.button.radius": {
+      "type": "number",
+      "value": "$global.radius.12"
+    },
+    "global.radius.12": {
+      "type": "number",
+      "value": 12
+    },
+    "component.button.secondary.bg": {
+      "type": "color",
+      "value": "$semantic.surface.2"
+    },
+    "semantic.surface.2": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.neutral.700",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.neutral.25",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.neutral.25": {
+      "type": "color",
+      "value": "#F1F5F9"
+    },
+    "component.button.secondary.border": {
+      "type": "color",
+      "value": "$semantic.border"
+    },
+    "component.button.secondary.fg": {
+      "type": "color",
+      "value": "$semantic.text"
+    },
+    "semantic.text": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.neutral.0",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.neutral.700",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.card.bg": {
+      "type": "color",
+      "value": "$semantic.surface"
+    },
+    "semantic.surface": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.neutral.800",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.neutral.0",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.neutral.800": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#1F1F1F"
+        },
+        {
+          "value": "#1f1f1fff"
+        },
+        {
+          "value": "#1f1f1fff"
+        }
+      ]
+    },
+    "component.card.body.fg": {
+      "type": "color",
+      "value": "$semantic.text.muted"
+    },
+    "component.card.border": {
+      "type": "color",
+      "value": "$semantic.border"
+    },
+    "component.card.footer.bg": {
+      "type": "color",
+      "value": "$semantic.surface.2"
+    },
+    "component.card.header.fg": {
+      "type": "color",
+      "value": "$semantic.text"
+    },
+    "component.card.padding": {
+      "type": "number",
+      "value": "$global.space.16"
+    },
+    "global.space.16": {
+      "type": "number",
+      "value": 16
+    },
+    "component.card.radius": {
+      "type": "number",
+      "value": "$global.radius.16"
+    },
+    "global.radius.16": {
+      "type": "number",
+      "value": 16
+    },
+    "component.input.bg": {
+      "type": "color",
+      "value": "$semantic.surface"
+    },
+    "component.input.border": {
+      "type": "color",
+      "value": "$semantic.border"
+    },
+    "component.input.border.error": {
+      "type": "color",
+      "value": "$semantic.danger"
+    },
+    "component.input.border.focus": {
+      "type": "color",
+      "value": "$semantic.focus.ring"
+    },
+    "component.input.disabled.bg": {
+      "type": "color",
+      "value": "$semantic.surface.2"
+    },
+    "component.input.disabled.fg": {
+      "type": "color",
+      "value": "$semantic.text.subtle"
+    },
+    "component.input.fg": {
+      "type": "color",
+      "value": "$semantic.text"
+    },
+    "component.input.height": {
+      "type": "number",
+      "value": 40
+    },
+    "component.input.hint": {
+      "type": "color",
+      "value": "$semantic.text.subtle"
+    },
+    "component.input.placeholder": {
+      "type": "color",
+      "value": "$semantic.text.subtle"
+    },
+    "component.input.radius": {
+      "type": "number",
+      "value": "$global.radius.12"
+    },
+    "component.list.item.bg.active": {
+      "type": "color",
+      "value": "$component.sidebar.item.bg.active"
+    },
+    "component.sidebar.item.bg.active": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FFFFFF14",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#1F1F1F0F",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.list.item.bg.hover": {
+      "type": "color",
+      "value": "$semantic.surface.2"
+    },
+    "component.list.item.border": {
+      "type": "color",
+      "value": "$semantic.divider"
+    },
+    "semantic.divider": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.divider.dark",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.divider.light",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.divider.dark": {
+      "type": "color",
+      "value": "#FFFFFF1A"
+    },
+    "global.color.divider.light": {
+      "type": "color",
+      "value": "#1F1F1F14"
+    },
+    "component.list.item.fg": {
+      "type": "color",
+      "value": "$semantic.text"
+    },
+    "component.list.item.fg.meta": {
+      "type": "color",
+      "value": "$semantic.text.subtle"
+    },
+    "component.modal.bg": {
+      "type": "color",
+      "value": "$semantic.surface"
+    },
+    "component.modal.body.fg": {
+      "type": "color",
+      "value": "$semantic.text.muted"
+    },
+    "component.modal.border": {
+      "type": "color",
+      "value": "$semantic.border"
+    },
+    "component.modal.radius": {
+      "type": "number",
+      "value": "$global.radius.16"
+    },
+    "component.modal.title.fg": {
+      "type": "color",
+      "value": "$semantic.text"
+    },
+    "component.risk.confirm.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#3A1F1F",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#FEE2E2",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.risk.confirm.border": {
+      "type": "color",
+      "value": "$semantic.danger"
+    },
+    "component.risk.confirm.command.bg": {
+      "type": "color",
+      "value": "$semantic.surface.2"
+    },
+    "component.select.option.active": {
+      "type": "color",
+      "value": "$semantic.primary"
+    },
+    "component.select.option.active.fg": {
+      "type": "color",
+      "value": "$global.color.neutral.0"
+    },
+    "component.select.option.hover": {
+      "type": "color",
+      "value": "$semantic.surface"
+    },
+    "component.select.panel.bg": {
+      "type": "color",
+      "value": "$semantic.surface.2"
+    },
+    "component.select.trigger.bg": {
+      "type": "color",
+      "value": "$component.input.bg"
+    },
+    "component.select.trigger.border": {
+      "type": "color",
+      "value": "$component.input.border"
+    },
+    "component.select.trigger.fg": {
+      "type": "color",
+      "value": "$component.input.fg"
+    },
+    "component.sidebar.bg": {
+      "type": "color",
+      "value": "$semantic.surface"
+    },
+    "component.sidebar.border": {
+      "type": "color",
+      "value": "$semantic.border"
+    },
+    "component.sidebar.item.bg.hover": {
+      "type": "color",
+      "value": "$semantic.surface.2"
+    },
+    "component.sidebar.item.fg": {
+      "type": "color",
+      "value": "$semantic.text.muted"
+    },
+    "component.sidebar.item.fg.active": {
+      "type": "color",
+      "value": "$semantic.text"
+    },
+    "component.table.bg": {
+      "type": "color",
+      "value": "$semantic.surface"
+    },
+    "component.table.border": {
+      "type": "color",
+      "value": "$semantic.border"
+    },
+    "component.table.header.bg": {
+      "type": "color",
+      "value": "$semantic.surface.2"
+    },
+    "component.table.header.fg": {
+      "type": "color",
+      "value": "$semantic.text.muted"
+    },
+    "component.table.row.bg.hover": {
+      "type": "color",
+      "value": "$semantic.surface.2"
+    },
+    "component.table.row.bg.selected": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#7E9DCE21",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#5E83BD14",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.table.row.divider": {
+      "type": "color",
+      "value": "$semantic.divider"
+    },
+    "component.table.row.fg": {
+      "type": "color",
+      "value": "$semantic.text"
+    },
+    "component.toast.error.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#3A1F1F",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#FEE2E2",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.toast.error.fg": {
+      "type": "color",
+      "value": "$semantic.danger"
+    },
+    "component.toast.info.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#1F2A3A",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#DBEAFE",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.toast.info.fg": {
+      "type": "color",
+      "value": "$semantic.primary"
+    },
+    "component.toast.warning.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#3A3017",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#FEF3C7",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.toast.warning.fg": {
+      "type": "color",
+      "value": "$semantic.warning"
+    },
+    "component.topbar.bg": {
+      "type": "color",
+      "value": "$semantic.surface"
+    },
+    "component.topbar.border": {
+      "type": "color",
+      "value": "$semantic.border"
+    },
+    "component.topbar.breadcrumb.fg": {
+      "type": "color",
+      "value": "$semantic.text.subtle"
+    },
+    "component.topbar.breadcrumb.fg.active": {
+      "type": "color",
+      "value": "$semantic.text"
+    },
+    "component.topbar.connection.connected": {
+      "type": "color",
+      "value": "$semantic.success"
+    },
+    "component.topbar.connection.disconnected": {
+      "type": "color",
+      "value": "$semantic.danger"
+    },
+    "global.alpha.border.default": {
+      "type": "number",
+      "value": 0.14
+    },
+    "global.alpha.border.strong": {
+      "type": "number",
+      "value": 0.22
+    },
+    "global.alpha.border.weak": {
+      "type": "number",
+      "value": 0.08
+    },
+    "global.alpha.divider.default": {
+      "type": "number",
+      "value": 0.16
+    },
+    "global.alpha.divider.subtle": {
+      "type": "number",
+      "value": 0.1
+    },
+    "global.color.danger.300": {
+      "type": "color",
+      "value": "#FCA5A5"
+    },
+    "global.color.danger.500": {
+      "type": "color",
+      "value": "#EF4444"
+    },
+    "global.color.neutral.1000": {
+      "type": "color",
+      "value": "#05070D"
+    },
+    "global.color.neutral.200": {
+      "type": "color",
+      "value": "#94A3B8"
+    },
+    "global.color.neutral.600": {
+      "type": "color",
+      "value": "#1E293B"
+    },
+    "global.color.neutral.900": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#181818ff"
+        },
+        {
+          "value": "#181818ff"
+        },
+        {
+          "value": "#181818ff"
+        }
+      ]
+    },
+    "global.color.overlay.dark": {
+      "type": "color",
+      "value": "#101010E6"
+    },
+    "global.color.overlay.light": {
+      "type": "color",
+      "value": "#1F1F1F14"
+    },
+    "global.color.primary.100": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#E6EDF7"
+        },
+        {
+          "value": "#E4E6EB",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#E6EDF7",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.primary.200": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#C7D6EC"
+        },
+        {
+          "value": "#BCC3D0",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#C7D6EC",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.primary.700": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#2F4E7E"
+        },
+        {
+          "value": "#2A3240",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#2F4E7E",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "global.color.success.300": {
+      "type": "color",
+      "value": "#86EFAC"
+    },
+    "global.color.success.500": {
+      "type": "color",
+      "value": "#22C55E"
+    },
+    "global.color.warning.300": {
+      "type": "color",
+      "value": "#FCD34D"
+    },
+    "global.color.warning.500": {
+      "type": "color",
+      "value": "#F59E0B"
+    },
+    "global.font.family.ui": {
+      "type": "string",
+      "value": [
+        {
+          "value": "SF Pro Text, PingFang SC, Noto Sans, sans-serif"
+        },
+        {
+          "value": "SF Pro Text"
+        },
+        {
+          "value": "PingFang SC"
+        }
+      ]
+    },
+    "global.font.size.12": {
+      "type": "number",
+      "value": 12
+    },
+    "global.font.size.14": {
+      "type": "number",
+      "value": 14
+    },
+    "global.font.size.16": {
+      "type": "number",
+      "value": 16
+    },
+    "global.font.size.18": {
+      "type": "number",
+      "value": 18
+    },
+    "global.font.size.20": {
+      "type": "number",
+      "value": 20
+    },
+    "global.font.size.24": {
+      "type": "number",
+      "value": 24
+    },
+    "global.font.size.28": {
+      "type": "number",
+      "value": 28
+    },
+    "global.font.weight.400": {
+      "type": "string",
+      "value": "400"
+    },
+    "global.font.weight.500": {
+      "type": "string",
+      "value": "500"
+    },
+    "global.font.weight.600": {
+      "type": "string",
+      "value": "600"
+    },
+    "global.font.weight.700": {
+      "type": "string",
+      "value": "700"
+    },
+    "global.line.height.normal": {
+      "type": "number",
+      "value": 1.45
+    },
+    "global.line.height.relaxed": {
+      "type": "number",
+      "value": 1.65
+    },
+    "global.line.height.tight": {
+      "type": "number",
+      "value": 1.25
+    },
+    "global.radius.8": {
+      "type": "number",
+      "value": 8
+    },
+    "global.shadow.1": {
+      "type": "string",
+      "value": "0 1px 2px rgba(5,7,13,0.35)"
+    },
+    "global.shadow.2": {
+      "type": "string",
+      "value": "0 6px 16px rgba(5,7,13,0.32)"
+    },
+    "global.shadow.3": {
+      "type": "string",
+      "value": "0 12px 28px rgba(5,7,13,0.36)"
+    },
+    "global.space.12": {
+      "type": "number",
+      "value": 12
+    },
+    "global.space.24": {
+      "type": "number",
+      "value": 24
+    },
+    "global.space.32": {
+      "type": "number",
+      "value": 32
+    },
+    "global.space.4": {
+      "type": "number",
+      "value": 4
+    },
+    "global.space.40": {
+      "type": "number",
+      "value": 40
+    },
+    "global.space.8": {
+      "type": "number",
+      "value": 8
+    },
+    "semantic.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.neutral.900",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.neutral.25",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "semantic.overlay": {
+      "type": "color",
+      "value": [
+        {
+          "value": "$global.color.overlay.dark",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "$global.color.overlay.light",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.shell.content.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#121417",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#F6F8FB",
+          "theme": {
+            "theme": "light"
+          }
+        },
+        {
+          "value": "#181818ff",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#F6F8FB",
+          "theme": {
+            "theme": "light"
+          }
+        },
+        {
+          "value": "#181818ff",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#f6f8fb",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.shell.content.bg.elevated": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#171A1F",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#FFFFFF",
+          "theme": {
+            "theme": "light"
+          }
+        },
+        {
+          "value": "#1f1f1fff",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#FFFFFF",
+          "theme": {
+            "theme": "light"
+          }
+        },
+        {
+          "value": "#1f1f1fff",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#ffffff",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.shell.divider": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FFFFFF1A",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#1F1F1F1A",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.shell.settings.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FFFFFF0A",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#1F1F1F0A",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.shell.settings.border": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FFFFFF24",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#1F1F1F1F",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.shell.sidebar.bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#2F3034",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#ECEFF4",
+          "theme": {
+            "theme": "light"
+          }
+        },
+        {
+          "value": "#1f1f1fff",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#ECEFF4",
+          "theme": {
+            "theme": "light"
+          }
+        },
+        {
+          "value": "#1f1f1fff",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#eceff4",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.shell.sidebar.bg.muted": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#26282D",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#E2E8F0",
+          "theme": {
+            "theme": "light"
+          }
+        },
+        {
+          "value": "#181818ff",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#E2E8F0",
+          "theme": {
+            "theme": "light"
+          }
+        },
+        {
+          "value": "#181818ff",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#e2e8f0",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    },
+    "component.table.row.selected": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#5863791F",
+          "theme": {
+            "theme": "dark"
+          }
+        },
+        {
+          "value": "#5E83BD14",
+          "theme": {
+            "theme": "light"
+          }
+        }
+      ]
+    }
+  }
+}

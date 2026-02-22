@@ -3,46 +3,344 @@
  * Token 定义所有权归 Pencil；业务组件仅消费 token，不在组件内重定义或硬编码样式值。
  */
 :root {
-  --global-color-neutral-0: #ffffff;
-  --global-color-neutral-50: #f6f7f8;
-  --global-color-neutral-200: #d6d9de;
-  --global-color-neutral-500: #6b7280;
-  --global-color-neutral-900: #111827;
+  /* =========================
+   * Global Tokens (Atomic)
+   * ========================= */
+  --global-color-neutral-0: #f8fafc;
+  --global-color-neutral-25: #f1f5f9;
+  --global-color-neutral-50: #e2e8f0;
+  --global-color-neutral-100: #cbd5e1;
+  --global-color-neutral-200: #94a3b8;
+  --global-color-neutral-300: #64748b;
+  --global-color-neutral-400: #475569;
+  --global-color-neutral-500: #334155;
+  --global-color-neutral-600: #1e293b;
+  --global-color-neutral-700: #2a2a2a;
+  --global-color-neutral-800: #1f1f1fff;
+  --global-color-neutral-900: #181818ff;
+  --global-color-neutral-1000: #101010;
 
-  --global-space-1: 4px;
-  --global-space-2: 8px;
-  --global-space-3: 12px;
-  --global-space-4: 16px;
-  --global-space-5: 24px;
+  --global-color-primary-100: #e6edf7;
+  --global-color-primary-200: #c7d6ec;
+  --global-color-primary-300: #a4badf;
+  --global-color-primary-400: #7e9dce;
+  --global-color-primary-500: #5e83bd;
+  --global-color-primary-600: #46689f;
+  --global-color-primary-700: #2f4e7e;
 
-  --global-radius-1: 6px;
-  --global-radius-2: 10px;
+  --global-color-danger-300: #fca5a5;
+  --global-color-danger-400: #f87171;
+  --global-color-danger-500: #ef4444;
+  --global-color-danger-600: #b91c1c;
 
-  --global-font-family-base: "Noto Sans", "PingFang SC", sans-serif;
-  --global-font-size-1: 14px;
-  --global-font-size-2: 16px;
+  --global-color-success-300: #86efac;
+  --global-color-success-400: #4ade80;
+  --global-color-success-500: #22c55e;
+  --global-color-success-600: #15803d;
 
-  --semantic-bg-page: var(--global-color-neutral-50);
-  --semantic-bg-surface: var(--global-color-neutral-0);
-  --semantic-border-default: var(--global-color-neutral-200);
-  --semantic-text-primary: var(--global-color-neutral-900);
-  --semantic-text-secondary: var(--global-color-neutral-500);
+  --global-color-warning-300: #fcd34d;
+  --global-color-warning-400: #fbbf24;
+  --global-color-warning-500: #f59e0b;
+  --global-color-warning-600: #b45309;
 
-  --component-shell-bg: var(--semantic-bg-page);
-  --component-panel-bg: var(--semantic-bg-surface);
-  --component-panel-border: var(--semantic-border-default);
-  --component-text-main: var(--semantic-text-primary);
-  --component-text-subtle: var(--semantic-text-secondary);
+  --global-font-family-ui: "SF Pro Text", "PingFang SC", "Noto Sans", sans-serif;
+  --global-font-size-11: 11px;
+  --global-font-size-12: 12px;
+  --global-font-size-13: 13px;
+  --global-font-size-14: 14px;
+  --global-font-size-16: 16px;
+  --global-font-size-18: 18px;
+  --global-font-size-20: 20px;
+  --global-font-size-24: 24px;
+  --global-font-size-28: 28px;
+  --global-line-height-tight: 1.25;
+  --global-line-height-normal: 1.45;
+  --global-line-height-relaxed: 1.65;
+  --global-font-weight-400: 400;
+  --global-font-weight-500: 500;
+  --global-font-weight-600: 600;
+  --global-font-weight-700: 700;
 
-  --component-space-xs: var(--global-space-2);
-  --component-space-sm: var(--global-space-3);
-  --component-space-md: var(--global-space-4);
-  --component-space-lg: var(--global-space-5);
+  --global-space-4: 4px;
+  --global-space-8: 8px;
+  --global-space-12: 12px;
+  --global-space-16: 16px;
+  --global-space-24: 24px;
+  --global-space-32: 32px;
+  --global-space-40: 40px;
 
-  --component-radius-sm: var(--global-radius-1);
-  --component-radius-md: var(--global-radius-2);
+  --global-radius-8: 8px;
+  --global-radius-12: 12px;
+  --global-radius-16: 16px;
 
-  --component-font-family: var(--global-font-family-base);
-  --component-font-size-body: var(--global-font-size-1);
-  --component-font-size-title: var(--global-font-size-2);
+  --global-shadow-1: 0 1px 2px rgb(5 7 13 / 35%);
+  --global-shadow-2: 0 6px 16px rgb(5 7 13 / 32%);
+  --global-shadow-3: 0 12px 28px rgb(5 7 13 / 36%);
+
+  --global-alpha-border-weak: 0.08;
+  --global-alpha-border-default: 0.14;
+  --global-alpha-border-strong: 0.22;
+  --global-alpha-divider-subtle: 0.1;
+  --global-alpha-divider-default: 0.16;
+
+  /* =========================
+   * Semantic Tokens (Dark default)
+   * ========================= */
+  --semantic-bg: var(--global-color-neutral-900);
+  --semantic-surface: var(--global-color-neutral-800);
+  --semantic-surface-2: var(--global-color-neutral-700);
+  --semantic-overlay: rgb(16 16 16 / 90%);
+  --semantic-text: var(--global-color-neutral-0);
+  --semantic-text-muted: var(--global-color-neutral-100);
+  --semantic-text-subtle: var(--global-color-neutral-300);
+  --semantic-border: rgb(255 255 255 / 14%);
+  --semantic-divider: rgb(255 255 255 / 10%);
+  --semantic-primary: var(--global-color-primary-400);
+  --semantic-danger: var(--global-color-danger-400);
+  --semantic-success: var(--global-color-success-400);
+  --semantic-warning: var(--global-color-warning-400);
+  --semantic-focus-ring: var(--global-color-primary-300);
+
+  /* =========================
+   * Component Tokens
+   * ========================= */
+  --component-button-height: 36px;
+  --component-button-padding-x: var(--global-space-12);
+  --component-button-padding-y: var(--global-space-8);
+  --component-button-radius: var(--global-radius-12);
+  --component-button-font-size: var(--global-font-size-13);
+  --component-button-primary-bg: var(--global-color-neutral-600);
+  --component-button-primary-fg: var(--global-color-neutral-0);
+  --component-button-primary-border: var(--global-color-neutral-600);
+  --component-button-secondary-bg: var(--semantic-surface-2);
+  --component-button-secondary-fg: var(--semantic-text);
+  --component-button-secondary-border: var(--semantic-border);
+  --component-button-ghost-bg: transparent;
+  --component-button-ghost-fg: var(--semantic-text-muted);
+  --component-button-ghost-border: transparent;
+  --component-button-danger-bg: #6d3030;
+  --component-button-danger-fg: var(--global-color-neutral-0);
+  --component-button-danger-border: #6d3030;
+  --component-button-disabled-bg: var(--global-color-neutral-700);
+  --component-button-disabled-fg: var(--semantic-text-subtle);
+  --component-button-disabled-border: var(--semantic-border);
+  --component-button-loading-opacity: 0.72;
+  --component-button-focus-ring: var(--semantic-focus-ring);
+
+  --component-input-height: 40px;
+  --component-input-radius: var(--global-radius-12);
+  --component-input-bg: var(--semantic-surface);
+  --component-input-fg: var(--semantic-text);
+  --component-input-placeholder: var(--semantic-text-subtle);
+  --component-input-border: var(--semantic-border);
+  --component-input-border-focus: var(--semantic-focus-ring);
+  --component-input-border-error: var(--semantic-danger);
+  --component-input-hint: var(--semantic-text-subtle);
+  --component-input-disabled-bg: var(--semantic-surface-2);
+  --component-input-disabled-fg: var(--semantic-text-subtle);
+
+  --component-select-trigger-bg: var(--component-input-bg);
+  --component-select-trigger-fg: var(--component-input-fg);
+  --component-select-trigger-border: var(--component-input-border);
+  --component-select-panel-bg: var(--semantic-surface-2);
+  --component-select-option-hover: var(--semantic-surface);
+  --component-select-option-active: var(--semantic-primary);
+  --component-select-option-active-fg: var(--global-color-neutral-0);
+
+  --component-badge-radius: 999px;
+  --component-badge-font-size: var(--global-font-size-11);
+  --component-badge-execution-queued-bg: rgb(251 191 36 / 15%);
+  --component-badge-execution-queued-fg: var(--semantic-warning);
+  --component-badge-execution-running-bg: rgb(126 157 206 / 20%);
+  --component-badge-execution-running-fg: var(--semantic-primary);
+  --component-badge-execution-confirming-bg: rgb(251 191 36 / 20%);
+  --component-badge-execution-confirming-fg: var(--semantic-warning);
+  --component-badge-execution-success-bg: rgb(34 197 94 / 17%);
+  --component-badge-execution-success-fg: var(--semantic-success);
+  --component-badge-execution-failed-bg: rgb(239 68 68 / 19%);
+  --component-badge-execution-failed-fg: var(--semantic-danger);
+  --component-badge-execution-cancelled-bg: rgb(100 116 139 / 25%);
+  --component-badge-execution-cancelled-fg: var(--semantic-text-muted);
+  --component-badge-network-connected-bg: rgb(34 197 94 / 17%);
+  --component-badge-network-connected-fg: var(--semantic-success);
+  --component-badge-network-disconnected-bg: rgb(239 68 68 / 19%);
+  --component-badge-network-disconnected-fg: var(--semantic-danger);
+
+  --component-card-bg: var(--semantic-surface);
+  --component-card-border: var(--semantic-border);
+  --component-card-radius: var(--global-radius-16);
+  --component-card-padding: var(--global-space-16);
+  --component-card-header-fg: var(--semantic-text);
+  --component-card-body-fg: var(--semantic-text-muted);
+  --component-card-footer-bg: var(--semantic-surface-2);
+
+  --component-sidebar-bg: var(--semantic-surface);
+  --component-sidebar-border: var(--semantic-border);
+  --component-sidebar-item-bg-hover: var(--semantic-surface-2);
+  --component-sidebar-item-bg-active: rgb(255 255 255 / 8%);
+  --component-sidebar-item-fg: var(--semantic-text-muted);
+  --component-sidebar-item-fg-active: var(--semantic-text);
+
+  --component-topbar-bg: var(--semantic-surface);
+  --component-topbar-border: var(--semantic-border);
+  --component-topbar-breadcrumb-fg: var(--semantic-text-subtle);
+  --component-topbar-breadcrumb-fg-active: var(--semantic-text);
+  --component-topbar-connection-connected: var(--semantic-success);
+  --component-topbar-connection-disconnected: var(--semantic-danger);
+
+  --component-shell-sidebar-bg: #1f1f1fff;
+  --component-shell-sidebar-bg-muted: #181818ff;
+  --component-shell-content-bg: #181818ff;
+  --component-shell-content-bg-elevated: #1f1f1fff;
+  --component-shell-divider: rgb(255 255 255 / 10%);
+  --component-shell-settings-bg: rgb(255 255 255 / 4%);
+  --component-shell-settings-border: rgb(255 255 255 / 14%);
+
+  --component-config-sidebar-width: 320px;
+  --component-config-content-gap: var(--global-space-12);
+  --component-config-content-max-width: 1320px;
+
+  --component-tree-item-bg-hover: var(--semantic-surface-2);
+  --component-tree-item-bg-active: var(--component-sidebar-item-bg-active);
+  --component-tree-item-disabled-opacity: 0.45;
+  --component-tree-indent: 16px;
+
+  --component-editor-bg: var(--semantic-bg);
+  --component-editor-border: var(--semantic-border);
+  --component-editor-radius: var(--global-radius-12);
+  --component-editor-padding: var(--global-space-12);
+  --component-editor-min-height: 140px;
+
+  --component-vendor-card-bg: var(--semantic-surface);
+  --component-vendor-card-border: var(--semantic-border);
+  --component-model-row-bg-hover: var(--semantic-surface-2);
+
+  --component-theme-segment-bg: var(--semantic-surface-2);
+  --component-theme-segment-active-bg: var(--component-sidebar-item-bg-active);
+  --component-theme-preset-card-bg: var(--semantic-surface);
+  --component-density-chip-bg: var(--semantic-surface-2);
+
+  --component-icon-action-size: 20px;
+  --component-icon-action-bg-hover: var(--semantic-surface-2);
+  --component-icon-action-fg-danger: var(--semantic-danger);
+
+  --component-modal-bg: var(--semantic-surface);
+  --component-modal-border: var(--semantic-border);
+  --component-modal-radius: var(--global-radius-16);
+  --component-modal-title-fg: var(--semantic-text);
+  --component-modal-body-fg: var(--semantic-text-muted);
+  --component-risk-confirm-bg: #3a1f1f;
+  --component-risk-confirm-border: var(--semantic-danger);
+  --component-risk-confirm-command-bg: var(--semantic-surface-2);
+
+  --component-toast-error-bg: #3a1f1f;
+  --component-toast-error-fg: var(--semantic-danger);
+  --component-toast-warning-bg: #3a3017;
+  --component-toast-warning-fg: var(--semantic-warning);
+  --component-toast-info-bg: #242628;
+  --component-toast-info-fg: var(--semantic-primary);
+  --component-alert-error-bg: var(--component-toast-error-bg);
+  --component-alert-error-fg: var(--component-toast-error-fg);
+  --component-alert-403-bg: var(--component-toast-error-bg);
+  --component-alert-403-fg: var(--component-toast-error-fg);
+  --component-alert-disconnected-bg: var(--component-toast-warning-bg);
+  --component-alert-disconnected-fg: var(--component-toast-warning-fg);
+  --component-alert-retrying-bg: var(--component-toast-info-bg);
+  --component-alert-retrying-fg: var(--component-toast-info-fg);
+
+  --component-table-bg: var(--semantic-surface);
+  --component-table-border: var(--semantic-border);
+  --component-table-header-bg: var(--semantic-surface-2);
+  --component-table-header-fg: var(--semantic-text-muted);
+  --component-table-row-fg: var(--semantic-text);
+  --component-table-row-bg-hover: var(--semantic-surface-2);
+  --component-table-row-bg-selected: rgb(255 255 255 / 8%);
+  --component-table-row-divider: var(--semantic-divider);
+
+  --component-list-item-fg: var(--semantic-text);
+  --component-list-item-fg-meta: var(--semantic-text-subtle);
+  --component-list-item-bg-hover: var(--semantic-surface-2);
+  --component-list-item-bg-active: var(--component-sidebar-item-bg-active);
+  --component-list-item-border: var(--semantic-divider);
+
+  /* =========================
+   * Legacy Aliases (v0.4.0 desktop placeholders)
+   * ========================= */
+  --global-space-1: var(--global-space-4);
+  --global-space-2: var(--global-space-8);
+  --global-space-3: var(--global-space-12);
+  --global-space-4-legacy: var(--global-space-16);
+  --global-space-5: var(--global-space-24);
+  --global-radius-1: var(--global-radius-8);
+  --global-radius-2: var(--global-radius-12);
+  --global-font-family-base: var(--global-font-family-ui);
+  --global-font-size-1: var(--global-font-size-14);
+  --global-font-size-2: var(--global-font-size-16);
+
+  --semantic-bg-page: var(--semantic-bg);
+  --semantic-bg-surface: var(--semantic-surface);
+  --semantic-border-default: var(--semantic-border);
+  --semantic-text-primary: var(--semantic-text);
+  --semantic-text-secondary: var(--semantic-text-muted);
+
+  --component-shell-bg: var(--component-shell-content-bg);
+  --component-panel-bg: var(--semantic-surface);
+  --component-panel-border: var(--semantic-border);
+  --component-text-main: var(--semantic-text);
+  --component-text-subtle: var(--semantic-text-muted);
+  --component-space-xs: var(--global-space-8);
+  --component-space-sm: var(--global-space-12);
+  --component-space-md: var(--global-space-16);
+  --component-space-lg: var(--global-space-24);
+  --component-radius-sm: var(--global-radius-8);
+  --component-radius-md: var(--global-radius-12);
+  --component-font-family: var(--global-font-family-ui);
+  --component-font-size-body: var(--global-font-size-14);
+  --component-font-size-title: var(--global-font-size-16);
+
+  --danger: var(--semantic-danger);
+  --success: var(--semantic-success);
+  --warning: var(--semantic-warning);
+}
+
+[data-theme="light"] {
+  --semantic-bg: var(--global-color-neutral-25);
+  --semantic-surface: var(--global-color-neutral-0);
+  --semantic-surface-2: var(--global-color-neutral-25);
+  --semantic-overlay: rgb(31 31 31 / 8%);
+  --semantic-text: var(--global-color-neutral-700);
+  --semantic-text-muted: var(--global-color-neutral-500);
+  --semantic-text-subtle: var(--global-color-neutral-400);
+  --semantic-border: rgb(31 31 31 / 12%);
+  --semantic-divider: rgb(31 31 31 / 8%);
+  --semantic-primary: var(--global-color-primary-600);
+  --semantic-danger: var(--global-color-danger-600);
+  --semantic-success: var(--global-color-success-600);
+  --semantic-warning: var(--global-color-warning-600);
+  --semantic-focus-ring: var(--global-color-primary-500);
+
+  --component-button-disabled-bg: var(--global-color-neutral-50);
+
+  --component-badge-execution-queued-bg: rgb(245 158 11 / 12%);
+  --component-badge-execution-running-bg: rgb(94 131 189 / 13%);
+  --component-badge-execution-confirming-bg: rgb(180 83 9 / 13%);
+  --component-badge-execution-success-bg: rgb(21 128 61 / 14%);
+  --component-badge-execution-failed-bg: rgb(185 28 28 / 14%);
+  --component-badge-execution-cancelled-bg: rgb(148 163 184 / 24%);
+  --component-badge-network-connected-bg: rgb(21 128 61 / 14%);
+  --component-badge-network-disconnected-bg: rgb(185 28 28 / 14%);
+
+  --component-sidebar-item-bg-active: rgb(31 31 31 / 6%);
+  --component-shell-sidebar-bg: #f2f2f2;
+  --component-shell-sidebar-bg-muted: #e8e8e8;
+  --component-shell-content-bg: #f7f7f7;
+  --component-shell-content-bg-elevated: #fff;
+  --component-shell-divider: rgb(31 31 31 / 10%);
+  --component-shell-settings-bg: rgb(31 31 31 / 4%);
+  --component-shell-settings-border: rgb(31 31 31 / 12%);
+  --component-risk-confirm-bg: #fee2e2;
+  --component-toast-error-bg: #fee2e2;
+  --component-toast-warning-bg: #fef3c7;
+  --component-toast-info-bg: #e9edf3;
+  --component-table-row-bg-selected: rgb(94 131 189 / 8%);
 }
