@@ -1,0 +1,153 @@
+openapi: 3.1.0
+info:
+  title: Goyais Contracts
+  version: 0.4.0
+servers:
+  - url: http://127.0.0.1:8787
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /v1/workspaces:
+    get:
+      summary: List workspaces (placeholder)
+      responses:
+        '200':
+          description: Empty list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+    post:
+      summary: Not implemented
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardError'
+  /v1/projects:
+    get:
+      summary: List projects (placeholder)
+      responses:
+        '200':
+          description: Empty list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+    post:
+      summary: Not implemented
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardError'
+  /v1/conversations:
+    get:
+      summary: List conversations (placeholder)
+      responses:
+        '200':
+          description: Empty list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+    post:
+      summary: Not implemented
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardError'
+  /v1/executions:
+    get:
+      summary: List executions (placeholder)
+      responses:
+        '200':
+          description: Empty list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+    post:
+      summary: Not implemented
+      responses:
+        '501':
+          description: Not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardError'
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [ok, version]
+      properties:
+        ok:
+          type: boolean
+        version:
+          type: string
+          const: '0.4.0'
+    ListEnvelope:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: {}
+        next_cursor:
+          type: [string, 'null']
+    StandardError:
+      type: object
+      required: [code, message, details, trace_id]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        trace_id:
+          type: string
+    ExecutionEvent:
+      type: object
+      required:
+        - event_id
+        - execution_id
+        - conversation_id
+        - trace_id
+        - sequence
+        - timestamp
+        - payload
+      properties:
+        event_id:
+          type: string
+        execution_id:
+          type: string
+        conversation_id:
+          type: string
+        trace_id:
+          type: string
+        sequence:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true

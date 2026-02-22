@@ -1,0 +1,16 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--component-font-family);
+  font-size: var(--component-font-size-body);
+  color: var(--component-text-main);
+  background: var(--component-shell-bg);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}

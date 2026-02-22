@@ -1,0 +1,48 @@
+/*
+ * 此文件由 Pencil 同步管理。
+ * Token 定义所有权归 Pencil；业务组件仅消费 token，不在组件内重定义或硬编码样式值。
+ */
+:root {
+  --global-color-neutral-0: #ffffff;
+  --global-color-neutral-50: #f6f7f8;
+  --global-color-neutral-200: #d6d9de;
+  --global-color-neutral-500: #6b7280;
+  --global-color-neutral-900: #111827;
+
+  --global-space-1: 4px;
+  --global-space-2: 8px;
+  --global-space-3: 12px;
+  --global-space-4: 16px;
+  --global-space-5: 24px;
+
+  --global-radius-1: 6px;
+  --global-radius-2: 10px;
+
+  --global-font-family-base: "Noto Sans", "PingFang SC", sans-serif;
+  --global-font-size-1: 14px;
+  --global-font-size-2: 16px;
+
+  --semantic-bg-page: var(--global-color-neutral-50);
+  --semantic-bg-surface: var(--global-color-neutral-0);
+  --semantic-border-default: var(--global-color-neutral-200);
+  --semantic-text-primary: var(--global-color-neutral-900);
+  --semantic-text-secondary: var(--global-color-neutral-500);
+
+  --component-shell-bg: var(--semantic-bg-page);
+  --component-panel-bg: var(--semantic-bg-surface);
+  --component-panel-border: var(--semantic-border-default);
+  --component-text-main: var(--semantic-text-primary);
+  --component-text-subtle: var(--semantic-text-secondary);
+
+  --component-space-xs: var(--global-space-2);
+  --component-space-sm: var(--global-space-3);
+  --component-space-md: var(--global-space-4);
+  --component-space-lg: var(--global-space-5);
+
+  --component-radius-sm: var(--global-radius-1);
+  --component-radius-md: var(--global-radius-2);
+
+  --component-font-family: var(--global-font-family-base);
+  --component-font-size-body: var(--global-font-size-1);
+  --component-font-size-title: var(--global-font-size-2);
+}

@@ -1,0 +1,14 @@
+{
+  "name": "goyais",
+  "private": true,
+  "version": "0.4.0",
+  "packageManager": "pnpm@10.11.0",
+  "scripts": {
+    "dev": "make dev",
+    "dev:hub": "make dev-hub",
+    "dev:worker": "make dev-worker",
+    "dev:desktop": "make dev-desktop",
+    "test": "make test",
+    "lint": "make lint"
+  }
+}
