@@ -7,7 +7,7 @@
         <RouterLink to="/project">Project</RouterLink>
         <RouterLink to="/conversation">Conversation</RouterLink>
         <RouterLink to="/resource">Resource</RouterLink>
-        <RouterLink to="/admin">Admin</RouterLink>
+        <RouterLink v-if="showAdminLink" to="/admin">Admin</RouterLink>
       </nav>
     </header>
     <main>
@@ -15,6 +15,14 @@
     </main>
   </div>
 </template>
+
+<script setup lang="ts">
+import { computed } from "vue";
+
+import { canAccessAdmin } from "@/shared/stores/authStore";
+
+const showAdminLink = computed(() => canAccessAdmin());
+</script>
 
 <style scoped>
 .app-shell {

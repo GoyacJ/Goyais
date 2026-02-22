@@ -15,25 +15,160 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
+
   /v1/workspaces:
     get:
-      summary: List workspaces (placeholder)
+      summary: List workspaces from control hub registry
       responses:
         '200':
-          description: Empty list
+          description: Workspace list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ListEnvelope'
+                $ref: '#/components/schemas/WorkspaceListEnvelope'
     post:
-      summary: Not implemented
+      summary: Create remote workspace metadata in control hub
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkspaceRequest'
       responses:
-        '501':
-          description: Not implemented
+        '201':
+          description: Created workspace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workspace'
+        '400':
+          description: Invalid input
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/StandardError'
+
+  /v1/workspaces/remote/connect:
+    post:
+      summary: Compatible shortcut for remote workspace connect and login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoteConnectRequest'
+      responses:
+        '200':
+          description: Workspace and login response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemoteConnectResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardError'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardError'
+        '403':
+          description: Login disabled or forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardError'
+
+  /v1/auth/login:
+    post:
+      summary: Remote login through control hub
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardError'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardError'
+        '403':
+          description: Login disabled or forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardError'
+        '404':
+          description: Workspace not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardError'
+
+  /v1/me:
+    get:
+      summary: Get current identity and capabilities for current hub session
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardError'
+
+  /v1/admin/ping:
+    get:
+      summary: Admin capability ping
+      responses:
+        '200':
+          description: Admin access granted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+        '401':
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardError'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardError'
+
   /v1/projects:
     get:
       summary: List projects (placeholder)
@@ -53,6 +188,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StandardError'
+
   /v1/conversations:
     get:
       summary: List conversations (placeholder)
@@ -72,6 +208,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StandardError'
+
   /v1/executions:
     get:
       summary: List executions (placeholder)
@@ -91,6 +228,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StandardError'
+
 components:
   schemas:
     HealthResponse:
@@ -102,6 +240,7 @@ components:
         version:
           type: string
           const: '0.4.0'
+
     ListEnvelope:
       type: object
       required: [items, next_cursor]
@@ -111,6 +250,143 @@ components:
           items: {}
         next_cursor:
           type: [string, 'null']
+
+    WorkspaceListEnvelope:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Workspace'
+        next_cursor:
+          type: [string, 'null']
+
+    Workspace:
+      type: object
+      required:
+        - id
+        - name
+        - mode
+        - hub_url
+        - is_default_local
+        - created_at
+        - login_disabled
+        - auth_mode
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        mode:
+          type: string
+          enum: [local, remote]
+        hub_url:
+          type: [string, 'null']
+        is_default_local:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        login_disabled:
+          type: boolean
+        auth_mode:
+          type: string
+          enum: [disabled, password_or_token, token_only]
+
+    CreateWorkspaceRequest:
+      type: object
+      required: [name, hub_url]
+      properties:
+        name:
+          type: string
+        hub_url:
+          type: string
+        login_disabled:
+          type: boolean
+          default: false
+        auth_mode:
+          type: string
+          enum: [password_or_token, token_only]
+          default: password_or_token
+
+    LoginRequest:
+      type: object
+      required: [workspace_id]
+      properties:
+        workspace_id:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+        token:
+          type: string
+
+    LoginResponse:
+      type: object
+      required: [access_token, token_type]
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          const: bearer
+        expires_in:
+          type: integer
+
+    RemoteConnectRequest:
+      type: object
+      properties:
+        workspace_id:
+          type: string
+        name:
+          type: string
+        hub_url:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+        token:
+          type: string
+
+    RemoteConnectResponse:
+      type: object
+      required: [workspace, login]
+      properties:
+        workspace:
+          $ref: '#/components/schemas/Workspace'
+        login:
+          $ref: '#/components/schemas/LoginResponse'
+
+    Capabilities:
+      type: object
+      required: [admin_console, resource_write, execution_control]
+      properties:
+        admin_console:
+          type: boolean
+        resource_write:
+          type: boolean
+        execution_control:
+          type: boolean
+
+    Me:
+      type: object
+      required: [user_id, display_name, workspace_id, role, capabilities]
+      properties:
+        user_id:
+          type: string
+        display_name:
+          type: string
+        workspace_id:
+          type: string
+        role:
+          type: string
+          enum: [viewer, developer, approver, admin]
+        capabilities:
+          $ref: '#/components/schemas/Capabilities'
+
     StandardError:
       type: object
       required: [code, message, details, trace_id]
@@ -124,6 +400,7 @@ components:
           additionalProperties: true
         trace_id:
           type: string
+
     ExecutionEvent:
       type: object
       required:

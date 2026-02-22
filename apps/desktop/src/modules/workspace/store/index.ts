@@ -1,1 +1,8 @@
-export const workspaceStorePlaceholder = "workspace-store-placeholder";
+export {
+  getCurrentWorkspace,
+  resetWorkspaceStore,
+  setCurrentWorkspace,
+  setWorkspaces,
+  upsertWorkspace,
+  workspaceStore
+} from "@/shared/stores/workspaceStore";

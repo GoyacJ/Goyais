@@ -255,6 +255,42 @@ PY
   return 1
 }
 
+check_workspace_list_envelope() {
+  local check_name="$1"
+  local url="$2"
+  local output_file="$3"
+
+  if ! curl -fsS "$url" >"$output_file"; then
+    record_check "$check_name" "fail" "request failed; url=${url}"
+    return 1
+  fi
+
+  if python3 - "$output_file" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+items = data.get("items")
+if not isinstance(items, list):
+    raise SystemExit(1)
+if data.get("next_cursor", "missing") is not None:
+    raise SystemExit(1)
+
+found_local = any(item.get("id") == "ws_local" and item.get("mode") == "local" for item in items if isinstance(item, dict))
+if not found_local:
+    raise SystemExit(1)
+PY
+  then
+    record_check "$check_name" "pass" "contains ws_local/local and next_cursor=null"
+    return 0
+  fi
+
+  record_check "$check_name" "fail" "unexpected body in ${output_file}"
+  return 1
+}
+
 check_error_trace_consistency() {
   local check_name="$1"
   local method="$2"
@@ -318,8 +354,9 @@ echo "[smoke] starting hub"
 PIDS+=("$!")
 wait_for_http "hub.readiness" "http://127.0.0.1:${HUB_PORT}/health"
 check_health_json "hub.health" "http://127.0.0.1:${HUB_PORT}/health" "$LOG_DIR/hub_health.json"
+check_workspace_list_envelope "hub.list.workspaces" "http://127.0.0.1:${HUB_PORT}/v1/workspaces" "$LOG_DIR/_v1_workspaces_list.json"
 
-for path in /v1/workspaces /v1/projects /v1/conversations /v1/executions; do
+for path in /v1/projects /v1/conversations /v1/executions; do
   check_name="hub.list.${path#/v1/}"
   output_file="$LOG_DIR/${path//\//_}_list.json"
   check_list_envelope "$check_name" "http://127.0.0.1:${HUB_PORT}${path}" "$output_file"
@@ -328,7 +365,7 @@ done
 check_error_trace_consistency \
   "hub.trace.error_consistency" \
   "POST" \
-  "http://127.0.0.1:${HUB_PORT}/v1/workspaces" \
+  "http://127.0.0.1:${HUB_PORT}/v1/projects" \
   "tr_smoke_hub" \
   "$LOG_DIR/hub_error_headers.txt" \
   "$LOG_DIR/hub_error_body.json"
