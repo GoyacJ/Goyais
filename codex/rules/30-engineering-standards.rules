@@ -1,0 +1,41 @@
+---
+description: 应用 v0.4.0 工程阈值与前端结构/token 约束。
+globs:
+  - "**/*.go"
+  - "**/*.py"
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.vue"
+  - "**/*.rs"
+---
+
+# 工程规范规则
+
+默认执行 v0.4.0 开发规范。
+
+硬阈值：
+
+- 文件行数：
+  - Go <= 400
+  - Python <= 350
+  - TypeScript/TSX/Vue <= 300
+  - Rust <= 350
+- 复杂度：
+  - cyclomatic <= 10
+  - cognitive <= 15
+- 覆盖率：
+  - 核心模块 >= 80%
+  - 总体 >= 70%
+
+核心模块：权限、资源共享、密钥治理、执行调度。
+
+结构约束：
+
+- 保持清晰模块边界，禁止循环依赖。
+- 前端必须 feature-first（模块内 views/components/store/services/schemas/tests）。
+- 不允许将 `src/views/*` 作为全局平铺主组织方式。
+
+Token/样式约束：
+
+- 必须保持 token 三层：global -> semantic -> component。
+- 组件实现中不得硬编码颜色/字体/间距/圆角值。
