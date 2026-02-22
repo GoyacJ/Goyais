@@ -8,6 +8,9 @@ import {
   getModelConfigsClient,
   type UpdateModelConfigInput
 } from "@/api/dataSource";
+import { localConfigWrite } from "@/api/localConfigClient";
+import { getProviderSecret, setProviderSecret } from "@/api/secretStoreClient";
+import { LOCAL_HUB_STORAGE_KEY } from "@/api/sessionDataSource";
 import { McpPanel } from "@/components/settings/McpPanel";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SkillsPanel } from "@/components/settings/SkillsPanel";
@@ -36,15 +39,16 @@ import {
   useWorkspaceStore
 } from "@/stores/workspaceStore";
 import {
+  type ModelCatalogItem,
   PROVIDER_METADATA,
   PROVIDER_ORDER,
-  type ModelCatalogItem,
   type ProviderKey,
   providerLabel
 } from "@/types/modelCatalog";
 
 type SettingsSection = "general" | "runtime" | "models" | "skills" | "mcp";
 type RowSaveState = "idle" | "saving" | "error";
+const LOCAL_PROCESS_SECRET_PROVIDER = "local-process-env";
 
 export const SETTINGS_MODEL_VISIBLE_FIELDS = [
   "provider",
@@ -93,6 +97,34 @@ function parseOptionalInt(value: string): number | null {
     return null;
   }
   return parsed;
+}
+
+function parseEnvLines(value: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const rawLine of value.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+    const idx = line.indexOf("=");
+    if (idx <= 0) {
+      continue;
+    }
+    const key = line.slice(0, idx).trim();
+    const envValue = line.slice(idx + 1).trim();
+    if (!key) {
+      continue;
+    }
+    out[key] = envValue;
+  }
+  return out;
+}
+
+function stringifyEnvLines(env: Record<string, string>): string {
+  return Object.entries(env)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("\n");
 }
 
 function normalizeHttpUrl(input: string): string {
@@ -367,9 +399,11 @@ export function SettingsPage() {
   const locale = useSettingsStore((state) => state.locale);
   const theme = useSettingsStore((state) => state.theme);
   const defaultModelConfigId = useSettingsStore((state) => state.defaultModelConfigId);
+  const localProcessConfig = useSettingsStore((state) => state.localProcessConfig);
   const setLocale = useSettingsStore((state) => state.setLocale);
   const setTheme = useSettingsStore((state) => state.setTheme);
   const setDefaultModelConfigId = useSettingsStore((state) => state.setDefaultModelConfigId);
+  const setLocalProcessConfig = useSettingsStore((state) => state.setLocalProcessConfig);
 
   const workspaceKind = useWorkspaceStore(selectCurrentWorkspaceKind);
   const currentProfile = useWorkspaceStore(selectCurrentProfile);
@@ -391,6 +425,12 @@ export function SettingsPage() {
   const [editState, setEditState] = useState<RowSaveState>("idle");
   const [editHint, setEditHint] = useState<string | undefined>(undefined);
   const [checkingModelConfigId, setCheckingModelConfigId] = useState<string | null>(null);
+  const [runtimeSaveState, setRuntimeSaveState] = useState<RowSaveState>("idle");
+  const [runtimeSaveHint, setRuntimeSaveHint] = useState<string | undefined>(undefined);
+  const [runtimeSharedSecret, setRuntimeSharedSecret] = useState("");
+  const [hubInternalSecret, setHubInternalSecret] = useState("");
+  const [syncToken, setSyncToken] = useState("");
+  const [runtimeSecretToken, setRuntimeSecretToken] = useState("");
 
   useEffect(() => {
     const valid = ["general", "runtime", "models", "skills", "mcp"];
@@ -425,6 +465,120 @@ export function SettingsPage() {
   useEffect(() => {
     void refreshModelConfigs();
   }, [refreshModelConfigs]);
+
+  useEffect(() => {
+    if (activeSection !== "runtime" || workspaceKind !== "local") {
+      return;
+    }
+
+    void (async () => {
+      const [runtimeShared, hubInternal, sync, runtimeToken] = await Promise.all([
+        getProviderSecret(LOCAL_PROCESS_SECRET_PROVIDER, "GOYAIS_RUNTIME_SHARED_SECRET"),
+        getProviderSecret(LOCAL_PROCESS_SECRET_PROVIDER, "GOYAIS_HUB_INTERNAL_SECRET"),
+        getProviderSecret(LOCAL_PROCESS_SECRET_PROVIDER, "GOYAIS_SYNC_TOKEN"),
+        getProviderSecret(LOCAL_PROCESS_SECRET_PROVIDER, "GOYAIS_RUNTIME_SECRET_TOKEN")
+      ]);
+      setRuntimeSharedSecret(runtimeShared ?? "");
+      setHubInternalSecret(hubInternal ?? "");
+      setSyncToken(sync ?? "");
+      setRuntimeSecretToken(runtimeToken ?? "");
+    })();
+  }, [activeSection, workspaceKind]);
+
+  const updateHubRuntimeConfig = useCallback(
+    (target: "hub" | "runtime", updates: Record<string, unknown>) => {
+      setLocalProcessConfig((current) => ({
+        ...current,
+        [target]: {
+          ...current[target],
+          ...updates
+        },
+        pendingApply: {
+          ...current.pendingApply,
+          [target]: true
+        }
+      }));
+      setRuntimeSaveState("idle");
+      setRuntimeSaveHint(undefined);
+    },
+    [setLocalProcessConfig]
+  );
+
+  const updateAdvancedEnv = useCallback(
+    (target: "hub" | "runtime", value: string) => {
+      setLocalProcessConfig((current) => ({
+        ...current,
+        [target]: {
+          ...current[target],
+          advancedEnv: parseEnvLines(value)
+        },
+        pendingApply: {
+          ...current.pendingApply,
+          [target]: true
+        }
+      }));
+      setRuntimeSaveState("idle");
+      setRuntimeSaveHint(undefined);
+    },
+    [setLocalProcessConfig]
+  );
+
+  const updateConnectionConfig = useCallback(
+    (updates: Record<string, string>) => {
+      setLocalProcessConfig((current) => ({
+        ...current,
+        connections: {
+          ...current.connections,
+          ...updates
+        }
+      }));
+
+      if (updates.localHubUrl) {
+        localStorage.setItem(LOCAL_HUB_STORAGE_KEY, updates.localHubUrl.trim());
+      }
+      setRuntimeSaveState("idle");
+      setRuntimeSaveHint(undefined);
+    },
+    [setLocalProcessConfig]
+  );
+
+  const saveRuntimeConfig = useCallback(async () => {
+    setRuntimeSaveState("saving");
+    setRuntimeSaveHint(t("settings.saveState.saving"));
+    try {
+      await Promise.all([
+        setProviderSecret(LOCAL_PROCESS_SECRET_PROVIDER, "GOYAIS_RUNTIME_SHARED_SECRET", runtimeSharedSecret.trim()),
+        setProviderSecret(LOCAL_PROCESS_SECRET_PROVIDER, "GOYAIS_HUB_INTERNAL_SECRET", hubInternalSecret.trim()),
+        setProviderSecret(LOCAL_PROCESS_SECRET_PROVIDER, "GOYAIS_SYNC_TOKEN", syncToken.trim()),
+        setProviderSecret(LOCAL_PROCESS_SECRET_PROVIDER, "GOYAIS_RUNTIME_SECRET_TOKEN", runtimeSecretToken.trim())
+      ]);
+      await localConfigWrite(localProcessConfig);
+      setRuntimeSaveState("idle");
+      setRuntimeSaveHint(t("settings.runtime.saved"));
+      addToast({
+        title: t("settings.runtime.saved"),
+        variant: "success"
+      });
+    } catch (error) {
+      const message = (error as Error).message;
+      setRuntimeSaveState("error");
+      setRuntimeSaveHint(message);
+      addToast({
+        title: t("settings.runtime.saveFailed"),
+        description: message,
+        diagnostic: message,
+        variant: "error"
+      });
+    }
+  }, [
+    addToast,
+    hubInternalSecret,
+    localProcessConfig,
+    runtimeSecretToken,
+    runtimeSharedSecret,
+    syncToken,
+    t
+  ]);
 
   const resetAddDraft = useCallback((provider: ProviderKey = "openai") => {
     setAddDraft(defaultModelDraft(provider));
@@ -702,8 +856,8 @@ export function SettingsPage() {
             <CardTitle>{t("settings.sections.runtime")}</CardTitle>
             <CardDescription>{t("settings.sections.runtimeDescription")}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="divide-y divide-border-subtle rounded-panel border border-border-subtle bg-background/40">
+          <CardContent className="space-y-3">
+            <div className="rounded-panel border border-border-subtle bg-background/40">
               <SettingRow
                 title={t("settings.workspaceScope")}
                 description={t("settings.workspaceScopeDescription")}
@@ -714,20 +868,191 @@ export function SettingsPage() {
                 }
               />
               <SettingRow
-                title={t("settings.workspacePermission")}
-                description={t("settings.workspacePermissionDescription")}
+                title={t("settings.runtime.localHubUrl")}
+                description={t("settings.runtime.localHubUrlDescription")}
                 control={
-                  <p
-                    className={cn(
-                      "text-small font-medium",
-                      writable ? "text-success" : "text-muted-foreground"
-                    )}
-                  >
-                    {writable ? t("settings.permissionWritable") : t("settings.permissionReadonly")}
-                  </p>
+                  <Input
+                    className="h-9"
+                    value={localProcessConfig.connections.localHubUrl}
+                    onChange={(event) =>
+                      updateConnectionConfig({
+                        localHubUrl: event.target.value
+                      })
+                    }
+                  />
+                }
+              />
+              <SettingRow
+                title={t("settings.runtime.defaultRemoteServer")}
+                description={t("settings.runtime.defaultRemoteServerDescription")}
+                control={
+                  <Input
+                    className="h-9"
+                    value={localProcessConfig.connections.defaultRemoteServerUrl}
+                    onChange={(event) =>
+                      updateConnectionConfig({
+                        defaultRemoteServerUrl: event.target.value
+                      })
+                    }
+                  />
                 }
               />
             </div>
+
+            {workspaceKind === "local" ? (
+              <>
+                <div className="grid gap-3 rounded-panel border border-border-subtle bg-background/40 p-3 md:grid-cols-2">
+                  <label className="grid gap-1 text-small text-muted-foreground">
+                    {t("settings.runtime.hubPort")}
+                    <Input
+                      className="h-9"
+                      value={localProcessConfig.hub.port}
+                      onChange={(event) => updateHubRuntimeConfig("hub", { port: event.target.value })}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-small text-muted-foreground">
+                    {t("settings.runtime.hubAuthMode")}
+                    <select
+                      className="h-9 rounded-control border border-border bg-background px-2 text-small text-foreground"
+                      value={localProcessConfig.hub.authMode}
+                      onChange={(event) => updateHubRuntimeConfig("hub", { authMode: event.target.value })}
+                    >
+                      <option value="local_open">local_open</option>
+                      <option value="remote_auth">remote_auth</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-small text-muted-foreground">
+                    {t("settings.runtime.hubDbPath")}
+                    <Input
+                      className="h-9"
+                      value={localProcessConfig.hub.dbPath}
+                      onChange={(event) => updateHubRuntimeConfig("hub", { dbPath: event.target.value })}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-small text-muted-foreground">
+                    {t("settings.runtime.workerBaseUrl")}
+                    <Input
+                      className="h-9"
+                      value={localProcessConfig.hub.workerBaseUrl}
+                      onChange={(event) => updateHubRuntimeConfig("hub", { workerBaseUrl: event.target.value })}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-small text-muted-foreground">
+                    {t("settings.runtime.runtimeHost")}
+                    <Input
+                      className="h-9"
+                      value={localProcessConfig.runtime.host}
+                      onChange={(event) => updateHubRuntimeConfig("runtime", { host: event.target.value })}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-small text-muted-foreground">
+                    {t("settings.runtime.runtimePort")}
+                    <Input
+                      className="h-9"
+                      value={localProcessConfig.runtime.port}
+                      onChange={(event) => updateHubRuntimeConfig("runtime", { port: event.target.value })}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-small text-muted-foreground">
+                    {t("settings.runtime.runtimeWorkspaceRoot")}
+                    <Input
+                      className="h-9"
+                      value={localProcessConfig.runtime.workspaceRoot}
+                      onChange={(event) => updateHubRuntimeConfig("runtime", { workspaceRoot: event.target.value })}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-small text-muted-foreground">
+                    {t("settings.runtime.runtimeRequireHubAuth")}
+                    <select
+                      className="h-9 rounded-control border border-border bg-background px-2 text-small text-foreground"
+                      value={localProcessConfig.runtime.requireHubAuth ? "true" : "false"}
+                      onChange={(event) =>
+                        updateHubRuntimeConfig("runtime", { requireHubAuth: event.target.value === "true" })
+                      }
+                    >
+                      <option value="true">true</option>
+                      <option value="false">false</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-small text-muted-foreground">
+                    {t("settings.runtime.runtimeSharedSecret")}
+                    <Input
+                      type="password"
+                      className="h-9"
+                      value={runtimeSharedSecret}
+                      onChange={(event) => setRuntimeSharedSecret(event.target.value)}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-small text-muted-foreground">
+                    {t("settings.runtime.hubInternalSecret")}
+                    <Input
+                      type="password"
+                      className="h-9"
+                      value={hubInternalSecret}
+                      onChange={(event) => setHubInternalSecret(event.target.value)}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-small text-muted-foreground">
+                    {t("settings.runtime.syncToken")}
+                    <Input
+                      type="password"
+                      className="h-9"
+                      value={syncToken}
+                      onChange={(event) => setSyncToken(event.target.value)}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-small text-muted-foreground">
+                    {t("settings.runtime.runtimeSecretToken")}
+                    <Input
+                      type="password"
+                      className="h-9"
+                      value={runtimeSecretToken}
+                      onChange={(event) => setRuntimeSecretToken(event.target.value)}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-small text-muted-foreground md:col-span-2">
+                    {t("settings.runtime.hubAdvancedEnv")}
+                    <textarea
+                      className="min-h-20 rounded-control border border-border bg-background px-2 py-2 text-small text-foreground"
+                      value={stringifyEnvLines(localProcessConfig.hub.advancedEnv)}
+                      onChange={(event) => updateAdvancedEnv("hub", event.target.value)}
+                      placeholder="KEY=value"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-small text-muted-foreground md:col-span-2">
+                    {t("settings.runtime.runtimeAdvancedEnv")}
+                    <textarea
+                      className="min-h-20 rounded-control border border-border bg-background px-2 py-2 text-small text-foreground"
+                      value={stringifyEnvLines(localProcessConfig.runtime.advancedEnv)}
+                      onChange={(event) => updateAdvancedEnv("runtime", event.target.value)}
+                      placeholder="KEY=value"
+                    />
+                  </label>
+                </div>
+
+                <div className="flex items-center justify-between rounded-panel border border-border-subtle bg-background/40 p-3">
+                  <p className="text-small text-muted-foreground">
+                    {runtimeSaveHint
+                      ?? (localProcessConfig.pendingApply.hub || localProcessConfig.pendingApply.runtime
+                        ? t("settings.runtime.pendingApply")
+                        : t("settings.runtime.liveApplyHint"))}
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={runtimeSaveState === "saving"}
+                    onClick={() => void saveRuntimeConfig()}
+                  >
+                    {runtimeSaveState === "saving" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {t("settings.runtime.save")}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="rounded-panel border border-border-subtle bg-background/40 p-3 text-small text-muted-foreground">
+                {t("settings.runtime.remoteReadonlyHint")}
+              </p>
+            )}
           </CardContent>
         </Card>
       ) : null}

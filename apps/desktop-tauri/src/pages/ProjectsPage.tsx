@@ -27,16 +27,17 @@ export function ProjectsPage() {
   const permissions = useWorkspaceStore(selectCurrentPermissions);
   const projectsClient = useMemo(() => getProjectsClient(currentProfile), [currentProfile]);
   const writable = canWriteProjects(workspaceKind, permissions);
+  const defaultLocalLocation = currentProfile?.kind === "local" ? (currentProfile.local?.rootPath || ".") : ".";
 
   const [name, setName] = useState("Demo Project");
-  const [location, setLocation] = useState("/Users/goya/Repo/Git/Goyais");
+  const [location, setLocation] = useState(defaultLocalLocation);
   const [projects, setProjects] = useState<DataProject[]>([]);
   const [loading, setLoading] = useState(false);
   const { addToast } = useToast();
 
   useEffect(() => {
-    setLocation(workspaceKind === "remote" ? "repo://demo/main" : "/Users/goya/Repo/Git/Goyais");
-  }, [workspaceKind]);
+    setLocation(workspaceKind === "remote" ? "repo://demo/main" : defaultLocalLocation);
+  }, [defaultLocalLocation, workspaceKind]);
 
   const refresh = useCallback(async () => {
     setLoading(true);

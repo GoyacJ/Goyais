@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useSettingsStore } from "@/stores/settingsStore";
 
 interface RemoteLoginDialogProps {
   open: boolean;
@@ -21,7 +22,8 @@ export function RemoteLoginDialog({
   onSubmit
 }: RemoteLoginDialogProps) {
   const { t } = useTranslation();
-  const [serverUrl, setServerUrl] = useState("http://127.0.0.1:8787");
+  const defaultServerUrl = useSettingsStore((state) => state.localProcessConfig.connections.defaultRemoteServerUrl);
+  const [serverUrl, setServerUrl] = useState(defaultServerUrl);
   const [email, setEmail] = useState("admin@example.com");
   const [password, setPassword] = useState("");
 
@@ -29,7 +31,10 @@ export function RemoteLoginDialog({
     if (!open) {
       setPassword("");
     }
-  }, [open]);
+    if (open && defaultServerUrl.trim()) {
+      setServerUrl(defaultServerUrl);
+    }
+  }, [defaultServerUrl, open]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api-error";
+import { useSettingsStore } from "@/stores/settingsStore";
 import {
   selectCurrentProfile,
   useWorkspaceStore,
@@ -47,6 +48,7 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
   const setRemoteNavigation = useWorkspaceStore((state) => state.setRemoteNavigation);
   const setRemoteNavigationLoading = useWorkspaceStore((state) => state.setRemoteNavigationLoading);
   const setRemoteUser = useWorkspaceStore((state) => state.setRemoteUser);
+  const setLocalProcessConfig = useSettingsStore((state) => state.setLocalProcessConfig);
 
   const [loginOpen, setLoginOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
@@ -116,6 +118,14 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
     setErrorMessage(undefined);
 
     try {
+      setLocalProcessConfig((current) => ({
+        ...current,
+        connections: {
+          ...current.connections,
+          defaultRemoteServerUrl: payload.serverUrl.trim() || current.connections.defaultRemoteServerUrl
+        }
+      }));
+
       const status = await getBootstrapStatus(payload.serverUrl);
       if (status.setup_mode) {
         setPendingSetupServerUrl(payload.serverUrl);

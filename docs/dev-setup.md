@@ -9,6 +9,12 @@
 - `pnpm dev:desktop`
 - `pnpm test`
 
+## Configuration references
+
+- Hub example env: `/Users/goya/Repo/Git/Goyais/server/hub-server-go/.env.example`
+- Runtime example env: `/Users/goya/Repo/Git/Goyais/runtime/python-agent/.env.example`
+- Unified config guide: `/Users/goya/Repo/Git/Goyais/docs/configuration.md`
+
 ## v0.2.0 auth modes
 
 Hub supports exactly two modes:
@@ -26,6 +32,7 @@ Hub supports exactly two modes:
 
 ```bash
 GOYAIS_AUTH_MODE=local_open \
+GOYAIS_HUB_PORT=8787 \
 GOYAIS_RUNTIME_SHARED_SECRET=dev-shared \
 pnpm dev:hub
 ```
@@ -36,6 +43,8 @@ pnpm dev:hub
 GOYAIS_RUNTIME_REQUIRE_HUB_AUTH=true \
 GOYAIS_RUNTIME_SHARED_SECRET=dev-shared \
 GOYAIS_HUB_BASE_URL=http://127.0.0.1:8787 \
+GOYAIS_RUNTIME_HOST=127.0.0.1 \
+GOYAIS_RUNTIME_PORT=8040 \
 pnpm dev:runtime
 ```
 

@@ -1,8 +1,13 @@
 import * as hubClient from "@/api/hubClient";
-import { invoke } from "@tauri-apps/api/core";
-import { deleteToken, loadToken } from "@/api/secretStoreClient";
+import { localConfigRead, serviceStart, serviceStatus } from "@/api/localConfigClient";
+import { deleteToken, getProviderSecret, loadToken } from "@/api/secretStoreClient";
 import { ApiError } from "@/lib/api-error";
+import { useSettingsStore } from "@/stores/settingsStore";
 import type { WorkspaceProfile } from "@/stores/workspaceStore";
+import {
+  createDefaultLocalProcessConfig,
+  type LocalProcessConfigV1
+} from "@/types/localProcessConfig";
 
 export interface SessionSummary {
   session_id: string;
@@ -46,16 +51,26 @@ export interface SessionDataSource {
 }
 
 export const LOCAL_HUB_STORAGE_KEY = "goyais.localHubUrl";
-export const DEFAULT_LOCAL_HUB_URL = import.meta.env.VITE_LOCAL_HUB_URL ?? "http://127.0.0.1:8787";
+const DEFAULT_LOCAL_CONFIG = createDefaultLocalProcessConfig();
+export const DEFAULT_LOCAL_HUB_URL = DEFAULT_LOCAL_CONFIG.connections.localHubUrl;
 export const LOCAL_TOKEN_PROFILE_ID = "local-default";
 export const LOCAL_WORKSPACE_STORAGE_KEY = "goyais.localWorkspaceId";
 const LEGACY_LOCAL_AUTO_PASSWORD_STORAGE_KEY = "goyais.localAutoPassword";
 const WORKSPACE_STORE_KEY = "goyais.workspace.registry.v1";
 const LOCAL_HUB_START_WAIT_MS = 6_000;
 const LOCAL_HUB_START_POLL_MS = 250;
+const LOCAL_PROCESS_SECRET_PROVIDER = "local-process-env";
 
 let localHubStartInFlight: Promise<boolean> | null = null;
 let localLegacyCleanupDone = false;
+
+async function loadActiveLocalConfig(): Promise<LocalProcessConfigV1> {
+  const fromStore = useSettingsStore.getState().localProcessConfig;
+  if (fromStore?.version === 1) {
+    return fromStore;
+  }
+  return localConfigRead();
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -86,8 +101,9 @@ function dedupeUrls(urls: string[]): string[] {
   return out;
 }
 
-function buildLocalHubCandidates(preferredUrl: string): string[] {
-  return dedupeUrls([preferredUrl, withHubUrlScheme(DEFAULT_LOCAL_HUB_URL)]);
+function buildLocalHubCandidates(preferredUrl: string, config?: LocalProcessConfigV1): string[] {
+  const fromConfig = config?.connections.localHubUrl ?? DEFAULT_LOCAL_HUB_URL;
+  return dedupeUrls([preferredUrl, withHubUrlScheme(fromConfig)]);
 }
 
 function persistLocalHubBaseUrl(serverUrl: string) {
@@ -141,23 +157,75 @@ function buildLocalHubStartCommand(): string {
 
   return [
     "if command -v goyais-hub >/dev/null 2>&1; then",
-    "  PORT=8787 GOYAIS_AUTH_MODE=local_open goyais-hub",
+    "  goyais-hub",
     "elif [ -f ./server/hub-server-go/cmd/hub/main.go ] && command -v go >/dev/null 2>&1; then",
-    "  cd ./server/hub-server-go && PORT=8787 GOYAIS_AUTH_MODE=local_open GOYAIS_DB_PATH=./data/hub.db go run cmd/hub/main.go",
+    "  cd ./server/hub-server-go && go run cmd/hub/main.go",
     "elif [ -f ./package.json ] && command -v pnpm >/dev/null 2>&1; then",
-    "  PORT=8787 GOYAIS_AUTH_MODE=local_open pnpm dev:hub",
+    "  pnpm dev:hub",
     "else",
     "  exit 127",
     "fi"
   ].join("\n");
 }
 
-function resolveLocalHubStartCwd(): string {
+function resolveLocalHubStartCwd(config?: LocalProcessConfigV1): string {
   const configured = import.meta.env.VITE_LOCAL_HUB_START_CWD as string | undefined;
   if (configured && configured.trim()) {
     return configured.trim();
   }
+  const fromConfig = config?.runtime.workspaceRoot?.trim();
+  if (fromConfig) {
+    return fromConfig;
+  }
   return inferWorkspaceRootFromStore() ?? ".";
+}
+
+async function loadLocalProcessSecrets(): Promise<Record<string, string>> {
+  const envKeys = [
+    "GOYAIS_RUNTIME_SHARED_SECRET",
+    "GOYAIS_HUB_INTERNAL_SECRET",
+    "GOYAIS_SYNC_TOKEN",
+    "GOYAIS_RUNTIME_SECRET_TOKEN"
+  ];
+  const entries = await Promise.all(
+    envKeys.map(async (key) => {
+      const value = await getProviderSecret(LOCAL_PROCESS_SECRET_PROVIDER, key);
+      return [key, value?.trim() ?? ""] as const;
+    })
+  );
+
+  const out: Record<string, string> = {};
+  for (const [key, value] of entries) {
+    if (value) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+async function buildLocalHubStartEnv(config: LocalProcessConfigV1): Promise<Record<string, string>> {
+  const secretEnv = await loadLocalProcessSecrets();
+  const hubEnv: Record<string, string> = {
+    PORT: config.hub.port.trim() || "8787",
+    GOYAIS_HUB_PORT: config.hub.port.trim() || "8787",
+    GOYAIS_AUTH_MODE: config.hub.authMode || "local_open",
+    GOYAIS_DB_DRIVER: config.hub.dbDriver || "sqlite",
+    GOYAIS_DB_PATH: config.hub.dbPath || "./data/hub.db",
+    GOYAIS_WORKER_BASE_URL: config.hub.workerBaseUrl || "http://127.0.0.1:8040",
+    GOYAIS_MAX_CONCURRENT_EXECUTIONS: config.hub.maxConcurrentExecutions || "5",
+    LOG_LEVEL: config.hub.logLevel || "info",
+    GOYAIS_HUB_LOG_LEVEL: config.hub.logLevel || "info"
+  };
+
+  if (config.hub.databaseUrl.trim()) {
+    hubEnv.GOYAIS_DATABASE_URL = config.hub.databaseUrl.trim();
+  }
+
+  return {
+    ...hubEnv,
+    ...config.hub.advancedEnv,
+    ...secretEnv
+  };
 }
 
 async function delay(ms: number): Promise<void> {
@@ -203,11 +271,14 @@ async function ensureLocalHubProcessRunning(candidates: string[]): Promise<boole
   if (!localHubStartInFlight) {
     localHubStartInFlight = (async () => {
       try {
-        const existingPid = await invoke<number | null>("runtime_status");
+        const config = await loadActiveLocalConfig();
+        const existingPid = await serviceStatus("hub");
         if (!existingPid) {
-          await invoke<number>("runtime_start", {
+          await serviceStart({
+            service: "hub",
             command: buildLocalHubStartCommand(),
-            cwd: resolveLocalHubStartCwd()
+            cwd: resolveLocalHubStartCwd(config),
+            env: await buildLocalHubStartEnv(config)
           });
         }
         return waitForLocalHub(candidates);
@@ -225,6 +296,10 @@ async function ensureLocalHubProcessRunning(candidates: string[]): Promise<boole
 }
 
 export function localHubBaseUrl(): string {
+  const configured = useSettingsStore.getState().localProcessConfig?.connections.localHubUrl;
+  if (configured?.trim()) {
+    return withHubUrlScheme(configured);
+  }
   const saved = localStorage.getItem(LOCAL_HUB_STORAGE_KEY);
   if (saved && saved.trim()) {
     return withHubUrlScheme(saved);
@@ -282,8 +357,9 @@ async function resolveLocalWorkspaceId(serverUrl: string): Promise<string> {
 async function resolveLocalHubContextInternal(allowAutoStart: boolean): Promise<HubContext> {
   cleanupLegacyLocalAuthArtifacts();
 
+  const localConfig = await loadActiveLocalConfig();
   const preferredServerUrl = localHubBaseUrl();
-  const candidates = buildLocalHubCandidates(preferredServerUrl);
+  const candidates = buildLocalHubCandidates(preferredServerUrl, localConfig);
 
   for (const serverUrl of candidates) {
     try {

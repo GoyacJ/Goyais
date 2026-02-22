@@ -1,6 +1,7 @@
 mod commands {
     pub mod app_state;
     pub mod git;
+    pub mod local_config;
     pub mod runtime_process;
     pub mod secret_store;
 }
@@ -17,6 +18,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
+            commands::local_config::local_config_read,
+            commands::local_config::local_config_write,
+            commands::runtime_process::service_start,
+            commands::runtime_process::service_status,
+            commands::runtime_process::service_stop,
             commands::runtime_process::runtime_start,
             commands::runtime_process::runtime_status,
             commands::secret_store::secret_get,

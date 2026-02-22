@@ -44,7 +44,7 @@ function makeLocalProfile(): WorkspaceProfile {
     kind: "local",
     name: "Local Workspace",
     local: {
-      rootPath: "/Users/goya/Repo/Git/Goyais"
+      rootPath: "."
     },
     lastUsedAt: new Date().toISOString()
   };

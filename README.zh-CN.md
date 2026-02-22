@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="./logo.png" alt="Goyais logo" width="160" />
+  <img src="./goyais_logo.png" alt="Goyais logo" width="160" />
 </p>
 
 <h1 align="center">Goyais</h1>

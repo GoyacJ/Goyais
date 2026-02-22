@@ -36,7 +36,7 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		Port:                    getEnv("PORT", "8080"),
+		Port:                    getEnvWithAliases([]string{"GOYAIS_HUB_PORT", "PORT"}, "8080"),
 		DBDriver:                getEnv("GOYAIS_DB_DRIVER", "sqlite"),
 		DBPath:                  getEnv("GOYAIS_DB_PATH", "./data/hub.db"),
 		DBUrl:                   getEnv("GOYAIS_DATABASE_URL", ""),
@@ -48,13 +48,22 @@ func Load() *Config {
 		RuntimeSharedSecret:     getEnv("GOYAIS_RUNTIME_SHARED_SECRET", getEnv("GOYAIS_HUB_RUNTIME_SHARED_SECRET", "")),
 		WorkerBaseURL:           getEnv("GOYAIS_WORKER_BASE_URL", "http://127.0.0.1:8040"),
 		MaxConcurrentExecutions: getEnvInt("GOYAIS_MAX_CONCURRENT_EXECUTIONS", 5),
-		LogLevel:                getEnv("LOG_LEVEL", "info"),
+		LogLevel:                getEnvWithAliases([]string{"GOYAIS_HUB_LOG_LEVEL", "LOG_LEVEL"}, "info"),
 	}
 }
 
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func getEnvWithAliases(keys []string, fallback string) string {
+	for _, key := range keys {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
 	}
 	return fallback
 }

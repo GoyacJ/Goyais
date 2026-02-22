@@ -64,7 +64,7 @@ interface WorkspaceStoreState {
 }
 
 const DEFAULT_LOCAL_PROFILE_ID = "local-default";
-const DEFAULT_LOCAL_ROOT = "/Users/goya/Repo/Git/Goyais";
+const DEFAULT_LOCAL_ROOT = ".";
 const LOCAL_PERMISSIONS: string[] = [
   "workspace:read",
   "workspace:manage",

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.2.0",
   "scripts": {
-    "dev": "uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8040",
+    "dev": "sh -lc 'uv run uvicorn app.main:app --reload --host \"${GOYAIS_RUNTIME_HOST:-127.0.0.1}\" --port \"${GOYAIS_RUNTIME_PORT:-8040}\"'",
     "build": "echo 'python build not required'",
     "typecheck": "uv run python -m compileall app",
     "test": "PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run pytest -p pytest_asyncio.plugin",

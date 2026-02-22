@@ -24,6 +24,24 @@ class _DummyReporter:
         return {"type": event_type, "payload": payload}
 
 
+class _CaptureInitReporter:
+    last_init: dict[str, dict] = {}
+
+    def __init__(self, *args, **kwargs) -> None:
+        self.args = args
+        self.kwargs = kwargs
+        _CaptureInitReporter.last_init = {"args": args, "kwargs": kwargs}
+
+    def start(self) -> None:
+        return None
+
+    async def stop(self) -> None:
+        return None
+
+    async def report(self, event_type: str, payload: dict) -> dict:
+        return {"type": event_type, "payload": payload}
+
+
 @pytest.mark.asyncio
 async def test_execute_uses_worktree_root_when_enabled(monkeypatch: pytest.MonkeyPatch):
     captured: dict[str, str] = {}
@@ -91,3 +109,57 @@ async def test_execute_uses_repo_root_when_worktree_disabled(monkeypatch: pytest
     )
 
     assert captured["workspace_path"] == "/repo/main"
+
+
+@pytest.mark.asyncio
+async def test_execute_uses_runtime_shared_secret_for_hub_reporter(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(execution_service_module, "HubReporter", _CaptureInitReporter)
+    monkeypatch.setenv("GOYAIS_RUNTIME_SHARED_SECRET", "dev-shared")
+    monkeypatch.delenv("GOYAIS_HUB_INTERNAL_SECRET", raising=False)
+    monkeypatch.setenv("GOYAIS_HUB_BASE_URL", "http://127.0.0.1:8787")
+
+    async def fake_execute_agent(self, execution_id: str, context: dict, workspace_path: str, reporter) -> None:
+        del self, execution_id, context, workspace_path, reporter
+
+    monkeypatch.setattr(ExecutionService, "_execute_agent", fake_execute_agent)
+
+    service = ExecutionService(repo=_DummyRepo(), agent_mode="vanilla")
+    await service.execute(
+        {
+            "execution_id": "e3",
+            "session_id": "s3",
+            "trace_id": "t3",
+            "user_message": "hello",
+            "repo_root": "/repo/main",
+            "use_worktree": False,
+        }
+    )
+
+    init = _CaptureInitReporter.last_init["kwargs"]
+    assert init["hub_internal_secret"] == "dev-shared"
+
+
+@pytest.mark.asyncio
+async def test_execute_defaults_hub_base_url_to_8787(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(execution_service_module, "HubReporter", _CaptureInitReporter)
+    monkeypatch.delenv("GOYAIS_HUB_BASE_URL", raising=False)
+
+    async def fake_execute_agent(self, execution_id: str, context: dict, workspace_path: str, reporter) -> None:
+        del self, execution_id, context, workspace_path, reporter
+
+    monkeypatch.setattr(ExecutionService, "_execute_agent", fake_execute_agent)
+
+    service = ExecutionService(repo=_DummyRepo(), agent_mode="vanilla")
+    await service.execute(
+        {
+            "execution_id": "e4",
+            "session_id": "s4",
+            "trace_id": "t4",
+            "user_message": "hello",
+            "repo_root": "/repo/main",
+            "use_worktree": False,
+        }
+    )
+
+    init = _CaptureInitReporter.last_init["kwargs"]
+    assert init["hub_base_url"] == "http://127.0.0.1:8787"

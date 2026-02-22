@@ -503,7 +503,12 @@ export function ConversationPage() {
         />
 
         <ContextPanel
-          workspacePath={selectedProject?.workspace_path ?? selectedProject?.root_uri ?? "/Users/goya/Repo/Git/Goyais"}
+          workspacePath={
+            selectedProject?.workspace_path
+              ?? selectedProject?.root_uri
+              ?? (currentProfile?.kind === "local" ? currentProfile.local?.rootPath : undefined)
+              ?? "."
+          }
           taskInput={input}
           eventsCount={events.length}
         />

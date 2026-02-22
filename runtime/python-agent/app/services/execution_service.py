@@ -21,7 +21,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import uuid
 from typing import Any
 
 from app.agent.loop import LoopCallbacks, agent_loop
@@ -368,8 +367,11 @@ class ExecutionService:
 
     @staticmethod
     def _hub_base_url() -> str:
-        return os.getenv("GOYAIS_HUB_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
+        return os.getenv("GOYAIS_HUB_BASE_URL", "http://127.0.0.1:8787").rstrip("/")
 
     @staticmethod
     def _hub_secret() -> str:
-        return os.getenv("GOYAIS_HUB_INTERNAL_SECRET", "")
+        # Backward compatibility: old env key + current shared-secret key.
+        return os.getenv("GOYAIS_HUB_INTERNAL_SECRET", "").strip() or os.getenv(
+            "GOYAIS_RUNTIME_SHARED_SECRET", ""
+        ).strip()
