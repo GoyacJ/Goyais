@@ -1,0 +1,379 @@
+# Goyais v0.4.0 开发规范（Engineering Executable Standards）
+
+> 本文档是 v0.4.0 的工程执行规范，目标是“可落地、可检查、可阻断”。  
+> 业务语义以 `PRD.md` 为准；架构事实以 `TECH_ARCH.md` 为准；实施顺序以 `IMPLEMENTATION_PLAN.md` 为准。
+
+---
+
+## 1. 文档定位与优先级
+
+### 1.1 目标
+
+1. 将开发规范从“原则描述”升级为“工程门禁规范”。
+2. 用统一阈值和流程约束代码质量，避免过度设计与无边界扩张。
+3. 保证跨 Hub/Worker/Desktop 的一致性与可维护性。
+
+### 1.2 适用范围
+
+1. 适用于 v0.4.0 全部代码与文档变更。
+2. 适用于 Go、Python、TypeScript/Vue、Rust（Tauri）代码。
+3. 适用于单元测试、集成测试、E2E、CI 配置和 PR 审查流程。
+
+### 1.3 文档优先级
+
+1. 安全红线 > 本文档 > 团队个人偏好。
+2. 当本文档与其他文档冲突时，以 `PRD.md` 业务定义为最高裁决。
+
+---
+
+## 2. 规范关键字与适用方式（RFC2119）
+
+### 2.1 关键字定义
+
+1. `MUST`：强制要求，不满足即视为违规。
+2. `MUST NOT`：明确禁止，出现即视为违规。
+3. `SHOULD`：强烈建议，偏离需在 PR 说明理由。
+4. `MAY`：可选项，由模块 owner 判断。
+
+### 2.2 执行方式
+
+1. 所有 `MUST/MUST NOT` 条款默认接入 CI 阻断。
+2. `SHOULD` 条款默认作为 Review 告警项。
+3. 唯一可豁免路径是 `StandardsExceptionADR`（见第 12 章）。
+
+---
+
+## 3. 软件工程理论落地（实用工程版）
+
+### 3.1 SOLID/KISS/YAGNI/DRY 落地要求
+
+1. `MUST` 保持单一职责：模块变更原因不超过一个业务轴。
+2. `MUST` 优先简单实现（KISS）：先可运行再抽象。
+3. `MUST NOT` 为“未来可能用到”提前抽象（YAGNI）。
+4. `MUST` 消除重复逻辑（DRY），但 `MUST NOT` 通过过度抽象制造复杂性。
+
+### 3.2 高内聚低耦合可执行标准
+
+1. `MUST` 让模块围绕单一领域聚合（权限、共享、执行调度、UI 模块）。
+2. `MUST` 避免横向依赖环；出现循环依赖即阻断。
+3. `SHOULD` 降低跨域调用深度，单请求链路跨域跳转不超过 3 层。
+4. `MUST` 使用清晰边界：handler -> service -> repository（后端），module view -> module service/store（前端）。
+
+### 3.3 抽象引入触发规则
+
+1. `MUST` 满足“第二实现触发”原则：至少存在两个有效实现或一个稳定外部边界，才允许提接口抽象。
+2. `MUST NOT` 因“写起来更优雅”单独引入新层。
+3. `SHOULD` 在大改架构前新增 ADR 说明收益、风险和回滚策略。
+
+---
+
+## 4. 设计模式白名单与触发条件
+
+### 4.1 白名单（仅允许以下模式）
+
+| Pattern | 适用场景 | 触发条件（MUST） | 禁止条件（MUST NOT） |
+|---|---|---|---|
+| `Strategy` | 多策略切换（如多 Provider） | 至少 2 种真实策略已存在 | 只有 1 种策略时提前抽象 |
+| `Adapter` | 外部协议差异统一 | 存在稳定外部接口差异 | 仅为包装内部函数而创建 |
+| `Factory` | 创建流程复杂或有变体 | 构造逻辑包含分支和依赖注入 | 仅替代 `new`/构造函数 |
+| `Repository` | 数据访问隔离 | 需要统一数据源访问边界 | 对简单查询硬分层导致冗余 |
+| `State` | 显式状态迁移 | 状态>=3 且迁移规则复杂 | 用于简单 if-else 状态切换 |
+
+### 4.2 模式治理契约
+
+```text
+PatternWhitelistRule {
+  pattern: "Strategy|Adapter|Factory|Repository|State"
+  trigger: string[]
+  anti_trigger: string[]
+  examples: string[]
+}
+```
+
+### 4.3 评审要求
+
+1. `MUST` 在 PR 描述中说明使用模式、触发条件、替代方案评估。
+2. `MUST` 附上测试证明模式引入后收益真实存在。
+
+---
+
+## 5. 反模式与过度设计禁止项
+
+### 5.1 明确禁止
+
+1. `MUST NOT` 引入全局 Service Locator。
+2. `MUST NOT` 为单实现场景引入多态层。
+3. `MUST NOT` 用多层 DTO/VO 映射掩盖简单业务。
+4. `MUST NOT` 在前端全局平铺 views/components 导致领域边界丢失。
+5. `MUST NOT` 为“可扩展性想象”增加无使用路径代码。
+
+### 5.2 识别信号（出现任意项即需重构评估）
+
+1. 单模块持续承担多个领域职责。
+2. 关键路径调用链过深且难追踪。
+3. 代码评审中无法清晰解释抽象收益。
+
+---
+
+## 6. 文件规模与拆分规则（硬阈值）
+
+### 6.1 单文件行数上限（MUST）
+
+| 语言 | 最大行数 |
+|---|---:|
+| Go | `<= 400` |
+| Python | `<= 350` |
+| TypeScript / TSX / Vue | `<= 300` |
+| Rust | `<= 350` |
+
+### 6.2 函数与组件复杂度提示阈值
+
+1. `SHOULD` 函数长度控制在 80 行以内。
+2. `SHOULD` Vue 单组件业务逻辑控制在 200 行以内（模板+脚本+样式总和）。
+
+### 6.3 拆分规则
+
+1. 超限文件 `MUST` 拆分为“领域逻辑 + 基础设施 + 辅助工具”。
+2. 拆分后 `MUST` 保持语义内聚，不允许机械切片。
+3. 生成文件、迁移文件、测试 fixture 可标记例外，但 `MUST` 在 PR 注明。
+
+### 6.4 工程门禁契约
+
+```text
+FileSizePolicy {
+  lang: "go|py|ts|tsx|vue|rs"
+  max_lines: number
+  blocking: true
+}
+```
+
+---
+
+## 7. 公共设计与复用规范
+
+### 7.1 复用原则
+
+1. `MUST` 将跨模块稳定能力沉淀到共享层。
+2. `MUST NOT` 将领域私有逻辑上提到共享层。
+3. `SHOULD` 共享前先评估被至少两个模块真实复用。
+
+### 7.2 共享对象范围
+
+1. 共享 UI 组件：统一放 `src/shared/ui`。
+2. 共享布局：统一放 `src/shared/layouts`。
+3. 共享工具：统一放 `src/shared/utils`。
+4. 共享类型契约：按领域定义，避免全局巨型 types 文件。
+
+### 7.3 后端共享规则
+
+1. `MUST` 共享通用中间件、错误模型、审计接口。
+2. `MUST NOT` 跨领域直接调用彼此私有 service。
+
+---
+
+## 8. 前端模块化规范（Feature-First）
+
+### 8.1 目录规范（MUST）
+
+```text
+src/
+  modules/
+    <domain>/
+      views/
+      components/
+      store/
+      services/
+      schemas/
+      tests/
+  shared/
+    ui/
+    layouts/
+    utils/
+```
+
+### 8.2 强制规则
+
+1. `MUST` 采用按业务模块分片（feature-first）。
+2. `MUST NOT` 使用全局平铺 `src/views/*` 作为主组织方式。
+3. `MUST` 让模块内 view 与模块 service/store 同域维护。
+4. `SHOULD` 每个模块提供 `index.ts` 作为对外边界。
+
+### 8.3 模块契约
+
+```text
+FrontendModuleLayoutContract {
+  required_dirs: ["views","components","store","services","schemas","tests"]
+  shared_dirs: ["src/shared/ui","src/shared/layouts","src/shared/utils"]
+  flat_views_forbidden: true
+}
+```
+
+---
+
+## 9. 统一样式与 Token 三层规范
+
+### 9.1 三层 Token 模型（MUST）
+
+1. `global token`：原子值（色板、字号、间距、圆角）。
+2. `semantic token`：语义映射（primary-text、danger-bg）。
+3. `component token`：组件级语义变量（button-bg、card-border）。
+
+### 9.2 禁止项（MUST NOT）
+
+1. 在组件内硬编码颜色值（如 `#123456`）。
+2. 在组件内硬编码字体族、字号、间距、圆角。
+3. 在主题切换逻辑中绕过 semantic token 直接读 global token。
+
+### 9.3 Token 契约
+
+```text
+TokenLayerContract {
+  layers: ["global","semantic","component"]
+  direct_hardcode_forbidden: true
+  semantic_as_required_bridge: true
+}
+```
+
+### 9.4 执行建议
+
+1. `SHOULD` 在 CI 增加 token 硬编码扫描。
+2. `SHOULD` 核心页面统一组件库实现，避免局部样式漂移。
+
+---
+
+## 10. 质量门禁（复杂度、覆盖率、依赖关系）
+
+### 10.1 复杂度门禁（MUST）
+
+1. 圈复杂度 `<= 10`。
+2. 认知复杂度 `<= 15`。
+3. 超阈值即阻断，除非有 ADR 豁免。
+
+### 10.2 覆盖率门禁（MUST）
+
+1. 核心模块覆盖率 `>= 80%`。
+2. 总体覆盖率 `>= 70%`。
+
+核心模块定义：权限、资源共享、密钥治理、执行调度。
+
+### 10.3 依赖关系门禁（MUST）
+
+1. 禁止循环依赖。
+2. 禁止跨层反向依赖（UI 依赖基础设施内部实现）。
+3. 禁止模块私有实现被外部模块直接引用。
+
+### 10.4 门禁契约
+
+```text
+ComplexityPolicy {
+  cyclomatic_max: 10
+  cognitive_max: 15
+  blocking: true
+}
+
+CoveragePolicy {
+  core_modules_min: 0.80
+  overall_min: 0.70
+  blocking: true
+}
+
+QualityGateResult {
+  check_id: string
+  threshold: string
+  actual: string
+  blocking: boolean
+}
+```
+
+---
+
+## 11. CI 强制策略与失败处理
+
+### 11.1 CI 门禁策略
+
+1. `MUST` 默认 `blocking=true`。
+2. `MUST` 覆盖以下检查：行数、复杂度、覆盖率、token 硬编码扫描、目录结构规则。
+3. `MUST` 输出可读失败原因和修复建议。
+
+### 11.2 失败处理流程
+
+1. 开发者修复后重新触发 CI。
+2. 若需临时豁免，`MUST` 提交 `StandardsExceptionADR`。
+3. 无 ADR 的门禁绕过请求 `MUST NOT` 被批准。
+
+---
+
+## 12. 例外流程（ADR + 到期治理）
+
+### 12.1 例外适用场景
+
+1. 线上紧急修复且存在时间窗口压力。
+2. 迁移过渡阶段必须短期共存旧实现。
+
+### 12.2 例外申请契约
+
+```text
+StandardsExceptionADR {
+  adr_id: string
+  owner: string
+  scope: string
+  reason: string
+  risk: string
+  mitigation: string
+  expiry_date: string
+  rollback_plan: string
+}
+```
+
+### 12.3 例外治理规则
+
+1. `MUST` 设置到期日（默认不超过 30 天）。
+2. `MUST` 指定 owner 和回收计划。
+3. 到期未清理 `MUST` 升级为阻断问题。
+
+---
+
+## 13. PR 审查清单与完成定义（DoD）
+
+### 13.1 PR 审查清单（MUST）
+
+1. 是否符合文件行数和复杂度阈值。
+2. 是否引入非白名单设计模式或过度抽象。
+3. 是否保持工作区隔离与权限校验边界。
+4. 是否覆盖拒绝路径测试（权限拒绝、审批拒绝、Stop、异常恢复）。
+5. 是否满足 token 三层规则且无硬编码样式。
+6. 是否补充必要审计日志与 trace_id 传播。
+7. 是否与 PRD/TECH_ARCH/PLAN 语义一致。
+
+### 13.2 完成定义（DoD）
+
+一项变更只有在以下全部满足时可标记完成：
+
+1. 业务语义与 `PRD.md` 对齐。
+2. 架构边界与 `TECH_ARCH.md` 对齐。
+3. 实施阶段目标与 `IMPLEMENTATION_PLAN.md` 对齐。
+4. CI 门禁全部通过，或有有效 ADR 例外。
+5. 测试证据完整且可追溯。
+
+---
+
+## 14. 与 PRD/TECH_ARCH/PLAN 的一致性维护规则
+
+1. 修改业务规则时，`MUST` 同步更新 `PRD.md`。
+2. 修改接口/状态机/模型时，`MUST` 同步更新 `TECH_ARCH.md`。
+3. 修改阶段目标或门禁策略时，`MUST` 同步更新 `IMPLEMENTATION_PLAN.md`。
+4. 四份文档任意冲突时，先修复冲突再合并代码，`MUST NOT` 带冲突进入主分支。
+
+---
+
+## 15. 文档级验收场景（用于检查规范可执行性）
+
+1. 出现超限文件时，能按第 6 章直接判定是否阻断或需 ADR。
+2. 出现复杂度超阈值函数时，能按第 10 章直接阻断并给出整改路径。
+3. 覆盖率不足时，能按第 10/11 章明确阻断与例外流程。
+4. 出现非白名单模式时，能按第 4/5 章明确违规判定。
+5. 前端出现全局 views 平铺时，能按第 8 章明确违规。
+6. 组件硬编码色值/间距时，能按第 9 章明确违规。
+7. 紧急修复场景下，能按第 12 章执行 ADR 豁免并追踪到期。
+8. PR 审查可按第 13 章逐项打勾并形成可追溯证据。
+
