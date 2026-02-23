@@ -89,6 +89,22 @@ export async function refreshMeForCurrentWorkspace(): Promise<void> {
     applyMe(me);
     workspaceStore.connectionState = "ready";
   } catch (error) {
+    if (workspace.mode === "local") {
+      applyMe({
+        user_id: "local_user",
+        display_name: "local-user",
+        workspace_id: workspace.id,
+        role: "admin",
+        capabilities: {
+          admin_console: true,
+          resource_write: true,
+          execution_control: true
+        }
+      });
+      workspaceStore.connectionState = "ready";
+      return;
+    }
+
     authStore.me = null;
     authStore.capabilities = { ...defaultCapabilities };
 

@@ -11,14 +11,28 @@
 - 三层 Token：`global -> semantic -> component`
 - 双主题：`dark`（主） + `light`（辅）
 - UI Kit：Button / Input / Select / Badge / Card / SidebarItem / Topbar / Modal(RiskConfirm) / Toast(Inline Alert)
-- Screens：Workspace / Project / Conversation / Resource(Settings) / Admin（Remote）
+- Screens（严格按 `.pen` 13 面）：
+  - `/main`
+  - `/remote/account`
+  - `/remote/members-roles`
+  - `/remote/permissions-audit`
+  - `/workspace/agent`
+  - `/workspace/model`
+  - `/workspace/rules`
+  - `/workspace/skills`
+  - `/workspace/mcp`
+  - `/settings/theme`
+  - `/settings/i18n`
+  - `/settings/updates-diagnostics`
+  - `/settings/general`
 
 ## 同步流程（v0.4.0）
 
 1. 设计侧在 Pencil 更新 token。
 2. 同步到 `src/styles/tokens.css`，确保 light/dark 均可用。
 3. 前端验证核心状态：空态/错误态/加载态/权限拒绝态（403）。
-4. 业务组件仅消费 token，不在组件内硬编码颜色/间距/字号/圆角。
+4. 运行 `pnpm --dir apps/desktop check:tokens` 校验 token 与设计基线未漂移。
+5. 业务组件仅消费 token，不在组件内硬编码颜色/间距/字号/圆角。
 
 ## 状态命名映射（UI 文案层）
 

@@ -1,102 +1,78 @@
 import { mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it } from "vitest";
+import { createMemoryHistory, createRouter } from "vue-router";
 
-import AppShell from "@/shared/layouts/AppShell.vue";
-import { authStore, resetAuthStore } from "@/shared/stores/authStore";
+import type { MenuEntry } from "@/shared/navigation/pageMenus";
+import RemoteConfigSidebar from "@/shared/layouts/RemoteConfigSidebar.vue";
+import { resetAuthStore } from "@/shared/stores/authStore";
 import { resetWorkspaceStore, setCurrentWorkspace, setWorkspaces } from "@/shared/stores/workspaceStore";
 
-describe("app shell", () => {
+const menuEntries: MenuEntry[] = [
+  { key: "remote_account", label: "远程-账号信息", path: "/remote/account", visibility: "enabled" },
+  { key: "remote_members_roles", label: "远程-成员与角色", path: "/remote/members-roles", visibility: "enabled" },
+  { key: "remote_permissions_audit", label: "远程-权限与审计", path: "/remote/permissions-audit", visibility: "enabled" }
+];
+
+describe("remote config sidebar", () => {
   beforeEach(() => {
     resetAuthStore();
     resetWorkspaceStore();
     setWorkspaces([
-      {
-        id: "ws_local",
-        name: "Local Workspace",
-        mode: "local",
-        hub_url: null,
-        is_default_local: true,
-        created_at: "2026-02-22T00:00:00Z",
-        login_disabled: false,
-        auth_mode: "disabled"
-      },
       {
         id: "ws_remote",
         name: "Remote Workspace",
         mode: "remote",
         hub_url: "https://hub.example.com",
         is_default_local: false,
-        created_at: "2026-02-22T00:00:00Z",
+        created_at: "2026-02-23T00:00:00Z",
         login_disabled: false,
         auth_mode: "password_or_token"
       }
     ]);
-    setCurrentWorkspace("ws_local");
+    setCurrentWorkspace("ws_remote");
   });
 
-  it("hides admin menu when admin capability is false", () => {
-    authStore.capabilities = {
-      admin_console: false,
-      resource_write: false,
-      execution_control: false
-    };
-
-    const wrapper = mountShell();
-    expect(wrapper.text()).not.toContain("Admin");
+  it("renders menu and active item", () => {
+    const wrapper = mountSidebar();
+    expect(wrapper.text()).toContain("远程-账号信息");
+    expect(wrapper.find(".menu-item.active").text()).toContain("远程-账号信息");
   });
 
-  it("shows admin menu when admin capability is true", () => {
-    authStore.capabilities = {
-      admin_console: true,
-      resource_write: true,
-      execution_control: true
-    };
+  it("toggles workspace menu", async () => {
+    const wrapper = mountSidebar();
+    expect(wrapper.find(".workspace-menu").exists()).toBe(false);
 
-    const wrapper = mountShell();
-    expect(wrapper.text()).toContain("Admin");
+    await wrapper.find(".workspace-trigger").trigger("click");
+    expect(wrapper.find(".workspace-menu").exists()).toBe(true);
   });
 
-  it("toggles settings panel and shows workspace/account info", async () => {
-    authStore.me = {
-      user_id: "u_001",
-      display_name: "goya",
-      workspace_id: "ws_local",
-      role: "admin",
-      capabilities: {
-        admin_console: true,
-        resource_write: true,
-        execution_control: true
-      }
-    };
+  it("toggles user menu", async () => {
+    const wrapper = mountSidebar();
+    expect(wrapper.find(".user-menu").exists()).toBe(false);
 
-    const wrapper = mountShell();
-    expect(wrapper.find('[data-testid="settings-panel"]').exists()).toBe(false);
-
-    await wrapper.find('[data-testid="settings-toggle"]').trigger("click");
-    expect(wrapper.find('[data-testid="settings-panel"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain("当前工作区账号信息");
-    expect(wrapper.text()).toContain("Local Workspace");
-    expect(wrapper.text()).toContain("goya");
-  });
-
-  it("renders workspace switcher options from workspace store", () => {
-    const wrapper = mountShell();
-    const options = wrapper.findAll("option");
-
-    expect(options).toHaveLength(2);
-    expect(options[0].text()).toContain("Local Workspace");
-    expect(options[1].text()).toContain("Remote Workspace");
+    await wrapper.find(".user-trigger").trigger("click");
+    expect(wrapper.find(".user-menu").exists()).toBe(true);
+    expect(wrapper.text()).toContain("设置 Settings");
   });
 });
 
-function mountShell() {
-  return mount(AppShell, {
-    slots: {
-      default: "<div>content</div>"
+function mountSidebar() {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: "/:pathMatch(.*)*", component: { template: "<div />" } }]
+  });
+
+  return mount(RemoteConfigSidebar, {
+    props: {
+      activeKey: "remote_account",
+      scopeHint: "Remote 视图提示",
+      menuEntries
     },
     global: {
+      plugins: [router],
       stubs: {
         RouterLink: {
+          props: ["to"],
           template: "<a><slot /></a>"
         }
       }

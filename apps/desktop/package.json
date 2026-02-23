@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "tsc --noEmit -p tsconfig.app.json",
     "test": "vitest run",
+    "check:tokens": "node ../../scripts/desktop/check-token-drift.mjs",
     "tauri:dev": "tauri dev"
   },
   "dependencies": {

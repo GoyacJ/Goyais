@@ -2,6 +2,8 @@
 
 interface ImportMetaEnv {
   readonly VITE_HUB_BASE_URL?: string;
+  readonly VITE_API_MODE?: "real" | "hybrid" | "mock";
+  readonly VITE_ENABLE_MOCK_FALLBACK?: string;
 }
 
 interface ImportMeta {
