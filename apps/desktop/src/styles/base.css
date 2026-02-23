@@ -7,10 +7,7 @@ body,
 #app {
   width: 100%;
   height: 100%;
-}
-
-html {
-  background: var(--global-color-neutral-1000);
+  background: transparent;
 }
 
 body {
@@ -18,12 +15,7 @@ body {
   font-family: var(--component-font-family);
   font-size: var(--component-font-size-body);
   color: var(--component-text-main);
-  background: var(--global-color-neutral-1000);
   overflow: hidden;
-}
-
-#app {
-  background: transparent;
 }
 
 a {

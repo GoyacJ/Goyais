@@ -10,11 +10,14 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Goyais",
         "decorations": false,
         "transparent": true,
+        "backgroundColor": "#00000000",
+        "shadow": false,
         "width": 1280,
         "height": 800
       }
