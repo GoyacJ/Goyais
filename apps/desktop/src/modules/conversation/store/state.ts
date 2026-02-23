@@ -7,10 +7,13 @@ import type {
   Conversation,
   ConversationMessage,
   ConversationMode,
+  ConversationSnapshot,
   DiffCapability,
   DiffItem,
   Execution,
-  ExecutionEvent
+  ExecutionEvent,
+  InspectorTabKey,
+  QueueState
 } from "@/shared/types/api";
 
 export type StreamHandle = {
@@ -22,12 +25,15 @@ export type ConversationRuntime = {
   messages: ConversationMessage[];
   events: ExecutionEvent[];
   executions: Execution[];
+  snapshots: ConversationSnapshot[];
   draft: string;
   mode: ConversationMode;
   modelId: string;
   status: ConnectionStatus;
   diff: DiffItem[];
   diffCapability: DiffCapability;
+  inspectorTab: InspectorTabKey;
+  worktreeRef: string | null;
 };
 
 type ConversationState = {
@@ -78,12 +84,15 @@ export function ensureConversationRuntime(
     messages: createInitialMessages(conversation.id),
     events: [],
     executions: [],
+    snapshots: [],
     draft: "",
     mode: conversation.default_mode,
     modelId: conversation.model_id,
     status: "connected",
     diff: [],
-    diffCapability: resolveDiffCapability(isGitProject)
+    diffCapability: resolveDiffCapability(isGitProject),
+    inspectorTab: "diff",
+    worktreeRef: null
   };
 
   conversationStore.byConversationId[conversation.id] = runtime;
@@ -115,6 +124,13 @@ export function setConversationModel(conversationId: string, modelId: string): v
   }
 }
 
+export function setConversationInspectorTab(conversationId: string, tab: InspectorTabKey): void {
+  const runtime = conversationStore.byConversationId[conversationId];
+  if (runtime) {
+    runtime.inspectorTab = tab;
+  }
+}
+
 export function setConversationError(error: string): void {
   conversationStore.error = error;
 }
@@ -137,6 +153,52 @@ export function createInitialMessages(conversationId: string): ConversationMessa
       created_at: new Date().toISOString()
     }
   ];
+}
+
+export function deriveQueueState(runtime: ConversationRuntime): QueueState {
+  const hasRunning = runtime.executions.some((execution) => execution.state === "executing" || execution.state === "confirming");
+  const hasQueued = runtime.executions.some((execution) => execution.state === "queued");
+  if (hasRunning) {
+    return "running";
+  }
+  if (hasQueued) {
+    return "queued";
+  }
+  return "idle";
+}
+
+export function createConversationSnapshot(runtime: ConversationRuntime, conversationId: string, rollbackPointMessageId: string): ConversationSnapshot {
+  return {
+    id: createMockId("snap"),
+    conversation_id: conversationId,
+    rollback_point_message_id: rollbackPointMessageId,
+    queue_state: deriveQueueState(runtime),
+    worktree_ref: runtime.worktreeRef,
+    inspector_state: {
+      tab: runtime.inspectorTab
+    },
+    messages: runtime.messages.map((message) => ({ ...message })),
+    execution_ids: runtime.executions.map((execution) => execution.id),
+    created_at: new Date().toISOString()
+  };
+}
+
+export function pushConversationSnapshot(conversationId: string, snapshot: ConversationSnapshot): void {
+  const runtime = conversationStore.byConversationId[conversationId];
+  if (!runtime) {
+    return;
+  }
+
+  runtime.snapshots.push(snapshot);
+}
+
+export function findSnapshotForMessage(conversationId: string, messageId: string): ConversationSnapshot | undefined {
+  const runtime = conversationStore.byConversationId[conversationId];
+  if (!runtime) {
+    return undefined;
+  }
+
+  return [...runtime.snapshots].reverse().find((snapshot) => snapshot.rollback_point_message_id === messageId);
 }
 
 export function countActiveAndQueued(runtime: ConversationRuntime): number {

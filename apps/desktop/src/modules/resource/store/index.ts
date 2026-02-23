@@ -3,21 +3,27 @@ import { reactive } from "vue";
 import {
   createShareRequest,
   importResource,
+  listModelCatalog,
   listResources,
+  syncModelCatalog,
   updateShareStatus
 } from "@/modules/resource/services";
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { getCurrentWorkspace } from "@/shared/stores/workspaceStore";
-import type { Resource, ResourceImportRequest, ShareStatus } from "@/shared/types/api";
+import type { ModelCatalogItem, ModelVendorName, Resource, ResourceImportRequest, ShareStatus } from "@/shared/types/api";
 
 type ResourceState = {
   items: Resource[];
+  modelCatalog: ModelCatalogItem[];
+  modelCatalogSyncing: boolean;
   loading: boolean;
   error: string;
 };
 
 const initialState: ResourceState = {
   items: [],
+  modelCatalog: [],
+  modelCatalogSyncing: false,
   loading: false,
   error: ""
 };
@@ -26,6 +32,8 @@ export const resourceStore = reactive<ResourceState>({ ...initialState });
 
 export function resetResourceStore(): void {
   resourceStore.items = [];
+  resourceStore.modelCatalog = [];
+  resourceStore.modelCatalogSyncing = false;
   resourceStore.loading = false;
   resourceStore.error = "";
 }
@@ -46,6 +54,35 @@ export async function refreshResources(): Promise<void> {
     resourceStore.error = toDisplayError(error);
   } finally {
     resourceStore.loading = false;
+  }
+}
+
+export async function refreshModelCatalog(): Promise<void> {
+  const workspace = getCurrentWorkspace();
+  if (!workspace) {
+    return;
+  }
+
+  try {
+    resourceStore.modelCatalog = await listModelCatalog(workspace.id);
+  } catch (error) {
+    resourceStore.error = toDisplayError(error);
+  }
+}
+
+export async function syncWorkspaceModelCatalog(vendors: ModelVendorName[]): Promise<void> {
+  const workspace = getCurrentWorkspace();
+  if (!workspace) {
+    return;
+  }
+
+  resourceStore.modelCatalogSyncing = true;
+  try {
+    resourceStore.modelCatalog = await syncModelCatalog(workspace.id, vendors);
+  } catch (error) {
+    resourceStore.error = toDisplayError(error);
+  } finally {
+    resourceStore.modelCatalogSyncing = false;
   }
 }
 

@@ -1,30 +1,54 @@
 <template>
   <div class="screen">
     <MainSidebarPanel
+      :workspaces="workspaceStore.workspaces"
+      :current-workspace-id="workspaceStore.currentWorkspaceId"
       :workspace-name="workspaceLabel"
       :workspace-mode="workspaceStore.mode"
+      :user-name="authStore.me?.display_name ?? 'local'"
       :projects="projectStore.projects"
       :conversations-by-project-id="projectStore.conversationsByProjectId"
       :active-conversation-id="projectStore.activeConversationId"
-      @add-project="addProjectByPrompt"
-      @delete-project="deleteProjectById"
+      @switch-workspace="switchWorkspace"
+      @create-workspace="createWorkspace"
+      @import-project="importProjectDirectory"
       @add-conversation="addConversationByPrompt"
+      @delete-project="deleteProjectById"
+      @export-conversation="exportConversation"
       @delete-conversation="deleteConversationById"
       @select-conversation="selectConversation"
+      @open-account="openAccount"
+      @open-settings="openSettings"
     />
+
     <section class="content">
       <header class="top-header">
         <div class="left">
-          <strong>{{ activeProject?.name ?? "Project" }}</strong>
+          <strong>{{ activeProject?.name ?? 'Project' }}</strong>
           <span>/</span>
-          <strong>{{ activeConversation?.name ?? "Conversation" }}</strong>
-          <IconSymbol name="edit" :size="12" />
+
+          <template v-if="editingConversationName">
+            <input
+              class="title-input"
+              :value="conversationNameDraft"
+              @input="onConversationNameInput"
+              @keydown.enter="saveConversationName"
+              @blur="saveConversationName"
+            />
+          </template>
+          <strong v-else>{{ activeConversation?.name ?? 'Conversation' }}</strong>
+
+          <button class="icon-btn" type="button" @click="startEditConversationName">
+            <AppIcon name="pencil" :size="12" />
+          </button>
         </div>
+
         <div class="right">
           <span class="state">{{ runningState }}</span>
-          <span class="connected">{{ runtime?.status ?? "connected" }}</span>
+          <span :class="connectionClass">{{ connectionState }}</span>
         </div>
       </header>
+
       <div class="main-body">
         <MainConversationPanel
           :messages="runtime?.messages ?? []"
@@ -41,27 +65,29 @@
           @stop="stopExecution"
           @rollback="rollbackMessage"
         />
+
         <MainInspectorPanel
           :diff="runtime?.diff ?? []"
           :capability="runtime?.diffCapability ?? nonGitCapability"
           :queued-count="queuedCount"
           :active-count="activeCount"
           :model-id="runtime?.modelId ?? 'gpt-4.1'"
+          :active-tab="runtime?.inspectorTab ?? 'diff'"
+          @change-tab="changeInspectorTab"
           @commit="commitDiff"
           @discard="discardDiff"
           @export-patch="exportPatch"
         />
       </div>
-      <footer class="status-bar">
-        <span>Hub: {{ workspaceStore.workspaces.find((item) => item.id === workspaceStore.currentWorkspaceId)?.hub_url ?? "https://hub.goyais.local" }}</span>
-        <span>{{ authStore.me?.role ?? "Owner" }} · connected</span>
-      </footer>
+
+      <HubStatusBar />
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 
 import MainConversationPanel from "@/modules/conversation/components/MainConversationPanel.vue";
 import MainInspectorPanel from "@/modules/conversation/components/MainInspectorPanel.vue";
@@ -70,9 +96,9 @@ import {
   commitLatestDiff,
   discardLatestDiff,
   ensureConversationRuntime,
-  getConversationRuntime,
   rollbackConversationToMessage,
   setConversationDraft,
+  setConversationInspectorTab,
   setConversationMode,
   setConversationModel,
   stopConversationExecution,
@@ -80,22 +106,36 @@ import {
 } from "@/modules/conversation/store";
 import {
   addConversation,
-  addProject,
   deleteConversation,
   deleteProject,
+  exportConversationById,
+  importProjectByDirectory,
   projectStore,
   refreshConversationsForActiveProject,
   refreshProjects,
+  renameConversationById,
   setActiveConversation,
   setActiveProject
 } from "@/modules/project/store";
-import { initializeWorkspaceContext, workspaceStore } from "@/modules/workspace/store";
+import { createRemoteConnection } from "@/modules/workspace/services";
+import {
+  initializeWorkspaceContext,
+  setWorkspaceConnection,
+  switchWorkspaceContext,
+  upsertWorkspace,
+  workspaceStore
+} from "@/modules/workspace/store";
 import { useI18n } from "@/shared/i18n";
-import { authStore } from "@/shared/stores/authStore";
-import IconSymbol from "@/shared/ui/IconSymbol.vue";
-import type { DiffCapability } from "@/shared/types/api";
+import { authStore, setWorkspaceToken } from "@/shared/stores/authStore";
+import AppIcon from "@/shared/ui/AppIcon.vue";
+import HubStatusBar from "@/shared/ui/HubStatusBar.vue";
+import type { DiffCapability, InspectorTabKey } from "@/shared/types/api";
 
+const router = useRouter();
 const { t } = useI18n();
+
+const editingConversationName = ref(false);
+const conversationNameDraft = ref("");
 
 const nonGitCapability: DiffCapability = {
   can_commit: false,
@@ -128,6 +168,26 @@ const queuedCount = computed(() => runtime.value?.executions.filter((item) => it
 const activeCount = computed(() => runtime.value?.executions.filter((item) => item.state === "executing").length ?? 0);
 const runningState = computed(() => (activeCount.value > 0 ? "running" : "idle"));
 const workspaceLabel = computed(() => workspaceStore.workspaces.find((item) => item.id === workspaceStore.currentWorkspaceId)?.name ?? "本地工作区");
+
+const connectionState = computed(() => {
+  if (workspaceStore.connectionState === "ready") {
+    return "connected";
+  }
+  if (workspaceStore.connectionState === "loading") {
+    return "reconnecting";
+  }
+  return "disconnected";
+});
+
+const connectionClass = computed(() => {
+  if (connectionState.value === "connected") {
+    return "connected";
+  }
+  if (connectionState.value === "reconnecting") {
+    return "reconnecting";
+  }
+  return "disconnected";
+});
 
 onMounted(async () => {
   await initializeWorkspaceContext();
@@ -162,6 +222,13 @@ function updateModel(value: string): void {
   setConversationModel(activeConversation.value.id, value);
 }
 
+function changeInspectorTab(tab: InspectorTabKey): void {
+  if (!activeConversation.value) {
+    return;
+  }
+  setConversationInspectorTab(activeConversation.value.id, tab);
+}
+
 async function sendMessage(): Promise<void> {
   if (!activeConversation.value || !activeProject.value) {
     return;
@@ -176,19 +243,15 @@ async function stopExecution(): Promise<void> {
   await stopConversationExecution(activeConversation.value);
 }
 
-function rollbackMessage(messageId: string): void {
+async function rollbackMessage(messageId: string): Promise<void> {
   if (!activeConversation.value) {
     return;
   }
-  rollbackConversationToMessage(activeConversation.value.id, messageId);
+  await rollbackConversationToMessage(activeConversation.value.id, messageId);
 }
 
-async function addProjectByPrompt(): Promise<void> {
-  const name = window.prompt("新增项目名称", "New Project");
-  if (!name) {
-    return;
-  }
-  await addProject({ name, repo_path: "/workspace/new-project", is_git: true });
+async function importProjectDirectory(repoPath: string): Promise<void> {
+  await importProjectByDirectory(repoPath);
 }
 
 async function deleteProjectById(projectId: string): Promise<void> {
@@ -216,6 +279,72 @@ function selectConversation(projectId: string, conversationId: string): void {
   setActiveConversation(conversationId);
 }
 
+async function exportConversation(conversationId: string): Promise<void> {
+  const markdown = await exportConversationById(conversationId);
+  if (!markdown) {
+    return;
+  }
+
+  const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${conversationId}.md`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function createWorkspace(payload: { hub_url: string; username: string; password: string }): Promise<void> {
+  const result = await createRemoteConnection(payload);
+  upsertWorkspace(result.workspace);
+  setWorkspaceConnection(result.connection);
+  if (result.access_token) {
+    setWorkspaceToken(result.workspace.id, result.access_token);
+  }
+  await switchWorkspaceContext(result.workspace.id);
+  await refreshProjects();
+}
+
+async function switchWorkspace(workspaceId: string): Promise<void> {
+  await switchWorkspaceContext(workspaceId);
+  await refreshProjects();
+}
+
+function openAccount(): void {
+  void router.push("/remote/account");
+}
+
+function openSettings(): void {
+  void router.push("/settings/theme");
+}
+
+function startEditConversationName(): void {
+  if (!activeConversation.value) {
+    return;
+  }
+  conversationNameDraft.value = activeConversation.value.name;
+  editingConversationName.value = true;
+}
+
+function onConversationNameInput(event: Event): void {
+  conversationNameDraft.value = (event.target as HTMLInputElement).value;
+}
+
+async function saveConversationName(): Promise<void> {
+  if (!editingConversationName.value || !activeConversation.value || !activeProject.value) {
+    editingConversationName.value = false;
+    return;
+  }
+
+  const name = conversationNameDraft.value.trim();
+  editingConversationName.value = false;
+  if (name === "" || name === activeConversation.value.name) {
+    return;
+  }
+
+  await renameConversationById(activeProject.value.id, activeConversation.value.id, name);
+}
+
 async function commitDiff(): Promise<void> {
   if (!activeConversation.value) {
     return;
@@ -239,17 +368,19 @@ function exportPatch(): void {
 .screen {
   height: 100vh;
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: auto 1fr;
   gap: var(--global-space-12);
   padding: var(--global-space-12);
   background: var(--semantic-bg);
 }
+
 .content {
   padding: var(--global-space-8) var(--global-space-12) 0;
   display: grid;
   grid-template-rows: 40px 1fr 36px;
   gap: var(--global-space-8);
 }
+
 .top-header {
   border-radius: var(--global-radius-12);
   background: var(--semantic-surface);
@@ -258,41 +389,67 @@ function exportPatch(): void {
   align-items: center;
   padding: 0 var(--global-space-12);
 }
+
 .left,
 .right {
   display: inline-flex;
   align-items: center;
   gap: var(--global-space-8);
 }
+
 .left span,
 .right {
   color: var(--semantic-text-subtle);
   font-size: var(--global-font-size-12);
 }
+
 .left strong {
   color: var(--semantic-text);
   font-size: var(--global-font-size-14);
 }
+
 .state {
   color: var(--semantic-warning);
 }
+
 .connected {
   color: var(--semantic-success);
 }
+
+.reconnecting {
+  color: var(--semantic-warning);
+}
+
+.disconnected {
+  color: var(--semantic-danger);
+}
+
 .main-body {
   display: grid;
   grid-template-columns: 1fr 340px;
   gap: var(--global-space-12);
   min-height: 0;
 }
-.status-bar {
-  border-radius: var(--global-radius-12);
-  background: var(--semantic-surface);
-  color: var(--semantic-text-muted);
-  display: flex;
-  justify-content: space-between;
+
+.icon-btn {
+  border: 0;
+  background: transparent;
+  color: var(--semantic-text-subtle);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
   align-items: center;
-  padding: 0 var(--global-space-12);
-  font-size: var(--global-font-size-11);
+  justify-content: center;
+}
+
+.title-input {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-8);
+  background: var(--semantic-bg);
+  color: var(--semantic-text);
+  height: 26px;
+  padding: 0 var(--global-space-8);
+  min-width: 220px;
 }
 </style>

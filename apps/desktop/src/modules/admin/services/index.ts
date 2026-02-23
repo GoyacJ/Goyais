@@ -19,6 +19,15 @@ export async function upsertAdminUser(workspaceId: string, input: { username: st
     "admin.upsertUser",
     () => getControlClient().post<AdminUser>("/v1/admin/users", { workspace_id: workspaceId, ...input }),
     () => {
+      const existing = mockData.users.find(
+        (user) => user.workspace_id === workspaceId && user.username === input.username
+      );
+      if (existing) {
+        existing.display_name = input.display_name;
+        existing.role = input.role;
+        return existing;
+      }
+
       const created: AdminUser = {
         id: createMockId("u"),
         workspace_id: workspaceId,
@@ -34,11 +43,103 @@ export async function upsertAdminUser(workspaceId: string, input: { username: st
   );
 }
 
+export async function removeAdminUser(userId: string): Promise<void> {
+  return withApiFallback(
+    "admin.removeUser",
+    async () => {
+      await getControlClient().request<void>(`/v1/admin/users/${userId}`, { method: "DELETE" });
+    },
+    () => {
+      mockData.users = mockData.users.filter((item) => item.id !== userId);
+    }
+  );
+}
+
+export async function setAdminUserEnabled(userId: string, enabled: boolean): Promise<AdminUser> {
+  return withApiFallback(
+    "admin.setUserEnabled",
+    () => getControlClient().request<AdminUser>(`/v1/admin/users/${userId}`, { method: "PATCH", body: { enabled } }),
+    () => {
+      const target = mockData.users.find((item) => item.id === userId);
+      if (!target) {
+        throw new Error("User not found");
+      }
+      target.enabled = enabled;
+      return target;
+    }
+  );
+}
+
+export async function setAdminUserRole(userId: string, role: Role): Promise<AdminUser> {
+  return withApiFallback(
+    "admin.setUserRole",
+    () => getControlClient().request<AdminUser>(`/v1/admin/users/${userId}`, { method: "PATCH", body: { role } }),
+    () => {
+      const target = mockData.users.find((item) => item.id === userId);
+      if (!target) {
+        throw new Error("User not found");
+      }
+      target.role = role;
+      return target;
+    }
+  );
+}
+
 export async function listAdminRoles(): Promise<AdminRole[]> {
   return withApiFallback(
     "admin.listRoles",
     () => getControlClient().get<AdminRole[]>("/v1/admin/roles"),
     () => [...mockData.roles]
+  );
+}
+
+export async function upsertAdminRole(input: AdminRole): Promise<AdminRole> {
+  return withApiFallback(
+    "admin.upsertRole",
+    () => getControlClient().post<AdminRole>("/v1/admin/roles", input),
+    () => {
+      const existingIndex = mockData.roles.findIndex((item) => item.key === input.key);
+      if (existingIndex >= 0) {
+        mockData.roles[existingIndex] = { ...input, permissions: [...input.permissions] };
+        return mockData.roles[existingIndex];
+      }
+
+      const created: AdminRole = {
+        key: input.key,
+        name: input.name,
+        permissions: [...input.permissions],
+        enabled: input.enabled
+      };
+      mockData.roles.push(created);
+      return created;
+    }
+  );
+}
+
+export async function removeAdminRole(roleKey: Role): Promise<void> {
+  return withApiFallback(
+    "admin.removeRole",
+    async () => {
+      await getControlClient().request<void>(`/v1/admin/roles/${roleKey}`, { method: "DELETE" });
+    },
+    () => {
+      mockData.roles = mockData.roles.filter((item) => item.key !== roleKey);
+    }
+  );
+}
+
+export async function setAdminRoleEnabled(roleKey: Role, enabled: boolean): Promise<AdminRole> {
+  return withApiFallback(
+    "admin.setRoleEnabled",
+    () => getControlClient().request<AdminRole>(`/v1/admin/roles/${roleKey}`, { method: "PATCH", body: { enabled } }),
+    () => {
+      const target = mockData.roles.find((item) => item.key === roleKey);
+      if (!target) {
+        throw new Error("Role not found");
+      }
+      target.enabled = enabled;
+      return target;
+    }
   );
 }
 

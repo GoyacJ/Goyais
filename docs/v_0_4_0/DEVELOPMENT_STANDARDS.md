@@ -254,7 +254,7 @@ TokenLayerContract {
 1. 核心模块覆盖率 `>= 80%`。
 2. 总体覆盖率 `>= 70%`。
 
-核心模块定义：权限、资源共享、密钥治理、执行调度。
+核心模块定义：权限、资源共享、密钥治理、执行调度、Conversation 回滚快照。
 
 ### 10.3 依赖关系门禁（MUST）
 
@@ -262,7 +262,15 @@ TokenLayerContract {
 2. 禁止跨层反向依赖（UI 依赖基础设施内部实现）。
 3. 禁止模块私有实现被外部模块直接引用。
 
-### 10.4 门禁契约
+### 10.4 语义一致性门禁（MUST）
+
+1. 队列门禁：单 Conversation 必须严格 FIFO，且同一时刻最多一个活动执行。
+2. 回滚门禁：`rollback` 必须恢复消息游标、队列状态、worktree_ref、Inspector 状态。
+3. 项目配置门禁：Conversation 覆盖不得反写 ProjectConfig。
+4. 菜单权限门禁：动态菜单可见性必须与后端权限一致（hidden/disabled/readonly/enabled）。
+5. 模型同步门禁：手动与定时同步路径至少一个失败可重试，且有审计日志。
+
+### 10.5 门禁契约
 
 ```text
 ComplexityPolicy {
@@ -274,6 +282,15 @@ ComplexityPolicy {
 CoveragePolicy {
   core_modules_min: 0.80
   overall_min: 0.70
+  blocking: true
+}
+
+SemanticGatePolicy {
+  queue_fifo_required: true
+  snapshot_rollback_required: true
+  project_config_override_non_persistent: true
+  permission_visibility_consistency: true
+  model_catalog_sync_auditable: true
   blocking: true
 }
 
@@ -292,14 +309,20 @@ QualityGateResult {
 ### 11.1 CI 门禁策略
 
 1. `MUST` 默认 `blocking=true`。
-2. `MUST` 覆盖以下检查：行数、复杂度、覆盖率、token 硬编码扫描、目录结构规则。
+2. `MUST` 覆盖以下检查：行数、复杂度、覆盖率、token 硬编码扫描、目录结构规则、语义一致性门禁。
 3. `MUST` 输出可读失败原因和修复建议。
+4. `MUST` 在 CI 产物中输出以下专项报告：
+   - queue/rollback 语义测试报告
+   - 权限可见性一致性报告
+   - 项目配置继承与覆盖报告
+   - 模型目录同步稳定性报告
 
 ### 11.2 失败处理流程
 
 1. 开发者修复后重新触发 CI。
 2. 若需临时豁免，`MUST` 提交 `StandardsExceptionADR`。
 3. 无 ADR 的门禁绕过请求 `MUST NOT` 被批准。
+4. 语义门禁失败（10.4）不得通过“仅补文档”绕过，必须有代码或测试修复。
 
 ---
 
@@ -340,10 +363,13 @@ StandardsExceptionADR {
 1. 是否符合文件行数和复杂度阈值。
 2. 是否引入非白名单设计模式或过度抽象。
 3. 是否保持工作区隔离与权限校验边界。
-4. 是否覆盖拒绝路径测试（权限拒绝、审批拒绝、Stop、异常恢复）。
+4. 是否覆盖拒绝路径测试（权限拒绝、审批拒绝、Stop、回滚失败、异常恢复）。
 5. 是否满足 token 三层规则且无硬编码样式。
 6. 是否补充必要审计日志与 trace_id 传播。
-7. 是否与 PRD/TECH_ARCH/PLAN 语义一致。
+7. 是否完成动态菜单与固定菜单语义校验（账号信息/设置）。
+8. 是否验证 ProjectConfig 继承与 Conversation 覆盖语义。
+9. 是否验证模型目录同步（手动 + 定时）及失败重试路径。
+10. 是否与 PRD/TECH_ARCH/PLAN 语义一致。
 
 ### 13.2 完成定义（DoD）
 
@@ -354,6 +380,7 @@ StandardsExceptionADR {
 3. 实施阶段目标与 `IMPLEMENTATION_PLAN.md` 对齐。
 4. CI 门禁全部通过，或有有效 ADR 例外。
 5. 测试证据完整且可追溯。
+6. 同步矩阵状态准确（done/missing），不得遗漏必改文档项。
 
 ---
 
@@ -363,6 +390,12 @@ StandardsExceptionADR {
 2. 修改接口/状态机/模型时，`MUST` 同步更新 `TECH_ARCH.md`。
 3. 修改阶段目标或门禁策略时，`MUST` 同步更新 `IMPLEMENTATION_PLAN.md`。
 4. 四份文档任意冲突时，先修复冲突再合并代码，`MUST NOT` 带冲突进入主分支。
+5. 文档同步 `MUST` 附带变化矩阵，至少包含：
+   - `change_type`
+   - `required_docs_to_update`
+   - `required_sections`
+   - `status`
+6. 若 `status=missing` 存在，`MUST NOT` 标记任务完成。
 
 ---
 
@@ -375,5 +408,8 @@ StandardsExceptionADR {
 5. 前端出现全局 views 平铺时，能按第 8 章明确违规。
 6. 组件硬编码色值/间距时，能按第 9 章明确违规。
 7. 紧急修复场景下，能按第 12 章执行 ADR 豁免并追踪到期。
-8. PR 审查可按第 13 章逐项打勾并形成可追溯证据。
-
+8. 回滚语义变更时，能按第 10.4 阻断“只回滚文本不回滚快照”的错误实现。
+9. 项目配置语义变更时，能验证“Conversation 覆盖不反写 ProjectConfig”。
+10. 菜单权限变更时，能验证动态菜单/固定菜单行为与权限一致。
+11. 模型同步策略变更时，能验证手动/定时同步与失败重试审计。
+12. PR 审查可按第 13 章逐项打勾并形成可追溯证据。

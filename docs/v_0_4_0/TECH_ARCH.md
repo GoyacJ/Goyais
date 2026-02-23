@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-- 版本：v0.4.0（2026-02-22 同步版）
+- 版本：v0.4.0（2026-02-23 同步版）
 - 对齐源：`/Users/goya/Repo/Git/Goyais/docs/v_0_4_0/PRD.md`
 - 目的：将 PRD 的业务决策落为可实现的技术架构与边界
 - 适用对象：架构师、后端、前端、AI/Agent 工程师、测试、运维
@@ -46,31 +46,44 @@ Desktop (Tauri + Vue)
 
 ```text
 Workspace
+  -> WorkspaceConnections(remote)
   -> Projects
+    -> ProjectConfigs
     -> Conversations
+      -> ConversationSnapshots
       -> Executions
   -> Resources(model/rule/skill/mcp)
+  -> ModelVendors
+  -> ModelCatalogItems
   -> ShareRequests
   -> PermissionPolicies
+  -> PermissionVisibility
   -> AuditLogs
 ```
 
 ### 3.2 关键语义
 
-1. `Conversation` 为主术语，`Session` 仅作为历史兼容别名。
-2. `Execution` 是一次消息触发的执行过程，不直接暴露为主导航实体。
-3. `Resource` 支持 `private/shared` 与 `workspace_native/local_import` 双维度。
-4. `ShareRequest` 是共享审批的权威记录。
+1. `Conversation` 为主术语，`Session` 不作为主语义。
+2. `WorkspaceConnection` 仅用于 remote 工作区，承载 `hub_url/username` 与连接状态。
+3. `ProjectConfig` 是项目级资源默认绑定（models/rules/skills/mcps），Conversation 仅可覆盖不反写。
+4. `ConversationSnapshot` 是回滚锚点，恢复消息游标、队列、worktree 引用、Inspector 视图状态。
+5. `Execution` 是消息触发的内部执行单元；Conversation 是队列与锁边界。
+6. `Resource` 支持 `private/shared` 与 `workspace_native/local_import` 双维度。
+7. `ShareRequest` 是共享审批权威记录，支持 `pending/approved/rejected/revoked` 全状态流转。
 
-### 3.3 状态机（Conversation + Execution）
+### 3.3 状态机（Conversation + Execution + Snapshot）
 
 ```text
 Conversation queue_state:
   idle -> running -> queued -> running -> idle
+      \-> rolling_back -> idle
 
 Execution state:
   queued -> pending -> executing -> confirming -> executing -> completed
                                    \-> failed / cancelled
+
+ConversationSnapshot state:
+  created -> applied -> stale
 ```
 
 不变量：
@@ -78,6 +91,8 @@ Execution state:
 1. 同一 Conversation 仅允许一个 `executing|confirming` 状态 Execution。
 2. 队列必须 FIFO。
 3. Stop 只影响当前执行，不清空后续队列。
+4. 回滚只允许指向当前 Conversation 内已有消息，且必须写审计。
+5. 回滚后目标消息后的队列与执行状态必须重算。
 
 ---
 
@@ -211,14 +226,14 @@ private resource
 
 ### 7.1 请求入口
 
-`POST /v1/conversations/{id}/executions`
+`POST /v1/conversations/{conversation_id}/messages`
 
 处理流程：
 
-1. 创建 Execution 记录（默认 `queued`）。
-2. 检查 Conversation 是否空闲。
-3. 空闲则调度为 `pending -> executing`。
-4. 忙碌则排队。
+1. 写入用户消息。
+2. 生成 Execution 记录（空闲进入 `pending`，忙碌进入 `queued`）。
+3. 返回 `execution_id`、`queue_state`、`queue_index`。
+4. 触发队列调度器异步推进。
 
 ### 7.2 Queue Dispatcher
 
@@ -233,20 +248,32 @@ private resource
 1. 从队列取最早一条 queued 进入 pending。
 2. 调度到可用 worker。
 3. 更新 Conversation `active_execution_id`。
+4. 推送 `execution_started` 事件并刷新 Inspector 执行态。
 
 ### 7.3 Stop 语义
 
-`POST /v1/conversations/{id}/executions/{eid}/cancel`
+`POST /v1/conversations/{conversation_id}/stop`
 
-1. 只取消 `eid` 当前执行。
+1. 只取消当前 `active_execution_id`。
 2. 不删除队列中后续消息。
 3. 触发 dispatcher 拉起下一条 queued。
+4. 产出 `execution_stopped` 审计事件。
 
-### 7.4 Plan / Agent 模式
+### 7.4 回滚语义（ConversationSnapshot）
 
-1. Conversation 字段 `default_mode=agent`。
-2. Execution 使用提交时 mode 快照，防止执行中配置飘移。
-3. P0 支持 mode 切换；P1 扩展更丰富 plan gate。
+`POST /v1/conversations/{conversation_id}/rollback`
+
+1. 入参 `message_id` 必须属于当前 Conversation 且可追溯到有效快照。
+2. Hub 锁定 Conversation，切换状态为 `rolling_back`。
+3. 应用快照：恢复消息游标、队列、worktree_ref、Inspector 状态。
+4. 重算目标消息之后的 queued 列表，释放锁并回到 `idle|running`。
+5. 回滚全过程强制写审计与事件：`rollback_requested`、`snapshot_applied`、`rollback_completed`。
+
+### 7.5 Plan / Agent 与模型切换
+
+1. Conversation 字段 `mode` 默认 `agent`。
+2. Execution 使用提交时 `mode_snapshot` 与 `model_snapshot`，防止执行中配置飘移。
+3. 模式与模型切换仅影响后续 Execution。
 
 ---
 
@@ -280,20 +307,24 @@ private resource
 #### Workspace / Auth
 
 1. `GET /v1/workspaces`
-2. `POST /v1/workspaces/remote/connect`
+2. `POST /v1/workspaces/remote-connections`
 3. `POST /v1/auth/login`
 4. `POST /v1/auth/refresh`
 
 #### Project / Conversation / Execution
 
 1. `GET|POST /v1/projects`
-2. `GET|POST /v1/projects/{id}/conversations`
-3. `POST /v1/conversations/{id}/executions`
-4. `POST /v1/conversations/{id}/executions/{eid}/cancel`
-5. `POST /v1/executions/{eid}/confirm`
-6. `POST /v1/executions/{eid}/commit`
-7. `POST /v1/executions/{eid}/discard`
-8. `GET /v1/conversations/{id}/events` (SSE)
+2. `POST /v1/projects/import`（仅目录）
+3. `PUT /v1/projects/{project_id}/config`
+4. `GET|POST /v1/projects/{project_id}/conversations`
+5. `POST /v1/conversations/{conversation_id}/messages`
+6. `POST /v1/conversations/{conversation_id}/stop`
+7. `POST /v1/conversations/{conversation_id}/rollback`
+8. `GET /v1/conversations/{conversation_id}/export?format=markdown`
+9. `GET /v1/conversations/{conversation_id}/events` (SSE)
+10. `POST /v1/executions/{execution_id}/confirm`
+11. `POST /v1/executions/{execution_id}/commit`
+12. `POST /v1/executions/{execution_id}/discard`
 
 #### Resource / Share
 
@@ -303,14 +334,19 @@ private resource
 4. `POST /v1/share-requests/{request_id}/approve`
 5. `POST /v1/share-requests/{request_id}/reject`
 6. `POST /v1/shared-resources/{id}/revoke`
+7. `GET /v1/workspaces/{workspace_id}/model-catalog`
+8. `POST /v1/workspaces/{workspace_id}/model-catalog/sync`
 
 #### Admin（P0）
 
 1. `POST /v1/admin/users`
-2. `POST /v1/admin/users/{id}/roles`
-3. `POST /v1/admin/permissions/menu-bindings`
-4. `POST /v1/admin/permissions/data-bindings`
-5. `POST /v1/admin/permissions/action-bindings`
+2. `PATCH /v1/admin/users/{id}`
+3. `POST /v1/admin/users/{id}/roles`
+4. `POST /v1/admin/roles`
+5. `PATCH /v1/admin/roles/{id}`
+6. `POST /v1/admin/permissions/menu-bindings`
+7. `POST /v1/admin/permissions/data-bindings`
+8. `POST /v1/admin/permissions/action-bindings`
 
 ### 9.2 内部 API（Hub <-> Worker）
 
@@ -319,6 +355,7 @@ private resource
 3. `POST /internal/secrets/resolve`
 4. `POST /internal/runtimes/register`
 5. `POST /internal/runtimes/heartbeat`
+6. `POST /internal/rollback/apply`
 
 ### 9.3 错误响应
 
@@ -328,7 +365,11 @@ private resource
 {
   "code": "CONVERSATION_BUSY",
   "message": "Conversation is currently executing another task",
-  "details": {"active_execution_id": "exec_..."},
+  "details": {
+    "active_execution_id": "exec_...",
+    "queue_state": "running",
+    "queue_index": 2
+  },
   "trace_id": "tr_..."
 }
 ```
@@ -348,8 +389,11 @@ private resource
 7. `confirmation_resolved`
 8. `diff_generated`
 9. `execution_stopped`
-10. `execution_done`
-11. `execution_error`
+10. `rollback_requested`
+11. `snapshot_applied`
+12. `rollback_completed`
+13. `execution_done`
+14. `execution_error`
 
 ### 10.2 事件基础字段
 
@@ -361,6 +405,7 @@ private resource
   "trace_id": "tr_...",
   "sequence": 42,
   "queue_index": 1,
+  "snapshot_id": "snap_...",
   "timestamp": "2026-02-22T10:30:00Z",
   "payload": {}
 }
@@ -386,6 +431,17 @@ CREATE TABLE workspaces (
   tenant_id TEXT,
   is_default_local BOOLEAN NOT NULL DEFAULT FALSE,
   hub_url TEXT,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE workspace_connections (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  hub_url TEXT NOT NULL,
+  username TEXT NOT NULL,
+  auth_state TEXT NOT NULL CHECK(auth_state IN ('connected','reconnecting','disconnected')),
+  last_connected_at DATETIME,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
 );
@@ -422,6 +478,16 @@ CREATE TABLE abac_policies (
   context_expr TEXT NOT NULL,
   enabled BOOLEAN NOT NULL DEFAULT TRUE
 );
+
+CREATE TABLE permission_visibility (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  role_key TEXT NOT NULL,
+  menu_key TEXT NOT NULL,
+  visibility TEXT NOT NULL CHECK(visibility IN ('hidden','disabled','readonly','enabled')),
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+);
 ```
 
 ### 11.2 资源与共享
@@ -438,6 +504,27 @@ CREATE TABLE resources (
   share_status TEXT NOT NULL CHECK(share_status IN ('not_shared','pending','approved','rejected','revoked')),
   spec_json TEXT NOT NULL,
   secret_ref TEXT,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE model_vendors (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  vendor_name TEXT NOT NULL CHECK(vendor_name IN ('OpenAI','Google','Qwen','Doubao','Zhipu','MiniMax','Local')),
+  status TEXT NOT NULL CHECK(status IN ('enabled','disabled')),
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE model_catalog_items (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  vendor_id TEXT NOT NULL,
+  model_key TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('enabled','disabled')),
+  last_synced_at DATETIME,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
 );
@@ -469,11 +556,14 @@ CREATE TABLE projects (
   updated_at DATETIME NOT NULL
 );
 
-CREATE TABLE project_resource_bindings (
-  project_id TEXT NOT NULL,
-  resource_id TEXT NOT NULL,
-  is_default BOOLEAN NOT NULL DEFAULT FALSE,
-  PRIMARY KEY(project_id, resource_id)
+CREATE TABLE project_configs (
+  project_id TEXT PRIMARY KEY,
+  default_model_id TEXT,
+  model_ids_json TEXT NOT NULL,
+  rule_ids_json TEXT NOT NULL,
+  skill_ids_json TEXT NOT NULL,
+  mcp_ids_json TEXT NOT NULL,
+  updated_at DATETIME NOT NULL
 );
 
 CREATE TABLE conversations (
@@ -488,6 +578,17 @@ CREATE TABLE conversations (
   archived BOOLEAN NOT NULL DEFAULT FALSE,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE conversation_snapshots (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL,
+  rollback_point_message_id TEXT NOT NULL,
+  queue_state TEXT NOT NULL CHECK(queue_state IN ('idle','running','queued')),
+  worktree_ref TEXT,
+  inspector_state_json TEXT NOT NULL,
+  snapshot_state TEXT NOT NULL CHECK(snapshot_state IN ('created','applied','stale')),
+  created_at DATETIME NOT NULL
 );
 
 CREATE TABLE executions (
@@ -608,23 +709,31 @@ while True:
 
 ### 14.1 页面架构
 
-1. Workspace 切换与连接管理。
-2. Project 列表与配置。
-3. Conversation 主界面（事件流 + 输入 + 队列状态）。
-4. Settings（资源管理 + 诊断）。
-5. Admin Console（用户/权限/审批）。
+1. 主屏幕：左侧导航 + 中部 Conversation 工作区 + 右侧 Inspector + 底部状态栏。
+2. 左侧导航：工作区切换（含新增远程工作区）、项目树、用户触发器上拉菜单。
+3. 账号信息页：动态权限菜单 + 账号/工作区信息 + 成员角色/权限审计。
+4. 设置页：固定菜单（主题、国际化、更新与诊断、通用设置）。
+5. 工作区共享配置页：Agent/模型/Rules/Skills/MCP，按入口与权限展示能力差异。
+6. 项目配置入口：同时出现在账号信息与设置中。
 
-### 14.2 状态管理建议
+### 14.2 关键交互约束
 
-1. 全局：workspace/auth/navigation。
-2. 领域：conversation/execution/resource/admin。
-3. 视图：ui transient state。
+1. 输入区固定顺序：`+功能菜单 -> Agent/Plan -> 模型切换 -> 发送按钮`。
+2. Conversation 区域消息方向：AI 在左、用户在右。
+3. 执行中发送新消息必须入队，不能打断当前执行。
+4. “回滚到此处”必须走快照回滚并更新 Inspector 状态。
 
-### 14.3 UI 实施建议
+### 14.3 状态管理建议
+
+1. 全局：workspace/auth/navigation/connection。
+2. 领域：conversation/execution/snapshot/resource/admin/project_config。
+3. 视图：ui transient state（tab、drawer、dialog、selection）。
+
+### 14.4 UI 实施建议
 
 1. 推荐使用 Pencil MCP 进行样式与交互基线沉淀。
 2. 参考：[Pencil Docs](https://docs.pencil.dev)
-3. 非发布阻塞，但应在核心页面优先采用。
+3. 核心页面必须遵守 token 三层，不得硬编码样式值。
 
 ---
 
@@ -717,39 +826,50 @@ while True:
 
 ## 20. 附录：关键接口示例
 
-### 20.1 资源导入
+### 20.1 新增远程工作区连接
 
-`POST /v1/workspaces/{workspace_id}/resource-imports`
-
-```json
-{
-  "resource_type": "model",
-  "source_workspace": "local_default",
-  "source_resource_id": "res_local_model_01",
-  "target_name": "my-private-claude",
-  "import_secret": true
-}
-```
-
-### 20.2 共享申请
-
-`POST /v1/workspaces/{workspace_id}/share-requests`
+`POST /v1/workspaces/remote-connections`
 
 ```json
 {
-  "resource_id": "res_123",
-  "reason": "team standard model"
+  "hub_url": "https://hub-prod.goyais.io",
+  "username": "admin@example.com",
+  "password": "******"
 }
 ```
 
-### 20.3 审批通过
+### 20.2 Conversation 快照回滚
 
-`POST /v1/share-requests/{request_id}/approve`
+`POST /v1/conversations/{conversation_id}/rollback`
 
 ```json
 {
-  "comment": "approved for team use",
-  "risk_acknowledged": true
+  "message_id": "msg_42",
+  "reason": "rollback_to_user_selected_point"
 }
 ```
 
+### 20.3 项目配置绑定
+
+`PUT /v1/projects/{project_id}/config`
+
+```json
+{
+  "default_model_id": "model_openai_gpt_4_1",
+  "model_ids": ["model_openai_gpt_4_1"],
+  "rule_ids": ["rule_secure_defaults"],
+  "skill_ids": ["skill_review_pr"],
+  "mcp_ids": ["mcp_github"]
+}
+```
+
+### 20.4 模型目录同步
+
+`POST /v1/workspaces/{workspace_id}/model-catalog/sync`
+
+```json
+{
+  "mode": "manual",
+  "vendors": ["OpenAI", "Google", "Qwen", "Doubao", "Zhipu", "MiniMax", "Local"]
+}
+```

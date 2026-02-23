@@ -9,11 +9,13 @@ export type ConnectionStatus = "connected" | "reconnecting" | "disconnected";
 export type ResourceType = "model" | "rule" | "skill" | "mcp";
 export type ResourceScope = "private" | "shared";
 export type ShareStatus = "pending" | "approved" | "denied" | "revoked";
+export type ModelVendorName = "OpenAI" | "Google" | "Qwen" | "Doubao" | "Zhipu" | "MiniMax" | "Local";
 export type MenuKey =
   | "main"
   | "remote_account"
   | "remote_members_roles"
   | "remote_permissions_audit"
+  | "workspace_project_config"
   | "workspace_agent"
   | "workspace_model"
   | "workspace_rules"
@@ -35,14 +37,31 @@ export type Workspace = {
   auth_mode: AuthMode;
 };
 
+export type WorkspaceConnection = {
+  workspace_id: string;
+  hub_url: string;
+  username: string;
+  connection_status: ConnectionStatus;
+  connected_at: string;
+  access_token?: string;
+};
+
+export type WorkspaceConnectionResult = {
+  workspace: Workspace;
+  connection: WorkspaceConnection;
+  access_token?: string;
+};
+
 export type ListEnvelope<T> = {
   items: T[];
   next_cursor: string | null;
 };
 
 export type CreateWorkspaceRequest = {
-  name: string;
+  name?: string;
   hub_url: string;
+  username: string;
+  password: string;
   login_disabled?: boolean;
   auth_mode?: Exclude<AuthMode, "disabled">;
 };
@@ -93,6 +112,15 @@ export type Project = {
   updated_at: string;
 };
 
+export type ProjectConfig = {
+  project_id: string;
+  model_id: string | null;
+  rule_ids: string[];
+  skill_ids: string[];
+  mcp_ids: string[];
+  updated_at: string;
+};
+
 export type Conversation = {
   id: string;
   workspace_id: string;
@@ -106,6 +134,8 @@ export type Conversation = {
   updated_at: string;
 };
 
+export type InspectorTabKey = "diff" | "run" | "files" | "risk";
+
 export type MessageRole = "user" | "assistant" | "system";
 
 export type ConversationMessage = {
@@ -116,6 +146,20 @@ export type ConversationMessage = {
   created_at: string;
   queue_index?: number;
   can_rollback?: boolean;
+};
+
+export type ConversationSnapshot = {
+  id: string;
+  conversation_id: string;
+  rollback_point_message_id: string;
+  queue_state: QueueState;
+  worktree_ref: string | null;
+  inspector_state: {
+    tab: InspectorTabKey;
+  };
+  messages: ConversationMessage[];
+  execution_ids: string[];
+  created_at: string;
 };
 
 export type Execution = {
@@ -189,6 +233,22 @@ export type Resource = {
   description?: string;
   created_at: string;
   updated_at: string;
+};
+
+export type ModelVendor = {
+  workspace_id: string;
+  name: ModelVendorName;
+  enabled: boolean;
+  updated_at: string;
+};
+
+export type ModelCatalogItem = {
+  workspace_id: string;
+  vendor: ModelVendorName;
+  model_id: string;
+  enabled: boolean;
+  status: "active" | "deprecated" | "preview";
+  synced_at: string;
 };
 
 export type ResourceImportRequest = {

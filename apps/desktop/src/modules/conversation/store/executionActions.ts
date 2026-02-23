@@ -3,15 +3,19 @@ import {
   commitExecution,
   createExecution,
   discardExecution,
-  loadExecutionDiff
+  loadExecutionDiff,
+  rollbackExecution
 } from "@/modules/conversation/services";
 import { createExecutionEvent } from "@/modules/conversation/store/events";
 import {
   clearConversationTimer,
   conversationStore,
   countActiveAndQueued,
+  createConversationSnapshot,
   ensureConversationRuntime,
+  findSnapshotForMessage,
   getLatestFinishedExecution,
+  pushConversationSnapshot,
   type ConversationRuntime
 } from "@/modules/conversation/store/state";
 import { toDisplayError } from "@/shared/services/errorMapper";
@@ -41,6 +45,10 @@ export async function submitConversationMessage(
     created_at: new Date().toISOString()
   };
   runtime.messages.push(userMessage);
+  pushConversationSnapshot(
+    conversation.id,
+    createConversationSnapshot(runtime, conversation.id, userMessage.id)
+  );
 
   try {
     const response = await createExecution(conversation, {
@@ -51,6 +59,7 @@ export async function submitConversationMessage(
 
     const execution = {
       ...response.execution,
+      message_id: userMessage.id,
       queue_index: queueIndex
     };
 
@@ -60,7 +69,7 @@ export async function submitConversationMessage(
         message_id: userMessage.id
       })
     );
-    startOrQueueExecution(conversation, runtime, execution);
+    startOrQueueExecution(conversation.id, runtime, execution);
   } catch (error) {
     conversationStore.error = toDisplayError(error);
     runtime.messages.push({
@@ -106,30 +115,64 @@ export async function stopConversationExecution(conversation: Conversation): Pro
     created_at: new Date().toISOString()
   });
 
-  drainQueue(conversation, runtime);
+  drainQueue(conversation.id, runtime);
 }
 
-export function rollbackConversationToMessage(conversationId: string, messageId: string): void {
+export async function rollbackConversationToMessage(conversationId: string, messageId: string): Promise<void> {
   const runtime = conversationStore.byConversationId[conversationId];
   if (!runtime) {
     return;
   }
 
-  const targetIndex = runtime.messages.findIndex((message) => message.id === messageId);
-  if (targetIndex < 0) {
+  const targetMessage = runtime.messages.find((message) => message.id === messageId);
+  if (!targetMessage || targetMessage.role !== "user") {
     return;
   }
 
-  const targetMessage = runtime.messages[targetIndex];
-  if (targetMessage.role !== "user") {
-    return;
-  }
-
-  runtime.messages = runtime.messages.slice(0, targetIndex + 1);
-  runtime.executions = runtime.executions.filter((execution) =>
-    runtime.messages.some((message) => message.id === execution.message_id)
+  runtime.events.push(
+    createExecutionEvent(conversationId, "", targetMessage.queue_index ?? 0, "thinking_delta", {
+      stage: "rollback_requested",
+      message_id: messageId
+    })
   );
+
+  try {
+    await rollbackExecution(conversationId, messageId);
+  } catch (error) {
+    conversationStore.error = toDisplayError(error);
+  }
+
+  const snapshot = findSnapshotForMessage(conversationId, messageId);
+  if (!snapshot) {
+    return;
+  }
+
   clearConversationTimer(conversationId);
+
+  runtime.messages = snapshot.messages.map((message) => ({ ...message }));
+  runtime.executions = runtime.executions
+    .filter((execution) => snapshot.execution_ids.includes(execution.id))
+    .filter((execution) => runtime.messages.some((message) => message.id === execution.message_id));
+  runtime.snapshots = runtime.snapshots.filter((item) => item.created_at <= snapshot.created_at);
+  runtime.worktreeRef = snapshot.worktree_ref;
+  runtime.inspectorTab = snapshot.inspector_state.tab;
+  runtime.diff = [];
+
+  runtime.events.push(
+    createExecutionEvent(conversationId, "", targetMessage.queue_index ?? 0, "thinking_delta", {
+      stage: "snapshot_applied",
+      message_id: messageId
+    })
+  );
+
+  runtime.events.push(
+    createExecutionEvent(conversationId, "", targetMessage.queue_index ?? 0, "thinking_delta", {
+      stage: "rollback_completed",
+      message_id: messageId
+    })
+  );
+
+  drainQueue(conversationId, runtime);
 }
 
 export async function commitLatestDiff(conversationId: string): Promise<void> {
@@ -159,7 +202,7 @@ export async function discardLatestDiff(conversationId: string): Promise<void> {
 }
 
 function startOrQueueExecution(
-  conversation: Conversation,
+  conversationId: string,
   runtime: ConversationRuntime,
   execution: Execution
 ): void {
@@ -168,36 +211,36 @@ function startOrQueueExecution(
     execution.state = "queued";
     execution.updated_at = new Date().toISOString();
     runtime.events.push(
-      createExecutionEvent(conversation.id, execution.id, execution.queue_index, "thinking_delta", {
+      createExecutionEvent(conversationId, execution.id, execution.queue_index, "thinking_delta", {
         note: "queued_waiting"
       })
     );
     return;
   }
 
-  runExecution(conversation, runtime, execution);
+  runExecution(conversationId, runtime, execution);
 }
 
 function runExecution(
-  conversation: Conversation,
+  conversationId: string,
   runtime: ConversationRuntime,
   execution: Execution
 ): void {
   execution.state = "executing";
   execution.updated_at = new Date().toISOString();
   runtime.events.push(
-    createExecutionEvent(conversation.id, execution.id, execution.queue_index, "execution_started", {
+    createExecutionEvent(conversationId, execution.id, execution.queue_index, "execution_started", {
       mode: execution.mode
     })
   );
 
-  conversationStore.timers[conversation.id] = setTimeout(async () => {
-    await completeExecution(conversation, runtime, execution);
+  conversationStore.timers[conversationId] = setTimeout(async () => {
+    await completeExecution(conversationId, runtime, execution);
   }, 2200);
 }
 
 async function completeExecution(
-  conversation: Conversation,
+  conversationId: string,
   runtime: ConversationRuntime,
   execution: Execution
 ): Promise<void> {
@@ -206,14 +249,14 @@ async function completeExecution(
 
   runtime.messages.push({
     id: createMockId("msg"),
-    conversation_id: conversation.id,
+    conversation_id: conversationId,
     role: "assistant",
     content: `Execution ${execution.id} done. Queue index: ${execution.queue_index}.`,
     created_at: new Date().toISOString()
   });
 
   runtime.events.push(
-    createExecutionEvent(conversation.id, execution.id, execution.queue_index, "execution_done", {
+    createExecutionEvent(conversationId, execution.id, execution.queue_index, "execution_done", {
       state: execution.state
     })
   );
@@ -221,19 +264,24 @@ async function completeExecution(
   try {
     runtime.diff = await loadExecutionDiff(execution.id);
     runtime.events.push(
-      createExecutionEvent(conversation.id, execution.id, execution.queue_index, "diff_generated", {
+      createExecutionEvent(conversationId, execution.id, execution.queue_index, "diff_generated", {
         files: runtime.diff.length
       })
     );
   } catch (error) {
     conversationStore.error = toDisplayError(error);
   } finally {
-    clearConversationTimer(conversation.id);
-    drainQueue(conversation, runtime);
+    clearConversationTimer(conversationId);
+    drainQueue(conversationId, runtime);
   }
 }
 
-function drainQueue(conversation: Conversation, runtime: ConversationRuntime): void {
+function drainQueue(conversationId: string, runtime: ConversationRuntime): void {
+  const hasActive = runtime.executions.some((execution) => execution.state === "executing" || execution.state === "confirming");
+  if (hasActive) {
+    return;
+  }
+
   const queued = runtime.executions
     .filter((execution) => execution.state === "queued")
     .sort((a, b) => a.queue_index - b.queue_index);
@@ -241,5 +289,5 @@ function drainQueue(conversation: Conversation, runtime: ConversationRuntime): v
     return;
   }
 
-  runExecution(conversation, runtime, queued[0]);
+  runExecution(conversationId, runtime, queued[0]);
 }

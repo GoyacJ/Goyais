@@ -14,8 +14,11 @@ Goyais v0.4.0 开发启动命令（分别在三个终端执行）
 2) Worker:
    PORT=${worker_port} make dev-worker
 
-3) Desktop:
+3) Desktop Client (Tauri):
    DESKTOP_PORT=${desktop_port} make dev-desktop
+
+4) Desktop Web (Vite, optional):
+   DESKTOP_PORT=${desktop_port} make dev-web
 
 健康检查:
    curl http://127.0.0.1:${hub_port}/health

@@ -15,6 +15,8 @@ alwaysApply: true
 - Command Guard：默认拒绝明显危险命令模式。
 - high/critical 风险动作必须具备显式确认语义。
 - 被拒绝动作也要在输出中保留可追踪审计理由。
+- 回滚动作必须记录快照应用审计（request/apply/complete）。
+- 模型目录同步失败必须保留可追踪错误与重试记录。
 
 风险基线：
 

@@ -2,7 +2,7 @@ HUB_PORT ?= 8787
 WORKER_PORT ?= 8788
 DESKTOP_PORT ?= 5173
 
-.PHONY: dev dev-hub dev-worker dev-desktop health health-app test lint test-hub test-worker test-desktop lint-hub lint-worker lint-desktop
+.PHONY: dev dev-hub dev-worker dev-desktop dev-web health health-app test lint test-hub test-worker test-desktop lint-hub lint-worker lint-desktop
 
 dev:
 	@scripts/dev/print_commands.sh $(HUB_PORT) $(WORKER_PORT) $(DESKTOP_PORT)
@@ -14,6 +14,9 @@ dev-worker:
 	@cd services/worker && PORT=$(WORKER_PORT) uv run python -m app.main
 
 dev-desktop:
+	@cd apps/desktop && pnpm tauri:dev
+
+dev-web:
 	@cd apps/desktop && DESKTOP_PORT=$(DESKTOP_PORT) pnpm dev --port $(DESKTOP_PORT)
 
 health:

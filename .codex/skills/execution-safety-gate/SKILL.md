@@ -38,9 +38,12 @@ description: 对写入/执行/网络/删除类动作实施风险分级与确认�
 - `guard_checks`（path/command/boundary）
 - `audit_expectation`（应记录与可追踪内容）
 - `blocked_reasons`（如被禁止）
+- `rollback_audit_requirements`（涉及回滚时必填）
 
 ## 护栏
 
 - high/critical 动作不得静默视为安全。
 - 超出边界或明显危险动作必须阻断并解释原因。
 - 与用户的风险说明默认使用中文。
+- 涉及 `rollback` 的动作必须要求事件审计至少包含：request/apply/complete。
+- 涉及模型目录同步失败时必须要求可追踪错误与重试审计。

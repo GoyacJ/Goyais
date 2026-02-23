@@ -8,6 +8,7 @@
     "dev:hub": "make dev-hub",
     "dev:worker": "make dev-worker",
     "dev:desktop": "make dev-desktop",
+    "dev:web": "make dev-web",
     "test": "make test",
     "lint": "make lint"
   }

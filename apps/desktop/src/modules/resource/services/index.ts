@@ -1,7 +1,15 @@
 import { getControlClient } from "@/shared/services/clients";
 import { withApiFallback } from "@/shared/services/fallback";
 import { createMockId, mockData } from "@/shared/services/mockData";
-import type { ListEnvelope, Resource, ResourceImportRequest, ShareRequest, ShareStatus } from "@/shared/types/api";
+import type {
+  ListEnvelope,
+  ModelCatalogItem,
+  ModelVendorName,
+  Resource,
+  ResourceImportRequest,
+  ShareRequest,
+  ShareStatus
+} from "@/shared/types/api";
 
 export async function listResources(workspaceId: string): Promise<ListEnvelope<Resource>> {
   return withApiFallback(
@@ -77,6 +85,46 @@ export async function updateShareStatus(requestId: string, status: Extract<Share
         target.status = status;
         target.updated_at = new Date().toISOString();
       }
+    }
+  );
+}
+
+export async function listModelCatalog(workspaceId: string): Promise<ModelCatalogItem[]> {
+  return withApiFallback(
+    "resource.modelCatalog",
+    () => getControlClient().get<ModelCatalogItem[]>(`/v1/workspaces/${workspaceId}/model-catalog`),
+    () => {
+      const now = new Date().toISOString();
+      return [
+        { workspace_id: workspaceId, vendor: "OpenAI", model_id: "gpt-4.1", enabled: true, status: "active", synced_at: now },
+        { workspace_id: workspaceId, vendor: "Google", model_id: "gemini-2.0-flash", enabled: true, status: "active", synced_at: now },
+        { workspace_id: workspaceId, vendor: "Qwen", model_id: "qwen-max", enabled: true, status: "active", synced_at: now },
+        { workspace_id: workspaceId, vendor: "Doubao", model_id: "doubao-pro", enabled: true, status: "preview", synced_at: now },
+        { workspace_id: workspaceId, vendor: "Zhipu", model_id: "glm-4.6", enabled: true, status: "active", synced_at: now },
+        { workspace_id: workspaceId, vendor: "MiniMax", model_id: "abab6.5-chat", enabled: false, status: "deprecated", synced_at: now },
+        { workspace_id: workspaceId, vendor: "Local", model_id: "llama3.1:8b", enabled: true, status: "active", synced_at: now }
+      ];
+    }
+  );
+}
+
+export async function syncModelCatalog(workspaceId: string, vendors: ModelVendorName[]): Promise<ModelCatalogItem[]> {
+  return withApiFallback(
+    "resource.modelCatalogSync",
+    () =>
+      getControlClient().post<ModelCatalogItem[]>(`/v1/workspaces/${workspaceId}/model-catalog/sync`, {
+        vendors
+      }),
+    () => {
+      const now = new Date().toISOString();
+      return vendors.map((vendor) => ({
+        workspace_id: workspaceId,
+        vendor,
+        model_id: `${vendor.toLowerCase()}-latest`,
+        enabled: true,
+        status: "active" as const,
+        synced_at: now
+      }));
     }
   );
 }

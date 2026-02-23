@@ -3,18 +3,23 @@ import { reactive } from "vue";
 import {
   createConversation,
   createProject,
+  exportConversationMarkdown,
+  importProjectDirectory,
   listConversations,
   listProjects,
   removeConversation,
-  removeProject
+  removeProject,
+  renameConversation,
+  updateProjectConfig
 } from "@/modules/project/services";
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { getCurrentWorkspace } from "@/shared/stores/workspaceStore";
-import type { Conversation, Project } from "@/shared/types/api";
+import type { Conversation, Project, ProjectConfig } from "@/shared/types/api";
 
 type ProjectState = {
   projects: Project[];
   conversationsByProjectId: Record<string, Conversation[]>;
+  projectConfigsByProjectId: Record<string, ProjectConfig>;
   activeProjectId: string;
   activeConversationId: string;
   loading: boolean;
@@ -24,6 +29,7 @@ type ProjectState = {
 const initialState: ProjectState = {
   projects: [],
   conversationsByProjectId: {},
+  projectConfigsByProjectId: {},
   activeProjectId: "",
   activeConversationId: "",
   loading: false,
@@ -35,6 +41,7 @@ export const projectStore = reactive<ProjectState>({ ...initialState });
 export function resetProjectStore(): void {
   projectStore.projects = [];
   projectStore.conversationsByProjectId = {};
+  projectStore.projectConfigsByProjectId = {};
   projectStore.activeProjectId = "";
   projectStore.activeConversationId = "";
   projectStore.loading = false;
@@ -93,11 +100,28 @@ export async function addProject(input: { name: string; repo_path: string; is_gi
   }
 }
 
+export async function importProjectByDirectory(repoPath: string): Promise<void> {
+  const workspace = getCurrentWorkspace();
+  if (!workspace || repoPath.trim() === "") {
+    return;
+  }
+
+  try {
+    const created = await importProjectDirectory(workspace.id, repoPath);
+    projectStore.projects.push(created);
+    projectStore.activeProjectId = created.id;
+    projectStore.conversationsByProjectId[created.id] = [];
+  } catch (error) {
+    projectStore.error = toDisplayError(error);
+  }
+}
+
 export async function deleteProject(projectId: string): Promise<void> {
   try {
     await removeProject(projectId);
     projectStore.projects = projectStore.projects.filter((project) => project.id !== projectId);
     delete projectStore.conversationsByProjectId[projectId];
+    delete projectStore.projectConfigsByProjectId[projectId];
 
     if (projectStore.activeProjectId === projectId) {
       projectStore.activeProjectId = projectStore.projects[0]?.id ?? "";
@@ -122,6 +146,18 @@ export async function addConversation(project: Project, name: string): Promise<C
   }
 }
 
+export async function renameConversationById(projectId: string, conversationId: string, name: string): Promise<void> {
+  try {
+    const updated = await renameConversation(conversationId, name);
+    const list = projectStore.conversationsByProjectId[projectId] ?? [];
+    projectStore.conversationsByProjectId[projectId] = list.map((conversation) =>
+      conversation.id === conversationId ? updated : conversation
+    );
+  } catch (error) {
+    projectStore.error = toDisplayError(error);
+  }
+}
+
 export async function deleteConversation(projectId: string, conversationId: string): Promise<void> {
   try {
     await removeConversation(conversationId);
@@ -130,6 +166,27 @@ export async function deleteConversation(projectId: string, conversationId: stri
     if (projectStore.activeConversationId === conversationId) {
       projectStore.activeConversationId = projectStore.conversationsByProjectId[projectId]?.[0]?.id ?? "";
     }
+  } catch (error) {
+    projectStore.error = toDisplayError(error);
+  }
+}
+
+export async function exportConversationById(conversationId: string): Promise<string | null> {
+  try {
+    return await exportConversationMarkdown(conversationId);
+  } catch (error) {
+    projectStore.error = toDisplayError(error);
+    return null;
+  }
+}
+
+export async function updateProjectBinding(
+  projectId: string,
+  config: Omit<ProjectConfig, "project_id" | "updated_at">
+): Promise<void> {
+  try {
+    const updated = await updateProjectConfig(projectId, config);
+    projectStore.projectConfigsByProjectId[projectId] = updated;
   } catch (error) {
     projectStore.error = toDisplayError(error);
   }

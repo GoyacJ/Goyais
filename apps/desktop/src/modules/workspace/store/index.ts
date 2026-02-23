@@ -4,8 +4,10 @@ import { refreshMeForCurrentWorkspace } from "@/shared/stores/authStore";
 import { refreshNavigationVisibility } from "@/shared/stores/navigationStore";
 import {
   getCurrentWorkspace,
+  getWorkspaceConnection,
   resetWorkspaceStore,
   setCurrentWorkspace,
+  setWorkspaceConnection,
   setWorkspaces,
   upsertWorkspace,
   workspaceStore
@@ -13,8 +15,10 @@ import {
 
 export {
   getCurrentWorkspace,
+  getWorkspaceConnection,
   resetWorkspaceStore,
   setCurrentWorkspace,
+  setWorkspaceConnection,
   setWorkspaces,
   upsertWorkspace,
   workspaceStore

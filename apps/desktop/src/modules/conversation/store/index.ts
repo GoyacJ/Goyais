@@ -1,6 +1,10 @@
 export {
   clearConversationTimer,
   conversationStore,
+  findSnapshotForMessage,
+  pushConversationSnapshot,
+  setConversationInspectorTab,
+  createConversationSnapshot,
   ensureConversationRuntime,
   getConversationRuntime,
   resetConversationStore,

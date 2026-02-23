@@ -4,7 +4,7 @@ import { createMemoryHistory } from "vue-router";
 import { createAppRouter, resetRouterInitForTests, routes } from "@/router";
 import { authStore, resetAuthStore } from "@/shared/stores/authStore";
 import { resetNavigationStore } from "@/shared/stores/navigationStore";
-import { resetWorkspaceStore, setCurrentWorkspace, setWorkspaces } from "@/shared/stores/workspaceStore";
+import { resetWorkspaceStore, setCurrentWorkspace, setWorkspaces, workspaceStore } from "@/shared/stores/workspaceStore";
 
 describe("desktop routes", () => {
   beforeEach(() => {
@@ -54,6 +54,41 @@ describe("desktop routes", () => {
 
     expect(router.currentRoute.value.path).toBe("/main");
     expect(router.currentRoute.value.query.reason).toBe("remote_required");
+  });
+
+  it("auto switches to remote workspace for remote routes", async () => {
+    setWorkspaces([
+      {
+        id: "ws_local",
+        name: "Local",
+        mode: "local",
+        hub_url: null,
+        is_default_local: true,
+        created_at: "2026-02-23T00:00:00Z",
+        login_disabled: true,
+        auth_mode: "disabled"
+      },
+      {
+        id: "ws_remote",
+        name: "Remote",
+        mode: "remote",
+        hub_url: "https://hub.example.com",
+        is_default_local: false,
+        created_at: "2026-02-23T00:00:00Z",
+        login_disabled: false,
+        auth_mode: "password_or_token"
+      }
+    ]);
+    setCurrentWorkspace("ws_local");
+    resetRouterInitForTests(true);
+
+    const router = createAppRouter(createMemoryHistory());
+    await router.push("/remote/account");
+    await router.isReady();
+
+    expect(router.currentRoute.value.path).toBe("/remote/account");
+    expect(workspaceStore.currentWorkspaceId).toBe("ws_remote");
+    expect(workspaceStore.mode).toBe("remote");
   });
 
   it("redirects admin route to account when admin capability is missing", async () => {

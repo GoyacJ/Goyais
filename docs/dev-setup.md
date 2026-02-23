@@ -7,6 +7,7 @@
 - `pnpm dev:hub`
 - `pnpm dev:runtime`
 - `pnpm dev:desktop`
+- `pnpm dev:web`
 - `pnpm test`
 
 ## v0.2.0 auth modes
@@ -39,10 +40,16 @@ GOYAIS_HUB_BASE_URL=http://127.0.0.1:8787 \
 pnpm dev:runtime
 ```
 
-### 3) Start Desktop
+### 3) Start Desktop Client (Tauri)
 
 ```bash
 pnpm dev:desktop
+```
+
+### 4) Start Desktop Web (optional)
+
+```bash
+pnpm dev:web
 ```
 
 ## Hub-first routing rules

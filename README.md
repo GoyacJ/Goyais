@@ -119,10 +119,16 @@ PORT=8787 GOYAIS_AUTH_MODE=local_open GOYAIS_RUNTIME_SHARED_SECRET=dev-shared pn
 GOYAIS_RUNTIME_REQUIRE_HUB_AUTH=true GOYAIS_RUNTIME_SHARED_SECRET=dev-shared GOYAIS_HUB_BASE_URL=http://127.0.0.1:8787 pnpm dev:runtime
 ```
 
-3. Desktop app:
+3. Desktop client (Tauri):
 
 ```bash
 pnpm dev:desktop
+```
+
+4. Desktop web mode (optional):
+
+```bash
+pnpm dev:web
 ```
 
 Then create a session in the desktop app (Plan mode or Agent mode), run a task, review patch,

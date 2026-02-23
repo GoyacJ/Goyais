@@ -115,10 +115,16 @@ PORT=8787 GOYAIS_AUTH_MODE=local_open GOYAIS_RUNTIME_SHARED_SECRET=dev-shared pn
 GOYAIS_RUNTIME_REQUIRE_HUB_AUTH=true GOYAIS_RUNTIME_SHARED_SECRET=dev-shared GOYAIS_HUB_BASE_URL=http://127.0.0.1:8787 pnpm dev:runtime
 ```
 
-3. 启动桌面端：
+3. 启动桌面客户端（Tauri）：
 
 ```bash
 pnpm dev:desktop
+```
+
+4. 启动桌面 Web 模式（可选）：
+
+```bash
+pnpm dev:web
 ```
 
 随后在桌面端创建 Session（Plan 或 Agent），执行任务并在 UI 中审阅 patch，再进行 commit/discard。

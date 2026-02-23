@@ -22,6 +22,17 @@ globs:
   - `docs/v_0_4_0/IMPLEMENTATION_PLAN.md`
   - `docs/v_0_4_0/DEVELOPMENT_STANDARDS.md`
 
+矩阵约束：
+
+- 必须输出字段：`change_type`、`code_or_doc_change`、`required_docs_to_update`、`required_sections`、`status`。
+- 若 `status=missing` 存在，不得宣称完成。
+
+推荐章节映射（v0.4.0 当前基线）：
+
+- 接口/状态/模型：`TECH_ARCH.md` 重点关注 3/7/9/11/14/20。
+- 阶段与验收：`IMPLEMENTATION_PLAN.md` 重点关注 Phase 3/4/5/7/9 与测试计划映射。
+- 门禁与 DoD：`DEVELOPMENT_STANDARDS.md` 重点关注 10/11/13/14/15。
+
 触发类型：
 
 - API 合同变化

@@ -17,6 +17,8 @@ Codex 的输出必须保持以下不变量：
 - Conversation 之间允许并行执行。
 - 单 Conversation 必须严格 FIFO 且同一时刻仅一个活动执行。
 - Stop 仅终止当前执行并释放锁，不清空后续队列。
+- 回滚必须为快照回滚，恢复消息游标/队列/worktree/Inspector 状态。
+- Conversation 导出默认且仅支持 Markdown（v0.4.0）。
 
 架构不变量：
 
@@ -27,5 +29,9 @@ Codex 的输出必须保持以下不变量：
 资源与共享不变量：
 
 - 资源是一等对象：model/rule/skill/mcp。
+- 项目配置必须通过 `ProjectConfig` 绑定四类资源，Conversation 覆盖不得反写项目。
+- 模型配置必须采用“厂商 -> 模型”两级结构。
+- P0 厂商支持清单固定：OpenAI、Google、Qwen、豆包、智谱、MiniMax、本地。
+- 模型目录同步必须支持手动触发与定时刷新，并可审计。
 - 远程使用本地来源资源必须是“导入为远程副本”语义。
 - 共享必须遵循申请/审批/撤销流程。

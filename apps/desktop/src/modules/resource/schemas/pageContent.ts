@@ -24,14 +24,14 @@ export const workspaceModelCards = [
   {
     title: "厂商配置 Vendor",
     lines: [
-      "OpenAI (configured) · Anthropic (configured) · Azure (disabled)",
+      "OpenAI · Google · Qwen · Doubao · Zhipu · MiniMax · Local",
       "操作: 新增厂商 · 编辑密钥 · 删除厂商"
     ],
     tone: "default" as const
   },
   {
     title: "模型配置 Vendor -> Models",
-    lines: ["OpenAI: gpt-4.1, gpt-4o-mini", "Anthropic: claude-sonnet-4.5", "默认模型: gpt-4.1"],
+    lines: ["OpenAI: gpt-4.1, gpt-4.1-mini", "Google: gemini-2.0-flash", "默认模型: gpt-4.1"],
     tone: "default" as const
   },
   {
@@ -101,6 +101,34 @@ export const workspaceMcpCards = [
   {
     title: "安全与审计",
     lines: ["连接信息、密钥变更与启停动作都会进入审计日志。"],
+    tone: "warning" as const
+  }
+];
+
+export const workspaceProjectConfigCards = [
+  {
+    title: "项目范围绑定",
+    lines: [
+      "绑定维度: 模型 / 规则 / 技能 / MCP",
+      "作用域: project_id",
+      "Conversation 创建时自动继承"
+    ],
+    tone: "default" as const
+  },
+  {
+    title: "覆盖语义",
+    lines: [
+      "Conversation 可临时覆盖模型、规则、技能、MCP",
+      "覆盖不会反写 ProjectConfig"
+    ],
+    tone: "info" as const
+  },
+  {
+    title: "治理与审计",
+    lines: [
+      "远程工作区按 RBAC/ABAC 控制编辑权限",
+      "变更记录写入审计并附带 trace_id"
+    ],
     tone: "warning" as const
   }
 ];

@@ -32,7 +32,7 @@ export function streamConversationEvents(
 export async function createExecution(conversation: Conversation, input: ExecutionCreateRequest): Promise<ExecutionCreateResponse> {
   return withApiFallback(
     "conversation.createExecution",
-    () => getControlClient().post<ExecutionCreateResponse>(`/v1/conversations/${conversation.id}/executions`, input),
+    () => getControlClient().post<ExecutionCreateResponse>(`/v1/conversations/${conversation.id}/messages`, input),
     () => ({
       execution: {
         id: createMockId("exec"),
@@ -52,10 +52,23 @@ export async function createExecution(conversation: Conversation, input: Executi
 }
 
 export async function cancelExecution(conversationId: string, executionId: string): Promise<void> {
+  void executionId;
   return withApiFallback(
     "conversation.cancelExecution",
     async () => {
-      await getControlClient().post<void>(`/v1/conversations/${conversationId}/executions/${executionId}/cancel`);
+      await getControlClient().post<void>(`/v1/conversations/${conversationId}/stop`);
+    },
+    () => undefined
+  );
+}
+
+export async function rollbackExecution(conversationId: string, messageId: string): Promise<void> {
+  return withApiFallback(
+    "conversation.rollback",
+    async () => {
+      await getControlClient().post<void>(`/v1/conversations/${conversationId}/rollback`, {
+        message_id: messageId
+      });
     },
     () => undefined
   );

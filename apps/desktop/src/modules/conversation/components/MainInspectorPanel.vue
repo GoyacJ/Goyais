@@ -1,14 +1,21 @@
 <template>
   <aside class="inspector">
     <p class="title">Inspector</p>
+
     <div class="tabs">
-      <span class="tab active">Diff</span>
-      <span class="tab">Run</span>
-      <span class="tab">Files</span>
-      <span class="tab">Risk</span>
+      <button
+        v-for="item in tabs"
+        :key="item.key"
+        class="tab"
+        :class="{ active: item.key === activeTab }"
+        type="button"
+        @click="$emit('changeTab', item.key)"
+      >
+        {{ item.label }}
+      </button>
     </div>
 
-    <section class="card">
+    <section v-if="activeTab === 'diff'" class="card">
       <div class="card-head">
         <strong>Diff</strong>
         <span>{{ diff.length }} files</span>
@@ -35,21 +42,30 @@
       <p v-if="capability.reason" class="reason">{{ capability.reason }}</p>
     </section>
 
-    <section class="card">
+    <section v-else-if="activeTab === 'run'" class="card">
       <strong>Execution</strong>
       <p>Queue: {{ queuedCount }} · Active: {{ activeCount }}</p>
-      <p class="warning">Approval: pending</p>
+      <p :class="queuedCount > 0 ? 'warning' : 'normal'">{{ queuedCount > 0 ? '消息将按 FIFO 排队执行' : '当前没有排队任务' }}</p>
     </section>
 
-    <section class="card">
-      <strong>Resources / MCP</strong>
-      <p>model: {{ modelId }} · mcp: 3 connected</p>
+    <section v-else-if="activeTab === 'files'" class="card">
+      <strong>Files</strong>
+      <p v-if="diff.length === 0" class="normal">暂无文件变更</p>
+      <ul v-else class="files-list">
+        <li v-for="item in diff" :key="`${item.id}-file`">{{ item.path }}</li>
+      </ul>
+    </section>
+
+    <section v-else class="card">
+      <strong>Risk</strong>
+      <p class="warning">模型: {{ modelId }}</p>
+      <p class="normal">高风险操作需审批并写审计。</p>
     </section>
   </aside>
 </template>
 
 <script setup lang="ts">
-import type { DiffCapability, DiffItem } from "@/shared/types/api";
+import type { DiffCapability, DiffItem, InspectorTabKey } from "@/shared/types/api";
 
 defineProps<{
   diff: DiffItem[];
@@ -57,13 +73,22 @@ defineProps<{
   queuedCount: number;
   activeCount: number;
   modelId: string;
+  activeTab: InspectorTabKey;
 }>();
 
 defineEmits<{
   (event: "commit"): void;
   (event: "discard"): void;
   (event: "exportPatch"): void;
+  (event: "changeTab", tab: InspectorTabKey): void;
 }>();
+
+const tabs: Array<{ key: InspectorTabKey; label: string }> = [
+  { key: "diff", label: "Diff" },
+  { key: "run", label: "Run" },
+  { key: "files", label: "Files" },
+  { key: "risk", label: "Risk" }
+];
 
 function mapChange(type: DiffItem["change_type"]): string {
   if (type === "added") {
@@ -86,26 +111,33 @@ function mapChange(type: DiffItem["change_type"]): string {
   align-content: start;
   gap: var(--global-space-8);
 }
+
 .title {
   margin: 0;
   color: var(--semantic-text-muted);
   font-size: var(--global-font-size-12);
   font-weight: var(--global-font-weight-600);
 }
+
 .tabs {
   display: inline-flex;
-  gap: var(--global-space-8);
-  font-size: var(--global-font-size-11);
+  gap: var(--global-space-4);
 }
+
 .tab {
-  color: var(--semantic-text-subtle);
-}
-.tab.active {
-  color: var(--semantic-text);
+  border: 0;
   border-radius: var(--global-radius-8);
-  background: var(--component-sidebar-item-bg-active);
+  background: transparent;
+  color: var(--semantic-text-subtle);
+  font-size: var(--global-font-size-11);
   padding: var(--global-space-4) var(--global-space-8);
 }
+
+.tab.active {
+  color: var(--semantic-text);
+  background: var(--component-sidebar-item-bg-active);
+}
+
 .card {
   background: var(--semantic-bg);
   border-radius: var(--global-radius-8);
@@ -113,14 +145,17 @@ function mapChange(type: DiffItem["change_type"]): string {
   display: grid;
   gap: var(--global-space-8);
 }
+
 .card-head {
   display: flex;
   justify-content: space-between;
 }
+
 .diff-list {
   display: grid;
   gap: var(--global-space-4);
 }
+
 .diff-row {
   background: var(--semantic-surface);
   border-radius: var(--global-radius-8);
@@ -130,28 +165,36 @@ function mapChange(type: DiffItem["change_type"]): string {
   align-items: center;
   gap: var(--global-space-8);
 }
+
 .path {
   color: var(--semantic-text-muted);
   font-size: var(--global-font-size-11);
   word-break: break-word;
 }
+
 .stat {
   font-size: var(--global-font-size-12);
   font-weight: var(--global-font-weight-700);
 }
+
 .stat.added {
   color: var(--semantic-success);
 }
+
 .stat.deleted {
   color: var(--semantic-danger);
 }
+
 .stat.modified {
   color: var(--semantic-warning);
 }
+
 .actions {
   display: flex;
   gap: var(--global-space-8);
+  flex-wrap: wrap;
 }
+
 .action {
   border: 0;
   border-radius: var(--global-radius-8);
@@ -160,17 +203,26 @@ function mapChange(type: DiffItem["change_type"]): string {
   padding: var(--global-space-4) var(--global-space-8);
   font-size: var(--global-font-size-11);
 }
-.reason {
-  margin: 0;
-  color: var(--semantic-text-subtle);
-  font-size: var(--global-font-size-11);
-}
+
+.reason,
+.normal,
+.warning,
 p {
   margin: 0;
   color: var(--semantic-text-muted);
   font-size: var(--global-font-size-11);
 }
+
 .warning {
   color: var(--semantic-warning);
+}
+
+.files-list {
+  margin: 0;
+  padding-left: var(--global-space-16);
+  color: var(--semantic-text-muted);
+  font-size: var(--global-font-size-11);
+  display: grid;
+  gap: var(--global-space-4);
 }
 </style>

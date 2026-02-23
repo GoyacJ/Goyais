@@ -13,6 +13,7 @@ const allEnabled: MenuVisibility = {
   remote_account: "enabled",
   remote_members_roles: "enabled",
   remote_permissions_audit: "enabled",
+  workspace_project_config: "enabled",
   workspace_agent: "enabled",
   workspace_model: "enabled",
   workspace_rules: "enabled",
@@ -50,6 +51,7 @@ export function refreshNavigationVisibility(): void {
   }
 
   const sharedVisibility: PermissionVisibility = canWriteResource ? "enabled" : "readonly";
+  visibility.workspace_project_config = sharedVisibility;
   visibility.workspace_agent = sharedVisibility;
   visibility.workspace_model = sharedVisibility;
   visibility.workspace_rules = sharedVisibility;

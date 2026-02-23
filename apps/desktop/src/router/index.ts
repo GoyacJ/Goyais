@@ -7,9 +7,10 @@ import MainScreenView from "@/modules/conversation/views/MainScreenView.vue";
 import WorkspaceAgentView from "@/modules/resource/views/WorkspaceAgentView.vue";
 import WorkspaceMcpView from "@/modules/resource/views/WorkspaceMcpView.vue";
 import WorkspaceModelView from "@/modules/resource/views/WorkspaceModelView.vue";
+import WorkspaceProjectConfigView from "@/modules/resource/views/WorkspaceProjectConfigView.vue";
 import WorkspaceRulesView from "@/modules/resource/views/WorkspaceRulesView.vue";
 import WorkspaceSkillsView from "@/modules/resource/views/WorkspaceSkillsView.vue";
-import { initializeWorkspaceContext } from "@/modules/workspace/store";
+import { initializeWorkspaceContext, switchWorkspaceContext } from "@/modules/workspace/store";
 import SettingsGeneralView from "@/modules/workspace/views/SettingsGeneralView.vue";
 import SettingsI18nView from "@/modules/workspace/views/SettingsI18nView.vue";
 import SettingsThemeView from "@/modules/workspace/views/SettingsThemeView.vue";
@@ -51,6 +52,12 @@ export const routes: RouteRecordRaw[] = [
     name: "workspace-agent",
     component: WorkspaceAgentView,
     meta: { menuKey: "workspace_agent" } as RouteMeta
+  },
+  {
+    path: "/workspace/project-config",
+    name: "workspace-project-config",
+    component: WorkspaceProjectConfigView,
+    meta: { menuKey: "workspace_project_config" } as RouteMeta
   },
   {
     path: "/workspace/model",
@@ -121,7 +128,10 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
     const menuKey = meta.menuKey;
 
     if (meta.requiresRemote && workspaceStore.mode !== "remote") {
-      return { path: "/main", query: { reason: "remote_required" } };
+      const switched = await trySwitchToRemoteWorkspace();
+      if (!switched) {
+        return { path: "/main", query: { reason: "remote_required" } };
+      }
     }
 
     if (meta.requiresAdmin && !canAccessAdmin()) {
@@ -145,4 +155,14 @@ export const router = createAppRouter();
 
 export function resetRouterInitForTests(value = false): void {
   initialized = value;
+}
+
+async function trySwitchToRemoteWorkspace(): Promise<boolean> {
+  const remoteWorkspace = workspaceStore.workspaces.find((workspace) => workspace.mode === "remote");
+  if (!remoteWorkspace) {
+    return false;
+  }
+
+  await switchWorkspaceContext(remoteWorkspace.id);
+  return workspaceStore.mode === "remote";
 }

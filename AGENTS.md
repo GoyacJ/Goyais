@@ -40,6 +40,20 @@ Codex 仅用于构建 Goyais v0.4.0。
 - 架构信任边界必须保持：`Desktop -> Hub -> Worker`。
   Desktop 不得绕过 Hub 执行权威控制动作。
 
+## v0.4.0 新增语义约束（2026-02-23）
+
+- Remote 工作区新增连接字段必须包含：`hub_url`、`username`、`password`。
+- 项目导入在 v0.4.0 仅允许“目录导入”。
+- Conversation 导出格式在 v0.4.0 固定为 Markdown。
+- “回滚到此处”必须是快照回滚，不得降级为仅文本回退。
+- 回滚恢复范围必须包含：消息游标、队列状态、worktree 引用、Inspector 状态。
+- 项目配置必须保持：`ProjectConfig` 定义默认资源绑定，Conversation 仅覆盖不反写。
+- 账号信息页面左侧菜单必须按权限动态渲染；设置页面左侧菜单必须固定。
+- 模型配置必须采用“厂商 -> 模型”两级结构。
+- v0.4.0 P0 厂商支持清单：OpenAI、Google、Qwen、豆包、智谱、MiniMax、本地。
+- 模型目录同步必须支持手动触发与定时刷新，并带失败审计。
+- 输入区动作顺序必须保持：`+` -> `Agent/Plan` -> `模型切换` -> `发送`。
+
 ## 风险与安全约束
 
 对于写入/命令执行/网络/删除语义，必须执行显式风险确认与可审计策略。
@@ -92,6 +106,8 @@ Codex 仅用于构建 Goyais v0.4.0。
 - 业务规则变化 => 更新 `PRD.md`
 - 接口/状态/模型变化 => 更新 `TECH_ARCH.md`
 - 阶段/门禁策略变化 => 更新 `IMPLEMENTATION_PLAN.md` 与 `DEVELOPMENT_STANDARDS.md`
+- 同步提交必须包含变更矩阵，字段至少含 `change_type`、`required_docs_to_update`、`required_sections`、`status`
+- 若矩阵存在 `missing` 项，不得宣称完成
 
 不得合并会导致权威文档语义不一致的改动。
 
