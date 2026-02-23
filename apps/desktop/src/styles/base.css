@@ -9,17 +9,21 @@ body,
   height: 100%;
 }
 
+html {
+  background: var(--global-color-neutral-1000);
+}
+
 body {
   margin: 0;
   font-family: var(--component-font-family);
   font-size: var(--component-font-size-body);
   color: var(--component-text-main);
-  background: var(--component-shell-bg);
+  background: var(--global-color-neutral-1000);
   overflow: hidden;
 }
 
 #app {
-  background: var(--component-shell-bg);
+  background: transparent;
 }
 
 a {
