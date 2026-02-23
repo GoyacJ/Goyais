@@ -49,8 +49,8 @@ const roleLabel = computed(() => authStore.me?.role ?? "Owner");
 <style scoped>
 .status-bar {
   height: 36px;
-  border-radius: var(--global-radius-12);
-  background: var(--semantic-surface);
+  border-radius: 0 0 var(--global-radius-12) var(--global-radius-12);
+  background: transparent;
   color: var(--semantic-text-muted);
   display: flex;
   align-items: center;

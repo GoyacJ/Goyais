@@ -71,18 +71,38 @@
           @rollback="rollbackMessage"
         />
 
-        <MainInspectorPanel
-          :diff="runtime?.diff ?? []"
-          :capability="runtime?.diffCapability ?? nonGitCapability"
-          :queued-count="queuedCount"
-          :active-count="activeCount"
-          :model-id="runtime?.modelId ?? 'gpt-4.1'"
-          :active-tab="runtime?.inspectorTab ?? 'diff'"
-          @change-tab="changeInspectorTab"
-          @commit="commitDiff"
-          @discard="discardDiff"
-          @export-patch="exportPatch"
-        />
+        <div class="inspector-slot" :class="{ collapsed: inspectorCollapsed }">
+          <MainInspectorPanel
+            v-if="!inspectorCollapsed"
+            :diff="runtime?.diff ?? []"
+            :capability="runtime?.diffCapability ?? nonGitCapability"
+            :queued-count="queuedCount"
+            :active-count="activeCount"
+            :model-id="runtime?.modelId ?? 'gpt-4.1'"
+            :active-tab="runtime?.inspectorTab ?? 'diff'"
+            @change-tab="changeInspectorTab"
+            @commit="commitDiff"
+            @discard="discardDiff"
+            @export-patch="exportPatch"
+            @toggle-collapse="inspectorCollapsed = true"
+          />
+
+          <aside v-else class="inspector-rail">
+            <button class="rail-btn rail-expand" type="button" title="展开 Inspector" @click="inspectorCollapsed = false">
+              <AppIcon name="panel-right-open" :size="12" />
+            </button>
+            <button
+              v-for="item in inspectorTabs"
+              :key="item.key"
+              class="rail-btn"
+              :class="{ active: item.key === (runtime?.inspectorTab ?? 'diff') }"
+              type="button"
+              @click="openInspectorTab(item.key)"
+            >
+              {{ item.label }}
+            </button>
+          </aside>
+        </div>
       </div>
 
       <HubStatusBar />
@@ -142,6 +162,13 @@ const { t } = useI18n();
 
 const editingConversationName = ref(false);
 const conversationNameDraft = ref("");
+const inspectorCollapsed = ref(false);
+const inspectorTabs: Array<{ key: InspectorTabKey; label: string }> = [
+  { key: "diff", label: "D" },
+  { key: "run", label: "R" },
+  { key: "files", label: "F" },
+  { key: "risk", label: "!" }
+];
 
 const nonGitCapability: DiffCapability = {
   can_commit: false,
@@ -233,6 +260,11 @@ function changeInspectorTab(tab: InspectorTabKey): void {
     return;
   }
   setConversationInspectorTab(activeConversation.value.id, tab);
+}
+
+function openInspectorTab(tab: InspectorTabKey): void {
+  inspectorCollapsed.value = false;
+  changeInspectorTab(tab);
 }
 
 async function sendMessage(): Promise<void> {
@@ -397,12 +429,12 @@ function onTopHeaderDoubleClick(event: MouseEvent): void {
 }
 
 .top-header {
-  border-radius: var(--global-radius-12);
-  background: var(--semantic-surface);
+  border-radius: var(--global-radius-12) var(--global-radius-12) 0 0;
+  background: transparent;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 var(--global-space-12);
+  padding: 0 var(--global-space-8);
   cursor: grab;
 }
 
@@ -421,7 +453,8 @@ function onTopHeaderDoubleClick(event: MouseEvent): void {
 
 .left strong {
   color: var(--semantic-text);
-  font-size: var(--global-font-size-14);
+  font-size: var(--global-font-size-13);
+  font-weight: var(--global-font-weight-600);
 }
 
 .state {
@@ -442,9 +475,52 @@ function onTopHeaderDoubleClick(event: MouseEvent): void {
 
 .main-body {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: 1fr auto;
   gap: var(--global-space-12);
   min-height: 0;
+}
+
+.inspector-slot {
+  width: 280px;
+}
+
+.inspector-slot.collapsed {
+  width: 44px;
+}
+
+.inspector-rail {
+  width: 44px;
+  height: 100%;
+  border-radius: var(--global-radius-12);
+  background: var(--semantic-surface);
+  padding: var(--global-space-8) var(--global-space-4);
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: var(--global-space-8);
+}
+
+.rail-btn {
+  width: 32px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--global-radius-8);
+  background: transparent;
+  color: var(--semantic-text-subtle);
+  font-size: var(--global-font-size-11);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rail-btn:hover,
+.rail-btn.active {
+  background: var(--component-sidebar-item-bg-active);
+  color: var(--semantic-text);
+}
+
+.rail-expand {
+  margin-bottom: var(--global-space-4);
 }
 
 .icon-btn {

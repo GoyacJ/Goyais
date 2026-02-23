@@ -1,6 +1,11 @@
 <template>
   <aside class="inspector">
-    <p class="title">Inspector</p>
+    <div class="head">
+      <p class="title">Inspector</p>
+      <button class="collapse-btn" type="button" title="最小化 Inspector" @click="$emit('toggleCollapse')">
+        <AppIcon name="panel-right-close" :size="12" />
+      </button>
+    </div>
 
     <div class="tabs">
       <button
@@ -65,6 +70,7 @@
 </template>
 
 <script setup lang="ts">
+import AppIcon from "@/shared/ui/AppIcon.vue";
 import type { DiffCapability, DiffItem, InspectorTabKey } from "@/shared/types/api";
 
 defineProps<{
@@ -81,6 +87,7 @@ defineEmits<{
   (event: "discard"): void;
   (event: "exportPatch"): void;
   (event: "changeTab", tab: InspectorTabKey): void;
+  (event: "toggleCollapse"): void;
 }>();
 
 const tabs: Array<{ key: InspectorTabKey; label: string }> = [
@@ -103,7 +110,7 @@ function mapChange(type: DiffItem["change_type"]): string {
 
 <style scoped>
 .inspector {
-  width: 340px;
+  width: 280px;
   border-radius: var(--global-radius-12);
   background: var(--semantic-surface);
   padding: var(--global-space-12);
@@ -112,11 +119,35 @@ function mapChange(type: DiffItem["change_type"]): string {
   gap: var(--global-space-8);
 }
 
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--global-space-8);
+}
+
 .title {
   margin: 0;
   color: var(--semantic-text-muted);
   font-size: var(--global-font-size-12);
   font-weight: var(--global-font-weight-600);
+}
+
+.collapse-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--global-radius-8);
+  border: 0;
+  background: transparent;
+  color: var(--semantic-text-subtle);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.collapse-btn:hover {
+  background: var(--semantic-surface-2);
+  color: var(--semantic-text);
 }
 
 .tabs {
