@@ -1,102 +1,101 @@
-import { reactive } from "vue";
-
+import { listWorkspaceProjectConfigs } from "@/modules/project/services";
 import {
-  createShareRequest,
-  importResource,
-  listModelCatalog,
-  listResources,
-  syncModelCatalog,
-  updateShareStatus
+  connectMcpResourceConfig,
+  createResourceConfig,
+  deleteResourceConfig,
+  exportMcpConfigs,
+  getCatalogRoot,
+  getModelCatalog,
+  listResourceConfigs,
+  patchResourceConfig,
+  reloadModelCatalog,
+  testModelResourceConfig,
+  updateCatalogRoot
 } from "@/modules/resource/services";
+import {
+  pickResourceListState,
+  resetResourceStore,
+  resourceStore,
+  setResourceEnabledFilter,
+  setResourceSearch,
+  toEnabledQuery,
+  type EnabledFilter
+} from "@/modules/resource/store/state";
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { getCurrentWorkspace } from "@/shared/stores/workspaceStore";
-import type { ModelCatalogItem, ModelVendorName, Resource, ResourceImportRequest, ShareStatus } from "@/shared/types/api";
+import type { McpConnectResult, ModelTestResult, ResourceConfig, ResourceConfigCreateRequest, ResourceConfigPatchRequest, ResourceType } from "@/shared/types/api";
 
-type CursorPageState = {
-  limit: number;
-  currentCursor: string | null;
-  backStack: Array<string | null>;
-  nextCursor: string | null;
-  loading: boolean;
-};
-
-type ResourceState = {
-  items: Resource[];
-  resourcesPage: CursorPageState;
-  modelCatalog: ModelCatalogItem[];
-  modelCatalogSyncing: boolean;
-  loading: boolean;
-  error: string;
-};
-
-const initialState: ResourceState = {
-  items: [],
-  resourcesPage: createInitialPageState(),
-  modelCatalog: [],
-  modelCatalogSyncing: false,
-  loading: false,
-  error: ""
-};
-
-export const resourceStore = reactive<ResourceState>({ ...initialState });
-
-export function resetResourceStore(): void {
-  resourceStore.items = [];
-  resourceStore.resourcesPage = createInitialPageState();
-  resourceStore.modelCatalog = [];
-  resourceStore.modelCatalogSyncing = false;
-  resourceStore.loading = false;
-  resourceStore.error = "";
-}
+export { resourceStore, resetResourceStore, setResourceSearch, setResourceEnabledFilter, type EnabledFilter };
 
 export async function refreshResources(): Promise<void> {
-  await loadResourcesPage({ cursor: null, backStack: [] });
+  await Promise.all([
+    refreshResourceConfigsByType("model"),
+    refreshResourceConfigsByType("rule"),
+    refreshResourceConfigsByType("skill"),
+    refreshResourceConfigsByType("mcp"),
+    refreshWorkspaceProjectBindings()
+  ]);
 }
 
-export async function loadNextResourcesPage(): Promise<void> {
-  const nextCursor = resourceStore.resourcesPage.nextCursor;
-  if (!nextCursor || resourceStore.resourcesPage.loading) {
+export async function refreshResourceConfigsByType(type: ResourceType): Promise<void> {
+  await loadResourceConfigsPage(type, { cursor: null, backStack: [] });
+}
+
+export async function loadNextResourceConfigsPage(type: ResourceType): Promise<void> {
+  const state = pickResourceListState(type);
+  const nextCursor = state.page.nextCursor;
+  if (!nextCursor || state.page.loading) {
     return;
   }
-  await loadResourcesPage({
+
+  await loadResourceConfigsPage(type, {
     cursor: nextCursor,
-    backStack: [...resourceStore.resourcesPage.backStack, resourceStore.resourcesPage.currentCursor]
+    backStack: [...state.page.backStack, state.page.currentCursor]
   });
 }
 
-export async function loadPreviousResourcesPage(): Promise<void> {
-  if (resourceStore.resourcesPage.backStack.length === 0 || resourceStore.resourcesPage.loading) {
+export async function loadPreviousResourceConfigsPage(type: ResourceType): Promise<void> {
+  const state = pickResourceListState(type);
+  if (state.page.backStack.length === 0 || state.page.loading) {
     return;
   }
-  const backStack = [...resourceStore.resourcesPage.backStack];
+
+  const backStack = [...state.page.backStack];
   const previousCursor = backStack.pop() ?? null;
-  await loadResourcesPage({ cursor: previousCursor, backStack });
+  await loadResourceConfigsPage(type, { cursor: previousCursor, backStack });
 }
 
-async function loadResourcesPage(input: { cursor: string | null; backStack: Array<string | null> }): Promise<void> {
+async function loadResourceConfigsPage(inputType: ResourceType, input: { cursor: string | null; backStack: Array<string | null> }): Promise<void> {
   const workspace = getCurrentWorkspace();
   if (!workspace) {
     return;
   }
 
+  const state = pickResourceListState(inputType);
   resourceStore.loading = true;
-  resourceStore.resourcesPage.loading = true;
+  state.loading = true;
+  state.page.loading = true;
   resourceStore.error = "";
 
   try {
-    const response = await listResources(workspace.id, {
+    const response = await listResourceConfigs(workspace.id, {
       cursor: input.cursor ?? undefined,
-      limit: resourceStore.resourcesPage.limit
+      limit: state.page.limit,
+      type: inputType,
+      q: state.q.trim() || undefined,
+      enabled: toEnabledQuery(state.enabledFilter)
     });
-    resourceStore.items = response.items;
-    resourceStore.resourcesPage.currentCursor = input.cursor;
-    resourceStore.resourcesPage.backStack = input.backStack;
-    resourceStore.resourcesPage.nextCursor = response.next_cursor;
+
+    state.items = response.items;
+    state.page.currentCursor = input.cursor;
+    state.page.backStack = input.backStack;
+    state.page.nextCursor = response.next_cursor;
   } catch (error) {
     resourceStore.error = toDisplayError(error);
   } finally {
     resourceStore.loading = false;
-    resourceStore.resourcesPage.loading = false;
+    state.loading = false;
+    state.page.loading = false;
   }
 }
 
@@ -106,78 +105,169 @@ export async function refreshModelCatalog(): Promise<void> {
     return;
   }
 
+  resourceStore.catalogLoading = true;
+  resourceStore.error = "";
   try {
-    resourceStore.modelCatalog = await listModelCatalog(workspace.id);
-  } catch (error) {
-    resourceStore.error = toDisplayError(error);
-  }
-}
-
-export async function syncWorkspaceModelCatalog(vendors: ModelVendorName[]): Promise<void> {
-  const workspace = getCurrentWorkspace();
-  if (!workspace) {
-    return;
-  }
-
-  resourceStore.modelCatalogSyncing = true;
-  try {
-    resourceStore.modelCatalog = await syncModelCatalog(workspace.id, vendors);
+    const [catalog, root] = await Promise.all([getModelCatalog(workspace.id), getCatalogRoot(workspace.id)]);
+    resourceStore.catalog = catalog;
+    resourceStore.catalogRoot = root.catalog_root;
   } catch (error) {
     resourceStore.error = toDisplayError(error);
   } finally {
-    resourceStore.modelCatalogSyncing = false;
+    resourceStore.catalogLoading = false;
   }
 }
 
-export async function importWorkspaceResource(input: Omit<ResourceImportRequest, "target_workspace_id">): Promise<void> {
+export async function reloadWorkspaceModelCatalog(): Promise<void> {
+  const workspace = getCurrentWorkspace();
+  if (!workspace) {
+    return;
+  }
+
+  resourceStore.catalogLoading = true;
+  resourceStore.error = "";
+  try {
+    resourceStore.catalog = await reloadModelCatalog(workspace.id);
+  } catch (error) {
+    resourceStore.error = toDisplayError(error);
+  } finally {
+    resourceStore.catalogLoading = false;
+  }
+}
+
+export async function syncCatalogRoot(catalogRoot: string): Promise<void> {
+  const workspace = getCurrentWorkspace();
+  if (!workspace || catalogRoot.trim() === "") {
+    return;
+  }
+
+  try {
+    const response = await updateCatalogRoot(workspace.id, catalogRoot.trim());
+    resourceStore.catalogRoot = response.catalog_root;
+  } catch (error) {
+    resourceStore.error = toDisplayError(error);
+  }
+}
+
+export async function createWorkspaceResourceConfig(input: ResourceConfigCreateRequest): Promise<ResourceConfig | null> {
+  const workspace = getCurrentWorkspace();
+  if (!workspace) {
+    return null;
+  }
+
+  try {
+    const created = await createResourceConfig(workspace.id, input);
+    await refreshResourceConfigsByType(input.type);
+    return created;
+  } catch (error) {
+    resourceStore.error = toDisplayError(error);
+    return null;
+  }
+}
+
+export async function patchWorkspaceResourceConfig(type: ResourceType, configId: string, patch: ResourceConfigPatchRequest): Promise<ResourceConfig | null> {
+  const workspace = getCurrentWorkspace();
+  if (!workspace) {
+    return null;
+  }
+
+  try {
+    const updated = await patchResourceConfig(workspace.id, configId, patch);
+    await refreshResourceConfigsByType(type);
+    return updated;
+  } catch (error) {
+    resourceStore.error = toDisplayError(error);
+    return null;
+  }
+}
+
+export async function deleteWorkspaceResourceConfig(type: ResourceType, configId: string): Promise<void> {
   const workspace = getCurrentWorkspace();
   if (!workspace) {
     return;
   }
 
   try {
-    await importResource({
-      ...input,
-      target_workspace_id: workspace.id
-    });
-    await refreshResources();
+    await deleteResourceConfig(workspace.id, configId);
+    if (type === "model") {
+      delete resourceStore.modelTestResultsByConfigId[configId];
+    }
+    if (type === "mcp") {
+      delete resourceStore.mcpConnectResultsByConfigId[configId];
+    }
+    await refreshResourceConfigsByType(type);
   } catch (error) {
     resourceStore.error = toDisplayError(error);
   }
 }
 
-export async function requestResourceShare(resourceId: string): Promise<void> {
+export async function testWorkspaceModelConfig(configId: string): Promise<ModelTestResult | null> {
+  const workspace = getCurrentWorkspace();
+  if (!workspace) {
+    return null;
+  }
+
+  try {
+    const result = await testModelResourceConfig(workspace.id, configId);
+    resourceStore.modelTestResultsByConfigId = {
+      ...resourceStore.modelTestResultsByConfigId,
+      [configId]: result
+    };
+    return result;
+  } catch (error) {
+    resourceStore.error = toDisplayError(error);
+    return null;
+  }
+}
+
+export async function connectWorkspaceMcpConfig(configId: string): Promise<McpConnectResult | null> {
+  const workspace = getCurrentWorkspace();
+  if (!workspace) {
+    return null;
+  }
+
+  try {
+    const result = await connectMcpResourceConfig(workspace.id, configId);
+    resourceStore.mcpConnectResultsByConfigId = {
+      ...resourceStore.mcpConnectResultsByConfigId,
+      [configId]: result
+    };
+    await refreshResourceConfigsByType("mcp");
+    return result;
+  } catch (error) {
+    resourceStore.error = toDisplayError(error);
+    return null;
+  }
+}
+
+export async function refreshWorkspaceMcpExport(): Promise<void> {
   const workspace = getCurrentWorkspace();
   if (!workspace) {
     return;
   }
 
+  resourceStore.mcpExportLoading = true;
   try {
-    await createShareRequest(workspace.id, resourceId);
-    await refreshResources();
+    resourceStore.mcpExport = await exportMcpConfigs(workspace.id);
   } catch (error) {
     resourceStore.error = toDisplayError(error);
+  } finally {
+    resourceStore.mcpExportLoading = false;
   }
 }
 
-export async function changeResourceShareStatus(
-  requestId: string,
-  status: Extract<ShareStatus, "approved" | "denied" | "revoked">
-): Promise<void> {
+export async function refreshWorkspaceProjectBindings(): Promise<void> {
+  const workspace = getCurrentWorkspace();
+  if (!workspace) {
+    return;
+  }
+
+  resourceStore.projectBindingsLoading = true;
   try {
-    await updateShareStatus(requestId, status);
-    await refreshResources();
+    resourceStore.projectBindings = await listWorkspaceProjectConfigs(workspace.id);
   } catch (error) {
     resourceStore.error = toDisplayError(error);
+  } finally {
+    resourceStore.projectBindingsLoading = false;
   }
-}
-
-function createInitialPageState(limit = 20): CursorPageState {
-  return {
-    limit,
-    currentCursor: null,
-    backStack: [],
-    nextCursor: null,
-    loading: false
-  };
 }

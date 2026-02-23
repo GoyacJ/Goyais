@@ -1,0 +1,126 @@
+.error {
+  margin: 0;
+  color: var(--semantic-danger);
+}
+
+.card {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-12);
+  background: var(--semantic-surface);
+  padding: var(--global-space-12);
+  display: grid;
+  gap: var(--global-space-10);
+}
+
+.import-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--global-space-8);
+}
+
+.import-row button,
+.table-actions button,
+.footer-actions button {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-8);
+  background: var(--semantic-surface-2);
+  color: var(--semantic-text);
+  padding: var(--global-space-6) var(--global-space-10);
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-8);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 900px;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: var(--global-space-8) var(--global-space-10);
+  border-bottom: 1px solid var(--semantic-border);
+}
+
+.table th {
+  color: var(--semantic-text-muted);
+  font-size: var(--global-font-size-12);
+}
+
+.table td {
+  color: var(--semantic-text);
+  font-size: var(--global-font-size-13);
+}
+
+.table-actions {
+  display: flex;
+  gap: var(--global-space-6);
+}
+
+.table-actions .danger {
+  color: var(--semantic-danger);
+}
+
+.empty {
+  color: var(--semantic-text-subtle);
+  text-align: center;
+}
+
+.modal-title {
+  margin: 0;
+}
+
+.binding-form {
+  display: grid;
+  gap: var(--global-space-10);
+}
+
+.binding-form p {
+  margin: 0;
+  color: var(--semantic-text-muted);
+}
+
+.group {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-8);
+  background: var(--semantic-bg);
+  padding: var(--global-space-8);
+  display: grid;
+  gap: var(--global-space-6);
+}
+
+.group h4 {
+  margin: 0;
+  color: var(--semantic-text-muted);
+  font-size: var(--global-font-size-12);
+}
+
+.checkbox-list {
+  display: grid;
+  gap: var(--global-space-4);
+  max-height: 160px;
+  overflow: auto;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: var(--global-space-6);
+  color: var(--semantic-text);
+  font-size: var(--global-font-size-12);
+}
+
+.footer-actions {
+  display: flex;
+  gap: var(--global-space-8);
+}
+
+.message {
+  margin: 0;
+  color: var(--semantic-danger);
+}

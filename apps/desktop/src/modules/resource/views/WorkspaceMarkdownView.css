@@ -1,0 +1,63 @@
+.error {
+  margin: 0;
+  color: var(--semantic-danger);
+}
+
+.enabled {
+  color: var(--semantic-success);
+}
+
+.disabled {
+  color: var(--semantic-danger);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--global-space-6);
+}
+
+.actions button,
+.footer-actions button {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-8);
+  background: var(--semantic-surface-2);
+  color: var(--semantic-text);
+  padding: var(--global-space-4) var(--global-space-8);
+}
+
+.actions .danger {
+  color: var(--semantic-danger);
+}
+
+.modal-title {
+  margin: 0;
+}
+
+.modal-form {
+  display: grid;
+  gap: var(--global-space-8);
+}
+
+.modal-form label {
+  display: grid;
+  gap: var(--global-space-4);
+  color: var(--semantic-text-muted);
+  font-size: var(--global-font-size-12);
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: var(--global-space-6);
+}
+
+.modal-message {
+  margin: 0;
+  color: var(--semantic-danger);
+}
+
+.footer-actions {
+  display: flex;
+  gap: var(--global-space-8);
+}

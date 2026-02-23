@@ -32,19 +32,19 @@ func defaultMenuConfigs() []adminMenu {
 
 func defaultMenuVisibility(role Role) map[string]PermissionVisibility {
 	visibility := map[string]PermissionVisibility{
-		"main":                         PermissionVisibilityEnabled,
-		"remote_account":               PermissionVisibilityEnabled,
-		"remote_members_roles":         PermissionVisibilityHidden,
-		"remote_permissions_audit":     PermissionVisibilityHidden,
-		"workspace_project_config":     PermissionVisibilityReadonly,
-		"workspace_agent":              PermissionVisibilityReadonly,
-		"workspace_model":              PermissionVisibilityReadonly,
-		"workspace_rules":              PermissionVisibilityReadonly,
-		"workspace_skills":             PermissionVisibilityReadonly,
-		"workspace_mcp":                PermissionVisibilityReadonly,
-		"settings_theme":               PermissionVisibilityEnabled,
-		"settings_i18n":                PermissionVisibilityEnabled,
-		"settings_general":             PermissionVisibilityEnabled,
+		"main":                     PermissionVisibilityEnabled,
+		"remote_account":           PermissionVisibilityEnabled,
+		"remote_members_roles":     PermissionVisibilityHidden,
+		"remote_permissions_audit": PermissionVisibilityHidden,
+		"workspace_project_config": PermissionVisibilityReadonly,
+		"workspace_agent":          PermissionVisibilityReadonly,
+		"workspace_model":          PermissionVisibilityReadonly,
+		"workspace_rules":          PermissionVisibilityReadonly,
+		"workspace_skills":         PermissionVisibilityReadonly,
+		"workspace_mcp":            PermissionVisibilityReadonly,
+		"settings_theme":           PermissionVisibilityEnabled,
+		"settings_i18n":            PermissionVisibilityEnabled,
+		"settings_general":         PermissionVisibilityEnabled,
 	}
 
 	switch role {
@@ -93,7 +93,9 @@ func defaultABACPolicies(workspaceID string) []ABACPolicy {
 				"name": map[string]any{
 					"in": []any{
 						"project.read", "project.write", "conversation.read", "conversation.write", "execution.control",
-						"resource.read", "resource.write", "share.request", "share.revoke", "model_catalog.sync", "admin.audit.read",
+						"resource.read", "resource.write", "resource_config.read", "resource_config.write", "resource_config.delete",
+						"project_config.read", "model.test", "mcp.connect", "catalog.update_root",
+						"share.request", "share.revoke", "admin.audit.read",
 					},
 				},
 			},

@@ -82,9 +82,9 @@ func ResourceImportsHandler(state *AppState) http.HandlerFunc {
 			workspaceID,
 			"resource.write",
 			authorizationResource{
-				WorkspaceID: workspaceID,
+				WorkspaceID:  workspaceID,
 				ResourceType: string(input.ResourceType),
-				Scope:       "private",
+				Scope:        "private",
 			},
 			authorizationContext{OperationType: "write"},
 		)
@@ -266,11 +266,11 @@ func ModelCatalogHandler(state *AppState) http.HandlerFunc {
 		workspaceID := strings.TrimSpace(r.PathValue("workspace_id"))
 		switch r.Method {
 		case http.MethodGet:
-			session, authErr := authorizeAction(
+			_, authErr := authorizeAction(
 				state,
 				r,
 				workspaceID,
-				"resource.read",
+				"resource_config.read",
 				authorizationResource{WorkspaceID: workspaceID, ResourceType: "model"},
 				authorizationContext{OperationType: "read"},
 			)
@@ -278,24 +278,21 @@ func ModelCatalogHandler(state *AppState) http.HandlerFunc {
 				authErr.write(w, r)
 				return
 			}
-			state.mu.RLock()
-			items := append([]ModelCatalogItem{}, state.modelCatalog[workspaceID]...)
-			state.mu.RUnlock()
-			writeJSON(w, http.StatusOK, items)
-			if state.authz != nil {
-				_ = state.authz.appendAudit(workspaceID, session.UserID, "model_catalog.read", "workspace", workspaceID, "success", map[string]any{}, TraceIDFromContext(r.Context()))
-			}
-		case http.MethodPost:
-			input := ModelCatalogSyncRequest{}
-			if err := decodeJSONBody(r, &input); err != nil {
-				err.write(w, r)
+			response, err := state.LoadModelCatalog(workspaceID, false)
+			if err != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "MODEL_CATALOG_LOAD_FAILED", "Failed to load model catalog", map[string]any{
+					"workspace_id": workspaceID,
+					"reason":       err.Error(),
+				})
 				return
 			}
+			writeJSON(w, http.StatusOK, response)
+		case http.MethodPost:
 			session, authErr := authorizeAction(
 				state,
 				r,
 				workspaceID,
-				"model_catalog.sync",
+				"resource_config.write",
 				authorizationResource{WorkspaceID: workspaceID, ResourceType: "model"},
 				authorizationContext{OperationType: "write", ABACRequired: true},
 				RoleAdmin, RoleApprover, RoleDeveloper,
@@ -304,41 +301,27 @@ func ModelCatalogHandler(state *AppState) http.HandlerFunc {
 				authErr.write(w, r)
 				return
 			}
-
-			now := time.Now().UTC().Format(time.RFC3339)
-			vendors := input.Vendors
-			if len(vendors) == 0 {
-				vendors = []string{"OpenAI", "Google", "Qwen", "Doubao", "Zhipu", "MiniMax", "Local"}
-			}
-			items := make([]ModelCatalogItem, 0, len(vendors))
-			for _, vendor := range vendors {
-				model := strings.ToLower(strings.TrimSpace(vendor)) + "-latest"
-				items = append(items, ModelCatalogItem{
-					WorkspaceID: workspaceID,
-					Vendor:      strings.TrimSpace(vendor),
-					ModelID:     model,
-					Enabled:     true,
-					Status:      "active",
-					SyncedAt:    now,
+			response, err := state.LoadModelCatalog(workspaceID, true)
+			if err != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "MODEL_CATALOG_RELOAD_FAILED", "Failed to reload model catalog", map[string]any{
+					"workspace_id": workspaceID,
+					"reason":       err.Error(),
 				})
+				return
 			}
-			state.mu.Lock()
-			state.modelCatalog[workspaceID] = items
-			state.mu.Unlock()
-
 			state.AppendAudit(AdminAuditEvent{
 				Actor:    actorFromSession(session),
-				Action:   "model_catalog.sync_manual",
+				Action:   "model_catalog.reload",
 				Resource: workspaceID,
 				Result:   "success",
 				TraceID:  TraceIDFromContext(r.Context()),
 			})
 			if state.authz != nil {
-				_ = state.authz.appendAudit(workspaceID, session.UserID, "model_catalog.sync", "workspace", workspaceID, "success", map[string]any{
-					"vendor_count": len(vendors),
+				_ = state.authz.appendAudit(workspaceID, session.UserID, "resource_config.write", "workspace", workspaceID, "success", map[string]any{
+					"operation": "model_catalog.reload",
 				}, TraceIDFromContext(r.Context()))
 			}
-			writeJSON(w, http.StatusOK, items)
+			writeJSON(w, http.StatusOK, response)
 		default:
 			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
 				"method": r.Method, "path": r.URL.Path,

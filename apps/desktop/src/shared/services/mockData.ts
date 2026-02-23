@@ -7,6 +7,7 @@ import type {
   Conversation,
   Project,
   Resource,
+  ResourceConfig,
   ShareRequest,
   Workspace
 } from "@/shared/types/api";
@@ -81,6 +82,59 @@ const defaultResources: Resource[] = [
   }
 ];
 
+const defaultResourceConfigs: ResourceConfig[] = [
+  {
+    id: "rc_model_1",
+    workspace_id: localWorkspace.id,
+    type: "model",
+    name: "OpenAI Default",
+    enabled: true,
+    model: {
+      vendor: "OpenAI",
+      model_id: "gpt-4.1",
+      api_key_masked: "sk-****",
+      base_url: "https://api.openai.com/v1"
+    },
+    created_at: now,
+    updated_at: now
+  },
+  {
+    id: "rc_rule_1",
+    workspace_id: localWorkspace.id,
+    type: "rule",
+    name: "Security Rule",
+    enabled: true,
+    rule: { content: "## Security\\n- Never expose secrets." },
+    created_at: now,
+    updated_at: now
+  },
+  {
+    id: "rc_skill_1",
+    workspace_id: localWorkspace.id,
+    type: "skill",
+    name: "Review Skill",
+    enabled: true,
+    skill: { content: "## Review\\n- Focus on regressions and tests." },
+    created_at: now,
+    updated_at: now
+  },
+  {
+    id: "rc_mcp_1",
+    workspace_id: localWorkspace.id,
+    type: "mcp",
+    name: "Filesystem MCP",
+    enabled: true,
+    mcp: {
+      transport: "stdio",
+      command: "npx @modelcontextprotocol/server-filesystem",
+      status: "connected",
+      tools: ["files.read", "files.write"]
+    },
+    created_at: now,
+    updated_at: now
+  }
+];
+
 const defaultUsers: AdminUser[] = [];
 
 const defaultRoles: AdminRole[] = [
@@ -109,6 +163,7 @@ export const mockData = reactive({
   projects: [...defaultProjects] as Project[],
   conversations: [...defaultConversations] as Conversation[],
   resources: [...defaultResources] as Resource[],
+  resourceConfigs: [...defaultResourceConfigs] as ResourceConfig[],
   users: [...defaultUsers] as AdminUser[],
   roles: [...defaultRoles] as AdminRole[],
   auditEvents: [...defaultAuditEvents] as AdminAuditEvent[],

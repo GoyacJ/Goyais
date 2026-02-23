@@ -58,6 +58,13 @@ func newRouterWithDBPath(dbPath string) http.Handler {
 	mux.HandleFunc("/v1/workspaces/{workspace_id}/share-requests", ShareRequestsHandler(state))
 	mux.HandleFunc("/v1/share-requests/{request_id}/{action}", ShareRequestActionHandler(state))
 	mux.HandleFunc("/v1/workspaces/{workspace_id}/model-catalog", ModelCatalogHandler(state))
+	mux.HandleFunc("/v1/workspaces/{workspace_id}/catalog-root", CatalogRootHandler(state))
+	mux.HandleFunc("/v1/workspaces/{workspace_id}/resource-configs", ResourceConfigsHandler(state))
+	mux.HandleFunc("/v1/workspaces/{workspace_id}/resource-configs/{config_id}", ResourceConfigByIDHandler(state))
+	mux.HandleFunc("/v1/workspaces/{workspace_id}/resource-configs/{config_id}/test", ResourceConfigTestHandler(state))
+	mux.HandleFunc("/v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect", ResourceConfigConnectHandler(state))
+	mux.HandleFunc("/v1/workspaces/{workspace_id}/mcps/export", MCPExportHandler(state))
+	mux.HandleFunc("/v1/workspaces/{workspace_id}/project-configs", WorkspaceProjectConfigsHandler(state))
 	// Backward-compatible route during migration
 	mux.HandleFunc("/v1/workspaces/{workspace_id}/model-catalog/sync", ModelCatalogHandler(state))
 

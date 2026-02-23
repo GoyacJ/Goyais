@@ -265,6 +265,19 @@ paths:
           $ref: '#/components/responses/StandardErrorResponse'
 
   /v1/projects/{project_id}/config:
+    get:
+      summary: Get project config
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+      responses:
+        '200':
+          description: Project config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectConfig'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
     put:
       summary: Update project config
       parameters:
@@ -575,15 +588,41 @@ paths:
         - $ref: '#/components/parameters/WorkspaceIdParam'
       responses:
         '200':
-          description: Model catalog list
+          description: Model catalog payload
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ModelCatalogItem'
+                $ref: '#/components/schemas/ModelCatalogResponse'
     post:
-      summary: Sync model catalog manually
+      summary: Reload model catalog from models.json
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      responses:
+        '200':
+          description: Updated model catalog payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelCatalogResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/catalog-root:
+    get:
+      summary: Get workspace model catalog root
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      responses:
+        '200':
+          description: Catalog root
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRootResponse'
+    put:
+      summary: Update workspace model catalog root
       parameters:
         - $ref: '#/components/parameters/WorkspaceIdParam'
       requestBody:
@@ -591,20 +630,174 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ModelCatalogSyncRequest'
+              $ref: '#/components/schemas/CatalogRootUpdateRequest'
       responses:
         '200':
-          description: Updated model catalog list
+          description: Catalog root updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRootResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/resource-configs:
+    get:
+      summary: List workspace resource configs
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [model, rule, skill, mcp]
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: enabled
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Resource config list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+    post:
+      summary: Create workspace resource config
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceConfigCreateRequest'
+      responses:
+        '201':
+          description: Created resource config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceConfig'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/resource-configs/{config_id}:
+    patch:
+      summary: Update workspace resource config
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+        - in: path
+          name: config_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceConfigPatchRequest'
+      responses:
+        '200':
+          description: Updated resource config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceConfig'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    delete:
+      summary: Delete workspace resource config
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+        - in: path
+          name: config_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/resource-configs/{config_id}/test:
+    post:
+      summary: Test model resource config
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+        - in: path
+          name: config_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Model test result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelTestResult'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect:
+    post:
+      summary: Connect MCP resource config
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+        - in: path
+          name: config_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: MCP connect result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpConnectResult'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/mcps/export:
+    get:
+      summary: Export workspace MCP configs as masked JSON
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      responses:
+        '200':
+          description: MCP export payload
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/workspaces/{workspace_id}/project-configs:
+    get:
+      summary: List project configs for workspace
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      responses:
+        '200':
+          description: Workspace project config list
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ModelCatalogItem'
-        '401':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '403':
-          $ref: '#/components/responses/StandardErrorResponse'
+                  $ref: '#/components/schemas/WorkspaceProjectConfigItem'
 
   /v1/admin/ping:
     get:
@@ -1536,11 +1729,15 @@ components:
 
     ProjectConfig:
       type: object
-      required: [project_id, model_id, rule_ids, skill_ids, mcp_ids, updated_at]
+      required: [project_id, model_ids, rule_ids, skill_ids, mcp_ids, updated_at]
       properties:
         project_id:
           type: string
-        model_id:
+        model_ids:
+          type: array
+          items:
+            type: string
+        default_model_id:
           type: [string, 'null']
         rule_ids:
           type: array
@@ -1557,6 +1754,17 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    WorkspaceProjectConfigItem:
+      type: object
+      required: [project_id, project_name, config]
+      properties:
+        project_id:
+          type: string
+        project_name:
+          type: string
+        config:
+          $ref: '#/components/schemas/ProjectConfig'
 
     Conversation:
       type: object
@@ -1807,6 +2015,236 @@ components:
           items:
             type: string
             enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+
+    ModelCatalogModel:
+      type: object
+      required: [id, label, enabled]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        enabled:
+          type: boolean
+
+    ModelCatalogVendor:
+      type: object
+      required: [name, models]
+      properties:
+        name:
+          type: string
+          enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelCatalogModel'
+
+    ModelCatalogResponse:
+      type: object
+      required: [workspace_id, revision, updated_at, source, vendors]
+      properties:
+        workspace_id:
+          type: string
+        revision:
+          type: integer
+          format: int64
+        updated_at:
+          type: string
+          format: date-time
+        source:
+          type: string
+        vendors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelCatalogVendor'
+
+    CatalogRootUpdateRequest:
+      type: object
+      required: [catalog_root]
+      properties:
+        catalog_root:
+          type: string
+
+    CatalogRootResponse:
+      type: object
+      required: [workspace_id, catalog_root, updated_at]
+      properties:
+        workspace_id:
+          type: string
+        catalog_root:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    ModelSpec:
+      type: object
+      required: [vendor, model_id]
+      properties:
+        vendor:
+          type: string
+          enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+        model_id:
+          type: string
+        base_url:
+          type: string
+        api_key:
+          type: string
+        api_key_masked:
+          type: string
+        timeout_ms:
+          type: integer
+        params:
+          type: object
+          additionalProperties: true
+
+    RuleSpec:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+
+    SkillSpec:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+
+    McpSpec:
+      type: object
+      required: [transport]
+      properties:
+        transport:
+          type: string
+          enum: [http_sse, stdio]
+        endpoint:
+          type: string
+        command:
+          type: string
+        env:
+          type: object
+          additionalProperties:
+            type: string
+        status:
+          type: string
+        tools:
+          type: array
+          items:
+            type: string
+        last_error:
+          type: string
+        last_connected_at:
+          type: string
+          format: date-time
+
+    ResourceConfig:
+      type: object
+      required: [id, workspace_id, type, name, enabled, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        type:
+          type: string
+          enum: [model, rule, skill, mcp]
+        name:
+          type: string
+        enabled:
+          type: boolean
+        model:
+          $ref: '#/components/schemas/ModelSpec'
+        rule:
+          $ref: '#/components/schemas/RuleSpec'
+        skill:
+          $ref: '#/components/schemas/SkillSpec'
+        mcp:
+          $ref: '#/components/schemas/McpSpec'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ResourceConfigCreateRequest:
+      type: object
+      required: [type, name]
+      properties:
+        type:
+          type: string
+          enum: [model, rule, skill, mcp]
+        name:
+          type: string
+        enabled:
+          type: boolean
+        model:
+          $ref: '#/components/schemas/ModelSpec'
+        rule:
+          $ref: '#/components/schemas/RuleSpec'
+        skill:
+          $ref: '#/components/schemas/SkillSpec'
+        mcp:
+          $ref: '#/components/schemas/McpSpec'
+
+    ResourceConfigPatchRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        enabled:
+          type: boolean
+        model:
+          $ref: '#/components/schemas/ModelSpec'
+        rule:
+          $ref: '#/components/schemas/RuleSpec'
+        skill:
+          $ref: '#/components/schemas/SkillSpec'
+        mcp:
+          $ref: '#/components/schemas/McpSpec'
+
+    ModelTestResult:
+      type: object
+      required: [config_id, status, latency_ms, message, tested_at]
+      properties:
+        config_id:
+          type: string
+        status:
+          type: string
+          enum: [success, failed]
+        latency_ms:
+          type: integer
+          format: int64
+        error_code:
+          type: string
+        message:
+          type: string
+        tested_at:
+          type: string
+          format: date-time
+
+    McpConnectResult:
+      type: object
+      required: [config_id, status, tools, message, connected_at]
+      properties:
+        config_id:
+          type: string
+        status:
+          type: string
+          enum: [connected, failed]
+        tools:
+          type: array
+          items:
+            type: string
+        error_code:
+          type: string
+        message:
+          type: string
+        connected_at:
+          type: string
+          format: date-time
 
     AdminUser:
       type: object

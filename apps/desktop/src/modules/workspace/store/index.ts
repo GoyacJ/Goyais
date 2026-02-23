@@ -72,7 +72,7 @@ export async function switchWorkspaceContext(workspaceId: string): Promise<void>
   await refreshMeForCurrentWorkspace();
   refreshNavigationVisibility();
 
-  if (workspaceStore.connectionState === "auth_required" || workspaceStore.connectionState === "error") {
+  if (!isWorkspaceConnectionReady()) {
     return;
   }
 
@@ -92,4 +92,8 @@ async function reloadWorkspaceScopedData(): Promise<void> {
     tasks.push(refreshAdminData());
   }
   await Promise.all(tasks);
+}
+
+function isWorkspaceConnectionReady(): boolean {
+  return workspaceStore.connectionState === "ready";
 }

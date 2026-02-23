@@ -4,9 +4,11 @@ import {
   createConversation,
   createProject,
   exportConversationMarkdown,
+  getProjectConfig,
   importProjectDirectory,
   listConversations,
   listProjects,
+  listWorkspaceProjectConfigs,
   removeConversation,
   removeProject,
   renameConversation,
@@ -134,6 +136,7 @@ async function loadProjectsPage(input: { cursor: string | null; backStack: Array
       projectStore.activeConversationId = "";
       return;
     }
+    await refreshWorkspaceProjectConfigs();
     await refreshConversationsForActiveProject();
   } catch (error) {
     projectStore.error = toDisplayError(error);
@@ -301,6 +304,35 @@ export async function updateProjectBinding(
   try {
     const updated = await updateProjectConfig(projectId, config);
     projectStore.projectConfigsByProjectId[projectId] = updated;
+  } catch (error) {
+    projectStore.error = toDisplayError(error);
+  }
+}
+
+export async function refreshWorkspaceProjectConfigs(): Promise<void> {
+  const workspace = getCurrentWorkspace();
+  if (!workspace) {
+    return;
+  }
+  try {
+    const items = await listWorkspaceProjectConfigs(workspace.id);
+    const next: Record<string, ProjectConfig> = {};
+    for (const item of items) {
+      next[item.project_id] = item.config;
+    }
+    projectStore.projectConfigsByProjectId = next;
+  } catch (error) {
+    projectStore.error = toDisplayError(error);
+  }
+}
+
+export async function refreshProjectConfigById(projectId: string): Promise<void> {
+  if (projectId.trim() === "") {
+    return;
+  }
+  try {
+    const config = await getProjectConfig(projectId);
+    projectStore.projectConfigsByProjectId[projectId] = config;
   } catch (error) {
     projectStore.error = toDisplayError(error);
   }

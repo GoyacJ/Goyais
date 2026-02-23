@@ -22,7 +22,8 @@ export type Project = {
 
 export type ProjectConfig = {
   project_id: string;
-  model_id: string | null;
+  model_ids: string[];
+  default_model_id: string | null;
   rule_ids: string[];
   skill_ids: string[];
   mcp_ids: string[];

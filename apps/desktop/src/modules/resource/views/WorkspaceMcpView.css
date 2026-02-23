@@ -1,0 +1,126 @@
+.error {
+  margin: 0;
+  color: var(--semantic-danger);
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--global-space-8);
+}
+
+.toolbar button,
+.card-actions button,
+.footer-actions button {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-8);
+  background: var(--semantic-surface-2);
+  color: var(--semantic-text);
+  padding: var(--global-space-6) var(--global-space-10);
+}
+
+.mcp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--global-space-10);
+}
+
+.mcp-card {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-12);
+  background: var(--semantic-surface);
+  padding: var(--global-space-10);
+  display: grid;
+  gap: var(--global-space-8);
+}
+
+.mcp-card h3,
+.mcp-card p {
+  margin: 0;
+}
+
+.meta {
+  color: var(--semantic-text-muted);
+  font-size: var(--global-font-size-12);
+}
+
+.diagnostic {
+  border: 1px dashed var(--semantic-border);
+  border-radius: var(--global-radius-8);
+  padding: var(--global-space-8);
+  display: grid;
+  gap: var(--global-space-4);
+}
+
+.hint {
+  margin: 0;
+  color: var(--semantic-warning);
+  font-size: var(--global-font-size-12);
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--global-space-6);
+}
+
+.card-actions .danger {
+  color: var(--semantic-danger);
+}
+
+.enabled {
+  color: var(--semantic-success);
+}
+
+.disabled {
+  color: var(--semantic-danger);
+}
+
+.empty {
+  margin: 0;
+  color: var(--semantic-text-subtle);
+}
+
+.modal-title {
+  margin: 0;
+}
+
+.modal-form {
+  display: grid;
+  gap: var(--global-space-8);
+}
+
+.modal-form label {
+  display: grid;
+  gap: var(--global-space-4);
+  color: var(--semantic-text-muted);
+  font-size: var(--global-font-size-12);
+}
+
+.native-textarea {
+  min-height: 120px;
+  resize: vertical;
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-8);
+  background: var(--semantic-bg);
+  color: var(--semantic-text);
+  padding: var(--global-space-8);
+  font-family: var(--global-font-family-code);
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: var(--global-space-6);
+}
+
+.modal-message {
+  margin: 0;
+  color: var(--semantic-danger);
+}
+
+.footer-actions {
+  display: flex;
+  gap: var(--global-space-8);
+}

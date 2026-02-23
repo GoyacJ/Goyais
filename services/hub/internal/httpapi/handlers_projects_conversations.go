@@ -83,12 +83,13 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 			state.mu.Lock()
 			state.projects[project.ID] = project
 			state.projectConfigs[project.ID] = ProjectConfig{
-				ProjectID: project.ID,
-				ModelID:   toStringPtr("gpt-4.1"),
-				RuleIDs:   []string{},
-				SkillIDs:  []string{},
-				MCPIDs:    []string{},
-				UpdatedAt: now,
+				ProjectID:      project.ID,
+				ModelIDs:       []string{"gpt-4.1"},
+				DefaultModelID: toStringPtr("gpt-4.1"),
+				RuleIDs:        []string{},
+				SkillIDs:       []string{},
+				MCPIDs:         []string{},
+				UpdatedAt:      now,
 			}
 			state.mu.Unlock()
 
@@ -159,12 +160,13 @@ func ProjectsImportHandler(state *AppState) http.HandlerFunc {
 		state.mu.Lock()
 		state.projects[project.ID] = project
 		state.projectConfigs[project.ID] = ProjectConfig{
-			ProjectID: project.ID,
-			ModelID:   toStringPtr("gpt-4.1"),
-			RuleIDs:   []string{},
-			SkillIDs:  []string{},
-			MCPIDs:    []string{},
-			UpdatedAt: now,
+			ProjectID:      project.ID,
+			ModelIDs:       []string{"gpt-4.1"},
+			DefaultModelID: toStringPtr("gpt-4.1"),
+			RuleIDs:        []string{},
+			SkillIDs:       []string{},
+			MCPIDs:         []string{},
+			UpdatedAt:      now,
 		}
 		state.mu.Unlock()
 
@@ -226,16 +228,16 @@ func ProjectByIDHandler(state *AppState) http.HandlerFunc {
 			delete(state.conversations, id)
 			delete(state.conversationMessages, id)
 			delete(state.conversationSnapshots, id)
-		delete(state.conversationExecutionOrder, id)
-	}
-	state.mu.Unlock()
+			delete(state.conversationExecutionOrder, id)
+		}
+		state.mu.Unlock()
 
-	writeJSON(w, http.StatusNoContent, map[string]any{})
-	state.AppendAudit(AdminAuditEvent{Actor: actorFromSession(session), Action: "project.delete", Resource: project.ID, Result: "success", TraceID: TraceIDFromContext(r.Context())})
-	if state.authz != nil {
-		_ = state.authz.appendAudit(project.WorkspaceID, session.UserID, "project.write", "project", project.ID, "success", map[string]any{"operation": "delete"}, TraceIDFromContext(r.Context()))
+		writeJSON(w, http.StatusNoContent, map[string]any{})
+		state.AppendAudit(AdminAuditEvent{Actor: actorFromSession(session), Action: "project.delete", Resource: project.ID, Result: "success", TraceID: TraceIDFromContext(r.Context())})
+		if state.authz != nil {
+			_ = state.authz.appendAudit(project.WorkspaceID, session.UserID, "project.write", "project", project.ID, "success", map[string]any{"operation": "delete"}, TraceIDFromContext(r.Context()))
+		}
 	}
-}
 }
 
 func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
@@ -304,6 +306,8 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				return
 			}
 			now := time.Now().UTC().Format(time.RFC3339)
+			config := state.projectConfigs[projectID]
+			defaultModelID := firstNonEmpty(derefString(config.DefaultModelID), firstNonEmpty(project.DefaultModelID, "gpt-4.1"))
 			conversation := Conversation{
 				ID:                "conv_" + randomHex(6),
 				WorkspaceID:       project.WorkspaceID,
@@ -311,7 +315,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				Name:              firstNonEmpty(strings.TrimSpace(input.Name), "Conversation"),
 				QueueState:        QueueStateIdle,
 				DefaultMode:       project.DefaultMode,
-				ModelID:           firstNonEmpty(project.DefaultModelID, "gpt-4.1"),
+				ModelID:           defaultModelID,
 				ActiveExecutionID: nil,
 				CreatedAt:         now,
 				UpdatedAt:         now,
@@ -342,51 +346,81 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 
 func ProjectConfigHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
-				"method": r.Method, "path": r.URL.Path,
-			})
-			return
-		}
-
 		projectID := strings.TrimSpace(r.PathValue("project_id"))
-		input := ProjectConfig{}
-		if err := decodeJSONBody(r, &input); err != nil {
-			err.write(w, r)
-			return
-		}
 		workspaceID := ""
 		state.mu.RLock()
 		if project, exists := state.projects[projectID]; exists {
 			workspaceID = project.WorkspaceID
 		}
 		state.mu.RUnlock()
-		_, authErr := authorizeAction(
-			state,
-			r,
-			workspaceID,
-			"project.write",
-			authorizationResource{WorkspaceID: workspaceID},
-			authorizationContext{OperationType: "write", ABACRequired: true},
-		)
-		if authErr != nil {
-			authErr.write(w, r)
-			return
-		}
-		now := time.Now().UTC().Format(time.RFC3339)
+		switch r.Method {
+		case http.MethodGet:
+			_, authErr := authorizeAction(
+				state,
+				r,
+				workspaceID,
+				"project_config.read",
+				authorizationResource{WorkspaceID: workspaceID},
+				authorizationContext{OperationType: "read"},
+			)
+			if authErr != nil {
+				authErr.write(w, r)
+				return
+			}
+			state.mu.RLock()
+			if _, exists := state.projects[projectID]; !exists {
+				state.mu.RUnlock()
+				WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{"project_id": projectID})
+				return
+			}
+			config := state.projectConfigs[projectID]
+			state.mu.RUnlock()
+			writeJSON(w, http.StatusOK, config)
+		case http.MethodPut:
+			input := ProjectConfig{}
+			if err := decodeJSONBody(r, &input); err != nil {
+				err.write(w, r)
+				return
+			}
+			_, authErr := authorizeAction(
+				state,
+				r,
+				workspaceID,
+				"project.write",
+				authorizationResource{WorkspaceID: workspaceID},
+				authorizationContext{OperationType: "write", ABACRequired: true},
+			)
+			if authErr != nil {
+				authErr.write(w, r)
+				return
+			}
+			now := time.Now().UTC().Format(time.RFC3339)
+			if input.DefaultModelID != nil && !containsString(input.ModelIDs, *input.DefaultModelID) {
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "default_model_id must be included in model_ids", map[string]any{})
+				return
+			}
 
-		state.mu.Lock()
-		if _, exists := state.projects[projectID]; !exists {
+			state.mu.Lock()
+			if _, exists := state.projects[projectID]; !exists {
+				state.mu.Unlock()
+				WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{"project_id": projectID})
+				return
+			}
+			input.ProjectID = projectID
+			input.UpdatedAt = now
+			state.projectConfigs[projectID] = input
+			if project, exists := state.projects[projectID]; exists {
+				project.DefaultModelID = firstNonEmpty(derefString(input.DefaultModelID), project.DefaultModelID)
+				project.UpdatedAt = now
+				state.projects[projectID] = project
+			}
 			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{"project_id": projectID})
-			return
+			writeJSON(w, http.StatusOK, input)
+		default:
+			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
+				"method": r.Method, "path": r.URL.Path,
+			})
 		}
-		input.ProjectID = projectID
-		input.UpdatedAt = now
-		state.projectConfigs[projectID] = input
-		state.mu.Unlock()
-
-		writeJSON(w, http.StatusOK, input)
 	}
 }
 
@@ -466,6 +500,15 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			})
 		}
 	}
+}
+
+func containsString(items []string, target string) bool {
+	for _, item := range items {
+		if strings.TrimSpace(item) == strings.TrimSpace(target) {
+			return true
+		}
+	}
+	return false
 }
 
 func deriveProjectName(path string) string {

@@ -176,6 +176,34 @@ func (s *authzStore) migrate() error {
 			trace_id TEXT NOT NULL,
 			created_at TEXT NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS workspace_catalog_roots (
+			workspace_id TEXT PRIMARY KEY,
+			catalog_root TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS resource_configs (
+			id TEXT PRIMARY KEY,
+			workspace_id TEXT NOT NULL,
+			type TEXT NOT NULL,
+			name TEXT NOT NULL,
+			enabled INTEGER NOT NULL DEFAULT 1,
+			payload_json TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_resource_configs_workspace_type ON resource_configs(workspace_id, type)`,
+		`CREATE TABLE IF NOT EXISTS resource_test_logs (
+			id TEXT PRIMARY KEY,
+			workspace_id TEXT NOT NULL,
+			config_id TEXT NOT NULL,
+			test_type TEXT NOT NULL,
+			result TEXT NOT NULL,
+			latency_ms INTEGER NOT NULL DEFAULT 0,
+			error_code TEXT,
+			details_json TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_resource_test_logs_workspace_created ON resource_test_logs(workspace_id, created_at DESC)`,
 	}
 
 	for _, statement := range statements {
@@ -204,8 +232,8 @@ func (s *authzStore) ensureWorkspaceSeeds(workspaceID string) error {
 
 	roles := []AdminRole{
 		{Key: RoleViewer, Name: "Viewer", Permissions: []string{"project.read", "conversation.read", "resource.read"}, Enabled: true},
-		{Key: RoleDeveloper, Name: "Developer", Permissions: []string{"project.read", "project.write", "conversation.read", "conversation.write", "execution.control", "resource.read", "resource.write", "share.request", "share.revoke", "model_catalog.sync"}, Enabled: true},
-		{Key: RoleApprover, Name: "Approver", Permissions: []string{"project.read", "project.write", "conversation.read", "conversation.write", "execution.control", "resource.read", "resource.write", "share.request", "share.approve", "share.reject", "share.revoke", "model_catalog.sync", "admin.audit.read"}, Enabled: true},
+		{Key: RoleDeveloper, Name: "Developer", Permissions: []string{"project.read", "project.write", "project_config.read", "conversation.read", "conversation.write", "execution.control", "resource.read", "resource.write", "resource_config.read", "resource_config.write", "model.test", "mcp.connect", "share.request", "share.revoke", "catalog.update_root"}, Enabled: true},
+		{Key: RoleApprover, Name: "Approver", Permissions: []string{"project.read", "project.write", "project_config.read", "conversation.read", "conversation.write", "execution.control", "resource.read", "resource.write", "resource_config.read", "resource_config.write", "resource_config.delete", "model.test", "mcp.connect", "share.request", "share.approve", "share.reject", "share.revoke", "catalog.update_root", "admin.audit.read"}, Enabled: true},
 		{Key: RoleAdmin, Name: "Admin", Permissions: []string{"*"}, Enabled: true},
 	}
 	for _, role := range roles {
@@ -240,11 +268,17 @@ func (s *authzStore) ensureWorkspaceSeeds(workspaceID string) error {
 		{Key: "execution.control", Label: "执行控制", Enabled: true},
 		{Key: "resource.read", Label: "读取资源", Enabled: true},
 		{Key: "resource.write", Label: "写入资源", Enabled: true},
+		{Key: "resource_config.read", Label: "读取资源配置", Enabled: true},
+		{Key: "resource_config.write", Label: "写入资源配置", Enabled: true},
+		{Key: "resource_config.delete", Label: "删除资源配置", Enabled: true},
+		{Key: "project_config.read", Label: "读取项目配置", Enabled: true},
+		{Key: "model.test", Label: "测试模型配置", Enabled: true},
+		{Key: "mcp.connect", Label: "连接MCP配置", Enabled: true},
+		{Key: "catalog.update_root", Label: "更新模型目录根路径", Enabled: true},
 		{Key: "share.request", Label: "发起共享", Enabled: true},
 		{Key: "share.approve", Label: "审批共享", Enabled: true},
 		{Key: "share.reject", Label: "拒绝共享", Enabled: true},
 		{Key: "share.revoke", Label: "撤销共享", Enabled: true},
-		{Key: "model_catalog.sync", Label: "同步模型目录", Enabled: true},
 		{Key: "admin.users.manage", Label: "成员管理", Enabled: true},
 		{Key: "admin.roles.manage", Label: "角色管理", Enabled: true},
 		{Key: "admin.permissions.manage", Label: "权限管理", Enabled: true},

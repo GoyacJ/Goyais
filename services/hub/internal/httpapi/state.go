@@ -25,8 +25,12 @@ type AppState struct {
 	conversationExecutionOrder map[string][]string
 	executions                 map[string]Execution
 
-	resources     map[string]Resource
-	shareRequests map[string]ShareRequest
+	resources             map[string]Resource
+	resourceConfigs       map[string]ResourceConfig
+	resourceTestLogs      []ResourceTestLog
+	workspaceCatalogRoots map[string]CatalogRootResponse
+	modelCatalogCache     map[string]modelCatalogCacheEntry
+	shareRequests         map[string]ShareRequest
 
 	adminUsers map[string]AdminUser
 	adminRoles map[Role]AdminRole
@@ -49,6 +53,10 @@ func NewAppState(store *authzStore, worker *workerClient) *AppState {
 		conversationExecutionOrder: map[string][]string{},
 		executions:                 map[string]Execution{},
 		resources:                  map[string]Resource{},
+		resourceConfigs:            map[string]ResourceConfig{},
+		resourceTestLogs:           []ResourceTestLog{},
+		workspaceCatalogRoots:      map[string]CatalogRootResponse{},
+		modelCatalogCache:          map[string]modelCatalogCacheEntry{},
 		shareRequests:              map[string]ShareRequest{},
 		adminUsers:                 map[string]AdminUser{},
 		adminRoles:                 map[Role]AdminRole{},
@@ -94,6 +102,7 @@ func NewAppState(store *authzStore, worker *workerClient) *AppState {
 			_, _ = state.authz.upsertUser(defaultUser)
 		}
 	}
+	state.startCatalogWatcher()
 
 	return state
 }

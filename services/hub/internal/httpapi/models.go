@@ -190,12 +190,13 @@ type Project struct {
 }
 
 type ProjectConfig struct {
-	ProjectID string   `json:"project_id"`
-	ModelID   *string  `json:"model_id"`
-	RuleIDs   []string `json:"rule_ids"`
-	SkillIDs  []string `json:"skill_ids"`
-	MCPIDs    []string `json:"mcp_ids"`
-	UpdatedAt string   `json:"updated_at"`
+	ProjectID      string   `json:"project_id"`
+	ModelIDs       []string `json:"model_ids"`
+	DefaultModelID *string  `json:"default_model_id,omitempty"`
+	RuleIDs        []string `json:"rule_ids"`
+	SkillIDs       []string `json:"skill_ids"`
+	MCPIDs         []string `json:"mcp_ids"`
+	UpdatedAt      string   `json:"updated_at"`
 }
 
 type CreateProjectRequest struct {
@@ -373,12 +374,12 @@ type AdminAuditEvent struct {
 }
 
 type PermissionSnapshot struct {
-	Role            Role                          `json:"role"`
-	Permissions     []string                      `json:"permissions"`
-	MenuVisibility  map[string]PermissionVisibility `json:"menu_visibility"`
+	Role             Role                            `json:"role"`
+	Permissions      []string                        `json:"permissions"`
+	MenuVisibility   map[string]PermissionVisibility `json:"menu_visibility"`
 	ActionVisibility map[string]PermissionVisibility `json:"action_visibility"`
-	PolicyVersion   string                        `json:"policy_version"`
-	GeneratedAt     string                        `json:"generated_at"`
+	PolicyVersion    string                          `json:"policy_version"`
+	GeneratedAt      string                          `json:"generated_at"`
 }
 
 type AdminPermission struct {
@@ -394,7 +395,7 @@ type AdminMenu struct {
 }
 
 type RoleMenuVisibility struct {
-	RoleKey Role                              `json:"role_key"`
+	RoleKey Role                            `json:"role_key"`
 	Items   map[string]PermissionVisibility `json:"items"`
 }
 

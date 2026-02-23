@@ -1,189 +1,149 @@
 <template>
   <WorkspaceSharedShell
     active-key="workspace_project_config"
-    title="项目配置（共享）"
-    account-subtitle="Workspace Config / Project Config (Shared)"
-    settings-subtitle="Local Settings / Project Config (Shared)"
+    title="项目配置"
+    account-subtitle="Workspace Config / Project Config"
+    settings-subtitle="Local Settings / Project Config"
   >
+    <p v-if="resourceStore.error" class="error">{{ resourceStore.error }}</p>
+
     <section class="card">
-      <h3>项目配置绑定</h3>
-      <div class="row">
-        <label>
-          项目
-          <select v-model="form.projectId" @change="loadProjectConfig">
-            <option value="">请选择项目</option>
-            <option v-for="project in projectStore.projects" :key="project.id" :value="project.id">
-              {{ project.name }}
-            </option>
-          </select>
-        </label>
-        <label>
-          模型
-          <input v-model="form.modelId" type="text" placeholder="gpt-4.1" />
-        </label>
+      <h3>项目导入与绑定</h3>
+      <div class="import-row">
+        <BaseInput v-model="form.importPath" placeholder="输入项目目录路径，例如 /Users/.../repo" />
+        <button type="button" :disabled="!canWrite" @click="importDirectoryProject">目录导入</button>
       </div>
 
-      <div class="row">
-        <label>
-          规则 IDs（逗号分隔）
-          <input v-model="form.ruleIds" type="text" placeholder="rule_secure,rule_repo_guard" />
-        </label>
-      </div>
-
-      <div class="row">
-        <label>
-          技能 IDs（逗号分隔）
-          <input v-model="form.skillIds" type="text" placeholder="skill_review,skill_test" />
-        </label>
-      </div>
-
-      <div class="row">
-        <label>
-          MCP IDs（逗号分隔）
-          <input v-model="form.mcpIds" type="text" placeholder="mcp_git,mcp_fs" />
-        </label>
-      </div>
-
-      <div class="actions">
-        <button type="button" :disabled="form.projectId === ''" @click="saveConfig">保存项目配置</button>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>目录</th>
+              <th>模型绑定</th>
+              <th>默认模型</th>
+              <th>规则/技能/MCP</th>
+              <th>动作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in projectRows" :key="row.id">
+              <td>{{ row.name }}</td>
+              <td>{{ row.repoPath }}</td>
+              <td>{{ row.modelCount }}</td>
+              <td>{{ row.defaultModelId }}</td>
+              <td>{{ row.ruleCount }}/{{ row.skillCount }}/{{ row.mcpCount }}</td>
+              <td>
+                <div class="table-actions">
+                  <button type="button" :disabled="!canWrite" @click="openProjectBinding(row.id)">配置</button>
+                  <button type="button" class="danger" :disabled="!canWrite" @click="removeProjectById(row.id, row.name)">移除</button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="projectRows.length === 0">
+              <td colspan="6" class="empty">当前工作区暂无项目</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
-    <section class="card tips">
-      <h3>语义约束</h3>
-      <ul>
-        <li>Conversation 创建时自动继承 ProjectConfig。</li>
-        <li>Conversation 可覆盖，但不会反写 ProjectConfig。</li>
-        <li>本地资源共享到远程后，仍需工作区管理员审批。</li>
-      </ul>
-    </section>
+    <BaseModal :open="form.open">
+      <template #title>
+        <h3 class="modal-title">项目绑定配置：{{ form.projectName }}</h3>
+      </template>
+
+      <div class="binding-form">
+        <p>ProjectConfig 仅定义默认绑定；Conversation 可覆盖但不反写项目配置。</p>
+
+        <section class="group">
+          <h4>模型绑定（多选）</h4>
+          <div class="checkbox-list">
+            <label v-for="item in modelOptions" :key="item.id" class="checkbox-item">
+              <input :checked="isChecked('modelIds', item.id)" type="checkbox" @change="toggleListItem('modelIds', item.id)" />
+              {{ item.name }}
+            </label>
+            <span v-if="modelOptions.length === 0">暂无模型配置</span>
+          </div>
+
+          <BaseSelect
+            v-model="form.defaultModelId"
+            :options="[{ value: '', label: '不设置默认模型' }, ...defaultModelOptions]"
+            :disabled="form.modelIds.length === 0"
+          />
+        </section>
+
+        <section class="group">
+          <h4>规则绑定</h4>
+          <div class="checkbox-list">
+            <label v-for="item in ruleOptions" :key="item.id" class="checkbox-item">
+              <input :checked="isChecked('ruleIds', item.id)" type="checkbox" @change="toggleListItem('ruleIds', item.id)" />
+              {{ item.name }}
+            </label>
+            <span v-if="ruleOptions.length === 0">暂无规则配置</span>
+          </div>
+        </section>
+
+        <section class="group">
+          <h4>技能绑定</h4>
+          <div class="checkbox-list">
+            <label v-for="item in skillOptions" :key="item.id" class="checkbox-item">
+              <input :checked="isChecked('skillIds', item.id)" type="checkbox" @change="toggleListItem('skillIds', item.id)" />
+              {{ item.name }}
+            </label>
+            <span v-if="skillOptions.length === 0">暂无技能配置</span>
+          </div>
+        </section>
+
+        <section class="group">
+          <h4>MCP 绑定</h4>
+          <div class="checkbox-list">
+            <label v-for="item in mcpOptions" :key="item.id" class="checkbox-item">
+              <input :checked="isChecked('mcpIds', item.id)" type="checkbox" @change="toggleListItem('mcpIds', item.id)" />
+              {{ item.name }}
+            </label>
+            <span v-if="mcpOptions.length === 0">暂无 MCP 配置</span>
+          </div>
+        </section>
+
+        <p v-if="form.message !== ''" class="message">{{ form.message }}</p>
+      </div>
+
+      <template #footer>
+        <div class="footer-actions">
+          <button type="button" @click="closeProjectBinding">取消</button>
+          <button type="button" :disabled="!canWrite" @click="saveProjectBinding">保存</button>
+        </div>
+      </template>
+    </BaseModal>
   </WorkspaceSharedShell>
 </template>
 
 <script setup lang="ts">
-import { reactive, watch } from "vue";
-
-import { projectStore, refreshProjects, updateProjectBinding } from "@/modules/project/store";
+import { useWorkspaceProjectConfigView } from "@/modules/resource/views/useWorkspaceProjectConfigView";
 import WorkspaceSharedShell from "@/shared/shells/WorkspaceSharedShell.vue";
-import { workspaceStore } from "@/shared/stores/workspaceStore";
+import BaseInput from "@/shared/ui/BaseInput.vue";
+import BaseModal from "@/shared/ui/BaseModal.vue";
+import BaseSelect from "@/shared/ui/BaseSelect.vue";
 
-const form = reactive({
-  projectId: "",
-  modelId: "gpt-4.1",
-  ruleIds: "",
-  skillIds: "",
-  mcpIds: ""
-});
-
-watch(
-  () => workspaceStore.currentWorkspaceId,
-  async () => {
-    form.projectId = "";
-    form.modelId = "gpt-4.1";
-    form.ruleIds = "";
-    form.skillIds = "";
-    form.mcpIds = "";
-    await refreshProjects();
-    form.projectId = projectStore.activeProjectId || projectStore.projects[0]?.id || "";
-    loadProjectConfig();
-  },
-  { immediate: true }
-);
-
-function loadProjectConfig(): void {
-  if (form.projectId === "") {
-    return;
-  }
-
-  const config = projectStore.projectConfigsByProjectId[form.projectId];
-  if (!config) {
-    form.modelId = "gpt-4.1";
-    form.ruleIds = "";
-    form.skillIds = "";
-    form.mcpIds = "";
-    return;
-  }
-
-  form.modelId = config.model_id ?? "";
-  form.ruleIds = config.rule_ids.join(",");
-  form.skillIds = config.skill_ids.join(",");
-  form.mcpIds = config.mcp_ids.join(",");
-}
-
-async function saveConfig(): Promise<void> {
-  if (form.projectId === "") {
-    return;
-  }
-
-  await updateProjectBinding(form.projectId, {
-    model_id: form.modelId.trim() || null,
-    rule_ids: toList(form.ruleIds),
-    skill_ids: toList(form.skillIds),
-    mcp_ids: toList(form.mcpIds)
-  });
-}
-
-function toList(raw: string): string[] {
-  return raw
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item !== "");
-}
+const {
+  canWrite,
+  closeProjectBinding,
+  defaultModelOptions,
+  form,
+  importDirectoryProject,
+  isChecked,
+  mcpOptions,
+  modelOptions,
+  openProjectBinding,
+  projectRows,
+  removeProjectById,
+  resourceStore,
+  ruleOptions,
+  saveProjectBinding,
+  skillOptions,
+  toggleListItem
+} = useWorkspaceProjectConfigView();
 </script>
 
-<style scoped>
-.card {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-12);
-  background: var(--semantic-surface);
-  padding: var(--global-space-12);
-  display: grid;
-  gap: var(--global-space-8);
-}
-
-.card h3 {
-  margin: 0;
-}
-
-.row {
-  display: grid;
-  gap: var(--global-space-8);
-}
-
-label {
-  display: grid;
-  gap: var(--global-space-4);
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-12);
-}
-
-input,
-select {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-bg);
-  color: var(--semantic-text);
-  padding: var(--global-space-8);
-}
-
-.actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.actions button {
-  border: 0;
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-surface-2);
-  color: var(--semantic-text);
-  padding: var(--global-space-8) var(--global-space-12);
-}
-
-.tips ul {
-  margin: 0;
-  padding-left: var(--global-space-16);
-  color: var(--semantic-text-muted);
-  display: grid;
-  gap: var(--global-space-4);
-}
-</style>
+<style scoped src="./WorkspaceProjectConfigView.css"></style>

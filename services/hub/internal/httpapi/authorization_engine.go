@@ -15,11 +15,11 @@ type actionSpec struct {
 }
 
 type authorizationResource struct {
-	WorkspaceID string
-	OwnerUserID string
-	Scope       string
+	WorkspaceID  string
+	OwnerUserID  string
+	Scope        string
 	ResourceType string
-	ShareStatus string
+	ShareStatus  string
 }
 
 type authorizationContext struct {
@@ -37,11 +37,17 @@ var actionSpecs = map[string]actionSpec{
 	"execution.control":        {PermissionKey: "execution.control", RiskLevel: "high", OperationType: "execute", ABACRequired: true},
 	"resource.read":            {PermissionKey: "resource.read", RiskLevel: "low", OperationType: "read"},
 	"resource.write":           {PermissionKey: "resource.write", RiskLevel: "medium", OperationType: "write", ABACRequired: true},
+	"resource_config.read":     {PermissionKey: "resource_config.read", RiskLevel: "low", OperationType: "read"},
+	"resource_config.write":    {PermissionKey: "resource_config.write", RiskLevel: "high", OperationType: "write", ABACRequired: true},
+	"resource_config.delete":   {PermissionKey: "resource_config.delete", RiskLevel: "critical", OperationType: "write", ABACRequired: true},
+	"project_config.read":      {PermissionKey: "project_config.read", RiskLevel: "low", OperationType: "read"},
+	"catalog.update_root":      {PermissionKey: "catalog.update_root", RiskLevel: "high", OperationType: "write", ABACRequired: true},
+	"model.test":               {PermissionKey: "model.test", RiskLevel: "high", OperationType: "write", ABACRequired: true},
+	"mcp.connect":              {PermissionKey: "mcp.connect", RiskLevel: "high", OperationType: "write", ABACRequired: true},
 	"share.request":            {PermissionKey: "share.request", RiskLevel: "medium", OperationType: "write", ABACRequired: true},
 	"share.approve":            {PermissionKey: "share.approve", RiskLevel: "high", OperationType: "write", ABACRequired: true},
 	"share.reject":             {PermissionKey: "share.reject", RiskLevel: "high", OperationType: "write", ABACRequired: true},
 	"share.revoke":             {PermissionKey: "share.revoke", RiskLevel: "high", OperationType: "write", ABACRequired: true},
-	"model_catalog.sync":       {PermissionKey: "model_catalog.sync", RiskLevel: "medium", OperationType: "write", ABACRequired: true},
 	"admin.users.manage":       {PermissionKey: "admin.users.manage", RiskLevel: "critical", OperationType: "write", ABACRequired: true},
 	"admin.roles.manage":       {PermissionKey: "admin.roles.manage", RiskLevel: "critical", OperationType: "write", ABACRequired: true},
 	"admin.permissions.manage": {PermissionKey: "admin.permissions.manage", RiskLevel: "critical", OperationType: "write", ABACRequired: true},
@@ -173,11 +179,11 @@ func matchABACPolicy(policy ABACPolicy, session Session, resource authorizationR
 			"workspace_id": session.WorkspaceID,
 		},
 		"resource": {
-			"workspace_id": resource.WorkspaceID,
+			"workspace_id":  resource.WorkspaceID,
 			"owner_user_id": resource.OwnerUserID,
-			"scope":        resource.Scope,
+			"scope":         resource.Scope,
 			"resource_type": resource.ResourceType,
-			"share_status": resource.ShareStatus,
+			"share_status":  resource.ShareStatus,
 		},
 		"action": {
 			"name": action,

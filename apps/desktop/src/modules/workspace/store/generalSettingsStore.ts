@@ -1,5 +1,6 @@
 import { computed, reactive } from "vue";
 
+import { updateCatalogRoot } from "@/modules/resource/services";
 import {
   cloneGeneralSettings,
   createDefaultGeneralSettings,
@@ -12,6 +13,7 @@ import {
 import { loadGeneralSettings, saveGeneralSettings } from "@/modules/workspace/services/generalSettingsPersistence";
 import { applyGeneralSettingsField, detectGeneralSettingsCapability } from "@/modules/workspace/services/generalSettingsPlatform";
 import { toDisplayError } from "@/shared/services/errorMapper";
+import { getCurrentWorkspace } from "@/shared/stores/workspaceStore";
 
 type GeneralSettingsStoreState = {
   value: GeneralSettings;
@@ -91,6 +93,12 @@ export async function updateGeneralSetting<Path extends GeneralSettingsFieldPath
   try {
     await applyGeneralSettingsField(path, state.value, state.capability);
     await saveGeneralSettings(state.value);
+    if (path === "defaultProjectDirectory") {
+      const workspace = getCurrentWorkspace();
+      if (workspace?.mode === "local") {
+        await updateCatalogRoot(workspace.id, String(value));
+      }
+    }
   } catch (error) {
     state.error = toDisplayError(error);
   } finally {

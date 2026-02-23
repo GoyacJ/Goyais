@@ -1,7 +1,7 @@
 import { getControlClient } from "@/shared/services/clients";
 import { withApiFallback } from "@/shared/services/fallback";
 import { createMockId, mockData } from "@/shared/services/mockData";
-import type { Conversation, ListEnvelope, PaginationQuery, Project, ProjectConfig } from "@/shared/types/api";
+import type { Conversation, ListEnvelope, PaginationQuery, Project, ProjectConfig, WorkspaceProjectConfigItem } from "@/shared/types/api";
 
 export async function listProjects(workspaceId: string, query: PaginationQuery = {}): Promise<ListEnvelope<Project>> {
   const search = buildPaginationSearch({ ...query, workspace_id: workspaceId });
@@ -161,12 +161,52 @@ export async function updateProjectConfig(projectId: string, config: Omit<Projec
     () => getControlClient().request<ProjectConfig>(`/v1/projects/${projectId}/config`, { method: "PUT", body: config }),
     () => ({
       project_id: projectId,
-      model_id: config.model_id,
+      model_ids: [...config.model_ids],
+      default_model_id: config.default_model_id,
       rule_ids: [...config.rule_ids],
       skill_ids: [...config.skill_ids],
       mcp_ids: [...config.mcp_ids],
       updated_at: new Date().toISOString()
     })
+  );
+}
+
+export async function getProjectConfig(projectId: string): Promise<ProjectConfig> {
+  return withApiFallback(
+    "project.getConfig",
+    () => getControlClient().get<ProjectConfig>(`/v1/projects/${projectId}/config`),
+    () => ({
+      project_id: projectId,
+      model_ids: ["gpt-4.1"],
+      default_model_id: "gpt-4.1",
+      rule_ids: [],
+      skill_ids: [],
+      mcp_ids: [],
+      updated_at: new Date().toISOString()
+    })
+  );
+}
+
+export async function listWorkspaceProjectConfigs(workspaceId: string): Promise<WorkspaceProjectConfigItem[]> {
+  return withApiFallback(
+    "project.listWorkspaceConfigs",
+    () => getControlClient().get<WorkspaceProjectConfigItem[]>(`/v1/workspaces/${workspaceId}/project-configs`),
+    () =>
+      mockData.projects
+        .filter((item) => item.workspace_id === workspaceId)
+        .map((item) => ({
+          project_id: item.id,
+          project_name: item.name,
+          config: {
+            project_id: item.id,
+            model_ids: [item.default_model_id ?? "gpt-4.1"],
+            default_model_id: item.default_model_id ?? "gpt-4.1",
+            rule_ids: [],
+            skill_ids: [],
+            mcp_ids: [],
+            updated_at: new Date().toISOString()
+          }
+        }))
   );
 }
 

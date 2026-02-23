@@ -159,8 +159,10 @@ func localPermissionSnapshot() PermissionSnapshot {
 	actionVisibility := map[string]PermissionVisibility{}
 	for _, item := range []string{
 		"project.read", "project.write", "conversation.read", "conversation.write", "execution.control",
-		"resource.read", "resource.write", "share.request", "share.approve", "share.reject", "share.revoke",
-		"model_catalog.sync", "admin.users.manage", "admin.roles.manage", "admin.permissions.manage",
+		"resource.read", "resource.write", "resource_config.read", "resource_config.write", "resource_config.delete",
+		"project_config.read", "model.test", "mcp.connect", "catalog.update_root",
+		"share.request", "share.approve", "share.reject", "share.revoke",
+		"admin.users.manage", "admin.roles.manage", "admin.permissions.manage",
 		"admin.menus.manage", "admin.policies.manage", "admin.audit.read",
 	} {
 		actionVisibility[item] = PermissionVisibilityEnabled

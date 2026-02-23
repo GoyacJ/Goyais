@@ -269,7 +269,7 @@ TokenLayerContract {
 2. 回滚门禁：`rollback` 必须恢复消息游标、队列状态、worktree_ref、Inspector 状态。
 3. 项目配置门禁：Conversation 覆盖不得反写 ProjectConfig。
 4. 菜单权限门禁：动态菜单可见性必须与后端权限一致（hidden/disabled/readonly/enabled）。
-5. 模型同步门禁：手动与定时同步路径至少一个失败可重试，且有审计日志。
+5. 模型目录门禁：手动与定时重载路径都需可用，JSON 校验失败必须可视化并写审计日志。
 6. 主题门禁：`theme mode/font style/font scale/preset` 必须全局即时生效并持久化，且具备可回归自动化测试。
 7. 通用设置门禁：`general settings` 必须提供 6 组策略型行式配置并即时持久化；系统能力未接入平台时必须显式禁用并展示原因文案。
 
@@ -293,7 +293,7 @@ SemanticGatePolicy {
   snapshot_rollback_required: true
   project_config_override_non_persistent: true
   permission_visibility_consistency: true
-  model_catalog_sync_auditable: true
+  model_catalog_reload_auditable: true
   general_settings_strategy_persistent: true
   blocking: true
 }
@@ -319,7 +319,7 @@ QualityGateResult {
    - queue/rollback 语义测试报告
    - 权限可见性一致性报告
    - 项目配置继承与覆盖报告
-   - 模型目录同步稳定性报告
+   - 模型目录加载稳定性报告
    - 通用设置策略即时持久化与平台降级提示报告
 5. `MUST` 执行 Desktop strict 联调通道（`VITE_API_MODE=strict` + `VITE_ENABLE_MOCK_FALLBACK=false`）。
 
@@ -374,7 +374,7 @@ StandardsExceptionADR {
 6. 是否补充必要审计日志与 trace_id 传播。
 7. 是否完成动态菜单与固定菜单语义校验（账号信息/设置）。
 8. 是否验证 ProjectConfig 继承与 Conversation 覆盖语义。
-9. 是否验证模型目录同步（手动 + 定时）及失败重试路径。
+9. 是否验证模型目录加载（手动 + 定时）及 JSON 异常路径。
 10. 是否与 PRD/TECH_ARCH/PLAN 语义一致。
 
 ### 13.2 完成定义（DoD）
@@ -417,7 +417,7 @@ StandardsExceptionADR {
 8. 回滚语义变更时，能按第 10.4 阻断“只回滚文本不回滚快照”的错误实现。
 9. 项目配置语义变更时，能验证“Conversation 覆盖不反写 ProjectConfig”。
 10. 菜单权限变更时，能验证动态菜单/固定菜单行为与权限一致。
-11. 模型同步策略变更时，能验证手动/定时同步与失败重试审计。
+11. 模型目录策略变更时，能验证手动/定时重载与失败审计。
 12. PR 审查可按第 13 章逐项打勾并形成可追溯证据。
 
 ---
@@ -429,3 +429,13 @@ StandardsExceptionADR {
 | Workspace 持久化与列表语义 | PRD.md, TECH_ARCH.md | PRD 5.x/9.x/14.x, TECH_ARCH 11.1/9.x | done |
 | 工作区切换上下文行为 | PRD.md, TECH_ARCH.md | PRD 5.2/9.2/16.x, TECH_ARCH 14.x/20.x | done |
 | 测试门禁与验收项 | IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | Phase 2/3 验收、DoD/门禁 | done |
+
+---
+
+## 17. 2026-02-23 资源配置体系完善同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 模型目录改为手工 JSON 目录加载 | PRD.md, TECH_ARCH.md | PRD 6.3/14.1, TECH_ARCH 3.2/6.5/20.4 | done |
+| API 与数据表扩展（catalog-root/resource-configs/project-configs） | TECH_ARCH.md, IMPLEMENTATION_PLAN.md | TECH_ARCH 9.1/11.2/20.5/20.6, PLAN Phase 4 | done |
+| 工程门禁更新（JSON 校验与重载审计） | DEVELOPMENT_STANDARDS.md | 10.4, 10.5, 11.1, 13.1, 15 | done |

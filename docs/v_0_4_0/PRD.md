@@ -60,7 +60,7 @@ Goyais 是一个工作区隔离的 AI 智能平台，覆盖两类能力：
 16. 远程 Hub 支持默认管理员账户，管理员具备全权限并强制审计。
 17. 本地资源（模型/规则/技能/MCP）可共享到远程工作区，但必须经远程工作区管理员审核。
 18. 模型配置采用“厂商 -> 模型”两级结构；P0 必须支持厂商：OpenAI、Google、Qwen、豆包、智谱、MiniMax、本地。
-19. 模型目录需支持同步能力（手动触发 + 定时刷新，P0 至少交付其中一项；本 PRD 定义为两项都支持）。
+19. 模型目录采用纯手工 JSON 文件维护（`<catalog_root>/goyais/catalog/models.json`），支持手动刷新与定时重载，并记录失败审计。
 20. v0.4.0 主术语统一使用 `Conversation`，`Session` 不作为主名。
 
 ---
@@ -159,15 +159,18 @@ Workspace
 3. Conversation 可覆盖项目默认值，仅影响当前 Conversation。
 4. Conversation 覆盖不反写 ProjectConfig。
 
-### 6.3 模型配置结构与目录同步
+### 6.3 模型配置结构与目录（手工 JSON）
 
 1. 模型配置采用两级结构：`Vendor -> Models`。
 2. P0 厂商清单：OpenAI、Google、Qwen、豆包、智谱、MiniMax、本地。
 3. 支持模型启用、停用、编辑、删除与默认模型指定。
-4. 提供模型目录同步：
-   - 手动触发同步（P0）。
-   - 定时刷新同步（P0）。
-5. 同步失败需提供可视化错误与审计记录。
+4. 模型目录来源为手工维护的 `models.json`：
+   - 本地工作区：目录根由通用设置 `defaultProjectDirectory` 同步到 Hub 的 `catalog-root`。
+   - 远程工作区：由 Hub 独立维护目录根与文件。
+5. 提供目录刷新能力：
+   - 手动触发目录重载（P0）。
+   - 定时文件重载（P0）。
+6. 重载失败需提供可视化错误与审计记录。
 
 ### 6.4 资源生命周期
 
@@ -345,7 +348,7 @@ Workspace
 12. 设置固定菜单：主题、国际化、更新与诊断、通用设置（主题模式 `system/dark/light`、字体样式、字体大小、预设主题、语言切换均需即时生效并持久化；通用设置需提供策略型行式配置：启动与窗口、默认目录、通知、隐私与遥测、更新策略、诊断与日志）。
 13. 项目配置入口（账号信息 + 设置），支持模型/规则/技能/MCP 绑定。
 14. 模型配置两级结构（厂商 -> 模型）与厂商清单支持。
-15. 模型目录同步（手动 + 定时）。
+15. 模型目录手工 JSON 维护与重载（手动 + 定时）。
 16. 本地资源共享到远程并需管理员审核。
 17. 模型密钥共享高风险治理。
 18. 底部状态栏统一展示 Hub 地址与连接状态。
@@ -429,16 +432,32 @@ Workspace
    - 导出 Conversation 为 Markdown。
 8. `PUT /v1/projects/{project_id}/config`
    - 更新项目配置（模型/规则/技能/MCP）。
-9. `POST /v1/workspaces/{workspace_id}/model-catalog`
-   - 手动触发模型目录同步（`vendors`）。
-10. `GET /v1/workspaces/{workspace_id}/model-catalog`
-   - 查询同步后的厂商/模型目录。
-11. 共享与审批接口（沿用并强化）：
+9. `GET /v1/workspaces/{workspace_id}/model-catalog`
+   - 查询 `models.json` 解析后的厂商/模型目录（`revision/source/updated_at`）。
+10. `POST /v1/workspaces/{workspace_id}/model-catalog`
+   - 手动触发目录重载（不做厂商自动同步）。
+11. `GET|PUT /v1/workspaces/{workspace_id}/catalog-root`
+   - 查询/更新目录根路径（远程工作区仅管理员可写）。
+12. `GET|POST /v1/workspaces/{workspace_id}/resource-configs`
+   - 统一管理 `model|rule|skill|mcp` 配置，支持分页与搜索。
+13. `PATCH|DELETE /v1/workspaces/{workspace_id}/resource-configs/{config_id}`
+   - 编辑、启停与硬删除资源配置。
+14. `POST /v1/workspaces/{workspace_id}/resource-configs/{config_id}/test`
+   - 模型最小推理测试。
+15. `POST /v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect`
+   - MCP 握手与工具列表拉取。
+16. `GET /v1/workspaces/{workspace_id}/mcps/export`
+   - 导出脱敏后的 MCP 聚合 JSON。
+17. `GET /v1/workspaces/{workspace_id}/project-configs`
+   - 批量返回工作区项目配置。
+18. `GET|PUT /v1/projects/{project_id}/config`
+   - 查询/更新项目配置（多模型绑定 + 默认模型）。
+19. 共享与审批接口（沿用并强化）：
    - `POST /v1/workspaces/{workspace_id}/share-requests`
    - `POST /v1/share-requests/{request_id}/approve`
    - `POST /v1/share-requests/{request_id}/reject`
    - `POST /v1/share-requests/{request_id}/revoke`
-12. 管理员接口组（成员/角色/审计）：
+20. 管理员接口组（成员/角色/审计）：
    - `GET|POST /v1/admin/users`
    - `PATCH|DELETE /v1/admin/users/{user_id}`
    - `GET|POST /v1/admin/roles`
@@ -480,10 +499,11 @@ Project {
 ProjectConfig {
   project_id: string
   model_ids: string[]
+  default_model_id: string | null
   rule_ids: string[]
   skill_ids: string[]
   mcp_ids: string[]
-  default_model_id?: string
+  updated_at: string
 }
 
 Conversation {
@@ -635,7 +655,7 @@ Desktop -> Hub -> Worker
 3. 回滚成功率：触发“回滚到此处”后快照恢复成功比例 >= 99%。
 4. 对话导出成功率：Markdown 导出成功比例 >= 99.5%。
 5. 权限菜单正确率：动态菜单与权限结果一致率 >= 99.9%。
-6. 模型目录同步成功率：手动/定时同步成功率 >= 98%。
+6. 模型目录加载成功率：手动重载/定时重载成功率 >= 98%。
 
 ### 18.2 技术指标
 
@@ -656,7 +676,7 @@ Desktop -> Hub -> Worker
 4. 成员与角色：成员/角色新增、编辑、删除、停用、分配权限全链路。
 5. 权限与审计：菜单/权限编辑停用生效；403 拒绝与审计一致。
 6. 项目配置：项目绑定生效，Conversation 覆盖不反写项目。
-7. 模型配置：厂商-模型两级管理、启停、删除、默认模型切换、目录同步。
+7. 模型配置：厂商-模型两级管理、启停、删除、默认模型切换、目录加载。
 8. 资源共享：本地资源共享到远程需管理员审核；通过后可用，撤销后失效。
 9. 底部状态栏：Hub 地址与连接状态在主屏幕、账号信息、设置页一致。
 10. 连接异常：`reconnecting/disconnected` 下显示只读与重试提示。
@@ -681,7 +701,7 @@ Desktop -> Hub -> Worker
 3. 回滚能力可用且审计完整。
 4. 账号信息/设置双入口及动态/固定菜单语义正确。
 5. 项目配置与 Conversation 覆盖语义正确。
-6. 厂商-模型两级配置与目录同步可用。
+6. 厂商-模型两级配置与手工目录加载可用。
 7. 本地资源共享审批闭环可用。
 8. 模型密钥共享满足审批、掩码、审计、撤销。
 9. 测试门槛全部通过。
@@ -700,7 +720,7 @@ Desktop -> Hub -> Worker
 | 回滚快照与工作树状态不一致 | 造成错误恢复或数据错判 | 快照原子写入 + 回滚事务 + 失败恢复指引 |
 | 队列竞争导致顺序错乱 | 执行语义破坏 | 单 Conversation 强互斥 + 原子状态机 + Watchdog |
 | 权限动态菜单错配 | 越权或误拦截 | 后端权限权威化 + 前端可见性枚举 + 回归用例 |
-| 模型目录同步不稳定 | 模型可用性下降 | 手动重试 + 定时补偿 + 错误审计 |
+| 模型目录 JSON 异常或路径失效 | 模型可用性下降 | 手动修复 JSON + 定时重载补偿 + 错误审计 |
 | 密钥共享泄露风险 | 安全合规风险 | 强制审批、掩码、加密存储、撤销与全审计 |
 
 ---
@@ -784,7 +804,7 @@ event types:
 |---|---|---|---|---|
 | 业务规则变化（主屏幕/账号/设置/项目配置） | PRD 重写 | `/Users/goya/Repo/Git/Goyais/docs/v_0_4_0/PRD.md` | 3, 5, 6, 7, 9, 12, 16, 19, 20 | done |
 | 接口与类型变化（rollback/export/project config/model sync） | 接口与类型定义更新 | `/Users/goya/Repo/Git/Goyais/docs/v_0_4_0/TECH_ARCH.md` | 3, 7, 9, 11, 14, 20 | done |
-| 阶段与门禁变化（新增回滚/导出/模型同步/项目配置验收） | 实施阶段映射更新 | `/Users/goya/Repo/Git/Goyais/docs/v_0_4_0/IMPLEMENTATION_PLAN.md` | Phase 3, 4, 5, 7, 9, 测试计划映射 | done |
+| 阶段与门禁变化（新增回滚/导出/模型目录加载/项目配置验收） | 实施阶段映射更新 | `/Users/goya/Repo/Git/Goyais/docs/v_0_4_0/IMPLEMENTATION_PLAN.md` | Phase 3, 4, 5, 7, 9, 测试计划映射 | done |
 | 工程规范补充（动态菜单/快照回滚测试/审计覆盖） | 规范与 DoD 更新 | `/Users/goya/Repo/Git/Goyais/docs/v_0_4_0/DEVELOPMENT_STANDARDS.md` | 10, 11, 13, 14, 15 | done |
 
 ### 25.3 2026-02-23 基础框架补齐矩阵
@@ -805,3 +825,12 @@ event types:
 | Workspace 持久化与列表语义（真实下拉） | PRD.md, TECH_ARCH.md | PRD 5.x/9.x/14.x, TECH_ARCH 11.1/9.x | done |
 | 工作区切换全上下文行为（Hub/项目/账号/权限） | PRD.md, TECH_ARCH.md | PRD 5.2/9.2/16.x, TECH_ARCH 14.x/20.x | done |
 | 测试门禁与验收项（strict 通道 + 工作区场景） | IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | Phase 2/3 验收、DoD/门禁 | done |
+
+### 25.5 2026-02-23 资源配置体系完善矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 模型目录语义由“同步”改为“纯手工 JSON 目录” | PRD.md | 6.3, 12.1, 18.1, 20.1, 21 | done |
+| 目录来源与本地/远程存储路径规则 | TECH_ARCH.md | 3, 6, 9, 11, 20 | done |
+| Phase 4 验收口径调整（移除厂商自动同步） | IMPLEMENTATION_PLAN.md | Phase 4 工作内容与验收标准 | done |
+| 安全与工程门禁（密钥加密、目录重载、JSON 校验） | DEVELOPMENT_STANDARDS.md | 10, 11, 13, 15 | done |

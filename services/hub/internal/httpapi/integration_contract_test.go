@@ -1,8 +1,11 @@
 package httpapi
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -223,5 +226,202 @@ func TestShareApproveRequiresApproverAndProducesAudit(t *testing.T) {
 	mustDecodeJSON(t, auditRes.Body.Bytes(), &auditPayload)
 	if len(auditPayload["items"].([]any)) == 0 {
 		t.Fatalf("expected audit items")
+	}
+}
+
+func TestResourceConfigAndCatalogEndpoints(t *testing.T) {
+	router := NewRouter()
+	workspaceID := createRemoteWorkspace(t, router, "Remote Resource Config", "http://127.0.0.1:9001", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "resource_owner", "pw", RoleAdmin, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	modelProbeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/chat/completions" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"cmpl_1","choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer modelProbeServer.Close()
+
+	mcpSessionID := "mcp-integration-session"
+	mcpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/sse":
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Mcp-Session-Id", mcpSessionID)
+			_, _ = w.Write([]byte("event: endpoint\n"))
+			_, _ = w.Write([]byte("data: /rpc\n\n"))
+		case r.Method == http.MethodPost && r.URL.Path == "/rpc":
+			if r.Header.Get("Mcp-Session-Id") != mcpSessionID {
+				t.Fatalf("expected mcp session id header")
+			}
+			payload := map[string]any{}
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read mcp rpc body failed: %v", err)
+			}
+			mustDecodeJSON(t, raw, &payload)
+			method, _ := payload["method"].(string)
+			id := payload["id"]
+			w.Header().Set("Content-Type", "application/json")
+			switch method {
+			case "initialize":
+				writeJSON(w, http.StatusOK, map[string]any{"jsonrpc": "2.0", "id": id, "result": map[string]any{"capabilities": map[string]any{}}})
+			case "tools/list":
+				writeJSON(w, http.StatusOK, map[string]any{"jsonrpc": "2.0", "id": id, "result": map[string]any{"tools": []map[string]any{{"name": "tools.list"}, {"name": "resources.list"}}}})
+			default:
+				writeJSON(w, http.StatusOK, map[string]any{"jsonrpc": "2.0", "id": id, "result": map[string]any{}})
+			}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer mcpServer.Close()
+
+	catalogRoot := filepath.Join(t.TempDir(), "resource-catalog")
+	rootRes := performJSONRequest(t, router, http.MethodPut, "/v1/workspaces/"+workspaceID+"/catalog-root", map[string]any{
+		"catalog_root": catalogRoot,
+	}, authHeaders)
+	if rootRes.Code != http.StatusOK {
+		t.Fatalf("expected update catalog root 200, got %d (%s)", rootRes.Code, rootRes.Body.String())
+	}
+
+	catalogRes := performJSONRequest(t, router, http.MethodGet, "/v1/workspaces/"+workspaceID+"/model-catalog", nil, authHeaders)
+	if catalogRes.Code != http.StatusOK {
+		t.Fatalf("expected model catalog 200, got %d (%s)", catalogRes.Code, catalogRes.Body.String())
+	}
+	catalogPayload := map[string]any{}
+	mustDecodeJSON(t, catalogRes.Body.Bytes(), &catalogPayload)
+	if _, ok := catalogPayload["vendors"].([]any); !ok {
+		t.Fatalf("expected vendors array, got %#v", catalogPayload["vendors"])
+	}
+	if _, err := os.Stat(filepath.Join(catalogRoot, "goyais", "catalog", "models.json")); err != nil {
+		t.Fatalf("expected models.json in catalog root: %v", err)
+	}
+
+	createModelRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/resource-configs", map[string]any{
+		"type": "model",
+		"name": "openai-probe",
+		"model": map[string]any{
+			"vendor":   "OpenAI",
+			"model_id": "gpt-4.1",
+			"base_url": modelProbeServer.URL,
+			"api_key":  "sk-test",
+		},
+	}, authHeaders)
+	if createModelRes.Code != http.StatusCreated {
+		t.Fatalf("expected create model config 201, got %d (%s)", createModelRes.Code, createModelRes.Body.String())
+	}
+	modelPayload := map[string]any{}
+	mustDecodeJSON(t, createModelRes.Body.Bytes(), &modelPayload)
+	modelConfigID := modelPayload["id"].(string)
+
+	testModelRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/resource-configs/"+modelConfigID+"/test", map[string]any{}, authHeaders)
+	if testModelRes.Code != http.StatusOK {
+		t.Fatalf("expected model test 200, got %d (%s)", testModelRes.Code, testModelRes.Body.String())
+	}
+	testPayload := map[string]any{}
+	mustDecodeJSON(t, testModelRes.Body.Bytes(), &testPayload)
+	if testPayload["status"] != "success" {
+		t.Fatalf("expected model test success, got %#v", testPayload["status"])
+	}
+
+	createMCPRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/resource-configs", map[string]any{
+		"type": "mcp",
+		"name": "local-shell",
+		"mcp": map[string]any{
+			"transport": "http_sse",
+			"endpoint":  mcpServer.URL + "/sse",
+		},
+	}, authHeaders)
+	if createMCPRes.Code != http.StatusCreated {
+		t.Fatalf("expected create mcp config 201, got %d (%s)", createMCPRes.Code, createMCPRes.Body.String())
+	}
+	mcpPayload := map[string]any{}
+	mustDecodeJSON(t, createMCPRes.Body.Bytes(), &mcpPayload)
+	mcpConfigID := mcpPayload["id"].(string)
+
+	connectRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/resource-configs/"+mcpConfigID+"/connect", map[string]any{}, authHeaders)
+	if connectRes.Code != http.StatusOK {
+		t.Fatalf("expected mcp connect 200, got %d (%s)", connectRes.Code, connectRes.Body.String())
+	}
+	connectPayload := map[string]any{}
+	mustDecodeJSON(t, connectRes.Body.Bytes(), &connectPayload)
+	if connectPayload["status"] != "connected" {
+		t.Fatalf("expected mcp connected, got %#v", connectPayload["status"])
+	}
+
+	exportRes := performJSONRequest(t, router, http.MethodGet, "/v1/workspaces/"+workspaceID+"/mcps/export", nil, authHeaders)
+	if exportRes.Code != http.StatusOK {
+		t.Fatalf("expected mcp export 200, got %d (%s)", exportRes.Code, exportRes.Body.String())
+	}
+	exportPayload := map[string]any{}
+	mustDecodeJSON(t, exportRes.Body.Bytes(), &exportPayload)
+	mcps, ok := exportPayload["mcps"].([]any)
+	if !ok || len(mcps) == 0 {
+		t.Fatalf("expected mcp export entries, got %#v", exportPayload["mcps"])
+	}
+
+	listRes := performJSONRequest(t, router, http.MethodGet, "/v1/workspaces/"+workspaceID+"/resource-configs?type=model", nil, authHeaders)
+	if listRes.Code != http.StatusOK {
+		t.Fatalf("expected resource config list 200, got %d (%s)", listRes.Code, listRes.Body.String())
+	}
+	listPayload := map[string]any{}
+	mustDecodeJSON(t, listRes.Body.Bytes(), &listPayload)
+	if len(listPayload["items"].([]any)) == 0 {
+		t.Fatalf("expected at least one model config")
+	}
+
+	deleteRes := performJSONRequest(t, router, http.MethodDelete, "/v1/workspaces/"+workspaceID+"/resource-configs/"+modelConfigID, nil, authHeaders)
+	if deleteRes.Code != http.StatusNoContent {
+		t.Fatalf("expected delete model config 204, got %d (%s)", deleteRes.Code, deleteRes.Body.String())
+	}
+}
+
+func TestProjectConfigV2Endpoints(t *testing.T) {
+	router := NewRouter()
+	workspaceID := createRemoteWorkspace(t, router, "Remote Project Config", "http://127.0.0.1:9002", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "project_owner", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
+		"workspace_id":   workspaceID,
+		"directory_path": "/tmp/project-config-alpha",
+	}, authHeaders)
+	if projectRes.Code != http.StatusCreated {
+		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
+	}
+	projectPayload := map[string]any{}
+	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
+	projectID := projectPayload["id"].(string)
+
+	getRes := performJSONRequest(t, router, http.MethodGet, "/v1/projects/"+projectID+"/config", nil, authHeaders)
+	if getRes.Code != http.StatusOK {
+		t.Fatalf("expected get project config 200, got %d (%s)", getRes.Code, getRes.Body.String())
+	}
+
+	putRes := performJSONRequest(t, router, http.MethodPut, "/v1/projects/"+projectID+"/config", map[string]any{
+		"project_id":       projectID,
+		"model_ids":        []string{"model_openai_gpt_4_1", "model_openai_gpt_4_1_mini"},
+		"default_model_id": "model_openai_gpt_4_1",
+		"rule_ids":         []string{"rule_secure"},
+		"skill_ids":        []string{"skill_review"},
+		"mcp_ids":          []string{"mcp_github"},
+		"updated_at":       "",
+	}, authHeaders)
+	if putRes.Code != http.StatusOK {
+		t.Fatalf("expected put project config 200, got %d (%s)", putRes.Code, putRes.Body.String())
+	}
+
+	listRes := performJSONRequest(t, router, http.MethodGet, "/v1/workspaces/"+workspaceID+"/project-configs", nil, authHeaders)
+	if listRes.Code != http.StatusOK {
+		t.Fatalf("expected list workspace project configs 200, got %d (%s)", listRes.Code, listRes.Body.String())
+	}
+	listPayload := []map[string]any{}
+	mustDecodeJSON(t, listRes.Body.Bytes(), &listPayload)
+	if len(listPayload) == 0 {
+		t.Fatalf("expected workspace project config list entries")
 	}
 }

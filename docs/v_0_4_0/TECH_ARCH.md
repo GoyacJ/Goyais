@@ -52,9 +52,9 @@ Workspace
     -> Conversations
       -> ConversationSnapshots
       -> Executions
-  -> Resources(model/rule/skill/mcp)
-  -> ModelVendors
-  -> ModelCatalogItems
+  -> ResourceConfigs(model/rule/skill/mcp)
+  -> WorkspaceCatalogRoots
+  -> ResourceTestLogs
   -> ShareRequests
   -> PermissionPolicies
   -> PermissionVisibility
@@ -71,6 +71,7 @@ Workspace
 6. `Resource` 支持 `private/shared` 与 `workspace_native/local_import` 双维度。
 7. `ShareRequest` 是共享审批权威记录，支持 `pending/approved/rejected/revoked` 全状态流转。
 8. `GeneralSettings` 属于 Desktop 本地策略模型，包含 `launch/default_directory/notifications/telemetry/update_policy/diagnostics`，并要求即时持久化与平台能力显式降级。
+9. 模型目录采用手工 JSON 文件：本地工作区目录根来源于 Desktop `defaultProjectDirectory` 同步，远程工作区目录根由 Hub 管理。
 
 ### 3.3 状态机（Conversation + Execution + Snapshot）
 
@@ -222,6 +223,13 @@ private resource
 3. 审批通过前不可被他人使用。
 4. 密钥展示全程掩码。
 
+### 6.5 模型目录加载
+
+1. 模型目录文件固定为 `<catalog_root>/goyais/catalog/models.json`。
+2. Hub 负责解析、JSON 校验、修订号递增与失败审计。
+3. 本地工作区目录根通过 `PUT /v1/workspaces/{workspace_id}/catalog-root` 从 Desktop 同步。
+4. 远程工作区目录根仅允许管理员变更。
+
 ---
 
 ## 7. 执行与队列架构
@@ -340,6 +348,13 @@ private resource
 6. `POST /v1/share-requests/{request_id}/revoke`
 7. `GET /v1/workspaces/{workspace_id}/model-catalog`
 8. `POST /v1/workspaces/{workspace_id}/model-catalog`
+9. `GET|PUT /v1/workspaces/{workspace_id}/catalog-root`
+10. `GET|POST /v1/workspaces/{workspace_id}/resource-configs`
+11. `PATCH|DELETE /v1/workspaces/{workspace_id}/resource-configs/{config_id}`
+12. `POST /v1/workspaces/{workspace_id}/resource-configs/{config_id}/test`
+13. `POST /v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect`
+14. `GET /v1/workspaces/{workspace_id}/mcps/export`
+15. `GET /v1/workspaces/{workspace_id}/project-configs`
 
 #### Admin（P0）
 
@@ -511,25 +526,33 @@ CREATE TABLE resources (
   updated_at DATETIME NOT NULL
 );
 
-CREATE TABLE model_vendors (
+CREATE TABLE workspace_catalog_roots (
+  workspace_id TEXT PRIMARY KEY,
+  catalog_root TEXT NOT NULL,
+  updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE resource_configs (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
-  vendor_name TEXT NOT NULL CHECK(vendor_name IN ('OpenAI','Google','Qwen','Doubao','Zhipu','MiniMax','Local')),
-  status TEXT NOT NULL CHECK(status IN ('enabled','disabled')),
+  type TEXT NOT NULL CHECK(type IN ('model','rule','skill','mcp')),
+  name TEXT NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  payload_json TEXT NOT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
 );
 
-CREATE TABLE model_catalog_items (
+CREATE TABLE resource_test_logs (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
-  vendor_id TEXT NOT NULL,
-  model_key TEXT NOT NULL,
-  display_name TEXT NOT NULL,
-  status TEXT NOT NULL CHECK(status IN ('enabled','disabled')),
-  last_synced_at DATETIME,
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL
+  config_id TEXT NOT NULL,
+  test_type TEXT NOT NULL CHECK(test_type IN ('model_test','mcp_connect')),
+  result TEXT NOT NULL CHECK(result IN ('success','failed')),
+  latency_ms INTEGER NOT NULL DEFAULT 0,
+  error_code TEXT,
+  details_json TEXT,
+  created_at DATETIME NOT NULL
 );
 
 CREATE TABLE share_requests (
@@ -870,17 +893,55 @@ while True:
 }
 ```
 
-### 20.4 模型目录同步
+### 20.4 模型目录（手工 JSON）重载
+
+`GET /v1/workspaces/{workspace_id}/model-catalog`
+
+```json
+{
+  "workspace_id": "ws_local",
+  "revision": 12,
+  "updated_at": "2026-02-23T15:04:05Z",
+  "source": "/Users/goya/.goyais/goyais/catalog/models.json",
+  "vendors": [
+    {
+      "name": "OpenAI",
+      "models": [
+        { "id": "gpt-4.1", "label": "GPT-4.1", "enabled": true }
+      ]
+    }
+  ]
+}
+```
 
 `POST /v1/workspaces/{workspace_id}/model-catalog`
 
 ```json
 {
-  "vendors": ["OpenAI", "Google", "Qwen", "Doubao", "Zhipu", "MiniMax", "Local"]
+  "reload": true
 }
 ```
 
-### 20.5 2026-02-24 工作区语义收口（实现约束）
+### 20.5 目录根路径同步
+
+`PUT /v1/workspaces/{workspace_id}/catalog-root`
+
+```json
+{
+  "catalog_root": "/Users/goya/.goyais"
+}
+```
+
+### 20.6 统一资源配置与运行态接口
+
+1. `GET|POST /v1/workspaces/{workspace_id}/resource-configs`
+2. `PATCH|DELETE /v1/workspaces/{workspace_id}/resource-configs/{config_id}`
+3. `POST /v1/workspaces/{workspace_id}/resource-configs/{config_id}/test`
+4. `POST /v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect`
+5. `GET /v1/workspaces/{workspace_id}/mcps/export`
+6. `GET /v1/workspaces/{workspace_id}/project-configs`
+
+### 20.7 2026-02-24 工作区语义收口（实现约束）
 
 1. 工作区数据源以 Hub SQLite 为权威：`workspaces`、`workspace_connections`。
 2. `GET /v1/workspaces` 仅返回：本地工作区 + 用户真实新增远程工作区，不允许预置固定 remote demo。
