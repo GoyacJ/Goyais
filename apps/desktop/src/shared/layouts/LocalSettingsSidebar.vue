@@ -1,12 +1,14 @@
 <template>
   <aside class="sidebar">
     <div class="sidebar-top">
-      <div class="local-trigger">
-        <IconSymbol name="settings" :size="14" />
-        <span>Local Settings (shared modules)</span>
-      </div>
+      <WorkspaceSwitcherCard
+        :workspaces="workspaceStore.workspaces"
+        :current-workspace-id="workspaceStore.currentWorkspaceId"
+        fallback-label="本地工作区"
+        @switch-workspace="switchWorkspace"
+      />
 
-      <p class="group-title">工作区配置（共享页面）</p>
+      <p class="group-title">工作区配置</p>
       <nav class="menu-list">
         <RouterLink
           v-for="item in sharedEntries"
@@ -14,9 +16,13 @@
           :to="item.path"
           class="menu-item"
           :class="{ active: item.key === activeKey, muted: item.visibility !== 'enabled' }"
+          :data-visibility="item.visibility"
           @click.prevent="onMenuClick(item)"
         >
-          {{ item.label }}
+          <AppIcon :name="resolveMenuIcon(item.key)" :size="12" />
+          <span>{{ item.label }}</span>
+          <small v-if="item.visibility === 'readonly'" class="visibility-tag">只读</small>
+          <small v-else-if="item.visibility === 'disabled'" class="visibility-tag">禁用</small>
         </RouterLink>
       </nav>
 
@@ -28,21 +34,25 @@
           :to="item.path"
           class="menu-item"
           :class="{ active: item.key === activeKey, muted: item.visibility !== 'enabled' }"
+          :data-visibility="item.visibility"
           @click.prevent="onMenuClick(item)"
         >
-          {{ item.label }}
+          <AppIcon :name="resolveMenuIcon(item.key)" :size="12" />
+          <span>{{ item.label }}</span>
+          <small v-if="item.visibility === 'readonly'" class="visibility-tag">只读</small>
+          <small v-else-if="item.visibility === 'disabled'" class="visibility-tag">禁用</small>
         </RouterLink>
       </nav>
     </div>
 
-    <div class="local-panel">
-      <p class="scope-title">本地工作区 Local</p>
-      <p class="scope-desc">本地模式不显示账号信息。</p>
-      <div class="panel-actions">
-        <button class="link-btn" type="button" @click="openRemoteWorkspace">打开远程工作区</button>
-        <button class="link-btn secondary" type="button">查看连接状态</button>
-      </div>
-    </div>
+    <UserProfileMenuCard
+      class="local-panel"
+      avatar="L"
+      title="本地"
+      subtitle="Local Workspace"
+      :items="userMenuItems"
+      @select="onUserMenuSelect"
+    />
   </aside>
 </template>
 
@@ -50,8 +60,13 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 
+import { switchWorkspaceContext } from "@/modules/workspace/store";
 import type { MenuEntry } from "@/shared/navigation/pageMenus";
-import IconSymbol from "@/shared/ui/IconSymbol.vue";
+import { refreshNavigationVisibility } from "@/shared/stores/navigationStore";
+import { workspaceStore } from "@/shared/stores/workspaceStore";
+import AppIcon from "@/shared/ui/AppIcon.vue";
+import UserProfileMenuCard from "@/shared/ui/sidebar/UserProfileMenuCard.vue";
+import WorkspaceSwitcherCard from "@/shared/ui/sidebar/WorkspaceSwitcherCard.vue";
 
 const props = defineProps<{
   activeKey: string;
@@ -59,17 +74,30 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
+const userMenuItems = [{ key: "settings", label: "设置", icon: "settings" }];
 
-const sharedKeys = ["workspace_agent", "workspace_model", "workspace_rules", "workspace_skills", "workspace_mcp"];
+const sharedKeys = [
+  "workspace_project_config",
+  "workspace_agent",
+  "workspace_model",
+  "workspace_rules",
+  "workspace_skills",
+  "workspace_mcp"
+];
 const generalKeys = ["settings_theme", "settings_i18n", "settings_updates_diagnostics", "settings_general"];
 
 const sharedEntries = computed(() =>
-  props.menuEntries.filter((item) => sharedKeys.includes(item.key))
+  props.menuEntries.filter((item) => sharedKeys.includes(item.key) && item.visibility !== "hidden")
 );
 
 const generalEntries = computed(() =>
-  props.menuEntries.filter((item) => generalKeys.includes(item.key))
+  props.menuEntries.filter((item) => generalKeys.includes(item.key) && item.visibility !== "hidden")
 );
+
+async function switchWorkspace(workspaceId: string): Promise<void> {
+  await switchWorkspaceContext(workspaceId);
+  refreshNavigationVisibility();
+}
 
 function onMenuClick(item: MenuEntry): void {
   if (item.visibility === "enabled" || item.visibility === "readonly") {
@@ -77,8 +105,43 @@ function onMenuClick(item: MenuEntry): void {
   }
 }
 
-function openRemoteWorkspace(): void {
-  void router.push("/main");
+function goSettings(): void {
+  void router.push("/settings/theme");
+}
+
+function onUserMenuSelect(): void {
+  goSettings();
+}
+
+function resolveMenuIcon(key: string): string {
+  if (key === "workspace_project_config") {
+    return "file-text";
+  }
+  if (key === "workspace_agent") {
+    return "bot";
+  }
+  if (key === "workspace_model") {
+    return "cpu";
+  }
+  if (key === "workspace_rules") {
+    return "scroll-text";
+  }
+  if (key === "workspace_skills") {
+    return "wrench";
+  }
+  if (key === "workspace_mcp") {
+    return "plug-zap";
+  }
+  if (key === "settings_theme") {
+    return "settings";
+  }
+  if (key === "settings_i18n") {
+    return "file-text";
+  }
+  if (key === "settings_updates_diagnostics") {
+    return "info";
+  }
+  return "settings";
 }
 </script>
 
@@ -91,77 +154,58 @@ function openRemoteWorkspace(): void {
   grid-template-rows: 1fr auto;
   gap: var(--global-space-12);
 }
+
 .sidebar-top {
   display: grid;
   gap: var(--global-space-8);
   align-content: start;
 }
-.local-trigger {
-  height: 34px;
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-surface-2);
-  color: var(--semantic-text);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--global-space-8);
-  padding: 0 var(--global-space-12);
-}
+
 .group-title {
   margin: 0;
   color: var(--semantic-text-subtle);
   font-size: var(--global-font-size-11);
   font-weight: var(--global-font-weight-600);
 }
+
 .menu-list {
   display: grid;
   gap: var(--global-space-4);
 }
+
 .menu-item {
   color: var(--semantic-text-muted);
   border-radius: var(--global-radius-8);
   padding: var(--global-space-8) var(--global-space-12);
   font-size: var(--global-font-size-12);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--global-space-8);
+  justify-content: flex-start;
+  transition: background 0.15s ease, color 0.15s ease;
 }
+
+.menu-item:hover {
+  background: var(--semantic-surface-2);
+  color: var(--semantic-text);
+}
+
 .menu-item.active {
   color: var(--semantic-text);
   background: var(--component-sidebar-item-bg-active);
 }
+
 .menu-item.muted {
   opacity: var(--component-tree-item-disabled-opacity);
 }
-.local-panel {
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-surface-2);
-  padding: var(--global-space-8);
-  display: grid;
-  gap: var(--global-space-8);
-}
-.scope-title,
-.scope-desc {
-  margin: 0;
-}
-.scope-title {
-  color: var(--semantic-text);
-  font-size: var(--global-font-size-12);
-  font-weight: var(--global-font-weight-600);
-}
-.scope-desc {
+
+.visibility-tag {
+  margin-left: auto;
   color: var(--semantic-text-subtle);
   font-size: var(--global-font-size-11);
 }
-.panel-actions {
-  display: inline-flex;
-  gap: var(--global-space-8);
-}
-.link-btn {
-  border: 0;
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-surface);
-  color: var(--semantic-text);
-  padding: var(--global-space-4) var(--global-space-8);
-  font-size: var(--global-font-size-11);
-}
-.secondary {
-  color: var(--semantic-text-muted);
+
+.local-panel {
+  display: block;
 }
 </style>

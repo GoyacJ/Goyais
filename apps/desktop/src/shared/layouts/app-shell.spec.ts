@@ -8,9 +8,9 @@ import { resetAuthStore } from "@/shared/stores/authStore";
 import { resetWorkspaceStore, setCurrentWorkspace, setWorkspaces } from "@/shared/stores/workspaceStore";
 
 const menuEntries: MenuEntry[] = [
-  { key: "remote_account", label: "远程-账号信息", path: "/remote/account", visibility: "enabled" },
-  { key: "remote_members_roles", label: "远程-成员与角色", path: "/remote/members-roles", visibility: "enabled" },
-  { key: "remote_permissions_audit", label: "远程-权限与审计", path: "/remote/permissions-audit", visibility: "enabled" }
+  { key: "remote_account", label: "账号信息", path: "/remote/account", visibility: "enabled" },
+  { key: "remote_members_roles", label: "成员与角色", path: "/remote/members-roles", visibility: "enabled" },
+  { key: "remote_permissions_audit", label: "权限与审计", path: "/remote/permissions-audit", visibility: "enabled" }
 ];
 
 describe("remote config sidebar", () => {
@@ -34,15 +34,15 @@ describe("remote config sidebar", () => {
 
   it("renders menu and active item", () => {
     const wrapper = mountSidebar();
-    expect(wrapper.text()).toContain("远程-账号信息");
-    expect(wrapper.find(".menu-item.active").text()).toContain("远程-账号信息");
+    expect(wrapper.text()).toContain("账号信息");
+    expect(wrapper.find(".menu-item.active").text()).toContain("账号信息");
   });
 
   it("toggles workspace menu", async () => {
     const wrapper = mountSidebar();
     expect(wrapper.find(".workspace-menu").exists()).toBe(false);
 
-    await wrapper.find(".workspace-trigger").trigger("click");
+    await wrapper.find(".workspace-btn").trigger("click");
     expect(wrapper.find(".workspace-menu").exists()).toBe(true);
   });
 
@@ -52,7 +52,7 @@ describe("remote config sidebar", () => {
 
     await wrapper.find(".user-trigger").trigger("click");
     expect(wrapper.find(".user-menu").exists()).toBe(true);
-    expect(wrapper.text()).toContain("设置 Settings");
+    expect(wrapper.text()).toContain("设置");
   });
 });
 
