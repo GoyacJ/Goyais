@@ -16,7 +16,7 @@ const (
 	maxModelProbeResponseBytes = 1 << 20
 )
 
-func runModelConfigTest(config ResourceConfig) ModelTestResult {
+func runModelConfigTest(config ResourceConfig, resolveCatalogBaseURL func(ModelVendorName) string) ModelTestResult {
 	start := time.Now()
 	status := "failed"
 	message := "model probe failed"
@@ -36,12 +36,13 @@ func runModelConfigTest(config ResourceConfig) ModelTestResult {
 		message = "model_id is required"
 		return buildModelTestResult(config.ID, status, code, message, start)
 	}
+	baseURL := resolveModelBaseURL(model, resolveCatalogBaseURL)
 
 	switch model.Vendor {
 	case ModelVendorGoogle:
-		status, code, message = probeGoogleModel(model)
+		status, code, message = probeGoogleModel(model, baseURL)
 	case ModelVendorOpenAI, ModelVendorQwen, ModelVendorDoubao, ModelVendorZhipu, ModelVendorMiniMax, ModelVendorLocal:
-		status, code, message = probeOpenAICompatibleModel(model)
+		status, code, message = probeOpenAICompatibleModel(model, baseURL)
 	default:
 		value := "unsupported_vendor"
 		code = &value
@@ -62,13 +63,12 @@ func buildModelTestResult(configID string, status string, code *string, message 
 	}
 }
 
-func probeOpenAICompatibleModel(model ModelSpec) (string, *string, string) {
+func probeOpenAICompatibleModel(model ModelSpec, baseURL string) (string, *string, string) {
 	if model.Vendor != ModelVendorLocal && strings.TrimSpace(model.APIKey) == "" {
 		value := "missing_api_key"
 		return "failed", &value, "api_key is required for remote vendor"
 	}
 
-	baseURL := resolveModelBaseURL(model)
 	if baseURL == "" || !isValidURLString(baseURL) {
 		value := "invalid_base_url"
 		return "failed", &value, "base_url is required and must be valid"
@@ -109,13 +109,12 @@ func probeOpenAICompatibleModel(model ModelSpec) (string, *string, string) {
 	return "success", nil, "minimal inference probe succeeded"
 }
 
-func probeGoogleModel(model ModelSpec) (string, *string, string) {
+func probeGoogleModel(model ModelSpec, baseURL string) (string, *string, string) {
 	if strings.TrimSpace(model.APIKey) == "" {
 		value := "missing_api_key"
 		return "failed", &value, "api_key is required for google vendor"
 	}
 
-	baseURL := resolveModelBaseURL(model)
 	if baseURL == "" || !isValidURLString(baseURL) {
 		value := "invalid_base_url"
 		return "failed", &value, "base_url is required and must be valid"
@@ -181,28 +180,22 @@ func resolveProbeTimeoutMS(timeoutMS int) time.Duration {
 	return time.Duration(timeoutMS) * time.Millisecond
 }
 
-func resolveModelBaseURL(model ModelSpec) string {
-	if strings.TrimSpace(model.BaseURL) != "" {
-		return strings.TrimSpace(model.BaseURL)
+func resolveModelBaseURL(model ModelSpec, resolveCatalogBaseURL func(ModelVendorName) string) string {
+	modelBaseURL := strings.TrimSpace(model.BaseURL)
+	catalogBaseURL := ""
+	if resolveCatalogBaseURL != nil {
+		catalogBaseURL = strings.TrimSpace(resolveCatalogBaseURL(model.Vendor))
 	}
-	switch model.Vendor {
-	case ModelVendorOpenAI:
-		return "https://api.openai.com/v1"
-	case ModelVendorGoogle:
-		return "https://generativelanguage.googleapis.com/v1beta"
-	case ModelVendorQwen:
-		return "https://dashscope.aliyuncs.com/compatible-mode/v1"
-	case ModelVendorDoubao:
-		return "https://ark.cn-beijing.volces.com/api/v3"
-	case ModelVendorZhipu:
-		return "https://open.bigmodel.cn/api/paas/v4"
-	case ModelVendorMiniMax:
-		return "https://api.minimax.chat/v1"
-	case ModelVendorLocal:
-		return "http://127.0.0.1:11434/v1"
-	default:
-		return ""
+	if model.Vendor == ModelVendorLocal && modelBaseURL != "" {
+		return modelBaseURL
 	}
+	if catalogBaseURL != "" {
+		return catalogBaseURL
+	}
+	if model.Vendor == ModelVendorLocal {
+		return modelBaseURL
+	}
+	return ""
 }
 
 func extractOpenAIErrorMessage(body []byte) string {

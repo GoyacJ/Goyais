@@ -4,7 +4,6 @@ import {
   createResourceConfig,
   deleteResourceConfig,
   exportMcpConfigs,
-  getCatalogRoot,
   getModelCatalog,
   listResourceConfigs,
   patchResourceConfig,
@@ -108,9 +107,7 @@ export async function refreshModelCatalog(): Promise<void> {
   resourceStore.catalogLoading = true;
   resourceStore.error = "";
   try {
-    const [catalog, root] = await Promise.all([getModelCatalog(workspace.id), getCatalogRoot(workspace.id)]);
-    resourceStore.catalog = catalog;
-    resourceStore.catalogRoot = root.catalog_root;
+    resourceStore.catalog = await getModelCatalog(workspace.id);
   } catch (error) {
     resourceStore.error = toDisplayError(error);
   } finally {
@@ -181,10 +178,10 @@ export async function patchWorkspaceResourceConfig(type: ResourceType, configId:
   }
 }
 
-export async function deleteWorkspaceResourceConfig(type: ResourceType, configId: string): Promise<void> {
+export async function deleteWorkspaceResourceConfig(type: ResourceType, configId: string): Promise<boolean> {
   const workspace = getCurrentWorkspace();
   if (!workspace) {
-    return;
+    return false;
   }
 
   try {
@@ -196,8 +193,10 @@ export async function deleteWorkspaceResourceConfig(type: ResourceType, configId
       delete resourceStore.mcpConnectResultsByConfigId[configId];
     }
     await refreshResourceConfigsByType(type);
+    return true;
   } catch (error) {
     resourceStore.error = toDisplayError(error);
+    return false;
   }
 }
 

@@ -9,87 +9,6 @@ import (
 	"strings"
 )
 
-type workspaceProjectConfigItem struct {
-	ProjectID   string        `json:"project_id"`
-	ProjectName string        `json:"project_name"`
-	Config      ProjectConfig `json:"config"`
-}
-
-func CatalogRootHandler(state *AppState) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		workspaceID := strings.TrimSpace(r.PathValue("workspace_id"))
-		switch r.Method {
-		case http.MethodGet:
-			_, authErr := authorizeAction(
-				state,
-				r,
-				workspaceID,
-				"resource_config.read",
-				authorizationResource{WorkspaceID: workspaceID, ResourceType: "model"},
-				authorizationContext{OperationType: "read"},
-			)
-			if authErr != nil {
-				authErr.write(w, r)
-				return
-			}
-			root, err := state.GetCatalogRoot(workspaceID)
-			if err != nil {
-				WriteStandardError(w, r, http.StatusInternalServerError, "CATALOG_ROOT_READ_FAILED", "Failed to read catalog root", map[string]any{
-					"workspace_id": workspaceID,
-					"reason":       err.Error(),
-				})
-				return
-			}
-			writeJSON(w, http.StatusOK, root)
-		case http.MethodPut:
-			session, authErr := authorizeAction(
-				state,
-				r,
-				workspaceID,
-				"catalog.update_root",
-				authorizationResource{WorkspaceID: workspaceID, ResourceType: "model"},
-				authorizationContext{OperationType: "write", ABACRequired: true},
-				RoleAdmin, RoleApprover, RoleDeveloper,
-			)
-			if authErr != nil {
-				authErr.write(w, r)
-				return
-			}
-			workspace, exists := state.GetWorkspace(workspaceID)
-			if exists && workspace.Mode == WorkspaceModeRemote && session.Role != RoleAdmin {
-				WriteStandardError(w, r, http.StatusForbidden, "ACCESS_DENIED", "Only admin can update remote catalog root", map[string]any{
-					"workspace_id": workspaceID,
-				})
-				return
-			}
-			input := CatalogRootUpdateRequest{}
-			if err := decodeJSONBody(r, &input); err != nil {
-				err.write(w, r)
-				return
-			}
-			root, err := state.SetCatalogRoot(workspaceID, input.CatalogRoot)
-			if err != nil {
-				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "catalog_root is invalid", map[string]any{
-					"workspace_id": workspaceID,
-					"reason":       err.Error(),
-				})
-				return
-			}
-			if state.authz != nil {
-				_ = state.authz.appendAudit(workspaceID, session.UserID, "catalog.update_root", "workspace", workspaceID, "success", map[string]any{
-					"catalog_root": root.CatalogRoot,
-				}, TraceIDFromContext(r.Context()))
-			}
-			writeJSON(w, http.StatusOK, root)
-		default:
-			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
-				"method": r.Method,
-				"path":   r.URL.Path,
-			})
-		}
-	}
-}
-
 func ResourceConfigsHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := strings.TrimSpace(r.PathValue("workspace_id"))
@@ -156,6 +75,9 @@ func ResourceConfigsHandler(state *AppState) http.HandlerFunc {
 			if input.Enabled != nil {
 				enabled = *input.Enabled
 			}
+			if input.Model != nil {
+				input.Model = normalizeModelSpecForStorage(input.Model)
+			}
 			now := nowUTC()
 			config := ResourceConfig{
 				ID:          "rc_" + randomHex(6),
@@ -170,6 +92,7 @@ func ResourceConfigsHandler(state *AppState) http.HandlerFunc {
 				CreatedAt:   now,
 				UpdatedAt:   now,
 			}
+			normalizeResourceConfigForStorage(&config)
 			created, err := saveWorkspaceResourceConfig(state, config)
 			if err != nil {
 				WriteStandardError(w, r, http.StatusInternalServerError, "RESOURCE_CONFIG_CREATE_FAILED", "Failed to create resource config", map[string]any{})
@@ -212,7 +135,11 @@ func ResourceConfigByIDHandler(state *AppState) http.HandlerFunc {
 				err.write(w, r)
 				return
 			}
+			if patch.Model != nil {
+				patch.Model = normalizeModelSpecForStorage(patch.Model)
+			}
 			applyPatchToResourceConfig(&origin, patch)
+			normalizeResourceConfigForStorage(&origin)
 			origin.UpdatedAt = nowUTC()
 			updated, err := saveWorkspaceResourceConfig(state, origin)
 			if err != nil {
@@ -237,57 +164,30 @@ func ResourceConfigByIDHandler(state *AppState) http.HandlerFunc {
 	}
 }
 
-func WorkspaceProjectConfigsHandler(state *AppState) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{"method": r.Method, "path": r.URL.Path})
-			return
-		}
-		workspaceID := strings.TrimSpace(r.PathValue("workspace_id"))
-		_, authErr := authorizeAction(state, r, workspaceID, "project_config.read", authorizationResource{WorkspaceID: workspaceID}, authorizationContext{OperationType: "read"})
-		if authErr != nil {
-			authErr.write(w, r)
-			return
-		}
-		state.mu.RLock()
-		items := make([]workspaceProjectConfigItem, 0)
-		for _, project := range state.projects {
-			if project.WorkspaceID != workspaceID {
-				continue
-			}
-			config := state.projectConfigs[project.ID]
-			items = append(items, workspaceProjectConfigItem{
-				ProjectID:   project.ID,
-				ProjectName: project.Name,
-				Config:      config,
-			})
-		}
-		state.mu.RUnlock()
-		sort.Slice(items, func(i, j int) bool {
-			return strings.ToLower(items[i].ProjectName) < strings.ToLower(items[j].ProjectName)
-		})
-		writeJSON(w, http.StatusOK, items)
-	}
-}
-
 func validateCreateResourceConfig(input ResourceConfigCreateRequest) error {
-	if strings.TrimSpace(input.Name) == "" {
-		return errors.New("name is required")
-	}
 	switch input.Type {
 	case ResourceTypeModel:
 		if input.Model == nil || strings.TrimSpace(input.Model.ModelID) == "" {
 			return errors.New("model spec with model_id is required")
 		}
 	case ResourceTypeRule:
+		if strings.TrimSpace(input.Name) == "" {
+			return errors.New("name is required")
+		}
 		if input.Rule == nil || strings.TrimSpace(input.Rule.Content) == "" {
 			return errors.New("rule spec with content is required")
 		}
 	case ResourceTypeSkill:
+		if strings.TrimSpace(input.Name) == "" {
+			return errors.New("name is required")
+		}
 		if input.Skill == nil || strings.TrimSpace(input.Skill.Content) == "" {
 			return errors.New("skill spec with content is required")
 		}
 	case ResourceTypeMCP:
+		if strings.TrimSpace(input.Name) == "" {
+			return errors.New("name is required")
+		}
 		if input.MCP == nil || strings.TrimSpace(input.MCP.Transport) == "" {
 			return errors.New("mcp spec with transport is required")
 		}
@@ -298,7 +198,7 @@ func validateCreateResourceConfig(input ResourceConfigCreateRequest) error {
 }
 
 func applyPatchToResourceConfig(target *ResourceConfig, patch ResourceConfigPatchRequest) {
-	if patch.Name != nil {
+	if patch.Name != nil && target.Type != ResourceTypeModel {
 		target.Name = strings.TrimSpace(*patch.Name)
 	}
 	if patch.Enabled != nil {
@@ -340,9 +240,10 @@ func listWorkspaceResourceConfigs(state *AppState, workspaceID string, query res
 		if query.Enabled != nil && item.Enabled != *query.Enabled {
 			continue
 		}
-		if query.Query != "" && !strings.Contains(strings.ToLower(item.Name), strings.ToLower(query.Query)) {
+		if query.Query != "" && !matchesResourceConfigQuery(item, query.Query) {
 			continue
 		}
+		normalizeResourceConfigForStorage(&item)
 		items = append(items, item)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt < items[j].CreatedAt })
@@ -350,6 +251,7 @@ func listWorkspaceResourceConfigs(state *AppState, workspaceID string, query res
 }
 
 func saveWorkspaceResourceConfig(state *AppState, item ResourceConfig) (ResourceConfig, error) {
+	normalizeResourceConfigForStorage(&item)
 	if state.authz != nil {
 		return state.authz.upsertResourceConfig(item)
 	}
@@ -395,4 +297,44 @@ func isValidURLString(raw string) bool {
 		return false
 	}
 	return strings.TrimSpace(parsed.Host) != ""
+}
+
+func matchesResourceConfigQuery(item ResourceConfig, query string) bool {
+	lowerQuery := strings.ToLower(strings.TrimSpace(query))
+	if lowerQuery == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(resourceConfigSearchText(item)), lowerQuery)
+}
+
+func resourceConfigSearchText(item ResourceConfig) string {
+	if item.Type == ResourceTypeModel && item.Model != nil {
+		return strings.TrimSpace(string(item.Model.Vendor) + " " + item.Model.ModelID)
+	}
+	return strings.TrimSpace(item.Name)
+}
+
+func normalizeModelSpecForStorage(spec *ModelSpec) *ModelSpec {
+	if spec == nil {
+		return nil
+	}
+	next := *spec
+	next.ModelID = strings.TrimSpace(next.ModelID)
+	next.BaseURL = strings.TrimSpace(next.BaseURL)
+	if next.Vendor != ModelVendorLocal {
+		next.BaseURL = ""
+	}
+	return &next
+}
+
+func normalizeResourceConfigForStorage(item *ResourceConfig) {
+	if item == nil {
+		return
+	}
+	if item.Type == ResourceTypeModel {
+		item.Name = ""
+	}
+	if item.Model != nil {
+		item.Model = normalizeModelSpecForStorage(item.Model)
+	}
 }

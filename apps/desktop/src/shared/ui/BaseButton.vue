@@ -3,6 +3,7 @@
     :class="['ui-button', `variant-${variant}`, { loading, iconOnly }]"
     :disabled="disabled || loading"
     type="button"
+    @click="onClick"
   >
     <slot />
   </button>
@@ -23,6 +24,14 @@ withDefaults(
     iconOnly: false
   }
 );
+
+const emit = defineEmits<{
+  (event: "click", payload: MouseEvent): void;
+}>();
+
+function onClick(event: MouseEvent): void {
+  emit("click", event);
+}
 </script>
 
 <style scoped>

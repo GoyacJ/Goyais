@@ -3,7 +3,6 @@ package httpapi
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 )
@@ -47,13 +46,12 @@ func (s *authzStore) upsertResourceConfig(input ResourceConfig) (ResourceConfig,
 		return ResourceConfig{}, err
 	}
 	_, err = s.db.Exec(
-		`INSERT INTO resource_configs(id, workspace_id, type, name, enabled, payload_json, created_at, updated_at)
-		 VALUES(?,?,?,?,?,?,?,?)
-		 ON CONFLICT(id) DO UPDATE SET type=excluded.type, name=excluded.name, enabled=excluded.enabled, payload_json=excluded.payload_json, updated_at=excluded.updated_at`,
+		`INSERT INTO resource_configs(id, workspace_id, type, enabled, payload_json, created_at, updated_at)
+		 VALUES(?,?,?,?,?,?,?)
+		 ON CONFLICT(id) DO UPDATE SET type=excluded.type, enabled=excluded.enabled, payload_json=excluded.payload_json, updated_at=excluded.updated_at`,
 		input.ID,
 		input.WorkspaceID,
 		string(input.Type),
-		input.Name,
 		boolToInt(input.Enabled),
 		encoded,
 		input.CreatedAt,
@@ -76,14 +74,7 @@ func (s *authzStore) listResourceConfigs(workspaceID string, query resourceConfi
 		clauses = append(clauses, "enabled = ?")
 		args = append(args, boolToInt(*query.Enabled))
 	}
-	if strings.TrimSpace(query.Query) != "" {
-		clauses = append(clauses, "name LIKE ?")
-		args = append(args, "%"+strings.TrimSpace(query.Query)+"%")
-	}
-	stmt := fmt.Sprintf(
-		`SELECT payload_json FROM resource_configs WHERE %s ORDER BY created_at ASC`,
-		strings.Join(clauses, " AND "),
-	)
+	stmt := `SELECT payload_json FROM resource_configs WHERE ` + strings.Join(clauses, " AND ") + ` ORDER BY created_at ASC`
 	rows, err := s.db.Query(stmt, args...)
 	if err != nil {
 		return nil, err
@@ -100,6 +91,10 @@ func (s *authzStore) listResourceConfigs(workspaceID string, query resourceConfi
 		if err != nil {
 			return nil, err
 		}
+		if query.Query != "" && !matchesResourceConfigQuery(item, query.Query) {
+			continue
+		}
+		normalizeResourceConfigForStorage(&item)
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -134,6 +129,7 @@ func (s *authzStore) getResourceConfigWithMode(workspaceID string, configID stri
 	if err != nil {
 		return ResourceConfig{}, false, err
 	}
+	normalizeResourceConfigForStorage(&item)
 	return item, true, nil
 }
 

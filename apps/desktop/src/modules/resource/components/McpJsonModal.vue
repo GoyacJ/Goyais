@@ -5,19 +5,22 @@
     </template>
 
     <div class="body">
-      <pre>{{ formatted }}</pre>
+      <textarea v-model="draftText" class="editor" spellcheck="false" />
+      <p v-if="errorMessage !== ''" class="error">{{ errorMessage }}</p>
     </div>
 
     <template #footer>
-      <button type="button" class="action" @click="emit('close')">关闭</button>
+      <BaseButton variant="ghost" @click="emit('close')">关闭</BaseButton>
+      <BaseButton variant="primary" @click="saveDraft">保存</BaseButton>
     </template>
   </BaseModal>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { ref, watch } from "vue";
 
 import BaseModal from "@/shared/ui/BaseModal.vue";
+import BaseButton from "@/shared/ui/BaseButton.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -26,15 +29,41 @@ const props = withDefaults(
     title?: string;
   }>(),
   {
-    title: "MCP 聚合 JSON"
+    title: "MCP 配置"
   }
 );
 
 const emit = defineEmits<{
   (event: "close"): void;
+  (event: "save", payload: Record<string, unknown>): void;
 }>();
 
-const formatted = computed(() => JSON.stringify(props.payload ?? {}, null, 2));
+const draftText = ref("");
+const errorMessage = ref("");
+
+watch(
+  () => [props.open, props.payload] as const,
+  ([open]) => {
+    if (!open) return;
+    draftText.value = JSON.stringify(props.payload ?? {}, null, 2);
+    errorMessage.value = "";
+  },
+  { immediate: true }
+);
+
+function saveDraft(): void {
+  try {
+    const parsed = JSON.parse(draftText.value) as Record<string, unknown>;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      errorMessage.value = "MCP 配置必须是 JSON 对象";
+      return;
+    }
+    emit("save", parsed);
+    emit("close");
+  } catch {
+    errorMessage.value = "JSON 格式错误，请检查后重试";
+  }
+}
 </script>
 
 <style scoped>
@@ -43,27 +72,29 @@ const formatted = computed(() => JSON.stringify(props.payload ?? {}, null, 2));
 }
 
 .body {
-  max-height: min(60vh, 520px);
-  overflow: auto;
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-bg);
-  padding: var(--global-space-8);
+  display: grid;
+  gap: var(--global-space-8);
 }
 
-pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
+.editor {
+  min-height: min(60vh, 520px);
+  max-height: min(60vh, 520px);
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--component-input-radius);
+  background: var(--component-input-bg);
+  padding: var(--global-space-8);
   color: var(--semantic-text-muted);
   font-size: var(--global-font-size-12);
+  font-family: var(--global-font-family-ui);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.action {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-surface-2);
-  color: var(--semantic-text);
-  padding: var(--global-space-6) var(--global-space-10);
+.error {
+  margin: 0;
+  color: var(--semantic-danger);
+  font-size: var(--global-font-size-12);
 }
 </style>

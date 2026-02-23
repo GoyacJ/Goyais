@@ -83,5 +83,5 @@ func newRouterWithDBPath(dbPath string) http.Handler {
 	mux.HandleFunc("/v1/admin/abac-policies/{policy_id}", AdminABACPolicyByIDHandler(state))
 	mux.HandleFunc("/v1/admin/audit", AdminAuditHandler(state))
 
-	return WithTrace(mux)
+	return WithTrace(WithCORS(mux))
 }

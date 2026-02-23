@@ -3,23 +3,31 @@ import { withApiFallback } from "@/shared/services/fallback";
 import { createMockId, mockData } from "@/shared/services/mockData";
 import type { Conversation, ListEnvelope, PaginationQuery, Project, ProjectConfig, WorkspaceProjectConfigItem } from "@/shared/types/api";
 
-export async function listProjects(workspaceId: string, query: PaginationQuery = {}): Promise<ListEnvelope<Project>> {
+type ProjectServiceOptions = {
+  token?: string;
+};
+
+export async function listProjects(
+  workspaceId: string,
+  query: PaginationQuery = {},
+  options: ProjectServiceOptions = {}
+): Promise<ListEnvelope<Project>> {
   const search = buildPaginationSearch({ ...query, workspace_id: workspaceId });
-  return withApiFallback(
-    "project.list",
-    () => getControlClient().get<ListEnvelope<Project>>(`/v1/projects${search}`),
-    () => paginateMock(mockData.projects.filter((project) => project.workspace_id === workspaceId), query)
-  );
+  return getControlClient().get<ListEnvelope<Project>>(`/v1/projects${search}`, { token: options.token });
 }
 
-export async function createProject(workspaceId: string, input: { name: string; repo_path: string; is_git: boolean }): Promise<Project> {
+export async function createProject(
+  workspaceId: string,
+  input: { name: string; repo_path: string; is_git: boolean },
+  options: ProjectServiceOptions = {}
+): Promise<Project> {
   return withApiFallback(
     "project.create",
     () =>
       getControlClient().post<Project>("/v1/projects", {
         workspace_id: workspaceId,
         ...input
-      }),
+      }, { token: options.token }),
     () => {
       const now = new Date().toISOString();
       const created: Project = {
@@ -39,64 +47,42 @@ export async function createProject(workspaceId: string, input: { name: string; 
   );
 }
 
-export async function importProjectDirectory(workspaceId: string, repoPath: string): Promise<Project> {
-  return withApiFallback(
-    "project.import",
-    () =>
-      getControlClient().post<Project>("/v1/projects/import", {
-        workspace_id: workspaceId,
-        directory_path: repoPath
-      }),
-    () => {
-      const now = new Date().toISOString();
-      const folderName = repoPath.split("/").filter(Boolean).pop() ?? "Imported Project";
-      const created: Project = {
-        id: createMockId("proj"),
-        workspace_id: workspaceId,
-        name: folderName,
-        repo_path: repoPath,
-        is_git: true,
-        default_mode: "agent",
-        default_model_id: "gpt-4.1",
-        created_at: now,
-        updated_at: now
-      };
-      mockData.projects.push(created);
-      return created;
-    }
-  );
+export async function importProjectDirectory(
+  workspaceId: string,
+  repoPath: string,
+  options: ProjectServiceOptions = {}
+): Promise<Project> {
+  return getControlClient().post<Project>("/v1/projects/import", {
+    workspace_id: workspaceId,
+    directory_path: repoPath
+  }, { token: options.token });
 }
 
-export async function removeProject(projectId: string): Promise<void> {
-  return withApiFallback(
-    "project.remove",
-    async () => {
-      await getControlClient().request<void>(`/v1/projects/${projectId}`, { method: "DELETE" });
-    },
-    () => {
-      mockData.projects = mockData.projects.filter((project) => project.id !== projectId);
-      mockData.conversations = mockData.conversations.filter((conversation) => conversation.project_id !== projectId);
-    }
-  );
+export async function removeProject(projectId: string, options: ProjectServiceOptions = {}): Promise<void> {
+  await getControlClient().request<void>(`/v1/projects/${projectId}`, { method: "DELETE", token: options.token });
 }
 
-export async function listConversations(projectId: string, query: PaginationQuery = {}): Promise<ListEnvelope<Conversation>> {
+export async function listConversations(
+  projectId: string,
+  query: PaginationQuery = {},
+  options: ProjectServiceOptions = {}
+): Promise<ListEnvelope<Conversation>> {
   const search = buildPaginationSearch(query);
   return withApiFallback(
     "project.listConversations",
-    () => getControlClient().get<ListEnvelope<Conversation>>(`/v1/projects/${projectId}/conversations${search}`),
+    () => getControlClient().get<ListEnvelope<Conversation>>(`/v1/projects/${projectId}/conversations${search}`, { token: options.token }),
     () => paginateMock(mockData.conversations.filter((conversation) => conversation.project_id === projectId), query)
   );
 }
 
-export async function createConversation(project: Project, name: string): Promise<Conversation> {
+export async function createConversation(project: Project, name: string, options: ProjectServiceOptions = {}): Promise<Conversation> {
   return withApiFallback(
     "project.createConversation",
     () =>
       getControlClient().post<Conversation>(`/v1/projects/${project.id}/conversations`, {
         workspace_id: project.workspace_id,
         name
-      }),
+      }, { token: options.token }),
     () => {
       const now = new Date().toISOString();
       const created: Conversation = {
@@ -117,10 +103,14 @@ export async function createConversation(project: Project, name: string): Promis
   );
 }
 
-export async function renameConversation(conversationId: string, name: string): Promise<Conversation> {
+export async function renameConversation(
+  conversationId: string,
+  name: string,
+  options: ProjectServiceOptions = {}
+): Promise<Conversation> {
   return withApiFallback(
     "project.renameConversation",
-    () => getControlClient().request<Conversation>(`/v1/conversations/${conversationId}`, { method: "PATCH", body: { name } }),
+    () => getControlClient().request<Conversation>(`/v1/conversations/${conversationId}`, { method: "PATCH", body: { name }, token: options.token }),
     () => {
       const target = mockData.conversations.find((conversation) => conversation.id === conversationId);
       if (!target) {
@@ -133,11 +123,11 @@ export async function renameConversation(conversationId: string, name: string): 
   );
 }
 
-export async function removeConversation(conversationId: string): Promise<void> {
+export async function removeConversation(conversationId: string, options: ProjectServiceOptions = {}): Promise<void> {
   return withApiFallback(
     "project.removeConversation",
     async () => {
-      await getControlClient().request<void>(`/v1/conversations/${conversationId}`, { method: "DELETE" });
+      await getControlClient().request<void>(`/v1/conversations/${conversationId}`, { method: "DELETE", token: options.token });
     },
     () => {
       mockData.conversations = mockData.conversations.filter((conversation) => conversation.id !== conversationId);
@@ -145,69 +135,33 @@ export async function removeConversation(conversationId: string): Promise<void> 
   );
 }
 
-export async function exportConversationMarkdown(conversationId: string): Promise<string> {
+export async function exportConversationMarkdown(conversationId: string, options: ProjectServiceOptions = {}): Promise<string> {
   return withApiFallback(
     "project.exportConversationMarkdown",
-    () => getControlClient().get<string>(`/v1/conversations/${conversationId}/export?format=markdown`),
+    () => getControlClient().get<string>(`/v1/conversations/${conversationId}/export?format=markdown`, { token: options.token }),
     () => {
       return `# Conversation ${conversationId}\n\n- Export format: markdown\n- Generated at: ${new Date().toISOString()}\n`;
     }
   );
 }
 
-export async function updateProjectConfig(projectId: string, config: Omit<ProjectConfig, "project_id" | "updated_at">): Promise<ProjectConfig> {
-  return withApiFallback(
-    "project.updateConfig",
-    () => getControlClient().request<ProjectConfig>(`/v1/projects/${projectId}/config`, { method: "PUT", body: config }),
-    () => ({
-      project_id: projectId,
-      model_ids: [...config.model_ids],
-      default_model_id: config.default_model_id,
-      rule_ids: [...config.rule_ids],
-      skill_ids: [...config.skill_ids],
-      mcp_ids: [...config.mcp_ids],
-      updated_at: new Date().toISOString()
-    })
-  );
+export async function updateProjectConfig(
+  projectId: string,
+  config: Omit<ProjectConfig, "project_id" | "updated_at">,
+  options: ProjectServiceOptions = {}
+): Promise<ProjectConfig> {
+  return getControlClient().request<ProjectConfig>(`/v1/projects/${projectId}/config`, { method: "PUT", body: config, token: options.token });
 }
 
-export async function getProjectConfig(projectId: string): Promise<ProjectConfig> {
-  return withApiFallback(
-    "project.getConfig",
-    () => getControlClient().get<ProjectConfig>(`/v1/projects/${projectId}/config`),
-    () => ({
-      project_id: projectId,
-      model_ids: ["gpt-4.1"],
-      default_model_id: "gpt-4.1",
-      rule_ids: [],
-      skill_ids: [],
-      mcp_ids: [],
-      updated_at: new Date().toISOString()
-    })
-  );
+export async function getProjectConfig(projectId: string, options: ProjectServiceOptions = {}): Promise<ProjectConfig> {
+  return getControlClient().get<ProjectConfig>(`/v1/projects/${projectId}/config`, { token: options.token });
 }
 
-export async function listWorkspaceProjectConfigs(workspaceId: string): Promise<WorkspaceProjectConfigItem[]> {
-  return withApiFallback(
-    "project.listWorkspaceConfigs",
-    () => getControlClient().get<WorkspaceProjectConfigItem[]>(`/v1/workspaces/${workspaceId}/project-configs`),
-    () =>
-      mockData.projects
-        .filter((item) => item.workspace_id === workspaceId)
-        .map((item) => ({
-          project_id: item.id,
-          project_name: item.name,
-          config: {
-            project_id: item.id,
-            model_ids: [item.default_model_id ?? "gpt-4.1"],
-            default_model_id: item.default_model_id ?? "gpt-4.1",
-            rule_ids: [],
-            skill_ids: [],
-            mcp_ids: [],
-            updated_at: new Date().toISOString()
-          }
-        }))
-  );
+export async function listWorkspaceProjectConfigs(
+  workspaceId: string,
+  options: ProjectServiceOptions = {}
+): Promise<WorkspaceProjectConfigItem[]> {
+  return getControlClient().get<WorkspaceProjectConfigItem[]>(`/v1/workspaces/${workspaceId}/project-configs`, { token: options.token });
 }
 
 function buildPaginationSearch(query: PaginationQuery & { workspace_id?: string }): string {

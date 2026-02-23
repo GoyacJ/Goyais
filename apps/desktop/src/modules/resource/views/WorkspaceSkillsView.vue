@@ -5,12 +5,11 @@
     account-subtitle="Workspace Config / Skills"
     settings-subtitle="Local Settings / Skills"
   >
-    <p v-if="resourceStore.error" class="error">{{ resourceStore.error }}</p>
-
     <ResourceConfigTable
       title="技能列表"
       :columns="columns"
       :rows="listState.items as Array<Record<string, unknown>>"
+      :empty-text="tableEmptyText"
       :search="listState.q"
       :loading="listState.loading"
       :can-prev="listState.page.backStack.length > 0"
@@ -36,11 +35,11 @@
       <template #cell-updated="{ row }">{{ formatTime((row as ResourceConfig).updated_at) }}</template>
       <template #cell-actions="{ row }">
         <div class="actions">
-          <button type="button" :disabled="!canWrite" @click="openEdit(row as ResourceConfig)">编辑</button>
-          <button type="button" :disabled="!canWrite" @click="toggleEnabled(row as ResourceConfig)">
+          <BaseButton :disabled="!canWrite" variant="ghost" @click="openEdit(row as ResourceConfig)">编辑</BaseButton>
+          <BaseButton :disabled="!canWrite" variant="ghost" @click="toggleEnabled(row as ResourceConfig)">
             {{ (row as ResourceConfig).enabled ? "停用" : "启用" }}
-          </button>
-          <button type="button" class="danger" :disabled="!canWrite" @click="removeConfig(row as ResourceConfig)">删除</button>
+          </BaseButton>
+          <BaseButton :disabled="!canWrite" variant="ghost" @click="removeConfig(row as ResourceConfig)">删除</BaseButton>
         </div>
       </template>
     </ResourceConfigTable>
@@ -65,8 +64,8 @@
 
       <template #footer>
         <div class="footer-actions">
-          <button type="button" @click="closeModal">取消</button>
-          <button type="button" :disabled="!canWrite" @click="saveConfig">保存</button>
+          <BaseButton variant="ghost" @click="closeModal">取消</BaseButton>
+          <BaseButton :disabled="!canWrite" variant="primary" @click="saveConfig">保存</BaseButton>
         </div>
       </template>
     </BaseModal>
@@ -79,6 +78,7 @@ import ResourceConfigTable from "@/modules/resource/components/ResourceConfigTab
 import { useWorkspaceMarkdownResourceView } from "@/modules/resource/views/useWorkspaceMarkdownResourceView";
 import WorkspaceSharedShell from "@/shared/shells/WorkspaceSharedShell.vue";
 import type { ResourceConfig } from "@/shared/types/api";
+import BaseButton from "@/shared/ui/BaseButton.vue";
 import BaseInput from "@/shared/ui/BaseInput.vue";
 import BaseModal from "@/shared/ui/BaseModal.vue";
 import BaseSelect from "@/shared/ui/BaseSelect.vue";
@@ -97,6 +97,7 @@ const {
   form,
   formatTime,
   listState,
+  tableEmptyText,
   loadNextResourceConfigsPage,
   loadPreviousResourceConfigsPage,
   onSearch,
@@ -104,7 +105,6 @@ const {
   openEdit,
   closeModal,
   removeConfig,
-  resourceStore,
   saveConfig,
   toggleEnabled
 } = useWorkspaceMarkdownResourceView("skill");

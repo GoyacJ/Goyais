@@ -54,6 +54,14 @@
   margin-top: var(--global-space-12);
 }
 
+.import-feedback {
+  min-height: 0;
+}
+
+.import-feedback .toast {
+  width: 100%;
+}
+
 .title {
   color: var(--semantic-text-muted);
   font-size: var(--global-font-size-12);
@@ -101,6 +109,11 @@
   overflow: auto;
 }
 
+.projects-header .icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .sidebar.collapsed .projects-header {
   margin-top: var(--global-space-8);
   display: grid;
@@ -135,8 +148,4 @@
 .conversation-item.active {
   background: var(--component-sidebar-item-bg-active);
   color: var(--semantic-text);
-}
-
-.hidden-input {
-  display: none;
 }

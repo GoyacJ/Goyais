@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,16 @@ type modelCatalogFile struct {
 	UpdatedAt string               `json:"updated_at"`
 	Vendors   []ModelCatalogVendor `json:"vendors"`
 }
+
+var (
+	//go:embed templates/models.default.json
+	defaultModelCatalogTemplate []byte
+)
+
+const (
+	workspaceModelCatalogRelativePath = ".goyais/model.json"
+	defaultModelCatalogSource         = "embedded://models.default.json"
+)
 
 type modelCatalogCacheEntry struct {
 	WorkspaceID string
@@ -110,42 +121,47 @@ func (s *AppState) LoadModelCatalog(workspaceID string, force bool) (ModelCatalo
 		return ModelCatalogResponse{}, err
 	}
 
-	filePath := filepath.Join(root.CatalogRoot, "goyais", "catalog", "models.json")
-	if err := ensureCatalogFile(filePath); err != nil {
-		return ModelCatalogResponse{}, err
-	}
-
-	info, err := os.Stat(filePath)
+	filePath := filepath.Join(root.CatalogRoot, workspaceModelCatalogRelativePath)
+	raw, revision, source, err := resolveWorkspaceModelCatalog(filePath)
 	if err != nil {
 		return ModelCatalogResponse{}, err
 	}
-	revision := info.ModTime().UnixNano()
 
 	if !force {
 		s.mu.RLock()
 		cache, ok := s.modelCatalogCache[workspaceID]
 		s.mu.RUnlock()
-		if ok && cache.Revision == revision && cache.FilePath == filePath {
+		if ok && cache.Revision == revision && cache.FilePath == source {
 			return cache.Response, nil
 		}
 	}
 
-	raw, err := os.ReadFile(filePath)
+	payload, err := parseModelCatalogPayload(raw, source)
 	if err != nil {
-		return ModelCatalogResponse{}, err
-	}
-	payload := modelCatalogFile{}
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		return ModelCatalogResponse{}, fmt.Errorf("invalid models.json: %w", err)
-	}
-	if len(payload.Vendors) == 0 {
-		return ModelCatalogResponse{}, errors.New("models.json vendors cannot be empty")
+		if source == defaultModelCatalogSource {
+			return ModelCatalogResponse{}, err
+		}
+		raw, revision, source, err = loadEmbeddedModelCatalogData()
+		if err != nil {
+			return ModelCatalogResponse{}, err
+		}
+		payload, err = parseModelCatalogPayload(raw, source)
+		if err != nil {
+			return ModelCatalogResponse{}, err
+		}
 	}
 
 	normalized := make([]ModelCatalogVendor, 0, len(payload.Vendors))
 	for _, vendor := range payload.Vendors {
 		if !isSupportedVendor(vendor.Name) {
 			return ModelCatalogResponse{}, fmt.Errorf("unsupported vendor: %s", vendor.Name)
+		}
+		baseURL := strings.TrimSpace(vendor.BaseURL)
+		if baseURL == "" {
+			return ModelCatalogResponse{}, fmt.Errorf("vendor %s has empty base_url", vendor.Name)
+		}
+		if !isValidURLString(baseURL) {
+			return ModelCatalogResponse{}, fmt.Errorf("vendor %s has invalid base_url", vendor.Name)
 		}
 		models := make([]ModelCatalogModel, 0, len(vendor.Models))
 		for _, model := range vendor.Models {
@@ -158,8 +174,9 @@ func (s *AppState) LoadModelCatalog(workspaceID string, force bool) (ModelCatalo
 			models = append(models, item)
 		}
 		normalized = append(normalized, ModelCatalogVendor{
-			Name:   vendor.Name,
-			Models: models,
+			Name:    vendor.Name,
+			BaseURL: baseURL,
+			Models:  models,
 		})
 	}
 
@@ -171,19 +188,32 @@ func (s *AppState) LoadModelCatalog(workspaceID string, force bool) (ModelCatalo
 		WorkspaceID: workspaceID,
 		Revision:    revision,
 		UpdatedAt:   updatedAt,
-		Source:      filePath,
+		Source:      source,
 		Vendors:     normalized,
 	}
 
 	s.mu.Lock()
 	s.modelCatalogCache[workspaceID] = modelCatalogCacheEntry{
 		WorkspaceID: workspaceID,
-		FilePath:    filePath,
+		FilePath:    source,
 		Revision:    revision,
 		Response:    response,
 	}
 	s.mu.Unlock()
 	return response, nil
+}
+
+func (s *AppState) resolveCatalogVendorBaseURL(workspaceID string, vendor ModelVendorName) string {
+	response, err := s.LoadModelCatalog(workspaceID, false)
+	if err != nil {
+		return ""
+	}
+	for _, item := range response.Vendors {
+		if item.Name == vendor {
+			return strings.TrimSpace(item.BaseURL)
+		}
+	}
+	return ""
 }
 
 func (s *AppState) defaultCatalogRoot(workspaceID string) string {
@@ -193,43 +223,53 @@ func (s *AppState) defaultCatalogRoot(workspaceID string) string {
 	}
 	home, err := os.UserHomeDir()
 	if err == nil && strings.TrimSpace(home) != "" {
-		return filepath.Join(home, ".goyais")
+		return home
 	}
 	return filepath.Join(".", "data", "local")
 }
 
-func ensureCatalogFile(path string) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+func loadDefaultModelCatalogTemplate(now string) (modelCatalogFile, error) {
+	payload := modelCatalogFile{}
+	if err := json.Unmarshal(defaultModelCatalogTemplate, &payload); err != nil {
+		return modelCatalogFile{}, fmt.Errorf("invalid embedded models.default.json: %w", err)
+	}
+	payload.UpdatedAt = now
+	return payload, nil
+}
+
+func resolveWorkspaceModelCatalog(path string) ([]byte, int64, string, error) {
+	info, err := os.Stat(path)
+	if err == nil {
+		raw, readErr := os.ReadFile(path)
+		if readErr == nil {
+			return raw, info.ModTime().UnixNano(), path, nil
+		}
 	}
 
-	if _, err := os.Stat(path); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return err
-	}
+	return loadEmbeddedModelCatalogData()
+}
 
-	now := nowUTC()
-	payload := modelCatalogFile{
-		Version:   "1",
-		UpdatedAt: now,
-		Vendors: []ModelCatalogVendor{
-			{Name: ModelVendorOpenAI, Models: []ModelCatalogModel{{ID: "gpt-4.1", Label: "GPT-4.1", Enabled: true}}},
-			{Name: ModelVendorGoogle, Models: []ModelCatalogModel{{ID: "gemini-2.0-flash", Label: "Gemini 2.0 Flash", Enabled: true}}},
-			{Name: ModelVendorQwen, Models: []ModelCatalogModel{{ID: "qwen-max", Label: "Qwen Max", Enabled: true}}},
-			{Name: ModelVendorDoubao, Models: []ModelCatalogModel{{ID: "doubao-pro-32k", Label: "Doubao Pro 32k", Enabled: true}}},
-			{Name: ModelVendorZhipu, Models: []ModelCatalogModel{{ID: "glm-4-plus", Label: "GLM-4-Plus", Enabled: true}}},
-			{Name: ModelVendorMiniMax, Models: []ModelCatalogModel{{ID: "MiniMax-Text-01", Label: "MiniMax Text 01", Enabled: true}}},
-			{Name: ModelVendorLocal, Models: []ModelCatalogModel{{ID: "llama3.1:8b", Label: "Llama 3.1 8B", Enabled: true}}},
-		},
+func loadEmbeddedModelCatalogData() ([]byte, int64, string, error) {
+	payload, loadErr := loadDefaultModelCatalogTemplate(nowUTC())
+	if loadErr != nil {
+		return nil, 0, "", loadErr
 	}
-	encoded, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		return err
+	encoded, marshalErr := json.Marshal(payload)
+	if marshalErr != nil {
+		return nil, 0, "", marshalErr
 	}
-	encoded = append(encoded, '\n')
-	return os.WriteFile(path, encoded, 0o644)
+	return encoded, 0, defaultModelCatalogSource, nil
+}
+
+func parseModelCatalogPayload(raw []byte, source string) (modelCatalogFile, error) {
+	payload := modelCatalogFile{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return modelCatalogFile{}, fmt.Errorf("invalid model catalog (%s): %w", source, err)
+	}
+	if len(payload.Vendors) == 0 {
+		return modelCatalogFile{}, fmt.Errorf("model catalog (%s) vendors cannot be empty", source)
+	}
+	return payload, nil
 }
 
 func isSupportedVendor(vendor ModelVendorName) bool {

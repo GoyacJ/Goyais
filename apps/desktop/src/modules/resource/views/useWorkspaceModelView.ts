@@ -8,7 +8,6 @@ import {
   patchWorkspaceResourceConfig,
   refreshModelCatalog,
   refreshResourceConfigsByType,
-  reloadWorkspaceModelCatalog,
   resourceStore,
   setResourceEnabledFilter,
   setResourceSearch,
@@ -19,10 +18,8 @@ import { workspaceStore } from "@/shared/stores/workspaceStore";
 import type { ModelVendorName, ResourceConfig } from "@/shared/types/api";
 
 const columns = [
-  { key: "name", label: "名称" },
   { key: "vendor", label: "厂商" },
   { key: "model", label: "模型" },
-  { key: "probe", label: "测试诊断" },
   { key: "enabled", label: "状态" },
   { key: "updated", label: "更新时间" },
   { key: "actions", label: "动作" }
@@ -34,27 +31,18 @@ const enabledOptions = [
   { value: "disabled", label: "仅停用" }
 ];
 
-const fallbackVendors: Array<{ value: string; label: string }> = [
-  { value: "OpenAI", label: "OpenAI" },
-  { value: "Google", label: "Google" },
-  { value: "Qwen", label: "Qwen" },
-  { value: "Doubao", label: "Doubao" },
-  { value: "Zhipu", label: "Zhipu" },
-  { value: "MiniMax", label: "MiniMax" },
-  { value: "Local", label: "Local" }
-];
-
 export function useWorkspaceModelView() {
   const canWrite = computed(() => workspaceStore.mode === "local" || authStore.capabilities.resource_write);
   const catalogVendors = computed(() => resourceStore.catalog?.vendors ?? []);
-  const vendorOptions = computed(() => {
-    const options = catalogVendors.value.map((item) => ({ value: item.name, label: item.name }));
-    return options.length > 0 ? options : fallbackVendors;
-  });
+  const vendorOptions = computed(() => catalogVendors.value.map((item) => ({ value: item.name, label: item.name })));
   const vendorModelOptions = computed(() => {
     const vendor = catalogVendors.value.find((item) => item.name === form.vendor);
-    const options = (vendor?.models ?? []).map((item) => ({ value: item.id, label: `${item.label} (${item.id})` }));
-    return [{ value: "", label: "请选择或手动输入" }, ...options];
+    return (vendor?.models ?? []).map((item) => ({ value: item.id, label: item.label }));
+  });
+  const showLocalBaseURL = computed(() => form.vendor === "Local");
+  const selectedVendorBaseURL = computed(() => {
+    const vendor = catalogVendors.value.find((item) => item.name === form.vendor);
+    return vendor?.base_url ?? "";
   });
 
   const enabledFilterModel = computed({
@@ -65,22 +53,37 @@ export function useWorkspaceModelView() {
     }
   });
 
+  const tableEmptyText = computed(() => {
+    if (resourceStore.error.trim() !== "") {
+      return resourceStore.error;
+    }
+    return "暂无数据";
+  });
+
   const form = reactive({
     open: false,
     mode: "create" as "create" | "edit",
     configId: "",
-    name: "",
-    vendor: "OpenAI" as ModelVendorName,
+    vendor: "" as ModelVendorName | "",
     selectedCatalogModel: "",
-    modelId: "",
     baseUrl: "",
     apiKey: "",
     apiKeyHint: "",
     timeoutMs: "",
-    paramsText: "",
     enabled: true,
     testMessage: ""
   });
+  const testNotice = reactive({
+    open: false,
+    tone: "info" as "error" | "warning" | "info" | "403" | "disconnected" | "retrying",
+    message: ""
+  });
+  const deleteConfirm = reactive({
+    open: false,
+    configId: "",
+    modelText: ""
+  });
+  let testNoticeTimer: ReturnType<typeof setTimeout> | null = null;
 
   watch(
     () => workspaceStore.currentWorkspaceId,
@@ -91,10 +94,19 @@ export function useWorkspaceModelView() {
   );
 
   watch(
-    () => form.selectedCatalogModel,
-    (value) => {
-      if (value.trim() !== "") {
-        form.modelId = value;
+    () => form.vendor,
+    (vendor) => {
+      const vendorConfig = catalogVendors.value.find((item) => item.name === vendor);
+      const firstModel = vendorConfig?.models[0]?.id ?? "";
+      const modelExists = vendorConfig?.models.some((item) => item.id === form.selectedCatalogModel) ?? false;
+      if (!modelExists) {
+        form.selectedCatalogModel = firstModel;
+      }
+      if (vendor === "Local" && form.baseUrl.trim() === "") {
+        form.baseUrl = vendorConfig?.base_url ?? "";
+      }
+      if (vendor !== "Local") {
+        form.baseUrl = "";
       }
     }
   );
@@ -106,39 +118,34 @@ export function useWorkspaceModelView() {
 
   function openCreate(): void {
     if (!canWrite.value) return;
-    const firstVendor = (catalogVendors.value[0]?.name ?? "OpenAI") as ModelVendorName;
+    const firstVendor = catalogVendors.value[0];
     Object.assign(form, {
       open: true,
       mode: "create",
       configId: "",
-      name: "",
-      vendor: firstVendor,
-      selectedCatalogModel: "",
-      modelId: "",
-      baseUrl: "",
+      vendor: (firstVendor?.name ?? "") as ModelVendorName | "",
+      selectedCatalogModel: firstVendor?.models[0]?.id ?? "",
+      baseUrl: firstVendor?.name === "Local" ? firstVendor.base_url : "",
       apiKey: "",
       apiKeyHint: "",
       timeoutMs: "",
-      paramsText: "",
       enabled: true
     });
   }
 
   function openEdit(item: ResourceConfig): void {
     if (!canWrite.value) return;
+    const vendor = (item.model?.vendor ?? "") as ModelVendorName | "";
     Object.assign(form, {
       open: true,
       mode: "edit",
       configId: item.id,
-      name: item.name,
-      vendor: item.model?.vendor ?? "OpenAI",
+      vendor,
       selectedCatalogModel: item.model?.model_id ?? "",
-      modelId: item.model?.model_id ?? "",
       baseUrl: item.model?.base_url ?? "",
       apiKey: "",
       apiKeyHint: item.model?.api_key_masked ? `当前: ${item.model.api_key_masked}（不填写将保留旧值）` : "",
       timeoutMs: item.model?.timeout_ms ? String(item.model.timeout_ms) : "",
-      paramsText: item.model?.params ? JSON.stringify(item.model.params, null, 2) : "",
       enabled: item.enabled
     });
   }
@@ -148,33 +155,26 @@ export function useWorkspaceModelView() {
   }
 
   async function saveConfig(): Promise<void> {
-    const name = form.name.trim();
-    const modelID = form.modelId.trim();
-    if (name === "" || modelID === "") {
-      form.testMessage = "名称和模型 ID 不能为空";
-      return;
-    }
-
-    const parsedParams = parseParams(form.paramsText);
-    if (parsedParams === "invalid") {
-      form.testMessage = "Params 必须是合法 JSON";
+    const vendor = form.vendor;
+    const modelID = form.selectedCatalogModel.trim();
+    if (vendor === "" || modelID === "") {
+      form.testMessage = "请选择厂商与模型";
       return;
     }
 
     const timeout = Number.parseInt(form.timeoutMs, 10);
     const model = {
-      vendor: form.vendor,
+      vendor,
       model_id: modelID,
-      base_url: form.baseUrl.trim() || undefined,
+      base_url: vendor === "Local" ? form.baseUrl.trim() || undefined : undefined,
       api_key: form.apiKey.trim() || undefined,
-      timeout_ms: Number.isNaN(timeout) ? undefined : timeout,
-      params: parsedParams || undefined
+      timeout_ms: Number.isNaN(timeout) ? undefined : timeout
     };
 
     if (form.mode === "create") {
-      await createWorkspaceResourceConfig({ type: "model", name, enabled: form.enabled, model });
+      await createWorkspaceResourceConfig({ type: "model", enabled: form.enabled, model });
     } else {
-      await patchWorkspaceResourceConfig("model", form.configId, { name, enabled: form.enabled, model });
+      await patchWorkspaceResourceConfig("model", form.configId, { enabled: form.enabled, model });
     }
     form.open = false;
   }
@@ -185,44 +185,54 @@ export function useWorkspaceModelView() {
 
   async function runModelTest(item: ResourceConfig): Promise<void> {
     const result = await testWorkspaceModelConfig(item.id);
-    if (!result) return;
-    form.testMessage = `${item.name}: ${result.status} (${result.latency_ms}ms) ${result.message}`;
-  }
-
-  function getProbeResult(configId: string) {
-    return resourceStore.modelTestResultsByConfigId[configId] ?? null;
-  }
-
-  function probeSuggestion(errorCode?: string): string {
-    if (!errorCode) return "";
-    if (errorCode === "missing_api_key") {
-      return "请补充 API Key。";
-    }
-    if (errorCode === "invalid_base_url") {
-      return "请检查 Base URL 与厂商网关。";
-    }
-    if (errorCode.startsWith("http_")) {
-      return "请检查网络、鉴权与模型 ID 是否有效。";
-    }
-    if (errorCode === "request_failed") {
-      return "请求失败，请检查网络连通性。";
-    }
-    return "请检查模型配置后重试。";
-  }
-
-  function probeStatusClass(status: string): string {
-    return status === "success" ? "enabled" : "disabled";
-  }
-
-  async function removeConfig(item: ResourceConfig): Promise<void> {
-    if (!window.confirm(`确认删除模型配置 ${item.name} ?`)) {
+    if (!result) {
+      showTestNotice("error", resourceStore.error || "模型测试失败");
       return;
     }
-    await deleteWorkspaceResourceConfig("model", item.id);
+    const modelText = `${item.model?.vendor ?? "-"} / ${item.model?.model_id ?? "-"}`;
+    const statusText = result.status === "success" ? "成功" : "失败";
+    const tone = result.status === "success" ? "info" : "error";
+    const detail = result.error_code ? ` / ${result.error_code}` : "";
+    showTestNotice(tone, `${modelText} 测试${statusText}，${result.latency_ms}ms${detail}：${result.message}`);
   }
 
-  async function reloadCatalog(): Promise<void> {
-    await reloadWorkspaceModelCatalog();
+  function showTestNotice(tone: "error" | "warning" | "info" | "403" | "disconnected" | "retrying", message: string): void {
+    testNotice.tone = tone;
+    testNotice.message = message;
+    testNotice.open = true;
+    if (testNoticeTimer) {
+      clearTimeout(testNoticeTimer);
+    }
+    testNoticeTimer = setTimeout(() => {
+      testNotice.open = false;
+    }, 3200);
+  }
+
+  function removeConfig(item: ResourceConfig): void {
+    deleteConfirm.open = true;
+    deleteConfirm.configId = item.id;
+    deleteConfirm.modelText = `${item.model?.vendor ?? "-"} / ${item.model?.model_id ?? "-"}`;
+  }
+
+  function closeDeleteConfirm(): void {
+    deleteConfirm.open = false;
+    deleteConfirm.configId = "";
+    deleteConfirm.modelText = "";
+  }
+
+  async function confirmRemoveConfig(): Promise<void> {
+    if (!deleteConfirm.configId) {
+      return;
+    }
+    const modelText = deleteConfirm.modelText;
+    const configID = deleteConfirm.configId;
+    const removed = await deleteWorkspaceResourceConfig("model", configID);
+    if (!removed) {
+      showTestNotice("error", resourceStore.error || `删除失败：${modelText}`);
+      return;
+    }
+    closeDeleteConfirm();
+    showTestNotice("info", `已删除模型配置：${modelText}`);
   }
 
   function formatTime(value: string): string {
@@ -235,6 +245,9 @@ export function useWorkspaceModelView() {
     enabledFilterModel,
     enabledOptions,
     form,
+    tableEmptyText,
+    testNotice,
+    deleteConfirm,
     onSearch,
     openCreate,
     openEdit,
@@ -243,26 +256,15 @@ export function useWorkspaceModelView() {
     toggleEnabled,
     runModelTest,
     removeConfig,
-    reloadCatalog,
-    getProbeResult,
-    probeSuggestion,
-    probeStatusClass,
+    closeDeleteConfirm,
+    confirmRemoveConfig,
     formatTime,
     loadNextResourceConfigsPage,
     loadPreviousResourceConfigsPage,
     resourceStore,
     vendorModelOptions,
-    vendorOptions
+    vendorOptions,
+    showLocalBaseURL,
+    selectedVendorBaseURL
   };
-}
-
-function parseParams(raw: string): Record<string, unknown> | null | "invalid" {
-  const source = raw.trim();
-  if (source === "") return null;
-  try {
-    const parsed = JSON.parse(source) as Record<string, unknown>;
-    return typeof parsed === "object" && parsed !== null ? parsed : null;
-  } catch {
-    return "invalid";
-  }
 }

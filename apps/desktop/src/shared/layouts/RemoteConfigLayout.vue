@@ -81,5 +81,6 @@ defineProps<{
   overflow: auto;
   display: grid;
   gap: var(--global-space-12);
+  align-content: start;
 }
 </style>

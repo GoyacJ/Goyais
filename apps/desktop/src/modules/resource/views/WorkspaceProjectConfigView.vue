@@ -5,47 +5,32 @@
     account-subtitle="Workspace Config / Project Config"
     settings-subtitle="Local Settings / Project Config"
   >
-    <p v-if="resourceStore.error" class="error">{{ resourceStore.error }}</p>
-
-    <section class="card">
-      <h3>项目导入与绑定</h3>
+    <section class="project-config-page">
       <div class="import-row">
-        <BaseInput v-model="form.importPath" placeholder="输入项目目录路径，例如 /Users/.../repo" />
-        <button type="button" :disabled="!canWrite" @click="importDirectoryProject">目录导入</button>
+        <BaseButton :disabled="!canWrite" variant="secondary" @click="addProject">添加项目</BaseButton>
       </div>
 
-      <div class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>项目</th>
-              <th>目录</th>
-              <th>模型绑定</th>
-              <th>默认模型</th>
-              <th>规则/技能/MCP</th>
-              <th>动作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in projectRows" :key="row.id">
-              <td>{{ row.name }}</td>
-              <td>{{ row.repoPath }}</td>
-              <td>{{ row.modelCount }}</td>
-              <td>{{ row.defaultModelId }}</td>
-              <td>{{ row.ruleCount }}/{{ row.skillCount }}/{{ row.mcpCount }}</td>
-              <td>
-                <div class="table-actions">
-                  <button type="button" :disabled="!canWrite" @click="openProjectBinding(row.id)">配置</button>
-                  <button type="button" class="danger" :disabled="!canWrite" @click="removeProjectById(row.id, row.name)">移除</button>
-                </div>
-              </td>
-            </tr>
-            <tr v-if="projectRows.length === 0">
-              <td colspan="6" class="empty">当前工作区暂无项目</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <ResourceConfigTable
+        title="项目导入与绑定"
+        :columns="columns"
+        :rows="projectRows as Array<Record<string, unknown>>"
+        :empty-text="tableEmptyText"
+        :show-search="false"
+        :show-add="false"
+      >
+        <template #cell-actions="{ row }">
+          <div class="table-actions">
+            <BaseButton :disabled="!canWrite" variant="ghost" @click="openProjectBinding((row as { id: string }).id)">配置</BaseButton>
+            <BaseButton
+              :disabled="!canWrite"
+              variant="ghost"
+              @click="removeProjectById((row as { id: string; name: string }).id, (row as { id: string; name: string }).name)"
+            >
+              移除
+            </BaseButton>
+          </div>
+        </template>
+      </ResourceConfigTable>
     </section>
 
     <BaseModal :open="form.open">
@@ -111,8 +96,8 @@
 
       <template #footer>
         <div class="footer-actions">
-          <button type="button" @click="closeProjectBinding">取消</button>
-          <button type="button" :disabled="!canWrite" @click="saveProjectBinding">保存</button>
+          <BaseButton variant="ghost" @click="closeProjectBinding">取消</BaseButton>
+          <BaseButton :disabled="!canWrite" variant="primary" @click="saveProjectBinding">保存</BaseButton>
         </div>
       </template>
     </BaseModal>
@@ -120,15 +105,18 @@
 </template>
 
 <script setup lang="ts">
+import ResourceConfigTable from "@/modules/resource/components/ResourceConfigTable.vue";
 import { useWorkspaceProjectConfigView } from "@/modules/resource/views/useWorkspaceProjectConfigView";
+import { pickDirectoryPath } from "@/shared/services/directoryPicker";
 import WorkspaceSharedShell from "@/shared/shells/WorkspaceSharedShell.vue";
-import BaseInput from "@/shared/ui/BaseInput.vue";
+import BaseButton from "@/shared/ui/BaseButton.vue";
 import BaseModal from "@/shared/ui/BaseModal.vue";
 import BaseSelect from "@/shared/ui/BaseSelect.vue";
 
 const {
   canWrite,
   closeProjectBinding,
+  columns,
   defaultModelOptions,
   form,
   importDirectoryProject,
@@ -137,13 +125,21 @@ const {
   modelOptions,
   openProjectBinding,
   projectRows,
+  tableEmptyText,
   removeProjectById,
-  resourceStore,
   ruleOptions,
   saveProjectBinding,
   skillOptions,
   toggleListItem
 } = useWorkspaceProjectConfigView();
+
+async function addProject(): Promise<void> {
+  const directoryPath = await pickDirectoryPath();
+  if (!directoryPath) {
+    return;
+  }
+  await importDirectoryProject(directoryPath);
+}
 </script>
 
 <style scoped src="./WorkspaceProjectConfigView.css"></style>

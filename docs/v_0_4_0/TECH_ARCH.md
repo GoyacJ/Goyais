@@ -225,10 +225,12 @@ private resource
 
 ### 6.5 模型目录加载
 
-1. 模型目录文件固定为 `<catalog_root>/goyais/catalog/models.json`。
-2. Hub 负责解析、JSON 校验、修订号递增与失败审计。
-3. 本地工作区目录根通过 `PUT /v1/workspaces/{workspace_id}/catalog-root` 从 Desktop 同步。
-4. 远程工作区目录根仅允许管理员变更。
+1. 模型目录优先读取 `<catalog_root>/.goyais/model.json`。
+2. 当 `.goyais/model.json` 不存在时，回退使用内置 `models.default.json` 模板。
+3. `vendors[*].base_url` 为必填字段，Hub 负责 URL 校验与失败审计。
+4. Hub 负责解析、JSON 校验、修订号递增与失败审计。
+5. 本地工作区目录根通过 `PUT /v1/workspaces/{workspace_id}/catalog-root` 从 Desktop 同步。
+6. 远程工作区目录根仅允许管理员变更。
 
 ---
 
@@ -536,7 +538,6 @@ CREATE TABLE resource_configs (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
   type TEXT NOT NULL CHECK(type IN ('model','rule','skill','mcp')),
-  name TEXT NOT NULL,
   enabled BOOLEAN NOT NULL DEFAULT TRUE,
   payload_json TEXT NOT NULL,
   created_at DATETIME NOT NULL,
@@ -902,10 +903,11 @@ while True:
   "workspace_id": "ws_local",
   "revision": 12,
   "updated_at": "2026-02-23T15:04:05Z",
-  "source": "/Users/goya/.goyais/goyais/catalog/models.json",
+  "source": "/Users/goya/.goyais/model.json",
   "vendors": [
     {
       "name": "OpenAI",
+      "base_url": "https://api.openai.com/v1",
       "models": [
         { "id": "gpt-4.1", "label": "GPT-4.1", "enabled": true }
       ]
@@ -938,6 +940,7 @@ while True:
 2. `PATCH|DELETE /v1/workspaces/{workspace_id}/resource-configs/{config_id}`
 3. `POST /v1/workspaces/{workspace_id}/resource-configs/{config_id}/test`
 4. `POST /v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect`
+5. `type=model` 时 `name` 为非必填字段；主标识为 `vendor + model_id`。
 5. `GET /v1/workspaces/{workspace_id}/mcps/export`
 6. `GET /v1/workspaces/{workspace_id}/project-configs`
 

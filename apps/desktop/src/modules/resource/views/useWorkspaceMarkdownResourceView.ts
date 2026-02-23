@@ -34,6 +34,12 @@ export function useWorkspaceMarkdownResourceView(type: MarkdownResourceType) {
       void refreshResourceConfigsByType(type);
     }
   });
+  const tableEmptyText = computed(() => {
+    if (resourceStore.error.trim() !== "") {
+      return resourceStore.error;
+    }
+    return "暂无数据";
+  });
 
   const form = reactive({
     open: false,
@@ -133,6 +139,7 @@ export function useWorkspaceMarkdownResourceView(type: MarkdownResourceType) {
     form,
     formatTime,
     listState,
+    tableEmptyText,
     loadNextResourceConfigsPage,
     loadPreviousResourceConfigsPage,
     onSearch,

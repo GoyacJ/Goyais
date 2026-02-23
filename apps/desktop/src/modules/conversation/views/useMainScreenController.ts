@@ -49,6 +49,9 @@ export function useMainScreenController() {
   const editingConversationName = ref(false);
   const conversationNameDraft = ref("");
   const inspectorCollapsed = ref(false);
+  const projectImportInProgress = ref(false);
+  const projectImportFeedback = ref("");
+  const projectImportError = ref("");
   const inspectorTabs: Array<{ key: InspectorTabKey; label: string }> = [
     { key: "diff", label: "D" },
     { key: "run", label: "R" },
@@ -137,6 +140,15 @@ export function useMainScreenController() {
     }
   );
 
+  watch(
+    () => workspaceStore.currentWorkspaceId,
+    () => {
+      projectImportInProgress.value = false;
+      projectImportFeedback.value = "";
+      projectImportError.value = "";
+    }
+  );
+
   function updateDraft(value: string): void {
     if (!activeConversation.value) {
       return;
@@ -192,7 +204,26 @@ export function useMainScreenController() {
   }
 
   async function importProjectDirectoryAction(repoPath: string): Promise<void> {
-    await importProjectByDirectory(repoPath);
+    const normalizedPath = repoPath.trim();
+    if (normalizedPath === "") {
+      return;
+    }
+
+    projectImportInProgress.value = true;
+    projectImportFeedback.value = "";
+    projectImportError.value = "";
+
+    try {
+      const created = await importProjectByDirectory(normalizedPath);
+      if (!created) {
+        projectImportError.value = projectStore.error || "PROJECT_IMPORT_FAILED: 导入项目失败";
+        return;
+      }
+      projectImportFeedback.value = `已添加项目：${created.name}`;
+      projectImportError.value = "";
+    } finally {
+      projectImportInProgress.value = false;
+    }
   }
 
   async function deleteProjectById(projectId: string): Promise<void> {
@@ -346,6 +377,9 @@ export function useMainScreenController() {
     paginateProjects,
     placeholder,
     projectStore,
+    projectImportError,
+    projectImportFeedback,
+    projectImportInProgress,
     projectsPage,
     queuedCount,
     rollbackMessage,

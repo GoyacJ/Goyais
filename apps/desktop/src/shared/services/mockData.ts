@@ -132,6 +132,22 @@ const defaultResourceConfigs: ResourceConfig[] = [
     },
     created_at: now,
     updated_at: now
+  },
+  {
+    id: "rc_mcp_2",
+    workspace_id: localWorkspace.id,
+    type: "mcp",
+    name: "GitHub MCP",
+    enabled: true,
+    mcp: {
+      transport: "http_sse",
+      endpoint: "http://127.0.0.1:9001/sse",
+      status: "connected",
+      tools: ["repos.search", "issues.list", "pull_requests.list"],
+      last_connected_at: now
+    },
+    created_at: now,
+    updated_at: now
   }
 ];
 

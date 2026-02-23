@@ -18,20 +18,15 @@
           <AppIcon name="folder" :size="12" />
           <template v-if="!collapsed">项目</template>
         </span>
-        <button class="icon-btn tiny" type="button" @click="pickDirectory">
+        <button class="icon-btn tiny" type="button" :disabled="projectImportInProgress" @click="pickDirectory">
           <AppIcon name="plus" :size="12" />
         </button>
       </div>
-
-      <input
-        ref="directoryInputRef"
-        type="file"
-        webkitdirectory
-        directory
-        multiple
-        class="hidden-input"
-        @change="onDirectoryPicked"
-      />
+      <div v-if="!collapsed" class="import-feedback">
+        <ToastAlert v-if="projectImportError !== ''" tone="error" :message="projectImportError" />
+        <ToastAlert v-else-if="projectImportInProgress" tone="retrying" message="正在导入项目..." />
+        <ToastAlert v-else-if="projectImportFeedback !== ''" tone="info" :message="projectImportFeedback" />
+      </div>
 
       <div v-if="!collapsed" class="project-tree">
         <section v-for="project in projects" :key="project.id" class="project-node">
@@ -97,7 +92,9 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 
+import { pickDirectoryPath } from "@/shared/services/directoryPicker";
 import AppIcon from "@/shared/ui/AppIcon.vue";
+import ToastAlert from "@/shared/ui/ToastAlert.vue";
 import type { Conversation, Project, Workspace, WorkspaceMode } from "@/shared/types/api";
 import WorkspaceCreateModal from "@/shared/ui/sidebar/WorkspaceCreateModal.vue";
 import UserProfileMenuCard from "@/shared/ui/sidebar/UserProfileMenuCard.vue";
@@ -125,6 +122,9 @@ const props = defineProps<{
     }
   >;
   activeConversationId: string;
+  projectImportInProgress: boolean;
+  projectImportFeedback: string;
+  projectImportError: string;
 }>();
 
 const emit = defineEmits<{
@@ -144,7 +144,6 @@ const emit = defineEmits<{
 
 const collapsed = ref(false);
 const createWorkspaceOpen = ref(false);
-const directoryInputRef = ref<HTMLInputElement>();
 
 const projectOpen = reactive<Record<string, boolean>>({});
 
@@ -163,6 +162,9 @@ const userMenuItems = computed(() => {
   }
   return items;
 });
+const projectImportInProgress = computed(() => props.projectImportInProgress);
+const projectImportFeedback = computed(() => props.projectImportFeedback);
+const projectImportError = computed(() => props.projectImportError);
 
 function toggleProject(projectId: string): void {
   projectOpen[projectId] = !isProjectOpen(projectId);
@@ -172,22 +174,16 @@ function isProjectOpen(projectId: string): boolean {
   return projectOpen[projectId] ?? true;
 }
 
-function pickDirectory(): void {
-  directoryInputRef.value?.click();
-}
-
-function onDirectoryPicked(event: Event): void {
-  const input = event.target as HTMLInputElement;
-  const files = input.files;
-  if (!files || files.length === 0) {
+async function pickDirectory(): Promise<void> {
+  const directoryPath = await pickDirectoryPath();
+  if (!directoryPath) {
     return;
   }
-
-  const first = files[0];
-  const relative = (first as File & { webkitRelativePath?: string }).webkitRelativePath ?? "";
-  const folder = relative.split("/")[0] || first.name;
-  emit("importProject", `/imported/${folder}`);
-  input.value = "";
+  const normalizedPath = directoryPath.trim();
+  if (normalizedPath === "") {
+    return;
+  }
+  emit("importProject", normalizedPath);
 }
 
 function onSwitchWorkspace(workspaceId: string): void {

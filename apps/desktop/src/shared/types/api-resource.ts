@@ -39,6 +39,7 @@ export type ModelCatalogModel = {
 
 export type ModelCatalogVendor = {
   name: ModelVendorName;
+  base_url: string;
   models: ModelCatalogModel[];
 };
 
@@ -89,7 +90,7 @@ export type ResourceConfig = {
   id: string;
   workspace_id: string;
   type: ResourceType;
-  name: string;
+  name?: string;
   enabled: boolean;
   model?: ModelSpec;
   rule?: RuleSpec;
@@ -101,7 +102,7 @@ export type ResourceConfig = {
 
 export type ResourceConfigCreateRequest = {
   type: ResourceType;
-  name: string;
+  name?: string;
   enabled?: boolean;
   model?: ModelSpec;
   rule?: RuleSpec;

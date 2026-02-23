@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRemoteConnectionsEndpointReturnsUnifiedShape(t *testing.T) {
@@ -74,6 +76,8 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 	mustDecodeJSON(t, projectRes.Body.Bytes(), &project)
 	projectID := project["id"].(string)
 
+	time.Sleep(1100 * time.Millisecond)
+
 	projectRes2 := performJSONRequest(t, router, http.MethodPost, "/v1/projects", map[string]any{
 		"workspace_id": workspaceID,
 		"name":         "beta",
@@ -93,6 +97,13 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 	items := page1Payload["items"].([]any)
 	if len(items) != 1 {
 		t.Fatalf("expected 1 project in page1, got %d", len(items))
+	}
+	page1First, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected project object in page1, got %#v", items[0])
+	}
+	if gotName := strings.TrimSpace(asString(page1First["name"])); gotName != "beta" {
+		t.Fatalf("expected newest project beta in page1, got %q", gotName)
 	}
 	nextCursor, ok := page1Payload["next_cursor"].(string)
 	if !ok || strings.TrimSpace(nextCursor) == "" {
@@ -294,20 +305,94 @@ func TestResourceConfigAndCatalogEndpoints(t *testing.T) {
 	}
 	catalogPayload := map[string]any{}
 	mustDecodeJSON(t, catalogRes.Body.Bytes(), &catalogPayload)
-	if _, ok := catalogPayload["vendors"].([]any); !ok {
+	vendors, ok := catalogPayload["vendors"].([]any)
+	if !ok {
 		t.Fatalf("expected vendors array, got %#v", catalogPayload["vendors"])
 	}
-	if _, err := os.Stat(filepath.Join(catalogRoot, "goyais", "catalog", "models.json")); err != nil {
-		t.Fatalf("expected models.json in catalog root: %v", err)
+	if len(vendors) == 0 {
+		t.Fatalf("expected non-empty vendors")
+	}
+	firstVendor, ok := vendors[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected vendor object, got %#v", vendors[0])
+	}
+	if strings.TrimSpace(asString(firstVendor["base_url"])) == "" {
+		t.Fatalf("expected vendor base_url, got %#v", firstVendor["base_url"])
+	}
+	if gotSource := strings.TrimSpace(asString(catalogPayload["source"])); gotSource != "embedded://models.default.json" {
+		t.Fatalf("expected embedded source when .goyais/model.json is missing, got %q", gotSource)
+	}
+	catalogFilePath := filepath.Join(catalogRoot, ".goyais", "model.json")
+	if err := os.MkdirAll(filepath.Dir(catalogFilePath), 0o755); err != nil {
+		t.Fatalf("create model catalog dir failed: %v", err)
+	}
+	if err := os.WriteFile(catalogFilePath, []byte(`{"version":"1","vendors":[`), 0o644); err != nil {
+		t.Fatalf("write invalid .goyais/model.json failed: %v", err)
+	}
+	invalidReloadRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/model-catalog", map[string]any{}, authHeaders)
+	if invalidReloadRes.Code != http.StatusOK {
+		t.Fatalf("expected model catalog reload 200 when file is invalid, got %d (%s)", invalidReloadRes.Code, invalidReloadRes.Body.String())
+	}
+	invalidReloadPayload := map[string]any{}
+	mustDecodeJSON(t, invalidReloadRes.Body.Bytes(), &invalidReloadPayload)
+	if gotSource := strings.TrimSpace(asString(invalidReloadPayload["source"])); gotSource != "embedded://models.default.json" {
+		t.Fatalf("expected embedded source when .goyais/model.json is invalid, got %q", gotSource)
+	}
+
+	customCatalog := fmt.Sprintf(`{
+  "version": "1",
+  "updated_at": "%s",
+  "vendors": [
+    {
+      "name": "OpenAI",
+      "base_url": %q,
+      "models": [{ "id": "gpt-4.1", "label": "GPT-4.1", "enabled": true }]
+    },
+    {
+      "name": "Google",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "models": [{ "id": "gemini-2.0-flash", "label": "Gemini 2.0 Flash", "enabled": true }]
+    },
+    {
+      "name": "Qwen",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "models": [{ "id": "qwen-max", "label": "Qwen Max", "enabled": true }]
+    },
+    {
+      "name": "Doubao",
+      "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+      "models": [{ "id": "doubao-pro-32k", "label": "Doubao Pro 32k", "enabled": true }]
+    },
+    {
+      "name": "Zhipu",
+      "base_url": "https://open.bigmodel.cn/api/paas/v4",
+      "models": [{ "id": "glm-4-plus", "label": "GLM-4-Plus", "enabled": true }]
+    },
+    {
+      "name": "MiniMax",
+      "base_url": "https://api.minimax.chat/v1",
+      "models": [{ "id": "MiniMax-Text-01", "label": "MiniMax Text 01", "enabled": true }]
+    },
+    {
+      "name": "Local",
+      "base_url": "http://127.0.0.1:11434/v1",
+      "models": [{ "id": "llama3.1:8b", "label": "Llama 3.1 8B", "enabled": true }]
+    }
+  ]
+	}`, nowUTC(), modelProbeServer.URL)
+	if err := os.WriteFile(catalogFilePath, []byte(customCatalog), 0o644); err != nil {
+		t.Fatalf("write custom .goyais/model.json failed: %v", err)
+	}
+	reloadRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/model-catalog", map[string]any{}, authHeaders)
+	if reloadRes.Code != http.StatusOK {
+		t.Fatalf("expected model catalog reload 200, got %d (%s)", reloadRes.Code, reloadRes.Body.String())
 	}
 
 	createModelRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/resource-configs", map[string]any{
 		"type": "model",
-		"name": "openai-probe",
 		"model": map[string]any{
 			"vendor":   "OpenAI",
 			"model_id": "gpt-4.1",
-			"base_url": modelProbeServer.URL,
 			"api_key":  "sk-test",
 		},
 	}, authHeaders)
@@ -317,6 +402,9 @@ func TestResourceConfigAndCatalogEndpoints(t *testing.T) {
 	modelPayload := map[string]any{}
 	mustDecodeJSON(t, createModelRes.Body.Bytes(), &modelPayload)
 	modelConfigID := modelPayload["id"].(string)
+	if _, exists := modelPayload["name"]; exists {
+		t.Fatalf("expected model config response without name field")
+	}
 
 	testModelRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/resource-configs/"+modelConfigID+"/test", map[string]any{}, authHeaders)
 	if testModelRes.Code != http.StatusOK {
@@ -373,6 +461,16 @@ func TestResourceConfigAndCatalogEndpoints(t *testing.T) {
 	if len(listPayload["items"].([]any)) == 0 {
 		t.Fatalf("expected at least one model config")
 	}
+	searchRes := performJSONRequest(t, router, http.MethodGet, "/v1/workspaces/"+workspaceID+"/resource-configs?type=model&q=OpenAI%20gpt-4.1", nil, authHeaders)
+	if searchRes.Code != http.StatusOK {
+		t.Fatalf("expected resource config search 200, got %d (%s)", searchRes.Code, searchRes.Body.String())
+	}
+	searchPayload := map[string]any{}
+	mustDecodeJSON(t, searchRes.Body.Bytes(), &searchPayload)
+	searchItems, ok := searchPayload["items"].([]any)
+	if !ok || len(searchItems) != 1 {
+		t.Fatalf("expected model search to match by vendor/model_id, got %#v", searchPayload["items"])
+	}
 
 	deleteRes := performJSONRequest(t, router, http.MethodDelete, "/v1/workspaces/"+workspaceID+"/resource-configs/"+modelConfigID, nil, authHeaders)
 	if deleteRes.Code != http.StatusNoContent {
@@ -424,4 +522,80 @@ func TestProjectConfigV2Endpoints(t *testing.T) {
 	if len(listPayload) == 0 {
 		t.Fatalf("expected workspace project config list entries")
 	}
+}
+
+func TestProjectConfigPersistsAcrossRouterRestart(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "hub.sqlite3")
+	router := newRouterWithDBPath(dbPath)
+	workspaceID := createRemoteWorkspace(t, router, "Remote Project Persist", "http://127.0.0.1:9003", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "persist_user", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
+		"workspace_id":   workspaceID,
+		"directory_path": "/tmp/project-persist-alpha",
+	}, authHeaders)
+	if projectRes.Code != http.StatusCreated {
+		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
+	}
+	projectPayload := map[string]any{}
+	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
+	projectID := projectPayload["id"].(string)
+
+	putRes := performJSONRequest(t, router, http.MethodPut, "/v1/projects/"+projectID+"/config", map[string]any{
+		"project_id":       projectID,
+		"model_ids":        []string{"model_a", "model_b"},
+		"default_model_id": "model_b",
+		"rule_ids":         []string{"rule_alpha"},
+		"skill_ids":        []string{"skill_alpha"},
+		"mcp_ids":          []string{"mcp_alpha"},
+		"updated_at":       "",
+	}, authHeaders)
+	if putRes.Code != http.StatusOK {
+		t.Fatalf("expected put project config 200, got %d (%s)", putRes.Code, putRes.Body.String())
+	}
+
+	restartRouter := newRouterWithDBPath(dbPath)
+	restartToken := loginRemoteWorkspace(t, restartRouter, workspaceID, "persist_user", "pw", RoleDeveloper, true)
+	restartHeaders := map[string]string{"Authorization": "Bearer " + restartToken}
+
+	getRes := performJSONRequest(t, restartRouter, http.MethodGet, "/v1/projects/"+projectID+"/config", nil, restartHeaders)
+	if getRes.Code != http.StatusOK {
+		t.Fatalf("expected get project config 200 after restart, got %d (%s)", getRes.Code, getRes.Body.String())
+	}
+	getPayload := map[string]any{}
+	mustDecodeJSON(t, getRes.Body.Bytes(), &getPayload)
+	if gotDefault := strings.TrimSpace(asString(getPayload["default_model_id"])); gotDefault != "model_b" {
+		t.Fatalf("expected persisted default_model_id model_b, got %q", gotDefault)
+	}
+
+	listRes := performJSONRequest(t, restartRouter, http.MethodGet, "/v1/workspaces/"+workspaceID+"/project-configs", nil, restartHeaders)
+	if listRes.Code != http.StatusOK {
+		t.Fatalf("expected list workspace project configs 200 after restart, got %d (%s)", listRes.Code, listRes.Body.String())
+	}
+	listPayload := []map[string]any{}
+	mustDecodeJSON(t, listRes.Body.Bytes(), &listPayload)
+	if len(listPayload) != 1 {
+		t.Fatalf("expected one workspace project config after restart, got %#v", listPayload)
+	}
+
+	createConversationRes := performJSONRequest(t, restartRouter, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+		"workspace_id": workspaceID,
+		"name":         "Persist Conv",
+	}, restartHeaders)
+	if createConversationRes.Code != http.StatusCreated {
+		t.Fatalf("expected create conversation 201 after restart, got %d (%s)", createConversationRes.Code, createConversationRes.Body.String())
+	}
+	conversationPayload := map[string]any{}
+	mustDecodeJSON(t, createConversationRes.Body.Bytes(), &conversationPayload)
+	if gotModel := strings.TrimSpace(asString(conversationPayload["model_id"])); gotModel != "model_b" {
+		t.Fatalf("expected conversation default model model_b after restart, got %q", gotModel)
+	}
+}
+
+func asString(value any) string {
+	if raw, ok := value.(string); ok {
+		return raw
+	}
+	return ""
 }

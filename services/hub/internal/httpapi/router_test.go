@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -24,6 +25,33 @@ func TestHealth(t *testing.T) {
 	}
 	if payload["version"] != "0.4.0" {
 		t.Fatalf("expected version 0.4.0, got %#v", payload["version"])
+	}
+}
+
+func TestCORSPreflightForModelCatalog(t *testing.T) {
+	router := NewRouter()
+	request := httptest.NewRequest(http.MethodOptions, "/v1/workspaces/ws_local/model-catalog", nil)
+	request.Header.Set("Origin", "http://localhost:5173")
+	request.Header.Set("Access-Control-Request-Method", "GET")
+	request.Header.Set("Access-Control-Request-Headers", "authorization,content-type,x-trace-id")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 for CORS preflight, got %d (%s)", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Fatalf("expected Access-Control-Allow-Origin=*, got %q", response.Header().Get("Access-Control-Allow-Origin"))
+	}
+	if !strings.Contains(response.Header().Get("Access-Control-Allow-Methods"), "OPTIONS") {
+		t.Fatalf("expected Access-Control-Allow-Methods to contain OPTIONS, got %q", response.Header().Get("Access-Control-Allow-Methods"))
+	}
+	if !strings.Contains(strings.ToLower(response.Header().Get("Access-Control-Allow-Headers")), "x-trace-id") {
+		t.Fatalf("expected Access-Control-Allow-Headers to contain X-Trace-Id, got %q", response.Header().Get("Access-Control-Allow-Headers"))
+	}
+	if strings.TrimSpace(response.Header().Get(TraceHeader)) == "" {
+		t.Fatalf("expected trace header on preflight response")
 	}
 }
 

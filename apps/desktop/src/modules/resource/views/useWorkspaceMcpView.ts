@@ -4,6 +4,8 @@ import {
   connectWorkspaceMcpConfig,
   createWorkspaceResourceConfig,
   deleteWorkspaceResourceConfig,
+  loadNextResourceConfigsPage,
+  loadPreviousResourceConfigsPage,
   patchWorkspaceResourceConfig,
   refreshResourceConfigsByType,
   refreshWorkspaceMcpExport,
@@ -29,7 +31,10 @@ export function useWorkspaceMcpView() {
     envText: "",
     enabled: true,
     message: "",
-    jsonModalOpen: false
+    jsonModalOpen: false,
+    removeModalOpen: false,
+    removeConfigId: "",
+    removeConfigName: ""
   });
 
   watch(
@@ -43,6 +48,14 @@ export function useWorkspaceMcpView() {
   function onSearch(value: string): void {
     setResourceSearch("mcp", value);
     void refreshResourceConfigsByType("mcp");
+  }
+
+  async function loadNextPage(): Promise<void> {
+    await loadNextResourceConfigsPage("mcp");
+  }
+
+  async function loadPreviousPage(): Promise<void> {
+    await loadPreviousResourceConfigsPage("mcp");
   }
 
   function openCreate(): void {
@@ -158,15 +171,36 @@ export function useWorkspaceMcpView() {
   }
 
   async function removeConfig(item: ResourceConfig): Promise<void> {
-    if (!window.confirm(`确认删除 MCP ${item.name} ?`)) {
+    if (!canWrite.value) {
       return;
     }
-    await deleteWorkspaceResourceConfig("mcp", item.id);
+    form.removeConfigId = item.id;
+    form.removeConfigName = item.name ?? "";
+    form.removeModalOpen = true;
+  }
+
+  function closeRemoveModal(): void {
+    form.removeModalOpen = false;
+    form.removeConfigId = "";
+    form.removeConfigName = "";
+  }
+
+  async function confirmRemoveConfig(): Promise<void> {
+    const configId = form.removeConfigId;
+    if (configId === "") {
+      return;
+    }
+    await deleteWorkspaceResourceConfig("mcp", configId);
+    closeRemoveModal();
   }
 
   async function openExportModal(): Promise<void> {
     await refreshWorkspaceMcpExport();
     form.jsonModalOpen = true;
+  }
+
+  function applyExportPayload(payload: Record<string, unknown>): void {
+    resourceStore.mcpExport = payload;
   }
 
   function closeExportModal(): void {
@@ -182,6 +216,8 @@ export function useWorkspaceMcpView() {
     canWrite,
     closeExportModal,
     closeModal,
+    closeRemoveModal,
+    confirmRemoveConfig,
     connectStatusClass,
     connectSuggestion,
     connect,
@@ -189,9 +225,12 @@ export function useWorkspaceMcpView() {
     formatTime,
     getConnectResult,
     listState,
+    loadNextPage,
+    loadPreviousPage,
     onSearch,
     openCreate,
     openEdit,
+    applyExportPayload,
     openExportModal,
     refreshResourceConfigsByType,
     removeConfig,

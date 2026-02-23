@@ -29,8 +29,9 @@ type ModelCatalogModel struct {
 }
 
 type ModelCatalogVendor struct {
-	Name   ModelVendorName     `json:"name"`
-	Models []ModelCatalogModel `json:"models"`
+	Name    ModelVendorName     `json:"name"`
+	BaseURL string              `json:"base_url"`
+	Models  []ModelCatalogModel `json:"models"`
 }
 
 type ModelCatalogResponse struct {
@@ -84,7 +85,7 @@ type ResourceConfig struct {
 	ID          string       `json:"id"`
 	WorkspaceID string       `json:"workspace_id"`
 	Type        ResourceType `json:"type"`
-	Name        string       `json:"name"`
+	Name        string       `json:"name,omitempty"`
 	Enabled     bool         `json:"enabled"`
 	Model       *ModelSpec   `json:"model,omitempty"`
 	Rule        *RuleSpec    `json:"rule,omitempty"`
@@ -96,7 +97,7 @@ type ResourceConfig struct {
 
 type ResourceConfigCreateRequest struct {
 	Type    ResourceType `json:"type"`
-	Name    string       `json:"name"`
+	Name    string       `json:"name,omitempty"`
 	Enabled *bool        `json:"enabled,omitempty"`
 	Model   *ModelSpec   `json:"model,omitempty"`
 	Rule    *RuleSpec    `json:"rule,omitempty"`

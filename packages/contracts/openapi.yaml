@@ -2029,11 +2029,13 @@ components:
 
     ModelCatalogVendor:
       type: object
-      required: [name, models]
+      required: [name, base_url, models]
       properties:
         name:
           type: string
           enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+        base_url:
+          type: string
         models:
           type: array
           items:
@@ -2141,7 +2143,7 @@ components:
 
     ResourceConfig:
       type: object
-      required: [id, workspace_id, type, name, enabled, created_at, updated_at]
+      required: [id, workspace_id, type, enabled, created_at, updated_at]
       properties:
         id:
           type: string
@@ -2171,7 +2173,7 @@ components:
 
     ResourceConfigCreateRequest:
       type: object
-      required: [type, name]
+      required: [type]
       properties:
         type:
           type: string

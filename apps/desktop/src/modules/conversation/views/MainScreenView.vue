@@ -12,6 +12,9 @@
         :conversations-by-project-id="projectStore.conversationsByProjectId"
         :conversation-page-by-project-id="conversationPageByProjectId"
         :active-conversation-id="projectStore.activeConversationId"
+        :project-import-in-progress="projectImportInProgress"
+        :project-import-feedback="projectImportFeedback"
+        :project-import-error="projectImportError"
         @switch-workspace="switchWorkspace"
         @create-workspace="createWorkspace"
         @import-project="importProjectDirectory"
@@ -160,6 +163,9 @@ const {
   paginateProjects,
   placeholder,
   projectStore,
+  projectImportError,
+  projectImportFeedback,
+  projectImportInProgress,
   projectsPage,
   queuedCount,
   rollbackMessage,

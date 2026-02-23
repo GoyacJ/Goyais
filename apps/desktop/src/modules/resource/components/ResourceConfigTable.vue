@@ -2,15 +2,14 @@
   <section class="card">
     <div class="card-head">
       <h3>{{ title }}</h3>
-      <button
+      <BaseButton
         v-if="showAdd"
-        type="button"
-        class="action-btn"
+        variant="secondary"
         :disabled="addDisabled"
         @click="emit('add')"
       >
         {{ addLabel }}
-      </button>
+      </BaseButton>
     </div>
 
     <div class="toolbar">
@@ -60,6 +59,7 @@
 
 <script setup lang="ts">
 import BaseInput from "@/shared/ui/BaseInput.vue";
+import BaseButton from "@/shared/ui/BaseButton.vue";
 import CursorPager from "@/shared/ui/CursorPager.vue";
 
 withDefaults(
@@ -107,9 +107,9 @@ const emit = defineEmits<{
   border: 1px solid var(--semantic-border);
   border-radius: var(--global-radius-12);
   background: var(--semantic-surface);
-  padding: var(--global-space-12);
+  padding: var(--component-card-padding);
   display: grid;
-  gap: var(--global-space-10);
+  gap: var(--global-space-12);
 }
 
 .card-head {
@@ -133,35 +133,35 @@ const emit = defineEmits<{
   overflow-x: auto;
   border: 1px solid var(--semantic-border);
   border-radius: var(--global-radius-8);
+  padding: var(--global-space-2);
 }
 
 .table {
   width: 100%;
-  border-collapse: collapse;
-  min-width: 720px;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 760px;
 }
 
 .table th,
 .table td {
   text-align: left;
-  padding: var(--global-space-8) var(--global-space-10);
+  padding: var(--global-space-10) var(--global-space-12);
   border-bottom: 1px solid var(--semantic-border);
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .table th {
   color: var(--semantic-text-muted);
   font-size: var(--global-font-size-12);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .table td {
   color: var(--semantic-text);
   font-size: var(--global-font-size-13);
-}
-
-.table tbody tr:last-child td {
-  border-bottom: 0;
+  line-height: 1.45;
 }
 
 .empty {
@@ -169,16 +169,4 @@ const emit = defineEmits<{
   color: var(--semantic-text-subtle);
 }
 
-.action-btn {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-surface-2);
-  color: var(--semantic-text);
-  padding: var(--global-space-6) var(--global-space-10);
-}
-
-.action-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 </style>

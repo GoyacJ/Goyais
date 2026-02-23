@@ -1,0 +1,69 @@
+{
+  "version": "1",
+  "updated_at": "2026-02-23T00:00:00Z",
+  "vendors": [
+    {
+      "name": "OpenAI",
+      "base_url": "https://api.openai.com/v1",
+      "models": [
+        { "id": "gpt-4.1", "label": "GPT-4.1", "enabled": true },
+        { "id": "gpt-4.1-mini", "label": "GPT-4.1 Mini", "enabled": true },
+        { "id": "gpt-4o-mini", "label": "GPT-4o Mini", "enabled": true }
+      ]
+    },
+    {
+      "name": "Google",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "models": [
+        { "id": "gemini-2.0-flash", "label": "Gemini 2.0 Flash", "enabled": true },
+        { "id": "gemini-2.0-flash-lite", "label": "Gemini 2.0 Flash Lite", "enabled": true },
+        { "id": "gemini-1.5-pro", "label": "Gemini 1.5 Pro", "enabled": true }
+      ]
+    },
+    {
+      "name": "Qwen",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "models": [
+        { "id": "qwen-max", "label": "Qwen Max", "enabled": true },
+        { "id": "qwen-plus", "label": "Qwen Plus", "enabled": true },
+        { "id": "qwen-turbo", "label": "Qwen Turbo", "enabled": true }
+      ]
+    },
+    {
+      "name": "Doubao",
+      "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+      "models": [
+        { "id": "doubao-pro-32k", "label": "Doubao Pro 32k", "enabled": true },
+        { "id": "doubao-lite-32k", "label": "Doubao Lite 32k", "enabled": true },
+        { "id": "doubao-pro-128k", "label": "Doubao Pro 128k", "enabled": true }
+      ]
+    },
+    {
+      "name": "Zhipu",
+      "base_url": "https://open.bigmodel.cn/api/paas/v4",
+      "models": [
+        { "id": "glm-4-plus", "label": "GLM-4-Plus", "enabled": true },
+        { "id": "glm-4-air", "label": "GLM-4-Air", "enabled": true },
+        { "id": "glm-4-flash", "label": "GLM-4-Flash", "enabled": true }
+      ]
+    },
+    {
+      "name": "MiniMax",
+      "base_url": "https://api.minimax.chat/v1",
+      "models": [
+        { "id": "MiniMax-Text-01", "label": "MiniMax Text 01", "enabled": true },
+        { "id": "abab6.5-chat", "label": "abab6.5 Chat", "enabled": true },
+        { "id": "abab6.5s-chat", "label": "abab6.5s Chat", "enabled": true }
+      ]
+    },
+    {
+      "name": "Local",
+      "base_url": "http://127.0.0.1:11434/v1",
+      "models": [
+        { "id": "llama3.1:8b", "label": "Llama 3.1 8B", "enabled": true },
+        { "id": "qwen2.5:7b", "label": "Qwen2.5 7B", "enabled": true },
+        { "id": "deepseek-r1:7b", "label": "DeepSeek R1 7B", "enabled": true }
+      ]
+    }
+  ]
+}

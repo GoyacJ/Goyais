@@ -6,11 +6,19 @@ import { authStore } from "@/shared/stores/authStore";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
 import type { ProjectConfig } from "@/shared/types/api";
 
+const columns = [
+  { key: "name", label: "项目" },
+  { key: "repoPath", label: "目录" },
+  { key: "modelCount", label: "模型绑定" },
+  { key: "defaultModelId", label: "默认模型" },
+  { key: "resourceSummary", label: "规则/技能/MCP" },
+  { key: "actions", label: "动作" }
+];
+
 export function useWorkspaceProjectConfigView() {
   const canWrite = computed(() => workspaceStore.mode === "local" || authStore.capabilities.resource_write);
 
   const form = reactive({
-    importPath: "",
     open: false,
     projectId: "",
     projectName: "",
@@ -35,12 +43,27 @@ export function useWorkspaceProjectConfigView() {
         defaultModelId: config?.default_model_id ?? "-",
         ruleCount: config?.rule_ids.length ?? 0,
         skillCount: config?.skill_ids.length ?? 0,
-        mcpCount: config?.mcp_ids.length ?? 0
+        mcpCount: config?.mcp_ids.length ?? 0,
+        resourceSummary: `${config?.rule_ids.length ?? 0}/${config?.skill_ids.length ?? 0}/${config?.mcp_ids.length ?? 0}`
       };
     });
   });
+  const tableEmptyText = computed(() => {
+    if (projectStore.error.trim() !== "") {
+      return projectStore.error;
+    }
+    if (resourceStore.error.trim() !== "") {
+      return resourceStore.error;
+    }
+    return "当前工作区暂无项目";
+  });
 
-  const modelOptions = computed(() => resourceStore.models.items.map((item) => ({ id: item.id, name: item.name })));
+  const modelOptions = computed(() =>
+    resourceStore.models.items.map((item) => ({
+      id: item.id,
+      name: `${item.model?.vendor ?? "-"} / ${item.model?.model_id ?? item.id}`
+    }))
+  );
   const ruleOptions = computed(() => resourceStore.rules.items.map((item) => ({ id: item.id, name: item.name })));
   const skillOptions = computed(() => resourceStore.skills.items.map((item) => ({ id: item.id, name: item.name })));
   const mcpOptions = computed(() => resourceStore.mcps.items.map((item) => ({ id: item.id, name: item.name })));
@@ -72,19 +95,19 @@ export function useWorkspaceProjectConfigView() {
     ]);
   }
 
-  async function importDirectoryProject(): Promise<void> {
+  async function importDirectoryProject(repoPath: string): Promise<void> {
     if (!canWrite.value) {
       return;
     }
 
-    const path = form.importPath.trim();
+    const path = repoPath.trim();
     if (path === "") {
       form.message = "目录路径不能为空";
       return;
     }
 
+    form.message = "";
     await importProjectByDirectory(path);
-    form.importPath = "";
     await refreshWorkspaceProjectBindings();
   }
 
@@ -199,6 +222,7 @@ export function useWorkspaceProjectConfigView() {
   return {
     canWrite,
     closeProjectBinding,
+    columns,
     defaultModelOptions,
     form,
     importDirectoryProject,
@@ -207,6 +231,7 @@ export function useWorkspaceProjectConfigView() {
     modelOptions,
     openProjectBinding,
     projectRows,
+    tableEmptyText,
     removeProjectById,
     resourceStore,
     ruleOptions,

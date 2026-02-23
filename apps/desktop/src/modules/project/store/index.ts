@@ -15,6 +15,7 @@ import {
   updateProjectConfig
 } from "@/modules/project/services";
 import { toDisplayError } from "@/shared/services/errorMapper";
+import { getWorkspaceToken } from "@/shared/stores/authStore";
 import { getCurrentWorkspace } from "@/shared/stores/workspaceStore";
 import type { Conversation, Project, ProjectConfig } from "@/shared/types/api";
 
@@ -95,6 +96,7 @@ async function loadProjectsPage(input: { cursor: string | null; backStack: Array
   if (!workspace) {
     return;
   }
+  const token = resolveWorkspaceToken(workspace.id);
 
   projectStore.loading = true;
   projectStore.projectsPage.loading = true;
@@ -104,7 +106,7 @@ async function loadProjectsPage(input: { cursor: string | null; backStack: Array
     const response = await listProjects(workspace.id, {
       cursor: input.cursor ?? undefined,
       limit: projectStore.projectsPage.limit
-    });
+    }, { token });
     projectStore.projects = response.items;
     const validProjectIDs = new Set(projectStore.projects.map((project) => project.id));
     for (const projectId of Object.keys(projectStore.conversationsByProjectId)) {
@@ -177,13 +179,14 @@ async function loadConversationsPage(projectId: string, input: { cursor: string 
     return;
   }
 
+  const token = resolveCurrentWorkspaceToken();
   const page = ensureConversationPageState(projectId);
   page.loading = true;
   try {
     const response = await listConversations(projectId, {
       cursor: input.cursor ?? undefined,
       limit: page.limit
-    });
+    }, { token });
     projectStore.conversationsByProjectId[projectId] = response.items;
     page.currentCursor = input.cursor;
     page.backStack = input.backStack;
@@ -206,9 +209,11 @@ export async function addProject(input: { name: string; repo_path: string; is_gi
   if (!workspace) {
     return;
   }
+  const token = resolveWorkspaceToken(workspace.id);
+  projectStore.error = "";
 
   try {
-    const created = await createProject(workspace.id, input);
+    const created = await createProject(workspace.id, input, { token });
     projectStore.activeProjectId = created.id;
     projectStore.activeConversationId = "";
     await refreshProjects();
@@ -217,25 +222,31 @@ export async function addProject(input: { name: string; repo_path: string; is_gi
   }
 }
 
-export async function importProjectByDirectory(repoPath: string): Promise<void> {
+export async function importProjectByDirectory(repoPath: string): Promise<Project | null> {
   const workspace = getCurrentWorkspace();
   if (!workspace || repoPath.trim() === "") {
-    return;
+    return null;
   }
+  const token = resolveWorkspaceToken(workspace.id);
+  projectStore.error = "";
 
   try {
-    const created = await importProjectDirectory(workspace.id, repoPath);
+    const created = await importProjectDirectory(workspace.id, repoPath, { token });
     projectStore.activeProjectId = created.id;
     projectStore.activeConversationId = "";
     await refreshProjects();
+    projectStore.error = "";
+    return created;
   } catch (error) {
     projectStore.error = toDisplayError(error);
+    return null;
   }
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
+  const token = resolveCurrentWorkspaceToken();
   try {
-    await removeProject(projectId);
+    await removeProject(projectId, { token });
     projectStore.projects = projectStore.projects.filter((project) => project.id !== projectId);
     delete projectStore.conversationsByProjectId[projectId];
     delete projectStore.conversationPagesByProjectId[projectId];
@@ -252,8 +263,9 @@ export async function deleteProject(projectId: string): Promise<void> {
 }
 
 export async function addConversation(project: Project, name: string): Promise<Conversation | null> {
+  const token = resolveWorkspaceToken(project.workspace_id);
   try {
-    const created = await createConversation(project, name);
+    const created = await createConversation(project, name, { token });
     await refreshConversationsForActiveProject();
     projectStore.activeConversationId = created.id;
     return created;
@@ -264,8 +276,9 @@ export async function addConversation(project: Project, name: string): Promise<C
 }
 
 export async function renameConversationById(projectId: string, conversationId: string, name: string): Promise<void> {
+  const token = resolveCurrentWorkspaceToken();
   try {
-    const updated = await renameConversation(conversationId, name);
+    const updated = await renameConversation(conversationId, name, { token });
     const list = projectStore.conversationsByProjectId[projectId] ?? [];
     projectStore.conversationsByProjectId[projectId] = list.map((conversation) =>
       conversation.id === conversationId ? updated : conversation
@@ -276,8 +289,9 @@ export async function renameConversationById(projectId: string, conversationId: 
 }
 
 export async function deleteConversation(projectId: string, conversationId: string): Promise<void> {
+  const token = resolveCurrentWorkspaceToken();
   try {
-    await removeConversation(conversationId);
+    await removeConversation(conversationId, { token });
     await refreshConversationsForActiveProject();
     const list = projectStore.conversationsByProjectId[projectId] ?? [];
     if (projectStore.activeConversationId === conversationId) {
@@ -289,8 +303,9 @@ export async function deleteConversation(projectId: string, conversationId: stri
 }
 
 export async function exportConversationById(conversationId: string): Promise<string | null> {
+  const token = resolveCurrentWorkspaceToken();
   try {
-    return await exportConversationMarkdown(conversationId);
+    return await exportConversationMarkdown(conversationId, { token });
   } catch (error) {
     projectStore.error = toDisplayError(error);
     return null;
@@ -301,8 +316,9 @@ export async function updateProjectBinding(
   projectId: string,
   config: Omit<ProjectConfig, "project_id" | "updated_at">
 ): Promise<void> {
+  const token = resolveCurrentWorkspaceToken();
   try {
-    const updated = await updateProjectConfig(projectId, config);
+    const updated = await updateProjectConfig(projectId, config, { token });
     projectStore.projectConfigsByProjectId[projectId] = updated;
   } catch (error) {
     projectStore.error = toDisplayError(error);
@@ -314,8 +330,9 @@ export async function refreshWorkspaceProjectConfigs(): Promise<void> {
   if (!workspace) {
     return;
   }
+  const token = resolveWorkspaceToken(workspace.id);
   try {
-    const items = await listWorkspaceProjectConfigs(workspace.id);
+    const items = await listWorkspaceProjectConfigs(workspace.id, { token });
     const next: Record<string, ProjectConfig> = {};
     for (const item of items) {
       next[item.project_id] = item.config;
@@ -330,8 +347,9 @@ export async function refreshProjectConfigById(projectId: string): Promise<void>
   if (projectId.trim() === "") {
     return;
   }
+  const token = resolveCurrentWorkspaceToken();
   try {
-    const config = await getProjectConfig(projectId);
+    const config = await getProjectConfig(projectId, { token });
     projectStore.projectConfigsByProjectId[projectId] = config;
   } catch (error) {
     projectStore.error = toDisplayError(error);
@@ -362,4 +380,20 @@ function ensureConversationPageState(projectId: string): CursorPageState {
     projectStore.conversationPagesByProjectId[projectId] = createInitialPageState();
   }
   return projectStore.conversationPagesByProjectId[projectId];
+}
+
+function resolveCurrentWorkspaceToken(): string | undefined {
+  const workspace = getCurrentWorkspace();
+  if (!workspace) {
+    return undefined;
+  }
+  return resolveWorkspaceToken(workspace.id);
+}
+
+function resolveWorkspaceToken(workspaceId: string): string | undefined {
+  const token = getWorkspaceToken(workspaceId).trim();
+  if (token === "") {
+    return undefined;
+  }
+  return token;
 }

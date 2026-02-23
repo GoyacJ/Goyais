@@ -60,7 +60,7 @@ Goyais 是一个工作区隔离的 AI 智能平台，覆盖两类能力：
 16. 远程 Hub 支持默认管理员账户，管理员具备全权限并强制审计。
 17. 本地资源（模型/规则/技能/MCP）可共享到远程工作区，但必须经远程工作区管理员审核。
 18. 模型配置采用“厂商 -> 模型”两级结构；P0 必须支持厂商：OpenAI、Google、Qwen、豆包、智谱、MiniMax、本地。
-19. 模型目录采用纯手工 JSON 文件维护（`<catalog_root>/goyais/catalog/models.json`），支持手动刷新与定时重载，并记录失败审计。
+19. 模型目录优先读取手工 JSON 文件（`<catalog_root>/.goyais/model.json`）；文件缺失时回退 `models.default.json` 模板，并支持手动刷新与定时重载及失败审计。
 20. v0.4.0 主术语统一使用 `Conversation`，`Session` 不作为主名。
 
 ---
@@ -161,16 +161,19 @@ Workspace
 
 ### 6.3 模型配置结构与目录（手工 JSON）
 
-1. 模型配置采用两级结构：`Vendor -> Models`。
+1. 模型配置采用两级结构：`Vendor(base_url) -> Models`。
 2. P0 厂商清单：OpenAI、Google、Qwen、豆包、智谱、MiniMax、本地。
-3. 支持模型启用、停用、编辑、删除与默认模型指定。
-4. 模型目录来源为手工维护的 `models.json`：
+3. `model.json`（或回退模板）中每个 Vendor 必须携带 `base_url`，并由 Hub 校验 URL 合法性。
+4. 模型资源配置以 `vendor + model_id` 为主标识，不再要求单独 `name` 字段。
+5. 非本地厂商 `base_url` 固定来自目录文件；本地厂商允许在配置时覆盖。
+6. 支持模型启用、停用、编辑、删除与默认模型指定。
+7. 模型目录优先来源为手工维护的 `.goyais/model.json`（缺失时回退 `models.default.json`）：
    - 本地工作区：目录根由通用设置 `defaultProjectDirectory` 同步到 Hub 的 `catalog-root`。
    - 远程工作区：由 Hub 独立维护目录根与文件。
-5. 提供目录刷新能力：
+8. 提供目录刷新能力：
    - 手动触发目录重载（P0）。
    - 定时文件重载（P0）。
-6. 重载失败需提供可视化错误与审计记录。
+9. 重载失败需提供可视化错误与审计记录。
 
 ### 6.4 资源生命周期
 
@@ -433,7 +436,7 @@ Workspace
 8. `PUT /v1/projects/{project_id}/config`
    - 更新项目配置（模型/规则/技能/MCP）。
 9. `GET /v1/workspaces/{workspace_id}/model-catalog`
-   - 查询 `models.json` 解析后的厂商/模型目录（`revision/source/updated_at`）。
+   - 查询 `.goyais/model.json`（缺失时回退 `models.default.json`）解析后的厂商/模型目录（`revision/source/updated_at`）。
 10. `POST /v1/workspaces/{workspace_id}/model-catalog`
    - 手动触发目录重载（不做厂商自动同步）。
 11. `GET|PUT /v1/workspaces/{workspace_id}/catalog-root`
@@ -532,6 +535,7 @@ ModelVendor {
   vendor_id: string
   workspace_id: string
   name: "OpenAI" | "Google" | "Qwen" | "Doubao" | "Zhipu" | "MiniMax" | "Local"
+  base_url: string
   status: "enabled" | "disabled"
 }
 
@@ -834,3 +838,11 @@ event types:
 | 目录来源与本地/远程存储路径规则 | TECH_ARCH.md | 3, 6, 9, 11, 20 | done |
 | Phase 4 验收口径调整（移除厂商自动同步） | IMPLEMENTATION_PLAN.md | Phase 4 工作内容与验收标准 | done |
 | 安全与工程门禁（密钥加密、目录重载、JSON 校验） | DEVELOPMENT_STANDARDS.md | 10, 11, 13, 15 | done |
+
+### 25.6 2026-02-24 模型配置收口矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 模型目录 Vendor 增加 base_url 并模板化 | PRD.md, TECH_ARCH.md | PRD 6.3, TECH_ARCH 6.5/20.4 | done |
+| model 资源配置去 name（接口/存储） | TECH_ARCH.md | TECH_ARCH 11.2/20.6 | done |
+| 模型配置页收口（仅列表、无手输） | PRD.md | PRD 6.3/19.1 | done |

@@ -35,8 +35,6 @@ type AppState struct {
 	adminUsers map[string]AdminUser
 	adminRoles map[Role]AdminRole
 	adminAudit []AdminAuditEvent
-
-	modelCatalog map[string][]ModelCatalogItem
 }
 
 func NewAppState(store *authzStore, worker *workerClient) *AppState {
@@ -61,7 +59,6 @@ func NewAppState(store *authzStore, worker *workerClient) *AppState {
 		adminUsers:                 map[string]AdminUser{},
 		adminRoles:                 map[Role]AdminRole{},
 		adminAudit:                 []AdminAuditEvent{},
-		modelCatalog:               map[string][]ModelCatalogItem{},
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)

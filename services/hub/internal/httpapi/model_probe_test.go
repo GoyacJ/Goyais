@@ -48,15 +48,22 @@ func TestRunModelConfigTest_SupportedVendors(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := runModelConfigTest(ResourceConfig{
-				ID: "rc_test",
-				Model: &ModelSpec{
-					Vendor:  tc.vendor,
-					ModelID: tc.model,
-					BaseURL: tc.base,
-					APIKey:  tc.key,
+			result := runModelConfigTest(
+				ResourceConfig{
+					ID: "rc_test",
+					Model: &ModelSpec{
+						Vendor:  tc.vendor,
+						ModelID: tc.model,
+						APIKey:  tc.key,
+					},
 				},
-			})
+				func(vendor ModelVendorName) string {
+					if vendor == tc.vendor {
+						return tc.base
+					}
+					return ""
+				},
+			)
 			if result.Status != "success" {
 				t.Fatalf("expected success for %s, got %s (%s)", tc.vendor, result.Status, result.Message)
 			}
@@ -65,19 +72,58 @@ func TestRunModelConfigTest_SupportedVendors(t *testing.T) {
 }
 
 func TestRunModelConfigTest_MissingAPIKey(t *testing.T) {
-	result := runModelConfigTest(ResourceConfig{
-		ID: "rc_missing_key",
-		Model: &ModelSpec{
-			Vendor:  ModelVendorOpenAI,
-			ModelID: "gpt-4.1",
-			BaseURL: "https://api.openai.com/v1",
+	result := runModelConfigTest(
+		ResourceConfig{
+			ID: "rc_missing_key",
+			Model: &ModelSpec{
+				Vendor:  ModelVendorOpenAI,
+				ModelID: "gpt-4.1",
+			},
 		},
-	})
+		func(vendor ModelVendorName) string {
+			if vendor == ModelVendorOpenAI {
+				return "https://api.openai.com/v1"
+			}
+			return ""
+		},
+	)
 	if result.Status != "failed" {
 		t.Fatalf("expected failed status, got %s", result.Status)
 	}
 	if result.ErrorCode == nil || *result.ErrorCode != "missing_api_key" {
 		raw, _ := json.Marshal(result)
 		t.Fatalf("expected missing_api_key, got %s", string(raw))
+	}
+}
+
+func TestRunModelConfigTest_RemoteVendorIgnoresUserBaseURL(t *testing.T) {
+	openAIServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat/completions" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"cmpl_1","choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer openAIServer.Close()
+
+	result := runModelConfigTest(
+		ResourceConfig{
+			ID: "rc_remote_base_url",
+			Model: &ModelSpec{
+				Vendor:  ModelVendorOpenAI,
+				ModelID: "gpt-4.1",
+				BaseURL: "http://127.0.0.1:1",
+				APIKey:  "sk-test",
+			},
+		},
+		func(vendor ModelVendorName) string {
+			if vendor == ModelVendorOpenAI {
+				return openAIServer.URL
+			}
+			return ""
+		},
+	)
+	if result.Status != "success" {
+		t.Fatalf("expected success, got %s (%s)", result.Status, result.Message)
 	}
 }

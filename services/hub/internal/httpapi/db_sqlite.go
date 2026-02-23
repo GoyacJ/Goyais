@@ -181,15 +181,37 @@ func (s *authzStore) migrate() error {
 			catalog_root TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
-		`CREATE TABLE IF NOT EXISTS resource_configs (
+		`CREATE TABLE IF NOT EXISTS projects (
 			id TEXT PRIMARY KEY,
 			workspace_id TEXT NOT NULL,
-			type TEXT NOT NULL,
 			name TEXT NOT NULL,
-			enabled INTEGER NOT NULL DEFAULT 1,
-			payload_json TEXT NOT NULL,
+			repo_path TEXT NOT NULL,
+			is_git INTEGER NOT NULL DEFAULT 1,
+			default_model_id TEXT,
+			default_mode TEXT NOT NULL,
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_projects_workspace_created ON projects(workspace_id, created_at)`,
+		`CREATE TABLE IF NOT EXISTS project_configs (
+			project_id TEXT PRIMARY KEY,
+			workspace_id TEXT NOT NULL,
+			model_ids_json TEXT NOT NULL,
+			default_model_id TEXT,
+			rule_ids_json TEXT NOT NULL,
+			skill_ids_json TEXT NOT NULL,
+			mcp_ids_json TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_project_configs_workspace_updated ON project_configs(workspace_id, updated_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS resource_configs (
+				id TEXT PRIMARY KEY,
+				workspace_id TEXT NOT NULL,
+				type TEXT NOT NULL,
+				enabled INTEGER NOT NULL DEFAULT 1,
+				payload_json TEXT NOT NULL,
+				created_at TEXT NOT NULL,
+				updated_at TEXT NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_resource_configs_workspace_type ON resource_configs(workspace_id, type)`,
 		`CREATE TABLE IF NOT EXISTS resource_test_logs (
@@ -211,7 +233,94 @@ func (s *authzStore) migrate() error {
 			return fmt.Errorf("apply migration: %w", err)
 		}
 	}
+	if err := s.migrateResourceConfigsDropNameColumn(); err != nil {
+		return fmt.Errorf("migrate resource_configs schema: %w", err)
+	}
 	return nil
+}
+
+func (s *authzStore) migrateResourceConfigsDropNameColumn() error {
+	hasNameColumn, err := tableHasColumn(s.db, "resource_configs", "name")
+	if err != nil {
+		return err
+	}
+	if !hasNameColumn {
+		return nil
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err = tx.Exec(`DROP INDEX IF EXISTS idx_resource_configs_workspace_type`); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`ALTER TABLE resource_configs RENAME TO resource_configs_legacy`); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(
+		`CREATE TABLE resource_configs (
+			id TEXT PRIMARY KEY,
+			workspace_id TEXT NOT NULL,
+			type TEXT NOT NULL,
+			enabled INTEGER NOT NULL DEFAULT 1,
+			payload_json TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+	); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(
+		`INSERT INTO resource_configs(id, workspace_id, type, enabled, payload_json, created_at, updated_at)
+		 SELECT id, workspace_id, type, enabled, payload_json, created_at, updated_at
+		 FROM resource_configs_legacy`,
+	); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`DROP TABLE resource_configs_legacy`); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_resource_configs_workspace_type ON resource_configs(workspace_id, type)`); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func tableHasColumn(db *sql.DB, table string, column string) (bool, error) {
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid        int
+			name       string
+			columnType string
+			notNull    int
+			defaultVal sql.NullString
+			pk         int
+		)
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultVal, &pk); err != nil {
+			return false, err
+		}
+		if strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(column)) {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 func (s *authzStore) ensureWorkspaceSeeds(workspaceID string) error {
