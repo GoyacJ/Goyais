@@ -64,6 +64,7 @@ function onSelect(key: string): void {
   padding: var(--global-space-8);
   display: grid;
   gap: var(--global-space-8);
+  position: relative;
 }
 
 .user-trigger {
@@ -109,6 +110,11 @@ function onSelect(key: string): void {
 }
 
 .user-menu {
+  position: absolute;
+  left: var(--global-space-8);
+  right: var(--global-space-8);
+  bottom: calc(100% + var(--global-space-8));
+  z-index: 12;
   background: var(--semantic-bg);
   border-radius: var(--global-radius-8);
   padding: var(--global-space-8);

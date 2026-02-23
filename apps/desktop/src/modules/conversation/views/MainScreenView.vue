@@ -22,7 +22,12 @@
     />
 
     <section class="content">
-      <header class="top-header">
+      <header
+        class="top-header"
+        data-tauri-drag-region
+        @mousedown="onTopHeaderMouseDown"
+        @dblclick="onTopHeaderDoubleClick"
+      >
         <div class="left">
           <strong>{{ activeProject?.name ?? 'Project' }}</strong>
           <span>/</span>
@@ -126,6 +131,7 @@ import {
   workspaceStore
 } from "@/modules/workspace/store";
 import { useI18n } from "@/shared/i18n";
+import { handleDragMouseDown, toggleMaximizeCurrentWindow } from "@/shared/services/windowControls";
 import { authStore, setWorkspaceToken } from "@/shared/stores/authStore";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import HubStatusBar from "@/shared/ui/HubStatusBar.vue";
@@ -263,11 +269,8 @@ async function addConversationByPrompt(projectId: string): Promise<void> {
   if (!project) {
     return;
   }
-  const name = window.prompt("新增对话名称", "New Conversation");
-  if (!name) {
-    return;
-  }
-  await addConversation(project, name);
+  const nextIndex = (projectStore.conversationsByProjectId[project.id] ?? []).length + 1;
+  await addConversation(project, `新对话 ${nextIndex}`);
 }
 
 async function deleteConversationById(projectId: string, conversationId: string): Promise<void> {
@@ -362,6 +365,17 @@ async function discardDiff(): Promise<void> {
 function exportPatch(): void {
   window.alert("Patch exported (design stub).");
 }
+
+function onTopHeaderMouseDown(event: MouseEvent): void {
+  void handleDragMouseDown(event);
+}
+
+function onTopHeaderDoubleClick(event: MouseEvent): void {
+  if ((event.target as HTMLElement | null)?.closest("button,a,input,select,textarea,[role='button'],[data-no-drag='true']")) {
+    return;
+  }
+  void toggleMaximizeCurrentWindow();
+}
 </script>
 
 <style scoped>
@@ -369,13 +383,13 @@ function exportPatch(): void {
   height: 100vh;
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: var(--global-space-12);
-  padding: var(--global-space-12);
-  background: var(--semantic-bg);
+  gap: var(--global-space-8);
+  padding: 0;
+  background: transparent;
 }
 
 .content {
-  padding: var(--global-space-8) var(--global-space-12) 0;
+  padding: var(--global-space-8) var(--global-space-8) 0 0;
   display: grid;
   grid-template-rows: 40px 1fr 36px;
   gap: var(--global-space-8);
@@ -388,6 +402,7 @@ function exportPatch(): void {
   justify-content: space-between;
   align-items: center;
   padding: 0 var(--global-space-12);
+  cursor: grab;
 }
 
 .left,

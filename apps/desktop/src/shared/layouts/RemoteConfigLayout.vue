@@ -48,13 +48,13 @@ defineProps<{
   height: 100vh;
   display: grid;
   grid-template-columns: 320px 1fr;
-  gap: var(--global-space-12);
-  padding: var(--global-space-12);
-  background: var(--semantic-bg);
+  gap: var(--global-space-8);
+  padding: 0;
+  background: transparent;
 }
 
 .content {
-  padding: var(--global-space-8) var(--global-space-12) 0;
+  padding: var(--global-space-8) var(--global-space-8) 0 0;
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: var(--global-space-12);

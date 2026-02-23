@@ -1,9 +1,21 @@
 <template>
   <div class="workspace-switcher" :class="{ collapsed }">
-    <div class="mac-row">
-      <span class="dot danger"></span>
-      <span class="dot warning"></span>
-      <span class="dot success"></span>
+    <div class="mac-row" data-tauri-drag-region @mousedown="onDragMouseDown" @dblclick.stop="onToggleMaximizeWindow">
+      <button class="dot danger" data-no-drag="true" type="button" title="Close" @click.stop="onCloseWindow"></button>
+      <button
+        class="dot warning"
+        data-no-drag="true"
+        type="button"
+        title="Minimize"
+        @click.stop="onMinimizeWindow"
+      ></button>
+      <button
+        class="dot success"
+        data-no-drag="true"
+        type="button"
+        title="Toggle Maximize"
+        @click.stop="onToggleMaximizeWindow"
+      ></button>
     </div>
 
     <div class="workspace-row">
@@ -43,6 +55,12 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
+import {
+  closeCurrentWindow,
+  handleDragMouseDown,
+  minimizeCurrentWindow,
+  toggleMaximizeCurrentWindow
+} from "@/shared/services/windowControls";
 import type { Workspace } from "@/shared/types/api";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 
@@ -83,6 +101,22 @@ function onCreateWorkspace(): void {
   emit("createWorkspace");
   menuOpen.value = false;
 }
+
+function onCloseWindow(): void {
+  void closeCurrentWindow();
+}
+
+function onMinimizeWindow(): void {
+  void minimizeCurrentWindow();
+}
+
+function onToggleMaximizeWindow(): void {
+  void toggleMaximizeCurrentWindow();
+}
+
+function onDragMouseDown(event: MouseEvent): void {
+  void handleDragMouseDown(event);
+}
 </script>
 
 <style scoped>
@@ -96,6 +130,25 @@ function onCreateWorkspace(): void {
   gap: var(--global-space-6);
 }
 
+.workspace-switcher.collapsed .workspace-row {
+  gap: var(--global-space-4);
+}
+
+.workspace-switcher.collapsed .workspace-btn {
+  padding: 0;
+  justify-content: center;
+}
+
+.workspace-switcher.collapsed .workspace-label {
+  justify-content: center;
+  width: 100%;
+  gap: 0;
+}
+
+.workspace-switcher.collapsed .mac-row {
+  justify-content: center;
+}
+
 .mac-row {
   display: inline-flex;
   gap: var(--global-space-8);
@@ -105,6 +158,21 @@ function onCreateWorkspace(): void {
   width: 12px;
   height: 12px;
   border-radius: 999px;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.9;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.dot:hover {
+  transform: scale(1.05);
+  opacity: 1;
+}
+
+.dot:focus-visible {
+  outline: 1px solid var(--semantic-focus-ring);
+  outline-offset: 1px;
 }
 
 .danger {

@@ -8,6 +8,11 @@
         @switch-workspace="switchWorkspace"
       />
 
+      <button class="menu-item nav-main" type="button" @click="goMain">
+        <AppIcon name="house" :size="12" />
+        <span>主界面</span>
+      </button>
+
       <p class="group-title">工作区配置</p>
       <nav class="menu-list">
         <RouterLink
@@ -109,6 +114,10 @@ function goSettings(): void {
   void router.push("/settings/theme");
 }
 
+function goMain(): void {
+  void router.push("/main");
+}
+
 function onUserMenuSelect(): void {
   goSettings();
 }
@@ -183,6 +192,12 @@ function resolveMenuIcon(key: string): string {
   gap: var(--global-space-8);
   justify-content: flex-start;
   transition: background 0.15s ease, color 0.15s ease;
+  border: 0;
+}
+
+.nav-main {
+  background: transparent;
+  text-align: left;
 }
 
 .menu-item:hover {

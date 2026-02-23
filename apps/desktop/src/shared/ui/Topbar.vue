@@ -1,5 +1,5 @@
 <template>
-  <header class="topbar">
+  <header class="topbar" data-tauri-drag-region @mousedown="onTopbarMouseDown" @dblclick="onTopbarDoubleClick">
     <div class="left">
       <slot name="left" />
     </div>
@@ -8,6 +8,21 @@
     </div>
   </header>
 </template>
+
+<script setup lang="ts">
+import { handleDragMouseDown, toggleMaximizeCurrentWindow } from "@/shared/services/windowControls";
+
+function onTopbarMouseDown(event: MouseEvent): void {
+  void handleDragMouseDown(event);
+}
+
+function onTopbarDoubleClick(event: MouseEvent): void {
+  if ((event.target as HTMLElement | null)?.closest("button,a,input,select,textarea,[role='button'],[data-no-drag='true']")) {
+    return;
+  }
+  void toggleMaximizeCurrentWindow();
+}
+</script>
 
 <style scoped>
 .topbar {
@@ -19,6 +34,7 @@
   background: var(--component-topbar-bg);
   border-radius: var(--global-radius-12);
   padding: 0 var(--global-space-12);
+  cursor: grab;
 }
 
 .left,

@@ -8,12 +8,15 @@
         @switch-workspace="switchWorkspace"
       />
 
-      <p class="scope-hint">{{ scopeHint }}</p>
-      <p class="menu-title">工作区配置 Workspace Config</p>
+      <button class="menu-item nav-main" type="button" @click="goMain">
+        <AppIcon name="house" :size="12" />
+        <span>主界面</span>
+      </button>
 
+      <p class="group-title">远程管理</p>
       <nav class="menu-list">
         <RouterLink
-          v-for="item in visibleMenuEntries"
+          v-for="item in remoteEntries"
           :key="item.key"
           :to="item.path"
           class="menu-item"
@@ -28,9 +31,23 @@
         </RouterLink>
       </nav>
 
-      <p class="remote-hint">
-        当前为 Remote：可见性=hidden/disabled/readonly/enabled，ABAC 拒绝返回 403
-      </p>
+      <p class="group-title">工作区配置</p>
+      <nav class="menu-list">
+        <RouterLink
+          v-for="item in workspaceEntries"
+          :key="item.key"
+          :to="item.path"
+          class="menu-item"
+          :class="{ active: item.key === activeKey, muted: item.visibility !== 'enabled' }"
+          :data-visibility="item.visibility"
+          @click.prevent="onMenuClick(item)"
+        >
+          <AppIcon :name="resolveMenuIcon(item.key)" :size="12" />
+          <span>{{ item.label }}</span>
+          <small v-if="item.visibility === 'readonly'" class="visibility-tag">只读</small>
+          <small v-else-if="item.visibility === 'disabled'" class="visibility-tag">禁用</small>
+        </RouterLink>
+      </nav>
     </div>
 
     <UserProfileMenuCard
@@ -64,7 +81,21 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
-const visibleMenuEntries = computed(() => props.menuEntries.filter((item) => item.visibility !== "hidden"));
+const remoteKeys = ["remote_account", "remote_members_roles", "remote_permissions_audit"];
+const workspaceKeys = [
+  "workspace_project_config",
+  "workspace_agent",
+  "workspace_model",
+  "workspace_rules",
+  "workspace_skills",
+  "workspace_mcp"
+];
+const remoteEntries = computed(() =>
+  props.menuEntries.filter((item) => remoteKeys.includes(item.key) && item.visibility !== "hidden")
+);
+const workspaceEntries = computed(() =>
+  props.menuEntries.filter((item) => workspaceKeys.includes(item.key) && item.visibility !== "hidden")
+);
 
 const accountName = computed(() => authStore.me?.display_name ?? "local-user");
 const accountInitial = computed(() => accountName.value.slice(0, 1).toUpperCase());
@@ -90,6 +121,10 @@ function onUserMenuSelect(key: string): void {
     return;
   }
   void router.push("/settings/theme");
+}
+
+function goMain(): void {
+  void router.push("/main");
 }
 
 function resolveMenuIcon(key: string): string {
@@ -138,19 +173,11 @@ function resolveMenuIcon(key: string): string {
   align-content: start;
 }
 
-.scope-hint,
-.menu-title,
-.remote-hint {
+.group-title {
   margin: 0;
   font-size: var(--global-font-size-11);
   color: var(--semantic-text-subtle);
-}
-
-.remote-hint {
-  color: var(--component-toast-warning-fg);
-  background: var(--component-toast-warning-bg);
-  border-radius: var(--global-radius-8);
-  padding: var(--global-space-8);
+  font-weight: var(--global-font-weight-600);
 }
 
 .menu-list {
@@ -167,6 +194,13 @@ function resolveMenuIcon(key: string): string {
   gap: var(--global-space-8);
   justify-content: flex-start;
   transition: background 0.15s ease, color 0.15s ease;
+  border: 0;
+  font-size: var(--global-font-size-12);
+}
+
+.nav-main {
+  background: transparent;
+  text-align: left;
 }
 
 .menu-item:hover {

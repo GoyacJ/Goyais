@@ -242,7 +242,8 @@ function submitWorkspaceCreate(): void {
 }
 
 .sidebar.collapsed {
-  width: 72px;
+  width: 88px;
+  padding: var(--global-space-8);
 }
 
 .top,
@@ -254,6 +255,7 @@ function submitWorkspaceCreate(): void {
 .top {
   min-height: 0;
   align-content: start;
+  overflow: hidden;
 }
 
 .icon-btn,
@@ -277,6 +279,10 @@ function submitWorkspaceCreate(): void {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.projects-header {
+  margin-top: var(--global-space-12);
 }
 
 .title {
@@ -324,6 +330,19 @@ function submitWorkspaceCreate(): void {
   min-height: 0;
   align-content: start;
   overflow: auto;
+}
+
+.sidebar.collapsed .projects-header {
+  margin-top: var(--global-space-8);
+  display: grid;
+  justify-items: center;
+  gap: var(--global-space-8);
+}
+
+.sidebar.collapsed .title,
+.sidebar.collapsed .tiny {
+  justify-content: center;
+  margin: 0 auto;
 }
 
 .conversation-item {
