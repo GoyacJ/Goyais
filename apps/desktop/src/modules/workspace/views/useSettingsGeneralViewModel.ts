@@ -1,14 +1,27 @@
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 
+import {
+  canCheckForAppUpdate,
+  checkForAppUpdate,
+  getCurrentAppVersion
+} from "@/modules/workspace/services/generalSettingsPlatform";
 import { initializeGeneralSettings, useGeneralSettings } from "@/modules/workspace/store/generalSettingsStore";
 import { useI18n } from "@/shared/i18n";
+
+type VersionCheckState = "idle" | "checking" | "latest" | "available" | "unsupported" | "failed";
 
 export function useSettingsGeneralViewModel() {
   const { t } = useI18n();
   const settings = useGeneralSettings();
 
+  const currentVersion = ref("");
+  const versionCheckState = ref<VersionCheckState>("idle");
+  const availableVersion = ref("");
+  const checkVersionError = ref("");
+
   onMounted(() => {
     void initializeGeneralSettings();
+    void initializeVersionState();
   });
 
   const enabledDisabledOptions = computed(() => [
@@ -107,8 +120,88 @@ export function useSettingsGeneralViewModel() {
     settings.capability.value.notifications.supported ? "" : t(settings.capability.value.notifications.reasonKey)
   );
 
+  const currentVersionText = computed(() => {
+    const version = currentVersion.value.trim();
+    if (version === "") {
+      return t("settings.general.field.currentVersion.unknown");
+    }
+    return toVersionBadge(version);
+  });
+
+  const checkVersionUnsupportedReason = computed(() =>
+    versionCheckState.value === "unsupported" ? t("settings.general.unsupported.updateCheck") : ""
+  );
+
+  const checkVersionButtonDisabled = computed(
+    () =>
+      settings.loading.value ||
+      settings.saving.value ||
+      versionCheckState.value === "checking" ||
+      versionCheckState.value === "unsupported"
+  );
+
+  const checkVersionActionLabel = computed(() =>
+    versionCheckState.value === "checking"
+      ? t("settings.general.field.checkVersion.checking")
+      : t("settings.general.field.checkVersion.action")
+  );
+
+  const checkVersionHint = computed(() => {
+    switch (versionCheckState.value) {
+      case "latest":
+        return t("settings.general.versionCheck.latest");
+      case "available":
+        return `${t("settings.general.versionCheck.availablePrefix")} ${toVersionBadge(availableVersion.value)}`;
+      case "failed":
+        return checkVersionError.value === ""
+          ? t("settings.general.versionCheck.failed")
+          : `${t("settings.general.versionCheck.failedPrefix")} ${checkVersionError.value}`;
+      default:
+        return "";
+    }
+  });
+
   function resetAll(): void {
     void settings.resetAll();
+  }
+
+  async function checkVersion(): Promise<void> {
+    if (versionCheckState.value === "checking" || versionCheckState.value === "unsupported") {
+      return;
+    }
+
+    versionCheckState.value = "checking";
+    availableVersion.value = "";
+    checkVersionError.value = "";
+
+    const result = await checkForAppUpdate();
+    if (result.status === "latest") {
+      versionCheckState.value = "latest";
+      return;
+    }
+
+    if (result.status === "update-available") {
+      versionCheckState.value = "available";
+      availableVersion.value = result.version;
+      return;
+    }
+
+    if (result.status === "unsupported") {
+      versionCheckState.value = "unsupported";
+      return;
+    }
+
+    versionCheckState.value = "failed";
+    checkVersionError.value = result.errorMessage;
+  }
+
+  async function initializeVersionState(): Promise<void> {
+    currentVersion.value = await getCurrentAppVersion();
+
+    const canCheckUpdate = await canCheckForAppUpdate();
+    if (!canCheckUpdate) {
+      versionCheckState.value = "unsupported";
+    }
   }
 
   return {
@@ -133,10 +226,21 @@ export function useSettingsGeneralViewModel() {
     logRetentionModel,
     launchUnsupportedReason,
     notificationsUnsupportedReason,
+    currentVersionText,
+    checkVersionUnsupportedReason,
+    checkVersionButtonDisabled,
+    checkVersionActionLabel,
+    checkVersionHint,
+    checkVersion,
     resetAll
   };
 }
 
 function toEnabledFlag(value: boolean): string {
   return value ? "enabled" : "disabled";
+}
+
+function toVersionBadge(version: string): string {
+  const normalized = version.trim().replace(/^v/i, "");
+  return normalized === "" ? "" : `v${normalized}`;
 }

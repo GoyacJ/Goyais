@@ -125,6 +125,24 @@
             :disabled="settings.loading.value"
           />
         </GeneralSettingsRow>
+
+        <GeneralSettingsRow
+          :label="t('settings.general.field.currentVersion.label')"
+          :description="t('settings.general.field.currentVersion.description')"
+        >
+          <p class="version-value">{{ currentVersionText }}</p>
+        </GeneralSettingsRow>
+
+        <GeneralSettingsRow
+          :label="t('settings.general.field.checkVersion.label')"
+          :description="t('settings.general.field.checkVersion.description')"
+          :hint="checkVersionHint"
+          :unsupported-reason="checkVersionUnsupportedReason"
+        >
+          <BaseButton variant="secondary" :disabled="checkVersionButtonDisabled" @click="checkVersion">
+            {{ checkVersionActionLabel }}
+          </BaseButton>
+        </GeneralSettingsRow>
       </GeneralSettingsSection>
 
       <GeneralSettingsSection
@@ -195,6 +213,12 @@ const {
   logRetentionModel,
   launchUnsupportedReason,
   notificationsUnsupportedReason,
+  currentVersionText,
+  checkVersionUnsupportedReason,
+  checkVersionButtonDisabled,
+  checkVersionActionLabel,
+  checkVersionHint,
+  checkVersion,
   resetAll
 } = useSettingsGeneralViewModel();
 </script>
@@ -229,6 +253,12 @@ const {
   margin: 0;
   color: var(--semantic-text-muted);
   font-size: var(--global-font-size-12);
+}
+
+.version-value {
+  margin: 0;
+  font-size: var(--global-font-size-12);
+  color: var(--semantic-text);
 }
 
 @media (max-width: 960px) {
