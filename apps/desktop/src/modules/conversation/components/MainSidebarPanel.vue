@@ -162,7 +162,13 @@ const currentWorkspaceMode = computed(() => props.workspaceMode);
 const currentWorkspaceName = computed(() => props.workspaceName);
 const userInitial = computed(() => (props.userName || "L").slice(0, 1).toUpperCase());
 const userMenuItems = computed(() => {
-  const items = [{ key: "settings", label: "设置", icon: "settings" }];
+  const items = [
+    {
+      key: "settings",
+      label: currentWorkspaceMode.value === "local" ? "本地设置" : "设置",
+      icon: "settings"
+    }
+  ];
   if (currentWorkspaceMode.value !== "local") {
     items.unshift({ key: "account", label: "账号信息", icon: "circle-user-round" });
   }
@@ -255,7 +261,7 @@ function submitWorkspaceCreate(): void {
 .top {
   min-height: 0;
   align-content: start;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .icon-btn,

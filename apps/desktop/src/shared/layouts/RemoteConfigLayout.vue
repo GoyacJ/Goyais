@@ -50,11 +50,11 @@ defineProps<{
   grid-template-columns: 320px 1fr;
   gap: var(--global-space-8);
   padding: 0;
-  background: transparent;
+  background: var(--component-shell-bg);
 }
 
 .content {
-  padding: var(--global-space-8) var(--global-space-8) 0 0;
+  padding: 0 var(--global-space-8) 0 0;
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: var(--global-space-12);

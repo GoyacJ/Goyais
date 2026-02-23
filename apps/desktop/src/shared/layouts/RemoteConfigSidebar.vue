@@ -107,6 +107,15 @@ const userMenuItems = computed(() => [
 async function switchWorkspace(workspaceId: string): Promise<void> {
   await switchWorkspaceContext(workspaceId);
   refreshNavigationVisibility();
+
+  if (workspaceStore.mode === "local") {
+    void router.push("/settings/theme");
+    return;
+  }
+
+  if (!router.currentRoute.value.path.startsWith("/remote/")) {
+    void router.push("/remote/account");
+  }
 }
 
 function onMenuClick(item: MenuEntry): void {

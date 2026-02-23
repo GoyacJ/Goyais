@@ -14,12 +14,12 @@ body {
   font-family: var(--component-font-family);
   font-size: var(--component-font-size-body);
   color: var(--component-text-main);
-  background: transparent;
+  background: var(--component-shell-bg);
   overflow: hidden;
 }
 
 #app {
-  background: transparent;
+  background: var(--component-shell-bg);
 }
 
 a {

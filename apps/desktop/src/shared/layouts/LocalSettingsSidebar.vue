@@ -79,7 +79,7 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
-const userMenuItems = [{ key: "settings", label: "设置", icon: "settings" }];
+const userMenuItems = [{ key: "settings", label: "本地设置", icon: "settings" }];
 
 const sharedKeys = [
   "workspace_project_config",
@@ -102,6 +102,15 @@ const generalEntries = computed(() =>
 async function switchWorkspace(workspaceId: string): Promise<void> {
   await switchWorkspaceContext(workspaceId);
   refreshNavigationVisibility();
+
+  if (workspaceStore.mode === "remote") {
+    void router.push("/remote/account");
+    return;
+  }
+
+  if (!router.currentRoute.value.path.startsWith("/settings/")) {
+    void router.push("/settings/theme");
+  }
 }
 
 function onMenuClick(item: MenuEntry): void {

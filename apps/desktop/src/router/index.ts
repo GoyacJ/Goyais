@@ -127,6 +127,14 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
     const meta = to.meta as RouteMeta;
     const menuKey = meta.menuKey;
 
+    if (to.path.startsWith("/settings/") && workspaceStore.mode !== "local") {
+      const switched = await trySwitchToLocalWorkspace();
+      if (!switched) {
+        return { path: "/main", query: { reason: "local_required" } };
+      }
+      refreshNavigationVisibility();
+    }
+
     if (meta.requiresRemote && workspaceStore.mode !== "remote") {
       const switched = await trySwitchToRemoteWorkspace();
       if (!switched) {
@@ -165,4 +173,16 @@ async function trySwitchToRemoteWorkspace(): Promise<boolean> {
 
   await switchWorkspaceContext(remoteWorkspace.id);
   return workspaceStore.mode === "remote";
+}
+
+async function trySwitchToLocalWorkspace(): Promise<boolean> {
+  const localWorkspace = workspaceStore.workspaces.find(
+    (workspace) => workspace.mode === "local" || workspace.is_default_local
+  );
+  if (!localWorkspace) {
+    return false;
+  }
+
+  await switchWorkspaceContext(localWorkspace.id);
+  return workspaceStore.mode === "local";
 }

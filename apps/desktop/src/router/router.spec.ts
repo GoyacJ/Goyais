@@ -119,4 +119,39 @@ describe("desktop routes", () => {
     expect(router.currentRoute.value.path).toBe("/remote/account");
     expect(router.currentRoute.value.query.reason).toBe("admin_forbidden");
   });
+
+  it("switches to local workspace when entering local settings routes", async () => {
+    setWorkspaces([
+      {
+        id: "ws_local",
+        name: "Local",
+        mode: "local",
+        hub_url: null,
+        is_default_local: true,
+        created_at: "2026-02-23T00:00:00Z",
+        login_disabled: true,
+        auth_mode: "disabled"
+      },
+      {
+        id: "ws_remote",
+        name: "Remote",
+        mode: "remote",
+        hub_url: "https://hub.example.com",
+        is_default_local: false,
+        created_at: "2026-02-23T00:00:00Z",
+        login_disabled: false,
+        auth_mode: "password_or_token"
+      }
+    ]);
+    setCurrentWorkspace("ws_remote");
+    resetRouterInitForTests(true);
+
+    const router = createAppRouter(createMemoryHistory());
+    await router.push("/settings/theme");
+    await router.isReady();
+
+    expect(router.currentRoute.value.path).toBe("/settings/theme");
+    expect(workspaceStore.mode).toBe("local");
+    expect(workspaceStore.currentWorkspaceId).toBe("ws_local");
+  });
 });

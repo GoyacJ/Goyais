@@ -1,6 +1,12 @@
 <template>
-  <div class="workspace-switcher" :class="{ collapsed }">
-    <div class="mac-row" data-tauri-drag-region @mousedown="onDragMouseDown" @dblclick.stop="onToggleMaximizeWindow">
+  <div
+    class="workspace-switcher"
+    :class="{ collapsed }"
+    data-tauri-drag-region
+    @mousedown="onDragMouseDown"
+    @dblclick="onDragRegionDoubleClick"
+  >
+    <div class="mac-row" data-tauri-drag-region>
       <button class="dot danger" data-no-drag="true" type="button" title="Close" @click.stop="onCloseWindow"></button>
       <button
         class="dot warning"
@@ -34,7 +40,7 @@
 
     <div v-if="menuOpen && !collapsed" class="workspace-menu">
       <button
-        v-for="workspace in workspaces"
+        v-for="workspace in workspaceOptions"
         :key="workspace.id"
         class="workspace-option"
         :class="{ active: workspace.id === currentWorkspaceId }"
@@ -91,6 +97,20 @@ const menuOpen = ref(false);
 
 const currentWorkspace = computed(() => props.workspaces.find((workspace) => workspace.id === props.currentWorkspaceId));
 const workspaceLabel = computed(() => currentWorkspace.value?.name ?? props.fallbackLabel);
+const workspaceOptions = computed(() => {
+  const byId = new Map<string, Workspace>();
+  const local = props.workspaces.find((workspace) => workspace.mode === "local" || workspace.is_default_local);
+  if (local) {
+    byId.set(local.id, local);
+  }
+
+  props.workspaces
+    .filter((workspace) => workspace.mode === "remote")
+    .forEach((workspace) => byId.set(workspace.id, workspace));
+
+  props.workspaces.forEach((workspace) => byId.set(workspace.id, workspace));
+  return [...byId.values()];
+});
 
 function onSwitchWorkspace(workspaceId: string): void {
   emit("switchWorkspace", workspaceId);
@@ -117,13 +137,23 @@ function onToggleMaximizeWindow(): void {
 function onDragMouseDown(event: MouseEvent): void {
   void handleDragMouseDown(event);
 }
+
+function onDragRegionDoubleClick(event: MouseEvent): void {
+  if ((event.target as HTMLElement | null)?.closest("button,a,input,select,textarea,[role='button'],[data-no-drag='true']")) {
+    return;
+  }
+
+  void toggleMaximizeCurrentWindow();
+}
 </script>
 
 <style scoped>
 .workspace-switcher {
+  position: relative;
   display: grid;
   gap: var(--global-space-8);
   align-content: start;
+  padding-top: var(--global-space-4);
 }
 
 .workspace-switcher.collapsed {
@@ -226,8 +256,15 @@ function onDragMouseDown(event: MouseEvent): void {
 }
 
 .workspace-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + var(--global-space-8));
+  z-index: 24;
   background: var(--semantic-bg);
+  border: 1px solid var(--semantic-border);
   border-radius: var(--global-radius-8);
+  box-shadow: var(--global-shadow-2);
   padding: var(--global-space-8);
   display: grid;
   gap: var(--global-space-4);

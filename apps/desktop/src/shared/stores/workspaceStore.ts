@@ -40,7 +40,7 @@ export function resetWorkspaceStore(): void {
 }
 
 export function setWorkspaces(workspaces: Workspace[]): void {
-  workspaceStore.workspaces = [...workspaces];
+  workspaceStore.workspaces = ensureLocalWorkspace(workspaces);
 
   const hasCurrentWorkspace = workspaceStore.workspaces.some((workspace) => workspace.id === workspaceStore.currentWorkspaceId);
   if (!hasCurrentWorkspace) {
@@ -129,4 +129,24 @@ function persistWorkspaceId(workspaceId: string): void {
 
 function clearPersistedWorkspaceId(): void {
   persistWorkspaceId("");
+}
+
+function ensureLocalWorkspace(workspaces: Workspace[]): Workspace[] {
+  const hasLocal = workspaces.some((workspace) => workspace.mode === "local" || workspace.is_default_local);
+  if (hasLocal) {
+    return [...workspaces];
+  }
+
+  const injectedLocal: Workspace = {
+    id: "ws_local",
+    name: "Local Workspace",
+    mode: "local",
+    hub_url: null,
+    is_default_local: true,
+    created_at: new Date().toISOString(),
+    login_disabled: true,
+    auth_mode: "disabled"
+  };
+
+  return [injectedLocal, ...workspaces];
 }
