@@ -110,7 +110,20 @@ const props = defineProps<{
   workspaceName: string;
   userName: string;
   projects: Project[];
+  projectsPage: {
+    canPrev: boolean;
+    canNext: boolean;
+    loading: boolean;
+  };
   conversationsByProjectId: Record<string, Conversation[]>;
+  conversationPageByProjectId: Record<
+    string,
+    {
+      canPrev: boolean;
+      canNext: boolean;
+      loading: boolean;
+    }
+  >;
   activeConversationId: string;
 }>();
 
@@ -125,6 +138,8 @@ const emit = defineEmits<{
   (event: "selectConversation", projectId: string, conversationId: string): void;
   (event: "openAccount"): void;
   (event: "openSettings"): void;
+  (event: "paginateProjects", direction: "prev" | "next"): void;
+  (event: "paginateConversations", projectId: string, direction: "prev" | "next"): void;
 }>();
 
 const collapsed = ref(false);
@@ -197,146 +212,4 @@ function submitWorkspaceCreate(payload: { hub_url: string; username: string; pas
 }
 </script>
 
-<style scoped>
-.sidebar {
-  background: var(--semantic-surface);
-  border-radius: var(--global-radius-12);
-  padding: var(--global-space-12);
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: var(--global-space-12);
-  transition: width 0.2s ease;
-  width: 320px;
-}
-
-.sidebar.collapsed {
-  width: 88px;
-  padding: var(--global-space-8);
-}
-
-.top,
-.project-tree {
-  display: grid;
-  gap: var(--global-space-8);
-}
-
-.top {
-  min-height: 0;
-  align-content: start;
-  overflow: visible;
-}
-
-.icon-btn,
-.tree-btn,
-.conversation-item {
-  border: 0;
-  background: var(--semantic-surface);
-  color: var(--semantic-text);
-  border-radius: var(--global-radius-8);
-  padding: 0;
-}
-
-.title {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--global-space-8);
-}
-
-.projects-header,
-.project-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.projects-header {
-  margin-top: var(--global-space-12);
-}
-
-.title {
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-12);
-  font-weight: var(--global-font-weight-600);
-}
-
-.tiny {
-  width: 20px;
-  height: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-
-.project-node {
-  background: transparent;
-  border-radius: var(--global-radius-8);
-}
-
-.tree-btn {
-  background: transparent;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--global-space-8);
-  padding: var(--global-space-4) 0;
-}
-
-.row-actions {
-  display: inline-flex;
-  gap: var(--global-space-4);
-}
-
-.conversation-list {
-  margin-left: var(--component-tree-indent);
-  border-left: 1px solid var(--semantic-divider);
-  padding-left: var(--global-space-8);
-  display: grid;
-  gap: var(--global-space-4);
-}
-
-.project-tree {
-  min-height: 0;
-  align-content: start;
-  overflow: auto;
-}
-
-.sidebar.collapsed .projects-header {
-  margin-top: var(--global-space-8);
-  display: grid;
-  justify-items: center;
-  gap: var(--global-space-8);
-}
-
-.sidebar.collapsed .title,
-.sidebar.collapsed .tiny {
-  justify-content: center;
-  margin: 0 auto;
-}
-
-.conversation-item {
-  background: transparent;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  color: var(--semantic-text-muted);
-  border-radius: var(--global-radius-6);
-  gap: var(--global-space-8);
-}
-
-.conversation-main {
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  padding: var(--global-space-8);
-}
-
-.conversation-item.active {
-  background: var(--component-sidebar-item-bg-active);
-  color: var(--semantic-text);
-}
-
-.hidden-input {
-  display: none;
-}
-</style>
+<style scoped src="./MainSidebarPanel.css"></style>

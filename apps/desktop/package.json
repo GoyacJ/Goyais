@@ -10,6 +10,7 @@
     "build": "vite build",
     "lint": "tsc --noEmit -p tsconfig.app.json",
     "test": "vitest run",
+    "test:strict": "VITE_API_MODE=strict VITE_ENABLE_MOCK_FALLBACK=false vitest run",
     "check:tokens": "node ../../scripts/desktop/check-token-drift.mjs",
     "tauri:dev": "tauri dev"
   },

@@ -4,20 +4,19 @@ import { createMockId, mockData } from "@/shared/services/mockData";
 import type {
   CreateWorkspaceRequest,
   ListEnvelope,
+  PaginationQuery,
   LoginRequest,
   LoginResponse,
   WorkspaceConnectionResult,
   Workspace
 } from "@/shared/types/api";
 
-export async function listWorkspaces(): Promise<ListEnvelope<Workspace>> {
+export async function listWorkspaces(query: PaginationQuery = {}): Promise<ListEnvelope<Workspace>> {
+  const search = buildPaginationSearch(query);
   return withApiFallback(
     "workspace.list",
-    () => getControlClient().get<ListEnvelope<Workspace>>("/v1/workspaces"),
-    () => ({
-      items: [...mockData.workspaces],
-      next_cursor: null
-    })
+    () => getControlClient().get<ListEnvelope<Workspace>>(`/v1/workspaces${search}`),
+    () => paginateMock([...mockData.workspaces], query)
   );
 }
 
@@ -90,4 +89,28 @@ export async function loginWorkspace(input: LoginRequest): Promise<LoginResponse
       token_type: "bearer"
     })
   );
+}
+
+function buildPaginationSearch(query: PaginationQuery): string {
+  const params = new URLSearchParams();
+  if (query.cursor) {
+    params.set("cursor", query.cursor);
+  }
+  if (query.limit !== undefined) {
+    params.set("limit", String(query.limit));
+  }
+  const encoded = params.toString();
+  return encoded ? `?${encoded}` : "";
+}
+
+function paginateMock<T>(items: T[], query: PaginationQuery): ListEnvelope<T> {
+  const start = Number.parseInt(query.cursor ?? "0", 10);
+  const safeStart = Number.isNaN(start) || start < 0 ? 0 : start;
+  const limit = query.limit !== undefined && query.limit > 0 ? query.limit : 20;
+  const end = Math.min(safeStart + limit, items.length);
+  const nextCursor = end < items.length ? String(end) : null;
+  return {
+    items: items.slice(safeStart, end),
+    next_cursor: nextCursor
+  };
 }

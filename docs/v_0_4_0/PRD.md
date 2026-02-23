@@ -342,7 +342,7 @@ Workspace
 9. 成员与角色管理（新增、编辑、删除、停用、分配）。
 10. 权限与审计管理（菜单树/权限项编辑、删除、停用）。
 11. 工作区共享配置页：Agent/模型/Rules/Skills/MCP。
-12. 设置固定菜单：主题、国际化、更新与诊断、通用设置。
+12. 设置固定菜单：主题、国际化、更新与诊断、通用设置（主题与语言均需即时生效并持久化）。
 13. 项目配置入口（账号信息 + 设置），支持模型/规则/技能/MCP 绑定。
 14. 模型配置两级结构（厂商 -> 模型）与厂商清单支持。
 15. 模型目录同步（手动 + 定时）。
@@ -350,7 +350,7 @@ Workspace
 17. 模型密钥共享高风险治理。
 18. 底部状态栏统一展示 Hub 地址与连接状态。
 19. 审计覆盖执行、审批、权限、共享、连接、启停、回滚。
-20. zh-CN 与 en-US 国际化能力。
+20. zh-CN 与 en-US 国际化能力（切换后菜单与关键页面文案即时更新）。
 
 ### 12.2 P1（增强项）
 
@@ -429,23 +429,21 @@ Workspace
    - 导出 Conversation 为 Markdown。
 8. `PUT /v1/projects/{project_id}/config`
    - 更新项目配置（模型/规则/技能/MCP）。
-9. `POST /v1/workspaces/{workspace_id}/model-catalog/sync`
-   - 手动触发模型目录同步。
+9. `POST /v1/workspaces/{workspace_id}/model-catalog`
+   - 手动触发模型目录同步（`vendors`）。
 10. `GET /v1/workspaces/{workspace_id}/model-catalog`
    - 查询同步后的厂商/模型目录。
 11. 共享与审批接口（沿用并强化）：
    - `POST /v1/workspaces/{workspace_id}/share-requests`
    - `POST /v1/share-requests/{request_id}/approve`
    - `POST /v1/share-requests/{request_id}/reject`
-   - `POST /v1/shared-resources/{id}/revoke`
-12. 管理员接口组（成员/角色/权限）：
-   - `POST /v1/admin/users`
-   - `PATCH /v1/admin/users/{id}`
-   - `POST /v1/admin/users/{id}/roles`
-   - `POST /v1/admin/roles`
-   - `PATCH /v1/admin/roles/{id}`
-   - `POST /v1/admin/permissions/menu-bindings`
-   - `POST /v1/admin/permissions/action-bindings`
+   - `POST /v1/share-requests/{request_id}/revoke`
+12. 管理员接口组（成员/角色/审计）：
+   - `GET|POST /v1/admin/users`
+   - `PATCH|DELETE /v1/admin/users/{user_id}`
+   - `GET|POST /v1/admin/roles`
+   - `PATCH|DELETE /v1/admin/roles/{role_key}`
+   - `GET /v1/admin/audit`
 
 ### 14.2 关键类型（新增字段）
 
@@ -458,12 +456,17 @@ Workspace {
 }
 
 WorkspaceConnection {
-  connection_id: string
   workspace_id: string
   hub_url: string
   username: string
-  auth_state: "connected" | "reconnecting" | "disconnected"
-  last_connected_at?: string
+  connection_status: "connected" | "reconnecting" | "disconnected"
+  connected_at: string
+}
+
+RemoteConnectionResponse {
+  workspace: Workspace
+  connection: WorkspaceConnection
+  access_token?: string
 }
 
 Project {
@@ -780,3 +783,12 @@ event types:
 | 接口与类型变化（rollback/export/project config/model sync） | 接口与类型定义更新 | `/Users/goya/Repo/Git/Goyais/docs/v_0_4_0/TECH_ARCH.md` | 3, 7, 9, 11, 14, 20 | done |
 | 阶段与门禁变化（新增回滚/导出/模型同步/项目配置验收） | 实施阶段映射更新 | `/Users/goya/Repo/Git/Goyais/docs/v_0_4_0/IMPLEMENTATION_PLAN.md` | Phase 3, 4, 5, 7, 9, 测试计划映射 | done |
 | 工程规范补充（动态菜单/快照回滚测试/审计覆盖） | 规范与 DoD 更新 | `/Users/goya/Repo/Git/Goyais/docs/v_0_4_0/DEVELOPMENT_STANDARDS.md` | 10, 11, 13, 14, 15 | done |
+
+### 25.3 2026-02-23 基础框架补齐矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| API/类型变更 | PRD.md, TECH_ARCH.md | PRD 14.x, TECH_ARCH 9.x | done |
+| 权限语义变更 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 9.x/14.3, TECH_ARCH 5.x, 标准 10.x | done |
+| 阶段与门禁变更 | IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | Phase 映射, DoD/门禁 | done |
+| i18n/主题行为变更 | PRD.md, TECH_ARCH.md | PRD 12.1/体验项, TECH_ARCH 14.x | done |

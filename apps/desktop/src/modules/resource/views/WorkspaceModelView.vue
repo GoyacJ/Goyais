@@ -30,15 +30,41 @@
         </article>
       </div>
     </section>
+
+    <section class="card">
+      <h3>资源列表（分页）</h3>
+      <ul class="resource-list">
+        <li v-for="resource in resourceStore.items" :key="resource.id">
+          <span>{{ resource.name }}</span>
+          <span class="muted">{{ resource.type }}</span>
+        </li>
+        <li v-if="resourceStore.items.length === 0" class="muted">暂无资源</li>
+      </ul>
+      <CursorPager
+        :can-prev="resourceStore.resourcesPage.backStack.length > 0"
+        :can-next="resourceStore.resourcesPage.nextCursor !== null"
+        :loading="resourceStore.resourcesPage.loading"
+        @prev="paginateResources('prev')"
+        @next="paginateResources('next')"
+      />
+    </section>
   </WorkspaceSharedShell>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
 
-import { refreshModelCatalog, resourceStore, syncWorkspaceModelCatalog } from "@/modules/resource/store";
+import {
+  loadNextResourcesPage,
+  loadPreviousResourcesPage,
+  refreshModelCatalog,
+  refreshResources,
+  resourceStore,
+  syncWorkspaceModelCatalog
+} from "@/modules/resource/store";
 import WorkspaceSharedShell from "@/shared/shells/WorkspaceSharedShell.vue";
 import type { ModelVendorName } from "@/shared/types/api";
+import CursorPager from "@/shared/ui/CursorPager.vue";
 
 const vendors: ModelVendorName[] = ["OpenAI", "Google", "Qwen", "Doubao", "Zhipu", "MiniMax", "Local"];
 
@@ -61,11 +87,19 @@ const modelsByVendor = computed<Record<ModelVendorName, typeof resourceStore.mod
 });
 
 onMounted(async () => {
-  await refreshModelCatalog();
+  await Promise.all([refreshModelCatalog(), refreshResources()]);
 });
 
 async function syncCatalog(): Promise<void> {
   await syncWorkspaceModelCatalog(vendors);
+}
+
+async function paginateResources(direction: "prev" | "next"): Promise<void> {
+  if (direction === "next") {
+    await loadNextResourcesPage();
+    return;
+  }
+  await loadPreviousResourcesPage();
 }
 </script>
 
@@ -124,6 +158,21 @@ async function syncCatalog(): Promise<void> {
 }
 
 .vendor-card li {
+  display: flex;
+  justify-content: space-between;
+  color: var(--semantic-text-muted);
+  font-size: var(--global-font-size-12);
+}
+
+.resource-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--global-space-4);
+}
+
+.resource-list li {
   display: flex;
   justify-content: space-between;
   color: var(--semantic-text-muted);

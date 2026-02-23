@@ -261,6 +261,9 @@ async function completeExecution(
     })
   );
 
+  clearConversationTimer(conversationId);
+  drainQueue(conversationId, runtime);
+
   try {
     runtime.diff = await loadExecutionDiff(execution.id);
     runtime.events.push(
@@ -270,9 +273,6 @@ async function completeExecution(
     );
   } catch (error) {
     conversationStore.error = toDisplayError(error);
-  } finally {
-    clearConversationTimer(conversationId);
-    drainQueue(conversationId, runtime);
   }
 }
 

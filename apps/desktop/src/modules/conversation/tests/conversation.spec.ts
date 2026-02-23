@@ -26,10 +26,65 @@ describe("conversation store", () => {
   beforeEach(() => {
     resetConversationStore();
     vi.useFakeTimers();
+    let executionCounter = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.includes("/v1/conversations/") && url.endsWith("/messages") && method === "POST") {
+        executionCounter += 1;
+        return jsonResponse({
+          execution: {
+            id: `exec_${executionCounter}`,
+            workspace_id: "ws_local",
+            conversation_id: mockConversation.id,
+            message_id: `msg_${executionCounter}`,
+            state: executionCounter === 1 ? "executing" : "queued",
+            mode: "agent",
+            model_id: "gpt-4.1",
+            queue_index: executionCounter - 1,
+            trace_id: `tr_exec_${executionCounter}`,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+        }, 201);
+      }
+
+      if (url.endsWith("/stop") && method === "POST") {
+        return jsonResponse({ ok: true });
+      }
+
+      if (url.includes("/rollback") && method === "POST") {
+        return jsonResponse({ ok: true });
+      }
+
+      if (url.includes("/v1/executions/") && url.endsWith("/diff") && method === "GET") {
+        return jsonResponse([
+          {
+            id: "diff_1",
+            path: "src/main.ts",
+            change_type: "modified",
+            summary: "queue updated"
+          }
+        ]);
+      }
+
+      return jsonResponse(
+        {
+          code: "ROUTE_NOT_FOUND",
+          message: "Not found",
+          details: {},
+          trace_id: "tr_not_found"
+        },
+        404
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it("keeps FIFO queue and drains after completion", async () => {
@@ -72,3 +127,12 @@ describe("conversation store", () => {
     expect(executingCount).toBe(1);
   });
 });
+
+function jsonResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      "Content-Type": "application/json"
+    }
+  });
+}

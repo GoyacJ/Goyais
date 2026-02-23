@@ -316,6 +316,7 @@ QualityGateResult {
    - 权限可见性一致性报告
    - 项目配置继承与覆盖报告
    - 模型目录同步稳定性报告
+5. `MUST` 执行 Desktop strict 联调通道（`VITE_API_MODE=strict` + `VITE_ENABLE_MOCK_FALLBACK=false`）。
 
 ### 11.2 失败处理流程
 

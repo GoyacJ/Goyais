@@ -182,6 +182,7 @@ function onDragRegionDoubleClick(event: MouseEvent): void {
 .mac-row {
   display: inline-flex;
   gap: var(--global-space-8);
+  margin-top: -2px;
 }
 
 .dot {
@@ -221,6 +222,7 @@ function onDragRegionDoubleClick(event: MouseEvent): void {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: var(--global-space-8);
+  margin-top: var(--global-space-4);
 }
 
 .workspace-btn,

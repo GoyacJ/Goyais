@@ -5,20 +5,19 @@ import type {
   ListEnvelope,
   ModelCatalogItem,
   ModelVendorName,
+  PaginationQuery,
   Resource,
   ResourceImportRequest,
   ShareRequest,
   ShareStatus
 } from "@/shared/types/api";
 
-export async function listResources(workspaceId: string): Promise<ListEnvelope<Resource>> {
+export async function listResources(workspaceId: string, query: PaginationQuery = {}): Promise<ListEnvelope<Resource>> {
+  const search = buildPaginationSearch({ ...query, workspace_id: workspaceId });
   return withApiFallback(
     "resource.list",
-    () => getControlClient().get<ListEnvelope<Resource>>(`/v1/resources?workspace_id=${encodeURIComponent(workspaceId)}`),
-    () => ({
-      items: mockData.resources.filter((resource) => resource.workspace_id === workspaceId),
-      next_cursor: null
-    })
+    () => getControlClient().get<ListEnvelope<Resource>>(`/v1/resources${search}`),
+    () => paginateMock(mockData.resources.filter((resource) => resource.workspace_id === workspaceId), query)
   );
 }
 
@@ -112,7 +111,7 @@ export async function syncModelCatalog(workspaceId: string, vendors: ModelVendor
   return withApiFallback(
     "resource.modelCatalogSync",
     () =>
-      getControlClient().post<ModelCatalogItem[]>(`/v1/workspaces/${workspaceId}/model-catalog/sync`, {
+      getControlClient().post<ModelCatalogItem[]>(`/v1/workspaces/${workspaceId}/model-catalog`, {
         vendors
       }),
     () => {
@@ -127,4 +126,30 @@ export async function syncModelCatalog(workspaceId: string, vendors: ModelVendor
       }));
     }
   );
+}
+
+function buildPaginationSearch(query: PaginationQuery & { workspace_id?: string }): string {
+  const params = new URLSearchParams();
+  if (query.workspace_id) {
+    params.set("workspace_id", query.workspace_id);
+  }
+  if (query.cursor) {
+    params.set("cursor", query.cursor);
+  }
+  if (query.limit !== undefined) {
+    params.set("limit", String(query.limit));
+  }
+  const encoded = params.toString();
+  return encoded ? `?${encoded}` : "";
+}
+
+function paginateMock<T>(items: T[], query: PaginationQuery): ListEnvelope<T> {
+  const start = Number.parseInt(query.cursor ?? "0", 10);
+  const safeStart = Number.isNaN(start) || start < 0 ? 0 : start;
+  const limit = query.limit !== undefined && query.limit > 0 ? query.limit : 20;
+  const end = Math.min(safeStart + limit, items.length);
+  return {
+    items: items.slice(safeStart, end),
+    next_cursor: end < items.length ? String(end) : null
+  };
 }

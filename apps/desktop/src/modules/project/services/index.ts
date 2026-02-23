@@ -1,16 +1,14 @@
 import { getControlClient } from "@/shared/services/clients";
 import { withApiFallback } from "@/shared/services/fallback";
 import { createMockId, mockData } from "@/shared/services/mockData";
-import type { Conversation, ListEnvelope, Project, ProjectConfig } from "@/shared/types/api";
+import type { Conversation, ListEnvelope, PaginationQuery, Project, ProjectConfig } from "@/shared/types/api";
 
-export async function listProjects(workspaceId: string): Promise<ListEnvelope<Project>> {
+export async function listProjects(workspaceId: string, query: PaginationQuery = {}): Promise<ListEnvelope<Project>> {
+  const search = buildPaginationSearch({ ...query, workspace_id: workspaceId });
   return withApiFallback(
     "project.list",
-    () => getControlClient().get<ListEnvelope<Project>>(`/v1/projects?workspace_id=${encodeURIComponent(workspaceId)}`),
-    () => ({
-      items: mockData.projects.filter((project) => project.workspace_id === workspaceId),
-      next_cursor: null
-    })
+    () => getControlClient().get<ListEnvelope<Project>>(`/v1/projects${search}`),
+    () => paginateMock(mockData.projects.filter((project) => project.workspace_id === workspaceId), query)
   );
 }
 
@@ -82,14 +80,12 @@ export async function removeProject(projectId: string): Promise<void> {
   );
 }
 
-export async function listConversations(projectId: string): Promise<ListEnvelope<Conversation>> {
+export async function listConversations(projectId: string, query: PaginationQuery = {}): Promise<ListEnvelope<Conversation>> {
+  const search = buildPaginationSearch(query);
   return withApiFallback(
     "project.listConversations",
-    () => getControlClient().get<ListEnvelope<Conversation>>(`/v1/projects/${projectId}/conversations`),
-    () => ({
-      items: mockData.conversations.filter((conversation) => conversation.project_id === projectId),
-      next_cursor: null
-    })
+    () => getControlClient().get<ListEnvelope<Conversation>>(`/v1/projects/${projectId}/conversations${search}`),
+    () => paginateMock(mockData.conversations.filter((conversation) => conversation.project_id === projectId), query)
   );
 }
 
@@ -172,4 +168,30 @@ export async function updateProjectConfig(projectId: string, config: Omit<Projec
       updated_at: new Date().toISOString()
     })
   );
+}
+
+function buildPaginationSearch(query: PaginationQuery & { workspace_id?: string }): string {
+  const params = new URLSearchParams();
+  if (query.workspace_id) {
+    params.set("workspace_id", query.workspace_id);
+  }
+  if (query.cursor) {
+    params.set("cursor", query.cursor);
+  }
+  if (query.limit !== undefined) {
+    params.set("limit", String(query.limit));
+  }
+  const encoded = params.toString();
+  return encoded ? `?${encoded}` : "";
+}
+
+function paginateMock<T>(items: T[], query: PaginationQuery): ListEnvelope<T> {
+  const start = Number.parseInt(query.cursor ?? "0", 10);
+  const safeStart = Number.isNaN(start) || start < 0 ? 0 : start;
+  const limit = query.limit !== undefined && query.limit > 0 ? query.limit : 20;
+  const end = Math.min(safeStart + limit, items.length);
+  return {
+    items: items.slice(safeStart, end),
+    next_cursor: end < items.length ? String(end) : null
+  };
 }

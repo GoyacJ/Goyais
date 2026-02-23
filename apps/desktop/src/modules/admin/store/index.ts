@@ -30,10 +30,20 @@ export type ActionPermissionItem = {
   enabled: boolean;
 };
 
+type CursorPageState = {
+  limit: number;
+  currentCursor: string | null;
+  backStack: Array<string | null>;
+  nextCursor: string | null;
+  loading: boolean;
+};
+
 type AdminState = {
   users: AdminUser[];
+  usersPage: CursorPageState;
   roles: AdminRole[];
   audits: AdminAuditEvent[];
+  auditsPage: CursorPageState;
   menuNodes: MenuPermissionNode[];
   permissionItems: ActionPermissionItem[];
   loading: boolean;
@@ -42,8 +52,10 @@ type AdminState = {
 
 const initialState: AdminState = {
   users: [],
+  usersPage: createInitialPageState(),
   roles: [],
   audits: [],
+  auditsPage: createInitialPageState(),
   menuNodes: createDefaultMenuNodes(),
   permissionItems: createDefaultPermissionItems(),
   loading: false,
@@ -54,8 +66,10 @@ export const adminStore = reactive<AdminState>({ ...initialState });
 
 export function resetAdminStore(): void {
   adminStore.users = [];
+  adminStore.usersPage = createInitialPageState();
   adminStore.roles = [];
   adminStore.audits = [];
+  adminStore.auditsPage = createInitialPageState();
   adminStore.menuNodes = createDefaultMenuNodes();
   adminStore.permissionItems = createDefaultPermissionItems();
   adminStore.loading = false;
@@ -63,27 +77,102 @@ export function resetAdminStore(): void {
 }
 
 export async function refreshAdminData(): Promise<void> {
+  await refreshAdminUsersPage({ cursor: null, backStack: [] });
+  await refreshAdminAuditPage({ cursor: null, backStack: [] });
+}
+
+export async function loadNextAdminUsersPage(): Promise<void> {
+  const nextCursor = adminStore.usersPage.nextCursor;
+  if (!nextCursor || adminStore.usersPage.loading) {
+    return;
+  }
+  await refreshAdminUsersPage({
+    cursor: nextCursor,
+    backStack: [...adminStore.usersPage.backStack, adminStore.usersPage.currentCursor]
+  });
+}
+
+export async function loadPreviousAdminUsersPage(): Promise<void> {
+  if (adminStore.usersPage.backStack.length === 0 || adminStore.usersPage.loading) {
+    return;
+  }
+  const backStack = [...adminStore.usersPage.backStack];
+  const previousCursor = backStack.pop() ?? null;
+  await refreshAdminUsersPage({ cursor: previousCursor, backStack });
+}
+
+export async function loadNextAdminAuditsPage(): Promise<void> {
+  const nextCursor = adminStore.auditsPage.nextCursor;
+  if (!nextCursor || adminStore.auditsPage.loading) {
+    return;
+  }
+  await refreshAdminAuditPage({
+    cursor: nextCursor,
+    backStack: [...adminStore.auditsPage.backStack, adminStore.auditsPage.currentCursor]
+  });
+}
+
+export async function loadPreviousAdminAuditsPage(): Promise<void> {
+  if (adminStore.auditsPage.backStack.length === 0 || adminStore.auditsPage.loading) {
+    return;
+  }
+  const backStack = [...adminStore.auditsPage.backStack];
+  const previousCursor = backStack.pop() ?? null;
+  await refreshAdminAuditPage({ cursor: previousCursor, backStack });
+}
+
+async function refreshAdminUsersPage(input: { cursor: string | null; backStack: Array<string | null> }): Promise<void> {
   const workspace = getCurrentWorkspace();
   if (!workspace || workspace.mode !== "remote") {
     return;
   }
 
   adminStore.loading = true;
+  adminStore.usersPage.loading = true;
   adminStore.error = "";
 
   try {
-    const [users, roles, audits] = await Promise.all([
-      listAdminUsers(workspace.id),
-      listAdminRoles(),
-      listAuditEvents(workspace.id)
+    const [users, roles] = await Promise.all([
+      listAdminUsers(workspace.id, {
+        cursor: input.cursor ?? undefined,
+        limit: adminStore.usersPage.limit
+      }),
+      listAdminRoles()
     ]);
 
     adminStore.users = users.items;
+    adminStore.usersPage.currentCursor = input.cursor;
+    adminStore.usersPage.backStack = input.backStack;
+    adminStore.usersPage.nextCursor = users.next_cursor;
     adminStore.roles = roles;
-    adminStore.audits = audits;
   } catch (error) {
     adminStore.error = toDisplayError(error);
   } finally {
+    adminStore.usersPage.loading = false;
+    adminStore.loading = false;
+  }
+}
+
+async function refreshAdminAuditPage(input: { cursor: string | null; backStack: Array<string | null> }): Promise<void> {
+  const workspace = getCurrentWorkspace();
+  if (!workspace || workspace.mode !== "remote") {
+    return;
+  }
+
+  adminStore.auditsPage.loading = true;
+  try {
+    const audits = await listAuditEvents(workspace.id, {
+      cursor: input.cursor ?? undefined,
+      limit: adminStore.auditsPage.limit
+    });
+    adminStore.audits = audits.items;
+    adminStore.auditsPage.currentCursor = input.cursor;
+    adminStore.auditsPage.backStack = input.backStack;
+    adminStore.auditsPage.nextCursor = audits.next_cursor;
+  } catch (error) {
+    adminStore.error = toDisplayError(error);
+  } finally {
+    adminStore.auditsPage.loading = false;
     adminStore.loading = false;
   }
 }
@@ -278,4 +367,14 @@ function createDefaultPermissionItems(): ActionPermissionItem[] {
     { id: "resource.approve", label: "审批共享", enabled: true },
     { id: "audit.read", label: "查看审计日志", enabled: true }
   ];
+}
+
+function createInitialPageState(limit = 20): CursorPageState {
+  return {
+    limit,
+    currentCursor: null,
+    backStack: [],
+    nextCursor: null,
+    loading: false
+  };
 }

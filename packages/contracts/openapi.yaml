@@ -18,7 +18,10 @@ paths:
 
   /v1/workspaces:
     get:
-      summary: List workspaces from control hub registry
+      summary: List workspaces
+      parameters:
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
           description: Workspace list
@@ -27,7 +30,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/WorkspaceListEnvelope'
     post:
-      summary: Create remote workspace metadata in control hub
+      summary: Create remote workspace metadata
       requestBody:
         required: true
         content:
@@ -42,50 +45,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/Workspace'
         '400':
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StandardError'
+          $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/workspaces/remote/connect:
+  /v1/workspaces/remote-connections:
     post:
-      summary: Compatible shortcut for remote workspace connect and login
+      summary: Create/resolve remote workspace connection and login
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RemoteConnectRequest'
+              $ref: '#/components/schemas/RemoteConnectionRequest'
       responses:
         '200':
-          description: Workspace and login response
+          description: Workspace connection and token
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RemoteConnectResponse'
+                $ref: '#/components/schemas/RemoteConnectionResponse'
         '400':
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StandardError'
+          $ref: '#/components/responses/StandardErrorResponse'
         '401':
-          description: Authentication failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StandardError'
+          $ref: '#/components/responses/StandardErrorResponse'
         '403':
-          description: Login disabled or forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StandardError'
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
 
   /v1/auth/login:
     post:
-      summary: Remote login through control hub
+      summary: Login to workspace
       requestBody:
         required: true
         content:
@@ -100,33 +89,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
         '400':
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StandardError'
+          $ref: '#/components/responses/StandardErrorResponse'
         '401':
-          description: Authentication failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StandardError'
+          $ref: '#/components/responses/StandardErrorResponse'
         '403':
-          description: Login disabled or forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StandardError'
+          $ref: '#/components/responses/StandardErrorResponse'
         '404':
-          description: Workspace not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StandardError'
+          $ref: '#/components/responses/StandardErrorResponse'
 
   /v1/me:
     get:
-      summary: Get current identity and capabilities for current hub session
+      summary: Current identity and capabilities
       responses:
         '200':
           description: Current user profile
@@ -135,11 +108,448 @@ paths:
               schema:
                 $ref: '#/components/schemas/Me'
         '401':
-          description: Invalid token
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/projects:
+    get:
+      summary: List projects
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Project list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StandardError'
+                $ref: '#/components/schemas/ListEnvelope'
+    post:
+      summary: Create project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '201':
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/projects/import:
+    post:
+      summary: Import project by directory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportProjectRequest'
+      responses:
+        '201':
+          description: Imported project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/projects/{project_id}:
+    delete:
+      summary: Delete project
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/projects/{project_id}/conversations:
+    get:
+      summary: List project conversations
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+    post:
+      summary: Create conversation in project
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+      responses:
+        '201':
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/projects/{project_id}/config:
+    put:
+      summary: Update project config
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectConfig'
+      responses:
+        '200':
+          description: Updated project config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectConfig'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations:
+    get:
+      summary: List conversations
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+        - in: query
+          name: project_id
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+
+  /v1/conversations/{conversation_id}:
+    patch:
+      summary: Rename conversation
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenameConversationRequest'
+      responses:
+        '200':
+          description: Renamed conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    delete:
+      summary: Delete conversation
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations/{conversation_id}/messages:
+    post:
+      summary: Enqueue conversation message and create execution
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionCreateRequest'
+      responses:
+        '201':
+          description: Created execution
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionCreateResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations/{conversation_id}/stop:
+    post:
+      summary: Stop active execution and continue queued items
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+      responses:
+        '200':
+          description: Stop accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations/{conversation_id}/rollback:
+    post:
+      summary: Rollback conversation to snapshot point
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RollbackRequest'
+      responses:
+        '200':
+          description: Rollback applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations/{conversation_id}/export:
+    get:
+      summary: Export conversation as markdown
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+        - in: query
+          name: format
+          required: true
+          schema:
+            type: string
+            enum: [markdown]
+      responses:
+        '200':
+          description: Markdown content
+          content:
+            text/markdown:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/executions:
+    get:
+      summary: List executions
+      parameters:
+        - in: query
+          name: conversation_id
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Execution list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+
+  /v1/executions/{execution_id}/diff:
+    get:
+      summary: Get execution diff summary
+      parameters:
+        - $ref: '#/components/parameters/ExecutionIdParam'
+      responses:
+        '200':
+          description: Diff list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DiffItem'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/executions/{execution_id}/{action}:
+    post:
+      summary: Commit or discard execution result
+      parameters:
+        - $ref: '#/components/parameters/ExecutionIdParam'
+        - in: path
+          name: action
+          required: true
+          schema:
+            type: string
+            enum: [commit, discard]
+      responses:
+        '200':
+          description: Action applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/resources:
+    get:
+      summary: List resources
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Resource list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+
+  /v1/workspaces/{workspace_id}/resource-imports:
+    post:
+      summary: Import resource into workspace
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceImportRequest'
+      responses:
+        '201':
+          description: Imported resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resource'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/share-requests:
+    post:
+      summary: Create share request
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareRequestCreateRequest'
+      responses:
+        '201':
+          description: Share request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareRequest'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/share-requests/{request_id}/{action}:
+    post:
+      summary: Approve/reject/revoke share request
+      parameters:
+        - in: path
+          name: request_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: action
+          required: true
+          schema:
+            type: string
+            enum: [approve, reject, revoke]
+      responses:
+        '200':
+          description: Share action applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/model-catalog:
+    get:
+      summary: List model catalog
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      responses:
+        '200':
+          description: Model catalog list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ModelCatalogItem'
+    post:
+      summary: Sync model catalog manually
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelCatalogSyncRequest'
+      responses:
+        '200':
+          description: Updated model catalog list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ModelCatalogItem'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
 
   /v1/admin/ping:
     get:
@@ -150,86 +560,275 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [ok]
-                properties:
-                  ok:
-                    type: boolean
-                    const: true
+                $ref: '#/components/schemas/OkResponse'
         '401':
-          description: Invalid token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StandardError'
+          $ref: '#/components/responses/StandardErrorResponse'
         '403':
-          description: Access denied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StandardError'
+          $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/projects:
+  /v1/admin/users:
     get:
-      summary: List projects (placeholder)
+      summary: List admin users
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
-          description: Empty list
+          description: Admin user list
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListEnvelope'
     post:
-      summary: Not implemented
+      summary: Create or update admin user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUser'
       responses:
-        '501':
-          description: Not implemented
+        '200':
+          description: Updated existing user
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StandardError'
+                $ref: '#/components/schemas/AdminUser'
+        '201':
+          description: Created user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations:
-    get:
-      summary: List conversations (placeholder)
+  /v1/admin/users/{user_id}:
+    patch:
+      summary: Update admin user role/enabled
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  $ref: '#/components/schemas/Role'
+                enabled:
+                  type: boolean
       responses:
         '200':
-          description: Empty list
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    delete:
+      summary: Delete admin user
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/roles:
+    get:
+      summary: List admin roles
+      responses:
+        '200':
+          description: Role list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminRole'
+    post:
+      summary: Create or update admin role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRole'
+      responses:
+        '200':
+          description: Updated role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminRole'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/roles/{role_key}:
+    patch:
+      summary: Toggle admin role enabled
+      parameters:
+        - in: path
+          name: role_key
+          required: true
+          schema:
+            $ref: '#/components/schemas/Role'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminRole'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    delete:
+      summary: Delete admin role
+      parameters:
+        - in: path
+          name: role_key
+          required: true
+          schema:
+            $ref: '#/components/schemas/Role'
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/audit:
+    get:
+      summary: List admin audit events
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Audit list
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListEnvelope'
-    post:
-      summary: Not implemented
-      responses:
-        '501':
-          description: Not implemented
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StandardError'
 
-  /v1/executions:
-    get:
-      summary: List executions (placeholder)
-      responses:
-        '200':
-          description: Empty list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListEnvelope'
+  /internal/executions:
     post:
-      summary: Not implemented
+      summary: Worker internal execution accept endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InternalExecutionRequest'
       responses:
-        '501':
-          description: Not implemented
+        '202':
+          description: Execution accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StandardError'
+                $ref: '#/components/schemas/InternalExecutionAcceptedResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /internal/events:
+    post:
+      summary: Worker internal event ingest endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InternalEventRequest'
+      responses:
+        '202':
+          description: Event accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalEventAcceptedResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
 
 components:
+  parameters:
+    CursorParam:
+      in: query
+      name: cursor
+      schema:
+        type: string
+      description: Opaque cursor; current implementation uses numeric offsets.
+    LimitParam:
+      in: query
+      name: limit
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    WorkspaceIdParam:
+      in: path
+      name: workspace_id
+      required: true
+      schema:
+        type: string
+    ProjectIdParam:
+      in: path
+      name: project_id
+      required: true
+      schema:
+        type: string
+    ConversationIdParam:
+      in: path
+      name: conversation_id
+      required: true
+      schema:
+        type: string
+    ExecutionIdParam:
+      in: path
+      name: execution_id
+      required: true
+      schema:
+        type: string
+
+  responses:
+    StandardErrorResponse:
+      description: Standard API error body
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StandardError'
+
   schemas:
     HealthResponse:
       type: object
@@ -241,26 +840,17 @@ components:
           type: string
           const: '0.4.0'
 
-    ListEnvelope:
+    OkResponse:
       type: object
-      required: [items, next_cursor]
+      required: [ok]
       properties:
-        items:
-          type: array
-          items: {}
-        next_cursor:
-          type: [string, 'null']
+        ok:
+          type: boolean
+          const: true
 
-    WorkspaceListEnvelope:
-      type: object
-      required: [items, next_cursor]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/Workspace'
-        next_cursor:
-          type: [string, 'null']
+    Role:
+      type: string
+      enum: [viewer, developer, approver, admin]
 
     Workspace:
       type: object
@@ -294,9 +884,65 @@ components:
           type: string
           enum: [disabled, password_or_token, token_only]
 
+    WorkspaceConnection:
+      type: object
+      required:
+        - workspace_id
+        - hub_url
+        - username
+        - connection_status
+        - connected_at
+      properties:
+        workspace_id:
+          type: string
+        hub_url:
+          type: string
+        username:
+          type: string
+        connection_status:
+          type: string
+          enum: [connected, reconnecting, disconnected]
+        connected_at:
+          type: string
+          format: date-time
+        access_token:
+          type: string
+
+    RemoteConnectionResponse:
+      type: object
+      required: [workspace, connection]
+      properties:
+        workspace:
+          $ref: '#/components/schemas/Workspace'
+        connection:
+          $ref: '#/components/schemas/WorkspaceConnection'
+        access_token:
+          type: string
+
+    ListEnvelope:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: {}
+        next_cursor:
+          type: [string, 'null']
+
+    WorkspaceListEnvelope:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Workspace'
+        next_cursor:
+          type: [string, 'null']
+
     CreateWorkspaceRequest:
       type: object
-      required: [name, hub_url]
+      required: [hub_url]
       properties:
         name:
           type: string
@@ -309,6 +955,23 @@ components:
           type: string
           enum: [password_or_token, token_only]
           default: password_or_token
+
+    RemoteConnectionRequest:
+      type: object
+      required: [hub_url, username, password]
+      properties:
+        workspace_id:
+          type: string
+        name:
+          type: string
+        hub_url:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+        token:
+          type: string
 
     LoginRequest:
       type: object
@@ -335,31 +998,6 @@ components:
         expires_in:
           type: integer
 
-    RemoteConnectRequest:
-      type: object
-      properties:
-        workspace_id:
-          type: string
-        name:
-          type: string
-        hub_url:
-          type: string
-        username:
-          type: string
-        password:
-          type: string
-        token:
-          type: string
-
-    RemoteConnectResponse:
-      type: object
-      required: [workspace, login]
-      properties:
-        workspace:
-          $ref: '#/components/schemas/Workspace'
-        login:
-          $ref: '#/components/schemas/LoginResponse'
-
     Capabilities:
       type: object
       required: [admin_console, resource_write, execution_control]
@@ -382,8 +1020,7 @@ components:
         workspace_id:
           type: string
         role:
-          type: string
-          enum: [viewer, developer, approver, admin]
+          $ref: '#/components/schemas/Role'
         capabilities:
           $ref: '#/components/schemas/Capabilities'
 
@@ -401,16 +1038,421 @@ components:
         trace_id:
           type: string
 
-    ExecutionEvent:
+    Project:
+      type: object
+      required: [id, workspace_id, name, repo_path, is_git, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        name:
+          type: string
+        repo_path:
+          type: string
+        is_git:
+          type: boolean
+        default_model_id:
+          type: string
+        default_mode:
+          type: string
+          enum: [agent, plan]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateProjectRequest:
+      type: object
+      required: [workspace_id, name, repo_path]
+      properties:
+        workspace_id:
+          type: string
+        name:
+          type: string
+        repo_path:
+          type: string
+        is_git:
+          type: boolean
+
+    ImportProjectRequest:
+      type: object
+      required: [workspace_id, directory_path]
+      properties:
+        workspace_id:
+          type: string
+        directory_path:
+          type: string
+
+    ProjectConfig:
+      type: object
+      required: [project_id, model_id, rule_ids, skill_ids, mcp_ids, updated_at]
+      properties:
+        project_id:
+          type: string
+        model_id:
+          type: [string, 'null']
+        rule_ids:
+          type: array
+          items:
+            type: string
+        skill_ids:
+          type: array
+          items:
+            type: string
+        mcp_ids:
+          type: array
+          items:
+            type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    Conversation:
       type: object
       required:
-        - event_id
-        - execution_id
+        - id
+        - workspace_id
+        - project_id
+        - name
+        - queue_state
+        - default_mode
+        - model_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        project_id:
+          type: string
+        name:
+          type: string
+        queue_state:
+          type: string
+          enum: [idle, running, queued]
+        default_mode:
+          type: string
+          enum: [agent, plan]
+        model_id:
+          type: string
+        active_execution_id:
+          type: [string, 'null']
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateConversationRequest:
+      type: object
+      required: [workspace_id, name]
+      properties:
+        workspace_id:
+          type: string
+        name:
+          type: string
+
+    RenameConversationRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    Execution:
+      type: object
+      required:
+        - id
+        - workspace_id
         - conversation_id
+        - message_id
+        - state
+        - mode
+        - model_id
+        - queue_index
         - trace_id
-        - sequence
-        - timestamp
-        - payload
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        conversation_id:
+          type: string
+        message_id:
+          type: string
+        state:
+          type: string
+          enum: [queued, executing, completed, failed, cancelled]
+        mode:
+          type: string
+          enum: [agent, plan]
+        model_id:
+          type: string
+        queue_index:
+          type: integer
+        trace_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ExecutionCreateRequest:
+      type: object
+      required: [content, mode, model_id]
+      properties:
+        content:
+          type: string
+        mode:
+          type: string
+          enum: [agent, plan]
+        model_id:
+          type: string
+
+    ExecutionCreateResponse:
+      type: object
+      required: [execution]
+      properties:
+        execution:
+          $ref: '#/components/schemas/Execution'
+
+    RollbackRequest:
+      type: object
+      required: [message_id]
+      properties:
+        message_id:
+          type: string
+
+    DiffItem:
+      type: object
+      required: [id, path, change_type, summary]
+      properties:
+        id:
+          type: string
+        path:
+          type: string
+        change_type:
+          type: string
+          enum: [added, modified, deleted]
+        summary:
+          type: string
+
+    Resource:
+      type: object
+      required:
+        - id
+        - workspace_id
+        - type
+        - name
+        - source
+        - scope
+        - share_status
+        - owner_user_id
+        - enabled
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        type:
+          type: string
+          enum: [model, rule, skill, mcp]
+        name:
+          type: string
+        source:
+          type: string
+        scope:
+          type: string
+        share_status:
+          type: string
+          enum: [pending, approved, denied, revoked]
+        owner_user_id:
+          type: string
+        enabled:
+          type: boolean
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ResourceImportRequest:
+      type: object
+      required: [resource_type, source_id]
+      properties:
+        resource_type:
+          type: string
+          enum: [model, rule, skill, mcp]
+        source_id:
+          type: string
+
+    ShareRequestCreateRequest:
+      type: object
+      required: [resource_id]
+      properties:
+        resource_id:
+          type: string
+
+    ShareRequest:
+      type: object
+      required: [id, workspace_id, resource_id, status, requester_user_id, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        resource_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, denied, revoked]
+        requester_user_id:
+          type: string
+        approver_user_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ModelCatalogItem:
+      type: object
+      required: [workspace_id, vendor, model_id, enabled, status, synced_at]
+      properties:
+        workspace_id:
+          type: string
+        vendor:
+          type: string
+          enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+        model_id:
+          type: string
+        enabled:
+          type: boolean
+        status:
+          type: string
+          enum: [active, deprecated, preview]
+        synced_at:
+          type: string
+          format: date-time
+
+    ModelCatalogSyncRequest:
+      type: object
+      properties:
+        vendors:
+          type: array
+          items:
+            type: string
+            enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+
+    AdminUser:
+      type: object
+      required: [workspace_id, username]
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        username:
+          type: string
+        display_name:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    AdminRole:
+      type: object
+      required: [key, name, permissions, enabled]
+      properties:
+        key:
+          $ref: '#/components/schemas/Role'
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+
+    AdminAuditEvent:
+      type: object
+      required: [id, actor, action, resource, result, trace_id, timestamp]
+      properties:
+        id:
+          type: string
+        actor:
+          type: string
+        action:
+          type: string
+        resource:
+          type: string
+        result:
+          type: string
+        trace_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    InternalExecutionRequest:
+      type: object
+      required: [execution_id, workspace_id, conversation_id, message_id, mode, model_id]
+      properties:
+        execution_id:
+          type: string
+        workspace_id:
+          type: string
+        conversation_id:
+          type: string
+        message_id:
+          type: string
+        mode:
+          type: string
+        model_id:
+          type: string
+        queue_index:
+          type: integer
+        state:
+          type: string
+        trace_id:
+          type: string
+        content:
+          type: string
+
+    InternalExecutionAcceptedResponse:
+      type: object
+      required: [accepted, execution]
+      properties:
+        accepted:
+          type: boolean
+        execution:
+          type: object
+          additionalProperties: true
+
+    InternalEventRequest:
+      type: object
+      required: [event_id, execution_id, conversation_id, type, sequence, queue_index]
       properties:
         event_id:
           type: string
@@ -420,11 +1462,25 @@ components:
           type: string
         trace_id:
           type: string
+        type:
+          type: string
         sequence:
+          type: integer
+        queue_index:
           type: integer
         timestamp:
           type: string
           format: date-time
         payload:
+          type: object
+          additionalProperties: true
+
+    InternalEventAcceptedResponse:
+      type: object
+      required: [accepted, event]
+      properties:
+        accepted:
+          type: boolean
+        event:
           type: object
           additionalProperties: true

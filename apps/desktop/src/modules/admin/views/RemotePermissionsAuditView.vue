@@ -91,7 +91,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="audit in adminStore.audits.slice(0, 12)" :key="audit.id">
+          <tr v-for="audit in adminStore.audits" :key="audit.id">
             <td>{{ audit.actor }}</td>
             <td>{{ audit.action }}</td>
             <td>{{ audit.resource }}</td>
@@ -100,6 +100,13 @@
           </tr>
         </tbody>
       </table>
+      <CursorPager
+        :can-prev="adminStore.auditsPage.backStack.length > 0"
+        :can-next="adminStore.auditsPage.nextCursor !== null"
+        :loading="adminStore.auditsPage.loading"
+        @prev="paginateAudits('prev')"
+        @next="paginateAudits('next')"
+      />
     </section>
   </AccountShell>
 </template>
@@ -111,12 +118,15 @@ import {
   adminStore,
   deleteMenuNode,
   deletePermissionItem,
+  loadNextAdminAuditsPage,
+  loadPreviousAdminAuditsPage,
   refreshAdminData,
   toggleMenuNode,
   togglePermissionItem
 } from "@/modules/admin/store";
 import AccountShell from "@/shared/shells/AccountShell.vue";
 import AppIcon from "@/shared/ui/AppIcon.vue";
+import CursorPager from "@/shared/ui/CursorPager.vue";
 import ToastAlert from "@/shared/ui/ToastAlert.vue";
 
 onMounted(async () => {
@@ -168,6 +178,14 @@ function removePermission(permissionId: string): void {
 
 function formatTime(value: string): string {
   return new Date(value).toLocaleString();
+}
+
+async function paginateAudits(direction: "prev" | "next"): Promise<void> {
+  if (direction === "next") {
+    await loadNextAdminAuditsPage();
+    return;
+  }
+  await loadPreviousAdminAuditsPage();
 }
 </script>
 

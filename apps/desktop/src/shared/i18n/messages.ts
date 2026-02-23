@@ -39,7 +39,15 @@ export const messages: Record<Locale, MessageMap> = {
     "settings.scope": "Local Settings",
     "settings.theme.system": "跟随系统",
     "settings.theme.dark": "Dark",
-    "settings.theme.light": "Light"
+    "settings.theme.light": "Light",
+    "settings.theme.title": "主题模式",
+    "settings.theme.current": "当前生效主题",
+    "settings.theme.preview": "主题预览",
+    "settings.theme.previewHint": "切换后即时生效并自动持久化。",
+    "settings.i18n.title": "语言切换",
+    "settings.i18n.current": "当前语言",
+    "settings.i18n.preview": "文案预览",
+    "settings.i18n.previewHint": "切换后菜单与页面文案立即更新，并自动持久化。"
   },
   "en-US": {
     "app.title": "Goyais v0.4.0",
@@ -77,6 +85,14 @@ export const messages: Record<Locale, MessageMap> = {
     "settings.scope": "Local Settings",
     "settings.theme.system": "System",
     "settings.theme.dark": "Dark",
-    "settings.theme.light": "Light"
+    "settings.theme.light": "Light",
+    "settings.theme.title": "Theme Mode",
+    "settings.theme.current": "Active Theme",
+    "settings.theme.preview": "Theme Preview",
+    "settings.theme.previewHint": "Changes apply immediately and persist automatically.",
+    "settings.i18n.title": "Language",
+    "settings.i18n.current": "Current Locale",
+    "settings.i18n.preview": "Copy Preview",
+    "settings.i18n.previewHint": "Menus and pages update instantly and persist automatically."
   }
 };

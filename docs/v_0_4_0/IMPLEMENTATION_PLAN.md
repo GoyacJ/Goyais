@@ -316,6 +316,16 @@
 
 ---
 
+## 2026-02-23 基础框架补齐门禁（增量）
+
+1. 契约门禁：`packages/contracts/openapi.yaml` 作为唯一 API 权威源，Hub 增加契约漂移测试。
+2. 联调门禁：Desktop 新增 strict 通道（`VITE_API_MODE=strict` + 禁用 fallback）。
+3. 分页门禁：项目/Conversation/资源/审计列表统一 `cursor + limit`，UI 必须支持前进与回退游标栈。
+4. 主题与 i18n 门禁：设置页提供真实切换控件，行为即时生效并持久化。
+5. Worker 门禁：`/internal/executions` 与 `/internal/events` 不再返回 501，改为最小可用 202 流程。
+
+---
+
 ## 关键风险与缓解
 
 | 风险 | 阶段 | 缓解 |

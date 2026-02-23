@@ -26,6 +26,49 @@ const (
 	RoleAdmin     Role = "admin"
 )
 
+type QueueState string
+
+const (
+	QueueStateIdle    QueueState = "idle"
+	QueueStateRunning QueueState = "running"
+	QueueStateQueued  QueueState = "queued"
+)
+
+type ConversationMode string
+
+const (
+	ConversationModeAgent ConversationMode = "agent"
+	ConversationModePlan  ConversationMode = "plan"
+)
+
+type ExecutionState string
+
+const (
+	ExecutionStateQueued    ExecutionState = "queued"
+	ExecutionStateExecuting ExecutionState = "executing"
+	ExecutionStateCompleted ExecutionState = "completed"
+	ExecutionStateFailed    ExecutionState = "failed"
+	ExecutionStateCancelled ExecutionState = "cancelled"
+)
+
+type ResourceType string
+
+const (
+	ResourceTypeModel ResourceType = "model"
+	ResourceTypeRule  ResourceType = "rule"
+	ResourceTypeSkill ResourceType = "skill"
+	ResourceTypeMCP   ResourceType = "mcp"
+)
+
+type ShareStatus string
+
+const (
+	ShareStatusPending  ShareStatus = "pending"
+	ShareStatusApproved ShareStatus = "approved"
+	ShareStatusDenied   ShareStatus = "denied"
+	ShareStatusRevoked  ShareStatus = "revoked"
+)
+
 type Workspace struct {
 	ID             string        `json:"id"`
 	Name           string        `json:"name"`
@@ -35,6 +78,21 @@ type Workspace struct {
 	CreatedAt      string        `json:"created_at"`
 	LoginDisabled  bool          `json:"login_disabled"`
 	AuthMode       AuthMode      `json:"auth_mode"`
+}
+
+type WorkspaceConnection struct {
+	WorkspaceID      string `json:"workspace_id"`
+	HubURL           string `json:"hub_url"`
+	Username         string `json:"username"`
+	ConnectionStatus string `json:"connection_status"`
+	ConnectedAt      string `json:"connected_at"`
+	AccessToken      string `json:"access_token,omitempty"`
+}
+
+type WorkspaceConnectionResult struct {
+	Workspace   Workspace           `json:"workspace"`
+	Connection  WorkspaceConnection `json:"connection"`
+	AccessToken string              `json:"access_token,omitempty"`
 }
 
 type CreateWorkspaceRequest struct {
@@ -66,11 +124,6 @@ type RemoteConnectRequest struct {
 	Token       string `json:"token,omitempty"`
 }
 
-type RemoteConnectResponse struct {
-	Workspace Workspace     `json:"workspace"`
-	Login     LoginResponse `json:"login"`
-}
-
 type Capabilities struct {
 	AdminConsole     bool `json:"admin_console"`
 	ResourceWrite    bool `json:"resource_write"`
@@ -92,4 +145,199 @@ type Session struct {
 	UserID      string    `json:"user_id"`
 	DisplayName string    `json:"display_name"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+type Project struct {
+	ID             string           `json:"id"`
+	WorkspaceID    string           `json:"workspace_id"`
+	Name           string           `json:"name"`
+	RepoPath       string           `json:"repo_path"`
+	IsGit          bool             `json:"is_git"`
+	DefaultModelID string           `json:"default_model_id,omitempty"`
+	DefaultMode    ConversationMode `json:"default_mode,omitempty"`
+	CreatedAt      string           `json:"created_at"`
+	UpdatedAt      string           `json:"updated_at"`
+}
+
+type ProjectConfig struct {
+	ProjectID string   `json:"project_id"`
+	ModelID   *string  `json:"model_id"`
+	RuleIDs   []string `json:"rule_ids"`
+	SkillIDs  []string `json:"skill_ids"`
+	MCPIDs    []string `json:"mcp_ids"`
+	UpdatedAt string   `json:"updated_at"`
+}
+
+type CreateProjectRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	Name        string `json:"name"`
+	RepoPath    string `json:"repo_path"`
+	IsGit       bool   `json:"is_git"`
+}
+
+type ImportProjectRequest struct {
+	WorkspaceID   string `json:"workspace_id"`
+	DirectoryPath string `json:"directory_path"`
+}
+
+type CreateConversationRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	Name        string `json:"name"`
+}
+
+type RenameConversationRequest struct {
+	Name string `json:"name"`
+}
+
+type Conversation struct {
+	ID                string           `json:"id"`
+	WorkspaceID       string           `json:"workspace_id"`
+	ProjectID         string           `json:"project_id"`
+	Name              string           `json:"name"`
+	QueueState        QueueState       `json:"queue_state"`
+	DefaultMode       ConversationMode `json:"default_mode"`
+	ModelID           string           `json:"model_id"`
+	ActiveExecutionID *string          `json:"active_execution_id"`
+	CreatedAt         string           `json:"created_at"`
+	UpdatedAt         string           `json:"updated_at"`
+}
+
+type MessageRole string
+
+const (
+	MessageRoleUser      MessageRole = "user"
+	MessageRoleAssistant MessageRole = "assistant"
+	MessageRoleSystem    MessageRole = "system"
+)
+
+type ConversationMessage struct {
+	ID             string      `json:"id"`
+	ConversationID string      `json:"conversation_id"`
+	Role           MessageRole `json:"role"`
+	Content        string      `json:"content"`
+	CreatedAt      string      `json:"created_at"`
+	QueueIndex     *int        `json:"queue_index,omitempty"`
+	CanRollback    *bool       `json:"can_rollback,omitempty"`
+}
+
+type ConversationSnapshot struct {
+	ID                     string                `json:"id"`
+	ConversationID         string                `json:"conversation_id"`
+	RollbackPointMessageID string                `json:"rollback_point_message_id"`
+	QueueState             QueueState            `json:"queue_state"`
+	WorktreeRef            *string               `json:"worktree_ref"`
+	InspectorState         ConversationInspector `json:"inspector_state"`
+	Messages               []ConversationMessage `json:"messages"`
+	ExecutionIDs           []string              `json:"execution_ids"`
+	CreatedAt              string                `json:"created_at"`
+}
+
+type ConversationInspector struct {
+	Tab string `json:"tab"`
+}
+
+type Execution struct {
+	ID             string           `json:"id"`
+	WorkspaceID    string           `json:"workspace_id"`
+	ConversationID string           `json:"conversation_id"`
+	MessageID      string           `json:"message_id"`
+	State          ExecutionState   `json:"state"`
+	Mode           ConversationMode `json:"mode"`
+	ModelID        string           `json:"model_id"`
+	QueueIndex     int              `json:"queue_index"`
+	TraceID        string           `json:"trace_id"`
+	CreatedAt      string           `json:"created_at"`
+	UpdatedAt      string           `json:"updated_at"`
+}
+
+type ExecutionCreateRequest struct {
+	Content string           `json:"content"`
+	Mode    ConversationMode `json:"mode"`
+	ModelID string           `json:"model_id"`
+}
+
+type ExecutionCreateResponse struct {
+	Execution Execution `json:"execution"`
+}
+
+type RollbackRequest struct {
+	MessageID string `json:"message_id"`
+}
+
+type DiffItem struct {
+	ID         string `json:"id"`
+	Path       string `json:"path"`
+	ChangeType string `json:"change_type"`
+	Summary    string `json:"summary"`
+}
+
+type Resource struct {
+	ID          string       `json:"id"`
+	WorkspaceID string       `json:"workspace_id"`
+	Type        ResourceType `json:"type"`
+	Name        string       `json:"name"`
+	Source      string       `json:"source"`
+	Scope       string       `json:"scope"`
+	ShareStatus ShareStatus  `json:"share_status"`
+	OwnerUserID string       `json:"owner_user_id"`
+	Enabled     bool         `json:"enabled"`
+	Description string       `json:"description,omitempty"`
+	CreatedAt   string       `json:"created_at"`
+	UpdatedAt   string       `json:"updated_at"`
+}
+
+type ResourceImportRequest struct {
+	ResourceType ResourceType `json:"resource_type"`
+	SourceID     string       `json:"source_id"`
+}
+
+type ShareRequest struct {
+	ID              string      `json:"id"`
+	WorkspaceID     string      `json:"workspace_id"`
+	ResourceID      string      `json:"resource_id"`
+	Status          ShareStatus `json:"status"`
+	RequesterUserID string      `json:"requester_user_id"`
+	ApproverUserID  *string     `json:"approver_user_id,omitempty"`
+	CreatedAt       string      `json:"created_at"`
+	UpdatedAt       string      `json:"updated_at"`
+}
+
+type ModelCatalogItem struct {
+	WorkspaceID string `json:"workspace_id"`
+	Vendor      string `json:"vendor"`
+	ModelID     string `json:"model_id"`
+	Enabled     bool   `json:"enabled"`
+	Status      string `json:"status"`
+	SyncedAt    string `json:"synced_at"`
+}
+
+type ModelCatalogSyncRequest struct {
+	Vendors []string `json:"vendors"`
+}
+
+type AdminUser struct {
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Role        Role   `json:"role"`
+	Enabled     bool   `json:"enabled"`
+	CreatedAt   string `json:"created_at"`
+}
+
+type AdminRole struct {
+	Key         Role     `json:"key"`
+	Name        string   `json:"name"`
+	Permissions []string `json:"permissions"`
+	Enabled     bool     `json:"enabled"`
+}
+
+type AdminAuditEvent struct {
+	ID        string `json:"id"`
+	Actor     string `json:"actor"`
+	Action    string `json:"action"`
+	Resource  string `json:"resource"`
+	Result    string `json:"result"`
+	TraceID   string `json:"trace_id"`
+	Timestamp string `json:"timestamp"`
 }

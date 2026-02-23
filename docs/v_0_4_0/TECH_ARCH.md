@@ -309,44 +309,43 @@ private resource
 1. `GET /v1/workspaces`
 2. `POST /v1/workspaces/remote-connections`
 3. `POST /v1/auth/login`
-4. `POST /v1/auth/refresh`
+4. `GET /v1/me`
 
 #### Project / Conversation / Execution
 
 1. `GET|POST /v1/projects`
 2. `POST /v1/projects/import`（仅目录）
-3. `PUT /v1/projects/{project_id}/config`
-4. `GET|POST /v1/projects/{project_id}/conversations`
-5. `POST /v1/conversations/{conversation_id}/messages`
-6. `POST /v1/conversations/{conversation_id}/stop`
-7. `POST /v1/conversations/{conversation_id}/rollback`
-8. `GET /v1/conversations/{conversation_id}/export?format=markdown`
-9. `GET /v1/conversations/{conversation_id}/events` (SSE)
-10. `POST /v1/executions/{execution_id}/confirm`
-11. `POST /v1/executions/{execution_id}/commit`
-12. `POST /v1/executions/{execution_id}/discard`
+3. `DELETE /v1/projects/{project_id}`
+4. `PUT /v1/projects/{project_id}/config`
+5. `GET|POST /v1/projects/{project_id}/conversations`
+6. `PATCH|DELETE /v1/conversations/{conversation_id}`
+7. `POST /v1/conversations/{conversation_id}/messages`
+8. `POST /v1/conversations/{conversation_id}/stop`
+9. `POST /v1/conversations/{conversation_id}/rollback`
+10. `GET /v1/conversations/{conversation_id}/export?format=markdown`
+11. `GET /v1/executions`
+12. `GET /v1/executions/{execution_id}/diff`
+13. `POST /v1/executions/{execution_id}/commit`
+14. `POST /v1/executions/{execution_id}/discard`
 
 #### Resource / Share
 
-1. `GET|POST /v1/resources`
+1. `GET /v1/resources`
 2. `POST /v1/workspaces/{workspace_id}/resource-imports`
 3. `POST /v1/workspaces/{workspace_id}/share-requests`
 4. `POST /v1/share-requests/{request_id}/approve`
 5. `POST /v1/share-requests/{request_id}/reject`
-6. `POST /v1/shared-resources/{id}/revoke`
+6. `POST /v1/share-requests/{request_id}/revoke`
 7. `GET /v1/workspaces/{workspace_id}/model-catalog`
-8. `POST /v1/workspaces/{workspace_id}/model-catalog/sync`
+8. `POST /v1/workspaces/{workspace_id}/model-catalog`
 
 #### Admin（P0）
 
-1. `POST /v1/admin/users`
-2. `PATCH /v1/admin/users/{id}`
-3. `POST /v1/admin/users/{id}/roles`
-4. `POST /v1/admin/roles`
-5. `PATCH /v1/admin/roles/{id}`
-6. `POST /v1/admin/permissions/menu-bindings`
-7. `POST /v1/admin/permissions/data-bindings`
-8. `POST /v1/admin/permissions/action-bindings`
+1. `GET|POST /v1/admin/users`
+2. `PATCH|DELETE /v1/admin/users/{user_id}`
+3. `GET|POST /v1/admin/roles`
+4. `PATCH|DELETE /v1/admin/roles/{role_key}`
+5. `GET /v1/admin/audit`
 
 ### 9.2 内部 API（Hub <-> Worker）
 
@@ -722,6 +721,9 @@ while True:
 2. Conversation 区域消息方向：AI 在左、用户在右。
 3. 执行中发送新消息必须入队，不能打断当前执行。
 4. “回滚到此处”必须走快照回滚并更新 Inspector 状态。
+5. 设置页 `theme` 必须支持 `system/dark/light`，并持久化到本地存储。
+6. 设置页 `i18n` 必须支持 `zh-CN/en-US` 即时切换，并持久化到本地存储。
+7. 列表页统一 `cursor + limit` 分页，前端必须提供前进/回退游标栈交互。
 
 ### 14.3 状态管理建议
 
@@ -865,11 +867,10 @@ while True:
 
 ### 20.4 模型目录同步
 
-`POST /v1/workspaces/{workspace_id}/model-catalog/sync`
+`POST /v1/workspaces/{workspace_id}/model-catalog`
 
 ```json
 {
-  "mode": "manual",
   "vendors": ["OpenAI", "Google", "Qwen", "Doubao", "Zhipu", "MiniMax", "Local"]
 }
 ```

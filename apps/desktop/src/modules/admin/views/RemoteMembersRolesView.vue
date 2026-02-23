@@ -48,6 +48,13 @@
           </tr>
         </tbody>
       </table>
+      <CursorPager
+        :can-prev="adminStore.usersPage.backStack.length > 0"
+        :can-next="adminStore.usersPage.nextCursor !== null"
+        :loading="adminStore.usersPage.loading"
+        @prev="paginateUsers('prev')"
+        @next="paginateUsers('next')"
+      />
     </section>
 
     <section class="card">
@@ -110,12 +117,15 @@ import {
   createOrUpdateRole,
   deleteAdminUser,
   deleteRole,
+  loadNextAdminUsersPage,
+  loadPreviousAdminUsersPage,
   refreshAdminData,
   toggleAdminUser,
   toggleRole
 } from "@/modules/admin/store";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import AccountShell from "@/shared/shells/AccountShell.vue";
+import CursorPager from "@/shared/ui/CursorPager.vue";
 import type { Role } from "@/shared/types/api";
 
 const roleOptions: Role[] = ["viewer", "developer", "approver", "admin"];
@@ -216,101 +226,14 @@ function assignPermission(roleKey: Role): void {
 async function removeRoleByKey(roleKey: Role): Promise<void> {
   await deleteRole(roleKey);
 }
+
+async function paginateUsers(direction: "prev" | "next"): Promise<void> {
+  if (direction === "next") {
+    await loadNextAdminUsersPage();
+    return;
+  }
+  await loadPreviousAdminUsersPage();
+}
 </script>
 
-<style scoped>
-.card {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-12);
-  background: var(--semantic-surface);
-  padding: var(--global-space-12);
-  display: grid;
-  gap: var(--global-space-8);
-}
-
-.card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--global-space-8);
-}
-
-.card-head h3 {
-  margin: 0;
-}
-
-.card-head button {
-  border: 0;
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-surface-2);
-  color: var(--semantic-text);
-  padding: var(--global-space-8) var(--global-space-12);
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.table th,
-.table td {
-  border-bottom: 1px solid var(--semantic-divider);
-  padding: var(--global-space-8);
-  text-align: left;
-  vertical-align: top;
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-12);
-}
-
-.table th {
-  color: var(--semantic-text-subtle);
-  font-size: var(--global-font-size-11);
-}
-
-.table select {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-bg);
-  color: var(--semantic-text);
-  padding: 4px var(--global-space-8);
-}
-
-.actions {
-  display: inline-flex;
-  gap: var(--global-space-4);
-}
-
-.actions button {
-  border: 0;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--semantic-surface-2);
-  color: var(--semantic-text);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.permission-tags {
-  display: inline-flex;
-  gap: var(--global-space-4);
-  flex-wrap: wrap;
-}
-
-.tag {
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-bg);
-  border: 1px solid var(--semantic-border);
-  padding: 2px var(--global-space-8);
-  font-size: var(--global-font-size-11);
-}
-
-.enabled {
-  color: var(--semantic-success);
-}
-
-.disabled {
-  color: var(--semantic-danger);
-}
-</style>
+<style scoped src="./RemoteMembersRolesView.css"></style>

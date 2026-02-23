@@ -75,7 +75,12 @@ export function createApiClient(baseURL: string): ApiClient {
         return undefined as T;
       }
 
-      return (await response.json()) as T;
+      const contentType = response.headers.get("Content-Type") ?? "";
+      if (contentType.includes("application/json")) {
+        return (await response.json()) as T;
+      }
+
+      return (await response.text()) as T;
     } catch (error) {
       if (error instanceof ApiError) {
         throw error;
