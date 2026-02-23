@@ -65,6 +65,24 @@ func (s *authzStore) close() error {
 
 func (s *authzStore) migrate() error {
 	statements := []string{
+		`CREATE TABLE IF NOT EXISTS workspaces (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			mode TEXT NOT NULL,
+			hub_url TEXT,
+			is_default_local INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL,
+			login_disabled INTEGER NOT NULL DEFAULT 0,
+			auth_mode TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS workspace_connections (
+			workspace_id TEXT PRIMARY KEY,
+			hub_url TEXT NOT NULL,
+			username TEXT NOT NULL,
+			connection_status TEXT NOT NULL,
+			connected_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
 		`CREATE TABLE IF NOT EXISTS users (
 			id TEXT PRIMARY KEY,
 			workspace_id TEXT NOT NULL,
@@ -330,4 +348,3 @@ func boolToInt(value bool) int {
 	}
 	return 0
 }
-

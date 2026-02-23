@@ -879,3 +879,11 @@ while True:
   "vendors": ["OpenAI", "Google", "Qwen", "Doubao", "Zhipu", "MiniMax", "Local"]
 }
 ```
+
+### 20.5 2026-02-24 工作区语义收口（实现约束）
+
+1. 工作区数据源以 Hub SQLite 为权威：`workspaces`、`workspace_connections`。
+2. `GET /v1/workspaces` 仅返回：本地工作区 + 用户真实新增远程工作区，不允许预置固定 remote demo。
+3. 远程连接通过 `POST /v1/workspaces/remote-connections` 落库连接状态，审计记录至少包含 `workspace.create_remote`、`workspace.connect`、`workspace.switch_context`。
+4. Desktop 工作区切换必须触发上下文失效与重载，最少覆盖：`auth/permission/project/admin/resource`。
+5. 切换到远程工作区若 token 缺失或 401/403，状态置为 `auth_required`，不得自动回退到本地工作区。

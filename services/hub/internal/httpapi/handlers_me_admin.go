@@ -37,6 +37,7 @@ func MeHandler(state *AppState) http.HandlerFunc {
 			)
 			return
 		}
+		state.AppendWorkspaceSwitchAudit(session.WorkspaceID, session.UserID, TraceIDFromContext(r.Context()))
 
 		role := parseRole(string(session.Role))
 		writeJSON(w, http.StatusOK, Me{

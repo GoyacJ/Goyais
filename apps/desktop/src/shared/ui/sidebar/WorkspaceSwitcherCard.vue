@@ -98,18 +98,9 @@ const menuOpen = ref(false);
 const currentWorkspace = computed(() => props.workspaces.find((workspace) => workspace.id === props.currentWorkspaceId));
 const workspaceLabel = computed(() => currentWorkspace.value?.name ?? props.fallbackLabel);
 const workspaceOptions = computed(() => {
-  const byId = new Map<string, Workspace>();
   const local = props.workspaces.find((workspace) => workspace.mode === "local" || workspace.is_default_local);
-  if (local) {
-    byId.set(local.id, local);
-  }
-
-  props.workspaces
-    .filter((workspace) => workspace.mode === "remote")
-    .forEach((workspace) => byId.set(workspace.id, workspace));
-
-  props.workspaces.forEach((workspace) => byId.set(workspace.id, workspace));
-  return [...byId.values()];
+  const remote = props.workspaces.filter((workspace) => workspace.mode === "remote" && workspace.id !== local?.id);
+  return local ? [local, ...remote] : remote;
 });
 
 function onSwitchWorkspace(workspaceId: string): void {

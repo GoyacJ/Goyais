@@ -419,3 +419,13 @@ StandardsExceptionADR {
 10. 菜单权限变更时，能验证动态菜单/固定菜单行为与权限一致。
 11. 模型同步策略变更时，能验证手动/定时同步与失败重试审计。
 12. PR 审查可按第 13 章逐项打勾并形成可追溯证据。
+
+---
+
+## 16. 2026-02-24 工作区语义收口同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| Workspace 持久化与列表语义 | PRD.md, TECH_ARCH.md | PRD 5.x/9.x/14.x, TECH_ARCH 11.1/9.x | done |
+| 工作区切换上下文行为 | PRD.md, TECH_ARCH.md | PRD 5.2/9.2/16.x, TECH_ARCH 14.x/20.x | done |
+| 测试门禁与验收项 | IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | Phase 2/3 验收、DoD/门禁 | done |

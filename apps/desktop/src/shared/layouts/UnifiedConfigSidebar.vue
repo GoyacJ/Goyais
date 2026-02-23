@@ -55,7 +55,6 @@ import { createRemoteConnection } from "@/modules/workspace/services";
 import { setWorkspaceConnection, switchWorkspaceContext, upsertWorkspace } from "@/modules/workspace/store";
 import type { MenuEntry } from "@/shared/navigation/pageMenus";
 import { authStore, setWorkspaceToken } from "@/shared/stores/authStore";
-import { refreshNavigationVisibility } from "@/shared/stores/navigationStore";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import UserProfileMenuCard from "@/shared/ui/sidebar/UserProfileMenuCard.vue";
@@ -146,7 +145,6 @@ function resolveEntries(keys: string[]): MenuEntry[] {
 
 async function switchWorkspace(workspaceId: string): Promise<void> {
   await switchWorkspaceContext(workspaceId);
-  refreshNavigationVisibility();
 
   if (workspaceStore.mode === "remote") {
     if (!router.currentRoute.value.path.startsWith("/remote/")) {

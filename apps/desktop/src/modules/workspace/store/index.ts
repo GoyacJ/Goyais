@@ -1,3 +1,7 @@
+import { resetAdminStore, refreshAdminData } from "@/modules/admin/store";
+import { resetConversationStore } from "@/modules/conversation/store";
+import { refreshProjects, resetProjectStore } from "@/modules/project/store";
+import { refreshModelCatalog, refreshResources, resetResourceStore } from "@/modules/resource/store";
 import { listWorkspaces } from "@/modules/workspace/services";
 import {
   initializeGeneralSettings,
@@ -58,11 +62,34 @@ export async function initializeWorkspaceContext(): Promise<void> {
 }
 
 export async function switchWorkspaceContext(workspaceId: string): Promise<void> {
-  if (workspaceId === "") {
+  if (workspaceId === "" || workspaceId === workspaceStore.currentWorkspaceId) {
     return;
   }
 
+  workspaceStore.connectionState = "loading";
   setCurrentWorkspace(workspaceId);
+  invalidateWorkspaceScopedState();
   await refreshMeForCurrentWorkspace();
   refreshNavigationVisibility();
+
+  if (workspaceStore.connectionState === "auth_required" || workspaceStore.connectionState === "error") {
+    return;
+  }
+
+  await reloadWorkspaceScopedData();
+}
+
+function invalidateWorkspaceScopedState(): void {
+  resetProjectStore();
+  resetConversationStore();
+  resetResourceStore();
+  resetAdminStore();
+}
+
+async function reloadWorkspaceScopedData(): Promise<void> {
+  const tasks: Array<Promise<unknown>> = [refreshProjects(), refreshResources(), refreshModelCatalog()];
+  if (workspaceStore.mode === "remote") {
+    tasks.push(refreshAdminData());
+  }
+  await Promise.all(tasks);
 }

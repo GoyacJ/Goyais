@@ -797,3 +797,11 @@ event types:
 | i18n/主题行为变更 | PRD.md, TECH_ARCH.md | PRD 12.1/体验项, TECH_ARCH 14.x | done |
 | 主题配置增强（字体样式/字号/预设） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 12.1/16.2/19.1, TECH_ARCH 14.2/14.3, PLAN 增量门禁/测试映射, 标准 9.x/10.x | done |
 | 通用设置能力化（策略型行式配置 + 本地持久化 + 平台降级显式化） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 12.1/16.2/19, TECH_ARCH 3.2/4.1/14, PLAN Phase 9/测试映射, 标准 10.4/11.1 | done |
+
+### 25.4 2026-02-24 工作区语义收口矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| Workspace 持久化与列表语义（真实下拉） | PRD.md, TECH_ARCH.md | PRD 5.x/9.x/14.x, TECH_ARCH 11.1/9.x | done |
+| 工作区切换全上下文行为（Hub/项目/账号/权限） | PRD.md, TECH_ARCH.md | PRD 5.2/9.2/16.x, TECH_ARCH 14.x/20.x | done |
+| 测试门禁与验收项（strict 通道 + 工作区场景） | IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | Phase 2/3 验收、DoD/门禁 | done |

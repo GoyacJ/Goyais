@@ -172,7 +172,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, watch } from "vue";
 
 import {
   adminStore,
@@ -193,6 +193,7 @@ import {
   togglePermissionItem
 } from "@/modules/admin/store";
 import AccountShell from "@/shared/shells/AccountShell.vue";
+import { workspaceStore } from "@/shared/stores/workspaceStore";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import CursorPager from "@/shared/ui/CursorPager.vue";
 import type { PermissionVisibility, Role } from "@/shared/types/api";
@@ -206,9 +207,13 @@ const selectedRole = computed<Role>({
   }
 });
 
-onMounted(async () => {
-  await refreshAdminData();
-});
+watch(
+  () => workspaceStore.currentWorkspaceId,
+  async () => {
+    await refreshAdminData();
+  },
+  { immediate: true }
+);
 
 function menuVisibility(menuKey: string): PermissionVisibility {
   return adminStore.roleMenuVisibility[menuKey] ?? "enabled";

@@ -37,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, watch } from "vue";
 
 import { refreshAdminData } from "@/modules/admin/store";
 import { authStore } from "@/shared/stores/authStore";
@@ -80,10 +80,14 @@ const queuedExecutionCount = computed(() => {
   }, 0);
 });
 
-onMounted(async () => {
-  await refreshAdminData();
-  await refreshConversationsForActiveProject();
-});
+watch(
+  () => workspaceStore.currentWorkspaceId,
+  async () => {
+    await refreshAdminData();
+    await refreshConversationsForActiveProject();
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>

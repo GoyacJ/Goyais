@@ -104,10 +104,36 @@ async function loadProjectsPage(input: { cursor: string | null; backStack: Array
       limit: projectStore.projectsPage.limit
     });
     projectStore.projects = response.items;
+    const validProjectIDs = new Set(projectStore.projects.map((project) => project.id));
+    for (const projectId of Object.keys(projectStore.conversationsByProjectId)) {
+      if (!validProjectIDs.has(projectId)) {
+        delete projectStore.conversationsByProjectId[projectId];
+      }
+    }
+    for (const projectId of Object.keys(projectStore.conversationPagesByProjectId)) {
+      if (!validProjectIDs.has(projectId)) {
+        delete projectStore.conversationPagesByProjectId[projectId];
+      }
+    }
+    for (const projectId of Object.keys(projectStore.projectConfigsByProjectId)) {
+      if (!validProjectIDs.has(projectId)) {
+        delete projectStore.projectConfigsByProjectId[projectId];
+      }
+    }
     projectStore.projectsPage.currentCursor = input.cursor;
     projectStore.projectsPage.backStack = input.backStack;
     projectStore.projectsPage.nextCursor = response.next_cursor;
-    projectStore.activeProjectId = projectStore.activeProjectId || projectStore.projects[0]?.id || "";
+    const hasActiveProject = validProjectIDs.has(projectStore.activeProjectId);
+    if (!hasActiveProject) {
+      projectStore.activeProjectId = projectStore.projects[0]?.id ?? "";
+      projectStore.activeConversationId = "";
+    } else if (projectStore.activeProjectId === "") {
+      projectStore.activeProjectId = projectStore.projects[0]?.id ?? "";
+    }
+    if (projectStore.activeProjectId === "") {
+      projectStore.activeConversationId = "";
+      return;
+    }
     await refreshConversationsForActiveProject();
   } catch (error) {
     projectStore.error = toDisplayError(error);
@@ -159,7 +185,12 @@ async function loadConversationsPage(projectId: string, input: { cursor: string 
     page.currentCursor = input.cursor;
     page.backStack = input.backStack;
     page.nextCursor = response.next_cursor;
-    projectStore.activeConversationId = projectStore.activeConversationId || response.items[0]?.id || "";
+    const hasActiveConversation = response.items.some((conversation) => conversation.id === projectStore.activeConversationId);
+    if (!hasActiveConversation) {
+      projectStore.activeConversationId = response.items[0]?.id ?? "";
+    } else if (projectStore.activeConversationId === "") {
+      projectStore.activeConversationId = response.items[0]?.id ?? "";
+    }
   } catch (error) {
     projectStore.error = toDisplayError(error);
   } finally {

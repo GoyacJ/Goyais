@@ -32,6 +32,9 @@ func AuthLoginHandler(state *AppState) http.HandlerFunc {
 			loginErr.write(w, r)
 			return
 		}
+		if session, exists := state.GetSession(response.AccessToken); exists {
+			state.AppendWorkspaceSwitchAudit(session.WorkspaceID, session.UserID, TraceIDFromContext(r.Context()))
+		}
 
 		writeJSON(w, http.StatusOK, response)
 	}
@@ -135,17 +138,17 @@ func executeLogin(state *AppState, r *http.Request, input LoginRequest, workspac
 		workspace, workspaceFound = state.GetWorkspace(strings.TrimSpace(input.WorkspaceID))
 	}
 
-		if !workspaceFound {
-			if !forwarded {
-				return LoginResponse{}, &apiError{
-					status:  http.StatusNotFound,
-					code:    "WORKSPACE_NOT_FOUND",
-					message: "Workspace does not exist",
-					details: map[string]any{"workspace_id": input.WorkspaceID},
-				}
+	if !workspaceFound {
+		if !forwarded {
+			return LoginResponse{}, &apiError{
+				status:  http.StatusNotFound,
+				code:    "WORKSPACE_NOT_FOUND",
+				message: "Workspace does not exist",
+				details: map[string]any{"workspace_id": input.WorkspaceID},
 			}
-			return createLocalSession(state, input, requestedRole, true)
 		}
+		return createLocalSession(state, input, requestedRole, true)
+	}
 
 	if workspace.LoginDisabled || workspace.AuthMode == AuthModeDisabled {
 		return LoginResponse{}, &apiError{

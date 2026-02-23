@@ -61,10 +61,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive } from "vue";
+import { reactive, watch } from "vue";
 
 import { projectStore, refreshProjects, updateProjectBinding } from "@/modules/project/store";
 import WorkspaceSharedShell from "@/shared/shells/WorkspaceSharedShell.vue";
+import { workspaceStore } from "@/shared/stores/workspaceStore";
 
 const form = reactive({
   projectId: "",
@@ -74,9 +75,20 @@ const form = reactive({
   mcpIds: ""
 });
 
-onMounted(async () => {
-  await refreshProjects();
-});
+watch(
+  () => workspaceStore.currentWorkspaceId,
+  async () => {
+    form.projectId = "";
+    form.modelId = "gpt-4.1";
+    form.ruleIds = "";
+    form.skillIds = "";
+    form.mcpIds = "";
+    await refreshProjects();
+    form.projectId = projectStore.activeProjectId || projectStore.projects[0]?.id || "";
+    loadProjectConfig();
+  },
+  { immediate: true }
+);
 
 function loadProjectConfig(): void {
   if (form.projectId === "") {

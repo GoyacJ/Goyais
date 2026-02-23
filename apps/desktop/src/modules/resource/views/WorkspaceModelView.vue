@@ -52,7 +52,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, watch } from "vue";
 
 import {
   loadNextResourcesPage,
@@ -63,6 +63,7 @@ import {
   syncWorkspaceModelCatalog
 } from "@/modules/resource/store";
 import WorkspaceSharedShell from "@/shared/shells/WorkspaceSharedShell.vue";
+import { workspaceStore } from "@/shared/stores/workspaceStore";
 import type { ModelVendorName } from "@/shared/types/api";
 import CursorPager from "@/shared/ui/CursorPager.vue";
 
@@ -86,9 +87,13 @@ const modelsByVendor = computed<Record<ModelVendorName, typeof resourceStore.mod
   return grouped;
 });
 
-onMounted(async () => {
-  await Promise.all([refreshModelCatalog(), refreshResources()]);
-});
+watch(
+  () => workspaceStore.currentWorkspaceId,
+  async () => {
+    await Promise.all([refreshModelCatalog(), refreshResources()]);
+  },
+  { immediate: true }
+);
 
 async function syncCatalog(): Promise<void> {
   await syncWorkspaceModelCatalog(vendors);

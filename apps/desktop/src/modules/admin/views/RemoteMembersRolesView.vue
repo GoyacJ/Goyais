@@ -107,7 +107,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { watch } from "vue";
 
 import {
   adminStore,
@@ -126,13 +126,18 @@ import {
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import AccountShell from "@/shared/shells/AccountShell.vue";
 import CursorPager from "@/shared/ui/CursorPager.vue";
+import { workspaceStore } from "@/shared/stores/workspaceStore";
 import type { Role } from "@/shared/types/api";
 
 const roleOptions: Role[] = ["viewer", "developer", "approver", "admin"];
 
-onMounted(async () => {
-  await refreshAdminData();
-});
+watch(
+  () => workspaceStore.currentWorkspaceId,
+  async () => {
+    await refreshAdminData();
+  },
+  { immediate: true }
+);
 
 async function addMember(): Promise<void> {
   const username = window.prompt("用户名", "new.user");

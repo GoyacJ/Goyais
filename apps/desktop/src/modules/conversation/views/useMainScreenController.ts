@@ -240,12 +240,10 @@ export function useMainScreenController() {
       setWorkspaceToken(result.workspace.id, result.access_token);
     }
     await switchWorkspaceContext(result.workspace.id);
-    await refreshProjects();
   }
 
   async function switchWorkspace(workspaceId: string): Promise<void> {
     await switchWorkspaceContext(workspaceId);
-    await refreshProjects();
   }
 
   async function paginateProjects(direction: "prev" | "next"): Promise<void> {

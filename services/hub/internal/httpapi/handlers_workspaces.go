@@ -105,6 +105,9 @@ func WorkspacesRemoteConnectionsHandler(state *AppState) http.HandlerFunc {
 			},
 			AccessToken: loginResponse.AccessToken,
 		}
+		traceID := TraceIDFromContext(r.Context())
+		state.SetWorkspaceConnection(result.Connection, username, traceID)
+		state.AppendWorkspaceSwitchAudit(workspace.ID, username, traceID)
 		writeJSON(w, http.StatusOK, result)
 	}
 }
