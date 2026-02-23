@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const dialogMocks = vi.hoisted(() => ({
+  open: vi.fn()
+}));
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open: dialogMocks.open
+}));
+
 import { pickDirectoryPath } from "@/shared/services/directoryPicker";
 
 type MutableDesktopFile = File & {
@@ -10,6 +18,8 @@ type MutableDesktopFile = File & {
 describe("pickDirectoryPath", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    dialogMocks.open.mockReset();
+    dialogMocks.open.mockRejectedValue(new Error("tauri dialog unavailable"));
   });
 
   afterEach(() => {
@@ -40,11 +50,32 @@ describe("pickDirectoryPath", () => {
     vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {
       window.dispatchEvent(new Event("focus"));
     });
+    vi.spyOn(window, "prompt").mockReturnValueOnce(null);
 
     const pending = pickDirectoryPath();
-    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(1500);
 
     await expect(pending).resolves.toBeNull();
+  });
+
+  it("falls back to manual directory path input when picker cannot resolve files", async () => {
+    vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    vi.spyOn(window, "prompt").mockReturnValueOnce("/tmp/empty-project");
+
+    const pending = pickDirectoryPath();
+    await vi.advanceTimersByTimeAsync(1500);
+
+    await expect(pending).resolves.toBe("/tmp/empty-project");
+  });
+
+  it("uses tauri dialog result when available (supports empty directory selection)", async () => {
+    dialogMocks.open.mockResolvedValue("/tmp/empty-folder");
+    const promptSpy = vi.spyOn(window, "prompt").mockReturnValueOnce("/tmp/should-not-be-used");
+
+    await expect(pickDirectoryPath()).resolves.toBe("/tmp/empty-folder");
+    expect(promptSpy).not.toHaveBeenCalled();
   });
 });
 

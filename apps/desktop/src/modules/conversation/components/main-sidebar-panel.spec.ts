@@ -35,6 +35,7 @@ describe("MainSidebarPanel", () => {
     await flushPromises();
 
     expect(wrapper.emitted("importProject")).toBeUndefined();
+    expect(wrapper.text()).toContain("未选择目录或目录读取失败");
   });
 
   it("disables plus button while project import is in progress", () => {

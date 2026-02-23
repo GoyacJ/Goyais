@@ -26,6 +26,7 @@
         <ToastAlert v-if="projectImportError !== ''" tone="error" :message="projectImportError" />
         <ToastAlert v-else-if="projectImportInProgress" tone="retrying" message="正在导入项目..." />
         <ToastAlert v-else-if="projectImportFeedback !== ''" tone="info" :message="projectImportFeedback" />
+        <ToastAlert v-else-if="pickerFeedback !== ''" tone="warning" :message="pickerFeedback" />
       </div>
 
       <div v-if="!collapsed" class="project-tree">
@@ -90,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 
 import { pickDirectoryPath } from "@/shared/services/directoryPicker";
 import AppIcon from "@/shared/ui/AppIcon.vue";
@@ -144,6 +145,7 @@ const emit = defineEmits<{
 
 const collapsed = ref(false);
 const createWorkspaceOpen = ref(false);
+const pickerFeedback = ref("");
 
 const projectOpen = reactive<Record<string, boolean>>({});
 
@@ -166,6 +168,15 @@ const projectImportInProgress = computed(() => props.projectImportInProgress);
 const projectImportFeedback = computed(() => props.projectImportFeedback);
 const projectImportError = computed(() => props.projectImportError);
 
+watch(
+  () => [projectImportInProgress.value, projectImportFeedback.value, projectImportError.value] as const,
+  ([inProgress, feedback, error]) => {
+    if (inProgress || feedback !== "" || error !== "") {
+      pickerFeedback.value = "";
+    }
+  }
+);
+
 function toggleProject(projectId: string): void {
   projectOpen[projectId] = !isProjectOpen(projectId);
 }
@@ -175,15 +186,22 @@ function isProjectOpen(projectId: string): boolean {
 }
 
 async function pickDirectory(): Promise<void> {
-  const directoryPath = await pickDirectoryPath();
-  if (!directoryPath) {
-    return;
+  pickerFeedback.value = "";
+  try {
+    const directoryPath = await pickDirectoryPath();
+    if (!directoryPath) {
+      pickerFeedback.value = "未选择目录或目录读取失败，请重试";
+      return;
+    }
+    const normalizedPath = directoryPath.trim();
+    if (normalizedPath === "") {
+      pickerFeedback.value = "未选择目录或目录读取失败，请重试";
+      return;
+    }
+    emit("importProject", normalizedPath);
+  } catch {
+    pickerFeedback.value = "目录选择失败，请重试";
   }
-  const normalizedPath = directoryPath.trim();
-  if (normalizedPath === "") {
-    return;
-  }
-  emit("importProject", normalizedPath);
 }
 
 function onSwitchWorkspace(workspaceId: string): void {
