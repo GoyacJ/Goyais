@@ -25,3 +25,4 @@ apps/desktop-tauri/src-tauri/target/
 worktrees/
 .worktrees/
 artifacts/
+services/hub/data/
