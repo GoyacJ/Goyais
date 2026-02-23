@@ -1,17 +1,15 @@
 <template>
-  <LocalSettingsPage
+  <SettingsShell
     active-key="settings_theme"
     title="主题"
     subtitle="Local Settings / Theme"
-    :menu-entries="menuEntries"
-    :cards="localThemeCards"
-  />
+  >
+    <LocalSettingsPage :cards="localThemeCards" />
+  </SettingsShell>
 </template>
 
 <script setup lang="ts">
 import LocalSettingsPage from "@/modules/workspace/components/LocalSettingsPage.vue";
 import { localThemeCards } from "@/modules/workspace/schemas/settingsContent";
-import { useLocalSettingsMenu } from "@/shared/navigation/pageMenus";
-
-const menuEntries = useLocalSettingsMenu();
+import SettingsShell from "@/shared/shells/SettingsShell.vue";
 </script>

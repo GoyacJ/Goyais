@@ -30,10 +30,9 @@ function onTopbarDoubleClick(event: MouseEvent): void {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid var(--component-topbar-border);
-  background: var(--component-topbar-bg);
-  border-radius: var(--global-radius-12);
-  padding: 0 var(--global-space-12);
+  border-radius: var(--global-radius-12) var(--global-radius-12) 0 0;
+  background: transparent;
+  padding: 0 var(--global-space-8);
   cursor: grab;
 }
 

@@ -1,8 +1,6 @@
 <template>
-  <RemoteConfigLayout
+  <AccountShell
     active-key="remote_permissions_audit"
-    :menu-entries="menuEntries"
-    :scope-hint="scopeHint"
     title="权限与审计"
     subtitle="Remote Workspace / Permissions & Audit"
   >
@@ -103,11 +101,11 @@
         </tbody>
       </table>
     </section>
-  </RemoteConfigLayout>
+  </AccountShell>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { onMounted } from "vue";
 
 import {
   adminStore,
@@ -117,13 +115,9 @@ import {
   toggleMenuNode,
   togglePermissionItem
 } from "@/modules/admin/store";
-import RemoteConfigLayout from "@/shared/layouts/RemoteConfigLayout.vue";
-import { useRemoteConfigMenu } from "@/shared/navigation/pageMenus";
+import AccountShell from "@/shared/shells/AccountShell.vue";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import ToastAlert from "@/shared/ui/ToastAlert.vue";
-
-const menuEntries = useRemoteConfigMenu();
-const scopeHint = computed(() => "Remote 视图：显示成员与角色、权限与审计，并按 RBAC+ABAC 控制");
 
 onMounted(async () => {
   await refreshAdminData();

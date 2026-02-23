@@ -1,11 +1,9 @@
 <template>
-  <component
-    :is="layoutComponent"
+  <WorkspaceSharedShell
     active-key="workspace_model"
-    :menu-entries="menuEntries"
-    :scope-hint="scopeHint"
     title="模型配置（共享）"
-    :subtitle="subtitle"
+    account-subtitle="Workspace Config / Models (Shared)"
+    settings-subtitle="Local Settings / Models (Shared)"
   >
     <section class="card">
       <div class="card-head">
@@ -32,37 +30,17 @@
         </article>
       </div>
     </section>
-  </component>
+  </WorkspaceSharedShell>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
 
 import { refreshModelCatalog, resourceStore, syncWorkspaceModelCatalog } from "@/modules/resource/store";
-import LocalSettingsLayout from "@/shared/layouts/LocalSettingsLayout.vue";
-import RemoteConfigLayout from "@/shared/layouts/RemoteConfigLayout.vue";
-import { useLocalSettingsMenu, useRemoteConfigMenu } from "@/shared/navigation/pageMenus";
-import { workspaceStore } from "@/shared/stores/workspaceStore";
+import WorkspaceSharedShell from "@/shared/shells/WorkspaceSharedShell.vue";
 import type { ModelVendorName } from "@/shared/types/api";
 
 const vendors: ModelVendorName[] = ["OpenAI", "Google", "Qwen", "Doubao", "Zhipu", "MiniMax", "Local"];
-
-const remoteMenuEntries = useRemoteConfigMenu();
-const localMenuEntries = useLocalSettingsMenu();
-
-const layoutComponent = computed(() =>
-  workspaceStore.mode === "remote" ? RemoteConfigLayout : LocalSettingsLayout
-);
-
-const menuEntries = computed(() =>
-  workspaceStore.mode === "remote" ? remoteMenuEntries.value : localMenuEntries.value
-);
-
-const subtitle = computed(() =>
-  workspaceStore.mode === "remote" ? "Workspace Config / Models (Shared)" : "Local Settings / Models (Shared)"
-);
-
-const scopeHint = computed(() => "共享模块：可从账号信息或设置进入；根据当前工作区与权限显示不同能力。");
 
 const modelsByVendor = computed<Record<ModelVendorName, typeof resourceStore.modelCatalog>>(() => {
   const grouped = {

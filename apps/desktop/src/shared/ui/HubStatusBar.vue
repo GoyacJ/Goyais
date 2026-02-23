@@ -16,14 +16,22 @@
 import { computed } from "vue";
 
 import { authStore } from "@/shared/stores/authStore";
-import { getCurrentWorkspace, workspaceStore } from "@/shared/stores/workspaceStore";
+import { getCurrentWorkspace, workspaceStore, type ConnectionState } from "@/shared/stores/workspaceStore";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 
+const props = defineProps<{
+  hubLabel?: string;
+  roleLabel?: string;
+  connectionState?: ConnectionState;
+}>();
+
+const resolvedConnectionState = computed(() => props.connectionState ?? workspaceStore.connectionState);
+
 const connectionLabel = computed(() => {
-  if (workspaceStore.connectionState === "ready") {
+  if (resolvedConnectionState.value === "ready") {
     return "connected";
   }
-  if (workspaceStore.connectionState === "loading") {
+  if (resolvedConnectionState.value === "loading") {
     return "reconnecting";
   }
   return "disconnected";
@@ -40,10 +48,10 @@ const connectionClass = computed(() => {
 });
 
 const hubLabel = computed(() => {
-  return getCurrentWorkspace()?.hub_url ?? "local://workspace";
+  return props.hubLabel ?? getCurrentWorkspace()?.hub_url ?? "local://workspace";
 });
 
-const roleLabel = computed(() => authStore.me?.role ?? "Owner");
+const roleLabel = computed(() => props.roleLabel ?? authStore.me?.role ?? "Owner");
 </script>
 
 <style scoped>

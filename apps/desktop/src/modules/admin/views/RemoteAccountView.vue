@@ -1,8 +1,6 @@
 <template>
-  <RemoteConfigLayout
+  <AccountShell
     active-key="remote_account"
-    :menu-entries="menuEntries"
-    :scope-hint="scopeHint"
     title="账号信息"
     subtitle="Remote Workspace / Account"
   >
@@ -35,22 +33,18 @@
         <p><span>默认管理员</span><strong>remote admin（全权限）</strong></p>
       </div>
     </section>
-  </RemoteConfigLayout>
+  </AccountShell>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
 
 import { refreshAdminData } from "@/modules/admin/store";
-import { useRemoteConfigMenu } from "@/shared/navigation/pageMenus";
 import { authStore } from "@/shared/stores/authStore";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
-import RemoteConfigLayout from "@/shared/layouts/RemoteConfigLayout.vue";
 import { projectStore, refreshConversationsForActiveProject } from "@/modules/project/store";
 import { conversationStore } from "@/modules/conversation/store";
-
-const menuEntries = useRemoteConfigMenu();
-const scopeHint = computed(() => "Remote 视图：显示成员与角色、权限与审计，并按 RBAC+ABAC 控制");
+import AccountShell from "@/shared/shells/AccountShell.vue";
 
 const workspace = computed(() =>
   workspaceStore.workspaces.find((item) => item.id === workspaceStore.currentWorkspaceId)

@@ -2,8 +2,8 @@
   <WorkspaceSharedPage
     active-key="workspace_skills"
     title="Skills 配置（共享）"
-    remote-subtitle="Workspace Config / Skills (Shared)"
-    local-subtitle="Local Settings / Skills (Shared)"
+    account-subtitle="Workspace Config / Skills (Shared)"
+    settings-subtitle="Local Settings / Skills (Shared)"
     :cards="workspaceSkillsCards"
   />
 </template>

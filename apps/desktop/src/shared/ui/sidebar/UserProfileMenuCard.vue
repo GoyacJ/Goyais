@@ -73,8 +73,9 @@ function onSelect(key: string): void {
   background: transparent;
   color: var(--semantic-text);
   min-height: 34px;
+  width: 100%;
   padding: 0 var(--global-space-4);
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: space-between;
 }

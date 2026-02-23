@@ -90,27 +90,7 @@
       @select="handleUserMenuSelect"
     />
 
-    <div v-if="createWorkspaceOpen" class="modal-mask" @click.self="createWorkspaceOpen = false">
-      <div class="modal">
-        <h4>新增工作区</h4>
-        <label>
-          Hub 地址
-          <input v-model="workspaceForm.hub_url" type="url" placeholder="https://hub.example.com" />
-        </label>
-        <label>
-          用户名
-          <input v-model="workspaceForm.username" type="text" placeholder="admin" />
-        </label>
-        <label>
-          密码
-          <input v-model="workspaceForm.password" type="password" placeholder="******" />
-        </label>
-        <div class="modal-actions">
-          <button type="button" @click="createWorkspaceOpen = false">取消</button>
-          <button type="button" @click="submitWorkspaceCreate">创建</button>
-        </div>
-      </div>
-    </div>
+    <WorkspaceCreateModal :open="createWorkspaceOpen" @close="createWorkspaceOpen = false" @submit="submitWorkspaceCreate" />
   </aside>
 </template>
 
@@ -119,6 +99,7 @@ import { computed, reactive, ref } from "vue";
 
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import type { Conversation, Project, Workspace, WorkspaceMode } from "@/shared/types/api";
+import WorkspaceCreateModal from "@/shared/ui/sidebar/WorkspaceCreateModal.vue";
 import UserProfileMenuCard from "@/shared/ui/sidebar/UserProfileMenuCard.vue";
 import WorkspaceSwitcherCard from "@/shared/ui/sidebar/WorkspaceSwitcherCard.vue";
 
@@ -151,12 +132,6 @@ const createWorkspaceOpen = ref(false);
 const directoryInputRef = ref<HTMLInputElement>();
 
 const projectOpen = reactive<Record<string, boolean>>({});
-
-const workspaceForm = reactive({
-  hub_url: "",
-  username: "",
-  password: ""
-});
 
 const currentWorkspaceMode = computed(() => props.workspaceMode);
 const userInitial = computed(() => (props.userName || "L").slice(0, 1).toUpperCase());
@@ -216,20 +191,8 @@ function handleUserMenuSelect(key: string): void {
   emit("openSettings");
 }
 
-function submitWorkspaceCreate(): void {
-  if (workspaceForm.hub_url.trim() === "" || workspaceForm.username.trim() === "" || workspaceForm.password.trim() === "") {
-    return;
-  }
-
-  emit("createWorkspace", {
-    hub_url: workspaceForm.hub_url.trim(),
-    username: workspaceForm.username.trim(),
-    password: workspaceForm.password
-  });
-
-  workspaceForm.hub_url = "";
-  workspaceForm.username = "";
-  workspaceForm.password = "";
+function submitWorkspaceCreate(payload: { hub_url: string; username: string; password: string }): void {
+  emit("createWorkspace", payload);
   createWorkspaceOpen.value = false;
 }
 </script>
@@ -375,58 +338,5 @@ function submitWorkspaceCreate(): void {
 
 .hidden-input {
   display: none;
-}
-
-.modal-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: grid;
-  place-items: center;
-  z-index: 20;
-}
-
-.modal {
-  width: 360px;
-  border-radius: var(--global-radius-12);
-  background: var(--semantic-surface);
-  border: 1px solid var(--semantic-border);
-  padding: var(--global-space-12);
-  display: grid;
-  gap: var(--global-space-8);
-}
-
-.modal h4 {
-  margin: 0;
-  font-size: var(--global-font-size-14);
-}
-
-.modal label {
-  display: grid;
-  gap: var(--global-space-4);
-  font-size: var(--global-font-size-11);
-  color: var(--semantic-text-muted);
-}
-
-.modal input {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-bg);
-  color: var(--semantic-text);
-  padding: var(--global-space-8);
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--global-space-8);
-}
-
-.modal-actions button {
-  border: 0;
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-surface-2);
-  color: var(--semantic-text);
-  padding: var(--global-space-8) var(--global-space-12);
 }
 </style>

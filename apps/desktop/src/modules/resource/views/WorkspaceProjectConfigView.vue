@@ -1,11 +1,9 @@
 <template>
-  <component
-    :is="layoutComponent"
+  <WorkspaceSharedShell
     active-key="workspace_project_config"
-    :menu-entries="menuEntries"
-    :scope-hint="scopeHint"
     title="项目配置（共享）"
-    :subtitle="subtitle"
+    account-subtitle="Workspace Config / Project Config (Shared)"
+    settings-subtitle="Local Settings / Project Config (Shared)"
   >
     <section class="card">
       <h3>项目配置绑定</h3>
@@ -59,34 +57,14 @@
         <li>本地资源共享到远程后，仍需工作区管理员审批。</li>
       </ul>
     </section>
-  </component>
+  </WorkspaceSharedShell>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive } from "vue";
+import { onMounted, reactive } from "vue";
 
 import { projectStore, refreshProjects, updateProjectBinding } from "@/modules/project/store";
-import LocalSettingsLayout from "@/shared/layouts/LocalSettingsLayout.vue";
-import RemoteConfigLayout from "@/shared/layouts/RemoteConfigLayout.vue";
-import { useLocalSettingsMenu, useRemoteConfigMenu } from "@/shared/navigation/pageMenus";
-import { workspaceStore } from "@/shared/stores/workspaceStore";
-
-const remoteMenuEntries = useRemoteConfigMenu();
-const localMenuEntries = useLocalSettingsMenu();
-
-const layoutComponent = computed(() =>
-  workspaceStore.mode === "remote" ? RemoteConfigLayout : LocalSettingsLayout
-);
-
-const menuEntries = computed(() =>
-  workspaceStore.mode === "remote" ? remoteMenuEntries.value : localMenuEntries.value
-);
-
-const subtitle = computed(() =>
-  workspaceStore.mode === "remote" ? "Workspace Config / Project Config (Shared)" : "Local Settings / Project Config (Shared)"
-);
-
-const scopeHint = computed(() => "共享模块：可从账号信息或设置进入；根据当前工作区与权限显示不同能力。");
+import WorkspaceSharedShell from "@/shared/shells/WorkspaceSharedShell.vue";
 
 const form = reactive({
   projectId: "",

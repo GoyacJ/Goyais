@@ -1,17 +1,15 @@
 <template>
-  <LocalSettingsPage
+  <SettingsShell
     active-key="settings_i18n"
     title="国际化"
     subtitle="Local Settings / i18n"
-    :menu-entries="menuEntries"
-    :cards="localI18nCards"
-  />
+  >
+    <LocalSettingsPage :cards="localI18nCards" />
+  </SettingsShell>
 </template>
 
 <script setup lang="ts">
 import LocalSettingsPage from "@/modules/workspace/components/LocalSettingsPage.vue";
 import { localI18nCards } from "@/modules/workspace/schemas/settingsContent";
-import { useLocalSettingsMenu } from "@/shared/navigation/pageMenus";
-
-const menuEntries = useLocalSettingsMenu();
+import SettingsShell from "@/shared/shells/SettingsShell.vue";
 </script>

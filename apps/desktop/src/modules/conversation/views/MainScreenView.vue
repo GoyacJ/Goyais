@@ -1,59 +1,62 @@
 <template>
-  <div class="screen">
-    <MainSidebarPanel
-      :workspaces="workspaceStore.workspaces"
-      :current-workspace-id="workspaceStore.currentWorkspaceId"
-      :workspace-name="workspaceLabel"
-      :workspace-mode="workspaceStore.mode"
-      :user-name="authStore.me?.display_name ?? 'local'"
-      :projects="projectStore.projects"
-      :conversations-by-project-id="projectStore.conversationsByProjectId"
-      :active-conversation-id="projectStore.activeConversationId"
-      @switch-workspace="switchWorkspace"
-      @create-workspace="createWorkspace"
-      @import-project="importProjectDirectory"
-      @add-conversation="addConversationByPrompt"
-      @delete-project="deleteProjectById"
-      @export-conversation="exportConversation"
-      @delete-conversation="deleteConversationById"
-      @select-conversation="selectConversation"
-      @open-account="openAccount"
-      @open-settings="openSettings"
-    />
+  <MainShell>
+    <template #sidebar>
+      <MainSidebarPanel
+        :workspaces="workspaceStore.workspaces"
+        :current-workspace-id="workspaceStore.currentWorkspaceId"
+        :workspace-name="workspaceLabel"
+        :workspace-mode="workspaceStore.mode"
+        :user-name="authStore.me?.display_name ?? 'local'"
+        :projects="projectStore.projects"
+        :conversations-by-project-id="projectStore.conversationsByProjectId"
+        :active-conversation-id="projectStore.activeConversationId"
+        @switch-workspace="switchWorkspace"
+        @create-workspace="createWorkspace"
+        @import-project="importProjectDirectory"
+        @add-conversation="addConversationByPrompt"
+        @delete-project="deleteProjectById"
+        @export-conversation="exportConversation"
+        @delete-conversation="deleteConversationById"
+        @select-conversation="selectConversation"
+        @open-account="openAccount"
+        @open-settings="openSettings"
+      />
+    </template>
 
-    <section class="content">
-      <header
-        class="top-header"
-        data-tauri-drag-region
-        @mousedown="onTopHeaderMouseDown"
-        @dblclick="onTopHeaderDoubleClick"
-      >
-        <div class="left">
-          <strong>{{ activeProject?.name ?? 'Project' }}</strong>
-          <span>/</span>
+    <template #header>
+      <Topbar>
+        <template #left>
+          <div class="left">
+            <strong>{{ activeProject?.name ?? 'Project' }}</strong>
+            <span>/</span>
 
-          <template v-if="editingConversationName">
-            <input
-              class="title-input"
-              :value="conversationNameDraft"
-              @input="onConversationNameInput"
-              @keydown.enter="saveConversationName"
-              @blur="saveConversationName"
-            />
-          </template>
-          <strong v-else>{{ activeConversation?.name ?? 'Conversation' }}</strong>
+            <template v-if="editingConversationName">
+              <input
+                class="title-input"
+                :value="conversationNameDraft"
+                @input="onConversationNameInput"
+                @keydown.enter="saveConversationName"
+                @blur="saveConversationName"
+              />
+            </template>
+            <strong v-else>{{ activeConversation?.name ?? 'Conversation' }}</strong>
 
-          <button class="icon-btn" type="button" @click="startEditConversationName">
-            <AppIcon name="pencil" :size="12" />
-          </button>
-        </div>
+            <button class="icon-btn" type="button" @click="startEditConversationName">
+              <AppIcon name="pencil" :size="12" />
+            </button>
+          </div>
+        </template>
 
-        <div class="right">
-          <span class="state">{{ runningState }}</span>
-          <span :class="connectionClass">{{ connectionState }}</span>
-        </div>
-      </header>
+        <template #right>
+          <div class="right">
+            <span class="state">{{ runningState }}</span>
+            <span :class="connectionClass">{{ connectionState }}</span>
+          </div>
+        </template>
+      </Topbar>
+    </template>
 
+    <template #main>
       <div class="main-body">
         <MainConversationPanel
           :messages="runtime?.messages ?? []"
@@ -104,10 +107,12 @@
           </aside>
         </div>
       </div>
+    </template>
 
+    <template #footer>
       <HubStatusBar />
-    </section>
-  </div>
+    </template>
+  </MainShell>
 </template>
 
 <script setup lang="ts">
@@ -151,10 +156,11 @@ import {
   workspaceStore
 } from "@/modules/workspace/store";
 import { useI18n } from "@/shared/i18n";
-import { handleDragMouseDown, toggleMaximizeCurrentWindow } from "@/shared/services/windowControls";
+import MainShell from "@/shared/shells/MainShell.vue";
 import { authStore, setWorkspaceToken } from "@/shared/stores/authStore";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import HubStatusBar from "@/shared/ui/HubStatusBar.vue";
+import Topbar from "@/shared/ui/Topbar.vue";
 import type { DiffCapability, InspectorTabKey } from "@/shared/types/api";
 
 const router = useRouter();
@@ -398,46 +404,9 @@ function exportPatch(): void {
   window.alert("Patch exported (design stub).");
 }
 
-function onTopHeaderMouseDown(event: MouseEvent): void {
-  void handleDragMouseDown(event);
-}
-
-function onTopHeaderDoubleClick(event: MouseEvent): void {
-  if ((event.target as HTMLElement | null)?.closest("button,a,input,select,textarea,[role='button'],[data-no-drag='true']")) {
-    return;
-  }
-  void toggleMaximizeCurrentWindow();
-}
 </script>
 
 <style scoped>
-.screen {
-  height: 100vh;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--global-space-8);
-  padding: 0;
-  background: var(--component-shell-bg);
-}
-
-.content {
-  padding: 0 var(--global-space-8) 0 0;
-  display: grid;
-  grid-template-rows: 40px 1fr 36px;
-  gap: var(--global-space-8);
-  border-radius: var(--global-radius-12);
-}
-
-.top-header {
-  border-radius: var(--global-radius-12) var(--global-radius-12) 0 0;
-  background: transparent;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 var(--global-space-8);
-  cursor: grab;
-}
-
 .left,
 .right {
   display: inline-flex;

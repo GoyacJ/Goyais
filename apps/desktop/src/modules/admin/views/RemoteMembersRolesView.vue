@@ -1,8 +1,6 @@
 <template>
-  <RemoteConfigLayout
+  <AccountShell
     active-key="remote_members_roles"
-    :menu-entries="menuEntries"
-    :scope-hint="scopeHint"
     title="成员与角色"
     subtitle="Remote Workspace / Members & Roles"
   >
@@ -98,11 +96,11 @@
         </tbody>
       </table>
     </section>
-  </RemoteConfigLayout>
+  </AccountShell>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { onMounted } from "vue";
 
 import {
   adminStore,
@@ -116,13 +114,10 @@ import {
   toggleAdminUser,
   toggleRole
 } from "@/modules/admin/store";
-import RemoteConfigLayout from "@/shared/layouts/RemoteConfigLayout.vue";
-import { useRemoteConfigMenu } from "@/shared/navigation/pageMenus";
 import AppIcon from "@/shared/ui/AppIcon.vue";
+import AccountShell from "@/shared/shells/AccountShell.vue";
 import type { Role } from "@/shared/types/api";
 
-const menuEntries = useRemoteConfigMenu();
-const scopeHint = computed(() => "Remote 视图：显示成员与角色、权限与审计，并按 RBAC+ABAC 控制");
 const roleOptions: Role[] = ["viewer", "developer", "approver", "admin"];
 
 onMounted(async () => {

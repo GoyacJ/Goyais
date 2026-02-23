@@ -2,8 +2,8 @@
   <WorkspaceSharedPage
     active-key="workspace_agent"
     title="Agent 配置（共享）"
-    remote-subtitle="Workspace Config / Agent (Shared)"
-    local-subtitle="Local Settings / Agent (Shared)"
+    account-subtitle="Workspace Config / Agent (Shared)"
+    settings-subtitle="Local Settings / Agent (Shared)"
     :cards="workspaceAgentCards"
   />
 </template>

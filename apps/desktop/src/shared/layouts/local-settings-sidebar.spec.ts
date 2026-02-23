@@ -3,21 +3,28 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 
 import type { MenuEntry } from "@/shared/navigation/pageMenus";
-import RemoteConfigSidebar from "@/shared/layouts/RemoteConfigSidebar.vue";
-import { resetAuthStore } from "@/shared/stores/authStore";
+import LocalSettingsSidebar from "@/shared/layouts/LocalSettingsSidebar.vue";
 import { resetWorkspaceStore, setCurrentWorkspace, setWorkspaces } from "@/shared/stores/workspaceStore";
 
 const menuEntries: MenuEntry[] = [
-  { key: "remote_account", label: "账号信息", path: "/remote/account", visibility: "enabled" },
-  { key: "remote_members_roles", label: "成员与角色", path: "/remote/members-roles", visibility: "enabled" },
-  { key: "remote_permissions_audit", label: "权限与审计", path: "/remote/permissions-audit", visibility: "enabled" }
+  { key: "workspace_agent", label: "Agent配置", path: "/workspace/agent", visibility: "enabled" },
+  { key: "settings_theme", label: "主题", path: "/settings/theme", visibility: "enabled" }
 ];
 
-describe("remote config sidebar", () => {
+describe("local settings sidebar", () => {
   beforeEach(() => {
-    resetAuthStore();
     resetWorkspaceStore();
     setWorkspaces([
+      {
+        id: "ws_local",
+        name: "Local Workspace",
+        mode: "local",
+        hub_url: null,
+        is_default_local: true,
+        created_at: "2026-02-23T00:00:00Z",
+        login_disabled: true,
+        auth_mode: "disabled"
+      },
       {
         id: "ws_remote",
         name: "Remote Workspace",
@@ -29,38 +36,21 @@ describe("remote config sidebar", () => {
         auth_mode: "password_or_token"
       }
     ]);
-    setCurrentWorkspace("ws_remote");
+    setCurrentWorkspace("ws_local");
   });
 
-  it("renders menu and active item", () => {
+  it("shows add workspace entry in workspace menu", async () => {
     const wrapper = mountSidebar();
-    expect(wrapper.text()).toContain("账号信息");
-    expect(wrapper.find(".menu-item.active").text()).toContain("账号信息");
-  });
-
-  it("toggles workspace menu", async () => {
-    const wrapper = mountSidebar();
-    expect(wrapper.find(".workspace-menu").exists()).toBe(false);
-
     await wrapper.find(".workspace-btn").trigger("click");
     expect(wrapper.find(".workspace-menu").exists()).toBe(true);
     expect(wrapper.text()).toContain("新增工作区");
   });
 
-  it("opens create workspace modal", async () => {
+  it("opens create workspace modal when selecting add workspace", async () => {
     const wrapper = mountSidebar();
     await wrapper.find(".workspace-btn").trigger("click");
     await wrapper.find(".workspace-option.add").trigger("click");
     expect(wrapper.find('[data-testid="workspace-create-modal"]').exists()).toBe(true);
-  });
-
-  it("toggles user menu", async () => {
-    const wrapper = mountSidebar();
-    expect(wrapper.find(".user-menu").exists()).toBe(false);
-
-    await wrapper.find(".user-trigger").trigger("click");
-    expect(wrapper.find(".user-menu").exists()).toBe(true);
-    expect(wrapper.text()).toContain("设置");
   });
 });
 
@@ -70,10 +60,9 @@ function mountSidebar() {
     routes: [{ path: "/:pathMatch(.*)*", component: { template: "<div />" } }]
   });
 
-  return mount(RemoteConfigSidebar, {
+  return mount(LocalSettingsSidebar, {
     props: {
-      activeKey: "remote_account",
-      scopeHint: "Remote 视图提示",
+      activeKey: "settings_theme",
       menuEntries
     },
     global: {

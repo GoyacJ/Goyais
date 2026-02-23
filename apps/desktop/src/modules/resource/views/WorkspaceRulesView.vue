@@ -2,8 +2,8 @@
   <WorkspaceSharedPage
     active-key="workspace_rules"
     title="Rules 配置（共享）"
-    remote-subtitle="Workspace Config / Rules (Shared)"
-    local-subtitle="Local Settings / Rules (Shared)"
+    account-subtitle="Workspace Config / Rules (Shared)"
+    settings-subtitle="Local Settings / Rules (Shared)"
     :cards="workspaceRulesCards"
   />
 </template>
