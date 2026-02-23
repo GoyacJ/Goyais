@@ -17,6 +17,22 @@ func ResourcesHandler(state *AppState) http.HandlerFunc {
 		}
 
 		workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
+		session, authErr := authorizeAction(
+			state,
+			r,
+			workspaceID,
+			"resource.read",
+			authorizationResource{WorkspaceID: workspaceID},
+			authorizationContext{OperationType: "read"},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
+		if workspaceID == "" && session.WorkspaceID != localWorkspaceID {
+			workspaceID = session.WorkspaceID
+		}
+
 		state.mu.RLock()
 		items := make([]Resource, 0)
 		for _, item := range state.resources {
@@ -60,6 +76,22 @@ func ResourceImportsHandler(state *AppState) http.HandlerFunc {
 		if input.ResourceType == "" {
 			input.ResourceType = ResourceTypeModel
 		}
+		session, authErr := authorizeAction(
+			state,
+			r,
+			workspaceID,
+			"resource.write",
+			authorizationResource{
+				WorkspaceID: workspaceID,
+				ResourceType: string(input.ResourceType),
+				Scope:       "private",
+			},
+			authorizationContext{OperationType: "write"},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
 		resource := Resource{
@@ -80,7 +112,13 @@ func ResourceImportsHandler(state *AppState) http.HandlerFunc {
 		state.mu.Unlock()
 
 		writeJSON(w, http.StatusCreated, resource)
-		state.AppendAudit(AdminAuditEvent{Actor: "system", Action: "resource.import", Resource: resource.ID, Result: "success"})
+		state.AppendAudit(AdminAuditEvent{Actor: actorFromSession(session), Action: "resource.import", Resource: resource.ID, Result: "success", TraceID: TraceIDFromContext(r.Context())})
+		if state.authz != nil {
+			_ = state.authz.appendAudit(workspaceID, session.UserID, "resource.import", "resource", resource.ID, "success", map[string]any{
+				"resource_type": input.ResourceType,
+				"source_id":     input.SourceID,
+			}, TraceIDFromContext(r.Context()))
+		}
 	}
 }
 
@@ -105,6 +143,21 @@ func ShareRequestsHandler(state *AppState) http.HandlerFunc {
 			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "resource_id is required", map[string]any{})
 			return
 		}
+		session, authErr := authorizeAction(
+			state,
+			r,
+			workspaceID,
+			"share.request",
+			authorizationResource{
+				WorkspaceID: workspaceID,
+				OwnerUserID: "",
+			},
+			authorizationContext{OperationType: "write"},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
 		request := ShareRequest{
@@ -112,7 +165,7 @@ func ShareRequestsHandler(state *AppState) http.HandlerFunc {
 			WorkspaceID:     workspaceID,
 			ResourceID:      strings.TrimSpace(payload.ResourceID),
 			Status:          ShareStatusPending,
-			RequesterUserID: "u_dev",
+			RequesterUserID: session.UserID,
 			CreatedAt:       now,
 			UpdatedAt:       now,
 		}
@@ -120,7 +173,12 @@ func ShareRequestsHandler(state *AppState) http.HandlerFunc {
 		state.shareRequests[request.ID] = request
 		state.mu.Unlock()
 		writeJSON(w, http.StatusCreated, request)
-		state.AppendAudit(AdminAuditEvent{Actor: "u_dev", Action: "share_request.create", Resource: request.ID, Result: "success"})
+		state.AppendAudit(AdminAuditEvent{Actor: actorFromSession(session), Action: "share_request.create", Resource: request.ID, Result: "success", TraceID: TraceIDFromContext(r.Context())})
+		if state.authz != nil {
+			_ = state.authz.appendAudit(workspaceID, session.UserID, "share.request", "share_request", request.ID, "success", map[string]any{
+				"resource_id": payload.ResourceID,
+			}, TraceIDFromContext(r.Context()))
+		}
 	}
 }
 
@@ -144,13 +202,25 @@ func ShareRequestActionHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		allowed := []Role{RoleAdmin, RoleApprover}
+		actionKey := "share." + action
+		allowedRoles := []Role{RoleAdmin, RoleApprover}
 		if action == "revoke" {
-			allowed = []Role{RoleAdmin, RoleApprover, RoleDeveloper}
+			allowedRoles = []Role{RoleAdmin, RoleApprover, RoleDeveloper}
 		}
-		session, err := requireAuthorization(state, r, request.WorkspaceID, allowed...)
-		if err != nil {
-			err.write(w, r)
+		session, authErr := authorizeAction(
+			state,
+			r,
+			request.WorkspaceID,
+			actionKey,
+			authorizationResource{
+				WorkspaceID: request.WorkspaceID,
+				ShareStatus: string(request.Status),
+			},
+			authorizationContext{OperationType: "write", ABACRequired: true},
+			allowedRoles...,
+		)
+		if authErr != nil {
+			authErr.write(w, r)
 			return
 		}
 
@@ -180,7 +250,13 @@ func ShareRequestActionHandler(state *AppState) http.HandlerFunc {
 			Action:   "share_request." + action,
 			Resource: requestID,
 			Result:   "success",
+			TraceID:  TraceIDFromContext(r.Context()),
 		})
+		if state.authz != nil {
+			_ = state.authz.appendAudit(request.WorkspaceID, session.UserID, actionKey, "share_request", requestID, "success", map[string]any{
+				"new_status": request.Status,
+			}, TraceIDFromContext(r.Context()))
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	}
 }
@@ -190,17 +266,40 @@ func ModelCatalogHandler(state *AppState) http.HandlerFunc {
 		workspaceID := strings.TrimSpace(r.PathValue("workspace_id"))
 		switch r.Method {
 		case http.MethodGet:
+			session, authErr := authorizeAction(
+				state,
+				r,
+				workspaceID,
+				"resource.read",
+				authorizationResource{WorkspaceID: workspaceID, ResourceType: "model"},
+				authorizationContext{OperationType: "read"},
+			)
+			if authErr != nil {
+				authErr.write(w, r)
+				return
+			}
 			state.mu.RLock()
 			items := append([]ModelCatalogItem{}, state.modelCatalog[workspaceID]...)
 			state.mu.RUnlock()
 			writeJSON(w, http.StatusOK, items)
+			if state.authz != nil {
+				_ = state.authz.appendAudit(workspaceID, session.UserID, "model_catalog.read", "workspace", workspaceID, "success", map[string]any{}, TraceIDFromContext(r.Context()))
+			}
 		case http.MethodPost:
 			input := ModelCatalogSyncRequest{}
 			if err := decodeJSONBody(r, &input); err != nil {
 				err.write(w, r)
 				return
 			}
-			session, authErr := requireAuthorization(state, r, workspaceID, RoleAdmin, RoleApprover, RoleDeveloper)
+			session, authErr := authorizeAction(
+				state,
+				r,
+				workspaceID,
+				"model_catalog.sync",
+				authorizationResource{WorkspaceID: workspaceID, ResourceType: "model"},
+				authorizationContext{OperationType: "write", ABACRequired: true},
+				RoleAdmin, RoleApprover, RoleDeveloper,
+			)
 			if authErr != nil {
 				authErr.write(w, r)
 				return
@@ -232,7 +331,13 @@ func ModelCatalogHandler(state *AppState) http.HandlerFunc {
 				Action:   "model_catalog.sync_manual",
 				Resource: workspaceID,
 				Result:   "success",
+				TraceID:  TraceIDFromContext(r.Context()),
 			})
+			if state.authz != nil {
+				_ = state.authz.appendAudit(workspaceID, session.UserID, "model_catalog.sync", "workspace", workspaceID, "success", map[string]any{
+					"vendor_count": len(vendors),
+				}, TraceIDFromContext(r.Context()))
+			}
 			writeJSON(w, http.StatusOK, items)
 		default:
 			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
@@ -247,6 +352,39 @@ func AdminUsersHandler(state *AppState) http.HandlerFunc {
 		switch r.Method {
 		case http.MethodGet:
 			workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
+			session, authErr := authorizeAction(
+				state,
+				r,
+				workspaceID,
+				"admin.users.manage",
+				authorizationResource{WorkspaceID: workspaceID},
+				authorizationContext{OperationType: "read", ABACRequired: true},
+				RoleAdmin,
+			)
+			if authErr != nil {
+				authErr.write(w, r)
+				return
+			}
+			if workspaceID == "" && session.WorkspaceID != localWorkspaceID {
+				workspaceID = session.WorkspaceID
+			}
+
+			if state.authz != nil {
+				items, err := state.authz.listUsers(workspaceID)
+				if err != nil {
+					WriteStandardError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list users", map[string]any{})
+					return
+				}
+				raw := make([]any, 0, len(items))
+				for _, item := range items {
+					raw = append(raw, item)
+				}
+				start, limit := parseCursorLimit(r)
+				paged, next := paginateAny(raw, start, limit)
+				writeJSON(w, http.StatusOK, ListEnvelope{Items: paged, NextCursor: next})
+				return
+			}
+
 			state.mu.RLock()
 			items := make([]AdminUser, 0)
 			for _, user := range state.adminUsers {
@@ -270,10 +408,41 @@ func AdminUsersHandler(state *AppState) http.HandlerFunc {
 				err.write(w, r)
 				return
 			}
-			if strings.TrimSpace(input.WorkspaceID) == "" || strings.TrimSpace(input.Username) == "" {
+			workspaceID := strings.TrimSpace(input.WorkspaceID)
+			session, authErr := authorizeAction(
+				state,
+				r,
+				workspaceID,
+				"admin.users.manage",
+				authorizationResource{WorkspaceID: workspaceID},
+				authorizationContext{OperationType: "write", ABACRequired: true},
+				RoleAdmin,
+			)
+			if authErr != nil {
+				authErr.write(w, r)
+				return
+			}
+			if workspaceID == "" && session.WorkspaceID != localWorkspaceID {
+				workspaceID = session.WorkspaceID
+			}
+			if strings.TrimSpace(workspaceID) == "" || strings.TrimSpace(input.Username) == "" {
 				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "workspace_id and username are required", map[string]any{})
 				return
 			}
+			input.WorkspaceID = workspaceID
+			if state.authz != nil {
+				updated, err := state.authz.upsertUser(input)
+				if err != nil {
+					WriteStandardError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to upsert user", map[string]any{})
+					return
+				}
+				writeJSON(w, http.StatusOK, updated)
+				_ = state.authz.appendAudit(workspaceID, session.UserID, "admin.users.manage", "user", updated.ID, "success", map[string]any{
+					"username": updated.Username,
+				}, TraceIDFromContext(r.Context()))
+				return
+			}
+
 			now := time.Now().UTC().Format(time.RFC3339)
 			state.mu.Lock()
 			for id, user := range state.adminUsers {
@@ -314,8 +483,44 @@ func AdminUsersHandler(state *AppState) http.HandlerFunc {
 func AdminUserByIDHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := strings.TrimSpace(r.PathValue("user_id"))
+		workspaceID := ""
+		if state.authz != nil {
+			user, err := state.authz.getUserByID(userID)
+			if err == nil {
+				workspaceID = user.WorkspaceID
+			}
+		}
+		if workspaceID == "" {
+			state.mu.RLock()
+			if user, exists := state.adminUsers[userID]; exists {
+				workspaceID = user.WorkspaceID
+			}
+			state.mu.RUnlock()
+		}
+		session, authErr := authorizeAction(
+			state,
+			r,
+			workspaceID,
+			"admin.users.manage",
+			authorizationResource{WorkspaceID: workspaceID},
+			authorizationContext{OperationType: "write", ABACRequired: true},
+			RoleAdmin,
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
 		switch r.Method {
 		case http.MethodDelete:
+			if state.authz != nil {
+				if err := state.authz.deleteUser(userID); err != nil {
+					WriteStandardError(w, r, http.StatusNotFound, "USER_NOT_FOUND", "User does not exist", map[string]any{"user_id": userID})
+					return
+				}
+				writeJSON(w, http.StatusNoContent, map[string]any{})
+				_ = state.authz.appendAudit(workspaceID, session.UserID, "admin.users.manage", "user", userID, "success", map[string]any{"operation": "delete"}, TraceIDFromContext(r.Context()))
+				return
+			}
 			state.mu.Lock()
 			if _, exists := state.adminUsers[userID]; !exists {
 				state.mu.Unlock()
@@ -332,6 +537,37 @@ func AdminUserByIDHandler(state *AppState) http.HandlerFunc {
 			}{}
 			if err := decodeJSONBody(r, &payload); err != nil {
 				err.write(w, r)
+				return
+			}
+			if state.authz != nil {
+				if payload.Enabled != nil {
+					updated, err := state.authz.setUserEnabled(userID, *payload.Enabled)
+					if err != nil {
+						WriteStandardError(w, r, http.StatusNotFound, "USER_NOT_FOUND", "User does not exist", map[string]any{"user_id": userID})
+						return
+					}
+					if payload.Role != "" {
+						updated, err = state.authz.setUserRole(userID, payload.Role)
+						if err != nil {
+							WriteStandardError(w, r, http.StatusNotFound, "USER_NOT_FOUND", "User does not exist", map[string]any{"user_id": userID})
+							return
+						}
+					}
+					writeJSON(w, http.StatusOK, updated)
+					_ = state.authz.appendAudit(updated.WorkspaceID, session.UserID, "admin.users.manage", "user", userID, "success", map[string]any{"operation": "patch"}, TraceIDFromContext(r.Context()))
+					return
+				}
+				if payload.Role != "" {
+					updated, err := state.authz.setUserRole(userID, payload.Role)
+					if err != nil {
+						WriteStandardError(w, r, http.StatusNotFound, "USER_NOT_FOUND", "User does not exist", map[string]any{"user_id": userID})
+						return
+					}
+					writeJSON(w, http.StatusOK, updated)
+					_ = state.authz.appendAudit(updated.WorkspaceID, session.UserID, "admin.users.manage", "user", userID, "success", map[string]any{"operation": "patch"}, TraceIDFromContext(r.Context()))
+					return
+				}
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "role or enabled is required", map[string]any{})
 				return
 			}
 			state.mu.Lock()
@@ -362,6 +598,29 @@ func AdminRolesHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
+			session, authErr := authorizeAction(
+				state,
+				r,
+				"",
+				"admin.roles.manage",
+				authorizationResource{},
+				authorizationContext{OperationType: "read", ABACRequired: true},
+				RoleAdmin,
+			)
+			if authErr != nil {
+				authErr.write(w, r)
+				return
+			}
+			workspaceID := firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("workspace_id")), session.WorkspaceID)
+			if state.authz != nil {
+				items, err := state.authz.listRoles(workspaceID)
+				if err != nil {
+					WriteStandardError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list roles", map[string]any{})
+					return
+				}
+				writeJSON(w, http.StatusOK, items)
+				return
+			}
 			state.mu.RLock()
 			items := make([]AdminRole, 0, len(state.adminRoles))
 			for _, role := range state.adminRoles {
@@ -376,8 +635,32 @@ func AdminRolesHandler(state *AppState) http.HandlerFunc {
 				err.write(w, r)
 				return
 			}
+			session, authErr := authorizeAction(
+				state,
+				r,
+				"",
+				"admin.roles.manage",
+				authorizationResource{},
+				authorizationContext{OperationType: "write", ABACRequired: true},
+				RoleAdmin,
+			)
+			if authErr != nil {
+				authErr.write(w, r)
+				return
+			}
 			if input.Key == "" || strings.TrimSpace(input.Name) == "" {
 				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "key and name are required", map[string]any{})
+				return
+			}
+			workspaceID := firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("workspace_id")), session.WorkspaceID)
+			if state.authz != nil {
+				updated, err := state.authz.upsertRole(workspaceID, input)
+				if err != nil {
+					WriteStandardError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to upsert role", map[string]any{})
+					return
+				}
+				writeJSON(w, http.StatusOK, updated)
+				_ = state.authz.appendAudit(workspaceID, session.UserID, "admin.roles.manage", "role", string(updated.Key), "success", map[string]any{"operation": "upsert"}, TraceIDFromContext(r.Context()))
 				return
 			}
 			state.mu.Lock()
@@ -395,8 +678,31 @@ func AdminRolesHandler(state *AppState) http.HandlerFunc {
 func AdminRoleByKeyHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		roleKey := Role(strings.TrimSpace(r.PathValue("role_key")))
+		session, authErr := authorizeAction(
+			state,
+			r,
+			"",
+			"admin.roles.manage",
+			authorizationResource{},
+			authorizationContext{OperationType: "write", ABACRequired: true},
+			RoleAdmin,
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
+		workspaceID := firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("workspace_id")), session.WorkspaceID)
 		switch r.Method {
 		case http.MethodDelete:
+			if state.authz != nil {
+				if err := state.authz.deleteRole(workspaceID, roleKey); err != nil {
+					WriteStandardError(w, r, http.StatusNotFound, "ROLE_NOT_FOUND", "Role does not exist", map[string]any{"role": roleKey})
+					return
+				}
+				writeJSON(w, http.StatusNoContent, map[string]any{})
+				_ = state.authz.appendAudit(workspaceID, session.UserID, "admin.roles.manage", "role", string(roleKey), "success", map[string]any{"operation": "delete"}, TraceIDFromContext(r.Context()))
+				return
+			}
 			state.mu.Lock()
 			if _, exists := state.adminRoles[roleKey]; !exists {
 				state.mu.Unlock()
@@ -412,6 +718,16 @@ func AdminRoleByKeyHandler(state *AppState) http.HandlerFunc {
 			}{}
 			if err := decodeJSONBody(r, &payload); err != nil {
 				err.write(w, r)
+				return
+			}
+			if state.authz != nil {
+				updated, err := state.authz.setRoleEnabled(workspaceID, roleKey, payload.Enabled)
+				if err != nil {
+					WriteStandardError(w, r, http.StatusNotFound, "ROLE_NOT_FOUND", "Role does not exist", map[string]any{"role": roleKey})
+					return
+				}
+				writeJSON(w, http.StatusOK, updated)
+				_ = state.authz.appendAudit(workspaceID, session.UserID, "admin.roles.manage", "role", string(roleKey), "success", map[string]any{"operation": "patch_enabled"}, TraceIDFromContext(r.Context()))
 				return
 			}
 			state.mu.Lock()
@@ -443,6 +759,37 @@ func AdminAuditHandler(state *AppState) http.HandlerFunc {
 		}
 
 		workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
+		session, authErr := authorizeAction(
+			state,
+			r,
+			workspaceID,
+			"admin.audit.read",
+			authorizationResource{WorkspaceID: workspaceID},
+			authorizationContext{OperationType: "read"},
+			RoleAdmin, RoleApprover,
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
+		if workspaceID == "" && session.WorkspaceID != localWorkspaceID {
+			workspaceID = session.WorkspaceID
+		}
+		if state.authz != nil {
+			items, err := state.authz.listAudit(workspaceID)
+			if err != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list audit logs", map[string]any{})
+				return
+			}
+			raw := make([]any, 0, len(items))
+			for _, item := range items {
+				raw = append(raw, item)
+			}
+			start, limit := parseCursorLimit(r)
+			paged, next := paginateAny(raw, start, limit)
+			writeJSON(w, http.StatusOK, ListEnvelope{Items: paged, NextCursor: next})
+			return
+		}
 		state.mu.RLock()
 		items := make([]any, 0)
 		for _, audit := range state.adminAudit {

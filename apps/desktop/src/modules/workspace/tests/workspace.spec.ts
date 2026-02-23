@@ -41,14 +41,15 @@ describe("workspace view", () => {
           resource_write: true,
           execution_control: true
         }
-      }));
+      }))
+      .mockResolvedValueOnce(jsonResponse(buildPermissionSnapshot("admin")));
 
     vi.stubGlobal("fetch", fetchMock);
 
     const wrapper = await mountWithRouter();
 
     expect(wrapper.text()).toContain("Local Ready");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("disables remote login button when login_disabled=true", async () => {
@@ -89,7 +90,8 @@ describe("workspace view", () => {
           resource_write: true,
           execution_control: true
         }
-      }));
+      }))
+      .mockResolvedValueOnce(jsonResponse(buildPermissionSnapshot("admin")));
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -134,6 +136,7 @@ describe("workspace view", () => {
           execution_control: true
         }
       }))
+      .mockResolvedValueOnce(jsonResponse(buildPermissionSnapshot("admin")))
       .mockResolvedValueOnce(
         jsonResponse({
           id: "ws_remote_new",
@@ -164,10 +167,12 @@ describe("workspace view", () => {
     expect(postCall).toBeTruthy();
   });
 
-  it("fetches remote me from target hub after login", async () => {
+  it("fetches remote me and permissions from control hub after login", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? "GET";
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      const authHeader = headers.Authorization ?? "";
 
       if (url.endsWith("/v1/workspaces") && method === "GET") {
         return jsonResponse({
@@ -198,6 +203,19 @@ describe("workspace view", () => {
       }
 
       if (url === "http://127.0.0.1:8787/v1/me" && method === "GET") {
+        if (authHeader === "Bearer at_remote") {
+          return jsonResponse({
+            user_id: "remote_user",
+            display_name: "Remote User",
+            workspace_id: "ws_remote_2",
+            role: "developer",
+            capabilities: {
+              admin_console: false,
+              resource_write: true,
+              execution_control: true
+            }
+          });
+        }
         return jsonResponse({
           user_id: "local_user",
           display_name: "Local User",
@@ -211,24 +229,17 @@ describe("workspace view", () => {
         });
       }
 
+      if (url === "http://127.0.0.1:8787/v1/me/permissions" && method === "GET") {
+        if (authHeader === "Bearer at_remote") {
+          return jsonResponse(buildPermissionSnapshot("developer"));
+        }
+        return jsonResponse(buildPermissionSnapshot("admin"));
+      }
+
       if (url === "http://127.0.0.1:8787/v1/auth/login" && method === "POST") {
         return jsonResponse({
           access_token: "at_remote",
           token_type: "bearer"
-        });
-      }
-
-      if (url === "http://10.0.0.9:9000/v1/me" && method === "GET") {
-        return jsonResponse({
-          user_id: "remote_user",
-          display_name: "Remote User",
-          workspace_id: "ws_remote_2",
-          role: "developer",
-          capabilities: {
-            admin_console: false,
-            resource_write: true,
-            execution_control: true
-          }
         });
       }
 
@@ -250,9 +261,19 @@ describe("workspace view", () => {
     await loginButton?.trigger("click");
     await flushPromises();
 
-    const targetMeCall = fetchMock.mock.calls.find((call) => String(call[0]) === "http://10.0.0.9:9000/v1/me");
-    expect(targetMeCall).toBeTruthy();
-    expect((targetMeCall?.[1]?.headers as Record<string, string>).Authorization).toBe("Bearer at_remote");
+    const controlMeCall = fetchMock.mock.calls.find(
+      (call) =>
+        String(call[0]) === "http://127.0.0.1:8787/v1/me" &&
+        ((call[1]?.headers as Record<string, string> | undefined)?.Authorization ?? "") === "Bearer at_remote"
+    );
+    expect(controlMeCall).toBeTruthy();
+
+    const permissionsCall = fetchMock.mock.calls.find(
+      (call) =>
+        String(call[0]) === "http://127.0.0.1:8787/v1/me/permissions" &&
+        ((call[1]?.headers as Record<string, string> | undefined)?.Authorization ?? "") === "Bearer at_remote"
+    );
+    expect(permissionsCall).toBeTruthy();
   });
 });
 
@@ -282,4 +303,29 @@ function jsonResponse(payload: unknown, status = 200): Response {
       "Content-Type": "application/json"
     }
   });
+}
+
+function buildPermissionSnapshot(role: "admin" | "developer") {
+  return {
+    role,
+    permissions: role === "admin" ? ["*"] : ["project.read", "project.write", "conversation.read", "conversation.write"],
+    menu_visibility: {
+      main: "enabled",
+      remote_account: "enabled",
+      remote_members_roles: role === "admin" ? "enabled" : "hidden",
+      remote_permissions_audit: role === "admin" ? "enabled" : "hidden",
+      workspace_project_config: "enabled",
+      workspace_agent: "enabled",
+      workspace_model: "enabled",
+      workspace_rules: "enabled",
+      workspace_skills: "enabled",
+      workspace_mcp: "enabled",
+      settings_theme: "enabled",
+      settings_i18n: "enabled",
+      settings_general: "enabled"
+    },
+    action_visibility: {},
+    policy_version: "test",
+    generated_at: "2026-02-23T00:00:00Z"
+  };
 }

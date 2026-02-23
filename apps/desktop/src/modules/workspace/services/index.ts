@@ -4,9 +4,11 @@ import { createMockId, mockData } from "@/shared/services/mockData";
 import type {
   CreateWorkspaceRequest,
   ListEnvelope,
-  PaginationQuery,
   LoginRequest,
   LoginResponse,
+  LogoutRequest,
+  PaginationQuery,
+  RefreshRequest,
   WorkspaceConnectionResult,
   Workspace
 } from "@/shared/types/api";
@@ -86,8 +88,29 @@ export async function loginWorkspace(input: LoginRequest): Promise<LoginResponse
     () => getControlClient().post<LoginResponse>("/v1/auth/login", input),
     () => ({
       access_token: `at_${createMockId("mock")}`,
+      refresh_token: `rt_${createMockId("mock")}`,
       token_type: "bearer"
     })
+  );
+}
+
+export async function refreshWorkspaceSession(input: RefreshRequest): Promise<LoginResponse> {
+  return withApiFallback(
+    "workspace.refresh",
+    () => getControlClient().post<LoginResponse>("/v1/auth/refresh", input),
+    () => ({
+      access_token: `at_${createMockId("mock")}`,
+      refresh_token: `rt_${createMockId("mock")}`,
+      token_type: "bearer"
+    })
+  );
+}
+
+export async function logoutWorkspaceSession(input: LogoutRequest): Promise<{ ok: true }> {
+  return withApiFallback(
+    "workspace.logout",
+    () => getControlClient().post<{ ok: true }>("/v1/auth/logout", input),
+    () => ({ ok: true })
   );
 }
 

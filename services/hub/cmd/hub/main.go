@@ -17,7 +17,7 @@ func main() {
 	addr := ":" + port
 	server := &http.Server{
 		Addr:    addr,
-		Handler: httpapi.NewRouter(),
+		Handler: httpapi.NewRouterFromEnv(),
 	}
 
 	log.Printf("hub listening on %s", addr)

@@ -4,12 +4,14 @@ from app.main import app
 
 
 client = TestClient(app)
+INTERNAL_TOKEN = "goyais-internal-token"
+AUTH_HEADERS = {"X-Internal-Token": INTERNAL_TOKEN}
 
 
 def test_internal_executions_accepts_request_and_keeps_trace_consistency() -> None:
     response = client.post(
         "/internal/executions",
-        headers={"X-Trace-Id": "tr_worker_user"},
+        headers={"X-Trace-Id": "tr_worker_user", **AUTH_HEADERS},
         json={
             "execution_id": "exec_01",
             "workspace_id": "ws_local",
@@ -33,6 +35,7 @@ def test_internal_executions_accepts_request_and_keeps_trace_consistency() -> No
 def test_internal_events_generates_trace_when_missing() -> None:
     create_response = client.post(
         "/internal/executions",
+        headers=AUTH_HEADERS,
         json={
             "execution_id": "exec_02",
             "workspace_id": "ws_local",
@@ -46,6 +49,7 @@ def test_internal_events_generates_trace_when_missing() -> None:
 
     response = client.post(
         "/internal/events",
+        headers=AUTH_HEADERS,
         json={
             "event_id": "evt_01",
             "execution_id": "exec_02",
@@ -68,7 +72,7 @@ def test_internal_events_generates_trace_when_missing() -> None:
 def test_internal_events_returns_404_for_unknown_execution() -> None:
     response = client.post(
         "/internal/events",
-        headers={"X-Trace-Id": "tr_missing_exec"},
+        headers={"X-Trace-Id": "tr_missing_exec", **AUTH_HEADERS},
         json={
             "event_id": "evt_missing",
             "execution_id": "exec_missing",
@@ -85,3 +89,37 @@ def test_internal_events_returns_404_for_unknown_execution() -> None:
     assert body["code"] == "EXECUTION_NOT_FOUND"
     assert body["details"]["execution_id"] == "exec_missing"
     assert body["trace_id"] == "tr_missing_exec"
+
+
+def test_internal_endpoints_require_internal_token() -> None:
+    execution_response = client.post(
+        "/internal/executions",
+        json={
+            "execution_id": "exec_unauth",
+            "workspace_id": "ws_local",
+            "conversation_id": "conv_unauth",
+            "message_id": "msg_unauth",
+            "mode": "agent",
+            "model_id": "gpt-4.1",
+        },
+    )
+
+    assert execution_response.status_code == 401
+    execution_body = execution_response.json()
+    assert execution_body["code"] == "AUTH_INTERNAL_TOKEN_REQUIRED"
+
+    event_response = client.post(
+        "/internal/events",
+        headers={"Authorization": "Bearer wrong-token"},
+        json={
+            "event_id": "evt_unauth",
+            "execution_id": "exec_02",
+            "conversation_id": "conv_02",
+            "type": "execution_done",
+            "sequence": 1,
+            "queue_index": 0,
+        },
+    )
+    assert event_response.status_code == 401
+    event_body = event_response.json()
+    assert event_body["code"] == "AUTH_INVALID_INTERNAL_TOKEN"

@@ -5,6 +5,7 @@ export type QueueState = "idle" | "running" | "queued";
 export type ConversationMode = "agent" | "plan";
 export type ExecutionState = "queued" | "pending" | "executing" | "confirming" | "completed" | "failed" | "cancelled";
 export type PermissionVisibility = "hidden" | "disabled" | "readonly" | "enabled";
+export type ABACEffect = "allow" | "deny";
 export type ConnectionStatus = "connected" | "reconnecting" | "disconnected";
 export type ResourceType = "model" | "rule" | "skill" | "mcp";
 export type ResourceScope = "private" | "shared";
@@ -27,7 +28,6 @@ export type MenuKey =
   | "workspace_mcp"
   | "settings_theme"
   | "settings_i18n"
-  | "settings_updates_diagnostics"
   | "settings_general";
 
 export type PaginationQuery = {

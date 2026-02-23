@@ -26,6 +26,22 @@ const (
 	RoleAdmin     Role = "admin"
 )
 
+type PermissionVisibility string
+
+const (
+	PermissionVisibilityHidden   PermissionVisibility = "hidden"
+	PermissionVisibilityDisabled PermissionVisibility = "disabled"
+	PermissionVisibilityReadonly PermissionVisibility = "readonly"
+	PermissionVisibilityEnabled  PermissionVisibility = "enabled"
+)
+
+type ABACEffect string
+
+const (
+	ABACEffectAllow ABACEffect = "allow"
+	ABACEffectDeny  ABACEffect = "deny"
+)
+
 type QueueState string
 
 const (
@@ -110,9 +126,18 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	AccessToken string `json:"access_token"`
-	TokenType   string `json:"token_type"`
-	ExpiresIn   *int   `json:"expires_in,omitempty"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	TokenType    string `json:"token_type"`
+	ExpiresIn    *int   `json:"expires_in,omitempty"`
+}
+
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+type LogoutRequest struct {
+	AccessToken string `json:"access_token,omitempty"`
 }
 
 type RemoteConnectRequest struct {
@@ -139,12 +164,17 @@ type Me struct {
 }
 
 type Session struct {
-	Token       string    `json:"token"`
-	WorkspaceID string    `json:"workspace_id"`
-	Role        Role      `json:"role"`
-	UserID      string    `json:"user_id"`
-	DisplayName string    `json:"display_name"`
-	CreatedAt   time.Time `json:"created_at"`
+	Token            string    `json:"token"`
+	RefreshToken     string    `json:"refresh_token"`
+	WorkspaceID      string    `json:"workspace_id"`
+	Role             Role      `json:"role"`
+	UserID           string    `json:"user_id"`
+	DisplayName      string    `json:"display_name"`
+	ExpiresAt        time.Time `json:"expires_at"`
+	RefreshExpiresAt time.Time `json:"refresh_expires_at"`
+	Revoked          bool      `json:"revoked"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type Project struct {
@@ -340,4 +370,45 @@ type AdminAuditEvent struct {
 	Result    string `json:"result"`
 	TraceID   string `json:"trace_id"`
 	Timestamp string `json:"timestamp"`
+}
+
+type PermissionSnapshot struct {
+	Role            Role                          `json:"role"`
+	Permissions     []string                      `json:"permissions"`
+	MenuVisibility  map[string]PermissionVisibility `json:"menu_visibility"`
+	ActionVisibility map[string]PermissionVisibility `json:"action_visibility"`
+	PolicyVersion   string                        `json:"policy_version"`
+	GeneratedAt     string                        `json:"generated_at"`
+}
+
+type AdminPermission struct {
+	Key     string `json:"key"`
+	Label   string `json:"label"`
+	Enabled bool   `json:"enabled"`
+}
+
+type AdminMenu struct {
+	Key     string `json:"key"`
+	Label   string `json:"label"`
+	Enabled bool   `json:"enabled"`
+}
+
+type RoleMenuVisibility struct {
+	RoleKey Role                              `json:"role_key"`
+	Items   map[string]PermissionVisibility `json:"items"`
+}
+
+type ABACPolicy struct {
+	ID           string         `json:"id"`
+	WorkspaceID  string         `json:"workspace_id"`
+	Name         string         `json:"name"`
+	Effect       ABACEffect     `json:"effect"`
+	Priority     int            `json:"priority"`
+	Enabled      bool           `json:"enabled"`
+	SubjectExpr  map[string]any `json:"subject_expr"`
+	ResourceExpr map[string]any `json:"resource_expr"`
+	ActionExpr   map[string]any `json:"action_expr"`
+	ContextExpr  map[string]any `json:"context_expr"`
+	CreatedAt    string         `json:"created_at,omitempty"`
+	UpdatedAt    string         `json:"updated_at,omitempty"`
 }

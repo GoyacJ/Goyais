@@ -192,7 +192,7 @@ async function addRole(): Promise<void> {
   await createOrUpdateRole({
     key: keyInput as Role,
     name,
-    permissions: ["read", "write", "execute"],
+    permissions: ["project.read", "project.write", "conversation.read", "conversation.write"],
     enabled: true
   });
 }
@@ -215,12 +215,12 @@ async function toggleRoleState(roleKey: Role): Promise<void> {
   await toggleRole(roleKey);
 }
 
-function assignPermission(roleKey: Role): void {
+async function assignPermission(roleKey: Role): Promise<void> {
   const permission = window.prompt("新增权限", "resource.manage");
   if (!permission) {
     return;
   }
-  assignPermissionToRole(roleKey, permission);
+  await assignPermissionToRole(roleKey, permission);
 }
 
 async function removeRoleByKey(roleKey: Role): Promise<void> {

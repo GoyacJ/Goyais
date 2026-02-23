@@ -14,7 +14,7 @@ describe("desktop routes", () => {
     resetNavigationStore();
   });
 
-  it("contains required 13 routes", () => {
+  it("contains required 12 routes", () => {
     const routePaths = routes.map((route) => route.path);
 
     expect(routePaths).toContain("/main");
@@ -28,7 +28,6 @@ describe("desktop routes", () => {
     expect(routePaths).toContain("/workspace/mcp");
     expect(routePaths).toContain("/settings/theme");
     expect(routePaths).toContain("/settings/i18n");
-    expect(routePaths).toContain("/settings/updates-diagnostics");
     expect(routePaths).toContain("/settings/general");
   });
 
@@ -91,7 +90,7 @@ describe("desktop routes", () => {
     expect(workspaceStore.mode).toBe("remote");
   });
 
-  it("redirects admin route to account when admin capability is missing", async () => {
+  it("redirects hidden admin route to main when visibility is hidden", async () => {
     setWorkspaces([
       {
         id: "ws_remote",
@@ -116,8 +115,8 @@ describe("desktop routes", () => {
     await router.push("/remote/members-roles");
     await router.isReady();
 
-    expect(router.currentRoute.value.path).toBe("/remote/account");
-    expect(router.currentRoute.value.query.reason).toBe("admin_forbidden");
+    expect(router.currentRoute.value.path).toBe("/main");
+    expect(router.currentRoute.value.query.reason).toBe("menu_hidden");
   });
 
   it("switches to local workspace when entering local settings routes", async () => {

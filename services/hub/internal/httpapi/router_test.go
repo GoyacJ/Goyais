@@ -142,7 +142,7 @@ func TestLoginDisabledReturns403(t *testing.T) {
 	}
 }
 
-func TestControlProxyLoginCreatesSessionOnlyOnTarget(t *testing.T) {
+func TestControlProxyLoginCreatesGatewayMirrorSession(t *testing.T) {
 	targetRouter := NewRouter()
 	targetServer := httptest.NewServer(targetRouter)
 	defer targetServer.Close()
@@ -168,8 +168,13 @@ func TestControlProxyLoginCreatesSessionOnlyOnTarget(t *testing.T) {
 	controlMe := performJSONRequest(t, controlRouter, http.MethodGet, "/v1/me", nil, map[string]string{
 		"Authorization": "Bearer " + loginPayload.AccessToken,
 	})
-	if controlMe.Code != http.StatusUnauthorized {
-		t.Fatalf("expected control /v1/me to reject remote token, got %d", controlMe.Code)
+	if controlMe.Code != http.StatusOK {
+		t.Fatalf("expected control /v1/me 200, got %d", controlMe.Code)
+	}
+	controlPayload := Me{}
+	mustDecodeJSON(t, controlMe.Body.Bytes(), &controlPayload)
+	if controlPayload.WorkspaceID != remoteID {
+		t.Fatalf("expected control workspace_id=%s, got %s", remoteID, controlPayload.WorkspaceID)
 	}
 
 	targetMe := performJSONRequest(t, targetRouter, http.MethodGet, "/v1/me", nil, map[string]string{
@@ -339,6 +344,30 @@ func createRemoteWorkspace(t *testing.T, router http.Handler, name string, hubUR
 		t.Fatalf("workspace id should not be empty")
 	}
 	return workspace.ID
+}
+
+func loginRemoteWorkspace(t *testing.T, router http.Handler, workspaceID string, username string, password string, role Role, forwarded bool) string {
+	t.Helper()
+	headers := map[string]string{
+		"X-Role": string(role),
+	}
+	if forwarded {
+		headers[internalForwardedLoginHeader] = "1"
+	}
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/auth/login", map[string]any{
+		"workspace_id": workspaceID,
+		"username":     username,
+		"password":     password,
+	}, headers)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200 login, got %d (%s)", res.Code, res.Body.String())
+	}
+	payload := LoginResponse{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	if payload.AccessToken == "" {
+		t.Fatalf("expected access token in login response")
+	}
+	return payload.AccessToken
 }
 
 func performJSONRequest(t *testing.T, router http.Handler, method string, path string, body map[string]any, headers map[string]string) *httptest.ResponseRecorder {

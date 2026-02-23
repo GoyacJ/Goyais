@@ -1,0 +1,91 @@
+:root[data-font-style="neutral"] {
+  --global-font-family-ui: "SF Pro Text", "PingFang SC", "Noto Sans", sans-serif;
+}
+
+:root[data-font-style="reading"] {
+  --global-font-family-ui: "Iowan Old Style", "Palatino", "Times New Roman", "PingFang SC", "Noto Serif SC", serif;
+}
+
+:root[data-font-style="coding"] {
+  --global-font-family-ui: "SF Mono", "JetBrains Mono", "Cascadia Mono", "Menlo", "Monaco", "PingFang SC", monospace;
+}
+
+:root[data-font-scale="sm"] {
+  --global-font-size-11: 10px;
+  --global-font-size-12: 11px;
+  --global-font-size-13: 12px;
+  --global-font-size-14: 13px;
+  --global-font-size-16: 15px;
+  --global-font-size-18: 17px;
+  --global-font-size-20: 19px;
+  --global-font-size-24: 23px;
+  --global-font-size-28: 26px;
+}
+
+:root[data-font-scale="md"] {
+  --global-font-size-11: 11px;
+  --global-font-size-12: 12px;
+  --global-font-size-13: 13px;
+  --global-font-size-14: 14px;
+  --global-font-size-16: 16px;
+  --global-font-size-18: 18px;
+  --global-font-size-20: 20px;
+  --global-font-size-24: 24px;
+  --global-font-size-28: 28px;
+}
+
+:root[data-font-scale="lg"] {
+  --global-font-size-11: 12px;
+  --global-font-size-12: 13px;
+  --global-font-size-13: 14px;
+  --global-font-size-14: 15px;
+  --global-font-size-16: 17px;
+  --global-font-size-18: 19px;
+  --global-font-size-20: 21px;
+  --global-font-size-24: 25px;
+  --global-font-size-28: 30px;
+}
+
+:root[data-theme-preset="aurora_forge"] {
+  --semantic-primary: var(--global-color-primary-400);
+  --semantic-focus-ring: var(--global-color-primary-300);
+  --component-button-primary-bg: var(--global-color-neutral-500);
+  --component-button-primary-border: var(--global-color-neutral-500);
+}
+
+:root[data-theme="light"][data-theme-preset="aurora_forge"] {
+  --semantic-primary: var(--global-color-primary-600);
+  --semantic-focus-ring: var(--global-color-primary-500);
+  --component-button-primary-bg: var(--global-color-primary-600);
+  --component-button-primary-border: var(--global-color-primary-600);
+}
+
+:root[data-theme-preset="obsidian_pulse"] {
+  --semantic-primary: var(--global-color-primary-300);
+  --semantic-focus-ring: var(--global-color-primary-200);
+  --component-button-primary-bg: var(--global-color-primary-700);
+  --component-button-primary-border: var(--global-color-primary-700);
+  --component-sidebar-item-bg-active: #7e9dce24;
+}
+
+:root[data-theme="light"][data-theme-preset="obsidian_pulse"] {
+  --semantic-primary: var(--global-color-primary-700);
+  --semantic-focus-ring: var(--global-color-primary-600);
+  --component-button-primary-bg: var(--global-color-primary-700);
+  --component-button-primary-border: var(--global-color-primary-700);
+  --component-sidebar-item-bg-active: #5e83bd1f;
+}
+
+:root[data-theme-preset="paper_focus"] {
+  --semantic-primary: var(--global-color-primary-500);
+  --semantic-focus-ring: var(--global-color-primary-400);
+  --component-button-primary-bg: var(--global-color-primary-500);
+  --component-button-primary-border: var(--global-color-primary-500);
+}
+
+:root[data-theme="light"][data-theme-preset="paper_focus"] {
+  --semantic-primary: var(--global-color-primary-500);
+  --semantic-focus-ring: var(--global-color-primary-400);
+  --component-button-primary-bg: var(--global-color-primary-500);
+  --component-button-primary-border: var(--global-color-primary-500);
+}

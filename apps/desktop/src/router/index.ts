@@ -14,7 +14,6 @@ import { initializeWorkspaceContext, switchWorkspaceContext } from "@/modules/wo
 import SettingsGeneralView from "@/modules/workspace/views/SettingsGeneralView.vue";
 import SettingsI18nView from "@/modules/workspace/views/SettingsI18nView.vue";
 import SettingsThemeView from "@/modules/workspace/views/SettingsThemeView.vue";
-import SettingsUpdatesDiagnosticsView from "@/modules/workspace/views/SettingsUpdatesDiagnosticsView.vue";
 import { canAccessAdmin } from "@/shared/stores/authStore";
 import { getMenuVisibility, refreshNavigationVisibility } from "@/shared/stores/navigationStore";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
@@ -96,12 +95,6 @@ export const routes: RouteRecordRaw[] = [
     meta: { menuKey: "settings_i18n" } as RouteMeta
   },
   {
-    path: "/settings/updates-diagnostics",
-    name: "settings-updates-diagnostics",
-    component: SettingsUpdatesDiagnosticsView,
-    meta: { menuKey: "settings_updates_diagnostics" } as RouteMeta
-  },
-  {
     path: "/settings/general",
     name: "settings-general",
     component: SettingsGeneralView,
@@ -142,15 +135,19 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
       }
     }
 
-    if (meta.requiresAdmin && !canAccessAdmin()) {
-      return { path: "/remote/account", query: { reason: "admin_forbidden" } };
-    }
-
+    let visibility: "hidden" | "disabled" | "readonly" | "enabled" = "enabled";
     if (menuKey) {
-      const visibility = getMenuVisibility(menuKey);
+      visibility = getMenuVisibility(menuKey);
       if (visibility === "hidden") {
         return { path: "/main", query: { reason: "menu_hidden" } };
       }
+      if (visibility === "disabled") {
+        return { path: to.path.startsWith("/remote/") ? "/remote/account" : "/main", query: { reason: "menu_disabled" } };
+      }
+    }
+
+    if (meta.requiresAdmin && !canAccessAdmin() && visibility === "enabled") {
+      return { path: "/remote/account", query: { reason: "admin_forbidden" } };
     }
 
     return true;

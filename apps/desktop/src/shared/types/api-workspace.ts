@@ -44,8 +44,17 @@ export type LoginRequest = {
 
 export type LoginResponse = {
   access_token: string;
+  refresh_token?: string;
   token_type: "bearer";
   expires_in?: number;
+};
+
+export type RefreshRequest = {
+  refresh_token: string;
+};
+
+export type LogoutRequest = {
+  access_token?: string;
 };
 
 export type Capabilities = {

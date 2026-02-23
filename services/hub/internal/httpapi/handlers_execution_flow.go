@@ -19,6 +19,21 @@ func ConversationsHandler(state *AppState) http.HandlerFunc {
 
 		projectID := strings.TrimSpace(r.URL.Query().Get("project_id"))
 		workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
+		session, authErr := authorizeAction(
+			state,
+			r,
+			workspaceID,
+			"conversation.read",
+			authorizationResource{WorkspaceID: workspaceID},
+			authorizationContext{OperationType: "read"},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
+		if workspaceID == "" && session.WorkspaceID != localWorkspaceID {
+			workspaceID = session.WorkspaceID
+		}
 		state.mu.RLock()
 		items := make([]Conversation, 0)
 		for _, conv := range state.conversations {
@@ -52,6 +67,26 @@ func ExecutionsHandler(state *AppState) http.HandlerFunc {
 		}
 
 		conversationID := strings.TrimSpace(r.URL.Query().Get("conversation_id"))
+		workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
+		if conversationID != "" {
+			state.mu.RLock()
+			if conversation, exists := state.conversations[conversationID]; exists {
+				workspaceID = firstNonEmpty(workspaceID, conversation.WorkspaceID)
+			}
+			state.mu.RUnlock()
+		}
+		_, authErr := authorizeAction(
+			state,
+			r,
+			workspaceID,
+			"conversation.read",
+			authorizationResource{WorkspaceID: workspaceID},
+			authorizationContext{OperationType: "read"},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
 		state.mu.RLock()
 		items := make([]Execution, 0)
 		for _, execution := range state.executions {
@@ -93,6 +128,25 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 		}
 		if input.Mode == "" {
 			input.Mode = ConversationModeAgent
+		}
+		state.mu.RLock()
+		conversationSeed, conversationExists := state.conversations[conversationID]
+		state.mu.RUnlock()
+		if !conversationExists {
+			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
+			return
+		}
+		session, authErr := authorizeAction(
+			state,
+			r,
+			conversationSeed.WorkspaceID,
+			"conversation.write",
+			authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
+			authorizationContext{OperationType: "write", ABACRequired: true},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
 		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
@@ -161,6 +215,12 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 		conversation.UpdatedAt = now
 		state.conversations[conversationID] = conversation
 		state.mu.Unlock()
+		if state.authz != nil {
+			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "conversation.write", "conversation", conversationID, "success", map[string]any{"operation": "send_message"}, TraceIDFromContext(r.Context()))
+		}
+		if execution.State == ExecutionStateExecuting {
+			dispatchExecutionToWorkerBestEffort(state, r, session, execution)
+		}
 
 		writeJSON(w, http.StatusCreated, ExecutionCreateResponse{Execution: execution})
 	}
@@ -176,6 +236,27 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 		}
 
 		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
+		state.mu.RLock()
+		conversationSeed, exists := state.conversations[conversationID]
+		state.mu.RUnlock()
+		if !exists {
+			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
+			return
+		}
+		session, authErr := authorizeAction(
+			state,
+			r,
+			conversationSeed.WorkspaceID,
+			"execution.control",
+			authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
+			authorizationContext{OperationType: "write", ABACRequired: true},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
+		var cancelledExecution *Execution
+		var nextExecution *Execution
 		state.mu.Lock()
 		conversation, exists := state.conversations[conversationID]
 		if !exists {
@@ -189,6 +270,7 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 			execution.State = ExecutionStateCancelled
 			execution.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 			state.executions[execution.ID] = execution
+			cancelledExecution = &execution
 			conversation.ActiveExecutionID = nil
 		}
 
@@ -198,10 +280,22 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 		} else {
 			conversation.ActiveExecutionID = &nextID
 			conversation.QueueState = QueueStateRunning
+			if execution, exists := state.executions[nextID]; exists {
+				nextExecution = &execution
+			}
 		}
 		conversation.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 		state.conversations[conversationID] = conversation
 		state.mu.Unlock()
+		if state.authz != nil {
+			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "execution.control", "conversation", conversationID, "success", map[string]any{"operation": "stop"}, TraceIDFromContext(r.Context()))
+		}
+		if cancelledExecution != nil {
+			dispatchExecutionEventToWorkerBestEffort(state, r, session, *cancelledExecution, "execution_stopped", 0)
+		}
+		if nextExecution != nil {
+			dispatchExecutionToWorkerBestEffort(state, r, session, *nextExecution)
+		}
 
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	}
@@ -224,6 +318,25 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 		}
 		if strings.TrimSpace(input.MessageID) == "" {
 			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "message_id is required", map[string]any{})
+			return
+		}
+		state.mu.RLock()
+		conversationSeed, exists := state.conversations[conversationID]
+		state.mu.RUnlock()
+		if !exists {
+			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
+			return
+		}
+		session, authErr := authorizeAction(
+			state,
+			r,
+			conversationSeed.WorkspaceID,
+			"execution.control",
+			authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
+			authorizationContext{OperationType: "write", ABACRequired: true},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
 			return
 		}
 
@@ -278,11 +391,15 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 		state.mu.Unlock()
 
 		state.AppendAudit(AdminAuditEvent{
-			Actor:    "system",
+			Actor:    actorFromSession(session),
 			Action:   "conversation.rollback",
 			Resource: conversationID,
 			Result:   "success",
+			TraceID:  TraceIDFromContext(r.Context()),
 		})
+		if state.authz != nil {
+			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "execution.control", "conversation", conversationID, "success", map[string]any{"operation": "rollback"}, TraceIDFromContext(r.Context()))
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	}
 }
@@ -314,6 +431,18 @@ func ConversationExportHandler(state *AppState) http.HandlerFunc {
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
 			return
 		}
+		_, authErr := authorizeAction(
+			state,
+			r,
+			conversation.WorkspaceID,
+			"conversation.read",
+			authorizationResource{WorkspaceID: conversation.WorkspaceID},
+			authorizationContext{OperationType: "read"},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
 
 		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
@@ -331,10 +460,22 @@ func ExecutionDiffHandler(state *AppState) http.HandlerFunc {
 		}
 		executionID := strings.TrimSpace(r.PathValue("execution_id"))
 		state.mu.RLock()
-		_, exists := state.executions[executionID]
+		execution, exists := state.executions[executionID]
 		state.mu.RUnlock()
 		if !exists {
 			WriteStandardError(w, r, http.StatusNotFound, "EXECUTION_NOT_FOUND", "Execution does not exist", map[string]any{"execution_id": executionID})
+			return
+		}
+		_, authErr := authorizeAction(
+			state,
+			r,
+			execution.WorkspaceID,
+			"conversation.read",
+			authorizationResource{WorkspaceID: execution.WorkspaceID},
+			authorizationContext{OperationType: "read"},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
 			return
 		}
 		writeJSON(w, http.StatusOK, []DiffItem{
@@ -353,6 +494,25 @@ func ExecutionActionHandler(state *AppState) http.HandlerFunc {
 		}
 		executionID := strings.TrimSpace(r.PathValue("execution_id"))
 		action := strings.TrimSpace(r.PathValue("action"))
+		state.mu.RLock()
+		executionSeed, exists := state.executions[executionID]
+		state.mu.RUnlock()
+		if !exists {
+			WriteStandardError(w, r, http.StatusNotFound, "EXECUTION_NOT_FOUND", "Execution does not exist", map[string]any{"execution_id": executionID})
+			return
+		}
+		_, authErr := authorizeAction(
+			state,
+			r,
+			executionSeed.WorkspaceID,
+			"execution.control",
+			authorizationResource{WorkspaceID: executionSeed.WorkspaceID},
+			authorizationContext{OperationType: "write", ABACRequired: true},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
 		state.mu.Lock()
 		execution, exists := state.executions[executionID]
 		if !exists {
@@ -415,6 +575,60 @@ func startNextQueuedExecutionLocked(state *AppState, conversationID string) stri
 		return id
 	}
 	return ""
+}
+
+func dispatchExecutionToWorkerBestEffort(state *AppState, r *http.Request, session Session, execution Execution) {
+	if state == nil || state.worker == nil {
+		return
+	}
+	if err := state.worker.submitExecution(r.Context(), execution); err != nil {
+		state.AppendAudit(AdminAuditEvent{
+			Actor:    actorFromSession(session),
+			Action:   "worker.execution.dispatch",
+			Resource: execution.ID,
+			Result:   "failed",
+			TraceID:  TraceIDFromContext(r.Context()),
+		})
+		if state.authz != nil {
+			_ = state.authz.appendAudit(
+				execution.WorkspaceID,
+				session.UserID,
+				"worker.execution.dispatch",
+				"execution",
+				execution.ID,
+				"failed",
+				map[string]any{"error": err.Error()},
+				TraceIDFromContext(r.Context()),
+			)
+		}
+	}
+}
+
+func dispatchExecutionEventToWorkerBestEffort(state *AppState, r *http.Request, session Session, execution Execution, eventType string, sequence int) {
+	if state == nil || state.worker == nil {
+		return
+	}
+	if err := state.worker.submitExecutionEvent(r.Context(), execution, eventType, sequence); err != nil {
+		state.AppendAudit(AdminAuditEvent{
+			Actor:    actorFromSession(session),
+			Action:   "worker.event.dispatch",
+			Resource: execution.ID,
+			Result:   "failed",
+			TraceID:  TraceIDFromContext(r.Context()),
+		})
+		if state.authz != nil {
+			_ = state.authz.appendAudit(
+				execution.WorkspaceID,
+				session.UserID,
+				"worker.event.dispatch",
+				"execution",
+				execution.ID,
+				"failed",
+				map[string]any{"error": err.Error(), "event_type": eventType},
+				TraceIDFromContext(r.Context()),
+			)
+		}
+	}
 }
 
 func findSnapshotByMessageID(items []ConversationSnapshot, messageID string) (ConversationSnapshot, bool) {

@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+import os
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -10,6 +11,10 @@ router = APIRouter()
 
 _executions: dict[str, dict[str, Any]] = {}
 _events: list[dict[str, Any]] = []
+_INTERNAL_TOKEN_HEADER = "X-Internal-Token"
+_AUTHORIZATION_HEADER = "Authorization"
+_BEARER_PREFIX = "Bearer "
+_DEFAULT_INTERNAL_TOKEN = "goyais-internal-token"
 
 
 @router.get("/health")
@@ -19,6 +24,10 @@ def health() -> dict[str, object]:
 
 @router.post("/internal/executions")
 async def internal_executions(request: Request):
+    auth_err = _require_internal_token(request)
+    if auth_err is not None:
+        return auth_err
+
     payload, err = await _decode_json(request)
     if err is not None:
         return err
@@ -71,6 +80,10 @@ async def internal_executions(request: Request):
 
 @router.post("/internal/events")
 async def internal_events(request: Request):
+    auth_err = _require_internal_token(request)
+    if auth_err is not None:
+        return auth_err
+
     payload, err = await _decode_json(request)
     if err is not None:
         return err
@@ -195,3 +208,39 @@ def _is_blank(value: Any) -> bool:
 
 def _now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _require_internal_token(request: Request) -> JSONResponse | None:
+    expected_token = os.getenv("WORKER_INTERNAL_TOKEN", _DEFAULT_INTERNAL_TOKEN).strip()
+    if expected_token == "":
+        return None
+
+    provided_token = _extract_internal_token(request)
+    if provided_token == "":
+        return standard_error_response(
+            request=request,
+            status_code=401,
+            code="AUTH_INTERNAL_TOKEN_REQUIRED",
+            message="Internal token is required",
+            details={"header": _INTERNAL_TOKEN_HEADER},
+        )
+    if provided_token != expected_token:
+        return standard_error_response(
+            request=request,
+            status_code=401,
+            code="AUTH_INVALID_INTERNAL_TOKEN",
+            message="Internal token is invalid",
+            details={},
+        )
+    return None
+
+
+def _extract_internal_token(request: Request) -> str:
+    token = request.headers.get(_INTERNAL_TOKEN_HEADER, "").strip()
+    if token != "":
+        return token
+
+    authorization = request.headers.get(_AUTHORIZATION_HEADER, "").strip()
+    if not authorization.startswith(_BEARER_PREFIX):
+        return ""
+    return authorization[len(_BEARER_PREFIX) :].strip()

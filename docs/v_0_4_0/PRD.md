@@ -342,7 +342,7 @@ Workspace
 9. 成员与角色管理（新增、编辑、删除、停用、分配）。
 10. 权限与审计管理（菜单树/权限项编辑、删除、停用）。
 11. 工作区共享配置页：Agent/模型/Rules/Skills/MCP。
-12. 设置固定菜单：主题、国际化、更新与诊断、通用设置（主题与语言均需即时生效并持久化）。
+12. 设置固定菜单：主题、国际化、更新与诊断、通用设置（主题模式 `system/dark/light`、字体样式、字体大小、预设主题、语言切换均需即时生效并持久化；通用设置需提供策略型行式配置：启动与窗口、默认目录、通知、隐私与遥测、更新策略、诊断与日志）。
 13. 项目配置入口（账号信息 + 设置），支持模型/规则/技能/MCP 绑定。
 14. 模型配置两级结构（厂商 -> 模型）与厂商清单支持。
 15. 模型目录同步（手动 + 定时）。
@@ -549,6 +549,7 @@ Desktop -> Hub -> Worker
 1. Desktop 不直接对 Worker 发权威控制指令。
 2. Hub 是权限、密钥、审计、策略唯一权威面。
 3. Worker 在受控上下文内执行。
+4. Hub 调用 Worker internal 接口必须携带 internal token；无 token 或 token 错误必须返回 401 并记录 trace_id。
 
 ### 15.2 安全策略
 
@@ -591,6 +592,8 @@ Desktop -> Hub -> Worker
 3. 设置左侧菜单为固定菜单。
 4. 两者左上角与主屏幕一致使用工作区切换设计。
 5. 两者左下角与主屏幕一致使用用户触发器设计。
+6. 设置页主题模块包含：主题模式、字体样式、字体大小、预设主题，以及恢复默认动作。
+7. 设置页通用模块采用紧凑行式布局，策略项即时生效并自动持久化；系统能力未接入平台必须显式展示“暂不可用”而非静默降级。
 
 ### 16.3 输入区与状态规范
 
@@ -649,7 +652,7 @@ Desktop -> Hub -> Worker
 
 1. 主屏幕流程：工作区切换、项目树折叠、Conversation 新增/删除/导出、发送与队列、Stop、Inspector 切换。
 2. 回滚流程：在 queued/running 场景回滚到指定消息，验证工作树与队列恢复到快照点。
-3. 设置与账号信息：账号菜单动态、设置菜单固定、本地工作区不显示账号信息卡。
+3. 设置与账号信息：账号菜单动态、设置菜单固定、本地工作区不显示账号信息卡；主题模块需验证主题模式/字体样式/字体大小/预设主题全局即时生效与持久化。
 4. 成员与角色：成员/角色新增、编辑、删除、停用、分配权限全链路。
 5. 权限与审计：菜单/权限编辑停用生效；403 拒绝与审计一致。
 6. 项目配置：项目绑定生效，Conversation 覆盖不反写项目。
@@ -792,3 +795,5 @@ event types:
 | 权限语义变更 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 9.x/14.3, TECH_ARCH 5.x, 标准 10.x | done |
 | 阶段与门禁变更 | IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | Phase 映射, DoD/门禁 | done |
 | i18n/主题行为变更 | PRD.md, TECH_ARCH.md | PRD 12.1/体验项, TECH_ARCH 14.x | done |
+| 主题配置增强（字体样式/字号/预设） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 12.1/16.2/19.1, TECH_ARCH 14.2/14.3, PLAN 增量门禁/测试映射, 标准 9.x/10.x | done |
+| 通用设置能力化（策略型行式配置 + 本地持久化 + 平台降级显式化） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 12.1/16.2/19, TECH_ARCH 3.2/4.1/14, PLAN Phase 9/测试映射, 标准 10.4/11.1 | done |

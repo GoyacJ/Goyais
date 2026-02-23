@@ -113,7 +113,7 @@ const sections = computed<SidebarSection[]>(() => {
     },
     {
       title: "软件通用设置",
-      keys: ["settings_theme", "settings_i18n", "settings_updates_diagnostics", "settings_general"]
+      keys: ["settings_theme", "settings_i18n", "settings_general"]
     }
   ];
 });
@@ -223,9 +223,6 @@ function resolveMenuIcon(key: string): string {
   }
   if (key === "settings_i18n") {
     return "file-text";
-  }
-  if (key === "settings_updates_diagnostics") {
-    return "info";
   }
   return "settings";
 }

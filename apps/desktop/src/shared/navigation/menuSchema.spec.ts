@@ -32,7 +32,6 @@ describe("menu schema", () => {
       "workspace_project_config",
       "settings_theme",
       "settings_i18n",
-      "settings_updates_diagnostics",
       "settings_general"
     ]);
   });

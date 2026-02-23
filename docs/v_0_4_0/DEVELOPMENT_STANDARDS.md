@@ -238,6 +238,7 @@ TokenLayerContract {
 
 1. `SHOULD` 在 CI 增加 token 硬编码扫描。
 2. `SHOULD` 核心页面统一组件库实现，避免局部样式漂移。
+3. `MUST` 主题增强采用属性驱动覆盖层（如 `theme-profiles.css`），禁止直接改写 `tokens.css` 的设计源定义。
 
 ---
 
@@ -269,6 +270,8 @@ TokenLayerContract {
 3. 项目配置门禁：Conversation 覆盖不得反写 ProjectConfig。
 4. 菜单权限门禁：动态菜单可见性必须与后端权限一致（hidden/disabled/readonly/enabled）。
 5. 模型同步门禁：手动与定时同步路径至少一个失败可重试，且有审计日志。
+6. 主题门禁：`theme mode/font style/font scale/preset` 必须全局即时生效并持久化，且具备可回归自动化测试。
+7. 通用设置门禁：`general settings` 必须提供 6 组策略型行式配置并即时持久化；系统能力未接入平台时必须显式禁用并展示原因文案。
 
 ### 10.5 门禁契约
 
@@ -291,6 +294,7 @@ SemanticGatePolicy {
   project_config_override_non_persistent: true
   permission_visibility_consistency: true
   model_catalog_sync_auditable: true
+  general_settings_strategy_persistent: true
   blocking: true
 }
 
@@ -316,6 +320,7 @@ QualityGateResult {
    - 权限可见性一致性报告
    - 项目配置继承与覆盖报告
    - 模型目录同步稳定性报告
+   - 通用设置策略即时持久化与平台降级提示报告
 5. `MUST` 执行 Desktop strict 联调通道（`VITE_API_MODE=strict` + `VITE_ENABLE_MOCK_FALLBACK=false`）。
 
 ### 11.2 失败处理流程

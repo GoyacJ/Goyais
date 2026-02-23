@@ -149,7 +149,7 @@ async function submitLogin(workspaceId: string): Promise<void> {
       token: loginForm.token || undefined
     });
 
-    setWorkspaceToken(workspaceId, response.access_token);
+    setWorkspaceToken(workspaceId, response.access_token, response.refresh_token);
     setCurrentWorkspace(workspaceId);
     await refreshMeForCurrentWorkspace();
 

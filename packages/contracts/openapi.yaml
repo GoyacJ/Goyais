@@ -97,6 +97,48 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
+  /v1/auth/refresh:
+    post:
+      summary: Refresh workspace session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Rotated access and refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/auth/logout:
+    post:
+      summary: Revoke current workspace session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+      responses:
+        '200':
+          description: Logout accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+
   /v1/me:
     get:
       summary: Current identity and capabilities
@@ -107,6 +149,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Me'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/me/permissions:
+    get:
+      summary: Get permission snapshot for current user in current workspace
+      responses:
+        '200':
+          description: Permission snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionSnapshot'
         '401':
           $ref: '#/components/responses/StandardErrorResponse'
 
@@ -722,6 +777,340 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
+  /v1/admin/permissions:
+    get:
+      summary: List permission definitions
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Permission definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminPermission'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+    post:
+      summary: Create or update permission definition
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminPermission'
+      responses:
+        '200':
+          description: Upserted permission definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPermission'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/permissions/{permission_key}:
+    patch:
+      summary: Update permission definition
+      parameters:
+        - in: path
+          name: permission_key
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminPermissionPatchRequest'
+      responses:
+        '200':
+          description: Updated permission definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPermission'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    delete:
+      summary: Delete permission definition
+      parameters:
+        - in: path
+          name: permission_key
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/menus:
+    get:
+      summary: List menu definitions
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Menu definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminMenu'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+    post:
+      summary: Create or update menu definition
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminMenu'
+      responses:
+        '200':
+          description: Upserted menu definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMenu'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/menus/{menu_key}:
+    patch:
+      summary: Update menu definition
+      parameters:
+        - in: path
+          name: menu_key
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminMenuPatchRequest'
+      responses:
+        '200':
+          description: Updated menu definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMenu'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    delete:
+      summary: Delete menu definition
+      parameters:
+        - in: path
+          name: menu_key
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/menu-visibility/{role_key}:
+    get:
+      summary: Get role menu visibility mapping
+      parameters:
+        - in: path
+          name: role_key
+          required: true
+          schema:
+            $ref: '#/components/schemas/Role'
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Menu visibility mapping
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleMenuVisibility'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+    put:
+      summary: Update role menu visibility mapping
+      parameters:
+        - in: path
+          name: role_key
+          required: true
+          schema:
+            $ref: '#/components/schemas/Role'
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleMenuVisibility'
+      responses:
+        '200':
+          description: Updated menu visibility mapping
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleMenuVisibility'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/abac-policies:
+    get:
+      summary: List ABAC policies
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ABAC policy list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ABACPolicy'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+    post:
+      summary: Create or update ABAC policy
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ABACPolicy'
+      responses:
+        '200':
+          description: Upserted ABAC policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicy'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/abac-policies/{policy_id}:
+    patch:
+      summary: Update ABAC policy
+      parameters:
+        - in: path
+          name: policy_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ABACPolicyPatchRequest'
+      responses:
+        '200':
+          description: Updated ABAC policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicy'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    delete:
+      summary: Delete ABAC policy
+      parameters:
+        - in: path
+          name: policy_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
   /v1/admin/audit:
     get:
       summary: List admin audit events
@@ -743,6 +1132,8 @@ paths:
   /internal/executions:
     post:
       summary: Worker internal execution accept endpoint
+      parameters:
+        - $ref: '#/components/parameters/InternalTokenHeader'
       requestBody:
         required: true
         content:
@@ -756,12 +1147,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InternalExecutionAcceptedResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
         '400':
           $ref: '#/components/responses/StandardErrorResponse'
 
   /internal/events:
     post:
       summary: Worker internal event ingest endpoint
+      parameters:
+        - $ref: '#/components/parameters/InternalTokenHeader'
       requestBody:
         required: true
         content:
@@ -775,6 +1170,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InternalEventAcceptedResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
         '400':
           $ref: '#/components/responses/StandardErrorResponse'
         '404':
@@ -796,6 +1193,14 @@ components:
         minimum: 1
         maximum: 100
         default: 20
+      description: Page size for cursor-based pagination.
+    InternalTokenHeader:
+      in: header
+      name: X-Internal-Token
+      required: true
+      schema:
+        type: string
+      description: Shared internal token used by Hub when invoking Worker internal endpoints.
     WorkspaceIdParam:
       in: path
       name: workspace_id
@@ -851,6 +1256,10 @@ components:
     Role:
       type: string
       enum: [viewer, developer, approver, admin]
+
+    PermissionVisibility:
+      type: string
+      enum: [hidden, disabled, readonly, enabled]
 
     Workspace:
       type: object
@@ -986,11 +1395,26 @@ components:
         token:
           type: string
 
-    LoginResponse:
+    RefreshRequest:
       type: object
-      required: [access_token, token_type]
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    LogoutRequest:
+      type: object
       properties:
         access_token:
+          type: string
+
+    LoginResponse:
+      type: object
+      required: [access_token, refresh_token, token_type]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
           type: string
         token_type:
           type: string
@@ -1023,6 +1447,30 @@ components:
           $ref: '#/components/schemas/Role'
         capabilities:
           $ref: '#/components/schemas/Capabilities'
+
+    PermissionSnapshot:
+      type: object
+      required: [role, permissions, menu_visibility, action_visibility, policy_version, generated_at]
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
+        permissions:
+          type: array
+          items:
+            type: string
+        menu_visibility:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PermissionVisibility'
+        action_visibility:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PermissionVisibility'
+        policy_version:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
 
     StandardError:
       type: object
@@ -1414,6 +1862,124 @@ components:
         timestamp:
           type: string
           format: date-time
+
+    AdminPermission:
+      type: object
+      required: [key, label, enabled]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        enabled:
+          type: boolean
+
+    AdminPermissionPatchRequest:
+      type: object
+      properties:
+        label:
+          type: string
+        enabled:
+          type: boolean
+
+    AdminMenu:
+      type: object
+      required: [key, label, enabled]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        enabled:
+          type: boolean
+
+    AdminMenuPatchRequest:
+      type: object
+      properties:
+        label:
+          type: string
+        enabled:
+          type: boolean
+
+    RoleMenuVisibility:
+      type: object
+      required: [role_key, items]
+      properties:
+        role_key:
+          $ref: '#/components/schemas/Role'
+        items:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PermissionVisibility'
+
+    ABACEffect:
+      type: string
+      enum: [allow, deny]
+
+    ABACExpression:
+      type: object
+      additionalProperties: true
+
+    ABACPolicy:
+      type: object
+      required:
+        - id
+        - workspace_id
+        - name
+        - effect
+        - priority
+        - enabled
+        - subject_expr
+        - resource_expr
+        - action_expr
+        - context_expr
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        name:
+          type: string
+        effect:
+          $ref: '#/components/schemas/ABACEffect'
+        priority:
+          type: integer
+        enabled:
+          type: boolean
+        subject_expr:
+          $ref: '#/components/schemas/ABACExpression'
+        resource_expr:
+          $ref: '#/components/schemas/ABACExpression'
+        action_expr:
+          $ref: '#/components/schemas/ABACExpression'
+        context_expr:
+          $ref: '#/components/schemas/ABACExpression'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ABACPolicyPatchRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        effect:
+          $ref: '#/components/schemas/ABACEffect'
+        priority:
+          type: integer
+        enabled:
+          type: boolean
+        subject_expr:
+          $ref: '#/components/schemas/ABACExpression'
+        resource_expr:
+          $ref: '#/components/schemas/ABACExpression'
+        action_expr:
+          $ref: '#/components/schemas/ABACExpression'
+        context_expr:
+          $ref: '#/components/schemas/ABACExpression'
 
     InternalExecutionRequest:
       type: object

@@ -1,12 +1,19 @@
 import { reactive } from "vue";
 
-import { getControlClient, getTargetClient } from "@/shared/services/clients";
+import { getControlClient } from "@/shared/services/clients";
 import { ApiError } from "@/shared/services/http";
+import { getPermissionSnapshot } from "@/shared/services/permissionService";
+import {
+  clearWorkspacePermissionSnapshot,
+  resetPermissionStore,
+  setWorkspacePermissionSnapshot
+} from "@/shared/stores/permissionStore";
 import { getCurrentWorkspace, workspaceStore } from "@/shared/stores/workspaceStore";
 import type { Capabilities, Me } from "@/shared/types/api";
 
 type AuthState = {
   tokensByWorkspaceId: Record<string, string>;
+  refreshTokensByWorkspaceId: Record<string, string>;
   me: Me | null;
   capabilities: Capabilities;
   loading: boolean;
@@ -21,6 +28,7 @@ const defaultCapabilities: Capabilities = {
 
 const initialState: AuthState = {
   tokensByWorkspaceId: {},
+  refreshTokensByWorkspaceId: {},
   me: null,
   capabilities: { ...defaultCapabilities },
   loading: false,
@@ -31,21 +39,33 @@ export const authStore = reactive<AuthState>({ ...initialState });
 
 export function resetAuthStore(): void {
   authStore.tokensByWorkspaceId = {};
+  authStore.refreshTokensByWorkspaceId = {};
   authStore.me = null;
   authStore.capabilities = { ...defaultCapabilities };
   authStore.loading = false;
   authStore.error = "";
+  resetPermissionStore();
 }
 
-export function setWorkspaceToken(workspaceId: string, token: string): void {
+export function setWorkspaceToken(workspaceId: string, token: string, refreshToken?: string): void {
   authStore.tokensByWorkspaceId = {
     ...authStore.tokensByWorkspaceId,
     [workspaceId]: token
   };
+  if (refreshToken !== undefined && refreshToken !== "") {
+    authStore.refreshTokensByWorkspaceId = {
+      ...authStore.refreshTokensByWorkspaceId,
+      [workspaceId]: refreshToken
+    };
+  }
 }
 
 export function getWorkspaceToken(workspaceId: string): string {
   return authStore.tokensByWorkspaceId[workspaceId] ?? "";
+}
+
+export function getWorkspaceRefreshToken(workspaceId: string): string {
+  return authStore.refreshTokensByWorkspaceId[workspaceId] ?? "";
 }
 
 export function canAccessAdmin(): boolean {
@@ -65,8 +85,9 @@ export async function refreshMeForCurrentWorkspace(): Promise<void> {
 
   try {
     if (workspace.mode === "local") {
-      const me = await getControlClient().get<Me>("/v1/me");
+      const [me, snapshot] = await Promise.all([getControlClient().get<Me>("/v1/me"), getPermissionSnapshot()]);
       applyMe(me);
+      setWorkspacePermissionSnapshot(workspace.id, snapshot);
       workspaceStore.connectionState = "ready";
       return;
     }
@@ -75,18 +96,17 @@ export async function refreshMeForCurrentWorkspace(): Promise<void> {
     if (token === "") {
       authStore.me = null;
       authStore.capabilities = { ...defaultCapabilities };
+      clearWorkspacePermissionSnapshot(workspace.id);
       workspaceStore.connectionState = "auth_required";
       return;
     }
 
-    if (!workspace.hub_url) {
-      workspaceStore.connectionState = "error";
-      authStore.error = "Remote workspace is missing hub_url";
-      return;
-    }
-
-    const me = await getTargetClient(workspace.hub_url).get<Me>("/v1/me", { token });
+    const [me, snapshot] = await Promise.all([
+      getControlClient().get<Me>("/v1/me", { token }),
+      getPermissionSnapshot(token)
+    ]);
     applyMe(me);
+    setWorkspacePermissionSnapshot(workspace.id, snapshot);
     workspaceStore.connectionState = "ready";
   } catch (error) {
     if (workspace.mode === "local") {
@@ -101,12 +121,21 @@ export async function refreshMeForCurrentWorkspace(): Promise<void> {
           execution_control: true
         }
       });
+      setWorkspacePermissionSnapshot(workspace.id, {
+        role: "admin",
+        permissions: ["*"],
+        menu_visibility: {},
+        action_visibility: {},
+        policy_version: "local-fallback",
+        generated_at: new Date().toISOString()
+      });
       workspaceStore.connectionState = "ready";
       return;
     }
 
     authStore.me = null;
     authStore.capabilities = { ...defaultCapabilities };
+    clearWorkspacePermissionSnapshot(workspace.id);
 
     const message = formatAuthError(error);
     authStore.error = message;

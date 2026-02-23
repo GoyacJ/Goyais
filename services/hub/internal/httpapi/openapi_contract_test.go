@@ -12,6 +12,9 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	requiredMarkers := []string{
 		"/v1/workspaces/remote-connections:",
+		"/v1/auth/refresh:",
+		"/v1/auth/logout:",
+		"/v1/me/permissions:",
 		"/v1/projects/import:",
 		"/v1/projects/{project_id}/conversations:",
 		"/v1/conversations/{conversation_id}/messages:",
@@ -23,9 +26,13 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/share-requests/{request_id}/{action}:",
 		"/v1/admin/users:",
 		"/v1/admin/roles:",
-		"/v1/admin/audit:",
-		"/internal/executions:",
-		"/internal/events:",
+		"/v1/admin/permissions:",
+			"/v1/admin/menus:",
+			"/v1/admin/menu-visibility/{role_key}:",
+			"/v1/admin/abac-policies:",
+			"/v1/admin/audit:",
+			"/internal/executions:",
+			"/internal/events:",
 	}
 
 	for _, marker := range requiredMarkers {

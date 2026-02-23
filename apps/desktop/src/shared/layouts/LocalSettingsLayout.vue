@@ -57,6 +57,7 @@ defineProps<{
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: var(--global-space-12);
+  min-height: 0;
 }
 
 .header-left {
@@ -83,7 +84,8 @@ defineProps<{
 
 .main {
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: grid;
   gap: var(--global-space-12);
 }

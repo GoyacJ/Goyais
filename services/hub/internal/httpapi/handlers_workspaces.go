@@ -64,6 +64,12 @@ func WorkspacesRemoteConnectionsHandler(state *AppState) http.HandlerFunc {
 			err.write(w, r)
 			return
 		}
+		if strings.TrimSpace(input.HubURL) == "" || strings.TrimSpace(input.Username) == "" || strings.TrimSpace(input.Password) == "" {
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "hub_url, username and password are required", map[string]any{
+				"required_fields": []string{"hub_url", "username", "password"},
+			})
+			return
+		}
 
 		workspace, err := resolveWorkspaceForConnect(state, input)
 		if err != nil {

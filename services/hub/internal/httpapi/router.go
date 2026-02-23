@@ -1,9 +1,24 @@
 package httpapi
 
-import "net/http"
+import (
+	"log"
+	"net/http"
+)
 
 func NewRouter() http.Handler {
-	state := NewAppState()
+	return newRouterWithDBPath(":memory:")
+}
+
+func NewRouterFromEnv() http.Handler {
+	return newRouterWithDBPath(resolveHubDBPathFromEnv())
+}
+
+func newRouterWithDBPath(dbPath string) http.Handler {
+	store, err := openAuthzStore(dbPath)
+	if err != nil {
+		log.Printf("failed to open authz db (%s), fallback to memory-only state: %v", dbPath, err)
+	}
+	state := NewAppState(store, newWorkerClientFromEnv())
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", HealthHandler)
@@ -14,7 +29,10 @@ func NewRouter() http.Handler {
 	// Backward-compatible route during migration
 	mux.HandleFunc("/v1/workspaces/remote/connect", WorkspacesRemoteConnectionsHandler(state))
 	mux.HandleFunc("/v1/auth/login", AuthLoginHandler(state))
+	mux.HandleFunc("/v1/auth/refresh", AuthRefreshHandler(state))
+	mux.HandleFunc("/v1/auth/logout", AuthLogoutHandler(state))
 	mux.HandleFunc("/v1/me", MeHandler(state))
+	mux.HandleFunc("/v1/me/permissions", MePermissionsHandler(state))
 
 	// Projects and conversations
 	mux.HandleFunc("/v1/projects", ProjectsHandler(state))
@@ -49,6 +67,13 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/v1/admin/users/{user_id}", AdminUserByIDHandler(state))
 	mux.HandleFunc("/v1/admin/roles", AdminRolesHandler(state))
 	mux.HandleFunc("/v1/admin/roles/{role_key}", AdminRoleByKeyHandler(state))
+	mux.HandleFunc("/v1/admin/permissions", AdminPermissionsHandler(state))
+	mux.HandleFunc("/v1/admin/permissions/{permission_key}", AdminPermissionByKeyHandler(state))
+	mux.HandleFunc("/v1/admin/menus", AdminMenusHandler(state))
+	mux.HandleFunc("/v1/admin/menus/{menu_key}", AdminMenuByKeyHandler(state))
+	mux.HandleFunc("/v1/admin/menu-visibility/{role_key}", AdminMenuVisibilityByRoleHandler(state))
+	mux.HandleFunc("/v1/admin/abac-policies", AdminABACPoliciesHandler(state))
+	mux.HandleFunc("/v1/admin/abac-policies/{policy_id}", AdminABACPolicyByIDHandler(state))
 	mux.HandleFunc("/v1/admin/audit", AdminAuditHandler(state))
 
 	return WithTrace(mux)

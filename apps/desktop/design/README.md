@@ -11,7 +11,7 @@
 - 三层 Token：`global -> semantic -> component`
 - 双主题：`dark`（主） + `light`（辅）
 - UI Kit：Button / Input / Select / Badge / Card / SidebarItem / Topbar / Modal(RiskConfirm) / Toast(Inline Alert)
-- Screens（严格按 `.pen` 13 面）：
+- Screens（严格按 `.pen` 12 面）：
   - `/main`
   - `/remote/account`
   - `/remote/members-roles`
@@ -23,7 +23,6 @@
   - `/workspace/mcp`
   - `/settings/theme`
   - `/settings/i18n`
-  - `/settings/updates-diagnostics`
   - `/settings/general`
 
 ## 同步流程（v0.4.0）

@@ -97,3 +97,79 @@ func AdminPingHandler(state *AppState) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	}
 }
+
+func MePermissionsHandler(state *AppState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			WriteStandardError(
+				w,
+				r,
+				http.StatusNotImplemented,
+				"INTERNAL_NOT_IMPLEMENTED",
+				"Route is not implemented yet",
+				map[string]any{"method": r.Method, "path": r.URL.Path},
+			)
+			return
+		}
+
+		token := strings.TrimSpace(extractAccessToken(r))
+		if token == "" {
+			writeJSON(w, http.StatusOK, localPermissionSnapshot())
+			return
+		}
+		session, exists := state.GetSession(token)
+		if !exists {
+			WriteStandardError(
+				w,
+				r,
+				http.StatusUnauthorized,
+				"AUTH_INVALID_TOKEN",
+				"Access token is invalid or expired",
+				map[string]any{},
+			)
+			return
+		}
+
+		if state.authz == nil {
+			writeJSON(w, http.StatusOK, localPermissionSnapshot())
+			return
+		}
+		snapshot, err := state.authz.buildPermissionSnapshot(session.WorkspaceID, session.Role)
+		if err != nil {
+			WriteStandardError(
+				w,
+				r,
+				http.StatusInternalServerError,
+				"AUTHZ_INTERNAL_ERROR",
+				"Failed to build permission snapshot",
+				map[string]any{},
+			)
+			return
+		}
+		writeJSON(w, http.StatusOK, snapshot)
+	}
+}
+
+func localPermissionSnapshot() PermissionSnapshot {
+	menus := map[string]PermissionVisibility{}
+	for _, item := range defaultMenuConfigs() {
+		menus[item.Key] = PermissionVisibilityEnabled
+	}
+	actionVisibility := map[string]PermissionVisibility{}
+	for _, item := range []string{
+		"project.read", "project.write", "conversation.read", "conversation.write", "execution.control",
+		"resource.read", "resource.write", "share.request", "share.approve", "share.reject", "share.revoke",
+		"model_catalog.sync", "admin.users.manage", "admin.roles.manage", "admin.permissions.manage",
+		"admin.menus.manage", "admin.policies.manage", "admin.audit.read",
+	} {
+		actionVisibility[item] = PermissionVisibilityEnabled
+	}
+	return PermissionSnapshot{
+		Role:             RoleAdmin,
+		Permissions:      []string{"*"},
+		MenuVisibility:   menus,
+		ActionVisibility: actionVisibility,
+		PolicyVersion:    "local-admin",
+		GeneratedAt:      nowUTC(),
+	}
+}

@@ -1,4 +1,11 @@
 import { listWorkspaces } from "@/modules/workspace/services";
+import {
+  initializeGeneralSettings,
+  resetGeneralSettings,
+  resetGeneralSettingsStoreForTest,
+  updateGeneralSetting,
+  useGeneralSettings
+} from "@/modules/workspace/store/generalSettingsStore";
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { refreshMeForCurrentWorkspace } from "@/shared/stores/authStore";
 import { refreshNavigationVisibility } from "@/shared/stores/navigationStore";
@@ -15,11 +22,16 @@ import {
 
 export {
   getCurrentWorkspace,
+  initializeGeneralSettings,
   getWorkspaceConnection,
   resetWorkspaceStore,
+  resetGeneralSettings,
+  resetGeneralSettingsStoreForTest,
   setCurrentWorkspace,
   setWorkspaceConnection,
   setWorkspaces,
+  updateGeneralSetting,
+  useGeneralSettings,
   upsertWorkspace,
   workspaceStore
 };

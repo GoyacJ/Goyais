@@ -14,6 +14,9 @@ const localWorkspaceID = "ws_local"
 type AppState struct {
 	mu sync.RWMutex
 
+	authz  *authzStore
+	worker *workerClient
+
 	workspaces map[string]Workspace
 	sessions   map[string]Session
 
@@ -35,8 +38,10 @@ type AppState struct {
 	modelCatalog map[string][]ModelCatalogItem
 }
 
-func NewAppState() *AppState {
+func NewAppState(store *authzStore, worker *workerClient) *AppState {
 	state := &AppState{
+		authz:                      store,
+		worker:                     worker,
 		workspaces:                 map[string]Workspace{},
 		sessions:                   map[string]Session{},
 		projects:                   map[string]Project{},
@@ -75,6 +80,16 @@ func NewAppState() *AppState {
 		Role:        RoleAdmin,
 		Enabled:     true,
 		CreatedAt:   now,
+	}
+	if state.authz != nil {
+		_ = state.authz.ensureWorkspaceSeeds(localWorkspaceID)
+		_, _ = state.authz.upsertUser(AdminUser{
+			WorkspaceID: localWorkspaceID,
+			Username:    "local-admin",
+			DisplayName: "Local Admin",
+			Role:        RoleAdmin,
+			Enabled:     true,
+		})
 	}
 
 	return state
@@ -147,6 +162,16 @@ func (s *AppState) CreateRemoteWorkspace(input CreateWorkspaceRequest) Workspace
 		CreatedAt:   workspace.CreatedAt,
 	}
 	s.mu.Unlock()
+	if s.authz != nil {
+		_ = s.authz.ensureWorkspaceSeeds(workspace.ID)
+		_, _ = s.authz.upsertUser(AdminUser{
+			WorkspaceID: workspace.ID,
+			Username:    "admin",
+			DisplayName: "Remote Admin",
+			Role:        RoleAdmin,
+			Enabled:     true,
+		})
+	}
 
 	s.AppendAudit(AdminAuditEvent{
 		Actor:    "system",
@@ -172,13 +197,70 @@ func (s *AppState) SetSession(session Session) {
 	s.mu.Lock()
 	s.sessions[session.Token] = session
 	s.mu.Unlock()
+	if s.authz != nil {
+		_, _ = s.authz.db.Exec(
+			`INSERT INTO sessions(access_token, refresh_token, workspace_id, user_id, display_name, role, expires_at, refresh_expires_at, revoked, created_at, updated_at)
+			 VALUES(?,?,?,?,?,?,?,?,?,?,?)
+			 ON CONFLICT(access_token) DO UPDATE SET refresh_token=excluded.refresh_token, workspace_id=excluded.workspace_id, user_id=excluded.user_id, display_name=excluded.display_name, role=excluded.role, expires_at=excluded.expires_at, refresh_expires_at=excluded.refresh_expires_at, revoked=excluded.revoked, updated_at=excluded.updated_at`,
+			session.Token,
+			session.RefreshToken,
+			session.WorkspaceID,
+			session.UserID,
+			session.DisplayName,
+			string(session.Role),
+			session.ExpiresAt.Format(time.RFC3339),
+			session.RefreshExpiresAt.Format(time.RFC3339),
+			boolToInt(session.Revoked),
+			session.CreatedAt.Format(time.RFC3339),
+			session.UpdatedAt.Format(time.RFC3339),
+		)
+	}
 }
 
 func (s *AppState) GetSession(token string) (Session, bool) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
 	session, ok := s.sessions[token]
-	return session, ok
+	s.mu.RUnlock()
+	if ok {
+		return session, true
+	}
+	if s.authz != nil {
+		persisted, exists, err := s.authz.getSession(token)
+		if err != nil || !exists {
+			return Session{}, false
+		}
+		s.mu.Lock()
+		s.sessions[token] = persisted
+		s.mu.Unlock()
+		return persisted, true
+	}
+	return Session{}, false
+}
+
+func (s *AppState) RefreshSession(refreshToken string) (Session, bool) {
+	if s.authz == nil {
+		return Session{}, false
+	}
+	session, ok, err := s.authz.refreshSession(refreshToken)
+	if err != nil || !ok {
+		return Session{}, false
+	}
+	s.mu.Lock()
+	s.sessions[session.Token] = session
+	s.mu.Unlock()
+	return session, true
+}
+
+func (s *AppState) RevokeSession(accessToken string) bool {
+	if s.authz != nil {
+		if err := s.authz.revokeSession(accessToken); err != nil {
+			return false
+		}
+	}
+	s.mu.Lock()
+	delete(s.sessions, accessToken)
+	s.mu.Unlock()
+	return true
 }
 
 func (s *AppState) AppendAudit(input AdminAuditEvent) {

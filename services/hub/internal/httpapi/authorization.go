@@ -7,8 +7,20 @@ import (
 )
 
 func resolveSession(state *AppState, r *http.Request) (Session, *apiError) {
+	return resolveSessionForWorkspace(state, r, "")
+}
+
+func resolveSessionForWorkspace(state *AppState, r *http.Request, workspaceHint string) (Session, *apiError) {
 	token := strings.TrimSpace(extractAccessToken(r))
 	if token == "" {
+		if strings.TrimSpace(workspaceHint) != "" && strings.TrimSpace(workspaceHint) != localWorkspaceID {
+			return Session{}, &apiError{
+				status:  http.StatusUnauthorized,
+				code:    "AUTH_TOKEN_REQUIRED",
+				message: "Access token is required for remote workspace",
+				details: map[string]any{"workspace_id": workspaceHint},
+			}
+		}
 		return Session{
 			Token:       "",
 			WorkspaceID: localWorkspaceID,
@@ -31,7 +43,7 @@ func resolveSession(state *AppState, r *http.Request) (Session, *apiError) {
 }
 
 func requireAuthorization(state *AppState, r *http.Request, workspaceID string, allowedRoles ...Role) (Session, *apiError) {
-	session, err := resolveSession(state, r)
+	session, err := resolveSessionForWorkspace(state, r, workspaceID)
 	if err != nil {
 		return Session{}, err
 	}

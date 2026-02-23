@@ -12,6 +12,21 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 		switch r.Method {
 		case http.MethodGet:
 			workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
+			session, authErr := authorizeAction(
+				state,
+				r,
+				workspaceID,
+				"project.read",
+				authorizationResource{WorkspaceID: workspaceID},
+				authorizationContext{OperationType: "read"},
+			)
+			if authErr != nil {
+				authErr.write(w, r)
+				return
+			}
+			if workspaceID == "" && session.WorkspaceID != localWorkspaceID {
+				workspaceID = session.WorkspaceID
+			}
 			state.mu.RLock()
 			items := make([]Project, 0)
 			for _, item := range state.projects {
@@ -38,6 +53,18 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 			}
 			if strings.TrimSpace(input.WorkspaceID) == "" || strings.TrimSpace(input.Name) == "" || strings.TrimSpace(input.RepoPath) == "" {
 				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "workspace_id/name/repo_path are required", map[string]any{})
+				return
+			}
+			session, authErr := authorizeAction(
+				state,
+				r,
+				strings.TrimSpace(input.WorkspaceID),
+				"project.write",
+				authorizationResource{WorkspaceID: strings.TrimSpace(input.WorkspaceID)},
+				authorizationContext{OperationType: "write", ABACRequired: true},
+			)
+			if authErr != nil {
+				authErr.write(w, r)
 				return
 			}
 
@@ -67,11 +94,15 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 
 			writeJSON(w, http.StatusCreated, project)
 			state.AppendAudit(AdminAuditEvent{
-				Actor:    "system",
+				Actor:    actorFromSession(session),
 				Action:   "project.create",
 				Resource: project.ID,
 				Result:   "success",
+				TraceID:  TraceIDFromContext(r.Context()),
 			})
+			if state.authz != nil {
+				_ = state.authz.appendAudit(project.WorkspaceID, session.UserID, "project.write", "project", project.ID, "success", map[string]any{"operation": "create"}, TraceIDFromContext(r.Context()))
+			}
 		default:
 			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
 				"method": r.Method,
@@ -97,6 +128,18 @@ func ProjectsImportHandler(state *AppState) http.HandlerFunc {
 		}
 		if strings.TrimSpace(input.WorkspaceID) == "" || strings.TrimSpace(input.DirectoryPath) == "" {
 			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "workspace_id and directory_path are required", map[string]any{})
+			return
+		}
+		session, authErr := authorizeAction(
+			state,
+			r,
+			strings.TrimSpace(input.WorkspaceID),
+			"project.write",
+			authorizationResource{WorkspaceID: strings.TrimSpace(input.WorkspaceID)},
+			authorizationContext{OperationType: "write", ABACRequired: true},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
 			return
 		}
 
@@ -127,11 +170,15 @@ func ProjectsImportHandler(state *AppState) http.HandlerFunc {
 
 		writeJSON(w, http.StatusCreated, project)
 		state.AppendAudit(AdminAuditEvent{
-			Actor:    "system",
+			Actor:    actorFromSession(session),
 			Action:   "project.import_directory",
 			Resource: project.ID,
 			Result:   "success",
+			TraceID:  TraceIDFromContext(r.Context()),
 		})
+		if state.authz != nil {
+			_ = state.authz.appendAudit(project.WorkspaceID, session.UserID, "project.write", "project", project.ID, "success", map[string]any{"operation": "import_directory"}, TraceIDFromContext(r.Context()))
+		}
 	}
 }
 
@@ -145,6 +192,24 @@ func ProjectByIDHandler(state *AppState) http.HandlerFunc {
 		}
 
 		projectID := strings.TrimSpace(r.PathValue("project_id"))
+		workspaceID := ""
+		state.mu.RLock()
+		if project, exists := state.projects[projectID]; exists {
+			workspaceID = project.WorkspaceID
+		}
+		state.mu.RUnlock()
+		session, authErr := authorizeAction(
+			state,
+			r,
+			workspaceID,
+			"project.write",
+			authorizationResource{WorkspaceID: workspaceID},
+			authorizationContext{OperationType: "write", ABACRequired: true},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
 		state.mu.Lock()
 		project, exists := state.projects[projectID]
 		if !exists {
@@ -161,20 +226,41 @@ func ProjectByIDHandler(state *AppState) http.HandlerFunc {
 			delete(state.conversations, id)
 			delete(state.conversationMessages, id)
 			delete(state.conversationSnapshots, id)
-			delete(state.conversationExecutionOrder, id)
-		}
-		state.mu.Unlock()
-
-		writeJSON(w, http.StatusNoContent, map[string]any{})
-		state.AppendAudit(AdminAuditEvent{Actor: "system", Action: "project.delete", Resource: project.ID, Result: "success"})
+		delete(state.conversationExecutionOrder, id)
 	}
+	state.mu.Unlock()
+
+	writeJSON(w, http.StatusNoContent, map[string]any{})
+	state.AppendAudit(AdminAuditEvent{Actor: actorFromSession(session), Action: "project.delete", Resource: project.ID, Result: "success", TraceID: TraceIDFromContext(r.Context())})
+	if state.authz != nil {
+		_ = state.authz.appendAudit(project.WorkspaceID, session.UserID, "project.write", "project", project.ID, "success", map[string]any{"operation": "delete"}, TraceIDFromContext(r.Context()))
+	}
+}
 }
 
 func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		projectID := strings.TrimSpace(r.PathValue("project_id"))
+		workspaceID := ""
+		state.mu.RLock()
+		if project, exists := state.projects[projectID]; exists {
+			workspaceID = project.WorkspaceID
+		}
+		state.mu.RUnlock()
 		switch r.Method {
 		case http.MethodGet:
+			_, authErr := authorizeAction(
+				state,
+				r,
+				workspaceID,
+				"conversation.read",
+				authorizationResource{WorkspaceID: workspaceID},
+				authorizationContext{OperationType: "read"},
+			)
+			if authErr != nil {
+				authErr.write(w, r)
+				return
+			}
 			state.mu.RLock()
 			items := make([]Conversation, 0)
 			for _, conv := range state.conversations {
@@ -195,6 +281,18 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 			input := CreateConversationRequest{}
 			if err := decodeJSONBody(r, &input); err != nil {
 				err.write(w, r)
+				return
+			}
+			session, authErr := authorizeAction(
+				state,
+				r,
+				workspaceID,
+				"conversation.write",
+				authorizationResource{WorkspaceID: workspaceID},
+				authorizationContext{OperationType: "write", ABACRequired: true},
+			)
+			if authErr != nil {
+				authErr.write(w, r)
 				return
 			}
 
@@ -231,6 +329,9 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 			state.mu.Unlock()
 
 			writeJSON(w, http.StatusCreated, conversation)
+			if state.authz != nil {
+				_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "conversation.write", "conversation", conversation.ID, "success", map[string]any{"operation": "create"}, TraceIDFromContext(r.Context()))
+			}
 		default:
 			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
 				"method": r.Method, "path": r.URL.Path,
@@ -254,6 +355,24 @@ func ProjectConfigHandler(state *AppState) http.HandlerFunc {
 			err.write(w, r)
 			return
 		}
+		workspaceID := ""
+		state.mu.RLock()
+		if project, exists := state.projects[projectID]; exists {
+			workspaceID = project.WorkspaceID
+		}
+		state.mu.RUnlock()
+		_, authErr := authorizeAction(
+			state,
+			r,
+			workspaceID,
+			"project.write",
+			authorizationResource{WorkspaceID: workspaceID},
+			authorizationContext{OperationType: "write", ABACRequired: true},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
 		now := time.Now().UTC().Format(time.RFC3339)
 
 		state.mu.Lock()
@@ -274,8 +393,26 @@ func ProjectConfigHandler(state *AppState) http.HandlerFunc {
 func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
+		workspaceID := ""
+		state.mu.RLock()
+		if conversation, exists := state.conversations[conversationID]; exists {
+			workspaceID = conversation.WorkspaceID
+		}
+		state.mu.RUnlock()
 		switch r.Method {
 		case http.MethodPatch:
+			_, authErr := authorizeAction(
+				state,
+				r,
+				workspaceID,
+				"conversation.write",
+				authorizationResource{WorkspaceID: workspaceID},
+				authorizationContext{OperationType: "write", ABACRequired: true},
+			)
+			if authErr != nil {
+				authErr.write(w, r)
+				return
+			}
 			input := RenameConversationRequest{}
 			if err := decodeJSONBody(r, &input); err != nil {
 				err.write(w, r)
@@ -299,6 +436,18 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			state.mu.Unlock()
 			writeJSON(w, http.StatusOK, conversation)
 		case http.MethodDelete:
+			_, authErr := authorizeAction(
+				state,
+				r,
+				workspaceID,
+				"conversation.write",
+				authorizationResource{WorkspaceID: workspaceID},
+				authorizationContext{OperationType: "write", ABACRequired: true},
+			)
+			if authErr != nil {
+				authErr.write(w, r)
+				return
+			}
 			state.mu.Lock()
 			if _, exists := state.conversations[conversationID]; !exists {
 				state.mu.Unlock()

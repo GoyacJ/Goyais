@@ -70,6 +70,7 @@ Workspace
 5. `Execution` 是消息触发的内部执行单元；Conversation 是队列与锁边界。
 6. `Resource` 支持 `private/shared` 与 `workspace_native/local_import` 双维度。
 7. `ShareRequest` 是共享审批权威记录，支持 `pending/approved/rejected/revoked` 全状态流转。
+8. `GeneralSettings` 属于 Desktop 本地策略模型，包含 `launch/default_directory/notifications/telemetry/update_policy/diagnostics`，并要求即时持久化与平台能力显式降级。
 
 ### 3.3 状态机（Conversation + Execution + Snapshot）
 
@@ -114,6 +115,7 @@ ConversationSnapshot state:
 3. `stores/resource`：资源池、导入与共享视图。
 4. `stores/admin`：用户、角色、权限绑定与审批任务。
 5. `stores/execution`：事件流、风险确认、Diff 状态。
+6. `stores/general_settings`：本地通用设置策略、能力探测、即时持久化状态。
 
 ### 4.2 Hub（Go）
 
@@ -355,6 +357,8 @@ private resource
 4. `POST /internal/runtimes/register`
 5. `POST /internal/runtimes/heartbeat`
 6. `POST /internal/rollback/apply`
+7. 内部接口必须携带共享 internal token（`X-Internal-Token` 或 `Authorization: Bearer <token>`），无效或缺失返回 `401`。
+8. Hub -> Worker 调用必须透传 `X-Trace-Id`，保证审计链路可回溯。
 
 ### 9.3 错误响应
 
@@ -721,13 +725,14 @@ while True:
 2. Conversation 区域消息方向：AI 在左、用户在右。
 3. 执行中发送新消息必须入队，不能打断当前执行。
 4. “回滚到此处”必须走快照回滚并更新 Inspector 状态。
-5. 设置页 `theme` 必须支持 `system/dark/light`，并持久化到本地存储。
+5. 设置页 `theme` 必须支持 `system/dark/light`，并提供字体样式、字体大小、预设主题；以上配置需即时生效并持久化到本地存储。
 6. 设置页 `i18n` 必须支持 `zh-CN/en-US` 即时切换，并持久化到本地存储。
-7. 列表页统一 `cursor + limit` 分页，前端必须提供前进/回退游标栈交互。
+7. 设置页 `general` 必须采用紧凑行式配置，覆盖启动与窗口、默认目录、通知、隐私与遥测、更新策略、诊断与日志；策略项即时生效并持久化，未接入平台能力必须显示不可用原因。
+8. 列表页统一 `cursor + limit` 分页，前端必须提供前进/回退游标栈交互。
 
 ### 14.3 状态管理建议
 
-1. 全局：workspace/auth/navigation/connection。
+1. 全局：workspace/auth/navigation/connection/theme_settings(mode,font_style,font_scale,preset,resolved)/general_settings(launch,default_directory,notifications,telemetry,update_policy,diagnostics)。
 2. 领域：conversation/execution/snapshot/resource/admin/project_config。
 3. 视图：ui transient state（tab、drawer、dialog、selection）。
 

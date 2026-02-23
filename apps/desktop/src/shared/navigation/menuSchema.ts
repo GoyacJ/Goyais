@@ -21,11 +21,6 @@ export const menuSchema: MenuSchemaEntry[] = [
   { key: "workspace_mcp", labelKey: "menu.workspaceMcp", path: "/workspace/mcp" },
   { key: "settings_theme", labelKey: "menu.settingsTheme", path: "/settings/theme" },
   { key: "settings_i18n", labelKey: "menu.settingsI18n", path: "/settings/i18n" },
-  {
-    key: "settings_updates_diagnostics",
-    labelKey: "menu.settingsUpdatesDiagnostics",
-    path: "/settings/updates-diagnostics"
-  },
   { key: "settings_general", labelKey: "menu.settingsGeneral", path: "/settings/general" }
 ];
 
@@ -50,7 +45,6 @@ const settingsMenuKeys: MenuKey[] = [
   "workspace_project_config",
   "settings_theme",
   "settings_i18n",
-  "settings_updates_diagnostics",
   "settings_general"
 ];
 
