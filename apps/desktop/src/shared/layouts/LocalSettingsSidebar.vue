@@ -4,7 +4,7 @@
       <WorkspaceSwitcherCard
         :workspaces="workspaceStore.workspaces"
         :current-workspace-id="workspaceStore.currentWorkspaceId"
-        fallback-label="本地工作区"
+        fallback-label="工作区"
         @switch-workspace="switchWorkspace"
       />
 
@@ -79,7 +79,7 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
-const userMenuItems = [{ key: "settings", label: "本地设置", icon: "settings" }];
+const userMenuItems = [{ key: "settings", label: "设置", icon: "settings" }];
 
 const sharedKeys = [
   "workspace_project_config",

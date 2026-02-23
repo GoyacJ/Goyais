@@ -7,7 +7,7 @@
         :collapsed="collapsed"
         :show-collapse-toggle="true"
         :can-create-workspace="true"
-        :fallback-label="currentWorkspaceName"
+        fallback-label="工作区"
         @switch-workspace="onSwitchWorkspace"
         @create-workspace="openCreateWorkspace"
         @toggle-collapse="collapsed = !collapsed"
@@ -159,13 +159,12 @@ const workspaceForm = reactive({
 });
 
 const currentWorkspaceMode = computed(() => props.workspaceMode);
-const currentWorkspaceName = computed(() => props.workspaceName);
 const userInitial = computed(() => (props.userName || "L").slice(0, 1).toUpperCase());
 const userMenuItems = computed(() => {
   const items = [
     {
       key: "settings",
-      label: currentWorkspaceMode.value === "local" ? "本地设置" : "设置",
+      label: "设置",
       icon: "settings"
     }
   ];

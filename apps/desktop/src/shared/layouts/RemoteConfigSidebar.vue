@@ -4,7 +4,7 @@
       <WorkspaceSwitcherCard
         :workspaces="workspaceStore.workspaces"
         :current-workspace-id="workspaceStore.currentWorkspaceId"
-        fallback-label="远程工作区"
+        fallback-label="工作区"
         @switch-workspace="switchWorkspace"
       />
 
