@@ -278,6 +278,10 @@ TokenLayerContract {
 11. 流路由门禁：事件应用必须以 `event.conversation_id` 路由，禁止将多会话事件写入同一 runtime。
 12. 风险分级门禁：`run_command` 的 `pwd/ls/rg --files/git status/cat` 归类 `low`，其他命令维持 `high/critical`。
 13. 执行策略门禁：Agent 模式不得进入 `confirming/wait_confirmation`，高风险调用直接执行并审计；Plan 模式高风险调用必须返回拒绝。
+14. Agent 配置门禁：`max_model_turns/show_process_trace/trace_detail_level` 必须由工作区配置中心统一管理，并通过后端 API 权威读写。
+15. 快照门禁：Execution 创建时必须固化 `agent_config_snapshot`，运行中 execution 不得被设置页变更重配。
+16. 回合门禁：触达 `max_turns` 时优先软收敛到 `execution_done(truncated=true, reason=MAX_TURNS_REACHED)`；仅总结失败时允许 `MAX_TURNS_EXCEEDED`。
+17. 过程流门禁：对话区必须可见 `thinking_delta/tool_call/tool_result/execution_started`，且执行终态后不得残留“正在思考/运行中可停止”。
 
 ### 10.5 门禁契约
 
@@ -429,6 +433,9 @@ StandardsExceptionADR {
 12. 模型目录全量对齐变更时，能验证 `auth/base_urls/base_url_key` 契约与禁用模型门禁。
 13. PR 审查可按第 13 章逐项打勾并形成可追溯证据。
 14. 会话稳定性回归时，能验证“重启恢复 + 执行占位状态 + 多会话不串流”。
+15. Agent 配置变更后，能验证“仅新 Execution 生效，运行中 Execution 不切换”。
+16. 大任务达到回合上限时，能验证“优先输出截断总结，不直接抛错”。
+17. 执行完成后，能验证过程流收敛与运行占位清理，不残留错误状态。
 
 ---
 
@@ -512,3 +519,12 @@ StandardsExceptionADR {
 | Worker 默认并发 3 与项目上下文注入 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/17, TECH_ARCH 12.4/16, PLAN Worker 门禁增量 | done |
 | `run_command` 只读命令低风险分类 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 15.3, TECH_ARCH 13.2, STANDARDS 10.4/13.1 | done |
 | Agent 模式移除风险确认链路（删除 confirm API / confirming 状态） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/15.3/24, TECH_ARCH 3.3/9.1/9.2/10.1/12.1, PLAN Phase 5/8, STANDARDS 10.4/13 | done |
+
+## 24. 2026-02-24 Agent 配置中心化与执行过程可视化同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| Workspace Agent 配置中心化（`/workspace/agent` + `agent-config` API） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 12.1/16.2, TECH_ARCH 9.1/20.10, STANDARDS 10.4/13 | done |
+| Execution 快照固化与仅新 execution 生效 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 14.2/16.3, TECH_ARCH 11.x/20.10, STANDARDS 10.4/15 | done |
+| `max turns` 软收敛与错误路径收口 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 12/20.10, PLAN Phase 5, STANDARDS 10.4/11 | done |
+| 对话区过程流展示与终态收敛 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 14.2/20.10, STANDARDS 10.4/11/15 | done |

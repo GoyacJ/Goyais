@@ -76,6 +76,7 @@ func newRouterWithDBPath(dbPath string) http.Handler {
 	mux.HandleFunc("/v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect", ResourceConfigConnectHandler(state))
 	mux.HandleFunc("/v1/workspaces/{workspace_id}/mcps/export", MCPExportHandler(state))
 	mux.HandleFunc("/v1/workspaces/{workspace_id}/project-configs", WorkspaceProjectConfigsHandler(state))
+	mux.HandleFunc("/v1/workspaces/{workspace_id}/agent-config", WorkspaceAgentConfigHandler(state))
 	// Backward-compatible route during migration
 	mux.HandleFunc("/v1/workspaces/{workspace_id}/model-catalog/sync", ModelCatalogHandler(state))
 

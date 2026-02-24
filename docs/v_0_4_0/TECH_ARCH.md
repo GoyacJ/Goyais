@@ -1042,6 +1042,21 @@ while True:
 3. 会话流应用层必须以 `event.conversation_id` 作为最终路由键，禁止仅按订阅会话 ID 写入。
 4. stream detach 条件：会话“非 active 且无未完成执行（queued/pending/executing）”时才允许断开。
 
+### 20.10 Workspace Agent 配置中心化与执行过程可视化
+
+1. 新增 `GET|PUT /v1/workspaces/{workspace_id}/agent-config` 作为工作区 Agent 配置权威接口；鉴权沿用 `resource_config.read/write`。
+2. 配置结构固定为：
+   - `execution.max_model_turns`（范围 `4..64`）
+   - `display.show_process_trace`
+   - `display.trace_detail_level`（`basic|verbose`）
+3. Hub 持久化层新增 `workspace_agent_configs`（`workspace_id` 主键），并在 `executions` 增加 `agent_config_snapshot_json`。
+4. `POST /v1/conversations/{conversation_id}/messages` 创建 Execution 时，必须读取当前工作区 Agent 配置并固化到 `execution.agent_config_snapshot`。
+5. Worker `max turns` 解析优先级必须为：`execution.agent_config_snapshot.max_model_turns` -> `WORKER_MAX_MODEL_TURNS` -> 默认值 `24`，并裁剪到 `4..64`。
+6. 命中回合上限时，Worker 必须优先软收敛：先发 `thinking_delta(stage=turn_limit_reached)`，再执行一次禁用工具的总结回合；成功则发 `execution_done(truncated=true, reason=MAX_TURNS_REACHED)`，仅总结失败时发 `execution_error(MAX_TURNS_EXCEEDED)`。
+7. Desktop 对话主面板执行过程流必须渲染 `execution_started/thinking_delta/tool_call/tool_result`，数据源为 `runtime.events`，并按 `execution_id + sequence/timestamp` 有序聚合。
+8. 过程展示粒度由 `execution.agent_config_snapshot.trace_detail_level` 控制；执行结束后不再显示“正在思考/运行中可停止”占位。
+9. 配置生效范围必须为“仅新 Execution”；运行中的 Execution 不得被重配。
+
 ## 21. 2026-02-24 会话稳定性与并发显示同步矩阵
 
 | change_type | required_docs_to_update | required_sections | status |
@@ -1051,3 +1066,12 @@ while True:
 | 会话订阅策略改为 `active + running/queued`，并增加防串流路由 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/16.3, TECH_ARCH 10.3/20.9, PLAN Phase 5 门禁增量 | done |
 | 风险分级细化（`run_command` 只读命令 low） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 15.3, TECH_ARCH 13.2, STANDARDS 10.4/13.1 | done |
 | Agent 模式移除风险确认链路（删除 confirm API 与 confirming 状态） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/15.3/24, TECH_ARCH 3.3/9.1/9.2/10.1/12.1/20.8/20.9, PLAN Phase 5/8, STANDARDS 10.4/13 | done |
+
+## 22. 2026-02-24 Agent 配置中心化与执行过程可视化同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 新增 Workspace Agent Config API 与 Execution 快照语义 | PRD.md, TECH_ARCH.md | PRD 14/16/17, TECH_ARCH 9.1/20.10 | done |
+| `max turns` 改为 Agent 配置驱动 + 软收敛 done(truncated) | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 16.3/19, TECH_ARCH 12/20.10, PLAN Phase 5 门禁增量 | done |
+| 对话区执行过程流（thinking/tool/command）与结束收敛规则 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 14.2/20.10, STANDARDS 11/13 | done |
+| 设置 `/workspace/agent` 从占位改为可编辑并动态保存 | PRD.md, IMPLEMENTATION_PLAN.md | PRD 12.1/16.2, PLAN Phase 4/9 验收 | done |

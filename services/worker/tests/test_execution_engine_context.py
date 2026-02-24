@@ -6,6 +6,7 @@ from typing import Any
 from app import execution_engine
 from app.execution_engine import run_execution_loop
 from app.model_adapters import ModelInvocation, ModelTurnResult, ToolCall
+from app.tool_runtime import ToolExecutionResult
 
 
 def test_run_execution_loop_injects_project_context_into_system_prompt(monkeypatch) -> None:
@@ -151,3 +152,81 @@ def test_plan_mode_still_rejects_high_risk_tool_usage(monkeypatch) -> None:
     payload = error_events[0]["payload"]
     assert payload["reason"] == "PLAN_MODE_REJECTED"
     assert payload["tool_name"] == "run_command"
+
+
+def test_resolve_max_turns_prefers_snapshot_and_clamps(monkeypatch) -> None:
+    monkeypatch.setenv("WORKER_MAX_MODEL_TURNS", "60")
+
+    assert execution_engine._resolve_max_turns({"agent_config_snapshot": {"max_model_turns": 2}}) == 4
+    assert execution_engine._resolve_max_turns({"agent_config_snapshot": {"max_model_turns": 80}}) == 64
+    assert execution_engine._resolve_max_turns({"agent_config_snapshot": {"max_model_turns": 18}}) == 18
+    assert execution_engine._resolve_max_turns({}) == 60
+
+    monkeypatch.delenv("WORKER_MAX_MODEL_TURNS", raising=False)
+    assert execution_engine._resolve_max_turns({}) == 24
+
+
+def test_run_execution_loop_turn_limit_emits_truncated_done(monkeypatch) -> None:
+    events: list[dict[str, Any]] = []
+    turn_counter = 0
+
+    async def fake_run_model_turn(invocation, messages, tools):
+        del invocation, messages
+        nonlocal turn_counter
+        turn_counter += 1
+        if len(tools) == 0:
+            return ModelTurnResult(text="summary after limit", tool_calls=[], raw_response={})
+        return ModelTurnResult(
+            text=f"turn-{turn_counter}",
+            tool_calls=[ToolCall(id=f"tc_{turn_counter}", name="read_file", arguments={"path": "README.md"})],
+            raw_response={},
+        )
+
+    def fake_resolve_model_invocation(execution):
+        del execution
+        return ModelInvocation(
+            vendor="local",
+            model_id="llama3:8b",
+            base_url="http://127.0.0.1:11434/v1",
+            api_key="",
+            timeout_ms=30_000,
+            params={},
+        )
+
+    def fake_execute_tool_call(tool_call, working_directory):
+        del tool_call, working_directory
+        return ToolExecutionResult(output={"summary": "ok"})
+
+    async def emit_event(execution, event_type, payload):
+        del execution
+        events.append({"type": event_type, "payload": payload})
+
+    def is_cancelled(execution_id: str) -> bool:
+        del execution_id
+        return False
+
+    monkeypatch.setattr(execution_engine, "run_model_turn", fake_run_model_turn)
+    monkeypatch.setattr(execution_engine, "resolve_model_invocation", fake_resolve_model_invocation)
+    monkeypatch.setattr(execution_engine, "execute_tool_call", fake_execute_tool_call)
+
+    execution = {
+        "execution_id": "exec_turn_limit",
+        "mode_snapshot": "agent",
+        "content": "初始化项目并生成大量文件",
+        "model_id": "llama3:8b",
+        "agent_config_snapshot": {
+            "max_model_turns": 4,
+        },
+    }
+
+    asyncio.run(run_execution_loop(execution, emit_event, is_cancelled))
+
+    done_events = [event for event in events if event["type"] == "execution_done"]
+    assert len(done_events) == 1
+    payload = done_events[0]["payload"]
+    assert payload["truncated"] is True
+    assert payload["reason"] == "MAX_TURNS_REACHED"
+    assert payload["max_turns"] == 4
+    assert "summary after limit" in payload["content"]
+    assert all(event["type"] != "execution_error" for event in events)
+    assert turn_counter == 5

@@ -5,7 +5,8 @@ import type {
   ExecutionState,
   InspectorTabKey,
   MessageRole,
-  QueueState
+  QueueState,
+  TraceDetailLevel
 } from "@/shared/types/api-common";
 
 export type Project = {
@@ -99,6 +100,11 @@ export type Execution = {
     base_url?: string;
     timeout_ms?: number;
     params?: Record<string, unknown>;
+  };
+  agent_config_snapshot?: {
+    max_model_turns: number;
+    show_process_trace: boolean;
+    trace_detail_level: TraceDetailLevel;
   };
   project_revision_snapshot: number;
   queue_index: number;

@@ -939,3 +939,17 @@ event types:
 | 会话订阅策略改为 `active + running/queued` | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/17, TECH_ARCH 10.3/14.2/16, PLAN Phase 5 门禁增量 | done |
 | Worker 默认并发 3 与项目上下文注入（project_name/project_path） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/17, TECH_ARCH 12.4/16, PLAN Worker 门禁增量 | done |
 | `run_command` 风险分级细化（只读命令 low） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 15.3, TECH_ARCH 13.2/20, STANDARDS 10.4/13.1 | done |
+
+### 25.11 2026-02-24 Agent 配置中心化与执行过程可视化矩阵
+
+1. 设置入口保持 `/workspace/agent`，配置项为 `max_model_turns`、`show_process_trace`、`trace_detail_level`。
+2. 配置生效范围：仅新建 Execution，运行中 Execution 不重配（通过 `execution.agent_config_snapshot` 固化）。
+3. 对话主面板在执行中显示 `thinking_delta/tool_call/tool_result/execution_started` 过程流，执行结束后自动收敛隐藏运行占位。
+4. 回合上限触发时优先软收敛：`execution_done(truncated=true, reason=MAX_TURNS_REACHED)`；仅总结失败时 `execution_error(MAX_TURNS_EXCEEDED)`。
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 新增 Workspace Agent Config API 与 Execution 快照语义 | PRD.md, TECH_ARCH.md | PRD 14/16/17, TECH_ARCH 9.1/20.10 | done |
+| `max turns` 改为 Agent 配置驱动 + 软收敛 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 16.3/19, TECH_ARCH 12/20.10, PLAN Phase 5 门禁增量 | done |
+| 对话区执行过程流可视化与结束收敛规则 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 14.2/20.10, STANDARDS 11/13 | done |
+| `/workspace/agent` 从占位页改为可编辑配置页（动态保存） | PRD.md, IMPLEMENTATION_PLAN.md | PRD 12.1/16.2, PLAN Phase 4/9 验收 | done |

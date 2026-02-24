@@ -395,6 +395,20 @@
 
 ---
 
+## 2026-02-24 Agent 配置中心化与执行过程可视化门禁（增量）
+
+1. 配置门禁：`/workspace/agent` 必须对接 `GET|PUT /v1/workspaces/{workspace_id}/agent-config`，不允许继续使用占位静态页。
+2. 数据门禁：Hub 必须持久化 `workspace_agent_configs`，并在 execution 创建时固化 `execution.agent_config_snapshot`。
+3. 生效门禁：Agent 配置变更仅影响新建 execution；运行中的 execution 不得重配。
+4. 回合门禁：Worker 不得使用硬编码 `MAX_TURNS=6`；必须按 `snapshot -> env -> default(24)` 解析并裁剪 `4..64`。
+5. 收敛门禁：触达回合上限优先 `execution_done(truncated=true, reason=MAX_TURNS_REACHED)`，仅总结失败时允许 `execution_error(MAX_TURNS_EXCEEDED)`。
+6. 展示门禁：主对话区必须渲染 `thinking_delta/tool_call/tool_result/execution_started` 过程流，支持 `basic|verbose` 粒度。
+7. 收敛门禁：当会话无 `pending/executing` 执行时，`正在思考...` 与 `运行中，可停止` 展示必须自动消失。
+8. 稳定性门禁：会话运行态事件缓存必须有限（建议每会话 `<=1000`），防止长会话内存膨胀。
+9. 测试门禁：Hub/Worker/Desktop 新增与回归测试均需覆盖（配置读写、快照固化、max turns 软收敛、过程流渲染与结束收敛）。
+
+---
+
 ## 关键风险与缓解
 
 | 风险 | 阶段 | 缓解 |
@@ -434,3 +448,12 @@
 | `active + running/queued` 订阅策略与防串流路由 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/16.3, TECH_ARCH 10.3/20.9, PLAN Phase 5 | done |
 | Worker 默认并发=3 + 项目上下文注入 + 只读命令低风险 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 15.3/17, TECH_ARCH 12.4/13.2/16, STANDARDS 10.4/13.1 | done |
 | Agent 模式移除风险确认链路（删除 confirm API / confirming 状态） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/15.3/24, TECH_ARCH 3.3/9.1/9.2/10.1/12.1, PLAN Phase 5/8, STANDARDS 10.4/13 | done |
+
+## 24. 2026-02-24 Agent 配置中心化与执行过程可视化同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 新增 Workspace Agent Config API 与 execution 快照固化链路 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14/16/17, TECH_ARCH 9.1/20.10, PLAN Phase 4/5 | done |
+| `max turns` 动态配置化与软收敛 done(truncated) | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 16.3/19, TECH_ARCH 12/20.10, PLAN Phase 5 门禁增量 | done |
+| 对话区过程流展示（thinking/tool/command）与结束收敛 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 14.2/20.10, STANDARDS 10.4/11/13 | done |
+| `/workspace/agent` 动态保存与仅新 execution 生效 | PRD.md, IMPLEMENTATION_PLAN.md | PRD 12.1/16.2, PLAN Phase 4/9 验收 | done |

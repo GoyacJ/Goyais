@@ -122,6 +122,13 @@ const (
 	ConversationStatusError   ConversationStatus = "error"
 )
 
+type WorkspaceAgentConfigTraceDetailLevel string
+
+const (
+	WorkspaceAgentTraceDetailLevelBasic   WorkspaceAgentConfigTraceDetailLevel = "basic"
+	WorkspaceAgentTraceDetailLevelVerbose WorkspaceAgentConfigTraceDetailLevel = "verbose"
+)
+
 type WorkspaceStatusResponse struct {
 	WorkspaceID        string             `json:"workspace_id"`
 	ConversationID     string             `json:"conversation_id,omitempty"`
@@ -130,6 +137,22 @@ type WorkspaceStatusResponse struct {
 	ConnectionStatus   string             `json:"connection_status"`
 	UserDisplayName    string             `json:"user_display_name"`
 	UpdatedAt          string             `json:"updated_at"`
+}
+
+type WorkspaceAgentExecutionConfig struct {
+	MaxModelTurns int `json:"max_model_turns"`
+}
+
+type WorkspaceAgentDisplayConfig struct {
+	ShowProcessTrace bool                                 `json:"show_process_trace"`
+	TraceDetailLevel WorkspaceAgentConfigTraceDetailLevel `json:"trace_detail_level"`
+}
+
+type WorkspaceAgentConfig struct {
+	WorkspaceID string                        `json:"workspace_id"`
+	Execution   WorkspaceAgentExecutionConfig `json:"execution"`
+	Display     WorkspaceAgentDisplayConfig   `json:"display"`
+	UpdatedAt   string                        `json:"updated_at"`
 }
 
 type CreateWorkspaceRequest struct {
@@ -304,20 +327,27 @@ type ConversationInspector struct {
 }
 
 type Execution struct {
-	ID                      string           `json:"id"`
-	WorkspaceID             string           `json:"workspace_id"`
-	ConversationID          string           `json:"conversation_id"`
-	MessageID               string           `json:"message_id"`
-	State                   ExecutionState   `json:"state"`
-	Mode                    ConversationMode `json:"mode"`
-	ModelID                 string           `json:"model_id"`
-	ModeSnapshot            ConversationMode `json:"mode_snapshot"`
-	ModelSnapshot           ModelSnapshot    `json:"model_snapshot"`
-	ProjectRevisionSnapshot int64            `json:"project_revision_snapshot"`
-	QueueIndex              int              `json:"queue_index"`
-	TraceID                 string           `json:"trace_id"`
-	CreatedAt               string           `json:"created_at"`
-	UpdatedAt               string           `json:"updated_at"`
+	ID                      string                        `json:"id"`
+	WorkspaceID             string                        `json:"workspace_id"`
+	ConversationID          string                        `json:"conversation_id"`
+	MessageID               string                        `json:"message_id"`
+	State                   ExecutionState                `json:"state"`
+	Mode                    ConversationMode              `json:"mode"`
+	ModelID                 string                        `json:"model_id"`
+	ModeSnapshot            ConversationMode              `json:"mode_snapshot"`
+	ModelSnapshot           ModelSnapshot                 `json:"model_snapshot"`
+	AgentConfigSnapshot     *ExecutionAgentConfigSnapshot `json:"agent_config_snapshot,omitempty"`
+	ProjectRevisionSnapshot int64                         `json:"project_revision_snapshot"`
+	QueueIndex              int                           `json:"queue_index"`
+	TraceID                 string                        `json:"trace_id"`
+	CreatedAt               string                        `json:"created_at"`
+	UpdatedAt               string                        `json:"updated_at"`
+}
+
+type ExecutionAgentConfigSnapshot struct {
+	MaxModelTurns    int                                  `json:"max_model_turns"`
+	ShowProcessTrace bool                                 `json:"show_process_trace"`
+	TraceDetailLevel WorkspaceAgentConfigTraceDetailLevel `json:"trace_detail_level"`
 }
 
 type ModelSnapshot struct {
@@ -367,15 +397,15 @@ type ProjectFileContentResponse struct {
 type ExecutionEventType string
 
 const (
-	ExecutionEventTypeMessageReceived      ExecutionEventType = "message_received"
-	ExecutionEventTypeExecutionStarted     ExecutionEventType = "execution_started"
-	ExecutionEventTypeThinkingDelta        ExecutionEventType = "thinking_delta"
-	ExecutionEventTypeToolCall             ExecutionEventType = "tool_call"
-	ExecutionEventTypeToolResult           ExecutionEventType = "tool_result"
-	ExecutionEventTypeDiffGenerated        ExecutionEventType = "diff_generated"
-	ExecutionEventTypeExecutionStopped     ExecutionEventType = "execution_stopped"
-	ExecutionEventTypeExecutionDone        ExecutionEventType = "execution_done"
-	ExecutionEventTypeExecutionError       ExecutionEventType = "execution_error"
+	ExecutionEventTypeMessageReceived  ExecutionEventType = "message_received"
+	ExecutionEventTypeExecutionStarted ExecutionEventType = "execution_started"
+	ExecutionEventTypeThinkingDelta    ExecutionEventType = "thinking_delta"
+	ExecutionEventTypeToolCall         ExecutionEventType = "tool_call"
+	ExecutionEventTypeToolResult       ExecutionEventType = "tool_result"
+	ExecutionEventTypeDiffGenerated    ExecutionEventType = "diff_generated"
+	ExecutionEventTypeExecutionStopped ExecutionEventType = "execution_stopped"
+	ExecutionEventTypeExecutionDone    ExecutionEventType = "execution_done"
+	ExecutionEventTypeExecutionError   ExecutionEventType = "execution_error"
 )
 
 type ExecutionEvent struct {

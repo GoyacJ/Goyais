@@ -15,7 +15,10 @@ export function cloneExecution(execution: Execution): Execution {
     id: execution.id.trim(),
     model_snapshot: {
       ...execution.model_snapshot
-    }
+    },
+    agent_config_snapshot: execution.agent_config_snapshot
+      ? { ...execution.agent_config_snapshot }
+      : undefined
   };
 }
 
@@ -56,7 +59,12 @@ export function mergeExecution(current: Execution, incoming: Execution): Executi
     model_snapshot: {
       ...current.model_snapshot,
       ...incoming.model_snapshot
-    }
+    },
+    agent_config_snapshot: incoming.agent_config_snapshot
+      ? { ...incoming.agent_config_snapshot }
+      : current.agent_config_snapshot
+        ? { ...current.agent_config_snapshot }
+        : undefined
   };
 }
 

@@ -1,6 +1,6 @@
 import { streamConversationEvents } from "@/modules/conversation/services";
 import { applyIncomingExecutionEvent } from "@/modules/conversation/store/executionActions";
-import { conversationStore } from "@/modules/conversation/store/state";
+import { appendRuntimeEvent, conversationStore } from "@/modules/conversation/store/state";
 import { createExecutionEvent } from "@/modules/conversation/store/events";
 import type { Conversation, ExecutionEvent } from "@/shared/types/api";
 
@@ -41,7 +41,8 @@ export function attachConversationStream(conversation: Conversation, token?: str
 
       current.status = status;
       if (status !== "connected") {
-        current.events.push(
+        appendRuntimeEvent(
+          current,
           createExecutionEvent(conversation.id, "", 0, "thinking_delta", {
             sse_status: status
           })

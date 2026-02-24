@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from typing import Any, Awaitable, Callable
 
 from app.model_adapters import ModelAdapterError, resolve_model_invocation, run_model_turn
@@ -16,7 +17,9 @@ from app.tools.subagent_tools import run_subagent
 EmitEventFn = Callable[[dict[str, Any], str, dict[str, Any]], Awaitable[None]]
 IsCancelledFn = Callable[[str], bool]
 
-MAX_TURNS = 6
+DEFAULT_MAX_TURNS = 24
+MIN_MAX_TURNS = 4
+MAX_MAX_TURNS = 64
 SYSTEM_PROMPT = (
     "You are Goyais worker. Prefer deterministic code edits and concise explanations. "
     "Use available tools only when necessary."
@@ -66,8 +69,9 @@ async def run_execution_loop(
         ]
         diffs: list[dict[str, Any]] = []
         final_text = ""
+        max_turns = _resolve_max_turns(execution)
 
-        for turn in range(MAX_TURNS):
+        for turn in range(max_turns):
             if is_cancelled(execution_id):
                 await emit_event(execution, "execution_stopped", {"reason": "stop_requested"})
                 return
@@ -106,6 +110,7 @@ async def run_execution_loop(
                         "content": final_text or f"Execution {execution_id} completed.",
                         "result": "ok",
                         "turns": turn + 1,
+                        "max_turns": max_turns,
                     },
                 )
                 return
@@ -212,14 +217,14 @@ async def run_execution_loop(
                         }
                     )
 
-        await emit_event(
-            execution,
-            "execution_error",
-            {
-                "reason": "MAX_TURNS_EXCEEDED",
-                "message": "Execution exceeded the max model turns.",
-                "max_turns": MAX_TURNS,
-            },
+        await _emit_turn_limit_summary(
+            execution=execution,
+            invocation=invocation,
+            messages=messages,
+            emit_event=emit_event,
+            execution_id=execution_id,
+            max_turns=max_turns,
+            final_text=final_text,
         )
     except ModelAdapterError as exc:
         await emit_event(
@@ -247,3 +252,95 @@ def _build_system_prompt(execution: dict[str, Any]) -> str:
     if len(context_parts) == 0:
         return SYSTEM_PROMPT
     return f"{SYSTEM_PROMPT} {' '.join(context_parts)} Use this context when answering project-scoped questions."
+
+
+def _resolve_max_turns(execution: dict[str, Any]) -> int:
+    snapshot = execution.get("agent_config_snapshot")
+    candidate_values: list[Any] = []
+    if isinstance(snapshot, dict):
+        candidate_values.append(snapshot.get("max_model_turns"))
+        nested_execution = snapshot.get("execution")
+        if isinstance(nested_execution, dict):
+            candidate_values.append(nested_execution.get("max_model_turns"))
+    candidate_values.append(os.getenv("WORKER_MAX_MODEL_TURNS"))
+    candidate_values.append(DEFAULT_MAX_TURNS)
+
+    for candidate in candidate_values:
+        try:
+            value = int(candidate)
+        except (TypeError, ValueError):
+            continue
+        if value < MIN_MAX_TURNS:
+            return MIN_MAX_TURNS
+        if value > MAX_MAX_TURNS:
+            return MAX_MAX_TURNS
+        return value
+    return DEFAULT_MAX_TURNS
+
+
+async def _emit_turn_limit_summary(
+    execution: dict[str, Any],
+    invocation: Any,
+    messages: list[dict[str, Any]],
+    emit_event: EmitEventFn,
+    execution_id: str,
+    max_turns: int,
+    final_text: str,
+) -> None:
+    await emit_event(
+        execution,
+        "thinking_delta",
+        {
+            "stage": "turn_limit_reached",
+            "max_turns": max_turns,
+        },
+    )
+    summary_messages = list(messages)
+    summary_messages.append(
+        {
+            "role": "user",
+            "content": (
+                "Tool-call turn limit reached. Do not call tools. "
+                "Provide a concise final answer based on the current context."
+            ),
+        }
+    )
+    try:
+        summary_result = await run_model_turn(invocation, summary_messages, [])
+    except Exception as exc:
+        await emit_event(
+            execution,
+            "execution_error",
+            {
+                "reason": "MAX_TURNS_EXCEEDED",
+                "message": "Execution exceeded the max model turns.",
+                "max_turns": max_turns,
+                "details": {"summary_error": str(exc)},
+            },
+        )
+        return
+
+    summary_text = str(summary_result.text or "").strip()
+    if summary_text != "":
+        await emit_event(
+            execution,
+            "thinking_delta",
+            {
+                "stage": "assistant_output",
+                "turn": max_turns + 1,
+                "delta": summary_text[:1000],
+            },
+        )
+
+    await emit_event(
+        execution,
+        "execution_done",
+        {
+            "content": summary_text or final_text or f"Execution {execution_id} completed.",
+            "result": "ok",
+            "turns": max_turns,
+            "truncated": True,
+            "reason": "MAX_TURNS_REACHED",
+            "max_turns": max_turns,
+        },
+    )

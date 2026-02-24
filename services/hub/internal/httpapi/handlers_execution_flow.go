@@ -220,6 +220,13 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 		if strings.TrimSpace(resolvedModelSnapshot.ModelID) == "" {
 			resolvedModelSnapshot.ModelID = resolvedModelID
 		}
+		workspaceAgentConfig, workspaceAgentConfigErr := loadWorkspaceAgentConfigFromStore(state, conversationSeed.WorkspaceID)
+		if workspaceAgentConfigErr != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "WORKSPACE_AGENT_CONFIG_READ_FAILED", "Failed to read workspace agent config", map[string]any{
+				"workspace_id": conversationSeed.WorkspaceID,
+			})
+			return
+		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
 		var createdExecution Execution
@@ -261,6 +268,7 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 			ModelID:                 resolvedModelID,
 			ModeSnapshot:            resolvedMode,
 			ModelSnapshot:           resolvedModelSnapshot,
+			AgentConfigSnapshot:     toExecutionAgentConfigSnapshot(workspaceAgentConfig),
 			ProjectRevisionSnapshot: project.CurrentRevision,
 			QueueIndex:              queueIndex,
 			TraceID:                 TraceIDFromContext(r.Context()),
@@ -505,13 +513,13 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 
 		conversation.QueueState = snapshot.QueueState
 		conversation.ActiveExecutionID = nil
-			for _, id := range ordered {
-				exec := state.executions[id]
-				if exec.State == ExecutionStateExecuting || exec.State == ExecutionStatePending {
-					conversation.ActiveExecutionID = &id
-					break
-				}
+		for _, id := range ordered {
+			exec := state.executions[id]
+			if exec.State == ExecutionStateExecuting || exec.State == ExecutionStatePending {
+				conversation.ActiveExecutionID = &id
+				break
 			}
+		}
 		conversation.UpdatedAt = now
 		state.conversations[conversationID] = conversation
 		appendExecutionEventLocked(state, ExecutionEvent{

@@ -70,6 +70,8 @@
           :pending-count="pendingCount"
           :executing-count="executingCount"
           :has-active-execution="activeCount > 0"
+          :show-process-trace="showProcessTrace"
+          :process-trace-items="processTraceItems"
           :draft="runtime?.draft ?? ''"
           :mode="runtime?.mode ?? 'agent'"
           :model-id="activeModelId"
@@ -172,6 +174,7 @@ const {
   placeholder,
   pendingCount,
   projectStore,
+  processTraceItems,
   projectImportError,
   projectImportFeedback,
   projectImportInProgress,
@@ -183,6 +186,7 @@ const {
   runtimeConnectionStatus,
   runtimeHubLabel,
   runtimeUserDisplayName,
+  showProcessTrace,
   runtime,
   saveConversationName,
   selectConversation,

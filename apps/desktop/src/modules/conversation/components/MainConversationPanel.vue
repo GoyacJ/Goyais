@@ -38,6 +38,16 @@
         </div>
       </div>
 
+      <div v-if="hasActiveExecution && showProcessTrace && processTraceItems.length > 0" class="trace-list">
+        <details v-for="item in processTraceItems" :key="item.id" class="trace-item">
+          <summary class="trace-summary">
+            <span class="trace-title">{{ item.title }}</span>
+            <span class="trace-text">{{ item.summary }}</span>
+          </summary>
+          <pre v-if="item.details !== ''" class="trace-details">{{ item.details }}</pre>
+        </details>
+      </div>
+
       <div v-if="hasActiveExecution" class="queue-chip">
         <StatusBadge tone="queued" :label="queueChipLabel" />
       </div>
@@ -102,6 +112,8 @@ const props = withDefaults(
     pendingCount: number;
     executingCount: number;
     hasActiveExecution: boolean;
+    showProcessTrace: boolean;
+    processTraceItems: Array<{ id: string; title: string; summary: string; details: string }>;
     draft: string;
     mode: ConversationMode;
     modelId: string;
@@ -133,6 +145,9 @@ const assistantModelLabel = computed(() => {
   return selected?.label ?? normalized;
 });
 const executionHint = computed(() => {
+  if (props.showProcessTrace && props.processTraceItems.length > 0) {
+    return "";
+  }
   if (props.pendingCount > 0 || props.executingCount > 0) {
     return "正在思考…";
   }

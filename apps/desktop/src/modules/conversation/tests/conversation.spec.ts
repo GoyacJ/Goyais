@@ -261,6 +261,28 @@ describe("conversation store", () => {
     expect(runtime.executions[0]?.queue_index).toBe(0);
   });
 
+  it("caps runtime events to prevent unbounded growth", () => {
+    ensureConversationRuntime(mockConversation, true);
+    const runtime = ensureConversationRuntime(mockConversation, true);
+
+    for (let index = 0; index < 1010; index += 1) {
+      applyIncomingExecutionEvent(mockConversation.id, {
+        event_id: `evt_cap_${index}`,
+        execution_id: "exec_cap",
+        conversation_id: mockConversation.id,
+        trace_id: "tr_cap",
+        sequence: index,
+        queue_index: 0,
+        type: "thinking_delta",
+        timestamp: new Date(Date.now() + index).toISOString(),
+        payload: { stage: "model_call", turn: index }
+      });
+    }
+
+    expect(runtime.events.length).toBe(1000);
+    expect(runtime.events[0]?.event_id).toBe("evt_cap_10");
+  });
+
 });
 
 function jsonResponse(payload: unknown, status = 200): Response {

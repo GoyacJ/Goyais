@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetProjectStore } from "@/modules/project/store";
 import { resetResourceStore } from "@/modules/resource/store";
 import WorkspaceMcpView from "@/modules/resource/views/WorkspaceMcpView.vue";
+import WorkspaceAgentView from "@/modules/resource/views/WorkspaceAgentView.vue";
 import WorkspaceModelView from "@/modules/resource/views/WorkspaceModelView.vue";
 import WorkspaceProjectConfigView from "@/modules/resource/views/WorkspaceProjectConfigView.vue";
 import WorkspaceRulesView from "@/modules/resource/views/WorkspaceRulesView.vue";
@@ -68,6 +69,24 @@ describe("resource module views", () => {
     expect(wrapper.text()).not.toContain("名称");
     expect(wrapper.text()).not.toContain("模型 ID（可手输）");
     expect(wrapper.text()).not.toContain("Params(JSON)");
+  });
+
+  it("loads and updates workspace agent config", async () => {
+    const wrapper = mountView(WorkspaceAgentView);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Max Model Turns");
+    const turnsInput = wrapper.find("input[type='number']");
+    expect(turnsInput.exists()).toBe(true);
+    await turnsInput.setValue("12");
+    await turnsInput.trigger("change");
+    await flushPromises();
+
+    const updateCalls = findFetchCalls("PUT", "/v1/workspaces/ws_local/agent-config");
+    expect(updateCalls).toHaveLength(1);
+    const [, init] = updateCalls[0] ?? [];
+    const payload = JSON.parse(String(init?.body ?? "{}"));
+    expect(payload.execution?.max_model_turns).toBe(12);
   });
 
   it("renders rules page with markdown editor modal", async () => {
@@ -277,8 +296,36 @@ function createApiFetchMock(options: { legacyProjectConfigModelIDs?: boolean } =
       return jsonResponse({ workspace_id: "ws_local", mcps: [] });
     }
 
+    if (method === "GET" && path === "/v1/workspaces/ws_local/agent-config") {
+      return jsonResponse({
+        workspace_id: "ws_local",
+        execution: {
+          max_model_turns: 24
+        },
+        display: {
+          show_process_trace: true,
+          trace_detail_level: "verbose"
+        },
+        updated_at: "2026-02-24T00:00:00Z"
+      });
+    }
+
     if (method === "PATCH") {
       return jsonResponse({ ok: true });
+    }
+    if (method === "PUT" && path === "/v1/workspaces/ws_local/agent-config") {
+      const parsed = JSON.parse(String(init?.body ?? "{}"));
+      return jsonResponse({
+        workspace_id: "ws_local",
+        execution: {
+          max_model_turns: parsed.execution?.max_model_turns ?? 24
+        },
+        display: {
+          show_process_trace: parsed.display?.show_process_trace ?? true,
+          trace_detail_level: parsed.display?.trace_detail_level ?? "verbose"
+        },
+        updated_at: "2026-02-24T00:00:00Z"
+      });
     }
     if (method === "PUT") {
       return jsonResponse({

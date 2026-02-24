@@ -181,7 +181,7 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 	_ = snapshotRows.Close()
 
 	executionRows, err := s.db.Query(
-		`SELECT id, workspace_id, conversation_id, message_id, state, mode, model_id, mode_snapshot, model_snapshot_json, project_revision_snapshot, queue_index, trace_id, created_at, updated_at
+		`SELECT id, workspace_id, conversation_id, message_id, state, mode, model_id, mode_snapshot, model_snapshot_json, agent_config_snapshot_json, project_revision_snapshot, queue_index, trace_id, created_at, updated_at
 		 FROM executions
 		 ORDER BY created_at ASC, id ASC`,
 	)
@@ -195,6 +195,7 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 			modeRaw           string
 			modeSnapshotRaw   string
 			modelSnapshotJSON string
+			agentConfigJSON   sql.NullString
 		)
 		if err := executionRows.Scan(
 			&item.ID,
@@ -206,6 +207,7 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 			&item.ModelID,
 			&modeSnapshotRaw,
 			&modelSnapshotJSON,
+			&agentConfigJSON,
 			&item.ProjectRevisionSnapshot,
 			&item.QueueIndex,
 			&item.TraceID,
@@ -223,6 +225,14 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 				_ = executionRows.Close()
 				return snapshot, err
 			}
+		}
+		if agentConfigJSON.Valid && strings.TrimSpace(agentConfigJSON.String) != "" {
+			configSnapshot := ExecutionAgentConfigSnapshot{}
+			if err := json.Unmarshal([]byte(agentConfigJSON.String), &configSnapshot); err != nil {
+				_ = executionRows.Close()
+				return snapshot, err
+			}
+			item.AgentConfigSnapshot = &configSnapshot
 		}
 		snapshot.Executions = append(snapshot.Executions, item)
 	}

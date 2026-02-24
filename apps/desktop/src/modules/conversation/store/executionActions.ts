@@ -16,6 +16,7 @@ import {
   upsertExecutionFromServer
 } from "@/modules/conversation/store/executionRuntime";
 import {
+  appendRuntimeEvent,
   conversationStore,
   createConversationSnapshot,
   ensureConversationRuntime,
@@ -64,7 +65,8 @@ export async function submitConversationMessage(
 
     upsertExecutionFromServer(runtime, response.execution);
     dedupeExecutions(runtime);
-    runtime.events.push(
+    appendRuntimeEvent(
+      runtime,
       createExecutionEvent(conversation.id, response.execution.id, response.queue_index, "message_received", {
         message_id: response.execution.message_id,
         queue_state: response.queue_state
@@ -111,7 +113,8 @@ export async function rollbackConversationToMessage(conversationId: string, mess
     return;
   }
 
-  runtime.events.push(
+  appendRuntimeEvent(
+    runtime,
     createExecutionEvent(conversationId, "", targetMessage.queue_index ?? 0, "thinking_delta", {
       stage: "rollback_requested",
       message_id: messageId
@@ -136,14 +139,16 @@ export async function rollbackConversationToMessage(conversationId: string, mess
   runtime.inspectorTab = snapshot.inspector_state.tab;
   runtime.diff = [];
 
-  runtime.events.push(
+  appendRuntimeEvent(
+    runtime,
     createExecutionEvent(conversationId, "", targetMessage.queue_index ?? 0, "thinking_delta", {
       stage: "snapshot_applied",
       message_id: messageId
     })
   );
 
-  runtime.events.push(
+  appendRuntimeEvent(
+    runtime,
     createExecutionEvent(conversationId, "", targetMessage.queue_index ?? 0, "thinking_delta", {
       stage: "rollback_completed",
       message_id: messageId
@@ -203,7 +208,7 @@ export function applyIncomingExecutionEvent(conversationId: string, event: Execu
     return;
   }
 
-  runtime.events.push(event);
+  appendRuntimeEvent(runtime, event);
 
   if (event.execution_id) {
     const execution = ensureExecution(runtime, conversationId, event);

@@ -9,7 +9,8 @@ import type {
   ResourceConfig,
   ResourceConfigCreateRequest,
   ResourceConfigPatchRequest,
-  ResourceType
+  ResourceType,
+  WorkspaceAgentConfig
 } from "@/shared/types/api";
 
 type ResourceConfigQuery = PaginationQuery & {
@@ -68,6 +69,20 @@ export async function connectMcpResourceConfig(workspaceId: string, configId: st
 
 export async function exportMcpConfigs(workspaceId: string): Promise<Record<string, unknown>> {
   return getControlClient().get<Record<string, unknown>>(`/v1/workspaces/${workspaceId}/mcps/export`);
+}
+
+export async function getWorkspaceAgentConfig(workspaceId: string): Promise<WorkspaceAgentConfig> {
+  return getControlClient().get<WorkspaceAgentConfig>(`/v1/workspaces/${workspaceId}/agent-config`);
+}
+
+export async function updateWorkspaceAgentConfig(
+  workspaceId: string,
+  input: WorkspaceAgentConfig
+): Promise<WorkspaceAgentConfig> {
+  return getControlClient().request<WorkspaceAgentConfig>(`/v1/workspaces/${workspaceId}/agent-config`, {
+    method: "PUT",
+    body: input
+  });
 }
 
 function buildResourceConfigSearch(query: ResourceConfigQuery): string {

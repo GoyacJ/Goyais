@@ -167,6 +167,57 @@ func TestAuthzStoreCreatesProjectSchema(t *testing.T) {
 	}
 }
 
+func TestAuthzStoreCreatesWorkspaceAgentConfigSchema(t *testing.T) {
+	store, err := openAuthzStore(":memory:")
+	if err != nil {
+		t.Fatalf("open authz store failed: %v", err)
+	}
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+
+	workspaceConfigColumns := []string{"workspace_id", "config_json", "updated_at"}
+	for _, column := range workspaceConfigColumns {
+		ok, hasErr := tableHasColumn(store.db, "workspace_agent_configs", column)
+		if hasErr != nil {
+			t.Fatalf("check workspace_agent_configs column %s failed: %v", column, hasErr)
+		}
+		if !ok {
+			t.Fatalf("expected workspace_agent_configs column %s to exist", column)
+		}
+	}
+
+	hasExecutionSnapshotColumn, hasErr := tableHasColumn(store.db, "executions", "agent_config_snapshot_json")
+	if hasErr != nil {
+		t.Fatalf("check executions agent_config_snapshot_json failed: %v", hasErr)
+	}
+	if !hasExecutionSnapshotColumn {
+		t.Fatalf("expected executions.agent_config_snapshot_json to exist")
+	}
+
+	if err := store.ensureWorkspaceSeeds("ws_agent_schema"); err != nil {
+		t.Fatalf("ensure workspace seeds failed: %v", err)
+	}
+	config, exists, err := store.getWorkspaceAgentConfig("ws_agent_schema")
+	if err != nil {
+		t.Fatalf("get workspace agent config failed: %v", err)
+	}
+	if !exists {
+		t.Fatalf("expected seeded workspace agent config")
+	}
+	if config.Execution.MaxModelTurns != defaultWorkspaceAgentMaxModelTurns {
+		t.Fatalf("expected default max_model_turns=%d, got %d", defaultWorkspaceAgentMaxModelTurns, config.Execution.MaxModelTurns)
+	}
+	if !config.Display.ShowProcessTrace {
+		t.Fatalf("expected show_process_trace default true")
+	}
+	if config.Display.TraceDetailLevel != WorkspaceAgentTraceDetailLevelVerbose {
+		t.Fatalf("expected trace_detail_level verbose, got %q", config.Display.TraceDetailLevel)
+	}
+}
+
 func TestResolveHubDBPathFromEnvUsesUserConfigDirByDefault(t *testing.T) {
 	t.Setenv("HUB_DB_PATH", "")
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "xdg-config"))

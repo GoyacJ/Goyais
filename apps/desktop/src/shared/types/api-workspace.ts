@@ -1,4 +1,4 @@
-import type { AuthMode, ConnectionStatus, ConversationStatus, Role, WorkspaceMode } from "@/shared/types/api-common";
+import type { AuthMode, ConnectionStatus, ConversationStatus, Role, TraceDetailLevel, WorkspaceMode } from "@/shared/types/api-common";
 
 export type Workspace = {
   id: string;
@@ -33,6 +33,18 @@ export type WorkspaceStatusResponse = {
   hub_url: string;
   connection_status: ConnectionStatus;
   user_display_name: string;
+  updated_at: string;
+};
+
+export type WorkspaceAgentConfig = {
+  workspace_id: string;
+  execution: {
+    max_model_turns: number;
+  };
+  display: {
+    show_process_trace: boolean;
+    trace_detail_level: TraceDetailLevel;
+  };
   updated_at: string;
 };
 

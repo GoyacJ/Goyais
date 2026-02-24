@@ -228,6 +228,7 @@ func captureExecutionDomainSnapshot(state *AppState) executionDomainSnapshot {
 	for _, execution := range state.executions {
 		copyExecution := execution
 		copyExecution.ModelSnapshot = cloneModelSnapshot(execution.ModelSnapshot)
+		copyExecution.AgentConfigSnapshot = cloneExecutionAgentConfigSnapshot(execution.AgentConfigSnapshot)
 		snapshot.Executions = append(snapshot.Executions, copyExecution)
 	}
 	for _, events := range state.executionEvents {

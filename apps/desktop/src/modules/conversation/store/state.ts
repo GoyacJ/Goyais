@@ -38,6 +38,8 @@ export type ConversationRuntime = {
   worktreeRef: string | null;
 };
 
+export const MAX_RUNTIME_EVENTS = 1000;
+
 type ConversationState = {
   byConversationId: Record<string, ConversationRuntime>;
   timers: Record<string, ReturnType<typeof setTimeout> | undefined>;
@@ -110,7 +112,15 @@ export function hydrateConversationRuntime(
   runtime.mode = detail.conversation.default_mode;
   runtime.modelId = detail.conversation.model_id;
   runtime.messages = detail.messages.length > 0 ? detail.messages.map((message) => ({ ...message })) : createInitialMessages(conversation.id);
-  runtime.executions = detail.executions.map((execution) => ({ ...execution }));
+  runtime.executions = detail.executions.map((execution) => ({
+    ...execution,
+    model_snapshot: {
+      ...execution.model_snapshot
+    },
+    agent_config_snapshot: execution.agent_config_snapshot
+      ? { ...execution.agent_config_snapshot }
+      : undefined
+  }));
   runtime.snapshots = detail.snapshots.map((snapshot) => ({
     ...snapshot,
     messages: snapshot.messages.map((message) => ({ ...message })),
@@ -127,6 +137,13 @@ export function hydrateConversationRuntime(
 
 export function getConversationRuntime(conversationId: string): ConversationRuntime | undefined {
   return conversationStore.byConversationId[conversationId];
+}
+
+export function appendRuntimeEvent(runtime: ConversationRuntime, event: ExecutionEvent): void {
+  runtime.events.push(event);
+  if (runtime.events.length > MAX_RUNTIME_EVENTS) {
+    runtime.events.splice(0, runtime.events.length - MAX_RUNTIME_EVENTS);
+  }
 }
 
 export function setConversationDraft(conversationId: string, draft: string): void {

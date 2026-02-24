@@ -15,6 +15,7 @@ export type ModelVendorName = "OpenAI" | "Google" | "Qwen" | "Doubao" | "Zhipu" 
 export type InspectorTabKey = "diff" | "run" | "files" | "risk";
 export type MessageRole = "user" | "assistant" | "system";
 export type DiffChangeType = "added" | "modified" | "deleted";
+export type TraceDetailLevel = "basic" | "verbose";
 
 export type MenuKey =
   | "main"

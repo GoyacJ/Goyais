@@ -90,6 +90,11 @@ func (s *authzStore) migrate() error {
 			connected_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS workspace_agent_configs (
+			workspace_id TEXT PRIMARY KEY,
+			config_json TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
 		`CREATE TABLE IF NOT EXISTS users (
 			id TEXT PRIMARY KEY,
 			workspace_id TEXT NOT NULL,
@@ -258,6 +263,7 @@ func (s *authzStore) migrate() error {
 			model_id TEXT NOT NULL,
 			mode_snapshot TEXT NOT NULL,
 			model_snapshot_json TEXT NOT NULL,
+			agent_config_snapshot_json TEXT,
 			project_revision_snapshot INTEGER NOT NULL DEFAULT 0,
 			queue_index INTEGER NOT NULL,
 			trace_id TEXT NOT NULL,
@@ -334,7 +340,22 @@ func (s *authzStore) migrate() error {
 	if err := s.migrateProjectsAddCurrentRevision(); err != nil {
 		return fmt.Errorf("migrate projects schema: %w", err)
 	}
+	if err := s.migrateExecutionsAddAgentConfigSnapshot(); err != nil {
+		return fmt.Errorf("migrate executions schema: %w", err)
+	}
 	return nil
+}
+
+func (s *authzStore) migrateExecutionsAddAgentConfigSnapshot() error {
+	hasColumn, err := tableHasColumn(s.db, "executions", "agent_config_snapshot_json")
+	if err != nil {
+		return err
+	}
+	if hasColumn {
+		return nil
+	}
+	_, err = s.db.Exec(`ALTER TABLE executions ADD COLUMN agent_config_snapshot_json TEXT`)
+	return err
 }
 
 func (s *authzStore) migrateProjectsAddCurrentRevision() error {
@@ -583,7 +604,11 @@ func (s *authzStore) ensureWorkspaceSeeds(workspaceID string) error {
 		}
 	}
 
-	err = tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+
+	_, err = s.ensureWorkspaceAgentConfig(workspaceID)
 	return err
 }
 

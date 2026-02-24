@@ -34,6 +34,7 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect:",
 		"/v1/workspaces/{workspace_id}/mcps/export:",
 		"/v1/workspaces/{workspace_id}/project-configs:",
+		"/v1/workspaces/{workspace_id}/agent-config:",
 		"/v1/workspaces/{workspace_id}/share-requests:",
 		"/v1/share-requests/{request_id}/{action}:",
 		"/v1/admin/users:",
@@ -113,6 +114,24 @@ func TestOpenAPIWorkspaceStatusResponseShape(t *testing.T) {
 	for _, marker := range requiredMarkers {
 		if !strings.Contains(spec, marker) {
 			t.Fatalf("openapi missing workspace status marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPIWorkspaceAgentConfigShape(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"/v1/workspaces/{workspace_id}/agent-config:",
+		"WorkspaceAgentConfig:",
+		"WorkspaceAgentExecutionConfig:",
+		"WorkspaceAgentDisplayConfig:",
+		"trace_detail_level:",
+		"show_process_trace:",
+		"max_model_turns:",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing workspace agent config marker: %s", marker)
 		}
 	}
 }

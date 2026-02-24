@@ -658,6 +658,108 @@ func TestProjectConfigPersistsAcrossRouterRestart(t *testing.T) {
 	}
 }
 
+func TestWorkspaceAgentConfigPersistsAndExecutionSnapshotIsFrozen(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "hub-agent-config.sqlite3")
+	router := newRouterWithDBPath(dbPath)
+	workspaceID := createRemoteWorkspace(t, router, "Remote Agent Config Persist", "http://127.0.0.1:9011", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "agent_config_user", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	putRes := performJSONRequest(t, router, http.MethodPut, "/v1/workspaces/"+workspaceID+"/agent-config", map[string]any{
+		"workspace_id": workspaceID,
+		"execution": map[string]any{
+			"max_model_turns": 8,
+		},
+		"display": map[string]any{
+			"show_process_trace": false,
+			"trace_detail_level": "basic",
+		},
+	}, authHeaders)
+	if putRes.Code != http.StatusOK {
+		t.Fatalf("expected put workspace agent config 200, got %d (%s)", putRes.Code, putRes.Body.String())
+	}
+
+	restartRouter := newRouterWithDBPath(dbPath)
+	restartToken := loginRemoteWorkspace(t, restartRouter, workspaceID, "agent_config_user", "pw", RoleDeveloper, true)
+	restartHeaders := map[string]string{"Authorization": "Bearer " + restartToken}
+
+	getRes := performJSONRequest(t, restartRouter, http.MethodGet, "/v1/workspaces/"+workspaceID+"/agent-config", nil, restartHeaders)
+	if getRes.Code != http.StatusOK {
+		t.Fatalf("expected get workspace agent config 200 after restart, got %d (%s)", getRes.Code, getRes.Body.String())
+	}
+	getPayload := map[string]any{}
+	mustDecodeJSON(t, getRes.Body.Bytes(), &getPayload)
+	executionConfig := getPayload["execution"].(map[string]any)
+	displayConfig := getPayload["display"].(map[string]any)
+	if got := int(executionConfig["max_model_turns"].(float64)); got != 8 {
+		t.Fatalf("expected persisted max_model_turns 8, got %d", got)
+	}
+	if got := displayConfig["show_process_trace"].(bool); got {
+		t.Fatalf("expected persisted show_process_trace false, got true")
+	}
+	if got := strings.TrimSpace(asString(displayConfig["trace_detail_level"])); got != "basic" {
+		t.Fatalf("expected persisted trace_detail_level basic, got %q", got)
+	}
+
+	projectRes := performJSONRequest(t, restartRouter, http.MethodPost, "/v1/projects/import", map[string]any{
+		"workspace_id":   workspaceID,
+		"directory_path": "/tmp/agent-config-persist-alpha",
+	}, restartHeaders)
+	if projectRes.Code != http.StatusCreated {
+		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
+	}
+	projectPayload := map[string]any{}
+	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
+	projectID := projectPayload["id"].(string)
+
+	conversationRes := performJSONRequest(t, restartRouter, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+		"workspace_id": workspaceID,
+		"name":         "Agent Config Persist",
+	}, restartHeaders)
+	if conversationRes.Code != http.StatusCreated {
+		t.Fatalf("expected create conversation 201, got %d (%s)", conversationRes.Code, conversationRes.Body.String())
+	}
+	conversationPayload := map[string]any{}
+	mustDecodeJSON(t, conversationRes.Body.Bytes(), &conversationPayload)
+	conversationID := conversationPayload["id"].(string)
+
+	createExecutionRes := performJSONRequest(t, restartRouter, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
+		"content": "show current project",
+	}, restartHeaders)
+	if createExecutionRes.Code != http.StatusCreated {
+		t.Fatalf("expected create execution 201, got %d (%s)", createExecutionRes.Code, createExecutionRes.Body.String())
+	}
+	executionPayload := map[string]any{}
+	mustDecodeJSON(t, createExecutionRes.Body.Bytes(), &executionPayload)
+	execution := executionPayload["execution"].(map[string]any)
+	agentConfigSnapshot := execution["agent_config_snapshot"].(map[string]any)
+	if got := int(agentConfigSnapshot["max_model_turns"].(float64)); got != 8 {
+		t.Fatalf("expected execution snapshot max_model_turns 8, got %d", got)
+	}
+	if got := agentConfigSnapshot["show_process_trace"].(bool); got {
+		t.Fatalf("expected execution snapshot show_process_trace false")
+	}
+	if got := strings.TrimSpace(asString(agentConfigSnapshot["trace_detail_level"])); got != "basic" {
+		t.Fatalf("expected execution snapshot trace_detail_level basic, got %q", got)
+	}
+
+	internalHeaders := map[string]string{"X-Internal-Token": defaultHubInternalToken}
+	claimRes := performJSONRequest(t, restartRouter, http.MethodPost, "/internal/executions/claim", map[string]any{
+		"worker_id": "worker-agent-config-1",
+	}, internalHeaders)
+	if claimRes.Code != http.StatusOK {
+		t.Fatalf("expected claim execution 200, got %d (%s)", claimRes.Code, claimRes.Body.String())
+	}
+	claimPayload := map[string]any{}
+	mustDecodeJSON(t, claimRes.Body.Bytes(), &claimPayload)
+	envelope := claimPayload["execution"].(map[string]any)
+	claimedExecution := envelope["execution"].(map[string]any)
+	claimedSnapshot := claimedExecution["agent_config_snapshot"].(map[string]any)
+	if got := int(claimedSnapshot["max_model_turns"].(float64)); got != 8 {
+		t.Fatalf("expected claimed execution snapshot max_model_turns 8, got %d", got)
+	}
+}
+
 func TestConversationPatchSupportsModeAndModel(t *testing.T) {
 	router := NewRouter()
 	workspaceID := createRemoteWorkspace(t, router, "Remote Conversation Patch", "http://127.0.0.1:9010", false)

@@ -909,6 +909,42 @@ paths:
                 items:
                   $ref: '#/components/schemas/WorkspaceProjectConfigItem'
 
+  /v1/workspaces/{workspace_id}/agent-config:
+    get:
+      summary: Get workspace agent config
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      responses:
+        '200':
+          description: Workspace agent config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceAgentConfig'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    put:
+      summary: Update workspace agent config
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkspaceAgentConfig'
+      responses:
+        '200':
+          description: Updated workspace agent config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceAgentConfig'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
   /v1/admin/ping:
     get:
       summary: Admin capability ping
@@ -2000,6 +2036,39 @@ components:
         config:
           $ref: '#/components/schemas/ProjectConfig'
 
+    WorkspaceAgentExecutionConfig:
+      type: object
+      required: [max_model_turns]
+      properties:
+        max_model_turns:
+          type: integer
+          minimum: 4
+          maximum: 64
+
+    WorkspaceAgentDisplayConfig:
+      type: object
+      required: [show_process_trace, trace_detail_level]
+      properties:
+        show_process_trace:
+          type: boolean
+        trace_detail_level:
+          type: string
+          enum: [basic, verbose]
+
+    WorkspaceAgentConfig:
+      type: object
+      required: [workspace_id, execution, display, updated_at]
+      properties:
+        workspace_id:
+          type: string
+        execution:
+          $ref: '#/components/schemas/WorkspaceAgentExecutionConfig'
+        display:
+          $ref: '#/components/schemas/WorkspaceAgentDisplayConfig'
+        updated_at:
+          type: string
+          format: date-time
+
     Conversation:
       type: object
       required:
@@ -2164,6 +2233,20 @@ components:
           type: object
           additionalProperties: true
 
+    ExecutionAgentConfigSnapshot:
+      type: object
+      required: [max_model_turns, show_process_trace, trace_detail_level]
+      properties:
+        max_model_turns:
+          type: integer
+          minimum: 4
+          maximum: 64
+        show_process_trace:
+          type: boolean
+        trace_detail_level:
+          type: string
+          enum: [basic, verbose]
+
     Execution:
       type: object
       required:
@@ -2203,6 +2286,8 @@ components:
           enum: [agent, plan]
         model_snapshot:
           $ref: '#/components/schemas/ModelSnapshot'
+        agent_config_snapshot:
+          $ref: '#/components/schemas/ExecutionAgentConfigSnapshot'
         project_revision_snapshot:
           type: integer
           format: int64
