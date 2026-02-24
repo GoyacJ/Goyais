@@ -1,5 +1,6 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 
@@ -37,8 +38,25 @@ def configure_logging() -> logging.Logger:
 
 
 logger = configure_logging()
-app = FastAPI(title="Goyais Worker", version="0.4.0")
 claim_loop_service = ClaimLoopService()
+
+
+def is_claim_loop_disabled() -> bool:
+    return os.getenv("WORKER_DISABLE_CLAIM_LOOP", "").strip().lower() in {"1", "true", "yes"}
+
+
+@asynccontextmanager
+async def app_lifespan(_app: FastAPI):
+    if not is_claim_loop_disabled():
+        await claim_loop_service.start()
+    try:
+        yield
+    finally:
+        if not is_claim_loop_disabled():
+            await claim_loop_service.stop()
+
+
+app = FastAPI(title="Goyais Worker", version="0.4.0", lifespan=app_lifespan)
 
 
 @app.middleware("http")
@@ -58,20 +76,6 @@ async def trace_middleware(request: Request, call_next):
 
 
 app.include_router(router)
-
-
-@app.on_event("startup")
-async def startup_worker_claim_loop() -> None:
-    if os.getenv("WORKER_DISABLE_CLAIM_LOOP", "").strip().lower() in {"1", "true", "yes"}:
-        return
-    await claim_loop_service.start()
-
-
-@app.on_event("shutdown")
-async def shutdown_worker_claim_loop() -> None:
-    if os.getenv("WORKER_DISABLE_CLAIM_LOOP", "").strip().lower() in {"1", "true", "yes"}:
-        return
-    await claim_loop_service.stop()
 
 
 def get_port() -> int:
