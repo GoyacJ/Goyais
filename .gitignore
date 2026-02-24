@@ -22,5 +22,8 @@ __pycache__/
 *.pyc
 target/
 apps/desktop-tauri/src-tauri/target/
+apps/desktop/src-tauri/binaries/
 worktrees/
 .worktrees/
+artifacts/
+services/hub/data/

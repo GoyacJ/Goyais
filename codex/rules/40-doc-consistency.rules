@@ -1,0 +1,44 @@
+---
+description: 语义变更时强制执行权威文档同步规则。
+globs:
+  - "docs/**/*.md"
+  - "**/*.go"
+  - "**/*.py"
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.vue"
+  - "**/*.rs"
+---
+
+# 文档一致性规则
+
+当语义发生变化时，Codex 必须显式识别并同步更新权威文档。
+
+同步映射：
+
+- 业务规则变化 => 更新 `docs/v_0_4_0/PRD.md`
+- 接口/状态/模型变化 => 更新 `docs/v_0_4_0/TECH_ARCH.md`
+- 阶段/门禁/质量策略变化 => 更新：
+  - `docs/v_0_4_0/IMPLEMENTATION_PLAN.md`
+  - `docs/v_0_4_0/DEVELOPMENT_STANDARDS.md`
+
+矩阵约束：
+
+- 必须输出字段：`change_type`、`code_or_doc_change`、`required_docs_to_update`、`required_sections`、`status`。
+- 若 `status=missing` 存在，不得宣称完成。
+
+推荐章节映射（v0.4.0 当前基线）：
+
+- 接口/状态/模型：`TECH_ARCH.md` 重点关注 3/7/9/11/14/20。
+- 阶段与验收：`IMPLEMENTATION_PLAN.md` 重点关注 Phase 3/4/5/7/9 与测试计划映射。
+- 门禁与 DoD：`DEVELOPMENT_STANDARDS.md` 重点关注 10/11/13/14/15。
+
+触发类型：
+
+- API 合同变化
+- 执行状态机变化
+- 权限或风险控制变化
+- 资源共享语义变化
+- 发布门槛或验收标准变化
+
+若存在必需文档更新，不得宣称任务完成。

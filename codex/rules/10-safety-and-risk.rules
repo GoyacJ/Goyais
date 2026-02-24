@@ -1,0 +1,27 @@
+---
+description: 强制高风险操作的安全门禁与确认策略。
+alwaysApply: true
+---
+
+# 安全与风险规则
+
+高风险动作不得静默执行。
+凡是可能引发文件变更、命令执行、网络访问、删除行为的动作，
+都必须要求明确用户意图或确认。
+
+必须满足的防护：
+
+- Path Guard：文件操作限制在项目/worktree 范围内。
+- Command Guard：默认拒绝明显危险命令模式。
+- high/critical 风险动作必须具备显式确认语义。
+- 被拒绝动作也要在输出中保留可追踪审计理由。
+- 回滚动作必须记录快照应用审计（request/apply/complete）。
+- 模型目录同步失败必须保留可追踪错误与重试记录。
+
+风险基线：
+
+- low: read/search/list
+- high: write/apply_patch, run_command, network/mcp_call
+- critical: delete/revoke_key
+
+不得将破坏性操作作为默认路径。

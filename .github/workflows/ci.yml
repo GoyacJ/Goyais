@@ -2,30 +2,92 @@ name: CI
 
 on:
   push:
+    branches:
+      - "**"
   pull_request:
 
 jobs:
-  checks:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+  hub-test:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - name: Hub tests
+        working-directory: services/hub
+        run: go test ./...
+
+  worker-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v4
+      - name: Worker tests
+        working-directory: services/worker
+        run: |
+          uv sync
+          uv run pytest
+
+  desktop-lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - uses: pnpm/action-setup@v4
         with:
           version: 10.11.0
+      - name: Install dependencies
+        run: pnpm install
+      - name: Install coverage provider
+        run: pnpm --filter @goyais/desktop add -D @vitest/coverage-v8 --no-frozen-lockfile
+      - name: Desktop lint
+        run: pnpm --filter @goyais/desktop lint
+      - name: Desktop test
+        run: pnpm --filter @goyais/desktop test
+      - name: Desktop strict test
+        run: pnpm --filter @goyais/desktop test:strict
+      - name: Desktop token gate
+        run: pnpm --filter @goyais/desktop check:tokens
+      - name: Desktop size gate
+        run: pnpm --filter @goyais/desktop check:size
+      - name: Desktop complexity gate
+        run: pnpm --filter @goyais/desktop check:complexity
+      - name: Desktop coverage gate
+        run: pnpm --filter @goyais/desktop coverage:gate
+
+  smoke-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: pnpm
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile=false
-      - name: Version alignment check
-        run: pnpm version:check
-      - name: Protocol generation check
-        run: pnpm protocol:generate
-      - name: Typecheck
-        run: pnpm typecheck
-      - name: Test
-        run: pnpm test
+        run: pnpm install
+      - name: Prepare worker dependencies
+        working-directory: services/worker
+        run: uv sync
+      - name: Run smoke check
+        run: make health
+      - name: Upload smoke artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-json
+          path: artifacts/smoke.json

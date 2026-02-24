@@ -1,0 +1,3082 @@
+openapi: 3.1.0
+info:
+  title: Goyais Contracts
+  version: 0.4.0
+servers:
+  - url: http://127.0.0.1:8787
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /v1/workspaces:
+    get:
+      summary: List workspaces
+      parameters:
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Workspace list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceListEnvelope'
+    post:
+      summary: Create remote workspace metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkspaceRequest'
+      responses:
+        '201':
+          description: Created workspace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workspace'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/remote-connections:
+    post:
+      summary: Create/resolve remote workspace connection and login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoteConnectionRequest'
+      responses:
+        '200':
+          description: Workspace connection and token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemoteConnectionResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/status:
+    get:
+      summary: Get workspace runtime status for top-right and bottom-right UI state
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+        - in: query
+          name: conversation_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workspace runtime status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceStatusResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/auth/login:
+    post:
+      summary: Login to workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/auth/refresh:
+    post:
+      summary: Refresh workspace session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Rotated access and refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/auth/logout:
+    post:
+      summary: Revoke current workspace session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+      responses:
+        '200':
+          description: Logout accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/me:
+    get:
+      summary: Current identity and capabilities
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/me/permissions:
+    get:
+      summary: Get permission snapshot for current user in current workspace
+      responses:
+        '200':
+          description: Permission snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionSnapshot'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/projects:
+    get:
+      summary: List projects
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Project list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+    post:
+      summary: Create project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '201':
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/projects/import:
+    post:
+      summary: Import project by directory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportProjectRequest'
+      responses:
+        '201':
+          description: Imported project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/projects/{project_id}:
+    delete:
+      summary: Delete project
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/projects/{project_id}/conversations:
+    get:
+      summary: List project conversations
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+    post:
+      summary: Create conversation in project
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+      responses:
+        '201':
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/projects/{project_id}/config:
+    get:
+      summary: Get project config
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+      responses:
+        '200':
+          description: Project config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectConfig'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    put:
+      summary: Update project config
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectConfig'
+      responses:
+        '200':
+          description: Updated project config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectConfig'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/projects/{project_id}/files:
+    get:
+      summary: List project files under project root
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+        - in: query
+          name: path
+          schema:
+            type: string
+        - in: query
+          name: depth
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 6
+      responses:
+        '200':
+          description: Project file entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectFileEntry'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/projects/{project_id}/files/content:
+    get:
+      summary: Read project file content
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+        - in: query
+          name: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Project file content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectFileContentResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations:
+    get:
+      summary: List conversations
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+        - in: query
+          name: project_id
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+
+  /v1/conversations/{conversation_id}:
+    get:
+      summary: Get conversation detail
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+      responses:
+        '200':
+          description: Conversation detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetailResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    patch:
+      summary: Update conversation metadata
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateConversationRequest'
+      responses:
+        '200':
+          description: Renamed conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    delete:
+      summary: Delete conversation
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations/{conversation_id}/messages:
+    post:
+      summary: Enqueue conversation message and create execution
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionCreateRequest'
+      responses:
+        '201':
+          description: Created execution
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionCreateResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations/{conversation_id}/events:
+    get:
+      summary: Stream execution events for conversation (SSE)
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+        - in: query
+          name: last_event_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations/{conversation_id}/stop:
+    post:
+      summary: Stop active execution and continue queued items
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+      responses:
+        '200':
+          description: Stop accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations/{conversation_id}/rollback:
+    post:
+      summary: Rollback conversation to snapshot point
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RollbackRequest'
+      responses:
+        '200':
+          description: Rollback applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations/{conversation_id}/export:
+    get:
+      summary: Export conversation as markdown
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+        - in: query
+          name: format
+          required: true
+          schema:
+            type: string
+            enum: [markdown]
+      responses:
+        '200':
+          description: Markdown content
+          content:
+            text/markdown:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/executions:
+    get:
+      summary: List executions
+      parameters:
+        - in: query
+          name: conversation_id
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Execution list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+
+  /v1/executions/{execution_id}/diff:
+    get:
+      summary: Get execution diff summary
+      parameters:
+        - $ref: '#/components/parameters/ExecutionIdParam'
+      responses:
+        '200':
+          description: Diff list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DiffItem'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/executions/{execution_id}/patch:
+    get:
+      summary: Export execution patch
+      parameters:
+        - $ref: '#/components/parameters/ExecutionIdParam'
+      responses:
+        '200':
+          description: Patch content
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/executions/{execution_id}/{action}:
+    post:
+      summary: Commit or discard execution result
+      parameters:
+        - $ref: '#/components/parameters/ExecutionIdParam'
+        - in: path
+          name: action
+          required: true
+          schema:
+            type: string
+            enum: [commit, discard]
+      responses:
+        '200':
+          description: Action applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/resources:
+    get:
+      summary: List resources
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Resource list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+
+  /v1/workspaces/{workspace_id}/resource-imports:
+    post:
+      summary: Import resource into workspace
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceImportRequest'
+      responses:
+        '201':
+          description: Imported resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resource'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/share-requests:
+    post:
+      summary: Create share request
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareRequestCreateRequest'
+      responses:
+        '201':
+          description: Share request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareRequest'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/share-requests/{request_id}/{action}:
+    post:
+      summary: Approve/reject/revoke share request
+      parameters:
+        - in: path
+          name: request_id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: action
+          required: true
+          schema:
+            type: string
+            enum: [approve, reject, revoke]
+      responses:
+        '200':
+          description: Share action applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/model-catalog:
+    get:
+      summary: List model catalog
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      responses:
+        '200':
+          description: Model catalog payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelCatalogResponse'
+    post:
+      summary: Reload model catalog from models.json
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelCatalogReloadRequest'
+      responses:
+        '200':
+          description: Updated model catalog payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelCatalogResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/catalog-root:
+    get:
+      summary: Get workspace model catalog root
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      responses:
+        '200':
+          description: Catalog root
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRootResponse'
+    put:
+      summary: Update workspace model catalog root
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogRootUpdateRequest'
+      responses:
+        '200':
+          description: Catalog root updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogRootResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/resource-configs:
+    get:
+      summary: List workspace resource configs
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [model, rule, skill, mcp]
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: enabled
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Resource config list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+    post:
+      summary: Create workspace resource config
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceConfigCreateRequest'
+      responses:
+        '201':
+          description: Created resource config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceConfig'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/resource-configs/{config_id}:
+    patch:
+      summary: Update workspace resource config
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+        - in: path
+          name: config_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceConfigPatchRequest'
+      responses:
+        '200':
+          description: Updated resource config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceConfig'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    delete:
+      summary: Delete workspace resource config
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+        - in: path
+          name: config_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/resource-configs/{config_id}/test:
+    post:
+      summary: Test model resource config
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+        - in: path
+          name: config_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Model test result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelTestResult'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect:
+    post:
+      summary: Connect MCP resource config
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+        - in: path
+          name: config_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: MCP connect result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpConnectResult'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/mcps/export:
+    get:
+      summary: Export workspace MCP configs as masked JSON
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      responses:
+        '200':
+          description: MCP export payload
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/workspaces/{workspace_id}/project-configs:
+    get:
+      summary: List project configs for workspace
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      responses:
+        '200':
+          description: Workspace project config list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkspaceProjectConfigItem'
+
+  /v1/workspaces/{workspace_id}/agent-config:
+    get:
+      summary: Get workspace agent config
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      responses:
+        '200':
+          description: Workspace agent config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceAgentConfig'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    put:
+      summary: Update workspace agent config
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkspaceAgentConfig'
+      responses:
+        '200':
+          description: Updated workspace agent config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceAgentConfig'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/ping:
+    get:
+      summary: Admin capability ping
+      responses:
+        '200':
+          description: Admin access granted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/users:
+    get:
+      summary: List admin users
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Admin user list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+    post:
+      summary: Create or update admin user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUser'
+      responses:
+        '200':
+          description: Updated existing user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '201':
+          description: Created user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/users/{user_id}:
+    patch:
+      summary: Update admin user role/enabled
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  $ref: '#/components/schemas/Role'
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    delete:
+      summary: Delete admin user
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/roles:
+    get:
+      summary: List admin roles
+      responses:
+        '200':
+          description: Role list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminRole'
+    post:
+      summary: Create or update admin role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRole'
+      responses:
+        '200':
+          description: Updated role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminRole'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/roles/{role_key}:
+    patch:
+      summary: Toggle admin role enabled
+      parameters:
+        - in: path
+          name: role_key
+          required: true
+          schema:
+            $ref: '#/components/schemas/Role'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminRole'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    delete:
+      summary: Delete admin role
+      parameters:
+        - in: path
+          name: role_key
+          required: true
+          schema:
+            $ref: '#/components/schemas/Role'
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/permissions:
+    get:
+      summary: List permission definitions
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Permission definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminPermission'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+    post:
+      summary: Create or update permission definition
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminPermission'
+      responses:
+        '200':
+          description: Upserted permission definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPermission'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/permissions/{permission_key}:
+    patch:
+      summary: Update permission definition
+      parameters:
+        - in: path
+          name: permission_key
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminPermissionPatchRequest'
+      responses:
+        '200':
+          description: Updated permission definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPermission'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    delete:
+      summary: Delete permission definition
+      parameters:
+        - in: path
+          name: permission_key
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/menus:
+    get:
+      summary: List menu definitions
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Menu definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminMenu'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+    post:
+      summary: Create or update menu definition
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminMenu'
+      responses:
+        '200':
+          description: Upserted menu definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMenu'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/menus/{menu_key}:
+    patch:
+      summary: Update menu definition
+      parameters:
+        - in: path
+          name: menu_key
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminMenuPatchRequest'
+      responses:
+        '200':
+          description: Updated menu definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMenu'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    delete:
+      summary: Delete menu definition
+      parameters:
+        - in: path
+          name: menu_key
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/menu-visibility/{role_key}:
+    get:
+      summary: Get role menu visibility mapping
+      parameters:
+        - in: path
+          name: role_key
+          required: true
+          schema:
+            $ref: '#/components/schemas/Role'
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Menu visibility mapping
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleMenuVisibility'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+    put:
+      summary: Update role menu visibility mapping
+      parameters:
+        - in: path
+          name: role_key
+          required: true
+          schema:
+            $ref: '#/components/schemas/Role'
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleMenuVisibility'
+      responses:
+        '200':
+          description: Updated menu visibility mapping
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleMenuVisibility'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/abac-policies:
+    get:
+      summary: List ABAC policies
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ABAC policy list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ABACPolicy'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+    post:
+      summary: Create or update ABAC policy
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ABACPolicy'
+      responses:
+        '200':
+          description: Upserted ABAC policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicy'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '403':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/abac-policies/{policy_id}:
+    patch:
+      summary: Update ABAC policy
+      parameters:
+        - in: path
+          name: policy_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ABACPolicyPatchRequest'
+      responses:
+        '200':
+          description: Updated ABAC policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicy'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+    delete:
+      summary: Delete ABAC policy
+      parameters:
+        - in: path
+          name: policy_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/admin/audit:
+    get:
+      summary: List admin audit events
+      parameters:
+        - in: query
+          name: workspace_id
+          schema:
+            type: string
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Audit list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEnvelope'
+
+  /internal/workers/register:
+    post:
+      summary: Worker register endpoint
+      parameters:
+        - $ref: '#/components/parameters/InternalTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerRegisterRequest'
+      responses:
+        '202':
+          description: Worker registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /internal/workers/{worker_id}/heartbeat:
+    post:
+      summary: Worker heartbeat endpoint
+      parameters:
+        - in: path
+          name: worker_id
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/InternalTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerHeartbeatRequest'
+      responses:
+        '202':
+          description: Heartbeat accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /internal/executions/claim:
+    post:
+      summary: Worker claims one pending execution with lease
+      parameters:
+        - $ref: '#/components/parameters/InternalTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionClaimRequest'
+      responses:
+        '200':
+          description: Claim result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionClaimResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /internal/executions/{execution_id}/events/batch:
+    post:
+      summary: Worker uploads execution events in batch
+      parameters:
+        - $ref: '#/components/parameters/ExecutionIdParam'
+        - $ref: '#/components/parameters/InternalTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionEventBatchRequest'
+      responses:
+        '202':
+          description: Events accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accepted, events]
+                properties:
+                  accepted:
+                    type: boolean
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExecutionEvent'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /internal/executions/{execution_id}/control:
+    get:
+      summary: Worker long-polls control commands for an execution
+      parameters:
+        - $ref: '#/components/parameters/ExecutionIdParam'
+        - $ref: '#/components/parameters/InternalTokenHeader'
+        - in: query
+          name: after_seq
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: wait_ms
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '200':
+          description: Control command list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionControlPollResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+components:
+  parameters:
+    CursorParam:
+      in: query
+      name: cursor
+      schema:
+        type: string
+      description: Opaque cursor; current implementation uses numeric offsets.
+    LimitParam:
+      in: query
+      name: limit
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Page size for cursor-based pagination.
+    InternalTokenHeader:
+      in: header
+      name: X-Internal-Token
+      required: true
+      schema:
+        type: string
+      description: Shared internal token used by Hub when invoking Worker internal endpoints.
+    WorkspaceIdParam:
+      in: path
+      name: workspace_id
+      required: true
+      schema:
+        type: string
+    ProjectIdParam:
+      in: path
+      name: project_id
+      required: true
+      schema:
+        type: string
+    ConversationIdParam:
+      in: path
+      name: conversation_id
+      required: true
+      schema:
+        type: string
+    ExecutionIdParam:
+      in: path
+      name: execution_id
+      required: true
+      schema:
+        type: string
+
+  responses:
+    StandardErrorResponse:
+      description: Standard API error body
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StandardError'
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [ok, version]
+      properties:
+        ok:
+          type: boolean
+        version:
+          type: string
+          const: '0.4.0'
+
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+          const: true
+
+    Role:
+      type: string
+      enum: [viewer, developer, approver, admin]
+
+    PermissionVisibility:
+      type: string
+      enum: [hidden, disabled, readonly, enabled]
+
+    Workspace:
+      type: object
+      required:
+        - id
+        - name
+        - mode
+        - hub_url
+        - is_default_local
+        - created_at
+        - login_disabled
+        - auth_mode
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        mode:
+          type: string
+          enum: [local, remote]
+        hub_url:
+          type: [string, 'null']
+        is_default_local:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        login_disabled:
+          type: boolean
+        auth_mode:
+          type: string
+          enum: [disabled, password_or_token, token_only]
+
+    WorkspaceConnection:
+      type: object
+      required:
+        - workspace_id
+        - hub_url
+        - username
+        - connection_status
+        - connected_at
+      properties:
+        workspace_id:
+          type: string
+        hub_url:
+          type: string
+        username:
+          type: string
+        connection_status:
+          type: string
+          enum: [connected, reconnecting, disconnected]
+        connected_at:
+          type: string
+          format: date-time
+        access_token:
+          type: string
+
+    ConversationStatus:
+      type: string
+      enum: [running, queued, stopped, done, error]
+
+    RemoteConnectionResponse:
+      type: object
+      required: [workspace, connection]
+      properties:
+        workspace:
+          $ref: '#/components/schemas/Workspace'
+        connection:
+          $ref: '#/components/schemas/WorkspaceConnection'
+        access_token:
+          type: string
+
+    WorkspaceStatusResponse:
+      type: object
+      required:
+        - workspace_id
+        - conversation_status
+        - hub_url
+        - connection_status
+        - user_display_name
+        - updated_at
+      properties:
+        workspace_id:
+          type: string
+        conversation_id:
+          type: string
+        conversation_status:
+          $ref: '#/components/schemas/ConversationStatus'
+        hub_url:
+          type: string
+        connection_status:
+          type: string
+          enum: [connected, reconnecting, disconnected]
+        user_display_name:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    ListEnvelope:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: {}
+        next_cursor:
+          type: [string, 'null']
+
+    WorkspaceListEnvelope:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Workspace'
+        next_cursor:
+          type: [string, 'null']
+
+    CreateWorkspaceRequest:
+      type: object
+      required: [hub_url]
+      properties:
+        name:
+          type: string
+        hub_url:
+          type: string
+        login_disabled:
+          type: boolean
+          default: false
+        auth_mode:
+          type: string
+          enum: [password_or_token, token_only]
+          default: password_or_token
+
+    RemoteConnectionRequest:
+      type: object
+      required: [hub_url, username, password]
+      properties:
+        workspace_id:
+          type: string
+        name:
+          type: string
+        hub_url:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+        token:
+          type: string
+
+    LoginRequest:
+      type: object
+      required: [workspace_id]
+      properties:
+        workspace_id:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+        token:
+          type: string
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    LogoutRequest:
+      type: object
+      properties:
+        access_token:
+          type: string
+
+    LoginResponse:
+      type: object
+      required: [access_token, refresh_token, token_type]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          const: bearer
+        expires_in:
+          type: integer
+
+    Capabilities:
+      type: object
+      required: [admin_console, resource_write, execution_control]
+      properties:
+        admin_console:
+          type: boolean
+        resource_write:
+          type: boolean
+        execution_control:
+          type: boolean
+
+    Me:
+      type: object
+      required: [user_id, display_name, workspace_id, role, capabilities]
+      properties:
+        user_id:
+          type: string
+        display_name:
+          type: string
+        workspace_id:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        capabilities:
+          $ref: '#/components/schemas/Capabilities'
+
+    PermissionSnapshot:
+      type: object
+      required: [role, permissions, menu_visibility, action_visibility, policy_version, generated_at]
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
+        permissions:
+          type: array
+          items:
+            type: string
+        menu_visibility:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PermissionVisibility'
+        action_visibility:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PermissionVisibility'
+        policy_version:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
+
+    StandardError:
+      type: object
+      required: [code, message, details, trace_id]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        trace_id:
+          type: string
+
+    Project:
+      type: object
+      required: [id, workspace_id, name, repo_path, is_git, current_revision, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        name:
+          type: string
+        repo_path:
+          type: string
+        is_git:
+          type: boolean
+        default_model_id:
+          type: string
+        default_mode:
+          type: string
+          enum: [agent, plan]
+        current_revision:
+          type: integer
+          format: int64
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateProjectRequest:
+      type: object
+      required: [workspace_id, name, repo_path]
+      properties:
+        workspace_id:
+          type: string
+        name:
+          type: string
+        repo_path:
+          type: string
+        is_git:
+          type: boolean
+
+    ImportProjectRequest:
+      type: object
+      required: [workspace_id, directory_path]
+      properties:
+        workspace_id:
+          type: string
+        directory_path:
+          type: string
+
+    ProjectConfig:
+      type: object
+      required: [project_id, model_ids, rule_ids, skill_ids, mcp_ids, updated_at]
+      properties:
+        project_id:
+          type: string
+        model_ids:
+          type: array
+          items:
+            type: string
+        default_model_id:
+          type: [string, 'null']
+        rule_ids:
+          type: array
+          items:
+            type: string
+        skill_ids:
+          type: array
+          items:
+            type: string
+        mcp_ids:
+          type: array
+          items:
+            type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    WorkspaceProjectConfigItem:
+      type: object
+      required: [project_id, project_name, config]
+      properties:
+        project_id:
+          type: string
+        project_name:
+          type: string
+        config:
+          $ref: '#/components/schemas/ProjectConfig'
+
+    WorkspaceAgentExecutionConfig:
+      type: object
+      required: [max_model_turns]
+      properties:
+        max_model_turns:
+          type: integer
+          minimum: 4
+          maximum: 64
+
+    WorkspaceAgentDisplayConfig:
+      type: object
+      required: [show_process_trace, trace_detail_level]
+      properties:
+        show_process_trace:
+          type: boolean
+        trace_detail_level:
+          type: string
+          enum: [basic, verbose]
+
+    WorkspaceAgentConfig:
+      type: object
+      required: [workspace_id, execution, display, updated_at]
+      properties:
+        workspace_id:
+          type: string
+        execution:
+          $ref: '#/components/schemas/WorkspaceAgentExecutionConfig'
+        display:
+          $ref: '#/components/schemas/WorkspaceAgentDisplayConfig'
+        updated_at:
+          type: string
+          format: date-time
+
+    Conversation:
+      type: object
+      required:
+        - id
+        - workspace_id
+        - project_id
+        - name
+        - queue_state
+        - default_mode
+        - model_id
+        - base_revision
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        project_id:
+          type: string
+        name:
+          type: string
+        queue_state:
+          type: string
+          enum: [idle, running, queued]
+        default_mode:
+          type: string
+          enum: [agent, plan]
+        model_id:
+          type: string
+        base_revision:
+          type: integer
+          format: int64
+        active_execution_id:
+          type: [string, 'null']
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ConversationMessage:
+      type: object
+      required: [id, conversation_id, role, content, created_at]
+      properties:
+        id:
+          type: string
+        conversation_id:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+        queue_index:
+          type: integer
+        can_rollback:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    ConversationInspector:
+      type: object
+      required: [tab]
+      properties:
+        tab:
+          type: string
+
+    ConversationSnapshot:
+      type: object
+      required:
+        - id
+        - conversation_id
+        - rollback_point_message_id
+        - queue_state
+        - inspector_state
+        - messages
+        - execution_ids
+        - created_at
+      properties:
+        id:
+          type: string
+        conversation_id:
+          type: string
+        rollback_point_message_id:
+          type: string
+        queue_state:
+          type: string
+          enum: [idle, running, queued]
+        worktree_ref:
+          type: [string, 'null']
+        inspector_state:
+          $ref: '#/components/schemas/ConversationInspector'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationMessage'
+        execution_ids:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ConversationDetailResponse:
+      type: object
+      required: [conversation, messages, executions, snapshots]
+      properties:
+        conversation:
+          $ref: '#/components/schemas/Conversation'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationMessage'
+        executions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Execution'
+        snapshots:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationSnapshot'
+
+    CreateConversationRequest:
+      type: object
+      required: [workspace_id, name]
+      properties:
+        workspace_id:
+          type: string
+        name:
+          type: string
+
+    UpdateConversationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        mode:
+          type: string
+          enum: [agent, plan]
+        model_id:
+          type: string
+
+    ModelSnapshot:
+      type: object
+      required: [model_id]
+      properties:
+        config_id:
+          type: string
+        vendor:
+          type: string
+        model_id:
+          type: string
+        base_url:
+          type: string
+        timeout_ms:
+          type: integer
+        params:
+          type: object
+          additionalProperties: true
+
+    ExecutionAgentConfigSnapshot:
+      type: object
+      required: [max_model_turns, show_process_trace, trace_detail_level]
+      properties:
+        max_model_turns:
+          type: integer
+          minimum: 4
+          maximum: 64
+        show_process_trace:
+          type: boolean
+        trace_detail_level:
+          type: string
+          enum: [basic, verbose]
+
+    Execution:
+      type: object
+      required:
+        - id
+        - workspace_id
+        - conversation_id
+        - message_id
+        - state
+        - mode
+        - model_id
+        - mode_snapshot
+        - model_snapshot
+        - tokens_in
+        - tokens_out
+        - project_revision_snapshot
+        - queue_index
+        - trace_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        conversation_id:
+          type: string
+        message_id:
+          type: string
+        state:
+          type: string
+          enum: [queued, pending, executing, completed, failed, cancelled]
+        mode:
+          type: string
+          enum: [agent, plan]
+        model_id:
+          type: string
+        mode_snapshot:
+          type: string
+          enum: [agent, plan]
+        model_snapshot:
+          $ref: '#/components/schemas/ModelSnapshot'
+        agent_config_snapshot:
+          $ref: '#/components/schemas/ExecutionAgentConfigSnapshot'
+        tokens_in:
+          type: integer
+          minimum: 0
+        tokens_out:
+          type: integer
+          minimum: 0
+        project_revision_snapshot:
+          type: integer
+          format: int64
+        queue_index:
+          type: integer
+        trace_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ExecutionCreateRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+        mode:
+          type: string
+          enum: [agent, plan]
+        model_id:
+          type: string
+
+    ExecutionCreateResponse:
+      type: object
+      required: [execution, queue_state, queue_index]
+      properties:
+        execution:
+          $ref: '#/components/schemas/Execution'
+        queue_state:
+          type: string
+          enum: [idle, running, queued]
+        queue_index:
+          type: integer
+
+    RollbackRequest:
+      type: object
+      required: [message_id]
+      properties:
+        message_id:
+          type: string
+
+    DiffItem:
+      type: object
+      required: [id, path, change_type, summary]
+      properties:
+        id:
+          type: string
+        path:
+          type: string
+        change_type:
+          type: string
+          enum: [added, modified, deleted]
+        summary:
+          type: string
+
+    ProjectFileEntry:
+      type: object
+      required: [path, type]
+      properties:
+        path:
+          type: string
+        type:
+          type: string
+          enum: [file, directory]
+        size:
+          type: integer
+          format: int64
+        mtime:
+          type: string
+          format: date-time
+
+    ProjectFileContentResponse:
+      type: object
+      required: [path, content]
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+
+    Resource:
+      type: object
+      required:
+        - id
+        - workspace_id
+        - type
+        - name
+        - source
+        - scope
+        - share_status
+        - owner_user_id
+        - enabled
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        type:
+          type: string
+          enum: [model, rule, skill, mcp]
+        name:
+          type: string
+        source:
+          type: string
+        scope:
+          type: string
+        share_status:
+          type: string
+          enum: [pending, approved, denied, revoked]
+        owner_user_id:
+          type: string
+        enabled:
+          type: boolean
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ResourceImportRequest:
+      type: object
+      required: [resource_type, source_id]
+      properties:
+        resource_type:
+          type: string
+          enum: [model, rule, skill, mcp]
+        source_id:
+          type: string
+
+    ShareRequestCreateRequest:
+      type: object
+      required: [resource_id]
+      properties:
+        resource_id:
+          type: string
+
+    ShareRequest:
+      type: object
+      required: [id, workspace_id, resource_id, status, requester_user_id, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        resource_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, denied, revoked]
+        requester_user_id:
+          type: string
+        approver_user_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ModelCatalogItem:
+      type: object
+      required: [workspace_id, vendor, model_id, enabled, status, synced_at]
+      properties:
+        workspace_id:
+          type: string
+        vendor:
+          type: string
+          enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+        model_id:
+          type: string
+        enabled:
+          type: boolean
+        status:
+          type: string
+          enum: [active, deprecated, preview]
+        synced_at:
+          type: string
+          format: date-time
+
+    ModelCatalogSyncRequest:
+      type: object
+      properties:
+        vendors:
+          type: array
+          items:
+            type: string
+            enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+
+    ModelCatalogModel:
+      type: object
+      required: [id, label, enabled]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        enabled:
+          type: boolean
+
+    ModelCatalogVendorAuth:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [none, http_bearer, api_key_header]
+        header:
+          type: string
+        scheme:
+          type: string
+        api_key_env:
+          type: string
+
+    ModelCatalogVendor:
+      type: object
+      required: [name, base_url, auth, models]
+      properties:
+        name:
+          type: string
+          enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+        homepage:
+          type: string
+        docs:
+          type: string
+        base_url:
+          type: string
+        base_urls:
+          type: object
+          additionalProperties:
+            type: string
+        auth:
+          $ref: '#/components/schemas/ModelCatalogVendorAuth'
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelCatalogModel'
+        notes:
+          type: array
+          items:
+            type: string
+
+    ModelCatalogResponse:
+      type: object
+      required: [workspace_id, revision, updated_at, source, vendors]
+      properties:
+        workspace_id:
+          type: string
+        revision:
+          type: integer
+          format: int64
+        updated_at:
+          type: string
+          format: date-time
+        source:
+          type: string
+        vendors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelCatalogVendor'
+
+    ModelCatalogReloadRequest:
+      type: object
+      properties:
+        source:
+          type: string
+          enum: [manual, page_open, scheduled]
+
+    CatalogRootUpdateRequest:
+      type: object
+      required: [catalog_root]
+      properties:
+        catalog_root:
+          type: string
+
+    CatalogRootResponse:
+      type: object
+      required: [workspace_id, catalog_root, updated_at]
+      properties:
+        workspace_id:
+          type: string
+        catalog_root:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    ModelSpec:
+      type: object
+      required: [vendor, model_id]
+      properties:
+        vendor:
+          type: string
+          enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+        model_id:
+          type: string
+        base_url:
+          type: string
+        base_url_key:
+          type: string
+        api_key:
+          type: string
+        api_key_masked:
+          type: string
+        timeout_ms:
+          type: integer
+        params:
+          type: object
+          additionalProperties: true
+
+    RuleSpec:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+
+    SkillSpec:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+
+    McpSpec:
+      type: object
+      required: [transport]
+      properties:
+        transport:
+          type: string
+          enum: [http_sse, stdio]
+        endpoint:
+          type: string
+        command:
+          type: string
+        env:
+          type: object
+          additionalProperties:
+            type: string
+        status:
+          type: string
+        tools:
+          type: array
+          items:
+            type: string
+        last_error:
+          type: string
+        last_connected_at:
+          type: string
+          format: date-time
+
+    ResourceConfig:
+      type: object
+      required: [id, workspace_id, type, enabled, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        type:
+          type: string
+          enum: [model, rule, skill, mcp]
+        name:
+          type: string
+        enabled:
+          type: boolean
+        model:
+          $ref: '#/components/schemas/ModelSpec'
+        rule:
+          $ref: '#/components/schemas/RuleSpec'
+        skill:
+          $ref: '#/components/schemas/SkillSpec'
+        mcp:
+          $ref: '#/components/schemas/McpSpec'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ResourceConfigCreateRequest:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [model, rule, skill, mcp]
+        name:
+          type: string
+        enabled:
+          type: boolean
+        model:
+          $ref: '#/components/schemas/ModelSpec'
+        rule:
+          $ref: '#/components/schemas/RuleSpec'
+        skill:
+          $ref: '#/components/schemas/SkillSpec'
+        mcp:
+          $ref: '#/components/schemas/McpSpec'
+
+    ResourceConfigPatchRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        enabled:
+          type: boolean
+        model:
+          $ref: '#/components/schemas/ModelSpec'
+        rule:
+          $ref: '#/components/schemas/RuleSpec'
+        skill:
+          $ref: '#/components/schemas/SkillSpec'
+        mcp:
+          $ref: '#/components/schemas/McpSpec'
+
+    ModelTestResult:
+      type: object
+      required: [config_id, status, latency_ms, message, tested_at]
+      properties:
+        config_id:
+          type: string
+        status:
+          type: string
+          enum: [success, failed]
+        latency_ms:
+          type: integer
+          format: int64
+        error_code:
+          type: string
+        message:
+          type: string
+        tested_at:
+          type: string
+          format: date-time
+
+    McpConnectResult:
+      type: object
+      required: [config_id, status, tools, message, connected_at]
+      properties:
+        config_id:
+          type: string
+        status:
+          type: string
+          enum: [connected, failed]
+        tools:
+          type: array
+          items:
+            type: string
+        error_code:
+          type: string
+        message:
+          type: string
+        connected_at:
+          type: string
+          format: date-time
+
+    AdminUser:
+      type: object
+      required: [workspace_id, username]
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        username:
+          type: string
+        display_name:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    AdminRole:
+      type: object
+      required: [key, name, permissions, enabled]
+      properties:
+        key:
+          $ref: '#/components/schemas/Role'
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+
+    AdminAuditEvent:
+      type: object
+      required: [id, actor, action, resource, result, trace_id, timestamp]
+      properties:
+        id:
+          type: string
+        actor:
+          type: string
+        action:
+          type: string
+        resource:
+          type: string
+        result:
+          type: string
+        trace_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    AdminPermission:
+      type: object
+      required: [key, label, enabled]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        enabled:
+          type: boolean
+
+    AdminPermissionPatchRequest:
+      type: object
+      properties:
+        label:
+          type: string
+        enabled:
+          type: boolean
+
+    AdminMenu:
+      type: object
+      required: [key, label, enabled]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        enabled:
+          type: boolean
+
+    AdminMenuPatchRequest:
+      type: object
+      properties:
+        label:
+          type: string
+        enabled:
+          type: boolean
+
+    RoleMenuVisibility:
+      type: object
+      required: [role_key, items]
+      properties:
+        role_key:
+          $ref: '#/components/schemas/Role'
+        items:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PermissionVisibility'
+
+    ABACEffect:
+      type: string
+      enum: [allow, deny]
+
+    ABACExpression:
+      type: object
+      additionalProperties: true
+
+    ABACPolicy:
+      type: object
+      required:
+        - id
+        - workspace_id
+        - name
+        - effect
+        - priority
+        - enabled
+        - subject_expr
+        - resource_expr
+        - action_expr
+        - context_expr
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        name:
+          type: string
+        effect:
+          $ref: '#/components/schemas/ABACEffect'
+        priority:
+          type: integer
+        enabled:
+          type: boolean
+        subject_expr:
+          $ref: '#/components/schemas/ABACExpression'
+        resource_expr:
+          $ref: '#/components/schemas/ABACExpression'
+        action_expr:
+          $ref: '#/components/schemas/ABACExpression'
+        context_expr:
+          $ref: '#/components/schemas/ABACExpression'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ABACPolicyPatchRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        effect:
+          $ref: '#/components/schemas/ABACEffect'
+        priority:
+          type: integer
+        enabled:
+          type: boolean
+        subject_expr:
+          $ref: '#/components/schemas/ABACExpression'
+        resource_expr:
+          $ref: '#/components/schemas/ABACExpression'
+        action_expr:
+          $ref: '#/components/schemas/ABACExpression'
+        context_expr:
+          $ref: '#/components/schemas/ABACExpression'
+
+    WorkerRegisterRequest:
+      type: object
+      required: [worker_id]
+      properties:
+        worker_id:
+          type: string
+        capabilities:
+          type: object
+          additionalProperties: true
+
+    WorkerHeartbeatRequest:
+      type: object
+      properties:
+        status:
+          type: string
+
+    ExecutionLease:
+      type: object
+      required: [execution_id, worker_id, lease_version, lease_expires_at, run_attempt]
+      properties:
+        execution_id:
+          type: string
+        worker_id:
+          type: string
+        lease_version:
+          type: integer
+        lease_expires_at:
+          type: string
+          format: date-time
+        run_attempt:
+          type: integer
+
+    ExecutionClaimRequest:
+      type: object
+      required: [worker_id]
+      properties:
+        worker_id:
+          type: string
+        lease_seconds:
+          type: integer
+
+    ExecutionClaimEnvelope:
+      type: object
+      required: [execution, lease, content, project_is_git]
+      properties:
+        execution:
+          $ref: '#/components/schemas/Execution'
+        lease:
+          $ref: '#/components/schemas/ExecutionLease'
+        content:
+          type: string
+        project_path:
+          type: string
+        project_is_git:
+          type: boolean
+
+    ExecutionClaimResponse:
+      type: object
+      required: [claimed]
+      properties:
+        claimed:
+          type: boolean
+        execution:
+          $ref: '#/components/schemas/ExecutionClaimEnvelope'
+
+    ExecutionEvent:
+      type: object
+      required: [event_id, execution_id, conversation_id, type, sequence, queue_index]
+      properties:
+        event_id:
+          type: string
+        execution_id:
+          type: string
+        conversation_id:
+          type: string
+        trace_id:
+          type: string
+        type:
+          type: string
+        sequence:
+          type: integer
+        queue_index:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true
+
+    ExecutionEventBatchRequest:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutionEvent'
+
+    ExecutionControlCommand:
+      type: object
+      required: [id, execution_id, type, payload, seq, created_at]
+      properties:
+        id:
+          type: string
+        execution_id:
+          type: string
+        type:
+          type: string
+          enum: [stop]
+        payload:
+          type: object
+          additionalProperties: true
+        seq:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    ExecutionControlPollResponse:
+      type: object
+      required: [commands, last_seq]
+      properties:
+        commands:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutionControlCommand'
+        last_seq:
+          type: integer

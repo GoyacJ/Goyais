@@ -1,9 +1,0 @@
-{
-  "$id": "goyais.protocol.v1.run-create.response",
-  "type": "object",
-  "required": ["run_id"],
-  "properties": {
-    "run_id": { "type": "string", "minLength": 1 }
-  },
-  "additionalProperties": false
-}

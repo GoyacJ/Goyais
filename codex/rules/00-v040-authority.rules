@@ -1,0 +1,29 @@
+---
+description: 强制使用 Goyais v0.4.0 权威文档范围与优先级。
+alwaysApply: true
+---
+
+# v0.4.0 权威规则
+
+所有实现决策必须基于：
+
+- `/Users/goya/Repo/Git/Goyais/docs/v_0_4_0/PRD.md`
+- `/Users/goya/Repo/Git/Goyais/docs/v_0_4_0/TECH_ARCH.md`
+- `/Users/goya/Repo/Git/Goyais/docs/v_0_4_0/IMPLEMENTATION_PLAN.md`
+- `/Users/goya/Repo/Git/Goyais/docs/v_0_4_0/DEVELOPMENT_STANDARDS.md`
+
+范围限制：
+
+- 仅将 `/Users/goya/Repo/Git/Goyais/docs/v_0_4_0/**` 视为实现权威来源。
+- v0.1/v0.2/v0.3 文档不可作为实现依据。
+
+冲突处理：
+
+1. 先按 PRD 业务语义裁决。
+2. 再对齐架构、计划、规范文档。
+3. 完成前必须显式给出跨文档同步项。
+4. 同步矩阵若包含 `missing`，不得宣称完成。
+
+对话语言：
+
+- 与用户交流时默认且优先使用中文。

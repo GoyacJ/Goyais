@@ -1,0 +1,5 @@
+multi_agent:
+  max_agents: 3
+  delegation_strategy: adaptive
+  require_explicit_approval: false
+

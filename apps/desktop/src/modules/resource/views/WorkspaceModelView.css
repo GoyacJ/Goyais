@@ -1,0 +1,81 @@
+.model-list-only {
+  display: grid;
+  gap: var(--global-space-8);
+  align-content: start;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--global-space-6);
+  white-space: nowrap;
+}
+
+.actions :deep(.ui-button) {
+  color: var(--component-button-ghost-fg);
+}
+
+.enabled {
+  color: var(--semantic-success);
+}
+
+.disabled {
+  color: var(--semantic-danger);
+}
+
+.modal-title {
+  margin: 0;
+}
+
+.modal-grid {
+  display: grid;
+  gap: var(--global-space-8);
+}
+
+.modal-grid label {
+  display: grid;
+  gap: var(--global-space-4);
+  color: var(--semantic-text-muted);
+  font-size: var(--global-font-size-12);
+}
+
+.modal-grid .full {
+  grid-column: 1 / -1;
+}
+
+.native-input,
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--global-space-8);
+}
+
+.native-input {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-8);
+  background: var(--semantic-bg);
+  color: var(--semantic-text);
+  padding: var(--global-space-8);
+}
+
+.hint {
+  color: var(--semantic-text-subtle);
+}
+
+.delete-confirm-message {
+  margin: 0;
+  color: var(--semantic-text-muted);
+}
+
+:deep(.delete-modal .modal) {
+  width: min(420px, 88vw);
+  padding: var(--global-space-12);
+  gap: var(--global-space-10);
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: var(--global-space-6);
+}

@@ -1,0 +1,52 @@
+.enabled {
+  color: var(--semantic-success);
+}
+
+.disabled {
+  color: var(--semantic-danger);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--global-space-6);
+  white-space: nowrap;
+}
+
+.actions :deep(.ui-button) {
+  color: var(--component-button-ghost-fg);
+}
+
+.modal-title {
+  margin: 0;
+}
+
+.modal-form {
+  display: grid;
+  gap: var(--global-space-8);
+}
+
+.modal-form label {
+  display: grid;
+  gap: var(--global-space-4);
+  color: var(--semantic-text-muted);
+  font-size: var(--global-font-size-12);
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: var(--global-space-6);
+}
+
+.modal-message {
+  margin: 0;
+  color: var(--semantic-danger);
+}
+
+.footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--global-space-8);
+}

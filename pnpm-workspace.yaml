@@ -1,5 +1,3 @@
 packages:
-  - apps/*
-  - packages/*
-  - server/*
-  - runtime/*
+  - "apps/*"
+  - "packages/*"

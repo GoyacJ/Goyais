@@ -9,153 +9,220 @@
 <h1 align="center">Goyais</h1>
 
 <p align="center">
-  开源、Hub-First、Session-Centric、本地优先的 AI 辅助编码桌面平台。
+  开源、Hub 权威控制、Conversation 中心化的 AI 桌面平台。
 </p>
 
 <p align="center">
-  <a href="./README.md">查看英文文档 (English README)</a>
+  <a href="./README.md">View English README</a>
 </p>
 
 <p align="center">
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
-  <a href="https://github.com/GoyacJ/Goyais/releases"><img alt="Version" src="https://img.shields.io/badge/version-0.2.0-0A7EA4"></a>
+  <a href="https://github.com/GoyacJ/Goyais/releases"><img alt="Version" src="https://img.shields.io/badge/version-0.4.0-0A7EA4"></a>
   <a href="https://github.com/GoyacJ/Goyais/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/GoyacJ/Goyais/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
 <p align="center">
-  <a href="#功能特性">功能特性</a> ·
+  <a href="#项目概览">项目概览</a> ·
   <a href="#系统架构">系统架构</a> ·
+  <a href="#界面截图">界面截图</a> ·
   <a href="#快速开始">快速开始</a> ·
+  <a href="#打包与发版">打包与发版</a> ·
   <a href="#文档索引">文档索引</a> ·
-  <a href="#参与贡献">参与贡献</a> ·
-  <a href="#安全披露">安全披露</a>
+  <a href="#参与贡献">参与贡献</a>
 </p>
 
 ---
 
 ## 项目概览
 
-Goyais 是一个面向安全与可控执行的 AI 编码桌面应用。
-系统由桌面端、Hub 控制面和 Runtime Worker 构成，统一管理执行状态、权限确认与审计事件。
+Goyais 是一个面向团队协作的开源 AI 桌面平台，目标是在“交付效率”和“运行治理”之间取得平衡。
+它不让 UI 直接控制执行引擎，而是坚持明确的控制平面：
+`Desktop -> Hub -> Worker`。
 
-当前稳定架构版本为 **v0.2.0**，核心设计为 **Hub-First** 与 **Session-Centric**：
-同一 Session 同时仅允许一个活动执行；高风险操作必须经过用户确认。
+这种架构让你获得原生桌面体验，同时把执行权威、策略校验和调度统一收敛到 Hub。
+产品对象模型固定为：
+`Workspace -> Project -> Conversation -> Execution`。
 
-Goyais 同时支持 **local_open** 本地模式与 **remote_auth** 远程服务器模式。
-在远程模式下，桌面端连接远程 Hub，通过工作区级访问控制进行隔离，Runtime Worker 可部署在集中式服务器环境。
+### 为什么是 Goyais
 
-## 功能特性
+- **桌面优先，而非纯浏览器形态**：以原生应用承载日常开发与协作流程。
+- **Hub 权威执行**：Desktop 不绕过 Hub 发起权威控制动作。
+- **Conversation 中心运行时**：多 Conversation 可并行；单 Conversation 严格 FIFO，且同一时刻仅一个活动执行。
+- **工作区级环境隔离**：支持不同工作区使用不同项目上下文、资源配置与执行环境。
+- **可治理的远程模式**：远程工作区使用显式连接信息（`hub_url`、`username`、`password`），并支持按权限动态渲染导航。
+- **团队 Hub 部署模式**：只需将 Hub 部署到服务器，即可让团队成员通过 Desktop 连接并使用同一工作区。
+- **完整权限能力**：Hub 支持完整的 RBAC + ABAC 权限与策略控制能力。
+- **共享资源治理**：支持 Rules、Skills、MCP 的集中共享与管理。
 
-- **Hub-First 控制面**：桌面端统一通过 Hub API 访问系统能力，Hub 是状态权威。
-- **本地 + 远程服务器模式**：同时支持本地优先开发与远程多工作区协作。
-- **工作区级隔离与 RBAC**：在 `remote_auth` 模式下执行工作区级路由与权限控制。
-- **Session-Centric 执行模型**：每个 Session 单活执行，冲突时返回明确状态。
-- **Plan 模式与 Agent 模式**：
-  - Plan 模式先产出计划，审批后执行。
-  - Agent 模式可自主执行，但高风险动作会被确认门禁拦截。
-- **Git Worktree 隔离执行**：每次任务在隔离工作树 `goyais-exec-<id>` 中运行。
-- **主流模型接入**：支持可配置模型端点与密钥，兼容 OpenAI/Anthropic 风格的 Provider 接入。
-- **Human-in-the-loop 安全机制**：`write_fs`、`exec`、`network`、`delete` 等能力默认需确认。
-- **Skills 与 MCP 扩展**：支持动态注入技能集与 MCP Connector。
-- **运行稳定性**：支持 SSE 事件流、看门狗超时回收与审计日志。
+### 当前代码库已落地能力
+
+- **三层技术栈**：
+  - Desktop：`Tauri + Vue + TypeScript`
+  - Hub：`Go`
+  - Worker：`Python + FastAPI`
+- **开箱即用本地模式**：Desktop 启动时自动拉起 Hub/Worker sidecar，执行 `/health` 健康检查，并把 sidecar 日志写入应用数据目录。
+- **执行生命周期能力**：支持消息提交、队列排队、停止执行、回滚接口、执行事件流、diff/patch 动作。
+- **Conversation 运行时能力**：支持 SSE 事件消费、事件幂等合并、快照结构，以及 Markdown 导出接口契约。
+- **工作区与资源能力面**：覆盖本地/远程工作区、模型/规则/技能/MCP 相关接口、项目配置与 Agent 配置接口。
+- **发布流水线能力**：支持 sidecar 集成打包、三平台构建，以及 Tag 触发的 GitHub Draft Release。
+
+### 当前状态说明
+
+仓库处于持续迭代与能力补齐阶段。
+核心运行时架构与发布链路已打通，但部分 API 分支仍会返回 `INTERNAL_NOT_IMPLEMENTED`，属于持续补齐中的实现项。
 
 ## 系统架构
 
 ```mermaid
 flowchart LR
-  UI[Desktop App\nTauri + React] -->|HTTP /v1/* + SSE| HUB[Hub Server\nGo]
-  HUB -->|Internal execution APIs| RUNTIME[Runtime Worker\nPython FastAPI + LangGraph]
-  HUB --> DB[(SQLite/Postgres)]
-  RUNTIME --> WT[Git Worktree Sandbox]
+  UI[Desktop App\nTauri + Vue] -->|HTTP /v1 + SSE| HUB[Hub\nGo]
+  HUB -->|/internal/*| WORKER[Worker\nPython FastAPI]
+  HUB --> DB[(SQLite)]
+  WORKER --> WT[Execution Runtime\nTools / Worktree]
 ```
 
-### 部署模式
+## 界面截图
 
-- **本地模式（`local_open`）**：桌面端 + 本地 Hub + 本地 Runtime Worker，适合单机开发。
-- **远程模式（`remote_auth`）**：桌面端连接远程 Hub，使用 Bearer 鉴权、工作区隔离与 RBAC。
+### 主界面
 
-### 核心模块
+<p align="center">
+  <img src="./docs/images/主页面.png" alt="主界面" width="85%" />
+</p>
 
-- `apps/desktop-tauri`：桌面应用与 UI。
-- `server/hub-server-go`：主要 Hub 控制面服务。
-- `runtime/python-agent`：任务执行 Worker。
-- `packages/protocol`：跨语言协议（JSON Schema + TS/Python 生成产物）。
+### 工作区与设置
 
-> 说明：`server/hub-server` 与 `server/sync-server` 当前保留用于兼容/测试，不是 v0.2.0 的主运行路径。
+<p align="center">
+  <img src="./docs/images/新增工作区.png" alt="新增工作区" width="32%" />
+  <img src="./docs/images/项目配置.png" alt="项目配置" width="32%" />
+  <img src="./docs/images/通用设置.png" alt="通用设置" width="32%" />
+</p>
+
+### 资源与策略配置
+
+<p align="center">
+  <img src="./docs/images/模型配置.png" alt="模型配置" width="32%" />
+  <img src="./docs/images/规则配置.png" alt="规则配置" width="32%" />
+  <img src="./docs/images/技能配置.png" alt="技能配置" width="32%" />
+</p>
+
+<p align="center">
+  <img src="./docs/images/Mcp配置.png" alt="MCP 配置" width="32%" />
+  <img src="./docs/images/主题.png" alt="主题设置" width="32%" />
+</p>
+
+## 仓库结构
+
+```text
+apps/desktop            # 桌面应用（Vue + Tauri）
+services/hub            # Hub 服务（Go）
+services/worker         # Worker 服务（Python）
+scripts/                # 开发/发版脚本
+docs/                   # 产品/架构/开发文档
+```
 
 ## 快速开始
 
 ### 环境要求
 
-- Node.js 22+
-- pnpm 10+
+- Node.js 22+（CI 使用 Node 24）
+- pnpm 10.11+
+- Go 1.24+
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/)
-- Go 1.24+
-- Rust stable（Tauri 构建所需）
+- Rust stable（Tauri）
 
-安装依赖：
+### 安装依赖
 
 ```bash
 pnpm install
-pnpm protocol:generate
 ```
 
-在 3 个终端分别启动：
-
-1. 启动 Hub（Go）：
+### 启动桌面端（推荐）
 
 ```bash
-PORT=8787 GOYAIS_AUTH_MODE=local_open GOYAIS_RUNTIME_SHARED_SECRET=dev-shared pnpm dev:hub
+pnpm run dev:desktop
 ```
 
-2. 启动 Runtime Worker（Python）：
+该命令会执行 `tauri dev`，并在本机缺失时自动准备 sidecar（`goyais-hub` / `goyais-worker`）。
+
+### 分体调试模式（可选）
 
 ```bash
-GOYAIS_RUNTIME_REQUIRE_HUB_AUTH=true GOYAIS_RUNTIME_SHARED_SECRET=dev-shared GOYAIS_HUB_BASE_URL=http://127.0.0.1:8787 pnpm dev:runtime
+make dev-hub
+make dev-worker
+make dev-web
 ```
 
-3. 启动桌面端：
+### 健康检查
 
 ```bash
-pnpm dev:desktop
+curl http://127.0.0.1:8787/health
+curl http://127.0.0.1:8788/health
 ```
 
-随后在桌面端创建 Session（Plan 或 Agent），执行任务并在 UI 中审阅 patch，再进行 commit/discard。
+### 日志位置
 
-### 远程服务器模式（概要）
-
-1. 在服务器环境部署 Hub 与 Runtime Worker 服务。
-2. 将 Hub 认证模式设置为 `GOYAIS_AUTH_MODE=remote_auth`。
-3. 桌面端连接远程工作区，按工作区级访问控制进行协作。
-
-## 仓库结构
+Desktop sidecar 运行日志：
 
 ```text
-apps/desktop-tauri        # 桌面 UI 与本地应用壳
-server/hub-server-go      # 主要 Hub 控制面（Go）
-runtime/python-agent      # Runtime Worker（FastAPI + LangGraph）
-packages/protocol         # 协议定义与生成类型
-docs/                     # PRD、架构、开发说明与计划文档
+~/Library/Application Support/com.goyais.desktop/sidecar.log
 ```
 
-## 常用开发命令
+## 测试与质量门禁
 
 ```bash
-pnpm version:check
-pnpm protocol:generate
-pnpm typecheck
-pnpm test
-cd server/hub-server-go && go test ./...
+make test
+make lint
+pnpm --filter @goyais/desktop test:strict
+pnpm --filter @goyais/desktop coverage:gate
 ```
+
+## 打包与发版
+
+### 本机构建安装包（当前主机目标）
+
+```bash
+TARGET_TRIPLE="$(rustc -vV | awk '/^host:/ {print $2}')"
+pnpm --filter @goyais/desktop sidecar:prepare
+cd apps/desktop
+VITE_API_MODE=strict VITE_ENABLE_MOCK_FALLBACK=false pnpm tauri build -- --target "$TARGET_TRIPLE" --no-sign
+```
+
+### 手工构建 sidecar
+
+```bash
+TARGET_TRIPLE="$(rustc -vV | awk '/^host:/ {print $2}')"
+scripts/release/build-hub-sidecar.sh "$TARGET_TRIPLE"
+scripts/release/build-worker-sidecar.sh "$TARGET_TRIPLE"
+```
+
+### GitHub Tag 自动发版
+
+推送 Tag 会触发 `.github/workflows/release.yml`，并创建 Draft Release。矩阵目标：
+
+- `aarch64-apple-darwin`
+- `x86_64-apple-darwin`
+- `x86_64-unknown-linux-gnu`
+- `x86_64-pc-windows-msvc`
+
+```bash
+git tag -a v0.4.0 -m "v0.4.0"
+git push origin v0.4.0
+```
+
+默认使用 `--no-sign` 构建并上传到草稿 Release。
 
 ## 文档索引
 
-- 英文文档：[`README.md`](./README.md)
-- 产品需求文档：[`docs/PRD.md`](./docs/PRD.md)
-- 技术架构文档：[`docs/TECH-ARCHITECTURE.md`](./docs/TECH-ARCHITECTURE.md)
+- 英文 README：[`README.md`](./README.md)
+- v0.4.0 权威文档总览：[`docs/v_0_4_0/README.md`](./docs/v_0_4_0/README.md)
+- 产品需求（v0.4.0）：[`docs/v_0_4_0/PRD.md`](./docs/v_0_4_0/PRD.md)
+- 技术架构（v0.4.0）：[`docs/v_0_4_0/TECH_ARCH.md`](./docs/v_0_4_0/TECH_ARCH.md)
+- 实施计划（v0.4.0）：[`docs/v_0_4_0/IMPLEMENTATION_PLAN.md`](./docs/v_0_4_0/IMPLEMENTATION_PLAN.md)
+- 开发标准（v0.4.0）：[`docs/v_0_4_0/DEVELOPMENT_STANDARDS.md`](./docs/v_0_4_0/DEVELOPMENT_STANDARDS.md)
 - 开发环境说明：[`docs/dev-setup.md`](./docs/dev-setup.md)
-- UI 规范：[`docs/ui-guidelines.md`](./docs/ui-guidelines.md)
+- Desktop 模块说明：[`apps/desktop/README.md`](./apps/desktop/README.md)
 - ADR 决策记录：[`docs/ADR/`](./docs/ADR)
 
 ## 参与贡献
@@ -167,13 +234,9 @@ cd server/hub-server-go && go test ./...
 请通过 GitHub 私密漏洞报告通道提交安全问题。
 详细流程见 [`SECURITY.md`](./SECURITY.md)。
 
-## 开源协作说明
+## 行为准则
 
-本仓库的治理文档（贡献指南、安全策略、行为准则）以英文主文为准：
-
-- [`CONTRIBUTING.md`](./CONTRIBUTING.md)
-- [`SECURITY.md`](./SECURITY.md)
-- [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
+本项目遵循社区协作行为准则，详见 [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)。
 
 ## 许可证
 
