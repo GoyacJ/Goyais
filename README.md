@@ -3,13 +3,13 @@
 </p>
 
 <p align="center">
-  <img src="./logo.png" alt="Goyais logo" width="160" />
+  <img src="./goyais_logo.png" alt="Goyais logo" width="160" />
 </p>
 
 <h1 align="center">Goyais</h1>
 
 <p align="center">
-  Open-source, Hub-First, Session-Centric, local-first AI-assisted coding desktop platform.
+  Open-source, Hub-authoritative, Conversation-centric AI desktop platform.
 </p>
 
 <p align="center">
@@ -18,155 +18,211 @@
 
 <p align="center">
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
-  <a href="https://github.com/GoyacJ/Goyais/releases"><img alt="Version" src="https://img.shields.io/badge/version-0.2.0-0A7EA4"></a>
+  <a href="https://github.com/GoyacJ/Goyais/releases"><img alt="Version" src="https://img.shields.io/badge/version-0.4.0-0A7EA4"></a>
   <a href="https://github.com/GoyacJ/Goyais/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/GoyacJ/Goyais/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> ·
+  <a href="#overview">Overview</a> ·
   <a href="#architecture">Architecture</a> ·
+  <a href="#screenshots">Screenshots</a> ·
   <a href="#quick-start">Quick Start</a> ·
+  <a href="#packaging-and-release">Packaging & Release</a> ·
   <a href="#documentation">Docs</a> ·
-  <a href="#contributing">Contributing</a> ·
-  <a href="#security">Security</a>
+  <a href="#contributing">Contributing</a>
 </p>
 
 ---
 
 ## Overview
 
-Goyais is an AI coding desktop application designed for safe and controllable execution.
-It combines a desktop shell, a Hub control plane, and a runtime worker so execution state,
-permissions, and audit events remain consistent.
+Goyais is an open-source AI desktop platform for teams that need both delivery speed and operational control.
+Instead of letting the UI call runtime tools directly, Goyais keeps a strict control plane:
+`Desktop -> Hub -> Worker`.
 
-The current stable architecture is **v0.2.0** with **Hub-First** routing and
-**Session-Centric** scheduling. A session can run only one active execution at a time,
-with explicit user confirmation for risky operations.
+This gives you a desktop-first experience while keeping execution authority, policy checks, and orchestration in Hub.
+The product model is built around:
+`Workspace -> Project -> Conversation -> Execution`.
 
-Goyais supports both **local_open** mode and **remote_auth** server mode.
-In remote mode, desktop clients connect to a remote Hub with workspace-scoped access control,
-and runtime workers can run on centralized server infrastructure.
+### Why Goyais
 
-## Features
+- **Desktop-first, not browser-only**: run as a native app and keep local workflows smooth.
+- **Hub-authoritative execution**: Desktop does not bypass Hub for control actions.
+- **Conversation-centric runtime**: multiple conversations can run in parallel, each conversation keeps strict FIFO with only one active execution.
+- **Workspace-level environment isolation**: different workspaces can keep different project contexts, resources, and execution environments.
+- **Governable remote mode**: connect to remote workspaces with explicit credentials (`hub_url`, `username`, `password`) and permission-aware UI behavior.
+- **Team Hub deployment model**: deploy Hub on a server, then all desktop members can connect to the same workspace.
+- **Full Hub authorization model**: Hub provides complete RBAC + ABAC capability for permission and policy control.
+- **Shared resource governance**: support centralized sharing and management for Rules, Skills, and MCP connectors.
 
-- **Hub-First control plane**: desktop interacts with Hub APIs as the single source of truth.
-- **Local + remote server deployment**: supports local-first development and remote multi-workspace collaboration.
-- **Workspace-level isolation and RBAC**: workspace-scoped routes and permissions in `remote_auth` mode.
-- **Session-Centric execution**: one active execution per session with clear conflict handling.
-- **Plan mode and Agent mode**:
-  - Plan mode generates a plan first and waits for approval before execution.
-  - Agent mode runs autonomously with confirmation gates for risky actions.
-- **Isolated Git worktree execution**: each execution runs in an isolated worktree (`goyais-exec-<id>`).
-- **Mainstream model integration**: configurable model endpoints and keys, with OpenAI/Anthropic-style provider compatibility.
-- **Human-in-the-loop safety**: high-risk capabilities (`write_fs`, `exec`, `network`, `delete`) require confirmation.
-- **Skills and MCP extensibility**: dynamic skill sets and MCP connectors can be injected at runtime.
-- **Operational resilience**: SSE event streaming, watchdog lock recovery, and audit logging.
+### What Is Implemented in the Current Codebase
+
+- **Three-tier stack**:
+  - Desktop: `Tauri + Vue + TypeScript`
+  - Hub: `Go`
+  - Worker: `Python + FastAPI`
+- **Out-of-the-box local mode**: Desktop starts Hub/Worker as sidecars, performs `/health` checks, and writes sidecar runtime logs under app data.
+- **Execution lifecycle APIs**: conversation message submission, queueing, stop, rollback endpoint, execution events stream, diff/patch actions.
+- **Conversation runtime features**: SSE event consumption, idempotent event merge, snapshot data structures, and Markdown export endpoint contract.
+- **Workspace/resource surface**: local + remote workspace paths, resource/model/skills/MCP related routes, project config and agent config endpoints.
+- **Release pipeline**: multi-platform Tauri packaging with sidecar binaries and tag-triggered draft GitHub Releases.
+
+### Current Status
+
+The repository is under active development and continuous capability hardening.
+Core runtime architecture and packaging flow are in place; some API branches still intentionally return `INTERNAL_NOT_IMPLEMENTED` while features are being completed.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  UI[Desktop App\nTauri + React] -->|HTTP /v1/* + SSE| HUB[Hub Server\nGo]
-  HUB -->|Internal execution APIs| RUNTIME[Runtime Worker\nPython FastAPI + LangGraph]
-  HUB --> DB[(SQLite/Postgres)]
-  RUNTIME --> WT[Git Worktree Sandbox]
+  UI[Desktop App\nTauri + Vue] -->|HTTP /v1 + SSE| HUB[Hub\nGo]
+  HUB -->|/internal/*| WORKER[Worker\nPython FastAPI]
+  HUB --> DB[(SQLite)]
+  WORKER --> WT[Execution Runtime\nTools / Worktree]
 ```
 
-### Deployment modes
+## Screenshots
 
-- **Local mode (`local_open`)**: desktop + local Hub + local runtime worker, optimized for local development.
-- **Remote mode (`remote_auth`)**: desktop connects to remote Hub with bearer auth, workspace isolation, and RBAC.
+### Main
 
-### Core modules
+<p align="center">
+  <img src="./docs/images/主页面.png" alt="Main screen" width="85%" />
+</p>
 
-- `apps/desktop-tauri`: desktop UI and local shell.
-- `server/hub-server-go`: primary Hub control plane.
-- `runtime/python-agent`: runtime worker for task execution.
-- `packages/protocol`: JSON schema and generated TS/Python protocol artifacts.
+### Workspace and Settings
 
-> Note: `server/hub-server` and `server/sync-server` remain in repo for compatibility/testing,
-> but are not the primary v0.2.0 runtime path.
+<p align="center">
+  <img src="./docs/images/新增工作区.png" alt="Create workspace" width="32%" />
+  <img src="./docs/images/项目配置.png" alt="Project configuration" width="32%" />
+  <img src="./docs/images/通用设置.png" alt="General settings" width="32%" />
+</p>
+
+### Resource and Policy Configuration
+
+<p align="center">
+  <img src="./docs/images/模型配置.png" alt="Model configuration" width="32%" />
+  <img src="./docs/images/规则配置.png" alt="Rules configuration" width="32%" />
+  <img src="./docs/images/技能配置.png" alt="Skills configuration" width="32%" />
+</p>
+
+<p align="center">
+  <img src="./docs/images/Mcp配置.png" alt="MCP configuration" width="32%" />
+  <img src="./docs/images/主题.png" alt="Theme settings" width="32%" />
+</p>
+
+## Repository Layout
+
+```text
+apps/desktop            # Desktop app (Vue + Tauri)
+services/hub            # Hub service (Go)
+services/worker         # Worker service (Python)
+scripts/                # Dev/release scripts
+docs/                   # Product/architecture/dev docs
+```
 
 ## Quick Start
 
 ### Requirements
 
-- Node.js 22+
-- pnpm 10+
+- Node.js 22+ (CI uses Node 24)
+- pnpm 10.11+
+- Go 1.24+
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/)
-- Go 1.24+
-- Rust stable (for Tauri desktop)
+- Rust stable (Tauri)
 
-Install dependencies:
+### Install
 
 ```bash
 pnpm install
-pnpm protocol:generate
 ```
 
-Start 3 processes in separate terminals:
-
-1. Hub (Go):
+### Run desktop (recommended)
 
 ```bash
-PORT=8787 GOYAIS_AUTH_MODE=local_open GOYAIS_RUNTIME_SHARED_SECRET=dev-shared pnpm dev:hub
+pnpm run dev:desktop
 ```
 
-2. Runtime worker (Python):
+This command runs `tauri dev` and auto-prepares local sidecars (`goyais-hub` / `goyais-worker`) when missing.
+
+### Run services separately (debug mode)
 
 ```bash
-GOYAIS_RUNTIME_REQUIRE_HUB_AUTH=true GOYAIS_RUNTIME_SHARED_SECRET=dev-shared GOYAIS_HUB_BASE_URL=http://127.0.0.1:8787 pnpm dev:runtime
+make dev-hub
+make dev-worker
+make dev-web
 ```
 
-3. Desktop client (Tauri):
+### Health checks
 
 ```bash
-pnpm dev:desktop
+curl http://127.0.0.1:8787/health
+curl http://127.0.0.1:8788/health
 ```
 
-4. Desktop web mode (optional):
+### Logs
 
-```bash
-pnpm dev:web
-```
-
-Then create a session in the desktop app (Plan mode or Agent mode), run a task, review patch,
-and commit/discard changes.
-
-### Remote server mode (summary)
-
-1. Deploy Hub and runtime worker services in your server environment.
-2. Set Hub auth mode to `GOYAIS_AUTH_MODE=remote_auth`.
-3. Connect desktop clients to the remote workspace and use workspace-scoped access control.
-
-## Repository Layout
+Desktop sidecar runtime log:
 
 ```text
-apps/desktop-tauri        # Desktop UI and local shell
-server/hub-server-go      # Primary Hub control plane (Go)
-runtime/python-agent      # Runtime worker (FastAPI + LangGraph)
-packages/protocol         # Protocol schemas and generated types
-docs/                     # PRD, architecture, setup, and plans
+~/Library/Application Support/com.goyais.desktop/sidecar.log
 ```
 
-## Development Commands
+## Testing & Quality
 
 ```bash
-pnpm version:check
-pnpm protocol:generate
-pnpm typecheck
-pnpm test
-cd server/hub-server-go && go test ./...
+make test
+make lint
+pnpm --filter @goyais/desktop test:strict
+pnpm --filter @goyais/desktop coverage:gate
 ```
+
+## Packaging and Release
+
+### Build local installer/package (current host target)
+
+```bash
+TARGET_TRIPLE="$(rustc -vV | awk '/^host:/ {print $2}')"
+pnpm --filter @goyais/desktop sidecar:prepare
+cd apps/desktop
+VITE_API_MODE=strict VITE_ENABLE_MOCK_FALLBACK=false pnpm tauri build -- --target "$TARGET_TRIPLE" --no-sign
+```
+
+### Build sidecars manually
+
+```bash
+TARGET_TRIPLE="$(rustc -vV | awk '/^host:/ {print $2}')"
+scripts/release/build-hub-sidecar.sh "$TARGET_TRIPLE"
+scripts/release/build-worker-sidecar.sh "$TARGET_TRIPLE"
+```
+
+### GitHub tag release
+
+Tag push triggers `.github/workflows/release.yml` and creates a draft Release with matrix targets:
+
+- `aarch64-apple-darwin`
+- `x86_64-apple-darwin`
+- `x86_64-unknown-linux-gnu`
+- `x86_64-pc-windows-msvc`
+
+```bash
+git tag -a v0.4.0 -m "v0.4.0"
+git push origin v0.4.0
+```
+
+By default, release artifacts are built with `--no-sign` and uploaded to a draft release.
 
 ## Documentation
 
-- Chinese documentation: [`README.zh-CN.md`](./README.zh-CN.md)
-- Product requirements: [`docs/PRD.md`](./docs/PRD.md)
-- Technical architecture: [`docs/TECH-ARCHITECTURE.md`](./docs/TECH-ARCHITECTURE.md)
-- Development setup: [`docs/dev-setup.md`](./docs/dev-setup.md)
-- UI guidelines: [`docs/ui-guidelines.md`](./docs/ui-guidelines.md)
+- Chinese README: [`README.zh-CN.md`](./README.zh-CN.md)
+- v0.4.0 authority docs index: [`docs/v_0_4_0/README.md`](./docs/v_0_4_0/README.md)
+- Product requirements (v0.4.0): [`docs/v_0_4_0/PRD.md`](./docs/v_0_4_0/PRD.md)
+- Technical architecture (v0.4.0): [`docs/v_0_4_0/TECH_ARCH.md`](./docs/v_0_4_0/TECH_ARCH.md)
+- Implementation plan (v0.4.0): [`docs/v_0_4_0/IMPLEMENTATION_PLAN.md`](./docs/v_0_4_0/IMPLEMENTATION_PLAN.md)
+- Development standards (v0.4.0): [`docs/v_0_4_0/DEVELOPMENT_STANDARDS.md`](./docs/v_0_4_0/DEVELOPMENT_STANDARDS.md)
+- Dev environment guide: [`docs/dev-setup.md`](./docs/dev-setup.md)
+- Desktop module guide: [`apps/desktop/README.md`](./apps/desktop/README.md)
 - ADRs: [`docs/ADR/`](./docs/ADR)
 
 ## Contributing

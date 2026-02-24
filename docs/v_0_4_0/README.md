@@ -12,6 +12,14 @@
 | [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) | 实施权威源 | 规划阶段、依赖、里程碑、上线门槛 |
 | [DEVELOPMENT_STANDARDS.md](./DEVELOPMENT_STANDARDS.md) | 开发权威源 | 约束编码、测试、安全、评审、DoD |
 
+## 工程落地文档（代码对齐）
+
+> 以下文档用于开发与发版操作说明，不作为业务语义裁决源。
+
+1. 开发环境与调试：[`../dev-setup.md`](../dev-setup.md)
+2. Desktop 模块说明：[`../../apps/desktop/README.md`](../../apps/desktop/README.md)
+3. Tag 自动发版工作流：[`../../.github/workflows/release.yml`](../../.github/workflows/release.yml)
+
 ## 推荐阅读顺序
 
 1. `PRD.md`：先确认业务口径和 P0/P1 边界。
