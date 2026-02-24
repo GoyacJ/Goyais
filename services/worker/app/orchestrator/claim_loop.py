@@ -7,7 +7,7 @@ import time
 import uuid
 from typing import Any
 
-from app.hub_client import HubClient
+from app.hub_client import HubClient, HubRequestError
 from app.runtime.langgraph_runtime import LangGraphRuntime
 from app.runtime.vanilla import VanillaRuntime
 from app.worktree.manager import WorktreeManager
@@ -210,6 +210,18 @@ class _ExecutionControls:
         while self._running:
             try:
                 response = await self.hub.poll_control(self.execution_id, self.after_seq, 2000)
+            except HubRequestError as exc:
+                if exc.status_code == 404 and "EXECUTION_NOT_FOUND" in exc.body_text:
+                    self._cancelled = True
+                    self._running = False
+                    logger.info(
+                        "control poll closed execution=%s because execution no longer exists",
+                        self.execution_id,
+                    )
+                    return
+                logger.warning("control poll failed execution=%s: %s", self.execution_id, exc)
+                await asyncio.sleep(0.5)
+                continue
             except Exception as exc:
                 logger.warning("control poll failed execution=%s: %s", self.execution_id, exc)
                 await asyncio.sleep(0.5)
@@ -237,4 +249,3 @@ class _ExecutionControls:
 
 def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-

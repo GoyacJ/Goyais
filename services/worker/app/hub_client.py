@@ -12,6 +12,13 @@ from app.internal_api import DEFAULT_INTERNAL_TOKEN, INTERNAL_TOKEN_HEADER
 from app.trace import TRACE_HEADER
 
 
+class HubRequestError(RuntimeError):
+    def __init__(self, status_code: int, body_text: str) -> None:
+        super().__init__(f"hub http error status={status_code} body={body_text[:300]}")
+        self.status_code = status_code
+        self.body_text = body_text
+
+
 class HubClient:
     def __init__(self) -> None:
         self.base_url = os.getenv("HUB_BASE_URL", "http://127.0.0.1:8787").strip().rstrip("/")
@@ -82,7 +89,7 @@ class HubClient:
                 raw = response.read()
         except urllib.error.HTTPError as exc:
             body_text = exc.read().decode("utf-8", errors="ignore")
-            raise RuntimeError(f"hub http error status={exc.code} body={body_text[:300]}") from exc
+            raise HubRequestError(exc.code, body_text) from exc
         except urllib.error.URLError as exc:
             raise RuntimeError(f"hub network error: {exc.reason}") from exc
 

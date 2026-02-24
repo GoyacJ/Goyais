@@ -10,7 +10,7 @@
         <div class="message-body">
           <div class="bubble-head">
             <AppIcon :name="message.role === 'assistant' ? 'bot' : 'user'" :size="12" />
-            <span>{{ message.role === "assistant" ? modelId : message.role === "user" ? "You" : "System" }}</span>
+            <span>{{ message.role === "assistant" ? assistantModelLabel : message.role === "user" ? "You" : "System" }}</span>
           </div>
           <div class="bubble">
             <p>{{ message.content }}</p>
@@ -110,6 +110,14 @@ const modelSelectOptions = computed(() => {
 });
 
 const hasModelOptions = computed(() => modelSelectOptions.value.length > 0);
+const assistantModelLabel = computed(() => {
+  const normalized = props.modelId.trim();
+  if (normalized === "") {
+    return "Assistant";
+  }
+  const selected = modelSelectOptions.value.find((item) => item.value === normalized);
+  return selected?.label ?? normalized;
+});
 
 const emit = defineEmits<{
   (event: "send"): void;

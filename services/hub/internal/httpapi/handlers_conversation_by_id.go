@@ -111,6 +111,9 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				}
 				delete(state.executions, executionID)
 				delete(state.executionDiffs, executionID)
+				delete(state.executionLeases, executionID)
+				delete(state.executionControlQueues, executionID)
+				delete(state.executionControlSeq, executionID)
 			}
 			delete(state.conversations, conversationID)
 			delete(state.conversationMessages, conversationID)

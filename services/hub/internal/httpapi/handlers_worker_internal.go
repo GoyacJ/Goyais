@@ -149,6 +149,8 @@ func InternalExecutionClaimHandler(state *AppState) http.HandlerFunc {
 		state.executionLeases[executionID] = lease
 		content := lookupExecutionContentLocked(state, execution)
 		projectPath, projectIsGit := lookupProjectExecutionContextLocked(state, execution)
+		state.mu.Unlock()
+		execution = hydrateExecutionModelSnapshotForWorker(state, execution)
 		envelope := ExecutionClaimEnvelope{
 			Execution:    execution,
 			Lease:        lease,
@@ -156,7 +158,6 @@ func InternalExecutionClaimHandler(state *AppState) http.HandlerFunc {
 			ProjectPath:  projectPath,
 			ProjectIsGit: projectIsGit,
 		}
-		state.mu.Unlock()
 		if state.authz != nil {
 			_ = state.authz.upsertExecutionLease(lease)
 		}

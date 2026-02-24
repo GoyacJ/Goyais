@@ -42,7 +42,21 @@ export function useMainScreenModeling(input: MainScreenModelingInput) {
     return map;
   });
 
-  const enabledModelIDs = computed(() => Array.from(modelLabelByModelID.value.keys()));
+  const enabledModelIDs = computed(() => {
+    const items: string[] = [];
+    for (const item of resourceStore.models.items) {
+      if (!item.enabled) {
+        continue;
+      }
+      const configID = item.id.trim();
+      const modelID = item.model?.model_id?.trim() ?? "";
+      if (configID === "" || modelID === "" || items.includes(configID)) {
+        continue;
+      }
+      items.push(configID);
+    }
+    return items;
+  });
   const availableModelIDs = computed(() => new Set(enabledModelIDs.value));
 
   function resolveSemanticModelID(raw: string): string {
@@ -50,20 +64,39 @@ export function useMainScreenModeling(input: MainScreenModelingInput) {
     if (normalized === "") {
       return "";
     }
-    const byConfigID = modelLabelByConfigID.value.get(normalized);
-    if (byConfigID) {
-      const resolved = resourceStore.models.items.find((item) => item.id.trim() === normalized)?.model?.model_id?.trim();
-      return resolved && resolved !== "" ? resolved : normalized;
+    if (modelLabelByConfigID.value.has(normalized)) {
+      return normalized;
     }
+
+    const byEnabledModelID = resourceStore.models.items.find(
+      (item) => item.enabled && (item.model?.model_id?.trim() ?? "") === normalized
+    );
+    if (byEnabledModelID) {
+      return byEnabledModelID.id.trim();
+    }
+
+    const byModelID = resourceStore.models.items.find((item) => (item.model?.model_id?.trim() ?? "") === normalized);
+    if (byModelID) {
+      return byModelID.id.trim();
+    }
+
     return normalized;
   }
 
-  function resolveModelLabel(modelID: string): string {
-    const normalized = modelID.trim();
+  function resolveModelLabel(configOrModelID: string): string {
+    const normalized = configOrModelID.trim();
     if (normalized === "") {
       return "";
     }
-    return modelLabelByModelID.value.get(normalized) ?? normalized;
+    const byConfigID = modelLabelByConfigID.value.get(normalized);
+    if (byConfigID) {
+      return byConfigID;
+    }
+    const byModelID = modelLabelByModelID.value.get(normalized);
+    if (byModelID) {
+      return byModelID;
+    }
+    return normalized;
   }
 
   const modelOptions = computed<Array<{ value: string; label: string }>>(() => {

@@ -152,6 +152,29 @@ describe("resource module views", () => {
     expect(wrapper.text()).not.toContain("删除 MCP 配置");
     expect(findFetchCalls("DELETE", "/v1/workspaces/ws_local/resource-configs/rc_mcp_1")).toHaveLength(1);
   });
+
+  it("normalizes legacy project model ids to config ids when saving binding", async () => {
+    vi.stubGlobal("fetch", createApiFetchMock({ legacyProjectConfigModelIDs: true }));
+    const wrapper = mountView(WorkspaceProjectConfigView);
+    await flushPromises();
+
+    const configButton = wrapper.findAll("button").find((item) => item.text() === "配置");
+    expect(configButton).toBeTruthy();
+    await configButton?.trigger("click");
+    await flushPromises();
+
+    const saveButton = wrapper.findAll("button").find((item) => item.text() === "保存");
+    expect(saveButton).toBeTruthy();
+    await saveButton?.trigger("click");
+    await flushPromises();
+
+    const updateCalls = findFetchCalls("PUT", "/v1/projects/proj_alpha/config");
+    expect(updateCalls).toHaveLength(1);
+    const [, updateInit] = updateCalls[0] ?? [];
+    const body = JSON.parse(String(updateInit?.body ?? "{}"));
+    expect(body.model_ids).toEqual(["rc_model_1"]);
+    expect(body.default_model_id).toBe("rc_model_1");
+  });
 });
 
 function mountView(component: unknown) {
@@ -166,7 +189,7 @@ function mountView(component: unknown) {
   });
 }
 
-function createApiFetchMock() {
+function createApiFetchMock(options: { legacyProjectConfigModelIDs?: boolean } = {}) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const urlValue =
       typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
@@ -232,14 +255,15 @@ function createApiFetchMock() {
     }
 
     if (method === "GET" && path === "/v1/workspaces/ws_local/project-configs") {
+      const modelBindingID = options.legacyProjectConfigModelIDs ? "gpt-5.3" : "rc_model_1";
       return jsonResponse([
         {
           project_id: "proj_alpha",
           project_name: "Alpha",
           config: {
             project_id: "proj_alpha",
-            model_ids: ["rc_model_1"],
-            default_model_id: "rc_model_1",
+            model_ids: [modelBindingID],
+            default_model_id: modelBindingID,
             rule_ids: ["rc_rule_1"],
             skill_ids: ["rc_skill_1"],
             mcp_ids: ["rc_mcp_1"],
@@ -255,6 +279,17 @@ function createApiFetchMock() {
 
     if (method === "PATCH") {
       return jsonResponse({ ok: true });
+    }
+    if (method === "PUT") {
+      return jsonResponse({
+        project_id: "proj_alpha",
+        model_ids: ["rc_model_1"],
+        default_model_id: "rc_model_1",
+        rule_ids: ["rc_rule_1"],
+        skill_ids: ["rc_skill_1"],
+        mcp_ids: ["rc_mcp_1"],
+        updated_at: "2026-02-24T00:00:00Z"
+      });
     }
     if (method === "POST") {
       return jsonResponse({ ok: true });

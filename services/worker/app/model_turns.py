@@ -14,6 +14,7 @@ from app.model_adapters import (
     SUPPORTED_PARAM_KEYS,
     ToolCall,
 )
+from app.tls_config import TLSConfigError, resolve_tls_context
 
 
 async def run_openai_compatible_turn(
@@ -117,7 +118,15 @@ def _post_json_sync(
     request = urllib.request.Request(url, data=body, method="POST", headers=headers)
     timeout_seconds = max(timeout_ms / 1000.0, 1.0)
     try:
-        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        context = resolve_tls_context(url)
+    except TLSConfigError as exc:
+        raise ModelAdapterError("MODEL_TLS_CONFIG_INVALID", str(exc), exc.details) from exc
+    try:
+        if context is None:
+            response_context = urllib.request.urlopen(request, timeout=timeout_seconds)
+        else:
+            response_context = urllib.request.urlopen(request, timeout=timeout_seconds, context=context)
+        with response_context as response:
             raw = response.read()
     except urllib.error.HTTPError as exc:
         raw = exc.read()
@@ -127,8 +136,15 @@ def _post_json_sync(
             {"status_code": exc.code, "body": _decode_error_body(raw)},
         ) from exc
     except urllib.error.URLError as exc:
+        reason = exc.reason
+        message = f"model request failed: {reason}"
+        if isinstance(reason, BaseException) and reason.__class__.__name__ == "SSLError":
+            message += (
+                " (TLS 校验失败，可配置 WORKER_TLS_CA_FILE 指向企业 CA，"
+                "或仅在受信环境下临时使用 WORKER_TLS_INSECURE_SKIP_VERIFY=1)"
+            )
         raise ModelAdapterError(
-            "MODEL_NETWORK_ERROR", f"model request failed: {exc.reason}"
+            "MODEL_NETWORK_ERROR", message
         ) from exc
 
     try:

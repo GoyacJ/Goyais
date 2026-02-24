@@ -59,19 +59,21 @@ export function useWorkspaceProjectConfigView() {
   });
 
   const modelOptions = computed(() => {
-    const labelsByModelID = new Map<string, string>();
-    for (const item of resourceStore.models.items) {
-      const modelID = item.model?.model_id?.trim() ?? "";
-      if (modelID === "") {
-        continue;
-      }
-      if (labelsByModelID.has(modelID)) {
-        continue;
-      }
-      const vendor = item.model?.vendor?.trim() ?? "-";
-      labelsByModelID.set(modelID, `${vendor} / ${modelID}`);
-    }
-    return Array.from(labelsByModelID.entries()).map(([id, name]) => ({ id, name }));
+    return resourceStore.models.items
+      .map((item) => {
+        const configID = item.id.trim();
+        const modelID = item.model?.model_id?.trim() ?? "";
+        if (configID === "" || modelID === "") {
+          return null;
+        }
+        const vendor = item.model?.vendor?.trim() ?? "-";
+        const suffix = item.enabled ? "" : " (Disabled)";
+        return {
+          id: configID,
+          name: `${vendor} / ${modelID}${suffix}`
+        };
+      })
+      .filter((item): item is { id: string; name: string } => item !== null);
   });
   const ruleOptions = computed(() => resourceStore.rules.items.map((item) => ({ id: item.id, name: item.name })));
   const skillOptions = computed(() => resourceStore.skills.items.map((item) => ({ id: item.id, name: item.name })));
@@ -234,24 +236,41 @@ export function useWorkspaceProjectConfigView() {
   }
 
   function normalizeModelBindingID(id: string): string {
-    const normalizedID = id.trim();
-    if (normalizedID === "") {
+    const normalizedSelector = id.trim();
+    if (normalizedSelector === "") {
       return "";
     }
-    const byConfigID = resourceStore.models.items.find((item) => item.id === normalizedID);
-    if (byConfigID?.model?.model_id) {
-      return byConfigID.model.model_id.trim();
+
+    const byConfigID = resourceStore.models.items.find((item) => item.id.trim() === normalizedSelector);
+    if (byConfigID) {
+      return byConfigID.id.trim();
     }
-    return normalizedID;
+
+    const byEnabledModelID = resourceStore.models.items.find(
+      (item) => item.enabled && (item.model?.model_id?.trim() ?? "") === normalizedSelector
+    );
+    if (byEnabledModelID) {
+      return byEnabledModelID.id.trim();
+    }
+
+    const byModelID = resourceStore.models.items.find((item) => (item.model?.model_id?.trim() ?? "") === normalizedSelector);
+    if (byModelID) {
+      return byModelID.id.trim();
+    }
+
+    return normalizedSelector;
   }
 
   function resolveModelBindingDisplayName(id: string): string {
-    const normalizedModelID = normalizeModelBindingID(id);
-    if (normalizedModelID === "") {
+    const normalizedConfigID = normalizeModelBindingID(id);
+    if (normalizedConfigID === "") {
       return "";
     }
-    const option = modelOptions.value.find((item) => item.id === normalizedModelID);
-    return option?.name ?? normalizedModelID;
+    const option = modelOptions.value.find((item) => item.id === normalizedConfigID);
+    if (option) {
+      return option.name;
+    }
+    return normalizedConfigID;
   }
 
   return {

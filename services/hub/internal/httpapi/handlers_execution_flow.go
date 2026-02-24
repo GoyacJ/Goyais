@@ -170,6 +170,56 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 		catalogDefaultModelID := strings.TrimSpace(state.resolveWorkspaceDefaultModelID(conversationSeed.WorkspaceID))
+		enabledOnly := true
+		modelConfigs, listModelConfigsErr := listWorkspaceResourceConfigs(state, conversationSeed.WorkspaceID, resourceConfigQuery{
+			Type:    ResourceTypeModel,
+			Enabled: &enabledOnly,
+		})
+		if listModelConfigsErr != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "RESOURCE_CONFIG_LIST_FAILED", "Failed to list model configs", map[string]any{
+				"workspace_id": conversationSeed.WorkspaceID,
+			})
+			return
+		}
+		resolvedMode := input.Mode
+		if resolvedMode == "" {
+			resolvedMode = conversationSeed.DefaultMode
+		}
+		if resolvedMode == "" {
+			resolvedMode = firstNonEmptyMode(project.DefaultMode, ConversationModeAgent)
+		}
+		modelSelector := strings.TrimSpace(input.ModelID)
+		if modelSelector == "" {
+			modelSelector = strings.TrimSpace(conversationSeed.ModelID)
+		}
+		if modelSelector == "" {
+			modelSelector = strings.TrimSpace(derefString(projectConfig.DefaultModelID))
+		}
+		if modelSelector == "" {
+			modelSelector = strings.TrimSpace(project.DefaultModelID)
+		}
+		if modelSelector == "" {
+			modelSelector = catalogDefaultModelID
+		}
+		if modelSelector == "" {
+			WriteStandardError(w, r, http.StatusBadRequest, "MODEL_NOT_RESOLVED", "No available model found for execution", map[string]any{
+				"conversation_id": conversationID,
+			})
+			return
+		}
+		resolvedModelID, resolvedModelSnapshot := resolveExecutionModelSnapshot(
+			state,
+			conversationSeed.WorkspaceID,
+			projectConfig,
+			modelSelector,
+			modelConfigs,
+		)
+		if strings.TrimSpace(resolvedModelID) == "" {
+			resolvedModelID = strings.TrimSpace(modelSelector)
+		}
+		if strings.TrimSpace(resolvedModelSnapshot.ModelID) == "" {
+			resolvedModelSnapshot.ModelID = resolvedModelID
+		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
 		var createdExecution Execution
@@ -179,34 +229,6 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 		if !exists {
 			state.mu.Unlock()
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
-			return
-		}
-
-		resolvedMode := input.Mode
-		if resolvedMode == "" {
-			resolvedMode = conversation.DefaultMode
-		}
-		if resolvedMode == "" {
-			resolvedMode = firstNonEmptyMode(project.DefaultMode, ConversationModeAgent)
-		}
-		resolvedModelID := strings.TrimSpace(input.ModelID)
-		if resolvedModelID == "" {
-			resolvedModelID = strings.TrimSpace(conversation.ModelID)
-		}
-		if resolvedModelID == "" {
-			resolvedModelID = strings.TrimSpace(derefString(projectConfig.DefaultModelID))
-		}
-		if resolvedModelID == "" {
-			resolvedModelID = strings.TrimSpace(project.DefaultModelID)
-		}
-		if resolvedModelID == "" {
-			resolvedModelID = catalogDefaultModelID
-		}
-		if resolvedModelID == "" {
-			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusBadRequest, "MODEL_NOT_RESOLVED", "No available model found for execution", map[string]any{
-				"conversation_id": conversationID,
-			})
 			return
 		}
 
@@ -230,18 +252,15 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 			executionState = ExecutionStatePending
 		}
 		execution := Execution{
-			ID:             "exec_" + randomHex(6),
-			WorkspaceID:    conversation.WorkspaceID,
-			ConversationID: conversationID,
-			MessageID:      msgID,
-			State:          executionState,
-			Mode:           resolvedMode,
-			ModelID:        resolvedModelID,
-			ModeSnapshot:   resolvedMode,
-			ModelSnapshot: ModelSnapshot{
-				ConfigID: normalizeModelConfigID(projectConfig.ModelIDs, resolvedModelID),
-				ModelID:  resolvedModelID,
-			},
+			ID:                      "exec_" + randomHex(6),
+			WorkspaceID:             conversation.WorkspaceID,
+			ConversationID:          conversationID,
+			MessageID:               msgID,
+			State:                   executionState,
+			Mode:                    resolvedMode,
+			ModelID:                 resolvedModelID,
+			ModeSnapshot:            resolvedMode,
+			ModelSnapshot:           resolvedModelSnapshot,
 			ProjectRevisionSnapshot: project.CurrentRevision,
 			QueueIndex:              queueIndex,
 			TraceID:                 TraceIDFromContext(r.Context()),
