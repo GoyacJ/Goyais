@@ -1,6 +1,6 @@
 .project-config-page {
   display: grid;
-  gap: var(--global-space-8);
+  gap: var(--global-space-12);
   align-content: start;
 }
 
@@ -17,7 +17,7 @@
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: var(--global-space-6);
+  gap: var(--global-space-8);
   white-space: nowrap;
 }
 
@@ -25,57 +25,241 @@
   color: var(--component-button-ghost-fg);
 }
 
+.modal-header {
+  display: grid;
+  gap: var(--global-space-4);
+}
+
 .modal-title {
   margin: 0;
 }
 
-.binding-form {
-  display: grid;
-  gap: var(--global-space-10);
-}
-
-.binding-form p {
-  margin: 0;
-  color: var(--semantic-text-muted);
-}
-
-.group {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-bg);
-  padding: var(--global-space-8);
-  display: grid;
-  gap: var(--global-space-6);
-}
-
-.group h4 {
+.modal-subtitle {
   margin: 0;
   color: var(--semantic-text-muted);
   font-size: var(--global-font-size-12);
 }
 
-.checkbox-list {
+.binding-form {
   display: grid;
-  gap: var(--global-space-4);
-  max-height: 160px;
+  gap: var(--global-space-12);
+  max-height: min(72vh, 760px);
   overflow: auto;
+  padding-right: var(--global-space-4);
 }
 
-.checkbox-item {
-  display: flex;
-  align-items: center;
-  gap: var(--global-space-6);
+.binding-intro {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-12);
+  background: var(--component-shell-content-bg-elevated);
+  padding: var(--global-space-12);
+  display: grid;
+  gap: var(--global-space-4);
+}
+
+.intro-title {
+  margin: 0;
   color: var(--semantic-text);
   font-size: var(--global-font-size-12);
 }
 
-.footer-actions {
-  display: flex;
-  justify-content: flex-end;
+.intro-description {
+  margin: 0;
+  color: var(--semantic-text-muted);
+  font-size: var(--global-font-size-12);
+}
+
+.default-model-panel {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-12);
+  background: var(--semantic-bg);
+  padding: var(--global-space-12);
+  display: grid;
   gap: var(--global-space-8);
+}
+
+.default-model-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--global-space-8);
+}
+
+.default-model-header h4 {
+  margin: 0;
+  color: var(--semantic-text);
+  font-size: var(--global-font-size-12);
+}
+
+.default-model-header span {
+  color: var(--semantic-text-subtle);
+  font-size: var(--global-font-size-12);
+}
+
+.default-model-hint {
+  margin: 0;
+  color: var(--semantic-text-subtle);
+  font-size: var(--global-font-size-12);
+}
+
+.group-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--global-space-12);
+}
+
+.group {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-12);
+  background: var(--semantic-bg);
+  padding: var(--global-space-12);
+  display: grid;
+  gap: var(--global-space-8);
+  min-height: 0;
+}
+
+.group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--global-space-8);
+}
+
+.group-head h4 {
+  margin: 0;
+  color: var(--semantic-text);
+  font-size: var(--global-font-size-12);
+}
+
+.group-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--global-space-8);
+}
+
+.group-meta {
+  color: var(--semantic-text-subtle);
+  font-size: var(--global-font-size-12);
+}
+
+.group-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--global-space-4);
+}
+
+.mini-action {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-8);
+  background: var(--component-button-ghost-bg);
+  color: var(--component-button-ghost-fg);
+  padding: var(--global-space-4) var(--global-space-8);
+  font-size: var(--global-font-size-12);
+  line-height: var(--global-line-height-tight);
+  cursor: pointer;
+}
+
+.mini-action:disabled {
+  color: var(--component-button-disabled-fg);
+  border-color: var(--component-button-disabled-border);
+  background: var(--component-button-disabled-bg);
+  cursor: not-allowed;
+}
+
+.checkbox-list {
+  display: grid;
+  gap: var(--global-space-8);
+  max-height: 160px;
+  overflow: auto;
+  padding-right: var(--global-space-4);
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--global-space-8);
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-8);
+  background: var(--component-shell-content-bg-elevated);
+  padding: var(--global-space-8);
+  cursor: pointer;
+}
+
+.checkbox-item:hover {
+  background: var(--component-sidebar-item-bg-hover);
+}
+
+.checkbox-item input[type="checkbox"] {
+  margin-top: var(--global-space-4);
+  accent-color: var(--semantic-focus-ring);
+}
+
+.checkbox-label {
+  color: var(--semantic-text);
+  font-size: var(--global-font-size-12);
+  line-height: var(--global-line-height-normal);
+  word-break: break-word;
+}
+
+.empty-item {
+  color: var(--semantic-text-subtle);
+  font-size: var(--global-font-size-12);
+  padding: var(--global-space-8);
 }
 
 .message {
   margin: 0;
   color: var(--semantic-danger);
+}
+
+.footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--global-space-12);
+}
+
+.footer-summary {
+  margin: 0;
+  color: var(--semantic-text-muted);
+  font-size: var(--global-font-size-12);
+}
+
+.footer-buttons {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: var(--global-space-8);
+}
+
+:deep(.project-binding-modal .modal) {
+  width: min(940px, 92vw);
+  padding: var(--global-space-16);
+  gap: var(--global-space-12);
+}
+
+@media (max-width: 980px) {
+  .group-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .group-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 760px) {
+  .footer-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .footer-buttons {
+    justify-content: flex-start;
+  }
+
+  :deep(.project-binding-modal .modal) {
+    width: min(96vw, 96vw);
+  }
 }

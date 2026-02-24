@@ -146,6 +146,6 @@
 }
 
 .conversation-item.active {
-  background: var(--component-sidebar-item-bg-active);
+  background: transparent;
   color: var(--semantic-text);
 }

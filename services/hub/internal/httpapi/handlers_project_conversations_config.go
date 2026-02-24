@@ -91,7 +91,10 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 			}
 
 			now := time.Now().UTC().Format(time.RFC3339)
-			defaultModelID := firstNonEmpty(derefString(config.DefaultModelID), firstNonEmpty(project.DefaultModelID, "gpt-4.1"))
+			defaultModelID := firstNonEmpty(derefString(config.DefaultModelID), project.DefaultModelID)
+			if strings.TrimSpace(defaultModelID) == "" {
+				defaultModelID = state.resolveWorkspaceDefaultModelID(project.WorkspaceID)
+			}
 			conversation := Conversation{
 				ID:                "conv_" + randomHex(6),
 				WorkspaceID:       project.WorkspaceID,

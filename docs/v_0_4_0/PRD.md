@@ -161,19 +161,23 @@ Workspace
 
 ### 6.3 模型配置结构与目录（手工 JSON）
 
-1. 模型配置采用两级结构：`Vendor(base_url) -> Models`。
+1. 模型配置采用两级结构：`Vendor -> Models`，其中 Vendor 层包含 `base_url/auth/base_urls/homepage/docs/notes`。
 2. P0 厂商清单：OpenAI、Google、Qwen、豆包、智谱、MiniMax、本地。
-3. `model.json`（或回退模板）中每个 Vendor 必须携带 `base_url`，并由 Hub 校验 URL 合法性。
-4. 模型资源配置以 `vendor + model_id` 为主标识，不再要求单独 `name` 字段。
+3. `model.json`（或回退模板）中每个 Vendor 必须携带 `base_url` 与 `auth`；`homepage/docs/base_urls/notes` 为可选扩展字段，Hub 负责 URL 与结构校验。
+4. 模型资源配置以 `vendor + model_id` 为主标识，不再要求单独 `name` 字段，并支持按 `base_url_key` 选择目录定义的 endpoint。
 5. 非本地厂商 `base_url` 固定来自目录文件；本地厂商允许在配置时覆盖。
 6. 支持模型启用、停用、编辑、删除与默认模型指定。
 7. 模型目录优先来源为手工维护的 `.goyais/model.json`（缺失时回退 `models.default.json`）：
    - 本地工作区：目录根由通用设置 `defaultProjectDirectory` 同步到 Hub 的 `catalog-root`。
    - 远程工作区：由 Hub 独立维护目录根与文件。
 8. 提供目录刷新能力：
-   - 手动触发目录重载（P0）。
-   - 定时文件重载（P0）。
-9. 重载失败需提供可视化错误与审计记录。
+   - 页面进入自动触发重载（`source=page_open`，优先 POST，权限不足降级 GET）。
+   - 定时文件重载（`source=scheduled`，3 秒周期）。
+   - 手动触发目录重载（`source=manual`，保留接口能力）。
+9. 目录格式采用严格新格式；旧格式按“静默自动补齐 + 写回”迁移（本地/远程工作区一致执行），补齐失败或校验失败时回退内置模板。
+10. 自动补齐写回会清理未知字段，并写入失败审计，保证目录可追踪治理。
+11. 模型页保持“仅列表+选择”，不提供手输模型 ID。
+12. 重载失败需提供可视化错误与审计记录，且不阻断目录读取回退链路。
 
 ### 6.4 资源生命周期
 
@@ -438,7 +442,7 @@ Workspace
 9. `GET /v1/workspaces/{workspace_id}/model-catalog`
    - 查询 `.goyais/model.json`（缺失时回退 `models.default.json`）解析后的厂商/模型目录（`revision/source/updated_at`）。
 10. `POST /v1/workspaces/{workspace_id}/model-catalog`
-   - 手动触发目录重载（不做厂商自动同步）。
+   - 触发目录重载（`source=manual|page_open|scheduled`，不做厂商自动同步）。
 11. `GET|PUT /v1/workspaces/{workspace_id}/catalog-root`
    - 查询/更新目录根路径（远程工作区仅管理员可写）。
 12. `GET|POST /v1/workspaces/{workspace_id}/resource-configs`
@@ -564,6 +568,33 @@ ModelCatalogItem {
   display_name: string
   status: "enabled" | "disabled"
   last_synced_at?: string
+}
+
+ModelCatalogVendorAuth {
+  type: "none" | "http_bearer" | "api_key_header"
+  header?: string
+  scheme?: string
+  api_key_env?: string
+}
+
+ModelCatalogVendor {
+  name: "OpenAI" | "Google" | "Qwen" | "Doubao" | "Zhipu" | "MiniMax" | "Local"
+  homepage?: string
+  docs?: string
+  base_url: string
+  base_urls?: Record<string, string>
+  auth: ModelCatalogVendorAuth
+  models: Array<{ id: string; label: string; enabled: boolean }>
+  notes?: string[]
+}
+
+ModelSpec {
+  vendor: string
+  model_id: string
+  base_url?: string
+  base_url_key?: string
+  api_key?: string
+  timeout_ms?: number
 }
 
 PermissionVisibility {
@@ -700,11 +731,13 @@ Desktop -> Hub -> Worker
 5. 权限与审计：菜单/权限编辑停用生效；403 拒绝与审计一致。
 6. 项目配置：项目绑定生效，Conversation 覆盖不反写项目。
 7. 模型配置：厂商-模型两级管理、启停、删除、默认模型切换、目录加载。
-8. 资源共享：本地资源共享到远程需管理员审核；通过后可用，撤销后失效。
-9. 底部状态栏：Hub 地址与连接状态在主屏幕、账号信息、设置页一致。
-10. 连接异常：`reconnecting/disconnected` 下显示只读与重试提示。
-11. 非 Git 降级：非 Git 项目进入降级模式并限制 Commit/worktree。
-12. 高风险能力：写入/命令/网络/删除触发确认并可审计。
+8. 模型目录重载：进入模型页自动触发 `page_open` 重载，无手动按钮；失败时回退 embedded 并保留审计。
+9. 模型可用性门禁：`enabled=false` 模型禁止新建；历史已存在配置可读可测。
+10. 资源共享：本地资源共享到远程需管理员审核；通过后可用，撤销后失效。
+11. 底部状态栏：Hub 地址与连接状态在主屏幕、账号信息、设置页一致。
+12. 连接异常：`reconnecting/disconnected` 下显示只读与重试提示。
+13. 非 Git 降级：非 Git 项目进入降级模式并限制 Commit/worktree。
+14. 高风险能力：写入/命令/网络/删除触发确认并可审计。
 
 ### 19.2 测试门槛
 
@@ -874,3 +907,13 @@ event types:
 | Execution 快照语义（mode/model/project revision） | PRD.md, TECH_ARCH.md | PRD 14.2, TECH_ARCH 7.5/11.3 | done |
 | 审批确认与风险门禁协议（confirm + confirmation_required） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/15.3, TECH_ARCH 10/12, STANDARDS 10.4/13 | done |
 | 同项目多 Conversation 并行 + 文件只读接口 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7/14, TECH_ARCH 7/9.1/14, PLAN Phase 5/6 | done |
+
+### 25.8 2026-02-24 模型目录全量对齐矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 模型目录 Vendor 扩展字段（auth/base_urls/docs/notes） | PRD.md, TECH_ARCH.md | PRD 6.3/14.2, TECH_ARCH 6.5/20.4 | done |
+| `ModelSpec` 新增 `base_url_key` | PRD.md, TECH_ARCH.md | PRD 6.3/14.2, TECH_ARCH 20.6 | done |
+| 目录严格格式 + 静默补齐 + 回退策略 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 6.3/19.1, TECH_ARCH 6.5/20.4, STANDARDS 10.4/15 | done |
+| 模型页进入自动重载（无手动按钮） | PRD.md, IMPLEMENTATION_PLAN.md | PRD 6.3/19.1, PLAN Phase 4/9 验收 | done |
+| 重载失败审计细化（manual/page_open/scheduled） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 6.3/19.1, TECH_ARCH 15.3/20.4, STANDARDS 10.4/13/15 | done |

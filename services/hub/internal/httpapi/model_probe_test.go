@@ -19,11 +19,11 @@ func TestRunModelConfigTest_SupportedVendors(t *testing.T) {
 	defer openAIServer.Close()
 
 	googleServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/models/") == false || strings.Contains(r.URL.Path, ":generateContent") == false {
+		if !strings.HasPrefix(r.URL.Path, "/models/") || !strings.Contains(r.URL.Path, ":generateContent") {
 			t.Fatalf("unexpected google path: %s", r.URL.Path)
 		}
-		if r.URL.Query().Get("key") == "" {
-			t.Fatalf("expected key query in google request")
+		if strings.TrimSpace(r.Header.Get("x-goog-api-key")) == "" {
+			t.Fatalf("expected x-goog-api-key header in google request")
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}`))
@@ -36,14 +36,15 @@ func TestRunModelConfigTest_SupportedVendors(t *testing.T) {
 		base   string
 		key    string
 		model  string
+		auth   ModelCatalogVendorAuth
 	}{
-		{name: "openai", vendor: ModelVendorOpenAI, base: openAIServer.URL, key: "sk-test", model: "gpt-4.1"},
-		{name: "qwen", vendor: ModelVendorQwen, base: openAIServer.URL, key: "qwen-key", model: "qwen-max"},
-		{name: "doubao", vendor: ModelVendorDoubao, base: openAIServer.URL, key: "doubao-key", model: "doubao-pro"},
-		{name: "zhipu", vendor: ModelVendorZhipu, base: openAIServer.URL, key: "zhipu-key", model: "glm-4-plus"},
-		{name: "minimax", vendor: ModelVendorMiniMax, base: openAIServer.URL, key: "minimax-key", model: "MiniMax-Text-01"},
-		{name: "local", vendor: ModelVendorLocal, base: openAIServer.URL, key: "", model: "llama3.1:8b"},
-		{name: "google", vendor: ModelVendorGoogle, base: googleServer.URL, key: "google-key", model: "gemini-2.0-flash"},
+		{name: "openai", vendor: ModelVendorOpenAI, base: openAIServer.URL, key: "sk-test", model: "gpt-5.3", auth: ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer"}},
+		{name: "qwen", vendor: ModelVendorQwen, base: openAIServer.URL, key: "qwen-key", model: "qwen-plus-latest", auth: ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer"}},
+		{name: "doubao", vendor: ModelVendorDoubao, base: openAIServer.URL, key: "doubao-key", model: "doubao-seed-2-0-pro-260215", auth: ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer"}},
+		{name: "zhipu", vendor: ModelVendorZhipu, base: openAIServer.URL, key: "zhipu-key", model: "glm-5", auth: ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer"}},
+		{name: "minimax", vendor: ModelVendorMiniMax, base: openAIServer.URL, key: "minimax-key", model: "MiniMax-M2.5", auth: ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer"}},
+		{name: "local", vendor: ModelVendorLocal, base: openAIServer.URL, key: "", model: "llama3.1:8b", auth: ModelCatalogVendorAuth{Type: "none"}},
+		{name: "google", vendor: ModelVendorGoogle, base: googleServer.URL, key: "google-key", model: "gemini-3.1-pro-preview", auth: ModelCatalogVendorAuth{Type: "api_key_header", Header: "x-goog-api-key"}},
 	}
 
 	for _, tc := range cases {
@@ -57,11 +58,11 @@ func TestRunModelConfigTest_SupportedVendors(t *testing.T) {
 						APIKey:  tc.key,
 					},
 				},
-				func(vendor ModelVendorName) string {
+				func(vendor ModelVendorName) (ModelCatalogVendor, bool) {
 					if vendor == tc.vendor {
-						return tc.base
+						return ModelCatalogVendor{Name: vendor, BaseURL: tc.base, Auth: tc.auth}, true
 					}
-					return ""
+					return ModelCatalogVendor{}, false
 				},
 			)
 			if result.Status != "success" {
@@ -77,14 +78,18 @@ func TestRunModelConfigTest_MissingAPIKey(t *testing.T) {
 			ID: "rc_missing_key",
 			Model: &ModelSpec{
 				Vendor:  ModelVendorOpenAI,
-				ModelID: "gpt-4.1",
+				ModelID: "gpt-5.3",
 			},
 		},
-		func(vendor ModelVendorName) string {
+		func(vendor ModelVendorName) (ModelCatalogVendor, bool) {
 			if vendor == ModelVendorOpenAI {
-				return "https://api.openai.com/v1"
+				return ModelCatalogVendor{
+					Name:    vendor,
+					BaseURL: "https://api.openai.com/v1",
+					Auth:    ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer"},
+				}, true
 			}
-			return ""
+			return ModelCatalogVendor{}, false
 		},
 	)
 	if result.Status != "failed" {
@@ -111,16 +116,53 @@ func TestRunModelConfigTest_RemoteVendorIgnoresUserBaseURL(t *testing.T) {
 			ID: "rc_remote_base_url",
 			Model: &ModelSpec{
 				Vendor:  ModelVendorOpenAI,
-				ModelID: "gpt-4.1",
+				ModelID: "gpt-5.3",
 				BaseURL: "http://127.0.0.1:1",
 				APIKey:  "sk-test",
 			},
 		},
-		func(vendor ModelVendorName) string {
+		func(vendor ModelVendorName) (ModelCatalogVendor, bool) {
 			if vendor == ModelVendorOpenAI {
-				return openAIServer.URL
+				return ModelCatalogVendor{Name: vendor, BaseURL: openAIServer.URL, Auth: ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer"}}, true
 			}
-			return ""
+			return ModelCatalogVendor{}, false
+		},
+	)
+	if result.Status != "success" {
+		t.Fatalf("expected success, got %s (%s)", result.Status, result.Message)
+	}
+}
+
+func TestRunModelConfigTest_UsesBaseURLKey(t *testing.T) {
+	regionalServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat/completions" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"cmpl_1","choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer regionalServer.Close()
+
+	result := runModelConfigTest(
+		ResourceConfig{
+			ID: "rc_base_url_key",
+			Model: &ModelSpec{
+				Vendor:     ModelVendorQwen,
+				ModelID:    "qwen-plus-latest",
+				APIKey:     "qwen-key",
+				BaseURLKey: "us-east-1",
+			},
+		},
+		func(vendor ModelVendorName) (ModelCatalogVendor, bool) {
+			if vendor == ModelVendorQwen {
+				return ModelCatalogVendor{
+					Name:     vendor,
+					BaseURL:  "https://dashscope.aliyuncs.com/compatible-mode/v1",
+					BaseURLs: map[string]string{"us-east-1": regionalServer.URL},
+					Auth:     ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer"},
+				}, true
+			}
+			return ModelCatalogVendor{}, false
 		},
 	)
 	if result.Status != "success" {

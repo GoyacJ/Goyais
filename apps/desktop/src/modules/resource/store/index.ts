@@ -115,7 +115,7 @@ export async function refreshModelCatalog(): Promise<void> {
   }
 }
 
-export async function reloadWorkspaceModelCatalog(): Promise<void> {
+export async function reloadWorkspaceModelCatalog(source: "manual" | "page_open" | "scheduled" = "manual"): Promise<void> {
   const workspace = getCurrentWorkspace();
   if (!workspace) {
     return;
@@ -124,7 +124,7 @@ export async function reloadWorkspaceModelCatalog(): Promise<void> {
   resourceStore.catalogLoading = true;
   resourceStore.error = "";
   try {
-    resourceStore.catalog = await reloadModelCatalog(workspace.id);
+    resourceStore.catalog = await reloadModelCatalog(workspace.id, source);
   } catch (error) {
     resourceStore.error = toDisplayError(error);
   } finally {

@@ -169,6 +169,7 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 			})
 			return
 		}
+		catalogDefaultModelID := strings.TrimSpace(state.resolveWorkspaceDefaultModelID(conversationSeed.WorkspaceID))
 
 		now := time.Now().UTC().Format(time.RFC3339)
 		var createdExecution Execution
@@ -199,7 +200,14 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 			resolvedModelID = strings.TrimSpace(project.DefaultModelID)
 		}
 		if resolvedModelID == "" {
-			resolvedModelID = "gpt-4.1"
+			resolvedModelID = catalogDefaultModelID
+		}
+		if resolvedModelID == "" {
+			state.mu.Unlock()
+			WriteStandardError(w, r, http.StatusBadRequest, "MODEL_NOT_RESOLVED", "No available model found for execution", map[string]any{
+				"conversation_id": conversationID,
+			})
+			return
 		}
 
 		queueIndex := deriveNextQueueIndexLocked(state, conversationID)

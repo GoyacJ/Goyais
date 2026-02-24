@@ -214,6 +214,7 @@ func decodeResourceConfigPayload(payload string, redactSecret bool) (ResourceCon
 				model.APIKey = ""
 			} else {
 				model.APIKeyMasked = maskSecret(secret)
+				model.APIKey = secret
 			}
 		}
 		item.Model = &model

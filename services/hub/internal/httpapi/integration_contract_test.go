@@ -248,6 +248,9 @@ func TestResourceConfigAndCatalogEndpoints(t *testing.T) {
 
 	modelProbeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/chat/completions" {
+			if got := strings.TrimSpace(r.Header.Get("Authorization")); got != "Bearer sk-test" {
+				t.Fatalf("expected model probe Authorization Bearer sk-test, got %q", got)
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"id":"cmpl_1","choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
 			return
@@ -342,11 +345,16 @@ func TestResourceConfigAndCatalogEndpoints(t *testing.T) {
 	customCatalog := fmt.Sprintf(`{
   "version": "1",
   "updated_at": "%s",
+  "legacy_root": "cleanup_me",
   "vendors": [
     {
       "name": "OpenAI",
       "base_url": %q,
-      "models": [{ "id": "gpt-4.1", "label": "GPT-4.1", "enabled": true }]
+      "legacy_field": "cleanup_me",
+      "models": [
+        { "id": "gpt-4.1", "label": "GPT-4.1", "enabled": true },
+        { "id": "gpt-4.1-mini", "label": "GPT-4.1 Mini", "enabled": false }
+      ]
     },
     {
       "name": "Google",
@@ -383,9 +391,55 @@ func TestResourceConfigAndCatalogEndpoints(t *testing.T) {
 	if err := os.WriteFile(catalogFilePath, []byte(customCatalog), 0o644); err != nil {
 		t.Fatalf("write custom .goyais/model.json failed: %v", err)
 	}
-	reloadRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/model-catalog", map[string]any{}, authHeaders)
+	reloadRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/model-catalog", map[string]any{
+		"source": "page_open",
+	}, authHeaders)
 	if reloadRes.Code != http.StatusOK {
 		t.Fatalf("expected model catalog reload 200, got %d (%s)", reloadRes.Code, reloadRes.Body.String())
+	}
+	reloadPayload := map[string]any{}
+	mustDecodeJSON(t, reloadRes.Body.Bytes(), &reloadPayload)
+	if gotSource := strings.TrimSpace(asString(reloadPayload["source"])); gotSource != catalogFilePath {
+		t.Fatalf("expected source to be workspace catalog file after autofill writeback, got %q", gotSource)
+	}
+	reloadedRaw, readErr := os.ReadFile(catalogFilePath)
+	if readErr != nil {
+		t.Fatalf("read rewritten catalog failed: %v", readErr)
+	}
+	reloaded := string(reloadedRaw)
+	if !strings.Contains(reloaded, `"auth"`) {
+		t.Fatalf("expected rewritten catalog to include auth block")
+	}
+	if strings.Contains(reloaded, `"legacy_field"`) || strings.Contains(reloaded, `"legacy_root"`) {
+		t.Fatalf("expected rewritten catalog to clean unknown fields")
+	}
+	auditRes := performJSONRequest(t, router, http.MethodGet, "/v1/admin/audit?workspace_id="+workspaceID+"&limit=50", nil, authHeaders)
+	if auditRes.Code != http.StatusOK {
+		t.Fatalf("expected audit list 200, got %d (%s)", auditRes.Code, auditRes.Body.String())
+	}
+	auditPayload := map[string]any{}
+	mustDecodeJSON(t, auditRes.Body.Bytes(), &auditPayload)
+	auditItems, ok := auditPayload["items"].([]any)
+	if !ok {
+		t.Fatalf("expected audit items array, got %#v", auditPayload["items"])
+	}
+	foundRequested := false
+	foundApply := false
+	for _, raw := range auditItems {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		action := strings.TrimSpace(asString(entry["action"]))
+		if action == "model_catalog.reload.requested" {
+			foundRequested = true
+		}
+		if action == "model_catalog.reload.apply" {
+			foundApply = true
+		}
+	}
+	if !foundRequested || !foundApply {
+		t.Fatalf("expected model_catalog.reload requested/apply audits, got %#v", auditItems)
 	}
 
 	createModelRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/resource-configs", map[string]any{
@@ -398,6 +452,17 @@ func TestResourceConfigAndCatalogEndpoints(t *testing.T) {
 	}, authHeaders)
 	if createModelRes.Code != http.StatusCreated {
 		t.Fatalf("expected create model config 201, got %d (%s)", createModelRes.Code, createModelRes.Body.String())
+	}
+	createDisabledModelRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/resource-configs", map[string]any{
+		"type": "model",
+		"model": map[string]any{
+			"vendor":   "OpenAI",
+			"model_id": "gpt-4.1-mini",
+			"api_key":  "sk-test",
+		},
+	}, authHeaders)
+	if createDisabledModelRes.Code != http.StatusBadRequest {
+		t.Fatalf("expected disabled model create to be blocked with 400, got %d (%s)", createDisabledModelRes.Code, createDisabledModelRes.Body.String())
 	}
 	modelPayload := map[string]any{}
 	mustDecodeJSON(t, createModelRes.Body.Bytes(), &modelPayload)

@@ -109,17 +109,19 @@
 1. 统一 Resource 数据模型（model/rule/skill/mcp）与共享状态机。
 2. Workspace 资源池 CRUD（含 Agent 配置、Rules、Skills、MCP）。
 3. 模型配置两级结构：Vendor -> Models（7 个 P0 厂商）。
-4. 模型目录手工 JSON 目录加载能力（手动触发 + 定时重载）。
-5. ProjectConfig 落地：模型/规则/技能/MCP 四类绑定。
-6. Conversation 创建时继承 ProjectConfig，并支持会话级覆盖且不反写项目。
+4. 模型目录手工 JSON 目录加载能力（严格新格式 + 旧格式静默补齐写回 + embedded 回退）。
+5. 模型目录重载触发链路（manual/page_open/scheduled）与失败审计落地。
+6. ProjectConfig 落地：模型/规则/技能/MCP 四类绑定。
+7. Conversation 创建时继承 ProjectConfig，并支持会话级覆盖且不反写项目。
 
 ### 验收标准
 
 1. 可在工作区创建并管理四类资源及厂商模型目录。
 2. ProjectConfig 可配置并在 Conversation 自动生效。
 3. Conversation 覆盖不反写 ProjectConfig。
-4. 模型目录手动与定时重载均可用，并有失败审计与可恢复提示。
-5. 资源查询严格按 workspace_id 隔离。
+4. 模型目录 manual/page_open/scheduled 重载均可用，并有 requested/apply/fallback_or_failed 审计。
+5. 旧目录自动补齐写回成功；补齐失败可回退 embedded 且不阻断读取。
+6. 资源查询严格按 workspace_id 隔离。
 
 ### 依赖
 
@@ -252,6 +254,7 @@
 8. 无障碍（键盘导航、focus trap、对比度）检查。
 9. 侧边进程管理与打包流程验证。
 10. 设计一致性优化（推荐按 Pencil MCP 设计方法落地）。
+11. 模型页进入自动触发目录重载；无手动刷新按钮；无写权限降级 GET。
 
 ### 验收标准
 
@@ -260,6 +263,7 @@
 3. 发布 checklist 满足 P0 Go 条件。
 4. 关键页面视觉与交互一致性可接受。
 5. 通用设置在 1440x900 首屏可见分组不少于 4 个，且策略变更即时持久化。
+6. 模型页自动重载与目录扩展字段可视化验收通过（docs/homepage/auth/notes/base_urls）。
 
 ### 依赖
 
@@ -348,6 +352,16 @@
 3. 契约门禁：`model-catalog/catalog-root/resource-configs/project-configs` 路由与 OpenAPI 必须一致。
 4. 安全门禁：API Key 必须加密落库、返回掩码、测试调用全量审计。
 5. 验收门禁：模型测试、MCP 连接、项目配置继承三类场景必须覆盖自动化测试。
+
+---
+
+## 2026-02-24 模型目录全量对齐门禁（增量）
+
+1. 契约门禁：Hub/Desktop/OpenAPI 必须同时支持 `auth/base_urls/homepage/docs/notes` 与 `base_url_key`。
+2. 兼容门禁：旧目录仅允许“静默自动补齐并写回”；补齐失败必须回退 embedded 并记录失败审计。
+3. 交互门禁：模型页进入自动触发 `source=page_open` 重载；无手动刷新按钮。
+4. 默认门禁：移除 `gpt-4.1` 硬编码兜底，默认模型走目录 `(Default)` 优先 + enabled 首个回退。
+5. 审计门禁：`model_catalog.reload` 必须覆盖 requested/apply/fallback_or_failed，含 `workspace_id/source/reason/error/trace_id`。
 
 ---
 

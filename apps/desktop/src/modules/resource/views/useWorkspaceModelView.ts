@@ -7,6 +7,7 @@ import {
   loadPreviousResourceConfigsPage,
   patchWorkspaceResourceConfig,
   refreshModelCatalog,
+  reloadWorkspaceModelCatalog,
   refreshResourceConfigsByType,
   resourceStore,
   setResourceEnabledFilter,
@@ -15,7 +16,7 @@ import {
 } from "@/modules/resource/store";
 import { authStore } from "@/shared/stores/authStore";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
-import type { ModelVendorName, ResourceConfig } from "@/shared/types/api";
+import type { ModelCatalogVendor, ModelVendorName, ResourceConfig } from "@/shared/types/api";
 
 const columns = [
   { key: "vendor", label: "厂商" },
@@ -35,15 +36,40 @@ export function useWorkspaceModelView() {
   const canWrite = computed(() => workspaceStore.mode === "local" || authStore.capabilities.resource_write);
   const catalogVendors = computed(() => resourceStore.catalog?.vendors ?? []);
   const vendorOptions = computed(() => catalogVendors.value.map((item) => ({ value: item.name, label: item.name })));
+
+  const form = reactive({
+    open: false,
+    mode: "create" as "create" | "edit",
+    configId: "",
+    vendor: "" as ModelVendorName | "",
+    selectedCatalogModel: "",
+    baseUrl: "",
+    baseUrlKey: "",
+    apiKey: "",
+    apiKeyHint: "",
+    timeoutMs: "",
+    enabled: true,
+    testMessage: ""
+  });
+
+  const selectedVendor = computed(() => catalogVendors.value.find((item) => item.name === form.vendor) ?? null);
   const vendorModelOptions = computed(() => {
-    const vendor = catalogVendors.value.find((item) => item.name === form.vendor);
-    return (vendor?.models ?? []).map((item) => ({ value: item.id, label: item.label }));
+    const models = selectedVendor.value?.models ?? [];
+    const selectedID = form.selectedCatalogModel;
+    return models
+      .filter((item) => item.enabled || item.id === selectedID)
+      .map((item) => ({
+        value: item.id,
+        label: item.enabled ? item.label : `${item.label} (Disabled)`
+      }));
   });
+  const vendorEndpointOptions = computed(() => {
+    const entries = Object.entries(selectedVendor.value?.base_urls ?? {});
+    return entries.map(([key, value]) => ({ value: key, label: `${key} (${value})` }));
+  });
+  const showVendorEndpointSelector = computed(() => form.vendor !== "Local" && vendorEndpointOptions.value.length > 0);
   const showLocalBaseURL = computed(() => form.vendor === "Local");
-  const selectedVendorBaseURL = computed(() => {
-    const vendor = catalogVendors.value.find((item) => item.name === form.vendor);
-    return vendor?.base_url ?? "";
-  });
+  const selectedVendorBaseURL = computed(() => selectedVendor.value?.base_url ?? "");
 
   const enabledFilterModel = computed({
     get: () => resourceStore.models.enabledFilter,
@@ -60,19 +86,6 @@ export function useWorkspaceModelView() {
     return "暂无数据";
   });
 
-  const form = reactive({
-    open: false,
-    mode: "create" as "create" | "edit",
-    configId: "",
-    vendor: "" as ModelVendorName | "",
-    selectedCatalogModel: "",
-    baseUrl: "",
-    apiKey: "",
-    apiKeyHint: "",
-    timeoutMs: "",
-    enabled: true,
-    testMessage: ""
-  });
   const testNotice = reactive({
     open: false,
     tone: "info" as "error" | "warning" | "info" | "403" | "disconnected" | "retrying",
@@ -88,7 +101,8 @@ export function useWorkspaceModelView() {
   watch(
     () => workspaceStore.currentWorkspaceId,
     async () => {
-      await Promise.all([refreshModelCatalog(), refreshResourceConfigsByType("model")]);
+      const loadCatalogTask = canWrite.value ? reloadWorkspaceModelCatalog("page_open") : refreshModelCatalog();
+      await Promise.all([loadCatalogTask, refreshResourceConfigsByType("model")]);
     },
     { immediate: true }
   );
@@ -97,16 +111,25 @@ export function useWorkspaceModelView() {
     () => form.vendor,
     (vendor) => {
       const vendorConfig = catalogVendors.value.find((item) => item.name === vendor);
-      const firstModel = vendorConfig?.models[0]?.id ?? "";
-      const modelExists = vendorConfig?.models.some((item) => item.id === form.selectedCatalogModel) ?? false;
+      const selectableModels = (vendorConfig?.models ?? []).filter((item) => item.enabled || item.id === form.selectedCatalogModel);
+      const firstModel = selectableModels[0]?.id ?? "";
+      const modelExists = selectableModels.some((item) => item.id === form.selectedCatalogModel);
       if (!modelExists) {
         form.selectedCatalogModel = firstModel;
       }
-      if (vendor === "Local" && form.baseUrl.trim() === "") {
-        form.baseUrl = vendorConfig?.base_url ?? "";
+
+      if (vendor === "Local") {
+        if (form.baseUrl.trim() === "") {
+          form.baseUrl = vendorConfig?.base_url ?? "";
+        }
+        form.baseUrlKey = "";
+        return;
       }
-      if (vendor !== "Local") {
-        form.baseUrl = "";
+
+      form.baseUrl = "";
+      const baseURLs = vendorConfig?.base_urls ?? {};
+      if (!(form.baseUrlKey in baseURLs)) {
+        form.baseUrlKey = resolveDefaultEndpointKey(vendorConfig);
       }
     }
   );
@@ -119,13 +142,15 @@ export function useWorkspaceModelView() {
   function openCreate(): void {
     if (!canWrite.value) return;
     const firstVendor = catalogVendors.value[0];
+    const firstModel = (firstVendor?.models ?? []).find((item) => item.enabled)?.id ?? "";
     Object.assign(form, {
       open: true,
       mode: "create",
       configId: "",
       vendor: (firstVendor?.name ?? "") as ModelVendorName | "",
-      selectedCatalogModel: firstVendor?.models[0]?.id ?? "",
+      selectedCatalogModel: firstModel,
       baseUrl: firstVendor?.name === "Local" ? firstVendor.base_url : "",
+      baseUrlKey: firstVendor?.name === "Local" ? "" : resolveDefaultEndpointKey(firstVendor),
       apiKey: "",
       apiKeyHint: "",
       timeoutMs: "",
@@ -143,6 +168,7 @@ export function useWorkspaceModelView() {
       vendor,
       selectedCatalogModel: item.model?.model_id ?? "",
       baseUrl: item.model?.base_url ?? "",
+      baseUrlKey: item.model?.base_url_key ?? "",
       apiKey: "",
       apiKeyHint: item.model?.api_key_masked ? `当前: ${item.model.api_key_masked}（不填写将保留旧值）` : "",
       timeoutMs: item.model?.timeout_ms ? String(item.model.timeout_ms) : "",
@@ -167,6 +193,7 @@ export function useWorkspaceModelView() {
       vendor,
       model_id: modelID,
       base_url: vendor === "Local" ? form.baseUrl.trim() || undefined : undefined,
+      base_url_key: vendor === "Local" ? undefined : form.baseUrlKey.trim() || undefined,
       api_key: form.apiKey.trim() || undefined,
       timeout_ms: Number.isNaN(timeout) ? undefined : timeout
     };
@@ -239,6 +266,31 @@ export function useWorkspaceModelView() {
     return new Date(value).toLocaleString();
   }
 
+  function resolveDefaultEndpointKey(vendor: ModelCatalogVendor | null | undefined): string {
+    if (!vendor || vendor.name === "Local") {
+      return "";
+    }
+    const entries = Object.entries(vendor.base_urls ?? {})
+      .map(([key, value]) => [key.trim(), value.trim()] as const)
+      .filter(([key, value]) => key !== "" && value !== "");
+    if (entries.length === 0) {
+      return "";
+    }
+    const normalizedBaseURL = normalizeURL(vendor.base_url);
+    if (normalizedBaseURL !== "") {
+      const matched = entries.find(([, value]) => normalizeURL(value) === normalizedBaseURL);
+      if (matched) {
+        return matched[0];
+      }
+    }
+    entries.sort(([a], [b]) => a.localeCompare(b));
+    return entries[0][0];
+  }
+
+  function normalizeURL(raw: string): string {
+    return raw.trim().replace(/\/+$/, "");
+  }
+
   return {
     canWrite,
     columns,
@@ -264,6 +316,8 @@ export function useWorkspaceModelView() {
     resourceStore,
     vendorModelOptions,
     vendorOptions,
+    vendorEndpointOptions,
+    showVendorEndpointSelector,
     showLocalBaseURL,
     selectedVendorBaseURL
   };

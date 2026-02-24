@@ -39,8 +39,8 @@ export function useWorkspaceProjectConfigView() {
         id: project.id,
         name: project.name,
         repoPath: project.repo_path,
-        modelCount: config?.model_ids.length ?? 0,
-        defaultModelId: config?.default_model_id ?? "-",
+        modelCount: normalizeModelBindingIDs(config?.model_ids ?? []).length,
+        defaultModelId: resolveModelBindingDisplayName(config?.default_model_id ?? "") || "-",
         ruleCount: config?.rule_ids.length ?? 0,
         skillCount: config?.skill_ids.length ?? 0,
         mcpCount: config?.mcp_ids.length ?? 0,
@@ -58,12 +58,21 @@ export function useWorkspaceProjectConfigView() {
     return "当前工作区暂无项目";
   });
 
-  const modelOptions = computed(() =>
-    resourceStore.models.items.map((item) => ({
-      id: item.id,
-      name: `${item.model?.vendor ?? "-"} / ${item.model?.model_id ?? item.id}`
-    }))
-  );
+  const modelOptions = computed(() => {
+    const labelsByModelID = new Map<string, string>();
+    for (const item of resourceStore.models.items) {
+      const modelID = item.model?.model_id?.trim() ?? "";
+      if (modelID === "") {
+        continue;
+      }
+      if (labelsByModelID.has(modelID)) {
+        continue;
+      }
+      const vendor = item.model?.vendor?.trim() ?? "-";
+      labelsByModelID.set(modelID, `${vendor} / ${modelID}`);
+    }
+    return Array.from(labelsByModelID.entries()).map(([id, name]) => ({ id, name }));
+  });
   const ruleOptions = computed(() => resourceStore.rules.items.map((item) => ({ id: item.id, name: item.name })));
   const skillOptions = computed(() => resourceStore.skills.items.map((item) => ({ id: item.id, name: item.name })));
   const mcpOptions = computed(() => resourceStore.mcps.items.map((item) => ({ id: item.id, name: item.name })));
@@ -130,12 +139,14 @@ export function useWorkspaceProjectConfigView() {
     }
 
     const config = getProjectConfig(projectId);
+    const normalizedModelIDs = normalizeModelBindingIDs(config.model_ids);
+    const normalizedDefaultModelID = normalizeModelBindingID(config.default_model_id ?? "");
     Object.assign(form, {
       open: true,
       projectId,
       projectName: project.name,
-      modelIds: [...config.model_ids],
-      defaultModelId: config.default_model_id ?? "",
+      modelIds: normalizedModelIDs,
+      defaultModelId: normalizedDefaultModelID,
       ruleIds: [...config.rule_ids],
       skillIds: [...config.skill_ids],
       mcpIds: [...config.mcp_ids],
@@ -217,6 +228,34 @@ export function useWorkspaceProjectConfigView() {
 
   function isChecked(field: "modelIds" | "ruleIds" | "skillIds" | "mcpIds", id: string): boolean {
     return form[field].includes(id);
+  }
+
+  function normalizeModelBindingIDs(modelIDs: string[]): string[] {
+    const normalized = modelIDs
+      .map((id) => normalizeModelBindingID(id))
+      .filter((id, index, source) => id !== "" && source.indexOf(id) === index);
+    return normalized;
+  }
+
+  function normalizeModelBindingID(id: string): string {
+    const normalizedID = id.trim();
+    if (normalizedID === "") {
+      return "";
+    }
+    const byConfigID = resourceStore.models.items.find((item) => item.id === normalizedID);
+    if (byConfigID?.model?.model_id) {
+      return byConfigID.model.model_id.trim();
+    }
+    return normalizedID;
+  }
+
+  function resolveModelBindingDisplayName(id: string): string {
+    const normalizedModelID = normalizeModelBindingID(id);
+    if (normalizedModelID === "") {
+      return "";
+    }
+    const option = modelOptions.value.find((item) => item.id === normalizedModelID);
+    return option?.name ?? normalizedModelID;
   }
 
   return {

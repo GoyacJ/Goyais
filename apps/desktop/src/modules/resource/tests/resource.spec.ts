@@ -42,6 +42,15 @@ describe("resource module views", () => {
     const wrapper = mountView(WorkspaceModelView);
     await flushPromises();
 
+    const catalogReloadCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(([input, init]) => {
+      const urlValue = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const path = new URL(urlValue, "http://127.0.0.1:8787").pathname;
+      const method = (init?.method ?? "GET").toUpperCase();
+      return method === "POST" && path === "/v1/workspaces/ws_local/model-catalog";
+    });
+    expect(catalogReloadCall).toBeTruthy();
+    expect(String(catalogReloadCall?.[1]?.body ?? "")).toContain(`"source":"page_open"`);
+
     expect(wrapper.text()).toContain("模型列表");
     expect(wrapper.text()).not.toContain("测试诊断");
     expect(wrapper.text()).not.toContain("Catalog Root");
@@ -51,6 +60,10 @@ describe("resource module views", () => {
     expect(addButton).toBeTruthy();
     await addButton?.trigger("click");
     expect(wrapper.text()).toContain("新增模型配置");
+    expect(wrapper.text()).toContain("Endpoint");
+    expect(wrapper.text()).not.toContain("认证：http_bearer");
+    expect(wrapper.text()).not.toContain("Homepage");
+    expect(wrapper.text()).not.toContain("Docs");
     expect(wrapper.text()).not.toContain("名称");
     expect(wrapper.text()).not.toContain("模型 ID（可手输）");
     expect(wrapper.text()).not.toContain("Params(JSON)");
@@ -116,7 +129,7 @@ function createApiFetchMock() {
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
     const path = requestURL.pathname;
 
-    if (method === "GET" && path === "/v1/workspaces/ws_local/model-catalog") {
+    if ((method === "GET" || method === "POST") && path === "/v1/workspaces/ws_local/model-catalog") {
       return jsonResponse({
         workspace_id: "ws_local",
         revision: 1,
@@ -125,8 +138,21 @@ function createApiFetchMock() {
         vendors: [
           {
             name: "OpenAI",
+            homepage: "https://openai.com/api/",
+            docs: "https://developers.openai.com/api/docs/models",
             base_url: "https://api.openai.com/v1",
-            models: [{ id: "gpt-4.1", label: "GPT-4.1", enabled: true }]
+            base_urls: {
+              global: "https://api.openai.com/v1",
+              mirror: "https://mirror.openai.com/v1"
+            },
+            auth: {
+              type: "http_bearer",
+              header: "Authorization",
+              scheme: "Bearer",
+              api_key_env: "OPENAI_API_KEY"
+            },
+            models: [{ id: "gpt-5.3", label: "GPT-5.3 (Default)", enabled: true }],
+            notes: ["OpenAI models are managed by model catalog."]
           }
         ]
       });
@@ -149,7 +175,7 @@ function createApiFetchMock() {
             name: "Alpha",
             repo_path: "/tmp/alpha",
             is_git: true,
-            default_model_id: "gpt-4.1",
+            default_model_id: "gpt-5.3",
             default_mode: "agent",
             current_revision: 0,
             created_at: "2026-02-24T00:00:00Z",
@@ -205,7 +231,7 @@ function buildResourceConfigItems(type: string | null) {
         enabled: true,
         model: {
           vendor: "OpenAI",
-          model_id: "gpt-4.1"
+          model_id: "gpt-5.3"
         },
         created_at: "2026-02-24T00:00:00Z",
         updated_at: "2026-02-24T00:00:00Z"

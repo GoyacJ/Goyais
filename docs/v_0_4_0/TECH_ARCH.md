@@ -227,10 +227,12 @@ private resource
 
 1. 模型目录优先读取 `<catalog_root>/.goyais/model.json`。
 2. 当 `.goyais/model.json` 不存在时，回退使用内置 `models.default.json` 模板。
-3. `vendors[*].base_url` 为必填字段，Hub 负责 URL 校验与失败审计。
-4. Hub 负责解析、JSON 校验、修订号递增与失败审计。
-5. 本地工作区目录根通过 `PUT /v1/workspaces/{workspace_id}/catalog-root` 从 Desktop 同步。
-6. 远程工作区目录根仅允许管理员变更。
+3. 目录采用严格新格式：`vendors[*].auth` 与 `vendors[*].base_url` 为必填，`homepage/docs/base_urls/notes` 为可选扩展。
+4. Hub 对旧格式执行静默自动补齐并写回（本地/远程一致），写回时清理未知字段；补齐失败或校验失败则回退 embedded 模板。
+5. 重载触发来源统一为 `manual/page_open/scheduled`，并记录 requested/apply/fallback_or_failed 阶段审计。
+6. 定时重载周期固定 3 秒；scheduled 命中缓存可跳过重复审计。
+7. 本地工作区目录根通过 `PUT /v1/workspaces/{workspace_id}/catalog-root` 从 Desktop 同步。
+8. 远程工作区目录根仅允许管理员变更。
 
 ---
 
@@ -575,6 +577,13 @@ CREATE TABLE share_requests (
 );
 ```
 
+`resource_configs.payload_json` 在 `type=model` 场景的关键字段：
+
+1. `vendor` + `model_id`：模型主标识。
+2. `base_url_key`：可选 endpoint key，命中 `vendors[*].base_urls`。
+3. `base_url`：仅 `Local` 厂商允许覆盖。
+4. `api_key`：密钥字段，存储与返回遵循掩码/审计策略。
+
 ### 11.3 项目与对话
 
 ```sql
@@ -800,6 +809,7 @@ while True:
 3. resource.import/share_request/share_approve/share_reject/share_revoke
 4. admin.user_create/role_bind/policy_update
 5. git.commit/discard/merge_conflict
+6. model_catalog.reload.requested/apply/fallback_or_failed（含 `source=manual|page_open|scheduled`）
 
 ---
 
@@ -917,10 +927,22 @@ while True:
   "vendors": [
     {
       "name": "OpenAI",
+      "homepage": "https://openai.com/api/",
+      "docs": "https://developers.openai.com/api/docs/models",
       "base_url": "https://api.openai.com/v1",
+      "base_urls": {
+        "global": "https://api.openai.com/v1"
+      },
+      "auth": {
+        "type": "http_bearer",
+        "header": "Authorization",
+        "scheme": "Bearer",
+        "api_key_env": "OPENAI_API_KEY"
+      },
       "models": [
-        { "id": "gpt-4.1", "label": "GPT-4.1", "enabled": true }
-      ]
+        { "id": "gpt-5.3", "label": "GPT-5.3 (Default)", "enabled": true }
+      ],
+      "notes": ["OpenAI default model"]
     }
   ]
 }
@@ -930,7 +952,7 @@ while True:
 
 ```json
 {
-  "reload": true
+  "source": "page_open"
 }
 ```
 
@@ -951,8 +973,10 @@ while True:
 3. `POST /v1/workspaces/{workspace_id}/resource-configs/{config_id}/test`
 4. `POST /v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect`
 5. `type=model` 时 `name` 为非必填字段；主标识为 `vendor + model_id`。
-5. `GET /v1/workspaces/{workspace_id}/mcps/export`
-6. `GET /v1/workspaces/{workspace_id}/project-configs`
+6. `ModelSpec` 增加 `base_url_key`，由 Hub 校验是否命中 Vendor `base_urls`。
+7. `enabled=false` 模型禁止新建配置；历史已存在配置允许继续读取与测试。
+8. `GET /v1/workspaces/{workspace_id}/mcps/export`
+9. `GET /v1/workspaces/{workspace_id}/project-configs`
 
 ### 20.7 2026-02-24 工作区语义收口（实现约束）
 

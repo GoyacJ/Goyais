@@ -31,7 +31,7 @@ export const workspaceModelCards = [
   },
   {
     title: "模型配置 Vendor -> Models",
-    lines: ["OpenAI: gpt-4.1, gpt-4.1-mini", "Google: gemini-2.0-flash", "默认模型: gpt-4.1"],
+    lines: ["OpenAI: gpt-5.3, gpt-5-mini", "Google: gemini-3.1-pro-preview", "默认模型: gpt-5.3"],
     tone: "default" as const
   },
   {

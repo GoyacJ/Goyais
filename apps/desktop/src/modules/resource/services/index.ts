@@ -22,8 +22,8 @@ export async function getModelCatalog(workspaceId: string): Promise<ModelCatalog
   return getControlClient().get<ModelCatalogResponse>(`/v1/workspaces/${workspaceId}/model-catalog`);
 }
 
-export async function reloadModelCatalog(workspaceId: string): Promise<ModelCatalogResponse> {
-  return getControlClient().post<ModelCatalogResponse>(`/v1/workspaces/${workspaceId}/model-catalog`, {});
+export async function reloadModelCatalog(workspaceId: string, source: "manual" | "page_open" | "scheduled" = "manual"): Promise<ModelCatalogResponse> {
+  return getControlClient().post<ModelCatalogResponse>(`/v1/workspaces/${workspaceId}/model-catalog`, { source });
 }
 
 export async function getCatalogRoot(workspaceId: string): Promise<CatalogRootResponse> {

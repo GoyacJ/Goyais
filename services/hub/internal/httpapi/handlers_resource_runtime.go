@@ -30,8 +30,8 @@ func ResourceConfigTestHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		result := runModelConfigTest(config, func(vendor ModelVendorName) string {
-			return state.resolveCatalogVendorBaseURL(workspaceID, vendor)
+		result := runModelConfigTest(config, func(vendor ModelVendorName) (ModelCatalogVendor, bool) {
+			return state.resolveCatalogVendor(workspaceID, vendor)
 		})
 		appendResourceTestLog(state, workspaceID, configID, "model_test", result.Status, result.LatencyMS, result.ErrorCode, result.Message)
 		writeJSON(w, http.StatusOK, result)

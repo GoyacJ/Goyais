@@ -18,6 +18,7 @@
   gap: var(--global-space-8);
   padding: 0;
   background: var(--component-shell-bg);
+  overflow: hidden;
 }
 
 .content {
@@ -26,5 +27,7 @@
   grid-template-rows: 40px 1fr 36px;
   gap: var(--global-space-8);
   border-radius: var(--global-radius-12);
+  min-height: 0;
+  overflow: hidden;
 }
 </style>

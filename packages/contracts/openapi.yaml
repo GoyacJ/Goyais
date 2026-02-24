@@ -690,6 +690,12 @@ paths:
       summary: Reload model catalog from models.json
       parameters:
         - $ref: '#/components/parameters/WorkspaceIdParam'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelCatalogReloadRequest'
       responses:
         '200':
           description: Updated model catalog payload
@@ -2198,19 +2204,47 @@ components:
         enabled:
           type: boolean
 
+    ModelCatalogVendorAuth:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [none, http_bearer, api_key_header]
+        header:
+          type: string
+        scheme:
+          type: string
+        api_key_env:
+          type: string
+
     ModelCatalogVendor:
       type: object
-      required: [name, base_url, models]
+      required: [name, base_url, auth, models]
       properties:
         name:
           type: string
           enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+        homepage:
+          type: string
+        docs:
+          type: string
         base_url:
           type: string
+        base_urls:
+          type: object
+          additionalProperties:
+            type: string
+        auth:
+          $ref: '#/components/schemas/ModelCatalogVendorAuth'
         models:
           type: array
           items:
             $ref: '#/components/schemas/ModelCatalogModel'
+        notes:
+          type: array
+          items:
+            type: string
 
     ModelCatalogResponse:
       type: object
@@ -2230,6 +2264,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ModelCatalogVendor'
+
+    ModelCatalogReloadRequest:
+      type: object
+      properties:
+        source:
+          type: string
+          enum: [manual, page_open, scheduled]
 
     CatalogRootUpdateRequest:
       type: object
@@ -2260,6 +2301,8 @@ components:
         model_id:
           type: string
         base_url:
+          type: string
+        base_url_key:
           type: string
         api_key:
           type: string

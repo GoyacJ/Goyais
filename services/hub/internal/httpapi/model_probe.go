@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 )
@@ -16,7 +15,12 @@ const (
 	maxModelProbeResponseBytes = 1 << 20
 )
 
-func runModelConfigTest(config ResourceConfig, resolveCatalogBaseURL func(ModelVendorName) string) ModelTestResult {
+type modelProbeTarget struct {
+	BaseURL string
+	Auth    ModelCatalogVendorAuth
+}
+
+func runModelConfigTest(config ResourceConfig, resolveCatalogVendor func(ModelVendorName) (ModelCatalogVendor, bool)) ModelTestResult {
 	start := time.Now()
 	status := "failed"
 	message := "model probe failed"
@@ -36,13 +40,13 @@ func runModelConfigTest(config ResourceConfig, resolveCatalogBaseURL func(ModelV
 		message = "model_id is required"
 		return buildModelTestResult(config.ID, status, code, message, start)
 	}
-	baseURL := resolveModelBaseURL(model, resolveCatalogBaseURL)
+	probeTarget := resolveModelProbeTarget(model, resolveCatalogVendor)
 
 	switch model.Vendor {
 	case ModelVendorGoogle:
-		status, code, message = probeGoogleModel(model, baseURL)
+		status, code, message = probeGoogleModel(model, probeTarget)
 	case ModelVendorOpenAI, ModelVendorQwen, ModelVendorDoubao, ModelVendorZhipu, ModelVendorMiniMax, ModelVendorLocal:
-		status, code, message = probeOpenAICompatibleModel(model, baseURL)
+		status, code, message = probeOpenAICompatibleModel(model, probeTarget)
 	default:
 		value := "unsupported_vendor"
 		code = &value
@@ -63,13 +67,8 @@ func buildModelTestResult(configID string, status string, code *string, message 
 	}
 }
 
-func probeOpenAICompatibleModel(model ModelSpec, baseURL string) (string, *string, string) {
-	if model.Vendor != ModelVendorLocal && strings.TrimSpace(model.APIKey) == "" {
-		value := "missing_api_key"
-		return "failed", &value, "api_key is required for remote vendor"
-	}
-
-	if baseURL == "" || !isValidURLString(baseURL) {
+func probeOpenAICompatibleModel(model ModelSpec, probeTarget modelProbeTarget) (string, *string, string) {
+	if probeTarget.BaseURL == "" || !isValidURLString(probeTarget.BaseURL) {
 		value := "invalid_base_url"
 		return "failed", &value, "base_url is required and must be valid"
 	}
@@ -84,14 +83,14 @@ func probeOpenAICompatibleModel(model ModelSpec, baseURL string) (string, *strin
 	}
 	payload, _ := json.Marshal(body)
 
-	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(baseURL, "/")+"/chat/completions", bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(probeTarget.BaseURL, "/")+"/chat/completions", bytes.NewReader(payload))
 	if err != nil {
 		value := "request_build_failed"
 		return "failed", &value, "failed to build request"
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if strings.TrimSpace(model.APIKey) != "" {
-		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(model.APIKey))
+	if authCode, authMessage := applyModelProbeAuth(req, probeTarget.Auth, model.APIKey); authCode != nil {
+		return "failed", authCode, authMessage
 	}
 
 	res, bodyBytes, err := doProbeRequest(req, resolveProbeTimeoutMS(model.TimeoutMS))
@@ -103,19 +102,14 @@ func probeOpenAICompatibleModel(model ModelSpec, baseURL string) (string, *strin
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		value := fmt.Sprintf("http_%d", res.StatusCode)
-		return "failed", &value, firstNonEmpty(extractOpenAIErrorMessage(bodyBytes), "provider returned non-success status")
+		return "failed", &value, firstNonEmpty(extractOpenAIErrorMessage(bodyBytes), extractGoogleErrorMessage(bodyBytes), "provider returned non-success status")
 	}
 
 	return "success", nil, "minimal inference probe succeeded"
 }
 
-func probeGoogleModel(model ModelSpec, baseURL string) (string, *string, string) {
-	if strings.TrimSpace(model.APIKey) == "" {
-		value := "missing_api_key"
-		return "failed", &value, "api_key is required for google vendor"
-	}
-
-	if baseURL == "" || !isValidURLString(baseURL) {
+func probeGoogleModel(model ModelSpec, probeTarget modelProbeTarget) (string, *string, string) {
+	if probeTarget.BaseURL == "" || !isValidURLString(probeTarget.BaseURL) {
 		value := "invalid_base_url"
 		return "failed", &value, "base_url is required and must be valid"
 	}
@@ -124,7 +118,7 @@ func probeGoogleModel(model ModelSpec, baseURL string) (string, *string, string)
 	if !strings.HasPrefix(modelPath, "models/") {
 		modelPath = "models/" + modelPath
 	}
-	endpoint := fmt.Sprintf("%s/%s:generateContent?key=%s", strings.TrimRight(baseURL, "/"), modelPath, url.QueryEscape(strings.TrimSpace(model.APIKey)))
+	endpoint := fmt.Sprintf("%s/%s:generateContent", strings.TrimRight(probeTarget.BaseURL, "/"), modelPath)
 
 	body := map[string]any{
 		"contents": []map[string]any{
@@ -140,6 +134,9 @@ func probeGoogleModel(model ModelSpec, baseURL string) (string, *string, string)
 		return "failed", &value, "failed to build request"
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if authCode, authMessage := applyModelProbeAuth(req, probeTarget.Auth, model.APIKey); authCode != nil {
+		return "failed", authCode, authMessage
+	}
 
 	res, bodyBytes, err := doProbeRequest(req, resolveProbeTimeoutMS(model.TimeoutMS))
 	if err != nil {
@@ -150,10 +147,43 @@ func probeGoogleModel(model ModelSpec, baseURL string) (string, *string, string)
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		value := fmt.Sprintf("http_%d", res.StatusCode)
-		return "failed", &value, firstNonEmpty(extractGoogleErrorMessage(bodyBytes), "provider returned non-success status")
+		return "failed", &value, firstNonEmpty(extractGoogleErrorMessage(bodyBytes), extractOpenAIErrorMessage(bodyBytes), "provider returned non-success status")
 	}
 
 	return "success", nil, "minimal inference probe succeeded"
+}
+
+func applyModelProbeAuth(req *http.Request, auth ModelCatalogVendorAuth, apiKey string) (*string, string) {
+	normalizedAuthType := strings.TrimSpace(auth.Type)
+	normalizedKey := strings.TrimSpace(apiKey)
+	switch normalizedAuthType {
+	case "", "none":
+		return nil, ""
+	case "http_bearer":
+		if normalizedKey == "" {
+			value := "missing_api_key"
+			return &value, "api_key is required by vendor auth"
+		}
+		header := firstNonEmpty(strings.TrimSpace(auth.Header), "Authorization")
+		scheme := firstNonEmpty(strings.TrimSpace(auth.Scheme), "Bearer")
+		req.Header.Set(header, strings.TrimSpace(scheme+" "+normalizedKey))
+		return nil, ""
+	case "api_key_header":
+		if normalizedKey == "" {
+			value := "missing_api_key"
+			return &value, "api_key is required by vendor auth"
+		}
+		header := strings.TrimSpace(auth.Header)
+		if header == "" {
+			value := "invalid_auth_header"
+			return &value, "vendor auth header is invalid"
+		}
+		req.Header.Set(header, normalizedKey)
+		return nil, ""
+	default:
+		value := "invalid_auth_type"
+		return &value, "vendor auth type is invalid"
+	}
 }
 
 func doProbeRequest(req *http.Request, timeout time.Duration) (*http.Response, []byte, error) {
@@ -180,22 +210,41 @@ func resolveProbeTimeoutMS(timeoutMS int) time.Duration {
 	return time.Duration(timeoutMS) * time.Millisecond
 }
 
-func resolveModelBaseURL(model ModelSpec, resolveCatalogBaseURL func(ModelVendorName) string) string {
-	modelBaseURL := strings.TrimSpace(model.BaseURL)
-	catalogBaseURL := ""
-	if resolveCatalogBaseURL != nil {
-		catalogBaseURL = strings.TrimSpace(resolveCatalogBaseURL(model.Vendor))
+func resolveModelProbeTarget(model ModelSpec, resolveCatalogVendor func(ModelVendorName) (ModelCatalogVendor, bool)) modelProbeTarget {
+	target := modelProbeTarget{
+		BaseURL: strings.TrimSpace(model.BaseURL),
+		Auth:    defaultVendorAuth(model.Vendor),
 	}
-	if model.Vendor == ModelVendorLocal && modelBaseURL != "" {
-		return modelBaseURL
+
+	if resolveCatalogVendor != nil {
+		if vendor, exists := resolveCatalogVendor(model.Vendor); exists {
+			catalogBaseURL := strings.TrimSpace(vendor.BaseURL)
+			if catalogBaseURL != "" {
+				target.BaseURL = catalogBaseURL
+			}
+			if endpointKey := strings.TrimSpace(model.BaseURLKey); endpointKey != "" {
+				if value, ok := vendor.BaseURLs[endpointKey]; ok {
+					normalized := strings.TrimSpace(value)
+					if normalized != "" {
+						target.BaseURL = normalized
+					}
+				}
+			}
+			normalizedAuthType := strings.TrimSpace(vendor.Auth.Type)
+			if normalizedAuthType != "" {
+				target.Auth = vendor.Auth
+			}
+		}
 	}
-	if catalogBaseURL != "" {
-		return catalogBaseURL
-	}
+
 	if model.Vendor == ModelVendorLocal {
-		return modelBaseURL
+		if strings.TrimSpace(model.BaseURL) != "" {
+			target.BaseURL = strings.TrimSpace(model.BaseURL)
+		}
+		target.Auth = ModelCatalogVendorAuth{Type: "none"}
 	}
-	return ""
+
+	return target
 }
 
 func extractOpenAIErrorMessage(body []byte) string {

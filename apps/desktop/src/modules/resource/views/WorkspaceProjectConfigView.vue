@@ -33,71 +33,143 @@
       </ResourceConfigTable>
     </section>
 
-    <BaseModal :open="form.open">
+    <BaseModal :open="form.open" class="project-binding-modal">
       <template #title>
-        <h3 class="modal-title">项目绑定配置：{{ form.projectName }}</h3>
+        <div class="modal-header">
+          <h3 class="modal-title">项目绑定配置</h3>
+          <p class="modal-subtitle">{{ form.projectName }}</p>
+        </div>
       </template>
 
       <div class="binding-form">
-        <p>ProjectConfig 仅定义默认绑定；Conversation 可覆盖但不反写项目配置。</p>
+        <section class="binding-intro">
+          <p class="intro-title">绑定说明</p>
+          <p class="intro-description">ProjectConfig 仅定义默认绑定；Conversation 可覆盖但不反写项目配置。</p>
+        </section>
 
-        <section class="group">
-          <h4>模型绑定（多选）</h4>
-          <div class="checkbox-list">
-            <label v-for="item in modelOptions" :key="item.id" class="checkbox-item">
-              <input :checked="isChecked('modelIds', item.id)" type="checkbox" @change="toggleListItem('modelIds', item.id)" />
-              {{ item.name }}
-            </label>
-            <span v-if="modelOptions.length === 0">暂无模型配置</span>
+        <section class="default-model-panel">
+          <div class="default-model-header">
+            <h4>默认模型</h4>
+            <span>{{ form.modelIds.length }} / {{ modelOptions.length }} 已选</span>
           </div>
-
           <BaseSelect
             v-model="form.defaultModelId"
             :options="[{ value: '', label: '不设置默认模型' }, ...defaultModelOptions]"
             :disabled="form.modelIds.length === 0"
           />
+          <p class="default-model-hint">仅可从“模型绑定”中选择默认模型。</p>
         </section>
 
-        <section class="group">
-          <h4>规则绑定</h4>
-          <div class="checkbox-list">
-            <label v-for="item in ruleOptions" :key="item.id" class="checkbox-item">
-              <input :checked="isChecked('ruleIds', item.id)" type="checkbox" @change="toggleListItem('ruleIds', item.id)" />
-              {{ item.name }}
-            </label>
-            <span v-if="ruleOptions.length === 0">暂无规则配置</span>
-          </div>
-        </section>
+        <div class="group-grid">
+          <section class="group">
+            <header class="group-head">
+              <h4>模型绑定</h4>
+              <div class="group-tools">
+                <span class="group-meta">{{ form.modelIds.length }} / {{ modelOptions.length }}</span>
+                <div class="group-actions">
+                  <button class="mini-action" type="button" :disabled="!canWrite || modelOptions.length === 0" @click="setGroupSelection('modelIds', 'all')">
+                    全选
+                  </button>
+                  <button class="mini-action" type="button" :disabled="!canWrite || form.modelIds.length === 0" @click="setGroupSelection('modelIds', 'none')">
+                    清空
+                  </button>
+                </div>
+              </div>
+            </header>
+            <div class="checkbox-list">
+              <label v-for="item in modelOptions" :key="item.id" class="checkbox-item">
+                <input :checked="isChecked('modelIds', item.id)" type="checkbox" @change="toggleListItem('modelIds', item.id)" />
+                <span class="checkbox-label">{{ item.name }}</span>
+              </label>
+              <span v-if="modelOptions.length === 0" class="empty-item">暂无模型配置</span>
+            </div>
+          </section>
 
-        <section class="group">
-          <h4>技能绑定</h4>
-          <div class="checkbox-list">
-            <label v-for="item in skillOptions" :key="item.id" class="checkbox-item">
-              <input :checked="isChecked('skillIds', item.id)" type="checkbox" @change="toggleListItem('skillIds', item.id)" />
-              {{ item.name }}
-            </label>
-            <span v-if="skillOptions.length === 0">暂无技能配置</span>
-          </div>
-        </section>
+          <section class="group">
+            <header class="group-head">
+              <h4>规则绑定</h4>
+              <div class="group-tools">
+                <span class="group-meta">{{ form.ruleIds.length }} / {{ ruleOptions.length }}</span>
+                <div class="group-actions">
+                  <button class="mini-action" type="button" :disabled="!canWrite || ruleOptions.length === 0" @click="setGroupSelection('ruleIds', 'all')">
+                    全选
+                  </button>
+                  <button class="mini-action" type="button" :disabled="!canWrite || form.ruleIds.length === 0" @click="setGroupSelection('ruleIds', 'none')">
+                    清空
+                  </button>
+                </div>
+              </div>
+            </header>
+            <div class="checkbox-list">
+              <label v-for="item in ruleOptions" :key="item.id" class="checkbox-item">
+                <input :checked="isChecked('ruleIds', item.id)" type="checkbox" @change="toggleListItem('ruleIds', item.id)" />
+                <span class="checkbox-label">{{ item.name }}</span>
+              </label>
+              <span v-if="ruleOptions.length === 0" class="empty-item">暂无规则配置</span>
+            </div>
+          </section>
 
-        <section class="group">
-          <h4>MCP 绑定</h4>
-          <div class="checkbox-list">
-            <label v-for="item in mcpOptions" :key="item.id" class="checkbox-item">
-              <input :checked="isChecked('mcpIds', item.id)" type="checkbox" @change="toggleListItem('mcpIds', item.id)" />
-              {{ item.name }}
-            </label>
-            <span v-if="mcpOptions.length === 0">暂无 MCP 配置</span>
-          </div>
-        </section>
+          <section class="group">
+            <header class="group-head">
+              <h4>技能绑定</h4>
+              <div class="group-tools">
+                <span class="group-meta">{{ form.skillIds.length }} / {{ skillOptions.length }}</span>
+                <div class="group-actions">
+                  <button class="mini-action" type="button" :disabled="!canWrite || skillOptions.length === 0" @click="setGroupSelection('skillIds', 'all')">
+                    全选
+                  </button>
+                  <button class="mini-action" type="button" :disabled="!canWrite || form.skillIds.length === 0" @click="setGroupSelection('skillIds', 'none')">
+                    清空
+                  </button>
+                </div>
+              </div>
+            </header>
+            <div class="checkbox-list">
+              <label v-for="item in skillOptions" :key="item.id" class="checkbox-item">
+                <input :checked="isChecked('skillIds', item.id)" type="checkbox" @change="toggleListItem('skillIds', item.id)" />
+                <span class="checkbox-label">{{ item.name }}</span>
+              </label>
+              <span v-if="skillOptions.length === 0" class="empty-item">暂无技能配置</span>
+            </div>
+          </section>
+
+          <section class="group">
+            <header class="group-head">
+              <h4>MCP 绑定</h4>
+              <div class="group-tools">
+                <span class="group-meta">{{ form.mcpIds.length }} / {{ mcpOptions.length }}</span>
+                <div class="group-actions">
+                  <button class="mini-action" type="button" :disabled="!canWrite || mcpOptions.length === 0" @click="setGroupSelection('mcpIds', 'all')">
+                    全选
+                  </button>
+                  <button class="mini-action" type="button" :disabled="!canWrite || form.mcpIds.length === 0" @click="setGroupSelection('mcpIds', 'none')">
+                    清空
+                  </button>
+                </div>
+              </div>
+            </header>
+            <div class="checkbox-list">
+              <label v-for="item in mcpOptions" :key="item.id" class="checkbox-item">
+                <input :checked="isChecked('mcpIds', item.id)" type="checkbox" @change="toggleListItem('mcpIds', item.id)" />
+                <span class="checkbox-label">{{ item.name }}</span>
+              </label>
+              <span v-if="mcpOptions.length === 0" class="empty-item">暂无 MCP 配置</span>
+            </div>
+          </section>
+        </div>
 
         <p v-if="form.message !== ''" class="message">{{ form.message }}</p>
       </div>
 
       <template #footer>
         <div class="footer-actions">
-          <BaseButton variant="ghost" @click="closeProjectBinding">取消</BaseButton>
-          <BaseButton :disabled="!canWrite" variant="primary" @click="saveProjectBinding">保存</BaseButton>
+          <p class="footer-summary">
+            已绑定：模型 {{ form.modelIds.length }} · 规则 {{ form.ruleIds.length }} · 技能 {{ form.skillIds.length }} · MCP {{ form.mcpIds.length }}
+          </p>
+          <div class="footer-buttons">
+            <BaseButton variant="ghost" @click="closeProjectBinding">取消</BaseButton>
+            <BaseButton :disabled="!canWrite" variant="primary" @click="saveProjectBinding">保存</BaseButton>
+          </div>
         </div>
       </template>
     </BaseModal>
@@ -133,12 +205,50 @@ const {
   toggleListItem
 } = useWorkspaceProjectConfigView();
 
+type BindingField = "modelIds" | "ruleIds" | "skillIds" | "mcpIds";
+
 async function addProject(): Promise<void> {
   const directoryPath = await pickDirectoryPath();
   if (!directoryPath) {
     return;
   }
   await importDirectoryProject(directoryPath);
+}
+
+function setGroupSelection(field: BindingField, mode: "all" | "none"): void {
+  const nextIDs = mode === "all" ? resolveGroupOptionIDs(field) : [];
+  if (field === "modelIds") {
+    form.modelIds = nextIDs;
+    if (form.defaultModelId !== "" && !nextIDs.includes(form.defaultModelId)) {
+      form.defaultModelId = "";
+    }
+    if (form.defaultModelId === "" && nextIDs.length > 0) {
+      form.defaultModelId = nextIDs[0] ?? "";
+    }
+    return;
+  }
+  if (field === "ruleIds") {
+    form.ruleIds = nextIDs;
+    return;
+  }
+  if (field === "skillIds") {
+    form.skillIds = nextIDs;
+    return;
+  }
+  form.mcpIds = nextIDs;
+}
+
+function resolveGroupOptionIDs(field: BindingField): string[] {
+  if (field === "modelIds") {
+    return modelOptions.value.map((item) => item.id);
+  }
+  if (field === "ruleIds") {
+    return ruleOptions.value.map((item) => item.id);
+  }
+  if (field === "skillIds") {
+    return skillOptions.value.map((item) => item.id);
+  }
+  return mcpOptions.value.map((item) => item.id);
 }
 </script>
 

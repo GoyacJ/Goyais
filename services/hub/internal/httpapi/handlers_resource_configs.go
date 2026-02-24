@@ -3,6 +3,7 @@ package httpapi
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sort"
@@ -77,6 +78,10 @@ func ResourceConfigsHandler(state *AppState) http.HandlerFunc {
 			}
 			if input.Model != nil {
 				input.Model = normalizeModelSpecForStorage(input.Model)
+				if err := validateModelSpecAgainstCatalog(state, workspaceID, nil, input.Model); err != nil {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
 			}
 			now := nowUTC()
 			config := ResourceConfig{
@@ -138,7 +143,14 @@ func ResourceConfigByIDHandler(state *AppState) http.HandlerFunc {
 			if patch.Model != nil {
 				patch.Model = normalizeModelSpecForStorage(patch.Model)
 			}
+			currentModel := origin.Model
 			applyPatchToResourceConfig(&origin, patch)
+			if origin.Type == ResourceTypeModel && origin.Model != nil {
+				if err := validateModelSpecAgainstCatalog(state, workspaceID, currentModel, origin.Model); err != nil {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
+			}
 			normalizeResourceConfigForStorage(&origin)
 			origin.UpdatedAt = nowUTC()
 			updated, err := saveWorkspaceResourceConfig(state, origin)
@@ -319,8 +331,10 @@ func normalizeModelSpecForStorage(spec *ModelSpec) *ModelSpec {
 		return nil
 	}
 	next := *spec
+	next.Vendor = ModelVendorName(strings.TrimSpace(string(next.Vendor)))
 	next.ModelID = strings.TrimSpace(next.ModelID)
 	next.BaseURL = strings.TrimSpace(next.BaseURL)
+	next.BaseURLKey = strings.TrimSpace(next.BaseURLKey)
 	if next.Vendor != ModelVendorLocal {
 		next.BaseURL = ""
 	}
@@ -337,4 +351,45 @@ func normalizeResourceConfigForStorage(item *ResourceConfig) {
 	if item.Model != nil {
 		item.Model = normalizeModelSpecForStorage(item.Model)
 	}
+}
+
+func validateModelSpecAgainstCatalog(state *AppState, workspaceID string, current *ModelSpec, next *ModelSpec) error {
+	if next == nil {
+		return errors.New("model spec with model_id is required")
+	}
+	vendor := ModelVendorName(strings.TrimSpace(string(next.Vendor)))
+	modelID := strings.TrimSpace(next.ModelID)
+	if vendor == "" || modelID == "" {
+		return errors.New("model vendor and model_id are required")
+	}
+	response, err := state.LoadModelCatalog(workspaceID, false)
+	if err != nil {
+		return fmt.Errorf("failed to load model catalog: %w", err)
+	}
+
+	for _, item := range response.Vendors {
+		if item.Name != vendor {
+			continue
+		}
+		endpointKey := strings.TrimSpace(next.BaseURLKey)
+		if endpointKey != "" {
+			if _, ok := item.BaseURLs[endpointKey]; !ok {
+				return fmt.Errorf("vendor %s does not contain endpoint key %s", vendor, endpointKey)
+			}
+		}
+		for _, model := range item.Models {
+			if strings.TrimSpace(model.ID) != modelID {
+				continue
+			}
+			if model.Enabled {
+				return nil
+			}
+			if current != nil && strings.TrimSpace(current.ModelID) == modelID && strings.TrimSpace(string(current.Vendor)) == string(vendor) {
+				return nil
+			}
+			return fmt.Errorf("model %s/%s is disabled in catalog", vendor, modelID)
+		}
+		return fmt.Errorf("model %s/%s does not exist in catalog", vendor, modelID)
+	}
+	return fmt.Errorf("vendor %s does not exist in catalog", vendor)
 }

@@ -37,10 +37,22 @@ export type ModelCatalogModel = {
   enabled: boolean;
 };
 
+export type ModelCatalogVendorAuth = {
+  type: "none" | "http_bearer" | "api_key_header";
+  header?: string;
+  scheme?: string;
+  api_key_env?: string;
+};
+
 export type ModelCatalogVendor = {
   name: ModelVendorName;
+  homepage?: string;
+  docs?: string;
   base_url: string;
+  base_urls?: Record<string, string>;
+  auth: ModelCatalogVendorAuth;
   models: ModelCatalogModel[];
+  notes?: string[];
 };
 
 export type ModelCatalogResponse = {
@@ -61,6 +73,7 @@ export type ModelSpec = {
   vendor: ModelVendorName;
   model_id: string;
   base_url?: string;
+  base_url_key?: string;
   api_key?: string;
   api_key_masked?: string;
   timeout_ms?: number;

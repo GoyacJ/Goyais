@@ -17,7 +17,7 @@ const mockConversation: Conversation = {
   name: "Test Conversation",
   queue_state: "idle",
   default_mode: "agent",
-  model_id: "gpt-4.1",
+  model_id: "gpt-5.3",
   base_revision: 0,
   active_execution_id: null,
   created_at: "2026-02-23T00:00:00Z",
@@ -45,10 +45,10 @@ describe("conversation store", () => {
               message_id: `msg_${executionCounter}`,
               state: executionCounter === 1 ? "pending" : "queued",
               mode: "agent",
-              model_id: "gpt-4.1",
+              model_id: "gpt-5.3",
               mode_snapshot: "agent",
               model_snapshot: {
-                model_id: "gpt-4.1"
+                model_id: "gpt-5.3"
               },
               project_revision_snapshot: 0,
               queue_index: executionCounter - 1,
@@ -122,10 +122,10 @@ describe("conversation store", () => {
       message_id: "msg_1",
       state: "pending",
       mode: "agent",
-      model_id: "gpt-4.1",
+      model_id: "gpt-5.3",
       mode_snapshot: "agent",
       model_snapshot: {
-        model_id: "gpt-4.1"
+        model_id: "gpt-5.3"
       },
       project_revision_snapshot: 0,
       queue_index: 0,
@@ -195,10 +195,10 @@ describe("conversation store", () => {
       message_id: "msg_running",
       state: "executing",
       mode: "agent",
-      model_id: "gpt-4.1",
+      model_id: "gpt-5.3",
       mode_snapshot: "agent",
       model_snapshot: {
-        model_id: "gpt-4.1"
+        model_id: "gpt-5.3"
       },
       project_revision_snapshot: 0,
       queue_index: 0,

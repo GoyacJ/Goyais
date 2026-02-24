@@ -35,6 +35,7 @@ import {
   updateConversationModeById,
   updateConversationModelById
 } from "@/modules/project/store";
+import { refreshResourceConfigsByType, resourceStore } from "@/modules/resource/store";
 import { createRemoteConnection } from "@/modules/workspace/services";
 import {
   initializeWorkspaceContext,
@@ -139,21 +140,69 @@ export function useMainScreenController() {
     return "disconnected";
   });
 
-  const modelOptions = computed(() => {
+  const modelLabelByConfigID = computed(() => {
+    const map = new Map<string, string>();
+    for (const item of resourceStore.models.items) {
+      const configID = item.id.trim();
+      const modelID = item.model?.model_id?.trim() ?? "";
+      if (configID === "" || modelID === "") {
+        continue;
+      }
+      const vendor = item.model?.vendor?.trim() ?? "-";
+      map.set(configID, `${vendor} / ${modelID}`);
+    }
+    return map;
+  });
+
+  const modelLabelByModelID = computed(() => {
+    const map = new Map<string, string>();
+    for (const item of resourceStore.models.items) {
+      if (!item.enabled) {
+        continue;
+      }
+      const modelID = item.model?.model_id?.trim() ?? "";
+      if (modelID === "" || map.has(modelID)) {
+        continue;
+      }
+      const vendor = item.model?.vendor?.trim() ?? "-";
+      map.set(modelID, `${vendor} / ${modelID}`);
+    }
+    return map;
+  });
+
+  const enabledModelIDs = computed(() => Array.from(modelLabelByModelID.value.keys()));
+  const availableModelIDs = computed(() => new Set(enabledModelIDs.value));
+
+  const modelOptions = computed<Array<{ value: string; label: string }>>(() => {
     const project = activeProject.value;
-    const runtimeModel = runtime.value?.modelId ?? activeConversation.value?.model_id ?? "gpt-4.1";
-    if (!project) {
-      return [runtimeModel];
+    const projectConfig = project ? projectStore.projectConfigsByProjectId[project.id] : undefined;
+
+    const configuredModelIDs = [
+      ...(projectConfig?.model_ids ?? []),
+      projectConfig?.default_model_id ?? ""
+    ]
+      .map((value) => resolveSemanticModelID(value))
+      .filter((value, index, source) => value !== "" && source.indexOf(value) === index)
+      .filter((value) => availableModelIDs.value.has(value));
+
+    if (configuredModelIDs.length > 0) {
+      return configuredModelIDs.map((value) => ({ value, label: resolveModelLabel(value) }));
     }
 
-    const configured = projectStore.projectConfigsByProjectId[project.id]?.model_ids ?? [];
-    const merged = [...configured, runtimeModel].filter((value, index, source) => value.trim() !== "" && source.indexOf(value) === index);
-    return merged.length > 0 ? merged : [runtimeModel];
+    return enabledModelIDs.value.map((value) => ({ value, label: resolveModelLabel(value) }));
+  });
+
+  const activeModelId = computed(() => {
+    const runtimeModelID = resolveSemanticModelID(runtime.value?.modelId ?? activeConversation.value?.model_id ?? "");
+    if (runtimeModelID !== "" && modelOptions.value.some((item) => item.value === runtimeModelID)) {
+      return runtimeModelID;
+    }
+    return modelOptions.value[0]?.value ?? "";
   });
 
   onMounted(async () => {
     await initializeWorkspaceContext();
-    await refreshProjects();
+    await Promise.all([refreshProjects(), refreshResourceConfigsByType("model")]);
   });
 
   onUnmounted(() => {
@@ -194,7 +243,36 @@ export function useMainScreenController() {
       projectImportInProgress.value = false;
       projectImportFeedback.value = "";
       projectImportError.value = "";
+      void refreshResourceConfigsByType("model");
     }
+  );
+
+  const autoModelSyncingConversationID = ref("");
+  watch(
+    [() => activeConversation.value?.id ?? "", () => activeCount.value, () => modelOptions.value],
+    async ([conversationID, executingCount, options]) => {
+      if (conversationID === "" || executingCount > 0 || options.length === 0) {
+        return;
+      }
+      if (autoModelSyncingConversationID.value === conversationID) {
+        return;
+      }
+      const currentModelID = resolveSemanticModelID(runtime.value?.modelId ?? activeConversation.value?.model_id ?? "");
+      if (currentModelID !== "" && options.some((item) => item.value === currentModelID)) {
+        return;
+      }
+      const targetModelID = options[0]?.value ?? "";
+      if (targetModelID === "") {
+        return;
+      }
+      autoModelSyncingConversationID.value = conversationID;
+      try {
+        await updateModel(targetModelID);
+      } finally {
+        autoModelSyncingConversationID.value = "";
+      }
+    },
+    { deep: true }
   );
 
   watch(
@@ -250,14 +328,39 @@ export function useMainScreenController() {
     if (!activeConversation.value || !activeProject.value) {
       return;
     }
+    const targetModelID = resolveSemanticModelID(value);
+    if (targetModelID === "") {
+      return;
+    }
     const conversationId = activeConversation.value.id;
     const projectId = activeProject.value.id;
-    const previousModel = runtime.value?.modelId ?? activeConversation.value.model_id;
-    setConversationModel(conversationId, value);
-    const updated = await updateConversationModelById(projectId, conversationId, value);
+    const previousModel = resolveSemanticModelID(runtime.value?.modelId ?? activeConversation.value.model_id);
+    setConversationModel(conversationId, targetModelID);
+    const updated = await updateConversationModelById(projectId, conversationId, targetModelID);
     if (!updated) {
       setConversationModel(conversationId, previousModel);
     }
+  }
+
+  function resolveSemanticModelID(raw: string): string {
+    const normalized = raw.trim();
+    if (normalized === "") {
+      return "";
+    }
+    const byConfigID = modelLabelByConfigID.value.get(normalized);
+    if (byConfigID) {
+      const resolved = resourceStore.models.items.find((item) => item.id.trim() === normalized)?.model?.model_id?.trim();
+      return resolved && resolved !== "" ? resolved : normalized;
+    }
+    return normalized;
+  }
+
+  function resolveModelLabel(modelID: string): string {
+    const normalized = modelID.trim();
+    if (normalized === "") {
+      return "";
+    }
+    return modelLabelByModelID.value.get(normalized) ?? normalized;
   }
 
   function changeInspectorTab(tab: InspectorTabKey): void {
@@ -503,6 +606,7 @@ export function useMainScreenController() {
     updateDraft,
     updateMode,
     updateModel,
+    activeModelId,
     modelOptions,
     workspaceLabel,
     workspaceStore

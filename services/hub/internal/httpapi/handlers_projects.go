@@ -77,13 +77,14 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 			}
 
 			now := time.Now().UTC().Format(time.RFC3339)
+			defaultModelID := state.resolveWorkspaceDefaultModelID(strings.TrimSpace(input.WorkspaceID))
 			project := Project{
 				ID:              "proj_" + randomHex(6),
 				WorkspaceID:     strings.TrimSpace(input.WorkspaceID),
 				Name:            strings.TrimSpace(input.Name),
 				RepoPath:        strings.TrimSpace(input.RepoPath),
 				IsGit:           input.IsGit,
-				DefaultModelID:  "gpt-4.1",
+				DefaultModelID:  defaultModelID,
 				DefaultMode:     ConversationModeAgent,
 				CurrentRevision: 0,
 				CreatedAt:       now,
@@ -156,13 +157,14 @@ func ProjectsImportHandler(state *AppState) http.HandlerFunc {
 		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
+		defaultModelID := state.resolveWorkspaceDefaultModelID(strings.TrimSpace(input.WorkspaceID))
 		project := Project{
 			ID:              "proj_" + randomHex(6),
 			WorkspaceID:     strings.TrimSpace(input.WorkspaceID),
 			Name:            deriveProjectName(input.DirectoryPath),
 			RepoPath:        strings.TrimSpace(input.DirectoryPath),
 			IsGit:           true,
-			DefaultModelID:  "gpt-4.1",
+			DefaultModelID:  defaultModelID,
 			DefaultMode:     ConversationModeAgent,
 			CurrentRevision: 0,
 			CreatedAt:       now,

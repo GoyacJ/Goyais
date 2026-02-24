@@ -269,9 +269,10 @@ TokenLayerContract {
 2. 回滚门禁：`rollback` 必须恢复消息游标、队列状态、worktree_ref、Inspector 状态。
 3. 项目配置门禁：Conversation 覆盖不得反写 ProjectConfig。
 4. 菜单权限门禁：动态菜单可见性必须与后端权限一致（hidden/disabled/readonly/enabled）。
-5. 模型目录门禁：手动与定时重载路径都需可用，JSON 校验失败必须可视化并写审计日志。
-6. 主题门禁：`theme mode/font style/font scale/preset` 必须全局即时生效并持久化，且具备可回归自动化测试。
-7. 通用设置门禁：`general settings` 必须提供 6 组策略型行式配置并即时持久化；系统能力未接入平台时必须显式禁用并展示原因文案。
+5. 模型目录门禁：`manual/page_open/scheduled` 重载路径都需可用，严格新格式校验失败必须回退 embedded 并写审计日志。
+6. 目录迁移门禁：旧目录仅允许静默自动补齐写回；写回失败必须产出 `fallback_or_failed` 审计。
+7. 主题门禁：`theme mode/font style/font scale/preset` 必须全局即时生效并持久化，且具备可回归自动化测试。
+8. 通用设置门禁：`general settings` 必须提供 6 组策略型行式配置并即时持久化；系统能力未接入平台时必须显式禁用并展示原因文案。
 
 ### 10.5 门禁契约
 
@@ -375,7 +376,9 @@ StandardsExceptionADR {
 7. 是否完成动态菜单与固定菜单语义校验（账号信息/设置）。
 8. 是否验证 ProjectConfig 继承与 Conversation 覆盖语义。
 9. 是否验证模型目录加载（手动 + 定时）及 JSON 异常路径。
-10. 是否与 PRD/TECH_ARCH/PLAN 语义一致。
+10. 是否验证模型页进入自动重载且无手动刷新按钮。
+11. 是否验证禁用模型不可新建、历史模型配置可读可测。
+12. 是否与 PRD/TECH_ARCH/PLAN 语义一致。
 
 ### 13.2 完成定义（DoD）
 
@@ -418,7 +421,8 @@ StandardsExceptionADR {
 9. 项目配置语义变更时，能验证“Conversation 覆盖不反写 ProjectConfig”。
 10. 菜单权限变更时，能验证动态菜单/固定菜单行为与权限一致。
 11. 模型目录策略变更时，能验证手动/定时重载与失败审计。
-12. PR 审查可按第 13 章逐项打勾并形成可追溯证据。
+12. 模型目录全量对齐变更时，能验证 `auth/base_urls/base_url_key` 契约与禁用模型门禁。
+13. PR 审查可按第 13 章逐项打勾并形成可追溯证据。
 
 ---
 
@@ -450,3 +454,15 @@ StandardsExceptionADR {
 | Execution 快照字段扩展（mode/model/project revision） | PRD.md, TECH_ARCH.md | PRD 14.2, TECH_ARCH 7.5/11.3/20.x | done |
 | 同项目多 Conversation + 项目文件只读能力 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7/14, TECH_ARCH 7/9/11, PLAN Phase 5/6 | done |
 | 核心链路 strict 化（禁 fallback） | IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PLAN 门禁增量, STANDARDS 11/13/14 | done |
+
+---
+
+## 19. 2026-02-24 模型目录全量对齐同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 模型目录 Vendor 扩展字段（auth/base_urls/docs/notes） | PRD.md, TECH_ARCH.md | PRD 6.3/14.2, TECH_ARCH 6.5/20.4 | done |
+| `ModelSpec` 新增 `base_url_key` | TECH_ARCH.md | TECH_ARCH 11.2/20.6 | done |
+| 目录严格格式 + 静默补齐 + 回退策略 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 6.3/19.1, TECH_ARCH 6.5/20.4, STANDARDS 10.4/15 | done |
+| 模型页进入自动重载（无手动按钮） | PRD.md, IMPLEMENTATION_PLAN.md | PRD 19.1, PLAN Phase 4/9 验收 | done |
+| 重载失败审计细化（manual/page_open/scheduled） | TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | TECH_ARCH 15.3/20.4, STANDARDS 10.4/13/15 | done |

@@ -65,6 +65,11 @@
           模型
           <BaseSelect v-model="form.selectedCatalogModel" :options="vendorModelOptions" />
         </label>
+        <label v-if="showVendorEndpointSelector" class="full">
+          Endpoint
+          <BaseSelect v-model="form.baseUrlKey" :options="vendorEndpointOptions" />
+          <span class="hint endpoint-hint">按目录 `base_url_key` 保存区域路由，不直接写入 `base_url`。</span>
+        </label>
         <label v-if="showLocalBaseURL">
           Base URL
           <BaseInput v-model="form.baseUrl" :placeholder="selectedVendorBaseURL || 'http://127.0.0.1:11434/v1'" />
@@ -142,7 +147,9 @@ const {
   closeDeleteConfirm,
   confirmRemoveConfig,
   vendorModelOptions,
+  vendorEndpointOptions,
   vendorOptions,
+  showVendorEndpointSelector,
   showLocalBaseURL,
   selectedVendorBaseURL
 } = useWorkspaceModelView();

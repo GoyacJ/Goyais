@@ -45,7 +45,7 @@ export async function createProject(
         repo_path: input.repo_path,
         is_git: input.is_git,
         default_mode: "agent",
-        default_model_id: "gpt-4.1",
+        default_model_id: resolveMockDefaultModelID(),
         current_revision: 0,
         created_at: now,
         updated_at: now
@@ -101,7 +101,7 @@ export async function createConversation(project: Project, name: string, options
         name,
         queue_state: "idle",
         default_mode: project.default_mode ?? "agent",
-        model_id: project.default_model_id ?? "gpt-4.1",
+        model_id: resolveMockDefaultModelID(project),
         base_revision: project.current_revision ?? 0,
         active_execution_id: null,
         created_at: now,
@@ -214,4 +214,15 @@ function paginateMock<T>(items: T[], query: PaginationQuery): ListEnvelope<T> {
     items: items.slice(safeStart, end),
     next_cursor: end < items.length ? String(end) : null
   };
+}
+
+function resolveMockDefaultModelID(project?: Project): string {
+  const projectDefaultModelID = project?.default_model_id?.trim();
+  if (projectDefaultModelID) {
+    return projectDefaultModelID;
+  }
+  const resourceConfig = mockData.resourceConfigs.find(
+    (item) => item.type === "model" && item.enabled && typeof item.model?.model_id === "string" && item.model.model_id.trim() !== ""
+  );
+  return resourceConfig?.model?.model_id?.trim() ?? "";
 }

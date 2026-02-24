@@ -28,10 +28,22 @@ type ModelCatalogModel struct {
 	Enabled bool   `json:"enabled"`
 }
 
+type ModelCatalogVendorAuth struct {
+	Type      string `json:"type"`
+	Header    string `json:"header,omitempty"`
+	Scheme    string `json:"scheme,omitempty"`
+	APIKeyEnv string `json:"api_key_env,omitempty"`
+}
+
 type ModelCatalogVendor struct {
-	Name    ModelVendorName     `json:"name"`
-	BaseURL string              `json:"base_url"`
-	Models  []ModelCatalogModel `json:"models"`
+	Name     ModelVendorName        `json:"name"`
+	Homepage string                 `json:"homepage,omitempty"`
+	Docs     string                 `json:"docs,omitempty"`
+	BaseURL  string                 `json:"base_url"`
+	BaseURLs map[string]string      `json:"base_urls,omitempty"`
+	Auth     ModelCatalogVendorAuth `json:"auth"`
+	Models   []ModelCatalogModel    `json:"models"`
+	Notes    []string               `json:"notes,omitempty"`
 }
 
 type ModelCatalogResponse struct {
@@ -56,6 +68,7 @@ type ModelSpec struct {
 	Vendor       ModelVendorName `json:"vendor"`
 	ModelID      string          `json:"model_id"`
 	BaseURL      string          `json:"base_url,omitempty"`
+	BaseURLKey   string          `json:"base_url_key,omitempty"`
 	APIKey       string          `json:"api_key,omitempty"`
 	APIKeyMasked string          `json:"api_key_masked,omitempty"`
 	TimeoutMS    int             `json:"timeout_ms,omitempty"`

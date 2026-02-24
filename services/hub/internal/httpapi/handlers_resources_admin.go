@@ -264,6 +264,7 @@ func ShareRequestActionHandler(state *AppState) http.HandlerFunc {
 func ModelCatalogHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		workspaceID := strings.TrimSpace(r.PathValue("workspace_id"))
+		traceID := TraceIDFromContext(r.Context())
 		switch r.Method {
 		case http.MethodGet:
 			_, authErr := authorizeAction(
@@ -278,7 +279,7 @@ func ModelCatalogHandler(state *AppState) http.HandlerFunc {
 				authErr.write(w, r)
 				return
 			}
-			response, err := state.LoadModelCatalog(workspaceID, false)
+			response, _, err := state.loadModelCatalogDetailed(workspaceID, false)
 			if err != nil {
 				WriteStandardError(w, r, http.StatusInternalServerError, "MODEL_CATALOG_LOAD_FAILED", "Failed to load model catalog", map[string]any{
 					"workspace_id": workspaceID,
@@ -301,25 +302,25 @@ func ModelCatalogHandler(state *AppState) http.HandlerFunc {
 				authErr.write(w, r)
 				return
 			}
-			response, err := state.LoadModelCatalog(workspaceID, true)
+			input := struct {
+				Source string `json:"source,omitempty"`
+			}{}
+			if strings.TrimSpace(r.Header.Get("Content-Type")) != "" && r.ContentLength != 0 {
+				if err := decodeJSONBody(r, &input); err != nil {
+					err.write(w, r)
+					return
+				}
+			}
+			trigger := normalizeCatalogReloadTrigger(input.Source)
+
+			response, meta, err := state.loadModelCatalogDetailed(workspaceID, true)
+			state.recordModelCatalogReloadAudit(workspaceID, trigger, meta, err, session.UserID, traceID)
 			if err != nil {
 				WriteStandardError(w, r, http.StatusInternalServerError, "MODEL_CATALOG_RELOAD_FAILED", "Failed to reload model catalog", map[string]any{
 					"workspace_id": workspaceID,
 					"reason":       err.Error(),
 				})
 				return
-			}
-			state.AppendAudit(AdminAuditEvent{
-				Actor:    actorFromSession(session),
-				Action:   "model_catalog.reload",
-				Resource: workspaceID,
-				Result:   "success",
-				TraceID:  TraceIDFromContext(r.Context()),
-			})
-			if state.authz != nil {
-				_ = state.authz.appendAudit(workspaceID, session.UserID, "resource_config.write", "workspace", workspaceID, "success", map[string]any{
-					"operation": "model_catalog.reload",
-				}, TraceIDFromContext(r.Context()))
 			}
 			writeJSON(w, http.StatusOK, response)
 		default:

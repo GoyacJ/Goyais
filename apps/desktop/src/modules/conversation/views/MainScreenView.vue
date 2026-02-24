@@ -71,7 +71,7 @@
           :has-active-execution="activeCount > 0"
           :draft="runtime?.draft ?? ''"
           :mode="runtime?.mode ?? 'agent'"
-          :model-id="runtime?.modelId ?? 'gpt-4.1'"
+          :model-id="activeModelId"
           :model-options="modelOptions"
           :placeholder="placeholder"
           @update:draft="updateDraft"
@@ -89,7 +89,7 @@
             :capability="runtime?.diffCapability ?? nonGitCapability"
             :queued-count="queuedCount"
             :active-count="activeCount"
-            :model-id="runtime?.modelId ?? 'gpt-4.1'"
+            :model-id="activeModelId"
             :active-tab="runtime?.inspectorTab ?? 'diff'"
             @change-tab="changeInspectorTab"
             @commit="commitDiff"
@@ -196,6 +196,7 @@ const {
   stopExecution,
   switchWorkspace,
   updateDraft,
+  activeModelId,
   modelOptions,
   updateMode,
   updateModel,
