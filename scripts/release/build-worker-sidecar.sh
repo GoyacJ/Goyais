@@ -44,6 +44,8 @@ fi
 mkdir -p "$OUTPUT_DIR"
 cp "$SOURCE_PATH" "$OUTPUT_PATH"
 
+rm -rf "$WORKER_DIR/dist" "$WORKER_DIR/build" "$WORKER_DIR/goyais-worker.spec"
+
 if [[ "$EXT" != ".exe" ]]; then
   chmod +x "$OUTPUT_PATH"
 fi

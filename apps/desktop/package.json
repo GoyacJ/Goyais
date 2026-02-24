@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:web": "vite",
-    "dev:desktop": "tauri dev",
+    "sidecar:prepare": "bash ../../scripts/release/ensure-local-sidecars.sh",
+    "dev:desktop": "pnpm sidecar:prepare && tauri dev",
     "build": "cross-env VITE_API_MODE=strict VITE_ENABLE_MOCK_FALLBACK=false vite build",
     "lint": "tsc --noEmit -p tsconfig.app.json",
     "test": "vitest run",
@@ -18,7 +19,7 @@
     "check:size": "node ../../scripts/desktop/check-file-size.mjs",
     "check:complexity": "node ../../scripts/desktop/check-complexity.mjs",
     "quality:gate": "pnpm run check:size && pnpm run check:complexity",
-    "tauri:dev": "tauri dev"
+    "tauri:dev": "pnpm dev:desktop"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",
