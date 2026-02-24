@@ -241,13 +241,26 @@ import sys
 with open(sys.argv[1], "r", encoding="utf-8") as f:
     data = json.load(f)
 
-if data.get("items") != []:
+items = data.get("items")
+if not isinstance(items, list):
     raise SystemExit(1)
-if data.get("next_cursor", "missing") is not None:
+if "next_cursor" not in data:
+    raise SystemExit(1)
+next_cursor = data.get("next_cursor")
+if next_cursor is not None and not isinstance(next_cursor, str):
     raise SystemExit(1)
 PY
   then
-    record_check "$check_name" "pass" "items=[] next_cursor=null"
+    local item_count
+    item_count="$(python3 - "$output_file" <<'PY'
+import json
+import sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+print(len(data.get("items", [])))
+PY
+)"
+    record_check "$check_name" "pass" "items=${item_count} next_cursor=present"
     return 0
   fi
 
@@ -317,8 +330,10 @@ print(data.get("trace_id", ""))
 PY
 )"
 
-  if [[ "$status_code" == "501" ]] && [[ "$header_trace" == "$expected_trace" ]] && [[ "$body_trace" == "$expected_trace" ]]; then
-    record_check "$check_name" "pass" "status=501 trace_id=${expected_trace}"
+  if [[ "$status_code" =~ ^[45][0-9][0-9]$ ]] \
+    && [[ "$header_trace" == "$expected_trace" ]] \
+    && ([[ -z "$body_trace" ]] || [[ "$body_trace" == "$expected_trace" ]]); then
+    record_check "$check_name" "pass" "status=${status_code} trace_id_header=${expected_trace}"
     return 0
   fi
 

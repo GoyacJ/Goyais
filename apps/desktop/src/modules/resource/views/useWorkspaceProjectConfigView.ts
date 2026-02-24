@@ -2,6 +2,7 @@ import { computed, reactive, watch } from "vue";
 
 import { deleteProject, importProjectByDirectory, projectStore, refreshProjects, updateProjectBinding } from "@/modules/project/store";
 import { refreshModelCatalog, refreshResourceConfigsByType, refreshWorkspaceProjectBindings, resourceStore } from "@/modules/resource/store";
+import { getProjectConfig } from "@/modules/resource/views/projectConfigDefaults";
 import { authStore } from "@/shared/stores/authStore";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
 import type { ProjectConfig } from "@/shared/types/api";
@@ -292,22 +293,5 @@ export function useWorkspaceProjectConfigView() {
     saveProjectBinding,
     skillOptions,
     toggleListItem
-  };
-}
-
-function getProjectConfig(projectId: string): ProjectConfig {
-  const config = projectStore.projectConfigsByProjectId[projectId];
-  if (config) {
-    return config;
-  }
-
-  return {
-    project_id: projectId,
-    model_ids: [],
-    default_model_id: null,
-    rule_ids: [],
-    skill_ids: [],
-    mcp_ids: [],
-    updated_at: new Date().toISOString()
   };
 }

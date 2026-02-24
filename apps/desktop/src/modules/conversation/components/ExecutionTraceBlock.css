@@ -65,7 +65,7 @@
 }
 
 .trace-steps {
-  margin: 0 0 0 var(--global-space-14);
+  margin: 0 0 0 var(--global-space-12);
   display: grid;
   gap: var(--global-space-6);
 }
@@ -109,7 +109,7 @@
 .trace-running-list {
   display: grid;
   gap: var(--global-space-4);
-  margin-left: var(--global-space-14);
+  margin-left: var(--global-space-12);
 }
 
 .trace-running-line {

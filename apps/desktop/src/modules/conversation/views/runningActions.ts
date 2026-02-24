@@ -104,63 +104,91 @@ function collectActiveActionsForExecution(execution: Execution, events: Executio
   const activeModelActionIds: string[] = [];
 
   for (const event of events) {
-    if (event.type === "thinking_delta") {
-      const stage = asString(event.payload.stage);
-      if (stage === "model_call") {
-        const actionId = `model:${execution.id}:${event.sequence}`;
-        activeModelActionIds.push(actionId);
-        activeActions.set(actionId, {
-          actionId,
-          executionId: execution.id,
-          queueIndex: execution.queue_index,
-          type: "model",
-          name: "model_call",
-          startedAt: event.timestamp
-        });
-      } else if (stage === "assistant_output" || stage === "turn_limit_reached") {
-        const modelActionId = activeModelActionIds.pop();
-        if (modelActionId) {
-          activeActions.delete(modelActionId);
-        }
-      }
-      continue;
-    }
-
-    if (event.type === "tool_call") {
-      const name = asString(event.payload.name) || "tool";
-      const actionType: RunningActionType = name === "run_subagent" ? "subagent" : "tool";
-      const callID = asString(event.payload.call_id);
-      const actionId = callID !== ""
-        ? `${actionType}:${execution.id}:${callID}`
-        : `${actionType}:${execution.id}:seq:${event.sequence}`;
-      activeActions.set(actionId, {
-        actionId,
-        executionId: execution.id,
-        queueIndex: execution.queue_index,
-        type: actionType,
-        name,
-        startedAt: event.timestamp
-      });
-      continue;
-    }
-
-    if (event.type === "tool_result") {
-      const name = asString(event.payload.name) || "tool";
-      const actionType: RunningActionType = name === "run_subagent" ? "subagent" : "tool";
-      const callID = asString(event.payload.call_id);
-      if (callID !== "") {
-        activeActions.delete(`${actionType}:${execution.id}:${callID}`);
-        continue;
-      }
-      const fallbackCandidate = [...activeActions.values()]
-        .filter((item) => item.type === actionType && item.name === name)
-        .sort((left, right) => left.startedAt.localeCompare(right.startedAt))[0];
-      if (fallbackCandidate) {
-        activeActions.delete(fallbackCandidate.actionId);
-      }
+    switch (event.type) {
+      case "thinking_delta":
+        handleThinkingDeltaEvent(execution, event, activeActions, activeModelActionIds);
+        break;
+      case "tool_call":
+        handleToolCallEvent(execution, event, activeActions);
+        break;
+      case "tool_result":
+        handleToolResultEvent(execution, event, activeActions);
+        break;
+      default:
+        break;
     }
   }
   return [...activeActions.values()];
+}
+
+function handleThinkingDeltaEvent(
+  execution: Execution,
+  event: ExecutionEvent,
+  activeActions: Map<string, ActiveAction>,
+  activeModelActionIds: string[]
+): void {
+  const stage = asString(event.payload.stage);
+  if (stage === "model_call") {
+    const actionId = `model:${execution.id}:${event.sequence}`;
+    activeModelActionIds.push(actionId);
+    activeActions.set(actionId, {
+      actionId,
+      executionId: execution.id,
+      queueIndex: execution.queue_index,
+      type: "model",
+      name: "model_call",
+      startedAt: event.timestamp
+    });
+    return;
+  }
+  if (stage !== "assistant_output" && stage !== "turn_limit_reached") {
+    return;
+  }
+  const modelActionId = activeModelActionIds.pop();
+  if (modelActionId) {
+    activeActions.delete(modelActionId);
+  }
+}
+
+function handleToolCallEvent(
+  execution: Execution,
+  event: ExecutionEvent,
+  activeActions: Map<string, ActiveAction>
+): void {
+  const name = asString(event.payload.name) || "tool";
+  const actionType: RunningActionType = name === "run_subagent" ? "subagent" : "tool";
+  const callID = asString(event.payload.call_id);
+  const actionId = callID !== ""
+    ? `${actionType}:${execution.id}:${callID}`
+    : `${actionType}:${execution.id}:seq:${event.sequence}`;
+  activeActions.set(actionId, {
+    actionId,
+    executionId: execution.id,
+    queueIndex: execution.queue_index,
+    type: actionType,
+    name,
+    startedAt: event.timestamp
+  });
+}
+
+function handleToolResultEvent(
+  execution: Execution,
+  event: ExecutionEvent,
+  activeActions: Map<string, ActiveAction>
+): void {
+  const name = asString(event.payload.name) || "tool";
+  const actionType: RunningActionType = name === "run_subagent" ? "subagent" : "tool";
+  const callID = asString(event.payload.call_id);
+  if (callID !== "") {
+    activeActions.delete(`${actionType}:${execution.id}:${callID}`);
+    return;
+  }
+  const fallbackCandidate = [...activeActions.values()]
+    .filter((item) => item.type === actionType && item.name === name)
+    .sort((left, right) => left.startedAt.localeCompare(right.startedAt))[0];
+  if (fallbackCandidate) {
+    activeActions.delete(fallbackCandidate.actionId);
+  }
 }
 
 function toDateOrNow(input: string): Date {

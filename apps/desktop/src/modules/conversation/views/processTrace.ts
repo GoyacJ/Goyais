@@ -193,41 +193,63 @@ function toNonNegativeInteger(value: unknown): number | null {
 
 function toExecutionTraceStep(event: ExecutionEvent, detailLevel: TraceDetailLevel, index: number): ExecutionTraceStep {
   const eventID = event.event_id?.trim() || `${event.execution_id}-${event.sequence}-${index}`;
-  if (event.type === "execution_started") {
-    return {
-      id: eventID,
-      title: "开始执行",
-      summary: "execution_started",
-      details: detailLevel === "verbose" ? toCompactJSON(event.payload) : ""
-    };
+  const details = detailLevel === "verbose" ? toCompactJSON(event.payload) : "";
+  switch (event.type) {
+    case "execution_started":
+      return buildExecutionStartedStep(eventID, details);
+    case "thinking_delta":
+      return buildThinkingStep(eventID, event, detailLevel, details);
+    case "tool_call":
+      return buildToolCallStep(eventID, event, details);
+    default:
+      return buildToolResultStep(eventID, event, details);
   }
-  if (event.type === "thinking_delta") {
-    const stage = asString(event.payload.stage) || "thinking";
-    const delta = asString(event.payload.delta);
-    return {
-      id: eventID,
-      title: "思考",
-      summary: detailLevel === "verbose" && delta ? `${stage}: ${truncate(delta, 160)}` : stage,
-      details: detailLevel === "verbose" ? toCompactJSON(event.payload) : ""
-    };
-  }
-  if (event.type === "tool_call") {
-    const name = asString(event.payload.name) || "tool";
-    const riskLevel = asString(event.payload.risk_level);
-    return {
-      id: eventID,
-      title: "工具调用",
-      summary: riskLevel ? `${name} (${riskLevel})` : name,
-      details: detailLevel === "verbose" ? toCompactJSON(event.payload) : ""
-    };
-  }
+}
+
+function buildExecutionStartedStep(stepID: string, details: string): ExecutionTraceStep {
+  return {
+    id: stepID,
+    title: "开始执行",
+    summary: "execution_started",
+    details
+  };
+}
+
+function buildThinkingStep(
+  stepID: string,
+  event: ExecutionEvent,
+  detailLevel: TraceDetailLevel,
+  details: string
+): ExecutionTraceStep {
+  const stage = asString(event.payload.stage) || "thinking";
+  const delta = asString(event.payload.delta);
+  return {
+    id: stepID,
+    title: "思考",
+    summary: detailLevel === "verbose" && delta ? `${stage}: ${truncate(delta, 160)}` : stage,
+    details
+  };
+}
+
+function buildToolCallStep(stepID: string, event: ExecutionEvent, details: string): ExecutionTraceStep {
+  const name = asString(event.payload.name) || "tool";
+  const riskLevel = asString(event.payload.risk_level);
+  return {
+    id: stepID,
+    title: "工具调用",
+    summary: riskLevel ? `${name} (${riskLevel})` : name,
+    details
+  };
+}
+
+function buildToolResultStep(stepID: string, event: ExecutionEvent, details: string): ExecutionTraceStep {
   const toolName = asString(event.payload.name) || "tool";
   const okText = event.payload.ok === false ? "failed" : "done";
   return {
-    id: eventID,
+    id: stepID,
     title: "工具结果",
     summary: `${toolName} (${okText})`,
-    details: detailLevel === "verbose" ? toCompactJSON(event.payload) : ""
+    details
   };
 }
 

@@ -8,18 +8,11 @@ import {
 } from "@/modules/conversation/services";
 import { createExecutionEvent } from "@/modules/conversation/store/events";
 import {
-  applyExecutionState,
   dedupeExecutions,
-  ensureExecution,
-  parseDiff,
   restoreExecutionsFromSnapshot,
   upsertExecutionFromServer
 } from "@/modules/conversation/store/executionRuntime";
-import {
-  buildEventDedupKey,
-  rememberProcessedEvent,
-  shouldAppendTerminalMessage
-} from "@/modules/conversation/store/executionEventIdempotency";
+import { buildEventDedupKey, rememberProcessedEvent } from "@/modules/conversation/store/executionEventIdempotency";
 import {
   appendRuntimeEvent,
   conversationStore,
@@ -29,7 +22,12 @@ import {
   getLatestFinishedExecution,
   pushConversationSnapshot
 } from "@/modules/conversation/store/state";
-import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import {
+  applyDiffUpdate,
+  appendTerminalMessageFromEvent,
+  type ExecutionTransition,
+  updateExecutionTransition
+} from "@/modules/conversation/store/executionEventHandlers";
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { createMockId } from "@/shared/services/mockData";
 import type { Conversation, ConversationMessage, ExecutionEvent } from "@/shared/types/api";
@@ -222,77 +220,7 @@ export function applyIncomingExecutionEvent(conversationId: string, event: Execu
 
   appendRuntimeEvent(runtime, event);
 
-  let previousState: string | undefined;
-  let nextState: string | undefined;
-  let messageID = "";
-  if (event.execution_id) {
-    previousState = runtime.executions.find((item) => item.id === event.execution_id)?.state;
-    const execution = ensureExecution(runtime, conversationId, event);
-    messageID = execution.message_id;
-    applyExecutionState(execution, event);
-    dedupeExecutions(runtime);
-    nextState = runtime.executions.find((item) => item.id === event.execution_id)?.state;
-  }
-
-  if (event.type === "diff_generated") {
-    runtime.diff = parseDiff(event.payload);
-  }
-
-  if (
-    event.type === "execution_done" &&
-    shouldAppendTerminalMessage(runtime, event, previousState, nextState, messageID, "assistant")
-  ) {
-    const content = typeof event.payload.content === "string" && event.payload.content.trim() !== ""
-      ? event.payload.content
-      : `Execution ${event.execution_id} completed.`;
-    appendTerminalMessage(runtime, {
-      id: createMockId("msg"),
-      conversation_id: conversationId,
-      role: "assistant",
-      content,
-      queue_index: event.queue_index,
-      created_at: new Date().toISOString()
-    });
-  }
-
-  if (
-    event.type === "execution_error" &&
-    shouldAppendTerminalMessage(runtime, event, previousState, nextState, messageID, "system")
-  ) {
-    const content = typeof event.payload.message === "string" && event.payload.message.trim() !== ""
-      ? event.payload.message
-      : "Execution failed.";
-    appendTerminalMessage(runtime, {
-      id: createMockId("msg"),
-      conversation_id: conversationId,
-      role: "system",
-      content,
-      queue_index: event.queue_index,
-      created_at: new Date().toISOString()
-    });
-  }
-}
-
-function appendTerminalMessage(runtime: ConversationRuntime, message: ConversationMessage): void {
-  if (typeof message.queue_index !== "number") {
-    runtime.messages.push(message);
-    return;
-  }
-
-  let insertAfter = -1;
-  for (let index = 0; index < runtime.messages.length; index += 1) {
-    const current = runtime.messages[index];
-    if (typeof current.queue_index !== "number") {
-      continue;
-    }
-    if (current.queue_index <= message.queue_index) {
-      insertAfter = index;
-    }
-  }
-
-  if (insertAfter < 0) {
-    runtime.messages.push(message);
-    return;
-  }
-  runtime.messages.splice(insertAfter + 1, 0, message);
+  const transition = updateExecutionTransition(runtime, conversationId, event);
+  applyDiffUpdate(runtime, event);
+  appendTerminalMessageFromEvent(runtime, conversationId, event, transition);
 }
