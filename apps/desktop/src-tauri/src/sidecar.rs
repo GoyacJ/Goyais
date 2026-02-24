@@ -17,7 +17,8 @@ use tauri_plugin_shell::{
 
 const HUB_PORT: u16 = 8787;
 const WORKER_PORT: u16 = 8788;
-const HEALTH_TIMEOUT: Duration = Duration::from_secs(10);
+const HUB_HEALTH_TIMEOUT: Duration = Duration::from_secs(10);
+const WORKER_HEALTH_TIMEOUT: Duration = Duration::from_secs(45);
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const SIDECAR_LOG_FILE: &str = "sidecar.log";
 const HUB_DB_FILE: &str = "hub.sqlite3";
@@ -60,7 +61,7 @@ pub fn initialize<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     ];
     let (hub_events, hub_child) = app
         .shell()
-        .sidecar("binaries/goyais-hub")
+        .sidecar("goyais-hub")
         .map_err(|error| format!("failed to resolve hub sidecar: {error}"))?
         .envs(hub_envs)
         .spawn()
@@ -69,7 +70,7 @@ pub fn initialize<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     log_line(&log_path, "hub sidecar spawned");
     started.hub = Some(hub_child);
 
-    if let Err(error) = wait_for_health(HUB_PORT, HEALTH_TIMEOUT, &log_path) {
+    if let Err(error) = wait_for_health(HUB_PORT, HUB_HEALTH_TIMEOUT, &log_path) {
         log_line(
             &log_path,
             &format!("hub health probe failed, shutting down sidecars: {error}"),
@@ -89,7 +90,7 @@ pub fn initialize<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     ];
     let (worker_events, worker_child) = app
         .shell()
-        .sidecar("binaries/goyais-worker")
+        .sidecar("goyais-worker")
         .map_err(|error| format!("failed to resolve worker sidecar: {error}"))?
         .envs(worker_envs)
         .spawn()
@@ -98,7 +99,7 @@ pub fn initialize<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     log_line(&log_path, "worker sidecar spawned");
     started.worker = Some(worker_child);
 
-    if let Err(error) = wait_for_health(WORKER_PORT, HEALTH_TIMEOUT, &log_path) {
+    if let Err(error) = wait_for_health(WORKER_PORT, WORKER_HEALTH_TIMEOUT, &log_path) {
         log_line(
             &log_path,
             &format!("worker health probe failed, shutting down sidecars: {error}"),
@@ -133,18 +134,13 @@ pub fn shutdown<R: Runtime>(app: &AppHandle<R>) {
 }
 
 pub fn show_startup_error<R: Runtime>(app: &AppHandle<R>, message: &str) {
-    let app_handle = app.clone();
-    let text = message.to_string();
-    let _ = thread::spawn(move || {
-        let _ = app_handle
-            .dialog()
-            .message(text)
-            .title("Goyais Startup Error")
-            .kind(MessageDialogKind::Error)
-            .buttons(MessageDialogButtons::Ok)
-            .blocking_show();
-    })
-    .join();
+    eprintln!("[startup-error] {message}");
+    app.dialog()
+        .message(message.to_string())
+        .title("Goyais Startup Error")
+        .kind(MessageDialogKind::Error)
+        .buttons(MessageDialogButtons::Ok)
+        .show(|_| {});
 }
 
 fn wait_for_health(port: u16, timeout: Duration, log_path: &Path) -> Result<(), String> {
