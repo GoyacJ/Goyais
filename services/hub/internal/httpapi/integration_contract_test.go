@@ -593,6 +593,150 @@ func TestProjectConfigPersistsAcrossRouterRestart(t *testing.T) {
 	}
 }
 
+func TestConversationPatchSupportsModeAndModel(t *testing.T) {
+	router := NewRouter()
+	workspaceID := createRemoteWorkspace(t, router, "Remote Conversation Patch", "http://127.0.0.1:9010", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "conversation_owner", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
+		"workspace_id":   workspaceID,
+		"directory_path": "/tmp/conversation-patch-alpha",
+	}, authHeaders)
+	if projectRes.Code != http.StatusCreated {
+		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
+	}
+	projectPayload := map[string]any{}
+	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
+	projectID := projectPayload["id"].(string)
+
+	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+		"workspace_id": workspaceID,
+		"name":         "Patch Target",
+	}, authHeaders)
+	if convRes.Code != http.StatusCreated {
+		t.Fatalf("expected create conversation 201, got %d (%s)", convRes.Code, convRes.Body.String())
+	}
+	convPayload := map[string]any{}
+	mustDecodeJSON(t, convRes.Body.Bytes(), &convPayload)
+	conversationID := convPayload["id"].(string)
+
+	patchRes := performJSONRequest(t, router, http.MethodPatch, "/v1/conversations/"+conversationID, map[string]any{
+		"name":     "Patch Applied",
+		"mode":     "plan",
+		"model_id": "model_openai_gpt_4_1",
+	}, authHeaders)
+	if patchRes.Code != http.StatusOK {
+		t.Fatalf("expected patch conversation 200, got %d (%s)", patchRes.Code, patchRes.Body.String())
+	}
+	updated := map[string]any{}
+	mustDecodeJSON(t, patchRes.Body.Bytes(), &updated)
+	if got := strings.TrimSpace(asString(updated["name"])); got != "Patch Applied" {
+		t.Fatalf("expected patched name, got %q", got)
+	}
+	if got := strings.TrimSpace(asString(updated["default_mode"])); got != "plan" {
+		t.Fatalf("expected patched mode plan, got %q", got)
+	}
+	if got := strings.TrimSpace(asString(updated["model_id"])); got != "model_openai_gpt_4_1" {
+		t.Fatalf("expected patched model_id, got %q", got)
+	}
+}
+
+func TestProjectFilesEndpoints(t *testing.T) {
+	router := NewRouter()
+	workspaceID := createRemoteWorkspace(t, router, "Remote Project Files", "http://127.0.0.1:9011", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "file_reader", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	projectDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(projectDir, "README.md"), []byte("# Demo"), 0o644); err != nil {
+		t.Fatalf("write readme failed: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(projectDir, "src"), 0o755); err != nil {
+		t.Fatalf("create src dir failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(projectDir, "src", "main.ts"), []byte("console.log('ok')"), 0o644); err != nil {
+		t.Fatalf("write main.ts failed: %v", err)
+	}
+
+	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
+		"workspace_id":   workspaceID,
+		"directory_path": projectDir,
+	}, authHeaders)
+	if projectRes.Code != http.StatusCreated {
+		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
+	}
+	projectPayload := map[string]any{}
+	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
+	projectID := projectPayload["id"].(string)
+
+	listRes := performJSONRequest(t, router, http.MethodGet, "/v1/projects/"+projectID+"/files?depth=3", nil, authHeaders)
+	if listRes.Code != http.StatusOK {
+		t.Fatalf("expected project files list 200, got %d (%s)", listRes.Code, listRes.Body.String())
+	}
+	files := []map[string]any{}
+	mustDecodeJSON(t, listRes.Body.Bytes(), &files)
+	if len(files) == 0 {
+		t.Fatalf("expected project files to be listed")
+	}
+
+	contentRes := performJSONRequest(t, router, http.MethodGet, "/v1/projects/"+projectID+"/files/content?path=README.md", nil, authHeaders)
+	if contentRes.Code != http.StatusOK {
+		t.Fatalf("expected file content 200, got %d (%s)", contentRes.Code, contentRes.Body.String())
+	}
+	contentPayload := map[string]any{}
+	mustDecodeJSON(t, contentRes.Body.Bytes(), &contentPayload)
+	if !strings.Contains(asString(contentPayload["content"]), "Demo") {
+		t.Fatalf("expected README content, got %#v", contentPayload)
+	}
+}
+
+func TestExecutionConfirmEndpoint(t *testing.T) {
+	router := NewRouter()
+	workspaceID := createRemoteWorkspace(t, router, "Remote Execution Confirm", "http://127.0.0.1:9012", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "confirm_user", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
+		"workspace_id":   workspaceID,
+		"directory_path": "/tmp/execution-confirm-alpha",
+	}, authHeaders)
+	if projectRes.Code != http.StatusCreated {
+		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
+	}
+	projectPayload := map[string]any{}
+	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
+	projectID := projectPayload["id"].(string)
+
+	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+		"workspace_id": workspaceID,
+		"name":         "Confirm Conv",
+	}, authHeaders)
+	if convRes.Code != http.StatusCreated {
+		t.Fatalf("expected create conversation 201, got %d (%s)", convRes.Code, convRes.Body.String())
+	}
+	conversationPayload := map[string]any{}
+	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
+	conversationID := conversationPayload["id"].(string)
+
+	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
+		"content": "update file and run command",
+	}, authHeaders)
+	if messageRes.Code != http.StatusCreated {
+		t.Fatalf("expected create execution 201, got %d (%s)", messageRes.Code, messageRes.Body.String())
+	}
+	executionPayload := map[string]any{}
+	mustDecodeJSON(t, messageRes.Body.Bytes(), &executionPayload)
+	executionID := executionPayload["execution"].(map[string]any)["id"].(string)
+
+	confirmRes := performJSONRequest(t, router, http.MethodPost, "/v1/executions/"+executionID+"/confirm", map[string]any{
+		"decision": "approve",
+	}, authHeaders)
+	if confirmRes.Code != http.StatusOK {
+		t.Fatalf("expected execution confirm 200, got %d (%s)", confirmRes.Code, confirmRes.Body.String())
+	}
+}
+
 func asString(value any) string {
 	if raw, ok := value.(string); ok {
 		return raw

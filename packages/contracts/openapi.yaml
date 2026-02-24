@@ -298,6 +298,57 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
+  /v1/projects/{project_id}/files:
+    get:
+      summary: List project files under project root
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+        - in: query
+          name: path
+          schema:
+            type: string
+        - in: query
+          name: depth
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 6
+      responses:
+        '200':
+          description: Project file entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectFileEntry'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/projects/{project_id}/files/content:
+    get:
+      summary: Read project file content
+      parameters:
+        - $ref: '#/components/parameters/ProjectIdParam'
+        - in: query
+          name: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Project file content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectFileContentResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
   /v1/conversations:
     get:
       summary: List conversations
@@ -322,7 +373,7 @@ paths:
 
   /v1/conversations/{conversation_id}:
     patch:
-      summary: Rename conversation
+      summary: Update conversation metadata
       parameters:
         - $ref: '#/components/parameters/ConversationIdParam'
       requestBody:
@@ -330,7 +381,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RenameConversationRequest'
+              $ref: '#/components/schemas/UpdateConversationRequest'
       responses:
         '200':
           description: Renamed conversation
@@ -372,6 +423,25 @@ paths:
                 $ref: '#/components/schemas/ExecutionCreateResponse'
         '400':
           $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations/{conversation_id}/events:
+    get:
+      summary: Stream execution events for conversation (SSE)
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+        - in: query
+          name: last_event_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
@@ -468,6 +538,29 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/DiffItem'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/executions/{execution_id}/confirm:
+    post:
+      summary: Confirm or deny a pending execution
+      parameters:
+        - $ref: '#/components/parameters/ExecutionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionConfirmRequest'
+      responses:
+        '200':
+          description: Confirmation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
@@ -1681,7 +1774,7 @@ components:
 
     Project:
       type: object
-      required: [id, workspace_id, name, repo_path, is_git, created_at, updated_at]
+      required: [id, workspace_id, name, repo_path, is_git, current_revision, created_at, updated_at]
       properties:
         id:
           type: string
@@ -1698,6 +1791,9 @@ components:
         default_mode:
           type: string
           enum: [agent, plan]
+        current_revision:
+          type: integer
+          format: int64
         created_at:
           type: string
           format: date-time
@@ -1776,6 +1872,7 @@ components:
         - queue_state
         - default_mode
         - model_id
+        - base_revision
         - created_at
         - updated_at
       properties:
@@ -1795,6 +1892,9 @@ components:
           enum: [agent, plan]
         model_id:
           type: string
+        base_revision:
+          type: integer
+          format: int64
         active_execution_id:
           type: [string, 'null']
         created_at:
@@ -1813,12 +1913,34 @@ components:
         name:
           type: string
 
-    RenameConversationRequest:
+    UpdateConversationRequest:
       type: object
-      required: [name]
       properties:
         name:
           type: string
+        mode:
+          type: string
+          enum: [agent, plan]
+        model_id:
+          type: string
+
+    ModelSnapshot:
+      type: object
+      required: [model_id]
+      properties:
+        config_id:
+          type: string
+        vendor:
+          type: string
+        model_id:
+          type: string
+        base_url:
+          type: string
+        timeout_ms:
+          type: integer
+        params:
+          type: object
+          additionalProperties: true
 
     Execution:
       type: object
@@ -1830,6 +1952,9 @@ components:
         - state
         - mode
         - model_id
+        - mode_snapshot
+        - model_snapshot
+        - project_revision_snapshot
         - queue_index
         - trace_id
         - created_at
@@ -1845,12 +1970,20 @@ components:
           type: string
         state:
           type: string
-          enum: [queued, executing, completed, failed, cancelled]
+          enum: [queued, pending, executing, confirming, completed, failed, cancelled]
         mode:
           type: string
           enum: [agent, plan]
         model_id:
           type: string
+        mode_snapshot:
+          type: string
+          enum: [agent, plan]
+        model_snapshot:
+          $ref: '#/components/schemas/ModelSnapshot'
+        project_revision_snapshot:
+          type: integer
+          format: int64
         queue_index:
           type: integer
         trace_id:
@@ -1864,7 +1997,7 @@ components:
 
     ExecutionCreateRequest:
       type: object
-      required: [content, mode, model_id]
+      required: [content]
       properties:
         content:
           type: string
@@ -1876,10 +2009,23 @@ components:
 
     ExecutionCreateResponse:
       type: object
-      required: [execution]
+      required: [execution, queue_state, queue_index]
       properties:
         execution:
           $ref: '#/components/schemas/Execution'
+        queue_state:
+          type: string
+          enum: [idle, running, queued]
+        queue_index:
+          type: integer
+
+    ExecutionConfirmRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [approve, deny]
 
     RollbackRequest:
       type: object
@@ -1900,6 +2046,31 @@ components:
           type: string
           enum: [added, modified, deleted]
         summary:
+          type: string
+
+    ProjectFileEntry:
+      type: object
+      required: [path, type]
+      properties:
+        path:
+          type: string
+        type:
+          type: string
+          enum: [file, directory]
+        size:
+          type: integer
+          format: int64
+        mtime:
+          type: string
+          format: date-time
+
+    ProjectFileContentResponse:
+      type: object
+      required: [path, content]
+      properties:
+        path:
+          type: string
+        content:
           type: string
 
     Resource:

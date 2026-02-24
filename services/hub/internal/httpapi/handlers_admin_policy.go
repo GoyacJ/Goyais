@@ -348,14 +348,14 @@ func AdminABACPolicyByIDHandler(state *AppState) http.HandlerFunc {
 			_ = state.authz.appendAudit(firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("workspace_id")), session.WorkspaceID), session.UserID, "admin.policies.manage", "abac_policy", policyID, "success", map[string]any{"operation": "delete"}, TraceIDFromContext(r.Context()))
 		case http.MethodPatch:
 			payload := struct {
-				Name         *string         `json:"name,omitempty"`
-				Effect       *ABACEffect     `json:"effect,omitempty"`
-				Priority     *int            `json:"priority,omitempty"`
-				Enabled      *bool           `json:"enabled,omitempty"`
-				SubjectExpr  map[string]any  `json:"subject_expr,omitempty"`
-				ResourceExpr map[string]any  `json:"resource_expr,omitempty"`
-				ActionExpr   map[string]any  `json:"action_expr,omitempty"`
-				ContextExpr  map[string]any  `json:"context_expr,omitempty"`
+				Name         *string        `json:"name,omitempty"`
+				Effect       *ABACEffect    `json:"effect,omitempty"`
+				Priority     *int           `json:"priority,omitempty"`
+				Enabled      *bool          `json:"enabled,omitempty"`
+				SubjectExpr  map[string]any `json:"subject_expr,omitempty"`
+				ResourceExpr map[string]any `json:"resource_expr,omitempty"`
+				ActionExpr   map[string]any `json:"action_expr,omitempty"`
+				ContextExpr  map[string]any `json:"context_expr,omitempty"`
 			}{}
 			if err := decodeJSONBody(r, &payload); err != nil {
 				err.write(w, r)

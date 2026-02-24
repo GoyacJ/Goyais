@@ -189,6 +189,7 @@ func (s *authzStore) migrate() error {
 			is_git INTEGER NOT NULL DEFAULT 1,
 			default_model_id TEXT,
 			default_mode TEXT NOT NULL,
+			current_revision INTEGER NOT NULL DEFAULT 0,
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
@@ -236,7 +237,22 @@ func (s *authzStore) migrate() error {
 	if err := s.migrateResourceConfigsDropNameColumn(); err != nil {
 		return fmt.Errorf("migrate resource_configs schema: %w", err)
 	}
+	if err := s.migrateProjectsAddCurrentRevision(); err != nil {
+		return fmt.Errorf("migrate projects schema: %w", err)
+	}
 	return nil
+}
+
+func (s *authzStore) migrateProjectsAddCurrentRevision() error {
+	hasCurrentRevision, err := tableHasColumn(s.db, "projects", "current_revision")
+	if err != nil {
+		return err
+	}
+	if hasCurrentRevision {
+		return nil
+	}
+	_, err = s.db.Exec(`ALTER TABLE projects ADD COLUMN current_revision INTEGER NOT NULL DEFAULT 0`)
+	return err
 }
 
 func (s *authzStore) migrateResourceConfigsDropNameColumn() error {

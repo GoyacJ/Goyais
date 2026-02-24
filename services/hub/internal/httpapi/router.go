@@ -40,9 +40,12 @@ func newRouterWithDBPath(dbPath string) http.Handler {
 	mux.HandleFunc("/v1/projects/{project_id}", ProjectByIDHandler(state))
 	mux.HandleFunc("/v1/projects/{project_id}/conversations", ProjectConversationsHandler(state))
 	mux.HandleFunc("/v1/projects/{project_id}/config", ProjectConfigHandler(state))
+	mux.HandleFunc("/v1/projects/{project_id}/files", ProjectFilesHandler(state))
+	mux.HandleFunc("/v1/projects/{project_id}/files/content", ProjectFileContentHandler(state))
 	mux.HandleFunc("/v1/conversations", ConversationsHandler(state))
 	mux.HandleFunc("/v1/conversations/{conversation_id}", ConversationByIDHandler(state))
 	mux.HandleFunc("/v1/conversations/{conversation_id}/messages", ConversationMessagesHandler(state))
+	mux.HandleFunc("/v1/conversations/{conversation_id}/events", ConversationEventsHandler(state))
 	mux.HandleFunc("/v1/conversations/{conversation_id}/stop", ConversationStopHandler(state))
 	mux.HandleFunc("/v1/conversations/{conversation_id}/rollback", ConversationRollbackHandler(state))
 	mux.HandleFunc("/v1/conversations/{conversation_id}/export", ConversationExportHandler(state))
@@ -50,7 +53,11 @@ func newRouterWithDBPath(dbPath string) http.Handler {
 	// Executions
 	mux.HandleFunc("/v1/executions", ExecutionsHandler(state))
 	mux.HandleFunc("/v1/executions/{execution_id}/diff", ExecutionDiffHandler(state))
+	mux.HandleFunc("/v1/executions/{execution_id}/confirm", ExecutionConfirmHandler(state))
 	mux.HandleFunc("/v1/executions/{execution_id}/{action}", ExecutionActionHandler(state))
+
+	// Internal hub callbacks
+	mux.HandleFunc("/internal/events", InternalExecutionEventsHandler(state))
 
 	// Resources and sharing
 	mux.HandleFunc("/v1/resources", ResourcesHandler(state))

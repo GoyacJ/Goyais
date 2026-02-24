@@ -24,6 +24,10 @@ type AppState struct {
 	conversationSnapshots      map[string][]ConversationSnapshot
 	conversationExecutionOrder map[string][]string
 	executions                 map[string]Execution
+	executionEvents            map[string][]ExecutionEvent
+	executionDiffs             map[string][]DiffItem
+	conversationEventSeq       map[string]int
+	conversationEventSubs      map[string]map[string]chan ExecutionEvent
 
 	resources             map[string]Resource
 	resourceConfigs       map[string]ResourceConfig
@@ -50,6 +54,10 @@ func NewAppState(store *authzStore, worker *workerClient) *AppState {
 		conversationSnapshots:      map[string][]ConversationSnapshot{},
 		conversationExecutionOrder: map[string][]string{},
 		executions:                 map[string]Execution{},
+		executionEvents:            map[string][]ExecutionEvent{},
+		executionDiffs:             map[string][]DiffItem{},
+		conversationEventSeq:       map[string]int{},
+		conversationEventSubs:      map[string]map[string]chan ExecutionEvent{},
 		resources:                  map[string]Resource{},
 		resourceConfigs:            map[string]ResourceConfig{},
 		resourceTestLogs:           []ResourceTestLog{},

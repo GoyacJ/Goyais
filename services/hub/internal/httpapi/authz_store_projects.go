@@ -8,7 +8,7 @@ import (
 
 func (s *authzStore) listProjects(workspaceID string) ([]Project, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
-	query := `SELECT id, workspace_id, name, repo_path, is_git, default_model_id, default_mode, created_at, updated_at
+	query := `SELECT id, workspace_id, name, repo_path, is_git, default_model_id, default_mode, current_revision, created_at, updated_at
 		FROM projects`
 	args := []any{}
 	if workspaceID != "" {
@@ -35,7 +35,7 @@ func (s *authzStore) listProjects(workspaceID string) ([]Project, error) {
 
 func (s *authzStore) getProject(projectID string) (Project, bool, error) {
 	row := s.db.QueryRow(
-		`SELECT id, workspace_id, name, repo_path, is_git, default_model_id, default_mode, created_at, updated_at
+		`SELECT id, workspace_id, name, repo_path, is_git, default_model_id, default_mode, current_revision, created_at, updated_at
 		 FROM projects
 		 WHERE id=?`,
 		strings.TrimSpace(projectID),
@@ -53,8 +53,8 @@ func (s *authzStore) getProject(projectID string) (Project, bool, error) {
 func (s *authzStore) upsertProject(input Project) (Project, error) {
 	project := normalizeProjectForStorage(input)
 	_, err := s.db.Exec(
-		`INSERT INTO projects(id, workspace_id, name, repo_path, is_git, default_model_id, default_mode, created_at, updated_at)
-		 VALUES(?,?,?,?,?,?,?,?,?)
+		`INSERT INTO projects(id, workspace_id, name, repo_path, is_git, default_model_id, default_mode, current_revision, created_at, updated_at)
+		 VALUES(?,?,?,?,?,?,?,?,?,?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   workspace_id=excluded.workspace_id,
 		   name=excluded.name,
@@ -62,6 +62,7 @@ func (s *authzStore) upsertProject(input Project) (Project, error) {
 		   is_git=excluded.is_git,
 		   default_model_id=excluded.default_model_id,
 		   default_mode=excluded.default_mode,
+		   current_revision=excluded.current_revision,
 		   updated_at=excluded.updated_at`,
 		project.ID,
 		project.WorkspaceID,
@@ -70,6 +71,7 @@ func (s *authzStore) upsertProject(input Project) (Project, error) {
 		boolToInt(project.IsGit),
 		nullWhenEmpty(project.DefaultModelID),
 		string(project.DefaultMode),
+		project.CurrentRevision,
 		project.CreatedAt,
 		project.UpdatedAt,
 	)
@@ -130,6 +132,7 @@ func scanProjectRow(scanner projectScanner) (Project, error) {
 		&isGitInt,
 		&defaultModelID,
 		&defaultModeRaw,
+		&item.CurrentRevision,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	); err != nil {
@@ -161,6 +164,9 @@ func normalizeProjectForStorage(input Project) Project {
 	}
 	if item.DefaultMode == "" {
 		item.DefaultMode = ConversationModeAgent
+	}
+	if item.CurrentRevision < 0 {
+		item.CurrentRevision = 0
 	}
 	if strings.TrimSpace(item.CreatedAt) == "" {
 		item.CreatedAt = now

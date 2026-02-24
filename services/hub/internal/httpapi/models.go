@@ -60,11 +60,13 @@ const (
 type ExecutionState string
 
 const (
-	ExecutionStateQueued    ExecutionState = "queued"
-	ExecutionStateExecuting ExecutionState = "executing"
-	ExecutionStateCompleted ExecutionState = "completed"
-	ExecutionStateFailed    ExecutionState = "failed"
-	ExecutionStateCancelled ExecutionState = "cancelled"
+	ExecutionStateQueued     ExecutionState = "queued"
+	ExecutionStatePending    ExecutionState = "pending"
+	ExecutionStateExecuting  ExecutionState = "executing"
+	ExecutionStateConfirming ExecutionState = "confirming"
+	ExecutionStateCompleted  ExecutionState = "completed"
+	ExecutionStateFailed     ExecutionState = "failed"
+	ExecutionStateCancelled  ExecutionState = "cancelled"
 )
 
 type ResourceType string
@@ -178,15 +180,16 @@ type Session struct {
 }
 
 type Project struct {
-	ID             string           `json:"id"`
-	WorkspaceID    string           `json:"workspace_id"`
-	Name           string           `json:"name"`
-	RepoPath       string           `json:"repo_path"`
-	IsGit          bool             `json:"is_git"`
-	DefaultModelID string           `json:"default_model_id,omitempty"`
-	DefaultMode    ConversationMode `json:"default_mode,omitempty"`
-	CreatedAt      string           `json:"created_at"`
-	UpdatedAt      string           `json:"updated_at"`
+	ID              string           `json:"id"`
+	WorkspaceID     string           `json:"workspace_id"`
+	Name            string           `json:"name"`
+	RepoPath        string           `json:"repo_path"`
+	IsGit           bool             `json:"is_git"`
+	DefaultModelID  string           `json:"default_model_id,omitempty"`
+	DefaultMode     ConversationMode `json:"default_mode,omitempty"`
+	CurrentRevision int64            `json:"current_revision"`
+	CreatedAt       string           `json:"created_at"`
+	UpdatedAt       string           `json:"updated_at"`
 }
 
 type ProjectConfig struct {
@@ -220,6 +223,12 @@ type RenameConversationRequest struct {
 	Name string `json:"name"`
 }
 
+type UpdateConversationRequest struct {
+	Name    *string           `json:"name,omitempty"`
+	Mode    *ConversationMode `json:"mode,omitempty"`
+	ModelID *string           `json:"model_id,omitempty"`
+}
+
 type Conversation struct {
 	ID                string           `json:"id"`
 	WorkspaceID       string           `json:"workspace_id"`
@@ -228,6 +237,7 @@ type Conversation struct {
 	QueueState        QueueState       `json:"queue_state"`
 	DefaultMode       ConversationMode `json:"default_mode"`
 	ModelID           string           `json:"model_id"`
+	BaseRevision      int64            `json:"base_revision"`
 	ActiveExecutionID *string          `json:"active_execution_id"`
 	CreatedAt         string           `json:"created_at"`
 	UpdatedAt         string           `json:"updated_at"`
@@ -268,17 +278,29 @@ type ConversationInspector struct {
 }
 
 type Execution struct {
-	ID             string           `json:"id"`
-	WorkspaceID    string           `json:"workspace_id"`
-	ConversationID string           `json:"conversation_id"`
-	MessageID      string           `json:"message_id"`
-	State          ExecutionState   `json:"state"`
-	Mode           ConversationMode `json:"mode"`
-	ModelID        string           `json:"model_id"`
-	QueueIndex     int              `json:"queue_index"`
-	TraceID        string           `json:"trace_id"`
-	CreatedAt      string           `json:"created_at"`
-	UpdatedAt      string           `json:"updated_at"`
+	ID                      string           `json:"id"`
+	WorkspaceID             string           `json:"workspace_id"`
+	ConversationID          string           `json:"conversation_id"`
+	MessageID               string           `json:"message_id"`
+	State                   ExecutionState   `json:"state"`
+	Mode                    ConversationMode `json:"mode"`
+	ModelID                 string           `json:"model_id"`
+	ModeSnapshot            ConversationMode `json:"mode_snapshot"`
+	ModelSnapshot           ModelSnapshot    `json:"model_snapshot"`
+	ProjectRevisionSnapshot int64            `json:"project_revision_snapshot"`
+	QueueIndex              int              `json:"queue_index"`
+	TraceID                 string           `json:"trace_id"`
+	CreatedAt               string           `json:"created_at"`
+	UpdatedAt               string           `json:"updated_at"`
+}
+
+type ModelSnapshot struct {
+	ConfigID  string         `json:"config_id,omitempty"`
+	Vendor    string         `json:"vendor,omitempty"`
+	ModelID   string         `json:"model_id"`
+	BaseURL   string         `json:"base_url,omitempty"`
+	TimeoutMS int            `json:"timeout_ms,omitempty"`
+	Params    map[string]any `json:"params,omitempty"`
 }
 
 type ExecutionCreateRequest struct {
@@ -288,7 +310,13 @@ type ExecutionCreateRequest struct {
 }
 
 type ExecutionCreateResponse struct {
-	Execution Execution `json:"execution"`
+	Execution  Execution  `json:"execution"`
+	QueueState QueueState `json:"queue_state"`
+	QueueIndex int        `json:"queue_index"`
+}
+
+type ExecutionConfirmRequest struct {
+	Decision string `json:"decision"`
 }
 
 type RollbackRequest struct {
@@ -300,6 +328,46 @@ type DiffItem struct {
 	Path       string `json:"path"`
 	ChangeType string `json:"change_type"`
 	Summary    string `json:"summary"`
+}
+
+type ProjectFileEntry struct {
+	Path  string `json:"path"`
+	Type  string `json:"type"`
+	Size  int64  `json:"size,omitempty"`
+	MTime string `json:"mtime,omitempty"`
+}
+
+type ProjectFileContentResponse struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+type ExecutionEventType string
+
+const (
+	ExecutionEventTypeMessageReceived      ExecutionEventType = "message_received"
+	ExecutionEventTypeExecutionStarted     ExecutionEventType = "execution_started"
+	ExecutionEventTypeThinkingDelta        ExecutionEventType = "thinking_delta"
+	ExecutionEventTypeToolCall             ExecutionEventType = "tool_call"
+	ExecutionEventTypeToolResult           ExecutionEventType = "tool_result"
+	ExecutionEventTypeConfirmationRequired ExecutionEventType = "confirmation_required"
+	ExecutionEventTypeConfirmationResolved ExecutionEventType = "confirmation_resolved"
+	ExecutionEventTypeDiffGenerated        ExecutionEventType = "diff_generated"
+	ExecutionEventTypeExecutionStopped     ExecutionEventType = "execution_stopped"
+	ExecutionEventTypeExecutionDone        ExecutionEventType = "execution_done"
+	ExecutionEventTypeExecutionError       ExecutionEventType = "execution_error"
+)
+
+type ExecutionEvent struct {
+	EventID        string             `json:"event_id"`
+	ExecutionID    string             `json:"execution_id"`
+	ConversationID string             `json:"conversation_id"`
+	TraceID        string             `json:"trace_id"`
+	Sequence       int                `json:"sequence"`
+	QueueIndex     int                `json:"queue_index"`
+	Type           ExecutionEventType `json:"type"`
+	Timestamp      string             `json:"timestamp"`
+	Payload        map[string]any     `json:"payload"`
 }
 
 type Resource struct {

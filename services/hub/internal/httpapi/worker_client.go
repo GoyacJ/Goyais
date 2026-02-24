@@ -42,19 +42,23 @@ func newWorkerClient(baseURL string, internalToken string) *workerClient {
 	}
 }
 
-func (c *workerClient) submitExecution(ctx context.Context, execution Execution) error {
+func (c *workerClient) submitExecution(ctx context.Context, execution Execution, content string) error {
 	if c == nil {
 		return nil
 	}
 	payload := map[string]any{
-		"execution_id":    execution.ID,
-		"workspace_id":    execution.WorkspaceID,
-		"conversation_id": execution.ConversationID,
-		"message_id":      execution.MessageID,
-		"mode":            execution.Mode,
-		"model_id":        execution.ModelID,
-		"queue_index":     execution.QueueIndex,
-		"trace_id":        firstNonEmpty(execution.TraceID, TraceIDFromContext(ctx)),
+		"execution_id":              execution.ID,
+		"workspace_id":              execution.WorkspaceID,
+		"conversation_id":           execution.ConversationID,
+		"message_id":                execution.MessageID,
+		"mode":                      execution.Mode,
+		"model_id":                  execution.ModelID,
+		"mode_snapshot":             execution.ModeSnapshot,
+		"model_snapshot":            execution.ModelSnapshot,
+		"project_revision_snapshot": execution.ProjectRevisionSnapshot,
+		"queue_index":               execution.QueueIndex,
+		"trace_id":                  firstNonEmpty(execution.TraceID, TraceIDFromContext(ctx)),
+		"content":                   strings.TrimSpace(content),
 	}
 	return c.postJSON(ctx, "/internal/executions", payload)
 }
@@ -76,6 +80,21 @@ func (c *workerClient) submitExecutionEvent(ctx context.Context, execution Execu
 		},
 	}
 	return c.postJSON(ctx, "/internal/events", payload)
+}
+
+func (c *workerClient) stopExecution(ctx context.Context, executionID string) error {
+	if c == nil {
+		return nil
+	}
+	return c.postJSON(ctx, "/internal/executions/"+strings.TrimSpace(executionID)+"/stop", map[string]any{})
+}
+
+func (c *workerClient) submitExecutionConfirmation(ctx context.Context, executionID string, decision string) error {
+	if c == nil {
+		return nil
+	}
+	payload := map[string]any{"decision": strings.TrimSpace(decision)}
+	return c.postJSON(ctx, "/internal/executions/"+strings.TrimSpace(executionID)+"/confirm", payload)
 }
 
 func (c *workerClient) postJSON(ctx context.Context, path string, payload map[string]any) error {

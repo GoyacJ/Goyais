@@ -37,11 +37,13 @@ func TestWorkerClientSubmitExecutionIncludesInternalTokenAndTrace(t *testing.T) 
 		MessageID:      "msg_001",
 		Mode:           ConversationModeAgent,
 		ModelID:        "gpt-4.1",
+		ModeSnapshot:   ConversationModeAgent,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-4.1"},
 		QueueIndex:     2,
 		TraceID:        "tr_execution",
 	}
 
-	if err := client.submitExecution(ctx, execution); err != nil {
+	if err := client.submitExecution(ctx, execution, "hello"); err != nil {
 		t.Fatalf("submit execution failed: %v", err)
 	}
 
@@ -59,6 +61,9 @@ func TestWorkerClientSubmitExecutionIncludesInternalTokenAndTrace(t *testing.T) 
 	}
 	if gotPayload["trace_id"] != "tr_execution" {
 		t.Fatalf("unexpected execution trace payload: %#v", gotPayload)
+	}
+	if gotPayload["content"] != "hello" {
+		t.Fatalf("unexpected execution content payload: %#v", gotPayload)
 	}
 }
 

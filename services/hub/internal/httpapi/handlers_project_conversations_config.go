@@ -100,6 +100,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				QueueState:        QueueStateIdle,
 				DefaultMode:       project.DefaultMode,
 				ModelID:           defaultModelID,
+				BaseRevision:      project.CurrentRevision,
 				ActiveExecutionID: nil,
 				CreatedAt:         now,
 				UpdatedAt:         now,

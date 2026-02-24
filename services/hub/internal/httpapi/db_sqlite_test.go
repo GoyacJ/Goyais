@@ -142,7 +142,7 @@ func TestAuthzStoreCreatesProjectSchema(t *testing.T) {
 		}
 	}()
 
-	projectColumns := []string{"id", "workspace_id", "name", "repo_path", "default_model_id", "default_mode", "created_at", "updated_at"}
+	projectColumns := []string{"id", "workspace_id", "name", "repo_path", "default_model_id", "default_mode", "current_revision", "created_at", "updated_at"}
 	for _, column := range projectColumns {
 		ok, hasErr := tableHasColumn(store.db, "projects", column)
 		if hasErr != nil {

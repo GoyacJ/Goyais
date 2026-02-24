@@ -17,7 +17,10 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/me/permissions:",
 		"/v1/projects/import:",
 		"/v1/projects/{project_id}/conversations:",
+		"/v1/projects/{project_id}/files:",
+		"/v1/projects/{project_id}/files/content:",
 		"/v1/conversations/{conversation_id}/messages:",
+		"/v1/conversations/{conversation_id}/events:",
 		"/v1/conversations/{conversation_id}/stop:",
 		"/v1/conversations/{conversation_id}/rollback:",
 		"/v1/conversations/{conversation_id}/export:",
@@ -38,6 +41,7 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/admin/menu-visibility/{role_key}:",
 		"/v1/admin/abac-policies:",
 		"/v1/admin/audit:",
+		"/v1/executions/{execution_id}/confirm:",
 		"/internal/executions:",
 		"/internal/events:",
 	}

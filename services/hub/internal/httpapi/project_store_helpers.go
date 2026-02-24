@@ -93,10 +93,24 @@ func deleteProjectFromStore(state *AppState, projectID string) (Project, error) 
 		if conv.ProjectID != projectID {
 			continue
 		}
+		for executionID, execution := range state.executions {
+			if execution.ConversationID != id {
+				continue
+			}
+			delete(state.executions, executionID)
+			delete(state.executionDiffs, executionID)
+		}
 		delete(state.conversations, id)
 		delete(state.conversationMessages, id)
 		delete(state.conversationSnapshots, id)
 		delete(state.conversationExecutionOrder, id)
+		delete(state.executionEvents, id)
+		delete(state.conversationEventSeq, id)
+		if subscribers, ok := state.conversationEventSubs[id]; ok {
+			for subID := range subscribers {
+				unregisterConversationEventSubscriberLocked(state, id, subID)
+			}
+		}
 	}
 	state.mu.Unlock()
 	return project, nil
