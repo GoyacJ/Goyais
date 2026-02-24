@@ -9,9 +9,11 @@ import {
 import { createExecutionEvent } from "@/modules/conversation/store/events";
 import {
   applyExecutionState,
+  dedupeExecutions,
   ensureExecution,
   parseDiff,
-  restoreExecutionsFromSnapshot
+  restoreExecutionsFromSnapshot,
+  upsertExecutionFromServer
 } from "@/modules/conversation/store/executionRuntime";
 import {
   conversationStore,
@@ -60,7 +62,8 @@ export async function submitConversationMessage(
       model_id: runtime.modelId
     });
 
-    runtime.executions.push(response.execution);
+    upsertExecutionFromServer(runtime, response.execution);
+    dedupeExecutions(runtime);
     runtime.events.push(
       createExecutionEvent(conversation.id, response.execution.id, response.queue_index, "message_received", {
         message_id: response.execution.message_id,
@@ -205,6 +208,7 @@ export function applyIncomingExecutionEvent(conversationId: string, event: Execu
   if (event.execution_id) {
     const execution = ensureExecution(runtime, conversationId, event);
     applyExecutionState(execution, event);
+    dedupeExecutions(runtime);
   }
 
   if (event.type === "diff_generated") {

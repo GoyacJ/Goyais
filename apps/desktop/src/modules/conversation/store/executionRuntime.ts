@@ -1,16 +1,23 @@
 import { createMockId } from "@/shared/services/mockData";
 import type { ConversationSnapshot, DiffItem, Execution, ExecutionEvent } from "@/shared/types/api";
 
+import {
+  cloneExecution,
+  mergeExecution,
+  normalizeExecutionList,
+  resolveMergedExecutionState
+} from "@/modules/conversation/store/executionMerge";
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
 
 export function ensureExecution(runtime: ConversationRuntime, conversationId: string, event: ExecutionEvent): Execution {
-  let execution = runtime.executions.find((item) => item.id === event.execution_id);
+  const executionId = event.execution_id.trim();
+  let execution = runtime.executions.find((item) => item.id === executionId);
   if (execution) {
     return execution;
   }
 
-  execution = {
-    id: event.execution_id,
+  execution = upsertExecutionFromServer(runtime, {
+    id: executionId,
     workspace_id: "",
     conversation_id: conversationId,
     message_id: "",
@@ -26,15 +33,14 @@ export function ensureExecution(runtime: ConversationRuntime, conversationId: st
     trace_id: event.trace_id,
     created_at: event.timestamp,
     updated_at: event.timestamp
-  };
-  runtime.executions.push(execution);
+  });
   return execution;
 }
 
 export function applyExecutionState(execution: Execution, event: ExecutionEvent): void {
   const nextState = executionStateByEventType[event.type];
   if (nextState) {
-    execution.state = nextState;
+    execution.state = resolveMergedExecutionState(execution.state, nextState);
   }
   execution.updated_at = event.timestamp;
 }
@@ -45,6 +51,23 @@ const executionStateByEventType: Partial<Record<ExecutionEvent["type"], Executio
   execution_done: "completed",
   execution_error: "failed"
 };
+
+export function upsertExecutionFromServer(runtime: ConversationRuntime, incoming: Execution): Execution {
+  const normalizedIncoming = cloneExecution(incoming);
+  const index = runtime.executions.findIndex((item) => item.id === normalizedIncoming.id);
+  if (index < 0) {
+    runtime.executions.push(normalizedIncoming);
+    return normalizedIncoming;
+  }
+
+  const merged = mergeExecution(runtime.executions[index], normalizedIncoming);
+  runtime.executions[index] = merged;
+  return merged;
+}
+
+export function dedupeExecutions(runtime: ConversationRuntime): void {
+  runtime.executions = normalizeExecutionList(runtime.executions);
+}
 
 export function parseDiff(payload: Record<string, unknown>): DiffItem[] {
   const raw = payload.diff;

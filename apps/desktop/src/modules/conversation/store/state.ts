@@ -1,6 +1,7 @@
 import { reactive } from "vue";
 
 import { resolveDiffCapability } from "@/modules/conversation/services";
+import { normalizeExecutionList } from "@/modules/conversation/store/executionMerge";
 import { createMockId } from "@/shared/services/mockData";
 import type {
   ConversationDetailResponse,
@@ -181,10 +182,11 @@ export function createInitialMessages(conversationId: string): ConversationMessa
 }
 
 export function deriveQueueState(runtime: ConversationRuntime): QueueState {
-  const hasRunning = runtime.executions.some((execution) =>
+  const executions = normalizeExecutionList(runtime.executions);
+  const hasRunning = executions.some((execution) =>
     execution.state === "pending" || execution.state === "executing"
   );
-  const hasQueued = runtime.executions.some((execution) => execution.state === "queued");
+  const hasQueued = executions.some((execution) => execution.state === "queued");
   if (hasRunning) {
     return "running";
   }
@@ -195,7 +197,8 @@ export function deriveQueueState(runtime: ConversationRuntime): QueueState {
 }
 
 export function createConversationSnapshot(runtime: ConversationRuntime, conversationId: string, rollbackPointMessageId: string): ConversationSnapshot {
-  const executionSnapshots = runtime.executions.map((execution) => ({
+  const executions = normalizeExecutionList(runtime.executions);
+  const executionSnapshots = executions.map((execution) => ({
     id: execution.id,
     state: execution.state,
     queue_index: execution.queue_index,
@@ -214,7 +217,7 @@ export function createConversationSnapshot(runtime: ConversationRuntime, convers
     },
     messages: runtime.messages.map((message) => ({ ...message })),
     execution_snapshots: executionSnapshots,
-    execution_ids: runtime.executions.map((execution) => execution.id),
+    execution_ids: executions.map((execution) => execution.id),
     created_at: new Date().toISOString()
   };
 }
@@ -238,7 +241,8 @@ export function findSnapshotForMessage(conversationId: string, messageId: string
 }
 
 export function countActiveAndQueued(runtime: ConversationRuntime): number {
-  return runtime.executions.filter((execution) =>
+  const executions = normalizeExecutionList(runtime.executions);
+  return executions.filter((execution) =>
     execution.state === "queued" || execution.state === "pending" || execution.state === "executing"
   ).length;
 }
@@ -248,7 +252,8 @@ export function getExecutionStateCounts(runtime: ConversationRuntime): {
   pending: number;
   executing: number;
 } {
-  return runtime.executions.reduce(
+  const executions = normalizeExecutionList(runtime.executions);
+  return executions.reduce(
     (acc, execution) => {
       if (execution.state === "queued") {
         acc.queued += 1;
@@ -274,7 +279,8 @@ export function getLatestFinishedExecution(conversationId: string): Execution | 
     return undefined;
   }
 
-  return [...runtime.executions]
+  const executions = normalizeExecutionList(runtime.executions);
+  return [...executions]
     .reverse()
     .find((execution) => execution.state === "completed" || execution.state === "failed" || execution.state === "cancelled");
 }
