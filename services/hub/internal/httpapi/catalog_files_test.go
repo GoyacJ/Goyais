@@ -32,7 +32,7 @@ func TestParseModelCatalogPayload_StrictRequiresAuth(t *testing.T) {
 }
 
 func TestLoadModelCatalogDetailed_LegacyAutoFillWriteback(t *testing.T) {
-	state := NewAppState(nil, nil)
+	state := NewAppState(nil)
 	workspaceID := "ws_catalog_autofill"
 	catalogRoot := t.TempDir()
 
@@ -95,7 +95,7 @@ func TestLoadModelCatalogDetailed_LegacyAutoFillWriteback(t *testing.T) {
 }
 
 func TestLoadModelCatalogDetailed_AutoFillWriteFailedFallsBackToEmbedded(t *testing.T) {
-	state := NewAppState(nil, nil)
+	state := NewAppState(nil)
 	workspaceID := "ws_catalog_fallback"
 	catalogRoot := t.TempDir()
 
@@ -147,7 +147,7 @@ func TestLoadModelCatalogDetailed_AutoFillWriteFailedFallsBackToEmbedded(t *test
 }
 
 func TestRecordModelCatalogReloadAudit_FailureIncludesFallbackStage(t *testing.T) {
-	state := NewAppState(nil, nil)
+	state := NewAppState(nil)
 	workspaceID := "ws_catalog_audit"
 	traceID := "tr_catalog_audit"
 	loadErr := errors.New("catalog parse failed")

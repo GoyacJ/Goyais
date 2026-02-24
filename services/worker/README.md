@@ -26,9 +26,9 @@ uv run pytest
 ## 已实现接口
 
 - `GET /health`
-- `POST /internal/executions`（接收 Execution 并启动执行循环）
-- `POST /internal/executions/{execution_id}/confirm`（审批确认）
-- `POST /internal/executions/{execution_id}/stop`（停止执行）
-- `POST /internal/events`（内部事件接收，兼容测试与回放）
+- Worker 启动后自动向 Hub 注册并发送心跳
+- Worker 通过 `POST /internal/executions/claim` 主动认领执行
+- Worker 通过 `POST /internal/executions/{execution_id}/events/batch` 回传事件
+- Worker 通过 `GET /internal/executions/{execution_id}/control` 拉取 confirm/stop 控制命令
 
-> 说明：Worker 可通过环境变量 `HUB_BASE_URL` + `HUB_INTERNAL_TOKEN` 将执行事件回传 Hub `/internal/events`。
+> 说明：Worker 依赖 `HUB_BASE_URL` + `HUB_INTERNAL_TOKEN` 与 Hub 内部 API 通信。

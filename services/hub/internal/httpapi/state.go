@@ -11,8 +11,7 @@ const localWorkspaceID = "ws_local"
 type AppState struct {
 	mu sync.RWMutex
 
-	authz  *authzStore
-	worker *workerClient
+	authz *authzStore
 
 	workspaces map[string]Workspace
 	sessions   map[string]Session
@@ -26,8 +25,12 @@ type AppState struct {
 	executions                 map[string]Execution
 	executionEvents            map[string][]ExecutionEvent
 	executionDiffs             map[string][]DiffItem
+	executionLeases            map[string]ExecutionLease
+	executionControlQueues     map[string][]ExecutionControlCommand
+	executionControlSeq        map[string]int
 	conversationEventSeq       map[string]int
 	conversationEventSubs      map[string]map[string]chan ExecutionEvent
+	workers                    map[string]WorkerRegistration
 
 	resources             map[string]Resource
 	resourceConfigs       map[string]ResourceConfig
@@ -41,10 +44,9 @@ type AppState struct {
 	adminAudit []AdminAuditEvent
 }
 
-func NewAppState(store *authzStore, worker *workerClient) *AppState {
+func NewAppState(store *authzStore) *AppState {
 	state := &AppState{
 		authz:                      store,
-		worker:                     worker,
 		workspaces:                 map[string]Workspace{},
 		sessions:                   map[string]Session{},
 		projects:                   map[string]Project{},
@@ -56,8 +58,12 @@ func NewAppState(store *authzStore, worker *workerClient) *AppState {
 		executions:                 map[string]Execution{},
 		executionEvents:            map[string][]ExecutionEvent{},
 		executionDiffs:             map[string][]DiffItem{},
+		executionLeases:            map[string]ExecutionLease{},
+		executionControlQueues:     map[string][]ExecutionControlCommand{},
+		executionControlSeq:        map[string]int{},
 		conversationEventSeq:       map[string]int{},
 		conversationEventSubs:      map[string]map[string]chan ExecutionEvent{},
+		workers:                    map[string]WorkerRegistration{},
 		resources:                  map[string]Resource{},
 		resourceConfigs:            map[string]ResourceConfig{},
 		resourceTestLogs:           []ResourceTestLog{},
@@ -78,6 +84,7 @@ func NewAppState(store *authzStore, worker *workerClient) *AppState {
 				state.syncWorkspaceCache(persisted)
 			}
 		}
+		state.hydrateExecutionDomainFromStore()
 	}
 
 	state.adminRoles = defaultRoles()

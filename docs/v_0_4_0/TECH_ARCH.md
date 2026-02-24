@@ -90,7 +90,7 @@ ConversationSnapshot state:
 
 不变量：
 
-1. 同一 Conversation 仅允许一个 `executing|confirming` 状态 Execution。
+1. 同一 Conversation 仅允许一个活动执行（`executing|confirming|pending(leased)`）。
 2. 队列必须 FIFO。
 3. Stop 只影响当前执行，不清空后续队列。
 4. 回滚只允许指向当前 Conversation 内已有消息，且必须写审计。
@@ -260,9 +260,10 @@ private resource
 推进动作：
 
 1. 从队列取最早一条 queued 进入 pending。
-2. 调度到可用 worker。
-3. 更新 Conversation `active_execution_id`。
-4. 推送 `execution_started` 事件并刷新 Inspector 执行态。
+2. Hub 写入/刷新 `active_execution_id` 与队列锁，不主动 push 到 Worker。
+3. Worker 通过 claim 接口主动认领 pending 执行并获得 lease。
+4. Worker 以 heartbeat 续租；lease 过期自动回收并保持 FIFO 重排。
+5. Worker 上报 `execution_started` 等事件后刷新 Inspector 执行态。
 
 ### 7.3 Stop 语义
 
@@ -374,16 +375,14 @@ private resource
 
 ### 9.2 内部 API（Hub <-> Worker）
 
-1. `POST /internal/executions`
-2. `POST /internal/events`
-3. `POST /internal/executions/{execution_id}/confirm`
-4. `POST /internal/executions/{execution_id}/stop`
-5. `POST /internal/secrets/resolve`
-6. `POST /internal/runtimes/register`
-7. `POST /internal/runtimes/heartbeat`
-8. `POST /internal/rollback/apply`
+1. `POST /internal/workers/register`
+2. `POST /internal/workers/{worker_id}/heartbeat`
+3. `POST /internal/executions/claim`
+4. `POST /internal/executions/{execution_id}/events/batch`
+5. `GET /internal/executions/{execution_id}/control?after_seq=&wait_ms=`
+6. `POST /v1/executions/{execution_id}/confirm` 与 `POST /v1/conversations/{conversation_id}/stop` 在 Hub 内部转换为 `execution_control_commands`（`confirm|stop`）。
 7. 内部接口必须携带共享 internal token（`X-Internal-Token` 或 `Authorization: Bearer <token>`），无效或缺失返回 `401`。
-8. Hub -> Worker 调用必须透传 `X-Trace-Id`，保证审计链路可回溯。
+8. `trace_id` 必须贯穿 Worker claim/control/events 全链路并进入审计。
 
 ### 9.3 错误响应
 
@@ -667,6 +666,32 @@ CREATE TABLE execution_events (
   created_at DATETIME NOT NULL
 );
 
+CREATE TABLE execution_control_commands (
+  id TEXT PRIMARY KEY,
+  execution_id TEXT NOT NULL,
+  command_type TEXT NOT NULL CHECK(command_type IN ('confirm','stop')),
+  payload_json TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  created_at DATETIME NOT NULL
+);
+
+CREATE TABLE execution_leases (
+  execution_id TEXT PRIMARY KEY,
+  worker_id TEXT NOT NULL,
+  lease_version INTEGER NOT NULL,
+  lease_expires_at DATETIME NOT NULL,
+  run_attempt INTEGER NOT NULL DEFAULT 1,
+  updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE workers (
+  worker_id TEXT PRIMARY KEY,
+  capabilities_json TEXT NOT NULL,
+  status TEXT NOT NULL,
+  last_heartbeat DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+);
+
 CREATE TABLE audit_logs (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
@@ -723,6 +748,13 @@ while True:
 2. 保留最近 N 轮对话。
 3. 早期轮次摘要化。
 4. 超长工具输出截断。
+
+### 12.4 P0 子代理边界
+
+1. P0 仅支持受控子代理并发，最大并发数 `<= 3`。
+2. 子代理为短生命周期上下文，不持有独立长期状态。
+3. 子代理工具集必须显式降权并继承父执行的风险门禁。
+4. 长期自治团队编排不属于 v0.4.0 P0 范围。
 
 ---
 
@@ -792,7 +824,7 @@ while True:
 ### 15.1 Trace
 
 1. 每个请求生成或透传 `trace_id`。
-2. Hub -> Worker -> Event -> Audit 全链路传播。
+2. `Desktop -> Hub -> Worker(claim/control/events) -> Audit` 全链路传播。
 
 ### 15.2 Metrics（建议）
 

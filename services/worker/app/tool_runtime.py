@@ -1,57 +1,21 @@
 from __future__ import annotations
 
-import json
+import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from app.model_adapters import ToolCall
+from app.safety.command_guard import CommandGuardError, ensure_safe_command
+from app.safety.path_guard import PathGuardError, resolve_guarded_path
+from app.safety.risk_gate import classify_content_risk, classify_tool_risk
+from app.tools.subagent_tools import subagent_tool_spec
 
 
 @dataclass(slots=True)
 class ToolExecutionResult:
     output: dict[str, Any]
     diff: dict[str, Any] | None = None
-
-
-def classify_content_risk(content: str) -> str:
-    normalized = content.lower()
-    critical_keywords = [" delete ", " rm ", "remove file", "drop table", "删除"]
-    high_keywords = [
-        "write",
-        "apply_patch",
-        "run ",
-        "command",
-        "network",
-        "edit ",
-        "修改",
-        "写入",
-        "执行",
-        "联网",
-    ]
-
-    wrapped = f" {normalized} "
-    if any(keyword in wrapped for keyword in critical_keywords):
-        return "critical"
-    if any(keyword in normalized for keyword in high_keywords):
-        return "high"
-    return "low"
-
-
-def classify_tool_risk(tool_name: str, arguments: dict[str, Any]) -> str:
-    normalized = tool_name.lower()
-    critical_keywords = ["delete", "remove", "rm", "drop"]
-    high_keywords = ["write", "patch", "run", "command", "network", "edit", "create"]
-    if any(keyword in normalized for keyword in critical_keywords):
-        return "critical"
-    if any(keyword in normalized for keyword in high_keywords):
-        return "high"
-
-    raw_arguments = json.dumps(arguments, ensure_ascii=False).lower()
-    if any(keyword in raw_arguments for keyword in ["delete", "rm ", "remove", "drop table", "删除"]):
-        return "critical"
-    if any(keyword in raw_arguments for keyword in ["write", "apply_patch", "run_command", "network"]):
-        return "high"
-    return "low"
 
 
 def default_tools() -> list[dict[str, Any]]:
@@ -78,6 +42,19 @@ def default_tools() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "edit_file",
+            "description": "Replace exact text in a file.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "old_text": {"type": "string"},
+                    "new_text": {"type": "string"},
+                },
+                "required": ["path", "old_text", "new_text"],
+            },
+        },
+        {
             "name": "run_command",
             "description": "Execute a terminal command in the current project.",
             "input_schema": {
@@ -86,57 +63,136 @@ def default_tools() -> list[dict[str, Any]]:
                 "required": ["command"],
             },
         },
+        subagent_tool_spec(),
     ]
 
 
-def execute_tool_call(tool_call: ToolCall) -> ToolExecutionResult:
-    name = tool_call.name
+def execute_tool_call(tool_call: ToolCall, working_directory: str) -> ToolExecutionResult:
+    name = tool_call.name.strip()
     name_lower = name.lower()
-    path = _resolve_tool_path(tool_call.arguments)
+    root = Path(working_directory).resolve()
 
-    if "read" in name_lower or "list" in name_lower or "search" in name_lower:
-        return ToolExecutionResult(
-            output={
-                "path": path,
-                "summary": f"Read completed for {path}",
-                "content_preview": "simulated tool output",
-            }
+    if name_lower == "read_file":
+        return _read_file(tool_call.arguments, root)
+    if name_lower == "write_file":
+        return _write_file(tool_call.arguments, root, name)
+    if name_lower == "edit_file":
+        return _edit_file(tool_call.arguments, root, name)
+    if name_lower == "run_command":
+        return _run_command(tool_call.arguments, root, name)
+
+    return ToolExecutionResult(output={"summary": f"Unsupported tool: {name}"})
+
+
+def _read_file(arguments: dict[str, Any], root: Path) -> ToolExecutionResult:
+    raw_path = str(arguments.get("path") or "").strip()
+    if raw_path == "":
+        return ToolExecutionResult(output={"error": "path is required"})
+    try:
+        path = resolve_guarded_path(root, raw_path)
+        content = path.read_text(encoding="utf-8")
+    except PathGuardError as exc:
+        return ToolExecutionResult(output={"error": str(exc)})
+    except FileNotFoundError:
+        return ToolExecutionResult(output={"error": f"file not found: {raw_path}"})
+    except Exception as exc:  # pragma: no cover - defensive branch
+        return ToolExecutionResult(output={"error": str(exc)})
+    return ToolExecutionResult(
+        output={
+            "path": raw_path,
+            "summary": f"Read {raw_path}",
+            "content_preview": content[:50000],
+        }
+    )
+
+
+def _write_file(arguments: dict[str, Any], root: Path, tool_name: str) -> ToolExecutionResult:
+    raw_path = str(arguments.get("path") or "").strip()
+    content = str(arguments.get("content") or "")
+    if raw_path == "":
+        return ToolExecutionResult(output={"error": "path is required"})
+    try:
+        path = resolve_guarded_path(root, raw_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    except PathGuardError as exc:
+        return ToolExecutionResult(output={"error": str(exc)})
+    except Exception as exc:  # pragma: no cover - defensive branch
+        return ToolExecutionResult(output={"error": str(exc)})
+    return ToolExecutionResult(
+        output={"path": raw_path, "summary": f"Wrote {len(content)} bytes"},
+        diff={
+            "id": f"diff_{tool_name}_{raw_path}",
+            "path": raw_path,
+            "change_type": "modified",
+            "summary": f"{tool_name} updated file",
+        },
+    )
+
+
+def _edit_file(arguments: dict[str, Any], root: Path, tool_name: str) -> ToolExecutionResult:
+    raw_path = str(arguments.get("path") or "").strip()
+    old_text = str(arguments.get("old_text") or "")
+    new_text = str(arguments.get("new_text") or "")
+    if raw_path == "":
+        return ToolExecutionResult(output={"error": "path is required"})
+    try:
+        path = resolve_guarded_path(root, raw_path)
+        current = path.read_text(encoding="utf-8")
+        if old_text not in current:
+            return ToolExecutionResult(output={"error": f"text not found in {raw_path}"})
+        path.write_text(current.replace(old_text, new_text, 1), encoding="utf-8")
+    except PathGuardError as exc:
+        return ToolExecutionResult(output={"error": str(exc)})
+    except FileNotFoundError:
+        return ToolExecutionResult(output={"error": f"file not found: {raw_path}"})
+    except Exception as exc:  # pragma: no cover - defensive branch
+        return ToolExecutionResult(output={"error": str(exc)})
+    return ToolExecutionResult(
+        output={"path": raw_path, "summary": f"Edited {raw_path}"},
+        diff={
+            "id": f"diff_{tool_name}_{raw_path}",
+            "path": raw_path,
+            "change_type": "modified",
+            "summary": f"{tool_name} updated file",
+        },
+    )
+
+
+def _run_command(arguments: dict[str, Any], root: Path, tool_name: str) -> ToolExecutionResult:
+    raw_command = str(arguments.get("command") or "").strip()
+    if raw_command == "":
+        return ToolExecutionResult(output={"error": "command is required"})
+    try:
+        command = ensure_safe_command(raw_command)
+    except CommandGuardError as exc:
+        return ToolExecutionResult(output={"error": str(exc)})
+
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
+        output = (result.stdout + result.stderr).strip()
+    except subprocess.TimeoutExpired:
+        return ToolExecutionResult(output={"error": "command timeout (120s)"})
+    except Exception as exc:  # pragma: no cover - defensive branch
+        return ToolExecutionResult(output={"error": str(exc)})
 
-    if "delete" in name_lower or "remove" in name_lower or "rm" in name_lower:
-        return ToolExecutionResult(
-            output={"path": path, "summary": f"Deleted {path}"},
-            diff={
-                "id": f"diff_{name}_{path}",
-                "path": path,
-                "change_type": "deleted",
-                "summary": f"{name} removed file",
-            },
-        )
-
-    if (
-        "write" in name_lower
-        or "patch" in name_lower
-        or "edit" in name_lower
-        or "run" in name_lower
-        or "command" in name_lower
-    ):
-        return ToolExecutionResult(
-            output={"path": path, "summary": f"Applied update via {name}"},
-            diff={
-                "id": f"diff_{name}_{path}",
-                "path": path,
-                "change_type": "modified",
-                "summary": f"{name} updated file",
-            },
-        )
-
-    return ToolExecutionResult(output={"summary": f"Tool {name} executed", "path": path})
-
-
-def _resolve_tool_path(arguments: dict[str, Any]) -> str:
-    for key in ("path", "file_path", "target", "target_path"):
-        value = arguments.get(key)
-        if isinstance(value, str) and value.strip() != "":
-            return value.strip()
-    return "src/main.ts"
+    return ToolExecutionResult(
+        output={
+            "summary": f"Command finished with code {result.returncode}",
+            "exit_code": result.returncode,
+            "output": output[:50000],
+        },
+        diff={
+            "id": f"diff_{tool_name}_command",
+            "path": ".",
+            "change_type": "modified",
+            "summary": "Command may have changed files",
+        },
+    )

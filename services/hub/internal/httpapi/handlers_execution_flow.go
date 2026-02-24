@@ -290,11 +290,9 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 			},
 		})
 		state.mu.Unlock()
+		syncExecutionDomainBestEffort(state)
 		if state.authz != nil {
 			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "conversation.write", "conversation", conversationID, "success", map[string]any{"operation": "send_message"}, TraceIDFromContext(r.Context()))
-		}
-		if createdExecution.State == ExecutionStatePending {
-			dispatchExecutionToWorkerBestEffort(state, r, session, createdExecution)
 		}
 
 		writeJSON(w, http.StatusCreated, ExecutionCreateResponse{
@@ -335,8 +333,6 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
-		var cancelledExecution *Execution
-		var nextExecution *Execution
 		state.mu.Lock()
 		conversation, exists := state.conversations[conversationID]
 		if !exists {
@@ -350,7 +346,10 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 			execution.State = ExecutionStateCancelled
 			execution.UpdatedAt = now
 			state.executions[execution.ID] = execution
-			cancelledExecution = &execution
+			delete(state.executionLeases, execution.ID)
+			appendExecutionControlCommandLocked(state, execution.ID, ExecutionControlCommandTypeStop, map[string]any{
+				"reason": "user_stop",
+			})
 			appendExecutionEventLocked(state, ExecutionEvent{
 				ExecutionID:    execution.ID,
 				ConversationID: conversationID,
@@ -371,23 +370,13 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 		} else {
 			conversation.ActiveExecutionID = &nextID
 			conversation.QueueState = QueueStateRunning
-			if execution, exists := state.executions[nextID]; exists {
-				nextExecution = &execution
-			}
 		}
 		conversation.UpdatedAt = now
 		state.conversations[conversationID] = conversation
 		state.mu.Unlock()
+		syncExecutionDomainBestEffort(state)
 		if state.authz != nil {
 			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "execution.control", "conversation", conversationID, "success", map[string]any{"operation": "stop"}, TraceIDFromContext(r.Context()))
-		}
-		if cancelledExecution != nil {
-			if state.worker != nil {
-				_ = state.worker.stopExecution(r.Context(), cancelledExecution.ID)
-			}
-		}
-		if nextExecution != nil {
-			dispatchExecutionToWorkerBestEffort(state, r, session, *nextExecution)
 		}
 
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -519,6 +508,7 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 			},
 		})
 		state.mu.Unlock()
+		syncExecutionDomainBestEffort(state)
 
 		state.AppendAudit(AdminAuditEvent{
 			Actor:    actorFromSession(session),
@@ -698,6 +688,7 @@ func ExecutionActionHandler(state *AppState) http.HandlerFunc {
 		state.executions[executionID] = execution
 		delete(state.executionDiffs, executionID)
 		state.mu.Unlock()
+		syncExecutionDomainBestEffort(state)
 		if projectToPersist != nil {
 			_, _ = saveProjectToStore(state, *projectToPersist)
 		}
@@ -746,66 +737,19 @@ func startNextQueuedExecutionLocked(state *AppState, conversationID string) stri
 }
 
 func dispatchExecutionToWorkerBestEffort(state *AppState, r *http.Request, session Session, execution Execution) {
-	if state == nil || state.worker == nil {
-		return
-	}
-	messageContent := ""
-	state.mu.RLock()
-	for _, item := range state.conversationMessages[execution.ConversationID] {
-		if item.ID == execution.MessageID {
-			messageContent = item.Content
-			break
-		}
-	}
-	state.mu.RUnlock()
-	if err := state.worker.submitExecution(r.Context(), execution, messageContent); err != nil {
-		state.AppendAudit(AdminAuditEvent{
-			Actor:    actorFromSession(session),
-			Action:   "worker.execution.dispatch",
-			Resource: execution.ID,
-			Result:   "failed",
-			TraceID:  TraceIDFromContext(r.Context()),
-		})
-		if state.authz != nil {
-			_ = state.authz.appendAudit(
-				execution.WorkspaceID,
-				session.UserID,
-				"worker.execution.dispatch",
-				"execution",
-				execution.ID,
-				"failed",
-				map[string]any{"error": err.Error()},
-				TraceIDFromContext(r.Context()),
-			)
-		}
-	}
+	_ = state
+	_ = r
+	_ = session
+	_ = execution
 }
 
 func dispatchExecutionEventToWorkerBestEffort(state *AppState, r *http.Request, session Session, execution Execution, eventType string, sequence int) {
-	if state == nil || state.worker == nil {
-		return
-	}
-	if err := state.worker.submitExecutionEvent(r.Context(), execution, eventType, sequence); err != nil {
-		state.AppendAudit(AdminAuditEvent{
-			Actor:    actorFromSession(session),
-			Action:   "worker.event.dispatch",
-			Resource: execution.ID,
-			Result:   "failed",
-			TraceID:  TraceIDFromContext(r.Context()),
-		})
-		if state.authz != nil {
-			_ = state.authz.appendAudit(
-				execution.WorkspaceID,
-				session.UserID,
-				"worker.event.dispatch",
-				"execution",
-				execution.ID,
-				"failed",
-				map[string]any{"error": err.Error(), "event_type": eventType},
-				TraceIDFromContext(r.Context()),
-			)
-		}
-	}
+	_ = state
+	_ = r
+	_ = session
+	_ = execution
+	_ = eventType
+	_ = sequence
 }
 
 func findSnapshotByMessageID(items []ConversationSnapshot, messageID string) (ConversationSnapshot, bool) {

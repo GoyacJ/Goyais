@@ -18,7 +18,7 @@ func newRouterWithDBPath(dbPath string) http.Handler {
 	if err != nil {
 		log.Printf("failed to open authz db (%s), fallback to memory-only state: %v", dbPath, err)
 	}
-	state := NewAppState(store, newWorkerClientFromEnv())
+	state := NewAppState(store)
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", HealthHandler)
@@ -56,8 +56,12 @@ func newRouterWithDBPath(dbPath string) http.Handler {
 	mux.HandleFunc("/v1/executions/{execution_id}/confirm", ExecutionConfirmHandler(state))
 	mux.HandleFunc("/v1/executions/{execution_id}/{action}", ExecutionActionHandler(state))
 
-	// Internal hub callbacks
-	mux.HandleFunc("/internal/events", InternalExecutionEventsHandler(state))
+	// Internal Hub<->Worker API
+	mux.HandleFunc("/internal/workers/register", WorkerRegisterHandler(state))
+	mux.HandleFunc("/internal/workers/{worker_id}/heartbeat", WorkerHeartbeatHandler(state))
+	mux.HandleFunc("/internal/executions/claim", InternalExecutionClaimHandler(state))
+	mux.HandleFunc("/internal/executions/{execution_id}/events/batch", InternalExecutionEventsBatchHandler(state))
+	mux.HandleFunc("/internal/executions/{execution_id}/control", InternalExecutionControlPollHandler(state))
 
 	// Resources and sharing
 	mux.HandleFunc("/v1/resources", ResourcesHandler(state))

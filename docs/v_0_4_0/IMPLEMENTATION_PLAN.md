@@ -330,7 +330,7 @@
 3. 分页门禁：项目/Conversation/资源/审计列表统一 `cursor + limit`，UI 必须支持前进与回退游标栈。
 4. 主题与 i18n 门禁：设置页提供真实切换控件；主题模式、字体样式、字体大小、预设主题、语言切换均即时生效并持久化。
 5. 通用设置门禁：设置页 `general` 必须提供 6 组策略行式配置并即时持久化；未接入平台能力必须显式禁用并展示原因。
-6. Worker 门禁：`/internal/executions` 与 `/internal/events` 不再返回 501，改为最小可用 202 流程。
+6. Worker 门禁：`/internal/executions/claim`、`/internal/executions/{execution_id}/events/batch`、`/internal/executions/{execution_id}/control`、`/internal/workers/register`、`/internal/workers/{worker_id}/heartbeat` 必须可用。
 
 ---
 
@@ -368,12 +368,13 @@
 ## 2026-02-24 Worker + AI 编程闭环门禁（P0 Phase 5+6 增量）
 
 1. 核心链路门禁：`Desktop -> Hub -> Worker` 必须走真实执行链路，`messages/stop/rollback/events/confirm` 禁 mock fallback。
-2. 事件门禁：新增 `GET /v1/conversations/{conversation_id}/events`（SSE）与 `POST /internal/events` 回传，支持 `last_event_id` 续传。
-3. 审批门禁：新增 `POST /v1/executions/{execution_id}/confirm` 与 Worker `confirm/stop` 内部控制接口。
+2. 事件门禁：新增 `GET /v1/conversations/{conversation_id}/events`（SSE）与 `POST /internal/executions/{execution_id}/events/batch` 回传，支持 `last_event_id` 续传。
+3. 审批门禁：`POST /v1/executions/{execution_id}/confirm` 与 `POST /v1/conversations/{conversation_id}/stop` 必须转换为 `execution_control_commands`，由 Worker 通过 `GET /internal/executions/{execution_id}/control` 拉取。
 4. 快照门禁：Execution 必须固化 `mode_snapshot/model_snapshot/project_revision_snapshot`。
 5. 多 Conversation 门禁：同项目下多 Conversation 可并行执行，单 Conversation 仍保持 FIFO + 单活执行。
 6. 项目文件只读门禁：新增 `GET /v1/projects/{project_id}/files` 与 `GET /v1/projects/{project_id}/files/content`，强制路径保护。
-7. 测试门禁：Hub `go test ./...`、Worker `uv run pytest`、Desktop `pnpm test` 与 `pnpm test:strict` 必须全绿。
+7. 子代理门禁：P0 仅允许受控子代理并发，最大并发数 `<= 3`，且受父执行风险门禁约束。
+8. 测试门禁：Hub `go test ./...`、Worker `uv run pytest`、Desktop `pnpm test` 与 `pnpm test:strict` 必须全绿。
 
 ---
 
@@ -395,3 +396,14 @@
 2. 任一 API 变化，必须同步更新 `TECH_ARCH.md` 的接口章节。
 3. 任一权限变化，必须同步更新权限模型与验收场景。
 4. 任一发布条件变化，必须同步更新 Go/No-Go 条款。
+
+---
+
+## 2026-02-24 Worker Pull-Claim 与内部 API 硬切换同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 内部调度由 Hub push 改为 Worker pull claim | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 7.1/15.1, TECH_ARCH 7.2/9.2, PLAN Worker 门禁增量, STANDARDS 10.4 | done |
+| 内部 API v1 硬切换 | TECH_ARCH.md, IMPLEMENTATION_PLAN.md | TECH_ARCH 9.2, PLAN Worker 门禁增量 | done |
+| Hub 持久化执行全状态（替代内存主导） | TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | TECH_ARCH 11.x 执行表与恢复语义, STANDARDS 10.4/11 | done |
+| P0 增加受控子代理并行（<=3） | PRD.md, TECH_ARCH.md | PRD 7.1/20.2, TECH_ARCH 12.4 | done |

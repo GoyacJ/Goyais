@@ -82,6 +82,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			conversation.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 			state.conversations[conversationID] = conversation
 			state.mu.Unlock()
+			syncExecutionDomainBestEffort(state)
 			writeJSON(w, http.StatusOK, conversation)
 		case http.MethodDelete:
 			_, authErr := authorizeAction(
@@ -123,6 +124,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				}
 			}
 			state.mu.Unlock()
+			syncExecutionDomainBestEffort(state)
 			writeJSON(w, http.StatusNoContent, map[string]any{})
 		default:
 			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{

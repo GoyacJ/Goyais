@@ -245,6 +245,7 @@ func ProjectByIDHandler(state *AppState) http.HandlerFunc {
 			})
 			return
 		}
+		syncExecutionDomainBestEffort(state)
 
 		writeJSON(w, http.StatusNoContent, map[string]any{})
 		state.AppendAudit(AdminAuditEvent{

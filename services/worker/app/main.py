@@ -3,6 +3,7 @@ import os
 
 from fastapi import FastAPI, Request
 
+from app.orchestrator.claim_loop import ClaimLoopService
 from app.routes import router
 from app.trace import (
     TRACE_HEADER,
@@ -37,6 +38,7 @@ def configure_logging() -> logging.Logger:
 
 logger = configure_logging()
 app = FastAPI(title="Goyais Worker", version="0.4.0")
+claim_loop_service = ClaimLoopService()
 
 
 @app.middleware("http")
@@ -56,6 +58,20 @@ async def trace_middleware(request: Request, call_next):
 
 
 app.include_router(router)
+
+
+@app.on_event("startup")
+async def startup_worker_claim_loop() -> None:
+    if os.getenv("WORKER_DISABLE_CLAIM_LOOP", "").strip().lower() in {"1", "true", "yes"}:
+        return
+    await claim_loop_service.start()
+
+
+@app.on_event("shutdown")
+async def shutdown_worker_claim_loop() -> None:
+    if os.getenv("WORKER_DISABLE_CLAIM_LOOP", "").strip().lower() in {"1", "true", "yes"}:
+        return
+    await claim_loop_service.stop()
 
 
 def get_port() -> int:

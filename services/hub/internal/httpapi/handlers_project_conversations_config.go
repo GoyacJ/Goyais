@@ -120,6 +120,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				},
 			}
 			state.mu.Unlock()
+			syncExecutionDomainBestEffort(state)
 
 			writeJSON(w, http.StatusCreated, conversation)
 			if state.authz != nil {

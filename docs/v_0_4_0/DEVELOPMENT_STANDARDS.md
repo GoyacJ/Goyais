@@ -273,6 +273,7 @@ TokenLayerContract {
 6. 目录迁移门禁：旧目录仅允许静默自动补齐写回；写回失败必须产出 `fallback_or_failed` 审计。
 7. 主题门禁：`theme mode/font style/font scale/preset` 必须全局即时生效并持久化，且具备可回归自动化测试。
 8. 通用设置门禁：`general settings` 必须提供 6 组策略型行式配置并即时持久化；系统能力未接入平台时必须显式禁用并展示原因文案。
+9. Worker 调度门禁：内部执行链路必须使用 pull-claim（`claim + lease + heartbeat + control poll + events batch`）；禁止恢复 Hub push Worker 语义。
 
 ### 10.5 门禁契约
 
@@ -466,3 +467,14 @@ StandardsExceptionADR {
 | 目录严格格式 + 静默补齐 + 回退策略 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 6.3/19.1, TECH_ARCH 6.5/20.4, STANDARDS 10.4/15 | done |
 | 模型页进入自动重载（无手动按钮） | PRD.md, IMPLEMENTATION_PLAN.md | PRD 19.1, PLAN Phase 4/9 验收 | done |
 | 重载失败审计细化（manual/page_open/scheduled） | TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | TECH_ARCH 15.3/20.4, STANDARDS 10.4/13/15 | done |
+
+---
+
+## 20. 2026-02-24 Worker Pull-Claim 与内部 API 硬切换同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 内部调度由 Hub push 改为 Worker pull claim | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 7.1/15.1, TECH_ARCH 7.2/9.2, PLAN 2026-02-24 Worker 门禁增量, STANDARDS 10.4 | done |
+| 内部 API v1 硬切换 | TECH_ARCH.md, IMPLEMENTATION_PLAN.md | TECH_ARCH 9.2, PLAN 2026-02-24 Worker 门禁增量 | done |
+| Hub 持久化执行全状态（替代内存主导） | TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | TECH_ARCH 11.x 执行表与恢复语义, STANDARDS 10.4/11 | done |
+| P0 增加受控子代理并行（<=3） | PRD.md, TECH_ARCH.md | PRD 7.1/20.2, TECH_ARCH 12.4 | done |

@@ -42,8 +42,11 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/admin/abac-policies:",
 		"/v1/admin/audit:",
 		"/v1/executions/{execution_id}/confirm:",
-		"/internal/executions:",
-		"/internal/events:",
+		"/internal/workers/register:",
+		"/internal/workers/{worker_id}/heartbeat:",
+		"/internal/executions/claim:",
+		"/internal/executions/{execution_id}/events/batch:",
+		"/internal/executions/{execution_id}/control:",
 	}
 
 	for _, marker := range requiredMarkers {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any, Awaitable, Callable
 
@@ -10,6 +11,7 @@ from app.tool_runtime import (
     default_tools,
     execute_tool_call,
 )
+from app.tools.subagent_tools import run_subagent
 
 EmitEventFn = Callable[[dict[str, Any], str, dict[str, Any]], Awaitable[None]]
 WaitConfirmationFn = Callable[[str, int], Awaitable[str]]
@@ -35,6 +37,7 @@ async def run_execution_loop(
 
     mode_snapshot = str(execution.get("mode_snapshot") or execution.get("mode") or "agent").strip().lower()
     content = str(execution.get("content") or "").strip()
+    working_directory = str(execution.get("working_directory") or ".").strip()
 
     try:
         await emit_event(
@@ -133,6 +136,7 @@ async def run_execution_loop(
                 }
             )
 
+            subagent_calls: list[tuple[str, str, asyncio.Task[dict[str, Any]]]] = []
             for tool_call in turn_result.tool_calls:
                 if is_cancelled(execution_id):
                     await emit_event(execution, "execution_stopped", {"reason": "stop_requested"})
@@ -175,7 +179,12 @@ async def run_execution_loop(
                     },
                 )
 
-                tool_result = execute_tool_call(tool_call)
+                if tool_call.name.strip().lower() == "run_subagent":
+                    task = asyncio.create_task(run_subagent(tool_call.arguments, invocation))
+                    subagent_calls.append((tool_call.id, tool_call.name, task))
+                    continue
+
+                tool_result = execute_tool_call(tool_call, working_directory)
                 await emit_event(
                     execution,
                     "tool_result",
@@ -196,6 +205,40 @@ async def run_execution_loop(
                         "content": json.dumps(tool_result.output, ensure_ascii=False),
                     }
                 )
+
+            if subagent_calls:
+                subagent_results = await asyncio.gather(
+                    *(item[2] for item in subagent_calls), return_exceptions=True
+                )
+                for (tool_call_id, tool_name, _), subagent_result in zip(
+                    subagent_calls, subagent_results, strict=False
+                ):
+                    if isinstance(subagent_result, Exception):
+                        output: dict[str, Any] = {
+                            "ok": False,
+                            "error": "SUBAGENT_RUNTIME_ERROR",
+                            "message": str(subagent_result),
+                        }
+                    else:
+                        output = subagent_result
+
+                    await emit_event(
+                        execution,
+                        "tool_result",
+                        {
+                            "name": tool_name,
+                            "ok": bool(output.get("ok", False)),
+                            "output": output,
+                        },
+                    )
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "name": tool_name,
+                            "content": json.dumps(output, ensure_ascii=False),
+                        }
+                    )
 
         await emit_event(
             execution,

@@ -205,6 +205,93 @@ func (s *authzStore) migrate() error {
 			updated_at TEXT NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_project_configs_workspace_updated ON project_configs(workspace_id, updated_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS conversations (
+			id TEXT PRIMARY KEY,
+			workspace_id TEXT NOT NULL,
+			project_id TEXT NOT NULL,
+			name TEXT NOT NULL,
+			queue_state TEXT NOT NULL,
+			default_mode TEXT NOT NULL,
+			model_id TEXT NOT NULL,
+			base_revision INTEGER NOT NULL DEFAULT 0,
+			active_execution_id TEXT,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_conversations_project_created ON conversations(project_id, created_at)`,
+		`CREATE TABLE IF NOT EXISTS conversation_messages (
+			id TEXT PRIMARY KEY,
+			conversation_id TEXT NOT NULL,
+			role TEXT NOT NULL,
+			content TEXT NOT NULL,
+			queue_index INTEGER,
+			can_rollback INTEGER,
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_conversation_messages_conversation_created ON conversation_messages(conversation_id, created_at)`,
+		`CREATE TABLE IF NOT EXISTS conversation_snapshots (
+			id TEXT PRIMARY KEY,
+			conversation_id TEXT NOT NULL,
+			rollback_point_message_id TEXT NOT NULL,
+			queue_state TEXT NOT NULL,
+			worktree_ref TEXT,
+			inspector_state_json TEXT NOT NULL,
+			messages_json TEXT NOT NULL,
+			execution_ids_json TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_conversation_snapshots_conversation_created ON conversation_snapshots(conversation_id, created_at)`,
+		`CREATE TABLE IF NOT EXISTS executions (
+			id TEXT PRIMARY KEY,
+			workspace_id TEXT NOT NULL,
+			conversation_id TEXT NOT NULL,
+			message_id TEXT NOT NULL,
+			state TEXT NOT NULL,
+			mode TEXT NOT NULL,
+			model_id TEXT NOT NULL,
+			mode_snapshot TEXT NOT NULL,
+			model_snapshot_json TEXT NOT NULL,
+			project_revision_snapshot INTEGER NOT NULL DEFAULT 0,
+			queue_index INTEGER NOT NULL,
+			trace_id TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_executions_conversation_created ON executions(conversation_id, created_at)`,
+		`CREATE TABLE IF NOT EXISTS execution_events (
+			event_id TEXT PRIMARY KEY,
+			execution_id TEXT NOT NULL,
+			conversation_id TEXT NOT NULL,
+			trace_id TEXT NOT NULL,
+			sequence INTEGER NOT NULL,
+			queue_index INTEGER NOT NULL,
+			type TEXT NOT NULL,
+			timestamp TEXT NOT NULL,
+			payload_json TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_execution_events_conversation_sequence ON execution_events(conversation_id, sequence)`,
+		`CREATE TABLE IF NOT EXISTS execution_control_commands (
+			id TEXT PRIMARY KEY,
+			execution_id TEXT NOT NULL,
+			type TEXT NOT NULL,
+			payload_json TEXT NOT NULL,
+			seq INTEGER NOT NULL,
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_execution_control_commands_execution_seq ON execution_control_commands(execution_id, seq)`,
+		`CREATE TABLE IF NOT EXISTS execution_leases (
+			execution_id TEXT PRIMARY KEY,
+			worker_id TEXT NOT NULL,
+			lease_version INTEGER NOT NULL,
+			lease_expires_at TEXT NOT NULL,
+			run_attempt INTEGER NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS workers (
+			worker_id TEXT PRIMARY KEY,
+			capabilities_json TEXT NOT NULL,
+			status TEXT NOT NULL,
+			last_heartbeat TEXT NOT NULL
+		)`,
 		`CREATE TABLE IF NOT EXISTS resource_configs (
 				id TEXT PRIMARY KEY,
 				workspace_id TEXT NOT NULL,

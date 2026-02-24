@@ -370,6 +370,73 @@ type ExecutionEvent struct {
 	Payload        map[string]any     `json:"payload"`
 }
 
+type ExecutionEventBatchRequest struct {
+	Events []ExecutionEvent `json:"events"`
+}
+
+type ExecutionControlCommandType string
+
+const (
+	ExecutionControlCommandTypeConfirm ExecutionControlCommandType = "confirm"
+	ExecutionControlCommandTypeStop    ExecutionControlCommandType = "stop"
+)
+
+type ExecutionControlCommand struct {
+	ID          string                      `json:"id"`
+	ExecutionID string                      `json:"execution_id"`
+	Type        ExecutionControlCommandType `json:"type"`
+	Payload     map[string]any              `json:"payload"`
+	Seq         int                         `json:"seq"`
+	CreatedAt   string                      `json:"created_at"`
+}
+
+type ExecutionControlPollResponse struct {
+	Commands []ExecutionControlCommand `json:"commands"`
+	LastSeq  int                       `json:"last_seq"`
+}
+
+type WorkerRegistration struct {
+	WorkerID      string         `json:"worker_id"`
+	Capabilities  map[string]any `json:"capabilities"`
+	Status        string         `json:"status"`
+	LastHeartbeat string         `json:"last_heartbeat"`
+}
+
+type WorkerRegisterRequest struct {
+	WorkerID     string         `json:"worker_id"`
+	Capabilities map[string]any `json:"capabilities"`
+}
+
+type WorkerHeartbeatRequest struct {
+	Status string `json:"status"`
+}
+
+type ExecutionLease struct {
+	ExecutionID    string `json:"execution_id"`
+	WorkerID       string `json:"worker_id"`
+	LeaseVersion   int    `json:"lease_version"`
+	LeaseExpiresAt string `json:"lease_expires_at"`
+	RunAttempt     int    `json:"run_attempt"`
+}
+
+type ExecutionClaimRequest struct {
+	WorkerID     string `json:"worker_id"`
+	LeaseSeconds int    `json:"lease_seconds,omitempty"`
+}
+
+type ExecutionClaimEnvelope struct {
+	Execution    Execution      `json:"execution"`
+	Lease        ExecutionLease `json:"lease"`
+	Content      string         `json:"content"`
+	ProjectPath  string         `json:"project_path,omitempty"`
+	ProjectIsGit bool           `json:"project_is_git"`
+}
+
+type ExecutionClaimResponse struct {
+	Claimed   bool                    `json:"claimed"`
+	Execution *ExecutionClaimEnvelope `json:"execution,omitempty"`
+}
+
 type Resource struct {
 	ID          string       `json:"id"`
 	WorkspaceID string       `json:"workspace_id"`
