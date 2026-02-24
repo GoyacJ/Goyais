@@ -150,6 +150,7 @@ async def run_execution_loop(
                     execution,
                     "tool_call",
                     {
+                        "call_id": tool_call.id,
                         "name": tool_call.name,
                         "input": tool_call.arguments,
                         "risk_level": risk_level,
@@ -166,6 +167,7 @@ async def run_execution_loop(
                     execution,
                     "tool_result",
                     {
+                        "call_id": tool_call.id,
                         "name": tool_call.name,
                         "ok": True,
                         "output": tool_result.output,
@@ -203,6 +205,7 @@ async def run_execution_loop(
                         execution,
                         "tool_result",
                         {
+                            "call_id": tool_call_id,
                             "name": tool_name,
                             "ok": bool(output.get("ok", False)),
                             "output": output,

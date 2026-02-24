@@ -46,11 +46,7 @@ export function createConversationStreamCoordinator(input: StreamCoordinatorInpu
     }
 
     const existingRuntime = conversationStore.byConversationId[conversationId];
-    const hasHydratedData = Boolean(existingRuntime) && (
-      (existingRuntime?.executions.length ?? 0) > 0 ||
-      (existingRuntime?.snapshots.length ?? 0) > 0 ||
-      (existingRuntime?.messages.length ?? 0) > 1
-    );
+    const hasHydratedData = Boolean(existingRuntime?.hydrated);
     if (!force && hasHydratedData) {
       return;
     }

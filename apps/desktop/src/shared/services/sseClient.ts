@@ -2,6 +2,7 @@ import type { ExecutionEvent } from "@/shared/types/api";
 
 type SseOptions = {
   token?: string;
+  initialLastEventId?: string;
   onEvent: (event: ExecutionEvent) => void;
   onStatusChange: (status: "connected" | "reconnecting" | "disconnected") => void;
   onError: (error: Error) => void;
@@ -17,7 +18,7 @@ const RECONNECT_DELAY_MS = 2_000;
 export function connectConversationEvents(url: string, options: SseOptions): SseHandle {
   let closed = false;
   let source: EventSource | null = null;
-  let lastId = "";
+  let lastId = options.initialLastEventId?.trim() ?? "";
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   const open = () => {

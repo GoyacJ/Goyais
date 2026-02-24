@@ -48,19 +48,30 @@ const conversationB: Conversation = {
 describe("conversation stream routing", () => {
   let onEvent: ((event: unknown) => void) | undefined;
   let closeHandle: ReturnType<typeof vi.fn>;
+  let optionsUsed:
+    | {
+      initialLastEventId?: string;
+      onEvent: (event: unknown) => void;
+    }
+    | undefined;
 
   beforeEach(() => {
     resetConversationStore();
     vi.stubGlobal("EventSource", class MockEventSource {});
     onEvent = undefined;
+    optionsUsed = undefined;
     closeHandle = vi.fn();
     streamConversationEventsMock.mockReset();
     applyIncomingExecutionEventMock.mockReset();
-    streamConversationEventsMock.mockImplementation((_conversationId: string, options: { onEvent: (event: unknown) => void }) => {
+    streamConversationEventsMock.mockImplementation((
+      _conversationId: string,
+      options: { initialLastEventId?: string; onEvent: (event: unknown) => void }
+    ) => {
+      optionsUsed = options;
       onEvent = options.onEvent;
       return {
         close: closeHandle,
-        lastEventId: () => ""
+        lastEventId: () => "evt_stream_last_handle"
       };
     });
     ensureConversationRuntime(conversationA, true);
@@ -98,6 +109,29 @@ describe("conversation stream routing", () => {
     warnSpy.mockRestore();
   });
 
+  it("passes lastEventId during attach and updates runtime lastEventId from incoming event", () => {
+    const runtime = ensureConversationRuntime(conversationA, true);
+    runtime.lastEventId = "evt_stream_resume_from";
+
+    attachConversationStream(conversationA);
+
+    expect(optionsUsed?.initialLastEventId).toBe("evt_stream_resume_from");
+    onEvent?.({
+      event_id: "evt_stream_new",
+      execution_id: "exec_stream_2",
+      conversation_id: conversationA.id,
+      trace_id: "tr_stream_2",
+      sequence: 2,
+      queue_index: 0,
+      type: "thinking_delta",
+      timestamp: "2026-02-24T00:00:00Z",
+      payload: {
+        stage: "model_call"
+      }
+    });
+    expect(runtime.lastEventId).toBe("evt_stream_new");
+  });
+
   it("detaches stream handle", () => {
     attachConversationStream(conversationA);
     expect(conversationStore.streams[conversationA.id]).toBeTruthy();
@@ -105,5 +139,6 @@ describe("conversation stream routing", () => {
     detachConversationStream(conversationA.id);
     expect(closeHandle).toHaveBeenCalledTimes(1);
     expect(conversationStore.streams[conversationA.id]).toBeUndefined();
+    expect(conversationStore.byConversationId[conversationA.id]?.lastEventId).toBe("evt_stream_last_handle");
   });
 });

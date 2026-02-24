@@ -126,43 +126,8 @@ p {
   justify-self: center;
 }
 
-.trace-list {
-  display: grid;
-  gap: var(--global-space-6);
-}
-
-.trace-item {
-  border: 1px dashed var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-surface);
-  padding: var(--global-space-6) var(--global-space-8);
-}
-
-.trace-summary {
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--global-space-8);
-}
-
-.trace-title {
-  color: var(--semantic-text);
-  font-size: var(--global-font-size-11);
-  font-weight: var(--global-font-weight-600);
-}
-
-.trace-text {
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-11);
-}
-
-.trace-details {
-  margin: var(--global-space-6) 0 0;
-  color: var(--semantic-text-subtle);
-  font-size: var(--global-font-size-11);
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-word;
+.trace-host {
+  display: contents;
 }
 
 .composer {

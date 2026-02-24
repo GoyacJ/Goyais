@@ -9,7 +9,9 @@ import {
 import {
   useAutoModelSyncWatcher
 } from "@/modules/conversation/views/controllerWatchers";
-import { buildProcessTraceItems, type ProcessTraceItem } from "@/modules/conversation/views/processTrace";
+import { buildExecutionTraceViewModels, type ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
+import { useExecutionTraceState } from "@/modules/conversation/views/useExecutionTraceState";
+import { useRunningActionsView } from "@/modules/conversation/views/useRunningActionsView";
 import { useMainScreenActions } from "@/modules/conversation/views/useMainScreenActions";
 import { useMainScreenModeling } from "@/modules/conversation/views/useMainScreenModeling";
 import { createConversationStreamCoordinator } from "@/modules/conversation/views/streamCoordinator";
@@ -26,7 +28,7 @@ import {
 import { useI18n } from "@/shared/i18n";
 import { authStore } from "@/shared/stores/authStore";
 import { useWorkspaceStatusSync } from "@/shared/stores/workspaceStatusStore";
-import type { DiffCapability, Execution, InspectorTabKey, TraceDetailLevel } from "@/shared/types/api";
+import type { DiffCapability, InspectorTabKey } from "@/shared/types/api";
 
 export function useMainScreenController() {
   const router = useRouter();
@@ -87,30 +89,23 @@ export function useMainScreenController() {
   const pendingCount = computed(() => executionStateCounts.value.pending);
   const executingCount = computed(() => executionStateCounts.value.executing);
   const activeCount = computed(() => pendingCount.value + executingCount.value);
-  const activeExecution = computed<Execution | undefined>(() => {
-    const executions = runtime.value?.executions ?? [];
-    const activeExecutions = executions.filter((item) => item.state === "pending" || item.state === "executing");
-    if (activeExecutions.length === 0) {
-      return undefined;
-    }
-    return [...activeExecutions].sort((left, right) => {
-      if (left.queue_index !== right.queue_index) {
-        return left.queue_index - right.queue_index;
-      }
-      return left.created_at.localeCompare(right.created_at);
-    })[0];
-  });
-  const showProcessTrace = computed(() => activeExecution.value?.agent_config_snapshot?.show_process_trace ?? true);
-  const traceDetailLevel = computed<TraceDetailLevel>(
-    () => activeExecution.value?.agent_config_snapshot?.trace_detail_level ?? "verbose"
-  );
-  const processTraceItems = computed<ProcessTraceItem[]>(() => {
+  const baseExecutionTraces = computed<ExecutionTraceViewModel[]>(() => {
     const currentRuntime = runtime.value;
-    const execution = activeExecution.value;
-    if (!currentRuntime || !execution || !showProcessTrace.value) {
+    if (!currentRuntime) {
       return [];
     }
-    return buildProcessTraceItems(currentRuntime.events, execution.id, traceDetailLevel.value);
+    const tracedExecutions = currentRuntime.executions.filter(
+      (execution) => execution.agent_config_snapshot?.show_process_trace ?? true
+    );
+    return buildExecutionTraceViewModels(currentRuntime.events, tracedExecutions);
+  });
+  const {
+    activeTraceCount,
+    executionTraces,
+    toggleExecutionTrace
+  } = useExecutionTraceState(baseExecutionTraces);
+  const { runningActions } = useRunningActionsView(runtime, {
+    executionFilter: (execution) => execution.agent_config_snapshot?.show_process_trace ?? true
   });
   const runningState = computed(() => workspaceStatus.conversationStatus.value);
   const runningStateClass = computed(() => {
@@ -246,7 +241,6 @@ export function useMainScreenController() {
       streamCoordinator.syncConversationStreams();
     }
   );
-
   useAutoModelSyncWatcher({
     activeConversation,
     activeCount,
@@ -273,7 +267,8 @@ export function useMainScreenController() {
     nonGitCapability,
     pendingCount,
     placeholder,
-    processTraceItems,
+    activeTraceCount,
+    executionTraces,
     projectImportError,
     projectImportFeedback,
     projectImportInProgress,
@@ -286,7 +281,8 @@ export function useMainScreenController() {
     runtimeConnectionStatus: workspaceStatus.connectionStatus,
     runtimeHubLabel: workspaceStatus.hubURL,
     runtimeUserDisplayName: workspaceStatus.userDisplayName,
-    showProcessTrace,
+    runningActions,
+    toggleExecutionTrace,
     workspaceLabel,
     workspaceStore
   };

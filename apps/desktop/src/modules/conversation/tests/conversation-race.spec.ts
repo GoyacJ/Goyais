@@ -96,6 +96,10 @@ describe("conversation execution race", () => {
     expect(runtime.executions.length).toBe(1);
     expect(runtime.executions[0]?.id).toBe("exec_race_1");
     expect(runtime.executions[0]?.state).toBe("completed");
+    const doneMessages = runtime.messages.filter(
+      (message) => message.role === "assistant" && message.content.includes("done")
+    );
+    expect(doneMessages).toHaveLength(1);
 
     const counts = getExecutionStateCounts(runtime);
     expect(counts.pending).toBe(0);

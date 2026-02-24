@@ -409,6 +409,19 @@
 
 ---
 
+## 2026-02-24 过程流折叠化与轻量展示门禁（增量）
+
+1. 结构门禁：主对话区过程流必须按 execution 聚合为单折叠入口，不再逐条事件独立卡片渲染。
+2. 交互门禁：默认 `running` 收起详情，仅展示“当前运行动作（可并发多条）+ 动作耗时”；用户点击后才展开详细过程。
+3. 展示门禁：过程区禁止卡片边框/背景，采用无边框文本时间线。
+4. 锚点门禁：过程摘要必须贴近触发消息上下文显示（message_id 主路径，queue_index 回退路径）。
+5. 验收门禁：执行中可见过程，执行结束保留一行摘要；不得残留重复“正在思考...”占位。
+6. 事件门禁：`execution_done/error/stopped` 仅允许首次终态转移时落消息；重放事件不得重复追加消息。
+7. 续传门禁：SSE 重连必须携带 `last_event_id`；重连后不得重放历史终态导致顺序污染。
+8. Worker 门禁：`tool_call/tool_result` 必须携带可选 `call_id`，前端缺失时按 `name+sequence` 降级匹配。
+
+---
+
 ## 关键风险与缓解
 
 | 风险 | 阶段 | 缓解 |
@@ -457,3 +470,19 @@
 | `max turns` 动态配置化与软收敛 done(truncated) | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 16.3/19, TECH_ARCH 12/20.10, PLAN Phase 5 门禁增量 | done |
 | 对话区过程流展示（thinking/tool/command）与结束收敛 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 14.2/20.10, STANDARDS 10.4/11/13 | done |
 | `/workspace/agent` 动态保存与仅新 execution 生效 | PRD.md, IMPLEMENTATION_PLAN.md | PRD 12.1/16.2, PLAN Phase 4/9 验收 | done |
+
+## 25. 2026-02-24 过程流折叠化与轻量展示同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| execution 聚合折叠与自动收敛策略 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 16.3/19, TECH_ARCH 20.11, PLAN Phase 9 验收 | done |
+| 无边框轻量展示与重复占位收敛 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 16.3, TECH_ARCH 20.11, STANDARDS 10.4/15 | done |
+
+## 26. 2026-02-24 运行中简要过程流与消息幂等同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 运行中简要动作列表（默认收起详情 + 多动作耗时） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 20.11, PLAN 过程流门禁, STANDARDS 10.4/15 | done |
+| 终态消息门禁（首次终态才落消息） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/16.3, TECH_ARCH 20.9/20.11, STANDARDS 10.4/11 | done |
+| SSE `last_event_id` 续传防重放 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.1, TECH_ARCH 20.9, PLAN 事件门禁 | done |
+| Worker `tool_call/tool_result.call_id` 可选扩展 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/16.3, TECH_ARCH 9.2/20.11, PLAN Worker 门禁, STANDARDS 10.4/15 | done |

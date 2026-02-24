@@ -1,8 +1,11 @@
 import { reactive } from "vue";
 
 import { resolveDiffCapability } from "@/modules/conversation/services";
+import {
+  buildConversationSnapshot,
+  createInitialMessages
+} from "@/modules/conversation/store/conversationSnapshots";
 import { normalizeExecutionList } from "@/modules/conversation/store/executionMerge";
-import { createMockId } from "@/shared/services/mockData";
 import type {
   ConversationDetailResponse,
   ConnectionStatus,
@@ -14,8 +17,7 @@ import type {
   DiffItem,
   Execution,
   ExecutionEvent,
-  InspectorTabKey,
-  QueueState
+  InspectorTabKey
 } from "@/shared/types/api";
 
 export type StreamHandle = {
@@ -36,6 +38,12 @@ export type ConversationRuntime = {
   diffCapability: DiffCapability;
   inspectorTab: InspectorTabKey;
   worktreeRef: string | null;
+  hydrated: boolean;
+  lastEventId: string;
+  processedEventKeys: string[];
+  processedEventKeySet: Set<string>;
+  completionMessageKeys: string[];
+  completionMessageKeySet: Set<string>;
 };
 
 export const MAX_RUNTIME_EVENTS = 1000;
@@ -96,7 +104,13 @@ export function ensureConversationRuntime(
     diff: [],
     diffCapability: resolveDiffCapability(isGitProject),
     inspectorTab: "diff",
-    worktreeRef: null
+    worktreeRef: null,
+    hydrated: false,
+    lastEventId: "",
+    processedEventKeys: [],
+    processedEventKeySet: new Set<string>(),
+    completionMessageKeys: [],
+    completionMessageKeySet: new Set<string>()
   };
 
   conversationStore.byConversationId[conversation.id] = runtime;
@@ -132,6 +146,7 @@ export function hydrateConversationRuntime(
   runtime.worktreeRef = latestSnapshot?.worktree_ref ?? null;
   runtime.inspectorTab = latestSnapshot?.inspector_state.tab ?? "diff";
   runtime.diff = [];
+  runtime.hydrated = true;
   return runtime;
 }
 
@@ -140,6 +155,10 @@ export function getConversationRuntime(conversationId: string): ConversationRunt
 }
 
 export function appendRuntimeEvent(runtime: ConversationRuntime, event: ExecutionEvent): void {
+  const eventID = event.event_id?.trim();
+  if (eventID) {
+    runtime.lastEventId = eventID;
+  }
   runtime.events.push(event);
   if (runtime.events.length > MAX_RUNTIME_EVENTS) {
     runtime.events.splice(0, runtime.events.length - MAX_RUNTIME_EVENTS);
@@ -186,57 +205,8 @@ export function clearConversationTimer(conversationId: string): void {
   delete conversationStore.timers[conversationId];
 }
 
-export function createInitialMessages(conversationId: string): ConversationMessage[] {
-  return [
-    {
-      id: createMockId("msg"),
-      conversation_id: conversationId,
-      role: "assistant",
-      content: "欢迎使用 Goyais，当前会话已准备就绪。",
-      created_at: new Date().toISOString()
-    }
-  ];
-}
-
-export function deriveQueueState(runtime: ConversationRuntime): QueueState {
-  const executions = normalizeExecutionList(runtime.executions);
-  const hasRunning = executions.some((execution) =>
-    execution.state === "pending" || execution.state === "executing"
-  );
-  const hasQueued = executions.some((execution) => execution.state === "queued");
-  if (hasRunning) {
-    return "running";
-  }
-  if (hasQueued) {
-    return "queued";
-  }
-  return "idle";
-}
-
 export function createConversationSnapshot(runtime: ConversationRuntime, conversationId: string, rollbackPointMessageId: string): ConversationSnapshot {
-  const executions = normalizeExecutionList(runtime.executions);
-  const executionSnapshots = executions.map((execution) => ({
-    id: execution.id,
-    state: execution.state,
-    queue_index: execution.queue_index,
-    message_id: execution.message_id,
-    updated_at: execution.updated_at
-  }));
-
-  return {
-    id: createMockId("snap"),
-    conversation_id: conversationId,
-    rollback_point_message_id: rollbackPointMessageId,
-    queue_state: deriveQueueState(runtime),
-    worktree_ref: runtime.worktreeRef,
-    inspector_state: {
-      tab: runtime.inspectorTab
-    },
-    messages: runtime.messages.map((message) => ({ ...message })),
-    execution_snapshots: executionSnapshots,
-    execution_ids: executions.map((execution) => execution.id),
-    created_at: new Date().toISOString()
-  };
+  return buildConversationSnapshot(runtime, conversationId, rollbackPointMessageId);
 }
 
 export function pushConversationSnapshot(conversationId: string, snapshot: ConversationSnapshot): void {

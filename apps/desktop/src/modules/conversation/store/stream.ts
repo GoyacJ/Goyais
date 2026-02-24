@@ -16,10 +16,15 @@ export function attachConversationStream(conversation: Conversation, token?: str
 
   conversationStore.streams[conversation.id] = streamConversationEvents(conversation.id, {
     token,
+    initialLastEventId: runtime.lastEventId,
     onEvent: (event) => {
       const incoming = normalizeExecutionEvent(event, conversation.id);
       if (!incoming) {
         return;
+      }
+      const incomingEventID = incoming.event_id?.trim();
+      if (incomingEventID) {
+        runtime.lastEventId = incomingEventID;
       }
       const eventConversationId = incoming.conversation_id.trim();
       if (eventConversationId !== conversation.id) {
@@ -56,7 +61,15 @@ export function attachConversationStream(conversation: Conversation, token?: str
 }
 
 export function detachConversationStream(conversationId: string): void {
-  conversationStore.streams[conversationId]?.close();
+  const handle = conversationStore.streams[conversationId];
+  const runtime = conversationStore.byConversationId[conversationId];
+  if (handle && runtime) {
+    const lastEventID = handle.lastEventId().trim();
+    if (lastEventID !== "") {
+      runtime.lastEventId = lastEventID;
+    }
+  }
+  handle?.close();
   delete conversationStore.streams[conversationId];
 }
 

@@ -1057,6 +1057,18 @@ while True:
 8. 过程展示粒度由 `execution.agent_config_snapshot.trace_detail_level` 控制；执行结束后不再显示“正在思考/运行中可停止”占位。
 9. 配置生效范围必须为“仅新 Execution”；运行中的 Execution 不得被重配。
 
+### 20.11 对话区过程流折叠与轻量展示约束
+
+1. 主对话区过程流渲染必须按 `execution_id` 聚合为单折叠单元，不得继续逐条事件独立卡片渲染。
+2. 默认交互策略：`pending|executing => 收起详情，仅展示简要运行动作列表（可并发多条）`，`completed|failed|cancelled => 保持收起并保留摘要`；用户手动切换后该 execution 内保持用户偏好。
+3. 折叠摘要必须锚定到触发 execution 的消息上下文（优先 `execution.message_id`，缺失时可回退 `queue_index`）。
+4. 过程展示层必须使用无边框轻量文本样式，不得使用额外卡片背景/虚线边框包裹。
+5. 过程摘要在执行结束后仍保留，以便按需展开复盘；Inspector Run 继续承载完整诊断视图。
+6. Worker 事件 `tool_call/tool_result` payload 应包含可选字段 `call_id`，用于前端精确配对动作起止时间；缺失时前端必须回退到 `name+sequence` 降级匹配。
+7. 前端事件应用层必须维护幂等去重键（优先 `event_id`，回退 `execution_id+sequence+type`）；重复事件不得重复落状态或消息。
+8. 终态消息仅允许在 execution 首次进入终态时追加；若 execution 已处于终态，重放 `execution_done/error/stopped` 必须忽略。
+9. SSE 重连必须携带 `last_event_id`，且 Conversation runtime 需要保存并在 detach/reattach 间续传该值。
+
 ## 21. 2026-02-24 会话稳定性与并发显示同步矩阵
 
 | change_type | required_docs_to_update | required_sections | status |
@@ -1075,3 +1087,19 @@ while True:
 | `max turns` 改为 Agent 配置驱动 + 软收敛 done(truncated) | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 16.3/19, TECH_ARCH 12/20.10, PLAN Phase 5 门禁增量 | done |
 | 对话区执行过程流（thinking/tool/command）与结束收敛规则 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 14.2/20.10, STANDARDS 11/13 | done |
 | 设置 `/workspace/agent` 从占位改为可编辑并动态保存 | PRD.md, IMPLEMENTATION_PLAN.md | PRD 12.1/16.2, PLAN Phase 4/9 验收 | done |
+
+## 23. 2026-02-24 过程流折叠化与轻量展示同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 过程流从“逐条事件卡片”改为“execution 聚合折叠” | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 16.3/19, TECH_ARCH 14.2/20.11, PLAN Phase 9 验收 | done |
+| 默认收起详情/自动收敛与手动偏好保持策略 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 16.3, TECH_ARCH 20.11, STANDARDS 10.4/15 | done |
+
+## 24. 2026-02-24 运行中简要过程流与消息幂等同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 运行中简要动作列表（默认收起详情 + 实时耗时） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 20.11, PLAN 过程流门禁, STANDARDS 10.4/15 | done |
+| Worker 事件扩展 `call_id`（tool_call/tool_result） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.1/16.3, TECH_ARCH 9.2/20.11, PLAN Worker 门禁 | done |
+| 终态消息落地幂等与事件去重 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/16.3, TECH_ARCH 20.9/20.11, STANDARDS 10.4/11 | done |
+| SSE `last_event_id` 续传与重连防重放 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.1, TECH_ARCH 20.9, PLAN 事件门禁 | done |

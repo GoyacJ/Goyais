@@ -1,30 +1,39 @@
 <template>
   <section class="panel">
     <div ref="conversationAreaRef" class="conversation-area" @scroll="onConversationScroll">
-      <div
-        v-for="message in messages"
-        :key="message.id"
-        class="message-row"
-        :class="message.role"
-      >
-        <div class="message-body">
-          <div class="bubble-head">
-            <AppIcon :name="message.role === 'assistant' ? 'bot' : 'user'" :size="12" />
-            <span>{{ message.role === "assistant" ? assistantModelLabel : message.role === "user" ? "You" : "System" }}</span>
+      <template v-for="message in messages" :key="message.id">
+        <div class="message-row" :class="message.role">
+          <div class="message-body">
+            <div class="bubble-head">
+              <AppIcon :name="message.role === 'assistant' ? 'bot' : 'user'" :size="12" />
+              <span>{{ message.role === "assistant" ? assistantModelLabel : message.role === "user" ? "You" : "System" }}</span>
+            </div>
+            <div class="bubble">
+              <p>{{ message.content }}</p>
+            </div>
+            <button
+              v-if="message.role === 'user' && message.can_rollback"
+              class="rollback"
+              type="button"
+              @click="$emit('rollback', message.id)"
+            >
+              回滚到此处
+            </button>
           </div>
-          <div class="bubble">
-            <p>{{ message.content }}</p>
-          </div>
-          <button
-            v-if="message.role === 'user' && message.can_rollback"
-            class="rollback"
-            type="button"
-            @click="$emit('rollback', message.id)"
-          >
-            回滚到此处
-          </button>
         </div>
-      </div>
+
+        <div
+          v-for="trace in getMessageTraces(message)"
+          :key="trace.executionId"
+          class="trace-host"
+        >
+          <ExecutionTraceBlock
+            :trace="trace"
+            :running-actions="getRunningActions(trace.executionId)"
+            @toggle-trace="onTraceToggle"
+          />
+        </div>
+      </template>
 
       <div v-if="executionHint !== ''" class="message-row assistant">
         <div class="message-body">
@@ -36,16 +45,6 @@
             <p>{{ executionHint }}</p>
           </div>
         </div>
-      </div>
-
-      <div v-if="hasActiveExecution && showProcessTrace && processTraceItems.length > 0" class="trace-list">
-        <details v-for="item in processTraceItems" :key="item.id" class="trace-item">
-          <summary class="trace-summary">
-            <span class="trace-title">{{ item.title }}</span>
-            <span class="trace-text">{{ item.summary }}</span>
-          </summary>
-          <pre v-if="item.details !== ''" class="trace-details">{{ item.details }}</pre>
-        </details>
       </div>
 
       <div v-if="hasActiveExecution" class="queue-chip">
@@ -97,13 +96,16 @@
     </div>
   </section>
 </template>
-
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUpdated, ref } from "vue";
-
 import type { ConversationMessage, ConversationMode } from "@/shared/types/api";
+import type { ExecutionTraceStep, ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
+import type { RunningActionViewModel } from "@/modules/conversation/views/runningActions";
+import ExecutionTraceBlock from "@/modules/conversation/components/ExecutionTraceBlock.vue";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+
+type ExecutionTrace = ExecutionTraceViewModel & { isExpanded: boolean; steps: ExecutionTraceStep[] };
 
 const props = withDefaults(
   defineProps<{
@@ -112,8 +114,9 @@ const props = withDefaults(
     pendingCount: number;
     executingCount: number;
     hasActiveExecution: boolean;
-    showProcessTrace: boolean;
-    processTraceItems: Array<{ id: string; title: string; summary: string; details: string }>;
+    activeTraceCount: number;
+    executionTraces: ExecutionTrace[];
+    runningActions: RunningActionViewModel[];
     draft: string;
     mode: ConversationMode;
     modelId: string;
@@ -145,7 +148,7 @@ const assistantModelLabel = computed(() => {
   return selected?.label ?? normalized;
 });
 const executionHint = computed(() => {
-  if (props.showProcessTrace && props.processTraceItems.length > 0) {
+  if (props.activeTraceCount > 0 || props.runningActions.length > 0) {
     return "";
   }
   if (props.pendingCount > 0 || props.executingCount > 0) {
@@ -159,11 +162,47 @@ const queueChipLabel = computed(() => {
   }
   return "运行中，可停止";
 });
+const executionTracesByMessageId = computed(() => {
+  const mapped = new Map<string, ExecutionTrace[]>();
+  for (const trace of props.executionTraces) {
+    const messageId = trace.messageId.trim();
+    if (messageId === "") {
+      continue;
+    }
+    const list = mapped.get(messageId) ?? [];
+    list.push(trace);
+    mapped.set(messageId, list);
+  }
+  return mapped;
+});
+const executionTracesByQueueIndex = computed(() => {
+  const mapped = new Map<number, ExecutionTrace[]>();
+  for (const trace of props.executionTraces) {
+    const list = mapped.get(trace.queueIndex) ?? [];
+    list.push(trace);
+    mapped.set(trace.queueIndex, list);
+  }
+  return mapped;
+});
+const runningActionsByExecutionId = computed(() => {
+  const mapped = new Map<string, RunningActionViewModel[]>();
+  for (const action of props.runningActions) {
+    const executionID = action.executionId.trim();
+    if (executionID === "") {
+      continue;
+    }
+    const list = mapped.get(executionID) ?? [];
+    list.push(action);
+    mapped.set(executionID, list);
+  }
+  return mapped;
+});
 
 const emit = defineEmits<{
   (event: "send"): void;
   (event: "stop"): void;
   (event: "rollback", messageId: string): void;
+  (event: "toggle-trace", executionId: string, expanded: boolean): void;
   (event: "update:draft", value: string): void;
   (event: "update:mode", value: ConversationMode): void;
   (event: "update:model", value: string): void;
@@ -183,6 +222,38 @@ function onModeChange(event: Event): void {
 
 function onModelChange(event: Event): void {
   emit("update:model", (event.target as HTMLSelectElement).value);
+}
+
+function getRunningActions(executionId: string): RunningActionViewModel[] {
+  return runningActionsByExecutionId.value.get(executionId) ?? [];
+}
+
+function getMessageTraces(message: ConversationMessage): ExecutionTrace[] {
+  if (message.role !== "user") {
+    return [];
+  }
+  const directMatches = executionTracesByMessageId.value.get(message.id) ?? [];
+  const queueMatches = typeof message.queue_index === "number"
+    ? executionTracesByQueueIndex.value.get(message.queue_index) ?? []
+    : [];
+  if (directMatches.length === 0) {
+    return queueMatches;
+  }
+  if (queueMatches.length === 0) {
+    return directMatches;
+  }
+  const merged = new Map<string, ExecutionTrace>();
+  for (const item of directMatches) {
+    merged.set(item.executionId, item);
+  }
+  for (const item of queueMatches) {
+    merged.set(item.executionId, item);
+  }
+  return [...merged.values()];
+}
+
+function onTraceToggle(executionId: string, expanded: boolean): void {
+  emit("toggle-trace", executionId, expanded);
 }
 
 function onDraftKeydown(event: KeyboardEvent): void {

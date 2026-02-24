@@ -19,6 +19,7 @@ export function streamConversationEvents(
   conversationId: string,
   options: {
     token?: string;
+    initialLastEventId?: string;
     onEvent: (event: unknown) => void;
     onStatusChange: (status: "connected" | "reconnecting" | "disconnected") => void;
     onError: (error: Error) => void;
@@ -27,6 +28,7 @@ export function streamConversationEvents(
   const url = `${getHubBaseUrl()}/v1/conversations/${conversationId}/events`;
   return connectConversationEvents(url, {
     token: options.token,
+    initialLastEventId: options.initialLastEventId,
     onEvent: options.onEvent as never,
     onStatusChange: options.onStatusChange,
     onError: options.onError

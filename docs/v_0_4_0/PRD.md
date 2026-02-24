@@ -953,3 +953,28 @@ event types:
 | `max turns` 改为 Agent 配置驱动 + 软收敛 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 16.3/19, TECH_ARCH 12/20.10, PLAN Phase 5 门禁增量 | done |
 | 对话区执行过程流可视化与结束收敛规则 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 14.2/20.10, STANDARDS 11/13 | done |
 | `/workspace/agent` 从占位页改为可编辑配置页（动态保存） | PRD.md, IMPLEMENTATION_PLAN.md | PRD 12.1/16.2, PLAN Phase 4/9 验收 | done |
+
+### 25.12 2026-02-24 过程流折叠化与轻量展示矩阵
+
+1. 过程流展示按 Execution 聚合为单折叠入口，默认“运行中收起详情，仅显示当前运行动作列表（可并发多条）与耗时”。
+2. 折叠摘要保留在对应 assistant 回复上方，可手动展开“查看详细过程”查看细节。
+3. 主对话区过程展示移除卡片边框与背景，采用无边框轻量时间线文案。
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 过程流按 execution 聚合折叠与自动收敛策略 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 16.3/19, TECH_ARCH 14.2/20.11, PLAN Phase 9 验收 | done |
+| 过程展示改为无边框轻量样式并保留手动展开入口 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 16.3, TECH_ARCH 20.11, STANDARDS 10.4/15 | done |
+
+### 25.13 2026-02-24 运行中简要过程流与消息顺序幂等矩阵
+
+1. 运行中默认展示简要动作流，不自动展开详细思考过程；详细过程仅在用户点击后展开。
+2. 每个运行动作必须展示实时耗时，并支持模型/工具/子代理并发动作多条展示。
+3. 消息落地必须满足幂等：`execution_done` 重放不得重复追加 assistant/system 消息。
+4. SSE 断线重连必须携带 `last_event_id` 续传，避免历史终态事件回放污染顺序。
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 运行中简要动作流（默认收起详情 + 多动作耗时） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 20.11, PLAN 过程流门禁, STANDARDS 10.4/15 | done |
+| 事件幂等与终态消息门禁（防重复落消息） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/16.3, TECH_ARCH 20.9/20.11, STANDARDS 10.4/11 | done |
+| SSE `last_event_id` 续传与重连去重 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.1, TECH_ARCH 20.9, PLAN 事件门禁 | done |
+| `tool_call/tool_result` 增加可选 `call_id`（向后兼容） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/16.3, TECH_ARCH 9.2/20.11, PLAN Worker 门禁, STANDARDS 10.4/15 | done |

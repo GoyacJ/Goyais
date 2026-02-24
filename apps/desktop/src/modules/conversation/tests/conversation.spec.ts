@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mount } from "@vue/test-utils";
 
 import {
   applyIncomingExecutionEvent,
@@ -9,6 +10,7 @@ import {
   stopConversationExecution,
   submitConversationMessage
 } from "@/modules/conversation/store";
+import MainConversationPanel from "@/modules/conversation/components/MainConversationPanel.vue";
 import type { Conversation } from "@/shared/types/api";
 
 const mockConversation: Conversation = {
@@ -116,6 +118,14 @@ describe("conversation store", () => {
 
   it("applies incoming execution events to runtime", () => {
     const runtime = ensureConversationRuntime(mockConversation, true);
+    runtime.messages.push({
+      id: "msg_1",
+      conversation_id: mockConversation.id,
+      role: "user",
+      content: "执行任务",
+      queue_index: 0,
+      created_at: new Date().toISOString()
+    });
     runtime.executions.push({
       id: "exec_1",
       workspace_id: "ws_local",
@@ -185,6 +195,113 @@ describe("conversation store", () => {
     expect(runtime.executions[0]?.state).toBe("completed");
     expect(runtime.diff.length).toBe(1);
     expect(runtime.messages[runtime.messages.length - 1]?.content).toContain("done");
+  });
+
+  it("does not append duplicate terminal message for replayed execution_done", () => {
+    const runtime = ensureConversationRuntime(mockConversation, true);
+    runtime.messages.push({
+      id: "msg_user_0",
+      conversation_id: mockConversation.id,
+      role: "user",
+      content: "查看当前项目",
+      queue_index: 0,
+      created_at: new Date().toISOString()
+    });
+    runtime.executions.push({
+      id: "exec_done_once",
+      workspace_id: "ws_local",
+      conversation_id: mockConversation.id,
+      message_id: "msg_user_0",
+      state: "executing",
+      mode: "agent",
+      model_id: "gpt-5.3",
+      mode_snapshot: "agent",
+      model_snapshot: {
+        model_id: "gpt-5.3"
+      },
+      project_revision_snapshot: 0,
+      queue_index: 0,
+      trace_id: "tr_done_once",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+
+    const doneEvent = {
+      event_id: "evt_done_once",
+      execution_id: "exec_done_once",
+      conversation_id: mockConversation.id,
+      trace_id: "tr_done_once",
+      sequence: 9,
+      queue_index: 0,
+      type: "execution_done" as const,
+      timestamp: new Date().toISOString(),
+      payload: { content: "项目读取完成" }
+    };
+
+    applyIncomingExecutionEvent(mockConversation.id, doneEvent);
+    applyIncomingExecutionEvent(mockConversation.id, doneEvent);
+
+    const assistantMessages = runtime.messages.filter(
+      (message) => message.role === "assistant" && message.content.includes("项目读取完成")
+    );
+    expect(assistantMessages).toHaveLength(1);
+  });
+
+  it("inserts terminal message by queue_index to keep message order stable", () => {
+    const runtime = ensureConversationRuntime(mockConversation, true);
+    runtime.messages.push(
+      {
+        id: "msg_user_0",
+        conversation_id: mockConversation.id,
+        role: "user",
+        content: "第一条",
+        queue_index: 0,
+        created_at: "2026-02-24T00:00:00Z"
+      },
+      {
+        id: "msg_user_1",
+        conversation_id: mockConversation.id,
+        role: "user",
+        content: "第二条",
+        queue_index: 1,
+        created_at: "2026-02-24T00:00:01Z"
+      }
+    );
+    runtime.executions.push({
+      id: "exec_order_0",
+      workspace_id: "ws_local",
+      conversation_id: mockConversation.id,
+      message_id: "msg_user_0",
+      state: "executing",
+      mode: "agent",
+      model_id: "gpt-5.3",
+      mode_snapshot: "agent",
+      model_snapshot: {
+        model_id: "gpt-5.3"
+      },
+      project_revision_snapshot: 0,
+      queue_index: 0,
+      trace_id: "tr_order_0",
+      created_at: "2026-02-24T00:00:00Z",
+      updated_at: "2026-02-24T00:00:00Z"
+    });
+
+    applyIncomingExecutionEvent(mockConversation.id, {
+      event_id: "evt_order_done",
+      execution_id: "exec_order_0",
+      conversation_id: mockConversation.id,
+      trace_id: "tr_order_0",
+      sequence: 3,
+      queue_index: 0,
+      type: "execution_done",
+      timestamp: "2026-02-24T00:00:02Z",
+      payload: {
+        content: "第一条已完成"
+      }
+    });
+
+    const contents = runtime.messages.map((message) => message.content);
+    expect(contents).toEqual(["第一条", "第一条已完成", "第二条"]);
   });
 
   it("stop calls backend stop endpoint", async () => {
@@ -281,6 +398,118 @@ describe("conversation store", () => {
 
     expect(runtime.events.length).toBe(1000);
     expect(runtime.events[0]?.event_id).toBe("evt_cap_10");
+  });
+
+  it("hides thinking hint when active trace summary is rendered", () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [
+          {
+            id: "msg_user_trace",
+            conversation_id: mockConversation.id,
+            role: "user",
+            content: "查看当前项目",
+            created_at: "2026-02-24T00:00:00Z",
+            queue_index: 0
+          }
+        ],
+        queuedCount: 0,
+        pendingCount: 1,
+        executingCount: 0,
+        hasActiveExecution: true,
+        activeTraceCount: 1,
+        executionTraces: [
+          {
+            executionId: "exec_trace_1",
+            messageId: "msg_user_trace",
+            queueIndex: 0,
+            state: "executing",
+            isRunning: true,
+            summary: "已思考 12s，已调用 2 个工具",
+            isExpanded: true,
+            steps: [
+              {
+                id: "trace_step_1",
+                title: "思考",
+                summary: "model_call",
+                details: ""
+              }
+            ]
+          }
+        ],
+        runningActions: [
+          {
+            actionId: "tool:exec_trace_1:call_1",
+            executionId: "exec_trace_1",
+            queueIndex: 0,
+            type: "tool",
+            label: "工具 read_file",
+            startedAt: "2026-02-24T00:00:01Z",
+            elapsedMs: 3000,
+            elapsedLabel: "3s"
+          }
+        ],
+        draft: "",
+        mode: "agent",
+        modelId: "gpt-5.3",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "gpt-5.3", label: "GPT-5.3" }]
+      }
+    });
+
+    expect(wrapper.find(".execution-hint").exists()).toBe(false);
+    expect(wrapper.find(".trace-summary-inline").exists()).toBe(true);
+    expect(wrapper.find(".trace-running-line").exists()).toBe(true);
+  });
+
+  it("renders trace disclosure without legacy trace card class", () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [
+          {
+            id: "msg_user_trace_2",
+            conversation_id: mockConversation.id,
+            role: "user",
+            content: "执行任务",
+            created_at: "2026-02-24T00:00:00Z",
+            queue_index: 1
+          }
+        ],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [
+          {
+            executionId: "exec_trace_2",
+            messageId: "msg_user_trace_2",
+            queueIndex: 1,
+            state: "completed",
+            isRunning: false,
+            summary: "已思考 8s，调用 1 个工具",
+            isExpanded: false,
+            steps: [
+              {
+                id: "trace_step_2",
+                title: "工具调用",
+                summary: "read_file (low)",
+                details: ""
+              }
+            ]
+          }
+        ],
+        runningActions: [],
+        draft: "",
+        mode: "agent",
+        modelId: "gpt-5.3",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "gpt-5.3", label: "GPT-5.3" }]
+      }
+    });
+
+    expect(wrapper.find("details.trace-disclosure").exists()).toBe(true);
+    expect(wrapper.find(".trace-item").exists()).toBe(false);
   });
 
 });

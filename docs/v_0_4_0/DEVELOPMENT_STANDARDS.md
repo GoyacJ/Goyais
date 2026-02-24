@@ -282,6 +282,11 @@ TokenLayerContract {
 15. 快照门禁：Execution 创建时必须固化 `agent_config_snapshot`，运行中 execution 不得被设置页变更重配。
 16. 回合门禁：触达 `max_turns` 时优先软收敛到 `execution_done(truncated=true, reason=MAX_TURNS_REACHED)`；仅总结失败时允许 `MAX_TURNS_EXCEEDED`。
 17. 过程流门禁：对话区必须可见 `thinking_delta/tool_call/tool_result/execution_started`，且执行终态后不得残留“正在思考/运行中可停止”。
+18. 折叠门禁：过程流必须按 execution 聚合折叠，默认运行中收起详情并仅展示简要动作列表（含耗时），终态保留摘要；支持用户手动展开/收起。
+19. 样式门禁：过程流展示禁止卡片边框/背景样式，必须使用无边框轻量文本层级。
+20. 幂等门禁：终态消息仅允许在 execution 首次进入终态时追加；重放 `execution_done/error/stopped` 不得重复追加消息。
+21. 续传门禁：SSE 重连必须携带并维护 `last_event_id`，断流恢复后不得回放历史终态污染顺序。
+22. 关联键门禁：Worker `tool_call/tool_result` 事件应携带 `call_id`；前端必须支持缺失 `call_id` 的降级匹配，保证兼容旧事件。
 
 ### 10.5 门禁契约
 
@@ -436,6 +441,8 @@ StandardsExceptionADR {
 15. Agent 配置变更后，能验证“仅新 Execution 生效，运行中 Execution 不切换”。
 16. 大任务达到回合上限时，能验证“优先输出截断总结，不直接抛错”。
 17. 执行完成后，能验证过程流收敛与运行占位清理，不残留错误状态。
+18. 过程流折叠场景下，能验证“运行中默认收起详情并展示动作耗时、手动展开可保持、终态仅保留摘要”。
+19. 过程流样式回归时，能验证无 `.trace-item` 等卡片边框类渲染。
 
 ---
 
@@ -528,3 +535,19 @@ StandardsExceptionADR {
 | Execution 快照固化与仅新 execution 生效 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 14.2/16.3, TECH_ARCH 11.x/20.10, STANDARDS 10.4/15 | done |
 | `max turns` 软收敛与错误路径收口 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 12/20.10, PLAN Phase 5, STANDARDS 10.4/11 | done |
 | 对话区过程流展示与终态收敛 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 14.2/20.10, STANDARDS 10.4/11/15 | done |
+
+## 25. 2026-02-24 过程流折叠化与轻量展示同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| execution 聚合折叠与自动收敛规则 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 20.11, STANDARDS 10.4/15 | done |
+| 无边框过程流样式与重复提示收敛 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 16.3, TECH_ARCH 20.11, STANDARDS 9/10.4/15 | done |
+
+## 26. 2026-02-24 运行中简要过程流与消息幂等同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 运行中简要动作流（默认收起详情 + 耗时显示） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 16.3/19, TECH_ARCH 20.11, PLAN 过程流门禁, STANDARDS 10.4/15 | done |
+| 终态消息幂等与事件去重门禁 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/16.3, TECH_ARCH 20.9/20.11, STANDARDS 10.4/11 | done |
+| SSE `last_event_id` 续传门禁 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.1, TECH_ARCH 20.9, PLAN 事件门禁 | done |
+| Worker `call_id` 扩展与前端降级匹配 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/16.3, TECH_ARCH 9.2/20.11, PLAN Worker 门禁, STANDARDS 10.4/15 | done |

@@ -230,3 +230,72 @@ def test_run_execution_loop_turn_limit_emits_truncated_done(monkeypatch) -> None
     assert "summary after limit" in payload["content"]
     assert all(event["type"] != "execution_error" for event in events)
     assert turn_counter == 5
+
+
+def test_tool_events_include_call_id_for_tool_and_subagent(monkeypatch) -> None:
+    events: list[dict[str, Any]] = []
+    turn_counter = 0
+
+    async def fake_run_model_turn(invocation, messages, tools):
+        del invocation, messages, tools
+        nonlocal turn_counter
+        turn_counter += 1
+        if turn_counter == 1:
+            return ModelTurnResult(
+                text="tool call turn",
+                tool_calls=[
+                    ToolCall(id="tc_read_1", name="read_file", arguments={"path": "README.md"}),
+                    ToolCall(id="tc_sub_1", name="run_subagent", arguments={"task": "list files"}),
+                ],
+                raw_response={},
+            )
+        return ModelTurnResult(text="done", tool_calls=[], raw_response={})
+
+    def fake_resolve_model_invocation(execution):
+        del execution
+        return ModelInvocation(
+            vendor="local",
+            model_id="llama3:8b",
+            base_url="http://127.0.0.1:11434/v1",
+            api_key="",
+            timeout_ms=30_000,
+            params={},
+        )
+
+    def fake_execute_tool_call(tool_call, working_directory):
+        del working_directory
+        return ToolExecutionResult(output={"name": tool_call.name, "ok": True})
+
+    async def fake_run_subagent(arguments, invocation):
+        del arguments, invocation
+        return {"ok": True, "output": "subagent done"}
+
+    async def emit_event(execution, event_type, payload):
+        del execution
+        events.append({"type": event_type, "payload": payload})
+
+    def is_cancelled(execution_id: str) -> bool:
+        del execution_id
+        return False
+
+    monkeypatch.setattr(execution_engine, "run_model_turn", fake_run_model_turn)
+    monkeypatch.setattr(execution_engine, "resolve_model_invocation", fake_resolve_model_invocation)
+    monkeypatch.setattr(execution_engine, "execute_tool_call", fake_execute_tool_call)
+    monkeypatch.setattr(execution_engine, "run_subagent", fake_run_subagent)
+
+    execution = {
+        "execution_id": "exec_tool_call_id",
+        "mode_snapshot": "agent",
+        "content": "读取项目文件并启动子代理",
+        "model_id": "llama3:8b",
+    }
+
+    asyncio.run(run_execution_loop(execution, emit_event, is_cancelled))
+
+    tool_calls = [event for event in events if event["type"] == "tool_call"]
+    tool_results = [event for event in events if event["type"] == "tool_result"]
+
+    assert len(tool_calls) == 2
+    assert len(tool_results) == 2
+    assert {item["payload"].get("call_id") for item in tool_calls} == {"tc_read_1", "tc_sub_1"}
+    assert {item["payload"].get("call_id") for item in tool_results} == {"tc_read_1", "tc_sub_1"}

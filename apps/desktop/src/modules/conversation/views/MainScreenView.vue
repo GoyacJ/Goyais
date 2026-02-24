@@ -70,8 +70,9 @@
           :pending-count="pendingCount"
           :executing-count="executingCount"
           :has-active-execution="activeCount > 0"
-          :show-process-trace="showProcessTrace"
-          :process-trace-items="processTraceItems"
+          :active-trace-count="activeTraceCount"
+          :execution-traces="executionTraces"
+          :running-actions="runningActions"
           :draft="runtime?.draft ?? ''"
           :mode="runtime?.mode ?? 'agent'"
           :model-id="activeModelId"
@@ -83,6 +84,7 @@
           @send="sendMessage"
           @stop="stopExecution"
           @rollback="rollbackMessage"
+          @toggle-trace="toggleExecutionTrace"
         />
 
         <div class="inspector-slot" :class="{ collapsed: inspectorCollapsed }">
@@ -159,6 +161,7 @@ const {
   discardDiff,
   editingConversationName,
   executingCount,
+  executionTraces,
   exportConversation,
   exportPatch,
   importProjectDirectory,
@@ -174,7 +177,7 @@ const {
   placeholder,
   pendingCount,
   projectStore,
-  processTraceItems,
+  activeTraceCount,
   projectImportError,
   projectImportFeedback,
   projectImportInProgress,
@@ -183,10 +186,11 @@ const {
   rollbackMessage,
   runningState,
   runningStateClass,
+  runningActions,
   runtimeConnectionStatus,
   runtimeHubLabel,
   runtimeUserDisplayName,
-  showProcessTrace,
+  toggleExecutionTrace,
   runtime,
   saveConversationName,
   selectConversation,
