@@ -69,6 +69,7 @@ async def run_execution_loop(
         ]
         diffs: list[dict[str, Any]] = []
         final_text = ""
+        usage_totals = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
         max_turns = _resolve_max_turns(execution)
 
         for turn in range(max_turns):
@@ -87,13 +88,19 @@ async def run_execution_loop(
                 },
             )
             turn_result = await run_model_turn(invocation, messages, default_tools())
+            usage_totals = _accumulate_usage(usage_totals, turn_result.usage)
 
             if turn_result.text:
                 final_text = turn_result.text
                 await emit_event(
                     execution,
                     "thinking_delta",
-                    {"stage": "assistant_output", "turn": turn + 1, "delta": turn_result.text[:1000]},
+                    {
+                        "stage": "assistant_output",
+                        "turn": turn + 1,
+                        "delta": turn_result.text[:1000],
+                        "usage": usage_totals,
+                    },
                 )
 
             if not turn_result.tool_calls:
@@ -111,6 +118,7 @@ async def run_execution_loop(
                         "result": "ok",
                         "turns": turn + 1,
                         "max_turns": max_turns,
+                        "usage": usage_totals,
                     },
                 )
                 return
@@ -228,6 +236,7 @@ async def run_execution_loop(
             execution_id=execution_id,
             max_turns=max_turns,
             final_text=final_text,
+            usage_totals=usage_totals,
         )
     except ModelAdapterError as exc:
         await emit_event(
@@ -289,6 +298,7 @@ async def _emit_turn_limit_summary(
     execution_id: str,
     max_turns: int,
     final_text: str,
+    usage_totals: dict[str, int],
 ) -> None:
     await emit_event(
         execution,
@@ -322,6 +332,7 @@ async def _emit_turn_limit_summary(
             },
         )
         return
+    usage_totals = _accumulate_usage(usage_totals, summary_result.usage)
 
     summary_text = str(summary_result.text or "").strip()
     if summary_text != "":
@@ -332,6 +343,7 @@ async def _emit_turn_limit_summary(
                 "stage": "assistant_output",
                 "turn": max_turns + 1,
                 "delta": summary_text[:1000],
+                "usage": usage_totals,
             },
         )
 
@@ -345,5 +357,28 @@ async def _emit_turn_limit_summary(
             "truncated": True,
             "reason": "MAX_TURNS_REACHED",
             "max_turns": max_turns,
+            "usage": usage_totals,
         },
     )
+
+
+def _accumulate_usage(current: dict[str, int], incoming: dict[str, Any] | None) -> dict[str, int]:
+    incoming_usage = incoming if isinstance(incoming, dict) else {}
+    input_tokens = _to_non_negative_int(incoming_usage.get("input_tokens"))
+    output_tokens = _to_non_negative_int(incoming_usage.get("output_tokens"))
+    total_tokens = _to_non_negative_int(incoming_usage.get("total_tokens"))
+    if total_tokens == 0:
+        total_tokens = input_tokens + output_tokens
+    return {
+        "input_tokens": current["input_tokens"] + input_tokens,
+        "output_tokens": current["output_tokens"] + output_tokens,
+        "total_tokens": current["total_tokens"] + total_tokens,
+    }
+
+
+def _to_non_negative_int(value: Any) -> int:
+    try:
+        parsed = int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+    return parsed if parsed >= 0 else 0

@@ -50,6 +50,8 @@
     <section v-else-if="activeTab === 'run'" class="card">
       <strong>Execution</strong>
       <p>Pending: {{ pendingCount }} · Executing: {{ executingCount }} · Queued: {{ queuedCount }}</p>
+      <p v-if="latestExecutionLabel" class="normal">{{ latestExecutionLabel }}</p>
+      <p v-if="latestExecutionMetrics" class="normal">{{ latestExecutionMetrics }}</p>
       <p :class="runHintTone">{{ runHint }}</p>
     </section>
 
@@ -64,7 +66,8 @@
     <section v-else class="card">
       <strong>Risk</strong>
       <p class="warning">模型: {{ modelId }}</p>
-      <p class="normal">操作会直接执行，并保留审计与可停止控制。</p>
+      <p class="normal">{{ riskSummary }}</p>
+      <p class="normal">low: {{ riskLow }} · high: {{ riskHigh }} · critical: {{ riskCritical }}</p>
     </section>
   </aside>
 </template>
@@ -73,7 +76,7 @@
 import { computed, toRefs } from "vue";
 
 import AppIcon from "@/shared/ui/AppIcon.vue";
-import type { DiffCapability, DiffItem, InspectorTabKey } from "@/shared/types/api";
+import type { DiffCapability, DiffItem, Execution, ExecutionEvent, InspectorTabKey } from "@/shared/types/api";
 
 defineEmits<{
   (event: "commit"): void;
@@ -97,9 +100,11 @@ const props = defineProps<{
   pendingCount: number;
   executingCount: number;
   modelId: string;
+  executions: Execution[];
+  events: ExecutionEvent[];
   activeTab: InspectorTabKey;
 }>();
-const { activeTab, capability, diff, executingCount, modelId, pendingCount, queuedCount } = toRefs(props);
+const { activeTab, capability, diff, events, executions, executingCount, modelId, pendingCount, queuedCount } = toRefs(props);
 
 const runHint = computed(() => {
   if (pendingCount.value > 0 || executingCount.value > 0) {
@@ -113,6 +118,66 @@ const runHint = computed(() => {
 
 const runHintTone = computed(() => (queuedCount.value > 0 ? "warning" : "normal"));
 
+const latestExecution = computed(() =>
+  [...executions.value].sort((left, right) => right.updated_at.localeCompare(left.updated_at))[0]
+);
+
+const latestExecutionLabel = computed(() => {
+  if (!latestExecution.value) {
+    return "";
+  }
+  return `最近执行: ${latestExecution.value.id} (${latestExecution.value.state})`;
+});
+
+const latestExecutionMetrics = computed(() => {
+  const execution = latestExecution.value;
+  if (!execution) {
+    return "";
+  }
+  const startedAt = toDateOrNow(execution.created_at);
+  const endedAt = isExecutionTerminal(execution.state) ? toDateOrNow(execution.updated_at) : new Date();
+  const durationSec = Math.max(0, Math.round((endedAt.getTime() - startedAt.getTime()) / 1000));
+  const tokensIn = toOptionalNonNegativeInteger(execution.tokens_in);
+  const tokensOut = toOptionalNonNegativeInteger(execution.tokens_out);
+  const tokenLabel = tokensIn === null || tokensOut === null
+    ? "Token N/A"
+    : `Token in ${tokensIn} / out ${tokensOut} / total ${tokensIn + tokensOut}`;
+  return `${tokenLabel} · 消息执行 ${durationSec}s`;
+});
+
+const riskCounters = computed(() => {
+  const counters = { low: 0, high: 0, critical: 0 };
+  for (const event of events.value) {
+    if (event.type !== "tool_call") {
+      continue;
+    }
+    const riskLevel = typeof event.payload.risk_level === "string" ? event.payload.risk_level.trim().toLowerCase() : "";
+    if (riskLevel === "critical") {
+      counters.critical += 1;
+      continue;
+    }
+    if (riskLevel === "high") {
+      counters.high += 1;
+      continue;
+    }
+    if (riskLevel === "low") {
+      counters.low += 1;
+    }
+  }
+  return counters;
+});
+
+const riskLow = computed(() => riskCounters.value.low);
+const riskHigh = computed(() => riskCounters.value.high);
+const riskCritical = computed(() => riskCounters.value.critical);
+const riskSummary = computed(() => {
+  const total = riskLow.value + riskHigh.value + riskCritical.value;
+  if (total === 0) {
+    return "当前会话暂无工具风险事件。";
+  }
+  return `当前会话累计 ${total} 次工具风险事件。`;
+});
+
 function mapChange(type: DiffItem["change_type"]): string {
   if (type === "added") {
     return "+";
@@ -121,6 +186,28 @@ function mapChange(type: DiffItem["change_type"]): string {
     return "-";
   }
   return "~";
+}
+
+function toDateOrNow(input: string): Date {
+  const value = new Date(input);
+  if (Number.isNaN(value.getTime())) {
+    return new Date();
+  }
+  return value;
+}
+
+function isExecutionTerminal(state: Execution["state"]): boolean {
+  return state === "completed" || state === "failed" || state === "cancelled";
+}
+
+function toOptionalNonNegativeInteger(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+  if (value < 0) {
+    return 0;
+  }
+  return Math.trunc(value);
 }
 </script>
 

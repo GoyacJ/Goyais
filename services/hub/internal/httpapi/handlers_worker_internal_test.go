@@ -89,7 +89,14 @@ func TestInternalExecutionClaimAndControlFlow(t *testing.T) {
 				"type":            "execution_done",
 				"sequence":        2,
 				"queue_index":     0,
-				"payload":         map[string]any{"content": "done"},
+				"payload": map[string]any{
+					"content": "done",
+					"usage": map[string]any{
+						"input_tokens":  31,
+						"output_tokens": 12,
+						"total_tokens":  43,
+					},
+				},
 			},
 		},
 	}, internalHeaders)
@@ -110,6 +117,12 @@ func TestInternalExecutionClaimAndControlFlow(t *testing.T) {
 	state := items[0].(map[string]any)["state"]
 	if state != "completed" {
 		t.Fatalf("expected completed execution state, got %#v", state)
+	}
+	if got := int(items[0].(map[string]any)["tokens_in"].(float64)); got != 31 {
+		t.Fatalf("expected tokens_in=31, got %d", got)
+	}
+	if got := int(items[0].(map[string]any)["tokens_out"].(float64)); got != 12 {
+		t.Fatalf("expected tokens_out=12, got %d", got)
 	}
 }
 

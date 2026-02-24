@@ -9,15 +9,8 @@ import type {
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
 
 export function createInitialMessages(conversationId: string): ConversationMessage[] {
-  return [
-    {
-      id: createMockId("msg"),
-      conversation_id: conversationId,
-      role: "assistant",
-      content: "欢迎使用 Goyais，当前会话已准备就绪。",
-      created_at: new Date().toISOString()
-    }
-  ];
+  void conversationId;
+  return [];
 }
 
 export function buildConversationSnapshot(

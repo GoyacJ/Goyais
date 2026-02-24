@@ -264,6 +264,8 @@ func (s *authzStore) migrate() error {
 			mode_snapshot TEXT NOT NULL,
 			model_snapshot_json TEXT NOT NULL,
 			agent_config_snapshot_json TEXT,
+			tokens_in INTEGER NOT NULL DEFAULT 0,
+			tokens_out INTEGER NOT NULL DEFAULT 0,
 			project_revision_snapshot INTEGER NOT NULL DEFAULT 0,
 			queue_index INTEGER NOT NULL,
 			trace_id TEXT NOT NULL,
@@ -343,6 +345,9 @@ func (s *authzStore) migrate() error {
 	if err := s.migrateExecutionsAddAgentConfigSnapshot(); err != nil {
 		return fmt.Errorf("migrate executions schema: %w", err)
 	}
+	if err := s.migrateExecutionsAddTokenColumns(); err != nil {
+		return fmt.Errorf("migrate executions token schema: %w", err)
+	}
 	return nil
 }
 
@@ -355,6 +360,28 @@ func (s *authzStore) migrateExecutionsAddAgentConfigSnapshot() error {
 		return nil
 	}
 	_, err = s.db.Exec(`ALTER TABLE executions ADD COLUMN agent_config_snapshot_json TEXT`)
+	return err
+}
+
+func (s *authzStore) migrateExecutionsAddTokenColumns() error {
+	hasTokensIn, err := tableHasColumn(s.db, "executions", "tokens_in")
+	if err != nil {
+		return err
+	}
+	if !hasTokensIn {
+		if _, err := s.db.Exec(`ALTER TABLE executions ADD COLUMN tokens_in INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+	}
+
+	hasTokensOut, err := tableHasColumn(s.db, "executions", "tokens_out")
+	if err != nil {
+		return err
+	}
+	if hasTokensOut {
+		return nil
+	}
+	_, err = s.db.Exec(`ALTER TABLE executions ADD COLUMN tokens_out INTEGER NOT NULL DEFAULT 0`)
 	return err
 }
 

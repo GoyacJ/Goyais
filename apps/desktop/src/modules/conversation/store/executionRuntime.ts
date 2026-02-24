@@ -42,6 +42,11 @@ export function applyExecutionState(execution: Execution, event: ExecutionEvent)
   if (nextState) {
     execution.state = resolveMergedExecutionState(execution.state, nextState);
   }
+  const usage = parseUsageFromPayload(event.payload);
+  if (usage) {
+    execution.tokens_in = Math.max(execution.tokens_in ?? 0, usage.inputTokens);
+    execution.tokens_out = Math.max(execution.tokens_out ?? 0, usage.outputTokens);
+  }
   execution.updated_at = event.timestamp;
 }
 
@@ -51,6 +56,33 @@ const executionStateByEventType: Partial<Record<ExecutionEvent["type"], Executio
   execution_done: "completed",
   execution_error: "failed"
 };
+
+function parseUsageFromPayload(payload: Record<string, unknown>): { inputTokens: number; outputTokens: number } | null {
+  const usage = payload.usage;
+  if (!usage || typeof usage !== "object") {
+    return null;
+  }
+  const usageMap = usage as Record<string, unknown>;
+  const inputTokens = toNonNegativeInteger(usageMap.input_tokens);
+  const outputTokens = toNonNegativeInteger(usageMap.output_tokens);
+  if (inputTokens === null && outputTokens === null) {
+    return null;
+  }
+  return {
+    inputTokens: inputTokens ?? 0,
+    outputTokens: outputTokens ?? 0
+  };
+}
+
+function toNonNegativeInteger(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+  if (value < 0) {
+    return 0;
+  }
+  return Math.trunc(value);
+}
 
 export function upsertExecutionFromServer(runtime: ConversationRuntime, incoming: Execution): Execution {
   const normalizedIncoming = cloneExecution(incoming);

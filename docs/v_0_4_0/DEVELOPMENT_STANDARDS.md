@@ -274,7 +274,7 @@ TokenLayerContract {
 7. 主题门禁：`theme mode/font style/font scale/preset` 必须全局即时生效并持久化，且具备可回归自动化测试。
 8. 通用设置门禁：`general settings` 必须提供 6 组策略型行式配置并即时持久化；系统能力未接入平台时必须显式禁用并展示原因文案。
 9. Worker 调度门禁：内部执行链路必须使用 pull-claim（`claim + lease + heartbeat + control poll + events batch`）；禁止恢复 Hub push Worker 语义。
-10. 会话恢复门禁：Desktop 进入 Conversation 必须先调用详情接口回填；仅后端无历史消息时允许欢迎语兜底。
+10. 会话恢复门禁：Desktop 进入 Conversation 必须先调用详情接口回填；禁止注入固定欢迎语兜底消息。
 11. 流路由门禁：事件应用必须以 `event.conversation_id` 路由，禁止将多会话事件写入同一 runtime。
 12. 风险分级门禁：`run_command` 的 `pwd/ls/rg --files/git status/cat` 归类 `low`，其他命令维持 `high/critical`。
 13. 执行策略门禁：Agent 模式不得进入 `confirming/wait_confirmation`，高风险调用直接执行并审计；Plan 模式高风险调用必须返回拒绝。
@@ -287,6 +287,10 @@ TokenLayerContract {
 20. 幂等门禁：终态消息仅允许在 execution 首次进入终态时追加；重放 `execution_done/error/stopped` 不得重复追加消息。
 21. 续传门禁：SSE 重连必须携带并维护 `last_event_id`，断流恢复后不得回放历史终态污染顺序。
 22. 关联键门禁：Worker `tool_call/tool_result` 事件应携带 `call_id`；前端必须支持缺失 `call_id` 的降级匹配，保证兼容旧事件。
+23. 可观测性门禁：执行摘要必须展示 `Token in/out/total + 消息执行时长`；usage 缺失场景必须显示 `N/A`。
+24. 选择态门禁：会话列表刷新不得自动选中第一条；删除当前会话后必须保持未选中状态。
+25. 空态门禁：主屏幕在未选中 Conversation 时必须仅显示空态，不得渲染对话区、发送区与 Inspector。
+26. Inspector 门禁：`Export Patch` 必须调用后端导出接口并触发下载；Run 与 Risk 必须展示真实执行指标，不得为静态占位文案。
 
 ### 10.5 门禁契约
 
@@ -551,3 +555,12 @@ StandardsExceptionADR {
 | 终态消息幂等与事件去重门禁 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/16.3, TECH_ARCH 20.9/20.11, STANDARDS 10.4/11 | done |
 | SSE `last_event_id` 续传门禁 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.1, TECH_ARCH 20.9, PLAN 事件门禁 | done |
 | Worker `call_id` 扩展与前端降级匹配 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/16.3, TECH_ARCH 9.2/20.11, PLAN Worker 门禁, STANDARDS 10.4/15 | done |
+
+## 27. 2026-02-25 Token 可观测性与主屏空态同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| Execution token 字段与 usage 聚合一致性 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.2/16.3, TECH_ARCH 10.2/11.3/20.12, PLAN 2026-02-25 增量门禁, STANDARDS 10.4/15 | done |
+| 新会话欢迎语注入移除（Hub/Desktop 双端） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 7.2/19.1, TECH_ARCH 20.9/20.12, STANDARDS 10.4 | done |
+| 未选中会话空态与禁用自动选中首条 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 16.1/19.1, TECH_ARCH 14.1/20.12, PLAN 2026-02-25 增量门禁, STANDARDS 10.4 | done |
+| Inspector `Export Patch` 真链路 + Run/Risk 指标门禁 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 8.2/14.1/19.1, TECH_ARCH 9.1/20.12, PLAN 2026-02-25 增量门禁, STANDARDS 10.4/13 | done |

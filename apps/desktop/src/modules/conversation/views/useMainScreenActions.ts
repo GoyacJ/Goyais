@@ -3,14 +3,17 @@ import type { Router } from "vue-router";
 import {
   commitLatestDiff,
   discardLatestDiff,
+  getLatestFinishedExecution,
   rollbackConversationToMessage,
   setConversationDraft,
+  setConversationError,
   setConversationInspectorTab,
   setConversationMode,
   setConversationModel,
   stopConversationExecution,
   submitConversationMessage
 } from "@/modules/conversation/store";
+import { exportExecutionPatch } from "@/modules/conversation/services";
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
 import {
   addConversation,
@@ -31,6 +34,7 @@ import {
 } from "@/modules/project/store";
 import { createRemoteConnection } from "@/modules/workspace/services";
 import { setWorkspaceToken } from "@/shared/stores/authStore";
+import { toDisplayError } from "@/shared/services/errorMapper";
 import type { Conversation, InspectorTabKey, Project } from "@/shared/types/api";
 import { setWorkspaceConnection, switchWorkspaceContext, upsertWorkspace } from "@/modules/workspace/store";
 type MainScreenActionsInput = {
@@ -229,8 +233,26 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     }
     await discardLatestDiff(input.activeConversation.value.id);
   }
-  function exportPatch(): void {
-    window.alert("Patch exported (design stub).");
+  async function exportPatch(): Promise<void> {
+    if (!input.activeConversation.value) {
+      return;
+    }
+    const execution = getLatestFinishedExecution(input.activeConversation.value.id);
+    if (!execution) {
+      return;
+    }
+    try {
+      const patch = await exportExecutionPatch(execution.id);
+      const blob = new Blob([patch], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${execution.id}.patch`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setConversationError(toDisplayError(error));
+    }
   }
   return {
     addConversationByPrompt,

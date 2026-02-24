@@ -110,15 +110,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 			}
 			state.mu.Lock()
 			state.conversations[conversation.ID] = conversation
-			state.conversationMessages[conversation.ID] = []ConversationMessage{
-				{
-					ID:             "msg_" + randomHex(6),
-					ConversationID: conversation.ID,
-					Role:           MessageRoleAssistant,
-					Content:        "欢迎使用 Goyais，当前会话已准备就绪。",
-					CreatedAt:      now,
-				},
-			}
+			state.conversationMessages[conversation.ID] = []ConversationMessage{}
 			state.mu.Unlock()
 			syncExecutionDomainBestEffort(state)
 

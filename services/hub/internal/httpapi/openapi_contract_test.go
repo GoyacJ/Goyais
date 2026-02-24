@@ -26,6 +26,7 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/conversations/{conversation_id}/stop:",
 		"/v1/conversations/{conversation_id}/rollback:",
 		"/v1/conversations/{conversation_id}/export:",
+		"/v1/executions/{execution_id}/patch:",
 		"/v1/workspaces/{workspace_id}/model-catalog:",
 		"/v1/workspaces/{workspace_id}/catalog-root:",
 		"/v1/workspaces/{workspace_id}/resource-configs:",

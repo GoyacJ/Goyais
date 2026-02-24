@@ -337,6 +337,8 @@ type Execution struct {
 	ModeSnapshot            ConversationMode              `json:"mode_snapshot"`
 	ModelSnapshot           ModelSnapshot                 `json:"model_snapshot"`
 	AgentConfigSnapshot     *ExecutionAgentConfigSnapshot `json:"agent_config_snapshot,omitempty"`
+	TokensIn                int                           `json:"tokens_in"`
+	TokensOut               int                           `json:"tokens_out"`
 	ProjectRevisionSnapshot int64                         `json:"project_revision_snapshot"`
 	QueueIndex              int                           `json:"queue_index"`
 	TraceID                 string                        `json:"trace_id"`

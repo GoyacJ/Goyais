@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -82,6 +83,60 @@ func asStringValue(value any) string {
 		return text
 	}
 	return ""
+}
+
+func parseTokenUsageFromPayload(payload map[string]any) (int, int, bool) {
+	if payload == nil {
+		return 0, 0, false
+	}
+	usage, _ := payload["usage"].(map[string]any)
+	if usage == nil {
+		return 0, 0, false
+	}
+	inputTokens, inputOK := parseTokenInt(usage["input_tokens"])
+	outputTokens, outputOK := parseTokenInt(usage["output_tokens"])
+	if !inputOK && !outputOK {
+		// Backward-compatibility for alternative field names.
+		inputTokens, inputOK = parseTokenInt(usage["prompt_tokens"])
+		outputTokens, outputOK = parseTokenInt(usage["completion_tokens"])
+	}
+	if !inputOK && !outputOK {
+		return 0, 0, false
+	}
+	if inputTokens < 0 {
+		inputTokens = 0
+	}
+	if outputTokens < 0 {
+		outputTokens = 0
+	}
+	return inputTokens, outputTokens, true
+}
+
+func parseTokenInt(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case int32:
+		return int(typed), true
+	case int64:
+		return int(typed), true
+	case float32:
+		return int(typed), true
+	case float64:
+		return int(typed), true
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		if trimmed == "" {
+			return 0, false
+		}
+		parsed, err := strconv.Atoi(trimmed)
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	default:
+		return 0, false
+	}
 }
 
 func isValidHubInternalToken(r *http.Request) bool {

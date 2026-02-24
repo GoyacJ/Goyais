@@ -54,6 +54,7 @@ func newRouterWithDBPath(dbPath string) http.Handler {
 	// Executions
 	mux.HandleFunc("/v1/executions", ExecutionsHandler(state))
 	mux.HandleFunc("/v1/executions/{execution_id}/diff", ExecutionDiffHandler(state))
+	mux.HandleFunc("/v1/executions/{execution_id}/patch", ExecutionPatchHandler(state))
 	mux.HandleFunc("/v1/executions/{execution_id}/{action}", ExecutionActionHandler(state))
 
 	// Internal Hub<->Worker API

@@ -48,7 +48,12 @@ async def run_openai_compatible_turn(
     message_map = message if isinstance(message, dict) else {}
     text = _extract_openai_text(message_map.get("content"))
     tool_calls = _extract_openai_tool_calls(message_map.get("tool_calls"))
-    return ModelTurnResult(text=text, tool_calls=tool_calls, raw_response=response)
+    return ModelTurnResult(
+        text=text,
+        tool_calls=tool_calls,
+        raw_response=response,
+        usage=_extract_openai_usage(response.get("usage")),
+    )
 
 
 async def run_google_turn(
@@ -102,6 +107,7 @@ async def run_google_turn(
         text="\n".join(text_fragments).strip(),
         tool_calls=tool_calls,
         raw_response=response,
+        usage=_extract_google_usage(response.get("usageMetadata")),
     )
 
 
@@ -291,3 +297,41 @@ def _decode_error_body(raw_body: bytes) -> str:
     except ValueError:
         pass
     return raw_body.decode("utf-8", errors="ignore")[:500].strip()
+
+
+def _extract_openai_usage(raw_usage: Any) -> dict[str, int]:
+    usage = raw_usage if isinstance(raw_usage, dict) else {}
+    input_tokens = _to_non_negative_int(usage.get("prompt_tokens"))
+    output_tokens = _to_non_negative_int(usage.get("completion_tokens"))
+    total_tokens = _to_non_negative_int(usage.get("total_tokens"))
+    if total_tokens == 0:
+        total_tokens = input_tokens + output_tokens
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+    }
+
+
+def _extract_google_usage(raw_usage: Any) -> dict[str, int]:
+    usage = raw_usage if isinstance(raw_usage, dict) else {}
+    input_tokens = _to_non_negative_int(usage.get("promptTokenCount"))
+    output_tokens = _to_non_negative_int(usage.get("candidatesTokenCount"))
+    total_tokens = _to_non_negative_int(usage.get("totalTokenCount"))
+    if total_tokens == 0:
+        total_tokens = input_tokens + output_tokens
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+    }
+
+
+def _to_non_negative_int(value: Any) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    if parsed < 0:
+        return 0
+    return parsed

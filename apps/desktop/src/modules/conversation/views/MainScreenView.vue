@@ -48,7 +48,7 @@
             </template>
             <strong v-else>{{ activeConversation?.name ?? 'Conversation' }}</strong>
 
-            <button class="icon-btn" type="button" @click="startEditConversationName">
+            <button v-if="activeConversation" class="icon-btn" type="button" @click="startEditConversationName">
               <AppIcon name="pencil" :size="12" />
             </button>
           </div>
@@ -63,62 +63,71 @@
     </template>
 
     <template #main>
-      <div class="main-body">
-        <MainConversationPanel
-          :messages="runtime?.messages ?? []"
-          :queued-count="queuedCount"
-          :pending-count="pendingCount"
-          :executing-count="executingCount"
-          :has-active-execution="activeCount > 0"
-          :active-trace-count="activeTraceCount"
-          :execution-traces="executionTraces"
-          :running-actions="runningActions"
-          :draft="runtime?.draft ?? ''"
-          :mode="runtime?.mode ?? 'agent'"
-          :model-id="activeModelId"
-          :model-options="modelOptions"
-          :placeholder="placeholder"
-          @update:draft="updateDraft"
-          @update:mode="updateMode"
-          @update:model="updateModel"
-          @send="sendMessage"
-          @stop="stopExecution"
-          @rollback="rollbackMessage"
-          @toggle-trace="toggleExecutionTrace"
-        />
-
-        <div class="inspector-slot" :class="{ collapsed: inspectorCollapsed }">
-          <MainInspectorPanel
-            v-if="!inspectorCollapsed"
-            :diff="runtime?.diff ?? []"
-            :capability="runtime?.diffCapability ?? nonGitCapability"
+      <div class="main-body" :class="{ empty: !activeConversation }">
+        <template v-if="activeConversation">
+          <MainConversationPanel
+            :messages="runtime?.messages ?? []"
             :queued-count="queuedCount"
             :pending-count="pendingCount"
             :executing-count="executingCount"
+            :has-active-execution="activeCount > 0"
+            :active-trace-count="activeTraceCount"
+            :execution-traces="executionTraces"
+            :running-actions="runningActions"
+            :draft="runtime?.draft ?? ''"
+            :mode="runtime?.mode ?? 'agent'"
             :model-id="activeModelId"
-            :active-tab="runtime?.inspectorTab ?? 'diff'"
-            @change-tab="changeInspectorTab"
-            @commit="commitDiff"
-            @discard="discardDiff"
-            @export-patch="exportPatch"
-            @toggle-collapse="inspectorCollapsed = true"
+            :model-options="modelOptions"
+            :placeholder="placeholder"
+            @update:draft="updateDraft"
+            @update:mode="updateMode"
+            @update:model="updateModel"
+            @send="sendMessage"
+            @stop="stopExecution"
+            @rollback="rollbackMessage"
+            @toggle-trace="toggleExecutionTrace"
           />
 
-          <aside v-else class="inspector-rail">
-            <button class="rail-btn rail-expand" type="button" title="展开 Inspector" @click="inspectorCollapsed = false">
-              <AppIcon name="panel-right-open" :size="12" />
-            </button>
-            <button
-              v-for="item in inspectorTabs"
-              :key="item.key"
-              class="rail-btn"
-              :class="{ active: item.key === (runtime?.inspectorTab ?? 'diff') }"
-              type="button"
-              @click="openInspectorTab(item.key)"
-            >
-              {{ item.label }}
-            </button>
-          </aside>
+          <div class="inspector-slot" :class="{ collapsed: inspectorCollapsed }">
+            <MainInspectorPanel
+              v-if="!inspectorCollapsed"
+              :diff="runtime?.diff ?? []"
+              :capability="runtime?.diffCapability ?? nonGitCapability"
+              :queued-count="queuedCount"
+              :pending-count="pendingCount"
+              :executing-count="executingCount"
+              :model-id="activeModelId"
+              :executions="runtime?.executions ?? []"
+              :events="runtime?.events ?? []"
+              :active-tab="runtime?.inspectorTab ?? 'diff'"
+              @change-tab="changeInspectorTab"
+              @commit="commitDiff"
+              @discard="discardDiff"
+              @export-patch="exportPatch"
+              @toggle-collapse="inspectorCollapsed = true"
+            />
+
+            <aside v-else class="inspector-rail">
+              <button class="rail-btn rail-expand" type="button" title="展开 Inspector" @click="inspectorCollapsed = false">
+                <AppIcon name="panel-right-open" :size="12" />
+              </button>
+              <button
+                v-for="item in inspectorTabs"
+                :key="item.key"
+                class="rail-btn"
+                :class="{ active: item.key === (runtime?.inspectorTab ?? 'diff') }"
+                type="button"
+                @click="openInspectorTab(item.key)"
+              >
+                {{ item.label }}
+              </button>
+            </aside>
+          </div>
+        </template>
+
+        <div v-else class="main-empty">
+          <p class="main-empty-title">未选择对话</p>
+          <p class="main-empty-description">请在左侧会话列表中选择一个对话后开始。</p>
         </div>
       </div>
     </template>
