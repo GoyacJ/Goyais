@@ -142,6 +142,8 @@
 5. SSE 事件流扩展：rollback_requested/snapshot_applied/rollback_completed。
 6. Plan/Agent 与模型切换仅影响后续 Execution。
 7. Conversation 导出 Markdown 落地。
+8. 新增 `GET /v1/conversations/{conversation_id}` 详情接口，Desktop 会话进入时先回填 runtime。
+9. Desktop 流订阅策略升级为 `active + running/queued`，并确保事件按 `event.conversation_id` 路由隔离。
 
 ### 验收标准
 
@@ -151,6 +153,8 @@
 4. 回滚后恢复目标消息时点的队列/worktree/Inspector 状态。
 5. Markdown 导出成功且包含完整消息轨迹。
 6. 事件链路完整可观测。
+7. Hub/Desktop 重启后，同一 Conversation 历史消息与执行状态可恢复。
+8. 发送后 300ms 内可见执行占位状态（pending/executing/confirming/queued）。
 
 ### 依赖
 
@@ -375,6 +379,9 @@
 6. 项目文件只读门禁：新增 `GET /v1/projects/{project_id}/files` 与 `GET /v1/projects/{project_id}/files/content`，强制路径保护。
 7. 子代理门禁：P0 仅允许受控子代理并发，最大并发数 `<= 3`，且受父执行风险门禁约束。
 8. 测试门禁：Hub `go test ./...`、Worker `uv run pytest`、Desktop `pnpm test` 与 `pnpm test:strict` 必须全绿。
+9. 并发门禁：Worker 默认 `WORKER_MAX_CONCURRENCY=3`，且允许环境变量覆盖。
+10. 上下文门禁：Worker system prompt 必须注入 `project_name/project_path`，保证“查看当前项目”可回馈。
+11. 风险门禁：`run_command` 仅只读命令自动放行，其余命令仍走高风险确认链路。
 
 ---
 
@@ -417,3 +424,12 @@
 | 内部 API v1 硬切换 | TECH_ARCH.md, IMPLEMENTATION_PLAN.md | TECH_ARCH 9.2, PLAN Worker 门禁增量 | done |
 | Hub 持久化执行全状态（替代内存主导） | TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | TECH_ARCH 11.x 执行表与恢复语义, STANDARDS 10.4/11 | done |
 | P0 增加受控子代理并行（<=3） | PRD.md, TECH_ARCH.md | PRD 7.1/20.2, TECH_ARCH 12.4 | done |
+
+## 2026-02-24 会话稳定性与并发显示同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| Conversation 详情读取 + Desktop runtime 回填 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.1/17, TECH_ARCH 9.1/20.9, PLAN Phase 5 | done |
+| Hub 本地 SQLite 默认路径迁移（用户配置目录） | TECH_ARCH.md, IMPLEMENTATION_PLAN.md | TECH_ARCH 17.1, PLAN Phase 5 验收项 | done |
+| `active + running/queued` 订阅策略与防串流路由 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/16.3, TECH_ARCH 10.3/20.9, PLAN Phase 5 | done |
+| Worker 默认并发=3 + 项目上下文注入 + 只读命令低风险 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 15.3/17, TECH_ARCH 12.4/13.2/16, STANDARDS 10.4/13.1 | done |

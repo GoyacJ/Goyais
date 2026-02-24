@@ -17,11 +17,21 @@ export function attachConversationStream(conversation: Conversation, token?: str
   conversationStore.streams[conversation.id] = streamConversationEvents(conversation.id, {
     token,
     onEvent: (event) => {
-      const current = conversationStore.byConversationId[conversation.id];
+      const incoming = normalizeExecutionEvent(event, conversation.id);
+      if (!incoming) {
+        return;
+      }
+      const eventConversationId = incoming.conversation_id.trim();
+      if (eventConversationId !== conversation.id) {
+        console.warn(
+          `[conversation-stream] routed event by event.conversation_id, stream=${conversation.id}, event=${eventConversationId}`
+        );
+      }
+      const current = conversationStore.byConversationId[eventConversationId];
       if (!current) {
         return;
       }
-      applyIncomingExecutionEvent(conversation.id, event as ExecutionEvent);
+      applyIncomingExecutionEvent(eventConversationId, incoming);
     },
     onStatusChange: (status) => {
       const current = conversationStore.byConversationId[conversation.id];
@@ -47,4 +57,23 @@ export function attachConversationStream(conversation: Conversation, token?: str
 export function detachConversationStream(conversationId: string): void {
   conversationStore.streams[conversationId]?.close();
   delete conversationStore.streams[conversationId];
+}
+
+function normalizeExecutionEvent(raw: unknown, fallbackConversationId: string): ExecutionEvent | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const candidate = raw as Partial<ExecutionEvent>;
+  if (typeof candidate.type !== "string") {
+    return null;
+  }
+  const normalizedConversationId = typeof candidate.conversation_id === "string" && candidate.conversation_id.trim() !== ""
+    ? candidate.conversation_id.trim()
+    : fallbackConversationId;
+
+  return {
+    ...candidate,
+    conversation_id: normalizedConversationId
+  } as ExecutionEvent;
 }

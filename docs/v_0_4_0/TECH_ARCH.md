@@ -323,8 +323,9 @@ private resource
 
 1. `GET /v1/workspaces`
 2. `POST /v1/workspaces/remote-connections`
-3. `POST /v1/auth/login`
-4. `GET /v1/me`
+3. `GET /v1/workspaces/{workspace_id}/status?conversation_id=...`
+4. `POST /v1/auth/login`
+5. `GET /v1/me`
 
 #### Project / Conversation / Execution
 
@@ -336,16 +337,17 @@ private resource
 6. `GET /v1/projects/{project_id}/files`
 7. `GET /v1/projects/{project_id}/files/content?path=...`
 8. `PATCH|DELETE /v1/conversations/{conversation_id}`
-9. `POST /v1/conversations/{conversation_id}/messages`
-10. `GET /v1/conversations/{conversation_id}/events`
-11. `POST /v1/conversations/{conversation_id}/stop`
-12. `POST /v1/conversations/{conversation_id}/rollback`
-13. `GET /v1/conversations/{conversation_id}/export?format=markdown`
-14. `GET /v1/executions`
-15. `GET /v1/executions/{execution_id}/diff`
-16. `POST /v1/executions/{execution_id}/confirm`
-17. `POST /v1/executions/{execution_id}/commit`
-18. `POST /v1/executions/{execution_id}/discard`
+9. `GET /v1/conversations/{conversation_id}`
+10. `POST /v1/conversations/{conversation_id}/messages`
+11. `GET /v1/conversations/{conversation_id}/events`
+12. `POST /v1/conversations/{conversation_id}/stop`
+13. `POST /v1/conversations/{conversation_id}/rollback`
+14. `GET /v1/conversations/{conversation_id}/export?format=markdown`
+15. `GET /v1/executions`
+16. `GET /v1/executions/{execution_id}/diff`
+17. `POST /v1/executions/{execution_id}/confirm`
+18. `POST /v1/executions/{execution_id}/commit`
+19. `POST /v1/executions/{execution_id}/discard`
 
 #### Resource / Share
 
@@ -443,6 +445,8 @@ private resource
 1. Hub 先落库再推送。
 2. 支持 `Last-Event-ID` 补发。
 3. 客户端断线后自动重连。
+4. Desktop 订阅策略固定为 `active conversation + all running/queued conversations`。
+5. 事件应用路由必须以 `event.conversation_id` 为最终键；与订阅会话不一致时按事件会话分发并记录告警。
 
 ---
 
@@ -751,7 +755,7 @@ while True:
 
 ### 12.4 P0 子代理边界
 
-1. P0 仅支持受控子代理并发，最大并发数 `<= 3`。
+1. P0 仅支持受控子代理并发，最大并发数 `<= 3`（Worker 默认并发 `= 3`，可由环境变量覆盖）。
 2. 子代理为短生命周期上下文，不持有独立长期状态。
 3. 子代理工具集必须显式降权并继承父执行的风险门禁。
 4. 长期自治团队编排不属于 v0.4.0 P0 范围。
@@ -771,7 +775,8 @@ while True:
 
 1. Path Guard：仅允许 repo/worktree 内路径。
 2. Command Guard：白名单命令 + 黑名单模式。
-3. 删除/网络/命令写入均需确认。
+3. `run_command` 风险分级细化：`pwd/ls/rg --files/git status/cat` 归类为 `low`，写入/联网/变更命令维持 `high/critical`。
+4. 删除/网络/命令写入均需确认。
 
 ### 13.3 高风险动作
 
@@ -850,8 +855,10 @@ while True:
 1. 多 Conversation 并发能力可配置，默认开启并发。
 2. 单 Conversation FIFO 必须严格保证。
 3. 事件推送链路本地延迟目标 < 200ms。
-4. 异常恢复必须以状态一致性为第一目标。
-5. i18n 强制双语齐套。
+4. 执行态聚合必须暴露 `pending/executing/confirming/queued` 分态，顶部状态优先级为 `confirming > running > queued > idle`。
+5. 异常恢复必须以状态一致性为第一目标。
+6. Hub/Desktop 重启后需通过 `GET /v1/conversations/{conversation_id}` 恢复历史消息、执行态与快照。
+7. i18n 强制双语齐套。
 
 ---
 
@@ -860,8 +867,9 @@ while True:
 ### 17.1 Local
 
 1. Tauri sidecar 启动 Hub + Worker。
-2. 本地数据库默认 SQLite。
-3. 启停受 Desktop 生命周期管理。
+2. 本地数据库默认 SQLite，路径优先 `HUB_DB_PATH`，否则 `os.UserConfigDir()/goyais/hub.sqlite3`。
+3. 若新默认路径不存在且旧相对路径 `data/hub.sqlite3` 存在，Hub 启动时执行一次性迁移复制并记录审计日志。
+4. 启停受 Desktop 生命周期管理。
 
 ### 17.2 Remote
 
@@ -1017,3 +1025,33 @@ while True:
 3. 远程连接通过 `POST /v1/workspaces/remote-connections` 落库连接状态，审计记录至少包含 `workspace.create_remote`、`workspace.connect`、`workspace.switch_context`。
 4. Desktop 工作区切换必须触发上下文失效与重载，最少覆盖：`auth/permission/project/admin/resource`。
 5. 切换到远程工作区若 token 缺失或 401/403，状态置为 `auth_required`，不得自动回退到本地工作区。
+
+### 20.8 工作区运行态聚合接口（状态位权威）
+
+1. `GET /v1/workspaces/{workspace_id}/status` 为主屏幕/账号信息/设置页状态位唯一权威接口。
+2. 响应字段最小集合：`workspace_id`、`conversation_id`、`conversation_status`、`hub_url`、`connection_status`、`user_display_name`、`updated_at`。
+3. `conversation_status` 标准：`running/queued/stopped/done/error`。
+4. `conversation_status` 计算映射：
+   - `executing|confirming -> running`
+   - `queued|pending -> queued`
+   - `completed -> done`
+   - `failed -> error`
+   - `cancelled|无会话|无执行 -> stopped`
+5. `connection_status` 权威来源为 `workspace_connections`；本地工作区固定 `connected`。
+6. 远程工作区请求该接口必须通过 workspace 级 `conversation.read` 权限校验；无 token 不得降级为本地语义。
+
+### 20.9 Conversation 详情读取与重启恢复
+
+1. `GET /v1/conversations/{conversation_id}` 返回 `conversation/messages/executions/snapshots`，作为 Desktop 重启回填权威来源。
+2. Desktop 进入会话时必须先拉取详情并回填 runtime；仅当后端无历史消息时允许使用欢迎语兜底。
+3. 会话流应用层必须以 `event.conversation_id` 作为最终路由键，禁止仅按订阅会话 ID 写入。
+4. stream detach 条件：会话“非 active 且无未完成执行（queued/pending/executing/confirming）”时才允许断开。
+
+## 21. 2026-02-24 会话稳定性与并发显示同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 新增 Conversation 详情读取接口与回填链路 | PRD.md, TECH_ARCH.md | PRD 14.1/17, TECH_ARCH 9.1/20.9 | done |
+| Hub 默认 DB 路径改为用户配置目录并加入一次性迁移 | TECH_ARCH.md, IMPLEMENTATION_PLAN.md | TECH_ARCH 17.1, PLAN Phase 5 门禁增量 | done |
+| 会话订阅策略改为 `active + running/queued`，并增加防串流路由 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/16.3, TECH_ARCH 10.3/20.9, PLAN Phase 5 门禁增量 | done |
+| 风险分级细化（`run_command` 只读命令 low） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 15.3, TECH_ARCH 13.2, STANDARDS 10.4/13.1 | done |

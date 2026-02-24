@@ -72,6 +72,27 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
+  /v1/workspaces/{workspace_id}/status:
+    get:
+      summary: Get workspace runtime status for top-right and bottom-right UI state
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+        - in: query
+          name: conversation_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workspace runtime status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceStatusResponse'
+        '401':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
   /v1/auth/login:
     post:
       summary: Login to workspace
@@ -372,6 +393,19 @@ paths:
                 $ref: '#/components/schemas/ListEnvelope'
 
   /v1/conversations/{conversation_id}:
+    get:
+      summary: Get conversation detail
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+      responses:
+        '200':
+          description: Conversation detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetailResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
     patch:
       summary: Update conversation metadata
       parameters:
@@ -1699,6 +1733,10 @@ components:
         access_token:
           type: string
 
+    ConversationStatus:
+      type: string
+      enum: [running, queued, stopped, done, error]
+
     RemoteConnectionResponse:
       type: object
       required: [workspace, connection]
@@ -1709,6 +1747,33 @@ components:
           $ref: '#/components/schemas/WorkspaceConnection'
         access_token:
           type: string
+
+    WorkspaceStatusResponse:
+      type: object
+      required:
+        - workspace_id
+        - conversation_status
+        - hub_url
+        - connection_status
+        - user_display_name
+        - updated_at
+      properties:
+        workspace_id:
+          type: string
+        conversation_id:
+          type: string
+        conversation_status:
+          $ref: '#/components/schemas/ConversationStatus'
+        hub_url:
+          type: string
+        connection_status:
+          type: string
+          enum: [connected, reconnecting, disconnected]
+        user_display_name:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
 
     ListEnvelope:
       type: object
@@ -1999,6 +2064,90 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    ConversationMessage:
+      type: object
+      required: [id, conversation_id, role, content, created_at]
+      properties:
+        id:
+          type: string
+        conversation_id:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+        queue_index:
+          type: integer
+        can_rollback:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    ConversationInspector:
+      type: object
+      required: [tab]
+      properties:
+        tab:
+          type: string
+
+    ConversationSnapshot:
+      type: object
+      required:
+        - id
+        - conversation_id
+        - rollback_point_message_id
+        - queue_state
+        - inspector_state
+        - messages
+        - execution_ids
+        - created_at
+      properties:
+        id:
+          type: string
+        conversation_id:
+          type: string
+        rollback_point_message_id:
+          type: string
+        queue_state:
+          type: string
+          enum: [idle, running, queued]
+        worktree_ref:
+          type: [string, 'null']
+        inspector_state:
+          $ref: '#/components/schemas/ConversationInspector'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationMessage'
+        execution_ids:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ConversationDetailResponse:
+      type: object
+      required: [conversation, messages, executions, snapshots]
+      properties:
+        conversation:
+          $ref: '#/components/schemas/Conversation'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationMessage'
+        executions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Execution'
+        snapshots:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationSnapshot'
 
     CreateConversationRequest:
       type: object

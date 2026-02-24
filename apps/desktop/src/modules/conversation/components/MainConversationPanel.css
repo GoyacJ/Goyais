@@ -54,6 +54,10 @@
   box-shadow: var(--global-shadow-1);
 }
 
+.bubble.execution-hint {
+  opacity: 0.85;
+}
+
 .message-row.user .message-body {
   justify-items: end;
 }

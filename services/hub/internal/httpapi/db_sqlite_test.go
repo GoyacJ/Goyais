@@ -3,7 +3,9 @@ package httpapi
 import (
 	"database/sql"
 	"encoding/json"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -162,5 +164,94 @@ func TestAuthzStoreCreatesProjectSchema(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected project_configs column %s to exist", column)
 		}
+	}
+}
+
+func TestResolveHubDBPathFromEnvUsesUserConfigDirByDefault(t *testing.T) {
+	t.Setenv("HUB_DB_PATH", "")
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "xdg-config"))
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "home"))
+
+	resolved := resolveHubDBPathFromEnv()
+	if resolved == legacyHubDBPath {
+		t.Fatalf("expected default db path to be decoupled from cwd, got legacy path %q", resolved)
+	}
+	expectedSuffix := filepath.Clean(filepath.Join(defaultHubDBAppName, defaultHubDBFileName))
+	if !strings.HasSuffix(filepath.Clean(resolved), expectedSuffix) {
+		t.Fatalf("expected default db path suffix %q, got %q", expectedSuffix, resolved)
+	}
+}
+
+func TestOpenAuthzStoreMigratesLegacyDBToDefaultPath(t *testing.T) {
+	baseDir := t.TempDir()
+	originalCWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get current directory failed: %v", err)
+	}
+	if err := os.Chdir(baseDir); err != nil {
+		t.Fatalf("change directory failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalCWD)
+	})
+
+	legacyStore, err := openAuthzStore(legacyHubDBPath)
+	if err != nil {
+		t.Fatalf("open legacy store failed: %v", err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	legacyURL := "http://legacy.local"
+	if _, err := legacyStore.upsertWorkspace(Workspace{
+		ID:             "ws_migrated",
+		Name:           "Migrated",
+		Mode:           WorkspaceModeRemote,
+		HubURL:         &legacyURL,
+		IsDefaultLocal: false,
+		CreatedAt:      now,
+		LoginDisabled:  false,
+		AuthMode:       AuthModePasswordOrToken,
+	}); err != nil {
+		_ = legacyStore.close()
+		t.Fatalf("seed legacy workspace failed: %v", err)
+	}
+	if err := legacyStore.close(); err != nil {
+		t.Fatalf("close legacy store failed: %v", err)
+	}
+
+	t.Setenv("HUB_DB_PATH", "")
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(baseDir, "config-home"))
+	t.Setenv("HOME", filepath.Join(baseDir, "home"))
+	targetPath := resolveHubDBPathFromEnv()
+
+	store, err := openAuthzStore("")
+	if err != nil {
+		t.Fatalf("open default store failed: %v", err)
+	}
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close migrated store failed: %v", closeErr)
+		}
+	}()
+
+	if _, err := os.Stat(targetPath); err != nil {
+		t.Fatalf("expected migrated db at %q: %v", targetPath, err)
+	}
+	if _, err := os.Stat(filepath.Join(baseDir, legacyHubDBPath)); err != nil {
+		t.Fatalf("expected legacy db kept at %q: %v", filepath.Join(baseDir, legacyHubDBPath), err)
+	}
+
+	workspaces, err := store.listWorkspaces()
+	if err != nil {
+		t.Fatalf("list workspaces after migration failed: %v", err)
+	}
+	found := false
+	for _, workspace := range workspaces {
+		if workspace.ID == "ws_migrated" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected migrated workspace record to exist after path migration")
 	}
 }

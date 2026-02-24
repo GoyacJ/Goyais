@@ -1,9 +1,18 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
-import { attachConversationStream, detachConversationStream, ensureConversationRuntime } from "@/modules/conversation/store";
+import {
+  conversationStore,
+  ensureConversationRuntime,
+  getExecutionStateCounts
+} from "@/modules/conversation/store";
+import {
+  useAutoModelSyncWatcher,
+  useRiskConfirmWatcher
+} from "@/modules/conversation/views/controllerWatchers";
 import { useMainScreenActions } from "@/modules/conversation/views/useMainScreenActions";
 import { useMainScreenModeling } from "@/modules/conversation/views/useMainScreenModeling";
+import { createConversationStreamCoordinator } from "@/modules/conversation/views/streamCoordinator";
 import {
   projectStore,
   refreshConversationsForActiveProject,
@@ -16,6 +25,7 @@ import {
 } from "@/modules/workspace/store";
 import { useI18n } from "@/shared/i18n";
 import { authStore } from "@/shared/stores/authStore";
+import { useWorkspaceStatusSync } from "@/shared/stores/workspaceStatusStore";
 import type { DiffCapability, InspectorTabKey } from "@/shared/types/api";
 
 export function useMainScreenController() {
@@ -65,10 +75,41 @@ export function useMainScreenController() {
     return ensureConversationRuntime(conversation, project.is_git);
   });
 
+  const workspaceStatus = useWorkspaceStatusSync({
+    conversationId: computed(() => activeConversation.value?.id ?? "")
+  });
+
   const placeholder = computed(() => t("conversation.placeholderInput"));
-  const queuedCount = computed(() => runtime.value?.executions.filter((item) => item.state === "queued").length ?? 0);
-  const activeCount = computed(() => runtime.value?.executions.filter((item) => item.state === "executing").length ?? 0);
-  const runningState = computed(() => (activeCount.value > 0 ? "running" : "idle"));
+  const executionStateCounts = computed(() =>
+    runtime.value
+      ? getExecutionStateCounts(runtime.value)
+      : {
+        queued: 0,
+        pending: 0,
+        executing: 0,
+        confirming: 0
+      }
+  );
+  const queuedCount = computed(() => executionStateCounts.value.queued);
+  const pendingCount = computed(() => executionStateCounts.value.pending);
+  const executingCount = computed(() => executionStateCounts.value.executing);
+  const confirmingCount = computed(() => executionStateCounts.value.confirming);
+  const activeCount = computed(() => pendingCount.value + executingCount.value + confirmingCount.value);
+  const runningState = computed(() => workspaceStatus.conversationStatus.value);
+  const runningStateClass = computed(() => {
+    switch (runningState.value) {
+      case "running":
+        return "running";
+      case "queued":
+        return "queued";
+      case "done":
+        return "done";
+      case "error":
+        return "error";
+      default:
+        return "stopped";
+    }
+  });
 
   const workspaceLabel = computed(
     () => workspaceStore.workspaces.find((item) => item.id === workspaceStore.currentWorkspaceId)?.name ?? "本地工作区"
@@ -89,25 +130,6 @@ export function useMainScreenController() {
       };
     }
     return result;
-  });
-
-  const connectionState = computed(() => {
-    if (workspaceStore.connectionState === "ready") {
-      return "connected";
-    }
-    if (workspaceStore.connectionState === "loading") {
-      return "reconnecting";
-    }
-    return "disconnected";
-  });
-  const connectionClass = computed(() => {
-    if (connectionState.value === "connected") {
-      return "connected";
-    }
-    if (connectionState.value === "reconnecting") {
-      return "reconnecting";
-    }
-    return "disconnected";
   });
 
   const modelState = useMainScreenModeling({
@@ -132,108 +154,96 @@ export function useMainScreenController() {
     resolveSemanticModelID: modelState.resolveSemanticModelID
   });
 
+  const streamCoordinator = createConversationStreamCoordinator({
+    projects: () => projectStore.projects,
+    conversationsByProjectId: () => projectStore.conversationsByProjectId,
+    activeConversationId: () => projectStore.activeConversationId,
+    resolveToken: () =>
+      workspaceStore.currentWorkspaceId ? authStore.tokensByWorkspaceId[workspaceStore.currentWorkspaceId] : undefined
+  });
+
   onMounted(async () => {
     await initializeWorkspaceContext();
     await Promise.all([refreshProjects(), refreshResourceConfigsByType("model")]);
+    streamCoordinator.syncConversationStreams();
   });
 
   onUnmounted(() => {
-    const activeId = projectStore.activeConversationId;
-    if (activeId) {
-      detachConversationStream(activeId);
-    }
+    streamCoordinator.clearStreams();
   });
 
   watch(
     () => projectStore.activeProjectId,
     async () => {
       await refreshConversationsForActiveProject();
+      streamCoordinator.syncConversationStreams();
     }
   );
 
   watch(
     () => projectStore.activeConversationId,
-    (nextId, prevId) => {
-      if (prevId) {
-        detachConversationStream(prevId);
-      }
+    (nextId) => {
       if (!nextId) {
+        streamCoordinator.syncConversationStreams();
         return;
       }
-      const conversation = (projectStore.conversationsByProjectId[projectStore.activeProjectId] ?? []).find((item) => item.id === nextId);
-      if (!conversation) {
+      const context = streamCoordinator.findConversationContextById(nextId);
+      if (!context) {
+        streamCoordinator.syncConversationStreams();
         return;
       }
-      const workspaceToken = workspaceStore.currentWorkspaceId ? authStore.tokensByWorkspaceId[workspaceStore.currentWorkspaceId] : undefined;
-      attachConversationStream(conversation, workspaceToken);
+      ensureConversationRuntime(context.conversation, context.isGitProject);
+      void streamCoordinator.hydrateConversationDetail(context, true);
+      streamCoordinator.syncConversationStreams();
+    }
+  );
+
+  watch(
+    () => projectStore.conversationsByProjectId,
+    () => {
+      streamCoordinator.syncConversationStreams();
+    },
+    { deep: true }
+  );
+
+  watch(
+    () =>
+      Object.entries(conversationStore.byConversationId)
+        .map(([conversationId, runtimeValue]) =>
+          `${conversationId}:${runtimeValue.executions.map((execution) => execution.state).join(",")}`
+        )
+        .sort()
+        .join("|"),
+    () => {
+      streamCoordinator.syncConversationStreams();
     }
   );
 
   watch(
     () => workspaceStore.currentWorkspaceId,
     () => {
+      streamCoordinator.clearStreams();
       projectImportInProgress.value = false;
       projectImportFeedback.value = "";
       projectImportError.value = "";
       void refreshResourceConfigsByType("model");
+      streamCoordinator.syncConversationStreams();
     }
   );
 
-  const autoModelSyncingConversationID = ref("");
-  watch(
-    [() => activeConversation.value?.id ?? "", () => activeCount.value, () => modelState.modelOptions.value],
-    async ([conversationID, executingCount, options]) => {
-      if (conversationID === "" || executingCount > 0 || options.length === 0) {
-        return;
-      }
-      if (autoModelSyncingConversationID.value === conversationID) {
-        return;
-      }
-      const currentModelID = modelState.resolveSemanticModelID(runtime.value?.modelId ?? activeConversation.value?.model_id ?? "");
-      if (currentModelID !== "" && options.some((item) => item.value === currentModelID)) {
-        return;
-      }
-      const targetModelID = options[0]?.value ?? "";
-      if (targetModelID === "") {
-        return;
-      }
-      autoModelSyncingConversationID.value = conversationID;
-      try {
-        await actions.updateModel(targetModelID);
-      } finally {
-        autoModelSyncingConversationID.value = "";
-      }
-    },
-    { deep: true }
-  );
+  useAutoModelSyncWatcher({
+    activeConversation,
+    activeCount,
+    modelOptions: modelState.modelOptions,
+    resolveSemanticModelID: modelState.resolveSemanticModelID,
+    runtime,
+    updateModel: actions.updateModel
+  });
 
-  watch(
-    () => runtime.value?.events.length ?? 0,
-    () => {
-      const events = runtime.value?.events ?? [];
-      const latest = events[events.length - 1];
-      if (!latest) {
-        return;
-      }
-
-      if (latest.type === "confirmation_required") {
-        riskConfirm.value = {
-          open: true,
-          executionId: latest.execution_id,
-          summary: typeof latest.payload.summary === "string" ? latest.payload.summary : "高风险操作需要确认",
-          preview: typeof latest.payload.preview === "string" ? latest.payload.preview : ""
-        };
-        return;
-      }
-
-      if (latest.type === "confirmation_resolved" || latest.type === "execution_done" || latest.type === "execution_error" || latest.type === "execution_stopped") {
-        if (latest.execution_id === riskConfirm.value.executionId) {
-          riskConfirm.value.open = false;
-          riskConfirm.value.executionId = "";
-        }
-      }
-    }
-  );
+  useRiskConfirmWatcher({
+    runtime,
+    riskConfirm
+  });
 
   return {
     ...actions,
@@ -242,15 +252,16 @@ export function useMainScreenController() {
     activeModelId: modelState.activeModelId,
     activeProject,
     authStore,
-    connectionClass,
-    connectionState,
+    confirmingCount,
     conversationNameDraft,
     conversationPageByProjectId,
     editingConversationName,
+    executingCount,
     inspectorCollapsed,
     inspectorTabs,
     modelOptions: modelState.modelOptions,
     nonGitCapability,
+    pendingCount,
     placeholder,
     projectImportError,
     projectImportFeedback,
@@ -260,7 +271,11 @@ export function useMainScreenController() {
     queuedCount,
     riskConfirm,
     runningState,
+    runningStateClass,
     runtime,
+    runtimeConnectionStatus: workspaceStatus.connectionStatus,
+    runtimeHubLabel: workspaceStatus.hubURL,
+    runtimeUserDisplayName: workspaceStatus.userDisplayName,
     workspaceLabel,
     workspaceStore
   };

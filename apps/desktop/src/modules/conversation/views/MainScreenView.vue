@@ -56,8 +56,7 @@
 
         <template #right>
           <div class="right">
-            <span class="state">{{ runningState }}</span>
-            <span :class="connectionClass">{{ connectionState }}</span>
+            <span class="state" :class="runningStateClass">{{ runningState }}</span>
           </div>
         </template>
       </Topbar>
@@ -68,6 +67,9 @@
         <MainConversationPanel
           :messages="runtime?.messages ?? []"
           :queued-count="queuedCount"
+          :pending-count="pendingCount"
+          :executing-count="executingCount"
+          :confirming-count="confirmingCount"
           :has-active-execution="activeCount > 0"
           :draft="runtime?.draft ?? ''"
           :mode="runtime?.mode ?? 'agent'"
@@ -88,7 +90,9 @@
             :diff="runtime?.diff ?? []"
             :capability="runtime?.diffCapability ?? nonGitCapability"
             :queued-count="queuedCount"
-            :active-count="activeCount"
+            :pending-count="pendingCount"
+            :executing-count="executingCount"
+            :confirming-count="confirmingCount"
             :model-id="activeModelId"
             :active-tab="runtime?.inspectorTab ?? 'diff'"
             @change-tab="changeInspectorTab"
@@ -118,7 +122,12 @@
     </template>
 
     <template #footer>
-      <HubStatusBar />
+      <HubStatusBar
+        runtime-mode
+        :hub-label="runtimeHubLabel"
+        :user-label="runtimeUserDisplayName"
+        :connection-status="runtimeConnectionStatus"
+      />
     </template>
 
     <RiskConfirmModal
@@ -155,9 +164,8 @@ const {
   authStore,
   changeInspectorTab,
   commitDiff,
-  connectionClass,
-  connectionState,
   closeRiskConfirm,
+  confirmingCount,
   confirmRisk,
   conversationNameDraft,
   conversationPageByProjectId,
@@ -166,6 +174,7 @@ const {
   deleteProjectById,
   discardDiff,
   editingConversationName,
+  executingCount,
   exportConversation,
   exportPatch,
   importProjectDirectory,
@@ -179,6 +188,7 @@ const {
   paginateConversations,
   paginateProjects,
   placeholder,
+  pendingCount,
   projectStore,
   projectImportError,
   projectImportFeedback,
@@ -188,6 +198,10 @@ const {
   riskConfirm,
   rollbackMessage,
   runningState,
+  runningStateClass,
+  runtimeConnectionStatus,
+  runtimeHubLabel,
+  runtimeUserDisplayName,
   runtime,
   saveConversationName,
   selectConversation,

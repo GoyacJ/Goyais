@@ -3,6 +3,11 @@
     active-key="remote_account"
     title="账号信息"
     subtitle="Remote Workspace / Account"
+    runtime-status-mode
+    :runtime-conversation-status="workspaceStatus.conversationStatus.value"
+    :runtime-connection-status="workspaceStatus.connectionStatus.value"
+    :runtime-user-display-name="workspaceStatus.userDisplayName.value"
+    :runtime-hub-url="workspaceStatus.hubURL.value"
   >
     <section class="card">
       <h3>当前账号</h3>
@@ -28,9 +33,9 @@
       <h3>连接与会话状态</h3>
       <div class="kv-grid">
         <p><span>连接状态</span><strong :class="connectionClass">{{ connectionLabel }}</strong></p>
+        <p><span>当前会话状态</span><strong :class="conversationClass">{{ conversationStatusLabel }}</strong></p>
         <p><span>活跃 Conversation</span><strong>{{ activeConversationCount }}</strong></p>
         <p><span>排队执行</span><strong>{{ queuedExecutionCount }}</strong></p>
-        <p><span>默认管理员</span><strong>remote admin（全权限）</strong></p>
       </div>
     </section>
   </AccountShell>
@@ -44,21 +49,19 @@ import { authStore } from "@/shared/stores/authStore";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
 import { projectStore, refreshConversationsForActiveProject } from "@/modules/project/store";
 import { conversationStore } from "@/modules/conversation/store";
+import { useWorkspaceStatusSync } from "@/shared/stores/workspaceStatusStore";
 import AccountShell from "@/shared/shells/AccountShell.vue";
 
 const workspace = computed(() =>
   workspaceStore.workspaces.find((item) => item.id === workspaceStore.currentWorkspaceId)
 );
 
-const connectionLabel = computed(() => {
-  if (workspaceStore.connectionState === "ready") {
-    return "connected";
-  }
-  if (workspaceStore.connectionState === "loading") {
-    return "reconnecting";
-  }
-  return "disconnected";
+const workspaceStatus = useWorkspaceStatusSync({
+  conversationId: computed(() => projectStore.activeConversationId)
 });
+
+const connectionLabel = computed(() => workspaceStatus.connectionStatus.value);
+const conversationStatusLabel = computed(() => workspaceStatus.conversationStatus.value);
 
 const connectionClass = computed(() => {
   if (connectionLabel.value === "connected") {
@@ -68,6 +71,19 @@ const connectionClass = computed(() => {
     return "reconnecting";
   }
   return "disconnected";
+});
+
+const conversationClass = computed(() => {
+  if (conversationStatusLabel.value === "running" || conversationStatusLabel.value === "done") {
+    return "connected";
+  }
+  if (conversationStatusLabel.value === "queued") {
+    return "reconnecting";
+  }
+  if (conversationStatusLabel.value === "error") {
+    return "disconnected";
+  }
+  return "";
 });
 
 const activeConversationCount = computed(() => {

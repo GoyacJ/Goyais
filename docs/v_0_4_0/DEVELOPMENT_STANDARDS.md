@@ -274,6 +274,9 @@ TokenLayerContract {
 7. 主题门禁：`theme mode/font style/font scale/preset` 必须全局即时生效并持久化，且具备可回归自动化测试。
 8. 通用设置门禁：`general settings` 必须提供 6 组策略型行式配置并即时持久化；系统能力未接入平台时必须显式禁用并展示原因文案。
 9. Worker 调度门禁：内部执行链路必须使用 pull-claim（`claim + lease + heartbeat + control poll + events batch`）；禁止恢复 Hub push Worker 语义。
+10. 会话恢复门禁：Desktop 进入 Conversation 必须先调用详情接口回填；仅后端无历史消息时允许欢迎语兜底。
+11. 流路由门禁：事件应用必须以 `event.conversation_id` 路由，禁止将多会话事件写入同一 runtime。
+12. 风险分级门禁：`run_command` 的 `pwd/ls/rg --files/git status/cat` 归类 `low`，其他命令维持 `high/critical`。
 
 ### 10.5 门禁契约
 
@@ -424,6 +427,7 @@ StandardsExceptionADR {
 11. 模型目录策略变更时，能验证手动/定时重载与失败审计。
 12. 模型目录全量对齐变更时，能验证 `auth/base_urls/base_url_key` 契约与禁用模型门禁。
 13. PR 审查可按第 13 章逐项打勾并形成可追溯证据。
+14. 会话稳定性回归时，能验证“重启恢复 + 执行占位状态 + 多会话不串流”。
 
 ---
 
@@ -489,3 +493,20 @@ StandardsExceptionADR {
 | Token 引用完整性与硬编码样式阻断脚本 | DEVELOPMENT_STANDARDS.md, IMPLEMENTATION_PLAN.md | STANDARDS 9.x/11.1, PLAN Desktop 前端治理门禁增量 | done |
 | CI 增量门禁（strict/tokens/size/complexity/coverage） | DEVELOPMENT_STANDARDS.md, IMPLEMENTATION_PLAN.md | STANDARDS 6.4/10.1/10.2/11.1, PLAN Desktop 前端治理门禁增量 | done |
 | TS/Vue 超行数文件拆分（feature-first 子模块化） | DEVELOPMENT_STANDARDS.md | STANDARDS 6.1/6.3/13.1 | done |
+
+---
+
+## 22. 2026-02-24 状态聚合接口补齐同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 状态聚合接口补齐 | TECH_ARCH.md | API 摘要/状态接口 | done |
+
+## 23. 2026-02-24 会话稳定性与并发显示同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| Conversation 详情回填与重启恢复门禁 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.1/17, TECH_ARCH 20.9, PLAN Phase 5 | done |
+| 会话订阅策略 `active + running/queued` 与防串流路由 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/16.3, TECH_ARCH 10.3/20.9, PLAN Phase 5 | done |
+| Worker 默认并发 3 与项目上下文注入 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/17, TECH_ARCH 12.4/16, PLAN Worker 门禁增量 | done |
+| `run_command` 只读命令低风险分类 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 15.3, TECH_ARCH 13.2, STANDARDS 10.4/13.1 | done |

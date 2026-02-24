@@ -65,7 +65,7 @@ export type ConversationSnapshot = {
     tab: InspectorTabKey;
   };
   messages: ConversationMessage[];
-  execution_snapshots: Array<{
+  execution_snapshots?: Array<{
     id: string;
     state: ExecutionState;
     queue_index: number;
@@ -74,6 +74,13 @@ export type ConversationSnapshot = {
   }>;
   execution_ids: string[];
   created_at: string;
+};
+
+export type ConversationDetailResponse = {
+  conversation: Conversation;
+  messages: ConversationMessage[];
+  executions: Execution[];
+  snapshots: ConversationSnapshot[];
 };
 
 export type Execution = {

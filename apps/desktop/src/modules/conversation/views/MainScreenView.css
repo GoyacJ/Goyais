@@ -19,18 +19,19 @@
 }
 
 .state {
-  color: var(--semantic-warning);
+  color: var(--semantic-text-muted);
 }
 
-.connected {
+.running,
+.done {
   color: var(--semantic-success);
 }
 
-.reconnecting {
+.queued {
   color: var(--semantic-warning);
 }
 
-.disconnected {
+.error {
   color: var(--semantic-danger);
 }
 

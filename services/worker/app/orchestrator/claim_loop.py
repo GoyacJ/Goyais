@@ -19,7 +19,7 @@ class ClaimLoopService:
     def __init__(self) -> None:
         self.hub = HubClient()
         self.worker_id = os.getenv("WORKER_ID", f"worker-{uuid.uuid4().hex[:8]}")
-        self.max_concurrency = max(1, int(os.getenv("WORKER_MAX_CONCURRENCY", "1")))
+        self.max_concurrency = max(1, int(os.getenv("WORKER_MAX_CONCURRENCY", "3")))
         self.lease_seconds = max(10, int(os.getenv("WORKER_LEASE_SECONDS", "30")))
         self.claim_interval_ms = max(100, int(os.getenv("WORKER_CLAIM_INTERVAL_MS", "500")))
         self.heartbeat_interval_seconds = max(3, int(os.getenv("WORKER_HEARTBEAT_SECONDS", "10")))
@@ -106,9 +106,14 @@ class ClaimLoopService:
         execution.setdefault("trace_id", f"tr_worker_{execution_id}")
 
         project_path = str(envelope.get("project_path") or "").strip()
+        project_name = str(envelope.get("project_name") or "").strip()
+        if project_name == "" and project_path != "":
+            project_name = os.path.basename(project_path.rstrip("/")) or ""
         project_is_git = bool(envelope.get("project_is_git"))
         worktree = self._worktree.prepare(execution_id, project_path, project_is_git)
         execution["working_directory"] = worktree.path
+        execution["project_path"] = project_path
+        execution["project_name"] = project_name
 
         controls = _ExecutionControls(self.hub, execution_id)
         await controls.start()

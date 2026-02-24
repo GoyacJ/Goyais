@@ -3,10 +3,14 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import SettingsI18nView from "@/modules/workspace/views/SettingsI18nView.vue";
 import { i18nState, setLocale } from "@/shared/i18n";
+import { resetAuthStore } from "@/shared/stores/authStore";
+import { resetWorkspaceStore } from "@/shared/stores/workspaceStore";
 
 describe("settings i18n view", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    resetWorkspaceStore();
+    resetAuthStore();
     setLocale("zh-CN");
   });
 

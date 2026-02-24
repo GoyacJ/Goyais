@@ -3,6 +3,7 @@ export type AuthMode = "disabled" | "password_or_token" | "token_only";
 export type Role = "viewer" | "developer" | "approver" | "admin";
 export type QueueState = "idle" | "running" | "queued";
 export type ConversationMode = "agent" | "plan";
+export type ConversationStatus = "running" | "queued" | "stopped" | "done" | "error";
 export type ExecutionState = "queued" | "pending" | "executing" | "confirming" | "completed" | "failed" | "cancelled";
 export type PermissionVisibility = "hidden" | "disabled" | "readonly" | "enabled";
 export type ABACEffect = "allow" | "deny";

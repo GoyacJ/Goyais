@@ -4,7 +4,7 @@ import asyncio
 from typing import Any
 
 from app.hub_client import HubRequestError
-from app.orchestrator.claim_loop import _ExecutionControls
+from app.orchestrator.claim_loop import ClaimLoopService, _ExecutionControls
 
 
 class _NotFoundHub:
@@ -35,3 +35,15 @@ def test_execution_controls_stop_polling_when_execution_not_found() -> None:
 
     assert hub.calls == 1
     assert controls.is_cancelled("") is True
+
+
+def test_claim_loop_default_max_concurrency_is_three(monkeypatch) -> None:
+    monkeypatch.delenv("WORKER_MAX_CONCURRENCY", raising=False)
+    service = ClaimLoopService()
+    assert service.max_concurrency == 3
+
+
+def test_claim_loop_max_concurrency_can_be_overridden(monkeypatch) -> None:
+    monkeypatch.setenv("WORKER_MAX_CONCURRENCY", "5")
+    service = ClaimLoopService()
+    assert service.max_concurrency == 5

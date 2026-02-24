@@ -3,6 +3,7 @@ import { reactive } from "vue";
 import { resolveDiffCapability } from "@/modules/conversation/services";
 import { createMockId } from "@/shared/services/mockData";
 import type {
+  ConversationDetailResponse,
   ConnectionStatus,
   Conversation,
   ConversationMessage,
@@ -81,7 +82,7 @@ export function ensureConversationRuntime(
   }
 
   const runtime: ConversationRuntime = {
-    messages: createInitialMessages(conversation.id),
+    messages: [],
     events: [],
     executions: [],
     snapshots: [],
@@ -96,6 +97,30 @@ export function ensureConversationRuntime(
   };
 
   conversationStore.byConversationId[conversation.id] = runtime;
+  return runtime;
+}
+
+export function hydrateConversationRuntime(
+  conversation: Conversation,
+  isGitProject: boolean,
+  detail: ConversationDetailResponse
+): ConversationRuntime {
+  const runtime = ensureConversationRuntime(conversation, isGitProject);
+  runtime.mode = detail.conversation.default_mode;
+  runtime.modelId = detail.conversation.model_id;
+  runtime.messages = detail.messages.length > 0 ? detail.messages.map((message) => ({ ...message })) : createInitialMessages(conversation.id);
+  runtime.executions = detail.executions.map((execution) => ({ ...execution }));
+  runtime.snapshots = detail.snapshots.map((snapshot) => ({
+    ...snapshot,
+    messages: snapshot.messages.map((message) => ({ ...message })),
+    execution_snapshots: snapshot.execution_snapshots?.map((item) => ({ ...item })),
+    execution_ids: [...snapshot.execution_ids]
+  }));
+
+  const latestSnapshot = runtime.snapshots[runtime.snapshots.length - 1];
+  runtime.worktreeRef = latestSnapshot?.worktree_ref ?? null;
+  runtime.inspectorTab = latestSnapshot?.inspector_state.tab ?? "diff";
+  runtime.diff = [];
   return runtime;
 }
 
@@ -156,7 +181,9 @@ export function createInitialMessages(conversationId: string): ConversationMessa
 }
 
 export function deriveQueueState(runtime: ConversationRuntime): QueueState {
-  const hasRunning = runtime.executions.some((execution) => execution.state === "executing" || execution.state === "confirming");
+  const hasRunning = runtime.executions.some((execution) =>
+    execution.state === "pending" || execution.state === "executing" || execution.state === "confirming"
+  );
   const hasQueued = runtime.executions.some((execution) => execution.state === "queued");
   if (hasRunning) {
     return "running";
@@ -211,7 +238,37 @@ export function findSnapshotForMessage(conversationId: string, messageId: string
 }
 
 export function countActiveAndQueued(runtime: ConversationRuntime): number {
-  return runtime.executions.filter((execution) => execution.state === "queued" || execution.state === "executing").length;
+  return runtime.executions.filter((execution) =>
+    execution.state === "queued" || execution.state === "pending" || execution.state === "executing" || execution.state === "confirming"
+  ).length;
+}
+
+export function getExecutionStateCounts(runtime: ConversationRuntime): {
+  queued: number;
+  pending: number;
+  executing: number;
+  confirming: number;
+} {
+  return runtime.executions.reduce(
+    (acc, execution) => {
+      if (execution.state === "queued") {
+        acc.queued += 1;
+      } else if (execution.state === "pending") {
+        acc.pending += 1;
+      } else if (execution.state === "executing") {
+        acc.executing += 1;
+      } else if (execution.state === "confirming") {
+        acc.confirming += 1;
+      }
+      return acc;
+    },
+    { queued: 0, pending: 0, executing: 0, confirming: 0 }
+  );
+}
+
+export function hasUnfinishedExecutions(runtime: ConversationRuntime): boolean {
+  const counts = getExecutionStateCounts(runtime);
+  return counts.queued > 0 || counts.pending > 0 || counts.executing > 0 || counts.confirming > 0;
 }
 
 export function getLatestFinishedExecution(conversationId: string): Execution | undefined {

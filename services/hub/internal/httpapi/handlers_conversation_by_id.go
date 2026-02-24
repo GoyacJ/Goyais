@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -16,6 +17,44 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 		}
 		state.mu.RUnlock()
 		switch r.Method {
+		case http.MethodGet:
+			state.mu.RLock()
+			conversation, exists := state.conversations[conversationID]
+			if !exists {
+				state.mu.RUnlock()
+				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
+					"conversation_id": conversationID,
+				})
+				return
+			}
+			messages := cloneMessages(state.conversationMessages[conversationID])
+			snapshots := cloneConversationSnapshots(state.conversationSnapshots[conversationID])
+			executions := append([]Execution{}, listConversationExecutionsLocked(state, conversationID)...)
+			state.mu.RUnlock()
+
+			_, authErr := authorizeAction(
+				state,
+				r,
+				conversation.WorkspaceID,
+				"conversation.read",
+				authorizationResource{WorkspaceID: conversation.WorkspaceID},
+				authorizationContext{OperationType: "read"},
+			)
+			if authErr != nil {
+				authErr.write(w, r)
+				return
+			}
+
+			sortConversationMessages(messages)
+			sortConversationSnapshots(snapshots)
+			sortConversationExecutions(executions)
+
+			writeJSON(w, http.StatusOK, ConversationDetailResponse{
+				Conversation: conversation,
+				Messages:     messages,
+				Executions:   executions,
+				Snapshots:    snapshots,
+			})
 		case http.MethodPatch:
 			_, authErr := authorizeAction(
 				state,
@@ -136,4 +175,48 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			})
 		}
 	}
+}
+
+func cloneConversationSnapshots(items []ConversationSnapshot) []ConversationSnapshot {
+	result := make([]ConversationSnapshot, 0, len(items))
+	for _, item := range items {
+		copyItem := item
+		copyItem.Messages = cloneMessages(item.Messages)
+		copyItem.ExecutionIDs = append([]string{}, item.ExecutionIDs...)
+		result = append(result, copyItem)
+	}
+	return result
+}
+
+func sortConversationMessages(items []ConversationMessage) {
+	sort.SliceStable(items, func(i, j int) bool {
+		cmp := compareTimestamp(items[i].CreatedAt, items[j].CreatedAt)
+		if cmp == 0 {
+			return items[i].ID < items[j].ID
+		}
+		return cmp < 0
+	})
+}
+
+func sortConversationSnapshots(items []ConversationSnapshot) {
+	sort.SliceStable(items, func(i, j int) bool {
+		cmp := compareTimestamp(items[i].CreatedAt, items[j].CreatedAt)
+		if cmp == 0 {
+			return items[i].ID < items[j].ID
+		}
+		return cmp < 0
+	})
+}
+
+func sortConversationExecutions(items []Execution) {
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].QueueIndex != items[j].QueueIndex {
+			return items[i].QueueIndex < items[j].QueueIndex
+		}
+		cmp := compareTimestamp(items[i].CreatedAt, items[j].CreatedAt)
+		if cmp == 0 {
+			return items[i].ID < items[j].ID
+		}
+		return cmp < 0
+	})
 }

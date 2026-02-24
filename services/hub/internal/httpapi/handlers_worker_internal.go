@@ -148,13 +148,14 @@ func InternalExecutionClaimHandler(state *AppState) http.HandlerFunc {
 		}
 		state.executionLeases[executionID] = lease
 		content := lookupExecutionContentLocked(state, execution)
-		projectPath, projectIsGit := lookupProjectExecutionContextLocked(state, execution)
+		projectPath, projectIsGit, projectName := lookupProjectExecutionContextLocked(state, execution)
 		state.mu.Unlock()
 		execution = hydrateExecutionModelSnapshotForWorker(state, execution)
 		envelope := ExecutionClaimEnvelope{
 			Execution:    execution,
 			Lease:        lease,
 			Content:      content,
+			ProjectName:  projectName,
 			ProjectPath:  projectPath,
 			ProjectIsGit: projectIsGit,
 		}

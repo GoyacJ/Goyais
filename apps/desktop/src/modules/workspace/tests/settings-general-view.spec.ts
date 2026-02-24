@@ -3,10 +3,14 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import SettingsGeneralView from "@/modules/workspace/views/SettingsGeneralView.vue";
 import { setLocale } from "@/shared/i18n";
+import { resetAuthStore } from "@/shared/stores/authStore";
+import { resetWorkspaceStore } from "@/shared/stores/workspaceStore";
 
 describe("settings general view", () => {
   beforeEach(async () => {
     window.localStorage.clear();
+    resetWorkspaceStore();
+    resetAuthStore();
     setLocale("zh-CN");
     const mod = await import("@/modules/workspace/store/generalSettingsStore");
     mod.resetGeneralSettingsStoreForTest();

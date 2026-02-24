@@ -45,6 +45,23 @@ func (s *authzStore) getWorkspace(workspaceID string) (Workspace, bool, error) {
 	return item, true, nil
 }
 
+func (s *authzStore) getWorkspaceConnection(workspaceID string) (WorkspaceConnection, bool, error) {
+	row := s.db.QueryRow(
+		`SELECT workspace_id, hub_url, username, connection_status, connected_at
+		 FROM workspace_connections
+		 WHERE workspace_id=?`,
+		strings.TrimSpace(workspaceID),
+	)
+	item, err := scanWorkspaceConnection(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return WorkspaceConnection{}, false, nil
+		}
+		return WorkspaceConnection{}, false, err
+	}
+	return item, true, nil
+}
+
 func (s *authzStore) hasRemoteWorkspace() (bool, error) {
 	row := s.db.QueryRow(`SELECT COUNT(1) FROM workspaces WHERE mode=?`, string(WorkspaceModeRemote))
 	count := 0
@@ -147,6 +164,20 @@ func scanWorkspace(scanner workspaceScanner) (Workspace, error) {
 	if hubURL.Valid && strings.TrimSpace(hubURL.String) != "" {
 		value := strings.TrimSpace(hubURL.String)
 		item.HubURL = &value
+	}
+	return item, nil
+}
+
+func scanWorkspaceConnection(scanner workspaceScanner) (WorkspaceConnection, error) {
+	item := WorkspaceConnection{}
+	if err := scanner.Scan(
+		&item.WorkspaceID,
+		&item.HubURL,
+		&item.Username,
+		&item.ConnectionStatus,
+		&item.ConnectedAt,
+	); err != nil {
+		return WorkspaceConnection{}, err
 	}
 	return item, nil
 }

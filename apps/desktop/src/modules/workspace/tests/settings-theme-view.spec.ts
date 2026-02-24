@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import SettingsThemeView from "@/modules/workspace/views/SettingsThemeView.vue";
 import { setLocale } from "@/shared/i18n";
+import { resetAuthStore } from "@/shared/stores/authStore";
+import { resetWorkspaceStore } from "@/shared/stores/workspaceStore";
 import { initializeTheme, resetThemeSettings } from "@/shared/stores/themeStore";
 
 const THEME_SETTINGS_STORAGE_KEY = "goyais.theme.settings.v1";
@@ -35,6 +37,8 @@ describe("settings theme view", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
     window.localStorage.clear();
+    resetWorkspaceStore();
+    resetAuthStore();
     clearThemeAttributes();
     mockMatchMedia(false);
     setLocale("zh-CN");

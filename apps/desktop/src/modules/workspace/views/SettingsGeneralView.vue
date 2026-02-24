@@ -3,6 +3,11 @@
     active-key="settings_general"
     :title="t('menu.settingsGeneral')"
     :subtitle="`${t('settings.scope')} / General`"
+    runtime-status-mode
+    :runtime-conversation-status="workspaceStatus.conversationStatus.value"
+    :runtime-connection-status="workspaceStatus.connectionStatus.value"
+    :runtime-user-display-name="workspaceStatus.userDisplayName.value"
+    :runtime-hub-url="workspaceStatus.hubURL.value"
   >
     <div class="general-scroll">
       <GeneralSettingsSection
@@ -183,10 +188,14 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
+
+import { projectStore } from "@/modules/project/store";
 import GeneralSettingsRow from "@/modules/workspace/components/general/GeneralSettingsRow.vue";
 import GeneralSettingsSection from "@/modules/workspace/components/general/GeneralSettingsSection.vue";
 import { useSettingsGeneralViewModel } from "@/modules/workspace/views/useSettingsGeneralViewModel";
 import SettingsShell from "@/shared/shells/SettingsShell.vue";
+import { useWorkspaceStatusSync } from "@/shared/stores/workspaceStatusStore";
 import BaseButton from "@/shared/ui/BaseButton.vue";
 import BaseInput from "@/shared/ui/BaseInput.vue";
 import BaseSelect from "@/shared/ui/BaseSelect.vue";
@@ -221,6 +230,10 @@ const {
   checkVersion,
   resetAll
 } = useSettingsGeneralViewModel();
+
+const workspaceStatus = useWorkspaceStatusSync({
+  conversationId: computed(() => projectStore.activeConversationId)
+});
 </script>
 
 <style scoped>

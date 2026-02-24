@@ -12,6 +12,7 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	requiredMarkers := []string{
 		"/v1/workspaces/remote-connections:",
+		"/v1/workspaces/{workspace_id}/status:",
 		"/v1/auth/refresh:",
 		"/v1/auth/logout:",
 		"/v1/me/permissions:",
@@ -19,6 +20,7 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/projects/{project_id}/conversations:",
 		"/v1/projects/{project_id}/files:",
 		"/v1/projects/{project_id}/files/content:",
+		"/v1/conversations/{conversation_id}:",
 		"/v1/conversations/{conversation_id}/messages:",
 		"/v1/conversations/{conversation_id}/events:",
 		"/v1/conversations/{conversation_id}/stop:",
@@ -56,6 +58,26 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 	}
 }
 
+func TestOpenAPIConversationDetailResponseShape(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"ConversationDetailResponse:",
+		"conversation:",
+		"$ref: '#/components/schemas/Conversation'",
+		"messages:",
+		"$ref: '#/components/schemas/ConversationMessage'",
+		"executions:",
+		"$ref: '#/components/schemas/Execution'",
+		"snapshots:",
+		"$ref: '#/components/schemas/ConversationSnapshot'",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing conversation detail marker: %s", marker)
+		}
+	}
+}
+
 func TestOpenAPIRemoteConnectionResponseShape(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	requiredMarkers := []string{
@@ -69,6 +91,22 @@ func TestOpenAPIRemoteConnectionResponseShape(t *testing.T) {
 	for _, marker := range requiredMarkers {
 		if !strings.Contains(spec, marker) {
 			t.Fatalf("openapi missing remote connection marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPIWorkspaceStatusResponseShape(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"WorkspaceStatusResponse:",
+		"conversation_status:",
+		"$ref: '#/components/schemas/ConversationStatus'",
+		"connection_status:",
+		"user_display_name:",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing workspace status marker: %s", marker)
 		}
 	}
 }

@@ -5,6 +5,8 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,7 +16,9 @@ import (
 )
 
 const (
-	defaultHubDBPath       = "data/hub.sqlite3"
+	defaultHubDBAppName    = "goyais"
+	defaultHubDBFileName   = "hub.sqlite3"
+	legacyHubDBPath        = "data/hub.sqlite3"
 	defaultAccessTokenTTL  = time.Hour
 	defaultRefreshTokenTTL = 24 * time.Hour
 )
@@ -25,7 +29,7 @@ type authzStore struct {
 
 func openAuthzStore(path string) (*authzStore, error) {
 	if strings.TrimSpace(path) == "" {
-		path = defaultHubDBPath
+		path = resolveHubDBPathFromEnv()
 	}
 
 	dsn := path
@@ -33,6 +37,9 @@ func openAuthzStore(path string) (*authzStore, error) {
 		absPath, err := filepath.Abs(path)
 		if err != nil {
 			return nil, fmt.Errorf("resolve db path: %w", err)
+		}
+		if err := migrateLegacyHubDBPath(absPath); err != nil {
+			return nil, fmt.Errorf("migrate legacy db path: %w", err)
 		}
 
 		if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
@@ -583,9 +590,99 @@ func (s *authzStore) ensureWorkspaceSeeds(workspaceID string) error {
 func resolveHubDBPathFromEnv() string {
 	path := strings.TrimSpace(os.Getenv("HUB_DB_PATH"))
 	if path == "" {
-		return defaultHubDBPath
+		return defaultHubDBPath()
 	}
 	return path
+}
+
+func defaultHubDBPath() string {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return legacyHubDBPath
+	}
+	configDir = strings.TrimSpace(configDir)
+	if configDir == "" {
+		return legacyHubDBPath
+	}
+	return filepath.Join(configDir, defaultHubDBAppName, defaultHubDBFileName)
+}
+
+func migrateLegacyHubDBPath(targetAbsPath string) error {
+	normalizedTarget := filepath.Clean(strings.TrimSpace(targetAbsPath))
+	if normalizedTarget == "" {
+		return nil
+	}
+
+	legacyAbsPath, err := filepath.Abs(legacyHubDBPath)
+	if err != nil {
+		return fmt.Errorf("resolve legacy db path: %w", err)
+	}
+	if filepath.Clean(legacyAbsPath) == normalizedTarget {
+		return nil
+	}
+
+	if _, err := os.Stat(normalizedTarget); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("check target db path: %w", err)
+	}
+
+	if _, err := os.Stat(legacyAbsPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("check legacy db path: %w", err)
+	}
+
+	if err := copyFilePreserveMode(legacyAbsPath, normalizedTarget); err != nil {
+		return err
+	}
+	log.Printf("audit: migrated hub sqlite db from %s to %s", legacyAbsPath, normalizedTarget)
+	return nil
+}
+
+func copyFilePreserveMode(sourcePath string, targetPath string) error {
+	sourceFile, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("open legacy db file: %w", err)
+	}
+	defer sourceFile.Close()
+
+	stat, err := sourceFile.Stat()
+	if err != nil {
+		return fmt.Errorf("stat legacy db file: %w", err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return fmt.Errorf("create target db directory: %w", err)
+	}
+
+	perm := stat.Mode().Perm()
+	if perm == 0 {
+		perm = 0o600
+	}
+	targetFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, perm)
+	if err != nil {
+		return fmt.Errorf("create target db file: %w", err)
+	}
+
+	_, copyErr := io.Copy(targetFile, sourceFile)
+	syncErr := targetFile.Sync()
+	closeErr := targetFile.Close()
+
+	if copyErr != nil {
+		_ = os.Remove(targetPath)
+		return fmt.Errorf("copy legacy db file: %w", copyErr)
+	}
+	if syncErr != nil {
+		_ = os.Remove(targetPath)
+		return fmt.Errorf("sync target db file: %w", syncErr)
+	}
+	if closeErr != nil {
+		_ = os.Remove(targetPath)
+		return fmt.Errorf("close target db file: %w", closeErr)
+	}
+	return nil
 }
 
 func boolToInt(value bool) int {

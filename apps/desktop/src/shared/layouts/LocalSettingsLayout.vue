@@ -11,7 +11,10 @@
           </div>
         </template>
         <template #right>
-          <div class="chips">
+          <div v-if="runtimeStatusMode" class="chips">
+            <StatusBadge :tone="conversationStatusTone" :label="`conversation: ${runtimeConversationStatus}`" />
+          </div>
+          <div v-else class="chips">
             <StatusBadge tone="running" label="scope: local_workspace" />
             <span class="mode-tag">Local</span>
           </div>
@@ -22,24 +25,61 @@
         <slot />
       </main>
 
-      <HubStatusBar />
+      <HubStatusBar
+        :runtime-mode="runtimeStatusMode"
+        :hub-label="runtimeHubUrl"
+        :user-label="runtimeUserDisplayName"
+        :connection-status="runtimeConnectionStatus"
+      />
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
+
 import type { MenuEntry } from "@/shared/navigation/pageMenus";
 import LocalSettingsSidebar from "@/shared/layouts/LocalSettingsSidebar.vue";
+import type { ConnectionStatus, ConversationStatus } from "@/shared/types/api";
 import HubStatusBar from "@/shared/ui/HubStatusBar.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import Topbar from "@/shared/ui/Topbar.vue";
 
-defineProps<{
+const props = withDefaults(
+  defineProps<{
   title: string;
   subtitle: string;
   activeKey: string;
   menuEntries: MenuEntry[];
-}>();
+    runtimeStatusMode?: boolean;
+    runtimeConversationStatus?: ConversationStatus;
+    runtimeConnectionStatus?: ConnectionStatus;
+    runtimeUserDisplayName?: string;
+    runtimeHubUrl?: string;
+  }>(),
+  {
+    runtimeStatusMode: false,
+    runtimeConversationStatus: "stopped",
+    runtimeConnectionStatus: "disconnected",
+    runtimeUserDisplayName: "",
+    runtimeHubUrl: ""
+  }
+);
+
+const conversationStatusTone = computed(() => {
+  switch (props.runtimeConversationStatus) {
+    case "running":
+      return "running";
+    case "queued":
+      return "queued";
+    case "done":
+      return "success";
+    case "error":
+      return "failed";
+    default:
+      return "cancelled";
+  }
+});
 </script>
 
 <style scoped>

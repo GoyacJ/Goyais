@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -110,6 +111,263 @@ func WorkspacesRemoteConnectionsHandler(state *AppState) http.HandlerFunc {
 		state.AppendWorkspaceSwitchAudit(workspace.ID, username, traceID)
 		writeJSON(w, http.StatusOK, result)
 	}
+}
+
+func WorkspaceStatusHandler(state *AppState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			WriteStandardError(
+				w,
+				r,
+				http.StatusNotImplemented,
+				"INTERNAL_NOT_IMPLEMENTED",
+				"Route is not implemented yet",
+				map[string]any{"method": r.Method, "path": r.URL.Path},
+			)
+			return
+		}
+
+		workspaceID := strings.TrimSpace(r.PathValue("workspace_id"))
+		if workspaceID == "" {
+			WriteStandardError(
+				w,
+				r,
+				http.StatusBadRequest,
+				"VALIDATION_ERROR",
+				"workspace_id is required",
+				map[string]any{"field": "workspace_id"},
+			)
+			return
+		}
+
+		workspace, exists := state.GetWorkspace(workspaceID)
+		if !exists {
+			WriteStandardError(
+				w,
+				r,
+				http.StatusNotFound,
+				"WORKSPACE_NOT_FOUND",
+				"Workspace does not exist",
+				map[string]any{"workspace_id": workspaceID},
+			)
+			return
+		}
+
+		session, authErr := authorizeAction(
+			state,
+			r,
+			workspaceID,
+			"conversation.read",
+			authorizationResource{WorkspaceID: workspaceID},
+			authorizationContext{OperationType: "read"},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
+
+		requestedConversationID := strings.TrimSpace(r.URL.Query().Get("conversation_id"))
+		conversationID, conversationStatus, conversationErr := resolveWorkspaceConversationStatus(state, workspaceID, requestedConversationID)
+		if conversationErr != nil {
+			conversationErr.write(w, r)
+			return
+		}
+
+		hubURL, connectionStatus := resolveWorkspaceConnectionStatus(state, workspace)
+		response := WorkspaceStatusResponse{
+			WorkspaceID:        workspaceID,
+			ConversationID:     conversationID,
+			ConversationStatus: conversationStatus,
+			HubURL:             hubURL,
+			ConnectionStatus:   connectionStatus,
+			UserDisplayName: firstNonEmpty(
+				strings.TrimSpace(session.DisplayName),
+				strings.TrimSpace(session.UserID),
+				"local-user",
+			),
+			UpdatedAt: nowUTC(),
+		}
+
+		writeJSON(w, http.StatusOK, response)
+	}
+}
+
+func resolveWorkspaceConversationStatus(state *AppState, workspaceID string, requestedConversationID string) (string, ConversationStatus, *apiError) {
+	state.mu.RLock()
+	defer state.mu.RUnlock()
+
+	if requestedConversationID != "" {
+		conversation, exists := state.conversations[requestedConversationID]
+		if !exists || strings.TrimSpace(conversation.WorkspaceID) != workspaceID {
+			return "", ConversationStatusStopped, &apiError{
+				status:  http.StatusNotFound,
+				code:    "CONVERSATION_NOT_FOUND",
+				message: "Conversation does not exist",
+				details: map[string]any{
+					"workspace_id":    workspaceID,
+					"conversation_id": requestedConversationID,
+				},
+			}
+		}
+		return requestedConversationID, deriveConversationStatusLocked(state, requestedConversationID), nil
+	}
+
+	selectedID := selectWorkspaceConversationIDLocked(state, workspaceID)
+	if selectedID == "" {
+		return "", ConversationStatusStopped, nil
+	}
+	return selectedID, deriveConversationStatusLocked(state, selectedID), nil
+}
+
+func selectWorkspaceConversationIDLocked(state *AppState, workspaceID string) string {
+	var withActiveExecution []Conversation
+	var all []Conversation
+	for _, item := range state.conversations {
+		if strings.TrimSpace(item.WorkspaceID) != workspaceID {
+			continue
+		}
+		all = append(all, item)
+		if item.ActiveExecutionID != nil && strings.TrimSpace(*item.ActiveExecutionID) != "" {
+			withActiveExecution = append(withActiveExecution, item)
+		}
+	}
+
+	if len(withActiveExecution) > 0 {
+		sort.SliceStable(withActiveExecution, func(i, j int) bool {
+			return compareTimestamp(withActiveExecution[i].UpdatedAt, withActiveExecution[j].UpdatedAt) > 0
+		})
+		return withActiveExecution[0].ID
+	}
+
+	if len(all) == 0 {
+		return ""
+	}
+	sort.SliceStable(all, func(i, j int) bool {
+		return compareTimestamp(all[i].UpdatedAt, all[j].UpdatedAt) > 0
+	})
+	return all[0].ID
+}
+
+func deriveConversationStatusLocked(state *AppState, conversationID string) ConversationStatus {
+	executions := listConversationExecutionsLocked(state, conversationID)
+	if len(executions) == 0 {
+		return ConversationStatusStopped
+	}
+
+	var latest *Execution
+	hasRunning := false
+	hasQueued := false
+	for i := range executions {
+		execution := executions[i]
+		switch execution.State {
+		case ExecutionStateExecuting, ExecutionStateConfirming:
+			hasRunning = true
+		case ExecutionStateQueued, ExecutionStatePending:
+			hasQueued = true
+		}
+
+		if latest == nil || compareTimestamp(execution.UpdatedAt, latest.UpdatedAt) > 0 {
+			current := execution
+			latest = &current
+		}
+	}
+
+	if hasRunning {
+		return ConversationStatusRunning
+	}
+	if hasQueued {
+		return ConversationStatusQueued
+	}
+	if latest == nil {
+		return ConversationStatusStopped
+	}
+
+	switch latest.State {
+	case ExecutionStateCompleted:
+		return ConversationStatusDone
+	case ExecutionStateFailed:
+		return ConversationStatusError
+	default:
+		return ConversationStatusStopped
+	}
+}
+
+func listConversationExecutionsLocked(state *AppState, conversationID string) []Execution {
+	order := state.conversationExecutionOrder[conversationID]
+	if len(order) > 0 {
+		items := make([]Execution, 0, len(order))
+		for _, executionID := range order {
+			execution, exists := state.executions[executionID]
+			if !exists {
+				continue
+			}
+			items = append(items, execution)
+		}
+		return items
+	}
+
+	items := make([]Execution, 0)
+	for _, execution := range state.executions {
+		if execution.ConversationID != conversationID {
+			continue
+		}
+		items = append(items, execution)
+	}
+	return items
+}
+
+func resolveWorkspaceConnectionStatus(state *AppState, workspace Workspace) (string, string) {
+	if workspace.Mode == WorkspaceModeLocal {
+		return "local://workspace", "connected"
+	}
+
+	hubURL := strings.TrimSpace(derefString(workspace.HubURL))
+	connectionStatus := "disconnected"
+	if state.authz != nil {
+		connection, exists, err := state.authz.getWorkspaceConnection(workspace.ID)
+		if err == nil && exists {
+			if strings.TrimSpace(connection.HubURL) != "" {
+				hubURL = strings.TrimSpace(connection.HubURL)
+			}
+			if strings.TrimSpace(connection.ConnectionStatus) != "" {
+				connectionStatus = strings.TrimSpace(connection.ConnectionStatus)
+			}
+		}
+	}
+
+	if hubURL == "" {
+		hubURL = "local://workspace"
+	}
+	return hubURL, connectionStatus
+}
+
+func compareTimestamp(left string, right string) int {
+	leftTime, leftOK := parseTimestamp(left)
+	rightTime, rightOK := parseTimestamp(right)
+	if leftOK && rightOK {
+		if leftTime.After(rightTime) {
+			return 1
+		}
+		if leftTime.Before(rightTime) {
+			return -1
+		}
+		return 0
+	}
+	if leftOK {
+		return 1
+	}
+	if rightOK {
+		return -1
+	}
+	return strings.Compare(left, right)
+}
+
+func parseTimestamp(raw string) (time.Time, bool) {
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(raw))
+	if err != nil {
+		return time.Time{}, false
+	}
+	return parsed, true
 }
 
 func resolveWorkspaceForConnect(state *AppState, input RemoteConnectRequest) (Workspace, *apiError) {

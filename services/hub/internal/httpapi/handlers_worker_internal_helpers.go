@@ -59,14 +59,14 @@ func lookupExecutionContentLocked(state *AppState, execution Execution) string {
 	return ""
 }
 
-func lookupProjectExecutionContextLocked(state *AppState, execution Execution) (string, bool) {
+func lookupProjectExecutionContextLocked(state *AppState, execution Execution) (string, bool, string) {
 	conversation, exists := state.conversations[execution.ConversationID]
 	if !exists {
-		return "", false
+		return "", false, ""
 	}
 	project, exists := state.projects[conversation.ProjectID]
 	if !exists {
-		return "", false
+		return "", false, ""
 	}
-	return project.RepoPath, project.IsGit
+	return project.RepoPath, project.IsGit, project.Name
 }

@@ -26,6 +26,7 @@ func newRouterWithDBPath(dbPath string) http.Handler {
 	// Workspace and auth
 	mux.HandleFunc("/v1/workspaces", WorkspacesHandler(state))
 	mux.HandleFunc("/v1/workspaces/remote-connections", WorkspacesRemoteConnectionsHandler(state))
+	mux.HandleFunc("/v1/workspaces/{workspace_id}/status", WorkspaceStatusHandler(state))
 	// Backward-compatible route during migration
 	mux.HandleFunc("/v1/workspaces/remote/connect", WorkspacesRemoteConnectionsHandler(state))
 	mux.HandleFunc("/v1/auth/login", AuthLoginHandler(state))

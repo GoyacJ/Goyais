@@ -1,5 +1,8 @@
 export {
   clearConversationTimer,
+  getExecutionStateCounts,
+  hasUnfinishedExecutions,
+  hydrateConversationRuntime,
   conversationStore,
   findSnapshotForMessage,
   pushConversationSnapshot,

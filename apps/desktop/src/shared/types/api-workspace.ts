@@ -1,4 +1,4 @@
-import type { AuthMode, ConnectionStatus, Role, WorkspaceMode } from "@/shared/types/api-common";
+import type { AuthMode, ConnectionStatus, ConversationStatus, Role, WorkspaceMode } from "@/shared/types/api-common";
 
 export type Workspace = {
   id: string;
@@ -24,6 +24,16 @@ export type WorkspaceConnectionResult = {
   workspace: Workspace;
   connection: WorkspaceConnection;
   access_token?: string;
+};
+
+export type WorkspaceStatusResponse = {
+  workspace_id: string;
+  conversation_id?: string;
+  conversation_status: ConversationStatus;
+  hub_url: string;
+  connection_status: ConnectionStatus;
+  user_display_name: string;
+  updated_at: string;
 };
 
 export type CreateWorkspaceRequest = {

@@ -113,6 +113,26 @@ type WorkspaceConnectionResult struct {
 	AccessToken string              `json:"access_token,omitempty"`
 }
 
+type ConversationStatus string
+
+const (
+	ConversationStatusRunning ConversationStatus = "running"
+	ConversationStatusQueued  ConversationStatus = "queued"
+	ConversationStatusStopped ConversationStatus = "stopped"
+	ConversationStatusDone    ConversationStatus = "done"
+	ConversationStatusError   ConversationStatus = "error"
+)
+
+type WorkspaceStatusResponse struct {
+	WorkspaceID        string             `json:"workspace_id"`
+	ConversationID     string             `json:"conversation_id,omitempty"`
+	ConversationStatus ConversationStatus `json:"conversation_status"`
+	HubURL             string             `json:"hub_url"`
+	ConnectionStatus   string             `json:"connection_status"`
+	UserDisplayName    string             `json:"user_display_name"`
+	UpdatedAt          string             `json:"updated_at"`
+}
+
 type CreateWorkspaceRequest struct {
 	Name          string   `json:"name"`
 	HubURL        string   `json:"hub_url"`
@@ -241,6 +261,13 @@ type Conversation struct {
 	ActiveExecutionID *string          `json:"active_execution_id"`
 	CreatedAt         string           `json:"created_at"`
 	UpdatedAt         string           `json:"updated_at"`
+}
+
+type ConversationDetailResponse struct {
+	Conversation Conversation           `json:"conversation"`
+	Messages     []ConversationMessage  `json:"messages"`
+	Executions   []Execution            `json:"executions"`
+	Snapshots    []ConversationSnapshot `json:"snapshots"`
 }
 
 type MessageRole string
@@ -428,6 +455,7 @@ type ExecutionClaimEnvelope struct {
 	Execution    Execution      `json:"execution"`
 	Lease        ExecutionLease `json:"lease"`
 	Content      string         `json:"content"`
+	ProjectName  string         `json:"project_name,omitempty"`
 	ProjectPath  string         `json:"project_path,omitempty"`
 	ProjectIsGit bool           `json:"project_is_git"`
 }

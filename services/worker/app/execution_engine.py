@@ -76,7 +76,7 @@ async def run_execution_loop(
 
         invocation = resolve_model_invocation(execution)
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": _build_system_prompt(execution)},
             {"role": "user", "content": content},
         ]
         diffs: list[dict[str, Any]] = []
@@ -292,3 +292,17 @@ async def _resolve_risk_confirmation(
         )
         return decision
     return "approve"
+
+
+def _build_system_prompt(execution: dict[str, Any]) -> str:
+    project_name = str(execution.get("project_name") or "").strip()
+    project_path = str(execution.get("project_path") or execution.get("working_directory") or "").strip()
+
+    context_parts: list[str] = []
+    if project_name != "":
+        context_parts.append(f"Current project name: {project_name}.")
+    if project_path != "":
+        context_parts.append(f"Current project path: {project_path}.")
+    if len(context_parts) == 0:
+        return SYSTEM_PROMPT
+    return f"{SYSTEM_PROMPT} {' '.join(context_parts)} Use this context when answering project-scoped questions."

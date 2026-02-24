@@ -5,7 +5,7 @@
       Hub: {{ hubLabel }}
     </span>
     <span class="right">
-      <span>{{ roleLabel }}</span>
+      <span>{{ identityLabel }}</span>
       <span class="dot" :class="connectionClass"></span>
       <span :class="connectionClass">{{ connectionLabel }}</span>
     </span>
@@ -17,17 +17,30 @@ import { computed } from "vue";
 
 import { authStore } from "@/shared/stores/authStore";
 import { getCurrentWorkspace, workspaceStore, type ConnectionState } from "@/shared/stores/workspaceStore";
+import type { ConnectionStatus } from "@/shared/types/api";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 
-const props = defineProps<{
-  hubLabel?: string;
-  roleLabel?: string;
-  connectionState?: ConnectionState;
-}>();
+const props = withDefaults(
+  defineProps<{
+    runtimeMode?: boolean;
+    hubLabel?: string;
+    roleLabel?: string;
+    userLabel?: string;
+    connectionState?: ConnectionState;
+    connectionStatus?: ConnectionStatus;
+  }>(),
+  {
+    runtimeMode: false
+  }
+);
 
 const resolvedConnectionState = computed(() => props.connectionState ?? workspaceStore.connectionState);
 
-const connectionLabel = computed(() => {
+const connectionLabel = computed<ConnectionStatus>(() => {
+  if (props.connectionStatus === "connected" || props.connectionStatus === "reconnecting" || props.connectionStatus === "disconnected") {
+    return props.connectionStatus;
+  }
+
   if (resolvedConnectionState.value === "ready") {
     return "connected";
   }
@@ -51,7 +64,26 @@ const hubLabel = computed(() => {
   return props.hubLabel ?? getCurrentWorkspace()?.hub_url ?? "local://workspace";
 });
 
-const roleLabel = computed(() => props.roleLabel ?? authStore.me?.role ?? "Owner");
+const identityLabel = computed(() => {
+  if (props.runtimeMode) {
+    return firstNonEmpty(
+      (props.userLabel ?? "").trim(),
+      (authStore.me?.display_name ?? "").trim(),
+      (authStore.me?.user_id ?? "").trim(),
+      "local-user"
+    );
+  }
+  return props.roleLabel ?? authStore.me?.role ?? "Owner";
+});
+
+function firstNonEmpty(...values: string[]): string {
+  for (const value of values) {
+    if (value !== "") {
+      return value;
+    }
+  }
+  return "";
+}
 </script>
 
 <style scoped>

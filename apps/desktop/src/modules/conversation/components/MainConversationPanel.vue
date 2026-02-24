@@ -26,8 +26,20 @@
         </div>
       </div>
 
+      <div v-if="executionHint !== ''" class="message-row assistant">
+        <div class="message-body">
+          <div class="bubble-head">
+            <AppIcon name="bot" :size="12" />
+            <span>{{ assistantModelLabel }}</span>
+          </div>
+          <div class="bubble execution-hint">
+            <p>{{ executionHint }}</p>
+          </div>
+        </div>
+      </div>
+
       <div v-if="hasActiveExecution" class="queue-chip">
-        <StatusBadge tone="queued" :label="queuedCount > 0 ? `运行中，队列 ${queuedCount}` : '运行中，可停止'" />
+        <StatusBadge tone="queued" :label="queueChipLabel" />
       </div>
     </div>
 
@@ -87,6 +99,9 @@ const props = withDefaults(
   defineProps<{
     messages: ConversationMessage[];
     queuedCount: number;
+    pendingCount: number;
+    executingCount: number;
+    confirmingCount: number;
     hasActiveExecution: boolean;
     draft: string;
     mode: ConversationMode;
@@ -117,6 +132,24 @@ const assistantModelLabel = computed(() => {
   }
   const selected = modelSelectOptions.value.find((item) => item.value === normalized);
   return selected?.label ?? normalized;
+});
+const executionHint = computed(() => {
+  if (props.confirmingCount > 0) {
+    return "等待风险确认…";
+  }
+  if (props.pendingCount > 0 || props.executingCount > 0) {
+    return "正在思考…";
+  }
+  return "";
+});
+const queueChipLabel = computed(() => {
+  if (props.confirmingCount > 0) {
+    return props.queuedCount > 0 ? `等待确认，队列 ${props.queuedCount}` : "等待确认";
+  }
+  if (props.queuedCount > 0) {
+    return `运行中，队列 ${props.queuedCount}`;
+  }
+  return "运行中，可停止";
 });
 
 const emit = defineEmits<{

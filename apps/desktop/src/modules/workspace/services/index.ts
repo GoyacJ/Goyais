@@ -8,6 +8,7 @@ import type {
   LoginResponse,
   LogoutRequest,
   PaginationQuery,
+  WorkspaceStatusResponse,
   RefreshRequest,
   WorkspaceConnectionResult,
   Workspace
@@ -69,6 +70,30 @@ export async function createRemoteConnection(input: CreateWorkspaceRequest): Pro
       };
     }
   );
+}
+
+export async function getWorkspaceStatus(
+  workspaceId: string,
+  options: {
+    conversationId?: string;
+    token?: string;
+  } = {}
+): Promise<WorkspaceStatusResponse> {
+  const normalizedWorkspaceID = workspaceId.trim();
+  if (normalizedWorkspaceID === "") {
+    throw new Error("workspace_id is required");
+  }
+
+  const params = new URLSearchParams();
+  const conversationID = options.conversationId?.trim() ?? "";
+  if (conversationID !== "") {
+    params.set("conversation_id", conversationID);
+  }
+  const query = params.toString() === "" ? "" : `?${params.toString()}`;
+
+  return getControlClient().get<WorkspaceStatusResponse>(`/v1/workspaces/${normalizedWorkspaceID}/status${query}`, {
+    token: options.token?.trim() === "" ? undefined : options.token
+  });
 }
 
 export async function createRemoteWorkspace(input: { name: string; hub_url: string }): Promise<Workspace> {

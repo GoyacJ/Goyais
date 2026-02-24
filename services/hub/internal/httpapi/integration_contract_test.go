@@ -707,6 +707,104 @@ func TestConversationPatchSupportsModeAndModel(t *testing.T) {
 	}
 }
 
+func TestConversationDetailEndpointReturnsMessagesExecutionsAndSnapshots(t *testing.T) {
+	router := NewRouter()
+	workspaceID := createRemoteWorkspace(t, router, "Remote Conversation Detail", "http://127.0.0.1:9015", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "conversation_detail_user", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
+		"workspace_id":   workspaceID,
+		"directory_path": "/tmp/conversation-detail-alpha",
+	}, authHeaders)
+	if projectRes.Code != http.StatusCreated {
+		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
+	}
+	projectPayload := map[string]any{}
+	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
+	projectID := projectPayload["id"].(string)
+
+	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+		"workspace_id": workspaceID,
+		"name":         "Detail Target",
+	}, authHeaders)
+	if convRes.Code != http.StatusCreated {
+		t.Fatalf("expected create conversation 201, got %d (%s)", convRes.Code, convRes.Body.String())
+	}
+	convPayload := map[string]any{}
+	mustDecodeJSON(t, convRes.Body.Bytes(), &convPayload)
+	conversationID := convPayload["id"].(string)
+
+	msg1 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
+		"content":  "hello detail",
+		"mode":     "agent",
+		"model_id": "gpt-4.1",
+	}, authHeaders)
+	if msg1.Code != http.StatusCreated {
+		t.Fatalf("expected first message 201, got %d (%s)", msg1.Code, msg1.Body.String())
+	}
+
+	msg2 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
+		"content":  "second detail",
+		"mode":     "agent",
+		"model_id": "gpt-4.1",
+	}, authHeaders)
+	if msg2.Code != http.StatusCreated {
+		t.Fatalf("expected second message 201, got %d (%s)", msg2.Code, msg2.Body.String())
+	}
+
+	detailRes := performJSONRequest(t, router, http.MethodGet, "/v1/conversations/"+conversationID, nil, authHeaders)
+	if detailRes.Code != http.StatusOK {
+		t.Fatalf("expected conversation detail 200, got %d (%s)", detailRes.Code, detailRes.Body.String())
+	}
+	detailPayload := map[string]any{}
+	mustDecodeJSON(t, detailRes.Body.Bytes(), &detailPayload)
+
+	conversation, ok := detailPayload["conversation"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected conversation object, got %#v", detailPayload["conversation"])
+	}
+	if gotID := strings.TrimSpace(asString(conversation["id"])); gotID != conversationID {
+		t.Fatalf("expected conversation id %s, got %s", conversationID, gotID)
+	}
+
+	messages, ok := detailPayload["messages"].([]any)
+	if !ok || len(messages) < 2 {
+		t.Fatalf("expected at least 2 messages, got %#v", detailPayload["messages"])
+	}
+	foundUserMessage := false
+	for _, item := range messages {
+		message, castOK := item.(map[string]any)
+		if !castOK {
+			continue
+		}
+		if strings.TrimSpace(asString(message["content"])) == "hello detail" {
+			foundUserMessage = true
+			break
+		}
+	}
+	if !foundUserMessage {
+		t.Fatalf("expected message list to contain user content 'hello detail', got %#v", messages)
+	}
+
+	executions, ok := detailPayload["executions"].([]any)
+	if !ok || len(executions) != 2 {
+		t.Fatalf("expected 2 executions, got %#v", detailPayload["executions"])
+	}
+	firstExecution, ok := executions[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first execution object, got %#v", executions[0])
+	}
+	if gotQueueIndex := int(firstExecution["queue_index"].(float64)); gotQueueIndex != 0 {
+		t.Fatalf("expected first execution queue_index 0, got %d", gotQueueIndex)
+	}
+
+	snapshots, ok := detailPayload["snapshots"].([]any)
+	if !ok || len(snapshots) != 2 {
+		t.Fatalf("expected 2 snapshots, got %#v", detailPayload["snapshots"])
+	}
+}
+
 func TestProjectFilesEndpoints(t *testing.T) {
 	router := NewRouter()
 	workspaceID := createRemoteWorkspace(t, router, "Remote Project Files", "http://127.0.0.1:9011", false)

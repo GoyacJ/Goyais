@@ -199,6 +199,7 @@ Workspace
 4. Hub 是队列与锁权威：仅 Hub 可推进 `queued -> pending` 与维护 `active_execution`。
 5. Worker 采用 pull-claim 模式：主动认领 `pending` 执行，不允许 Desktop 直连 Worker 控制执行。
 6. 认领必须带 lease + heartbeat；lease 超时后 Execution 自动回队并增加 `run_attempt`。
+7. Desktop 事件订阅策略必须覆盖 `active conversation + all running/queued conversations`，避免后台会话丢流。
 
 ### 7.2 用户行为与系统响应
 
@@ -434,52 +435,54 @@ Workspace
    - 创建 Conversation。
 4. `POST /v1/conversations/{conversation_id}/messages`
    - 发送消息；busy 时返回 queued 结果。
-5. `POST /v1/conversations/{conversation_id}/stop`
+5. `GET /v1/conversations/{conversation_id}`
+   - 查询 Conversation 详情（`conversation/messages/executions/snapshots`）。
+6. `POST /v1/conversations/{conversation_id}/stop`
    - 停止当前 Execution。
-6. `POST /v1/conversations/{conversation_id}/rollback`
+7. `POST /v1/conversations/{conversation_id}/rollback`
    - 参数：`message_id`；执行快照回滚。
-7. `GET /v1/conversations/{conversation_id}/export?format=markdown`
+8. `GET /v1/conversations/{conversation_id}/export?format=markdown`
    - 导出 Conversation 为 Markdown。
-8. `PUT /v1/projects/{project_id}/config`
+9. `PUT /v1/projects/{project_id}/config`
    - 更新项目配置（模型/规则/技能/MCP）。
-9. `GET /v1/workspaces/{workspace_id}/model-catalog`
+10. `GET /v1/workspaces/{workspace_id}/model-catalog`
    - 查询 `.goyais/model.json`（缺失时回退 `models.default.json`）解析后的厂商/模型目录（`revision/source/updated_at`）。
-10. `POST /v1/workspaces/{workspace_id}/model-catalog`
+11. `POST /v1/workspaces/{workspace_id}/model-catalog`
    - 触发目录重载（`source=manual|page_open|scheduled`，不做厂商自动同步）。
-11. `GET|PUT /v1/workspaces/{workspace_id}/catalog-root`
+12. `GET|PUT /v1/workspaces/{workspace_id}/catalog-root`
    - 查询/更新目录根路径（远程工作区仅管理员可写）。
-12. `GET|POST /v1/workspaces/{workspace_id}/resource-configs`
+13. `GET|POST /v1/workspaces/{workspace_id}/resource-configs`
    - 统一管理 `model|rule|skill|mcp` 配置，支持分页与搜索。
-13. `PATCH|DELETE /v1/workspaces/{workspace_id}/resource-configs/{config_id}`
+14. `PATCH|DELETE /v1/workspaces/{workspace_id}/resource-configs/{config_id}`
    - 编辑、启停与硬删除资源配置。
-14. `POST /v1/workspaces/{workspace_id}/resource-configs/{config_id}/test`
+15. `POST /v1/workspaces/{workspace_id}/resource-configs/{config_id}/test`
    - 模型最小推理测试。
-15. `POST /v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect`
+16. `POST /v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect`
    - MCP 握手与工具列表拉取。
-16. `GET /v1/workspaces/{workspace_id}/mcps/export`
+17. `GET /v1/workspaces/{workspace_id}/mcps/export`
    - 导出脱敏后的 MCP 聚合 JSON。
-17. `GET /v1/workspaces/{workspace_id}/project-configs`
+18. `GET /v1/workspaces/{workspace_id}/project-configs`
    - 批量返回工作区项目配置。
-18. `GET|PUT /v1/projects/{project_id}/config`
+19. `GET|PUT /v1/projects/{project_id}/config`
    - 查询/更新项目配置（多模型绑定 + 默认模型）。
-19. 共享与审批接口（沿用并强化）：
+20. 共享与审批接口（沿用并强化）：
    - `POST /v1/workspaces/{workspace_id}/share-requests`
    - `POST /v1/share-requests/{request_id}/approve`
    - `POST /v1/share-requests/{request_id}/reject`
    - `POST /v1/share-requests/{request_id}/revoke`
-20. 管理员接口组（成员/角色/审计）：
+21. 管理员接口组（成员/角色/审计）：
    - `GET|POST /v1/admin/users`
    - `PATCH|DELETE /v1/admin/users/{user_id}`
    - `GET|POST /v1/admin/roles`
    - `PATCH|DELETE /v1/admin/roles/{role_key}`
    - `GET /v1/admin/audit`
-21. `GET /v1/conversations/{conversation_id}/events`
+22. `GET /v1/conversations/{conversation_id}/events`
    - SSE 事件流（支持 `last_event_id` 断线续传）。
-22. `POST /v1/executions/{execution_id}/confirm`
+23. `POST /v1/executions/{execution_id}/confirm`
    - 审批 `approve|deny`，用于 `confirmation_required` 场景。
-23. `GET /v1/projects/{project_id}/files`
+24. `GET /v1/projects/{project_id}/files`
    - 项目文件树只读查询（`path + depth`）。
-24. `GET /v1/projects/{project_id}/files/content?path=...`
+25. `GET /v1/projects/{project_id}/files/content?path=...`
    - 项目文件内容只读预览（路径必须在项目根内）。
 
 ### 14.2 关键类型（新增字段）
@@ -642,7 +645,8 @@ Desktop -> Hub -> Worker
 |------|------|----------|
 | read/search/list | low | 自动放行 |
 | write/apply_patch | high | 阻断确认 |
-| run_command | high | 阻断确认 |
+| run_command（只读命令：`pwd/ls/rg --files/git status/cat`） | low | 自动放行 |
+| run_command（写入/联网/变更命令） | high | 阻断确认 |
 | network/mcp_call | high | 阻断确认 |
 | delete/revoke_key | critical | 阻断确认 + 审计增强 |
 
@@ -675,7 +679,7 @@ Desktop -> Hub -> Worker
 ### 16.3 输入区与状态规范
 
 1. 输入区动作顺序固定：`+ -> Agent/Plan -> 模型 -> 发送`。
-2. 运行状态标准：`running/queued/stopped/done/error`。
+2. 运行状态标准：`confirming/running/queued/idle`。
 3. 连接状态标准：`connected/reconnecting/disconnected`。
 4. 审批状态标准：`pending/approved/denied/revoked`。
 
@@ -695,6 +699,7 @@ Desktop -> Hub -> Worker
 | 事件延迟 | Hub/Worker 事件到前端渲染 < 200ms（本地网络） |
 | 并发 | 支持多 Conversation 并行；并发上限可配置 |
 | 队列 | 单 Conversation 严格 FIFO，不允许并发执行 |
+| 重启恢复 | Hub/Desktop 重启后，Conversation 历史、Execution 状态与快照必须可恢复 |
 | 回滚 | 快照回滚成功率 >= 99%，失败可恢复 |
 | 导出 | Markdown 导出成功率 >= 99.5% |
 | 观测 | trace_id 贯穿 Hub -> Worker -> Events -> Audit |
@@ -929,3 +934,12 @@ event types:
 | 内部 API v1 硬切换 | TECH_ARCH.md, IMPLEMENTATION_PLAN.md | TECH_ARCH 9.2, PLAN 2026-02-24 Worker 门禁增量 | done |
 | Hub 持久化执行全状态（替代内存主导） | TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | TECH_ARCH 11.x 执行表与恢复语义, STANDARDS 10.4/20 | done |
 | P0 增加受控子代理并行（<=3） | PRD.md, TECH_ARCH.md | PRD 7.1/20.2, TECH_ARCH 12.4 | done |
+
+### 25.10 2026-02-24 会话稳定性与并发显示根治矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 新增 Conversation 详情读取接口与前端回填链路 | PRD.md, TECH_ARCH.md | PRD 14.1/16.3, TECH_ARCH 9.1/14.2 | done |
+| 会话订阅策略改为 `active + running/queued` | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/17, TECH_ARCH 10.3/14.2/16, PLAN Phase 5 门禁增量 | done |
+| Worker 默认并发 3 与项目上下文注入（project_name/project_path） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/17, TECH_ARCH 12.4/16, PLAN Worker 门禁增量 | done |
+| `run_command` 风险分级细化（只读命令 low） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 15.3, TECH_ARCH 13.2/20, STANDARDS 10.4/13.1 | done |

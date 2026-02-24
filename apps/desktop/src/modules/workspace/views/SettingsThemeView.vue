@@ -3,6 +3,11 @@
     active-key="settings_theme"
     :title="t('menu.settingsTheme')"
     :subtitle="`${t('settings.scope')} / Theme`"
+    runtime-status-mode
+    :runtime-conversation-status="workspaceStatus.conversationStatus.value"
+    :runtime-connection-status="workspaceStatus.connectionStatus.value"
+    :runtime-user-display-name="workspaceStatus.userDisplayName.value"
+    :runtime-hub-url="workspaceStatus.hubURL.value"
   >
     <section class="theme-layout">
       <article class="config-panel">
@@ -51,14 +56,19 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { projectStore } from "@/modules/project/store";
 import SettingsShell from "@/shared/shells/SettingsShell.vue";
 import { useI18n } from "@/shared/i18n";
+import { useWorkspaceStatusSync } from "@/shared/stores/workspaceStatusStore";
 import BaseButton from "@/shared/ui/BaseButton.vue";
 import BaseSelect from "@/shared/ui/BaseSelect.vue";
 import { useTheme, type FontScale, type FontStyle, type ThemeMode, type ThemePreset } from "@/shared/stores/themeStore";
 
 const { t } = useI18n();
 const theme = useTheme();
+const workspaceStatus = useWorkspaceStatusSync({
+  conversationId: computed(() => projectStore.activeConversationId)
+});
 
 const themeModeModel = computed<ThemeMode>({
   get: () => theme.mode.value,

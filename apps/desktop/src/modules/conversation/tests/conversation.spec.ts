@@ -260,6 +260,7 @@ describe("conversation store", () => {
     expect(runtime.executions[0]?.state).toBe("pending");
     expect(runtime.executions[0]?.queue_index).toBe(0);
   });
+
 });
 
 function jsonResponse(payload: unknown, status = 200): Response {

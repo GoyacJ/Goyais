@@ -1,12 +1,19 @@
 import { getControlClient } from "@/shared/services/clients";
+import { withApiFallback } from "@/shared/services/fallback";
+import { createMockId, mockData } from "@/shared/services/mockData";
 import { connectConversationEvents } from "@/shared/services/sseClient";
 import type {
   Conversation,
+  ConversationDetailResponse,
   DiffCapability,
   DiffItem,
   ExecutionCreateRequest,
   ExecutionCreateResponse
 } from "@/shared/types/api";
+
+type ConversationServiceOptions = {
+  token?: string;
+};
 
 export function streamConversationEvents(
   conversationId: string,
@@ -28,6 +35,37 @@ export function streamConversationEvents(
 
 export async function createExecution(conversation: Conversation, input: ExecutionCreateRequest): Promise<ExecutionCreateResponse> {
   return getControlClient().post<ExecutionCreateResponse>(`/v1/conversations/${conversation.id}/messages`, input);
+}
+
+export async function getConversationDetail(
+  conversationId: string,
+  options: ConversationServiceOptions = {}
+): Promise<ConversationDetailResponse> {
+  return withApiFallback(
+    "conversation.getDetail",
+    () => getControlClient().get<ConversationDetailResponse>(`/v1/conversations/${conversationId}`, { token: options.token }),
+    () => {
+      const conversation = mockData.conversations.find((item) => item.id === conversationId);
+      if (!conversation) {
+        throw new Error("Conversation not found");
+      }
+      const createdAt = new Date().toISOString();
+      return {
+        conversation,
+        messages: [
+          {
+            id: createMockId("msg"),
+            conversation_id: conversation.id,
+            role: "assistant",
+            content: "欢迎使用 Goyais，当前会话已准备就绪。",
+            created_at: createdAt
+          }
+        ],
+        executions: [],
+        snapshots: []
+      };
+    }
+  );
 }
 
 export async function cancelExecution(conversationId: string, executionId: string): Promise<void> {

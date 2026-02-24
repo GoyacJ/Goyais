@@ -17,6 +17,19 @@ def test_subagent_tool_risk_is_low() -> None:
     assert classify_tool_risk("run_subagent", {"task": "analyze files"}) == "low"
 
 
+def test_run_command_read_only_risk_is_low() -> None:
+    assert classify_tool_risk("run_command", {"command": "pwd"}) == "low"
+    assert classify_tool_risk("run_command", {"command": "ls -la"}) == "low"
+    assert classify_tool_risk("run_command", {"command": "rg --files"}) == "low"
+    assert classify_tool_risk("run_command", {"command": "git status"}) == "low"
+    assert classify_tool_risk("run_command", {"command": "cat README.md"}) == "low"
+
+
+def test_run_command_write_or_delete_risk_is_not_low() -> None:
+    assert classify_tool_risk("run_command", {"command": "python scripts/sync.py"}) == "high"
+    assert classify_tool_risk("run_command", {"command": "rm -rf ."}) == "critical"
+
+
 def test_run_subagent_requires_task() -> None:
     invocation = ModelInvocation(
         vendor="openai",
@@ -48,4 +61,3 @@ def test_run_subagent_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result["ok"] is True
     assert result["summary"] == "subagent summary"
     assert result["model_id"] == "gpt-4.1"
-
