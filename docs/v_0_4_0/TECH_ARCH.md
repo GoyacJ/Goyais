@@ -330,15 +330,19 @@ private resource
 3. `DELETE /v1/projects/{project_id}`
 4. `PUT /v1/projects/{project_id}/config`
 5. `GET|POST /v1/projects/{project_id}/conversations`
-6. `PATCH|DELETE /v1/conversations/{conversation_id}`
-7. `POST /v1/conversations/{conversation_id}/messages`
-8. `POST /v1/conversations/{conversation_id}/stop`
-9. `POST /v1/conversations/{conversation_id}/rollback`
-10. `GET /v1/conversations/{conversation_id}/export?format=markdown`
-11. `GET /v1/executions`
-12. `GET /v1/executions/{execution_id}/diff`
-13. `POST /v1/executions/{execution_id}/commit`
-14. `POST /v1/executions/{execution_id}/discard`
+6. `GET /v1/projects/{project_id}/files`
+7. `GET /v1/projects/{project_id}/files/content?path=...`
+8. `PATCH|DELETE /v1/conversations/{conversation_id}`
+9. `POST /v1/conversations/{conversation_id}/messages`
+10. `GET /v1/conversations/{conversation_id}/events`
+11. `POST /v1/conversations/{conversation_id}/stop`
+12. `POST /v1/conversations/{conversation_id}/rollback`
+13. `GET /v1/conversations/{conversation_id}/export?format=markdown`
+14. `GET /v1/executions`
+15. `GET /v1/executions/{execution_id}/diff`
+16. `POST /v1/executions/{execution_id}/confirm`
+17. `POST /v1/executions/{execution_id}/commit`
+18. `POST /v1/executions/{execution_id}/discard`
 
 #### Resource / Share
 
@@ -370,10 +374,12 @@ private resource
 
 1. `POST /internal/executions`
 2. `POST /internal/events`
-3. `POST /internal/secrets/resolve`
-4. `POST /internal/runtimes/register`
-5. `POST /internal/runtimes/heartbeat`
-6. `POST /internal/rollback/apply`
+3. `POST /internal/executions/{execution_id}/confirm`
+4. `POST /internal/executions/{execution_id}/stop`
+5. `POST /internal/secrets/resolve`
+6. `POST /internal/runtimes/register`
+7. `POST /internal/runtimes/heartbeat`
+8. `POST /internal/rollback/apply`
 7. 内部接口必须携带共享 internal token（`X-Internal-Token` 或 `Authorization: Bearer <token>`），无效或缺失返回 `401`。
 8. Hub -> Worker 调用必须透传 `X-Trace-Id`，保证审计链路可回溯。
 
@@ -579,6 +585,7 @@ CREATE TABLE projects (
   repo_path TEXT,
   repo_url TEXT,
   supports_git BOOLEAN NOT NULL DEFAULT TRUE,
+  current_revision INTEGER NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
 );
@@ -599,6 +606,8 @@ CREATE TABLE conversations (
   project_id TEXT NOT NULL,
   name TEXT NOT NULL,
   default_mode TEXT NOT NULL DEFAULT 'agent',
+  model_id TEXT NOT NULL,
+  base_revision INTEGER NOT NULL DEFAULT 0,
   default_worktree BOOLEAN NOT NULL DEFAULT TRUE,
   active_execution_id TEXT,
   queue_state TEXT NOT NULL DEFAULT 'idle',
@@ -625,6 +634,7 @@ CREATE TABLE executions (
   queue_index INTEGER NOT NULL,
   mode_snapshot TEXT NOT NULL,
   model_snapshot TEXT NOT NULL,
+  project_revision_snapshot INTEGER NOT NULL DEFAULT 0,
   user_message TEXT NOT NULL,
   worktree_path TEXT,
   tokens_in INTEGER NOT NULL DEFAULT 0,

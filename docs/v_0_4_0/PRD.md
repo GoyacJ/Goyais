@@ -466,6 +466,14 @@ Workspace
    - `GET|POST /v1/admin/roles`
    - `PATCH|DELETE /v1/admin/roles/{role_key}`
    - `GET /v1/admin/audit`
+21. `GET /v1/conversations/{conversation_id}/events`
+   - SSE 事件流（支持 `last_event_id` 断线续传）。
+22. `POST /v1/executions/{execution_id}/confirm`
+   - 审批 `approve|deny`，用于 `confirmation_required` 场景。
+23. `GET /v1/projects/{project_id}/files`
+   - 项目文件树只读查询（`path + depth`）。
+24. `GET /v1/projects/{project_id}/files/content?path=...`
+   - 项目文件内容只读预览（路径必须在项目根内）。
 
 ### 14.2 关键类型（新增字段）
 
@@ -497,6 +505,7 @@ Project {
   name: string
   root_path: string
   is_git_repo: boolean
+  current_revision: number
 }
 
 ProjectConfig {
@@ -514,8 +523,18 @@ Conversation {
   project_id: string
   name: string
   mode: "agent" | "plan"
+  model_id: string
+  base_revision: number
   queue_state: "idle" | "running" | "queued"
   active_execution_id?: string
+}
+
+Execution {
+  execution_id: string
+  state: "queued" | "pending" | "executing" | "confirming" | "completed" | "failed" | "cancelled"
+  mode_snapshot: "agent" | "plan"
+  model_snapshot: object
+  project_revision_snapshot: number
 }
 
 ConversationSnapshot {
@@ -846,3 +865,12 @@ event types:
 | 模型目录 Vendor 增加 base_url 并模板化 | PRD.md, TECH_ARCH.md | PRD 6.3, TECH_ARCH 6.5/20.4 | done |
 | model 资源配置去 name（接口/存储） | TECH_ARCH.md | TECH_ARCH 11.2/20.6 | done |
 | 模型配置页收口（仅列表、无手输） | PRD.md | PRD 6.3/19.1 | done |
+
+### 25.7 2026-02-24 Worker + AI 编程闭环矩阵（P0 Phase 5+6）
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 真实执行闭环（Desktop -> Hub -> Worker） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7/14/24, TECH_ARCH 7/9/10/11, PLAN Phase 5/6 | done |
+| Execution 快照语义（mode/model/project revision） | PRD.md, TECH_ARCH.md | PRD 14.2, TECH_ARCH 7.5/11.3 | done |
+| 审批确认与风险门禁协议（confirm + confirmation_required） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/15.3, TECH_ARCH 10/12, STANDARDS 10.4/13 | done |
+| 同项目多 Conversation 并行 + 文件只读接口 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7/14, TECH_ARCH 7/9.1/14, PLAN Phase 5/6 | done |

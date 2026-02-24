@@ -351,6 +351,18 @@
 
 ---
 
+## 2026-02-24 Worker + AI 编程闭环门禁（P0 Phase 5+6 增量）
+
+1. 核心链路门禁：`Desktop -> Hub -> Worker` 必须走真实执行链路，`messages/stop/rollback/events/confirm` 禁 mock fallback。
+2. 事件门禁：新增 `GET /v1/conversations/{conversation_id}/events`（SSE）与 `POST /internal/events` 回传，支持 `last_event_id` 续传。
+3. 审批门禁：新增 `POST /v1/executions/{execution_id}/confirm` 与 Worker `confirm/stop` 内部控制接口。
+4. 快照门禁：Execution 必须固化 `mode_snapshot/model_snapshot/project_revision_snapshot`。
+5. 多 Conversation 门禁：同项目下多 Conversation 可并行执行，单 Conversation 仍保持 FIFO + 单活执行。
+6. 项目文件只读门禁：新增 `GET /v1/projects/{project_id}/files` 与 `GET /v1/projects/{project_id}/files/content`，强制路径保护。
+7. 测试门禁：Hub `go test ./...`、Worker `uv run pytest`、Desktop `pnpm test` 与 `pnpm test:strict` 必须全绿。
+
+---
+
 ## 关键风险与缓解
 
 | 风险 | 阶段 | 缓解 |

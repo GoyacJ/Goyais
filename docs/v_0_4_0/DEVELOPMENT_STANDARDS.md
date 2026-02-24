@@ -439,3 +439,14 @@ StandardsExceptionADR {
 | 模型目录改为手工 JSON 目录加载 | PRD.md, TECH_ARCH.md | PRD 6.3/14.1, TECH_ARCH 3.2/6.5/20.4 | done |
 | API 与数据表扩展（catalog-root/resource-configs/project-configs） | TECH_ARCH.md, IMPLEMENTATION_PLAN.md | TECH_ARCH 9.1/11.2/20.5/20.6, PLAN Phase 4 | done |
 | 工程门禁更新（JSON 校验与重载审计） | DEVELOPMENT_STANDARDS.md | 10.4, 10.5, 11.1, 13.1, 15 | done |
+
+---
+
+## 18. 2026-02-24 Worker + AI 编程闭环同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| 实时事件流与审批协议（SSE + confirm + internal events） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.x/24, TECH_ARCH 9.x/10.x/11.x, PLAN Phase 5/6 增量门禁 | done |
+| Execution 快照字段扩展（mode/model/project revision） | PRD.md, TECH_ARCH.md | PRD 14.2, TECH_ARCH 7.5/11.3/20.x | done |
+| 同项目多 Conversation + 项目文件只读能力 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7/14, TECH_ARCH 7/9/11, PLAN Phase 5/6 | done |
+| 核心链路 strict 化（禁 fallback） | IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PLAN 门禁增量, STANDARDS 11/13/14 | done |
