@@ -49,7 +49,7 @@
 
     <section v-else-if="activeTab === 'run'" class="card">
       <strong>Execution</strong>
-      <p>Pending: {{ pendingCount }} · Executing: {{ executingCount }} · Confirming: {{ confirmingCount }} · Queued: {{ queuedCount }}</p>
+      <p>Pending: {{ pendingCount }} · Executing: {{ executingCount }} · Queued: {{ queuedCount }}</p>
       <p :class="runHintTone">{{ runHint }}</p>
     </section>
 
@@ -64,7 +64,7 @@
     <section v-else class="card">
       <strong>Risk</strong>
       <p class="warning">模型: {{ modelId }}</p>
-      <p class="normal">高风险操作需审批并写审计。</p>
+      <p class="normal">操作会直接执行，并保留审计与可停止控制。</p>
     </section>
   </aside>
 </template>
@@ -96,16 +96,12 @@ const props = defineProps<{
   queuedCount: number;
   pendingCount: number;
   executingCount: number;
-  confirmingCount: number;
   modelId: string;
   activeTab: InspectorTabKey;
 }>();
-const { activeTab, capability, confirmingCount, diff, executingCount, modelId, pendingCount, queuedCount } = toRefs(props);
+const { activeTab, capability, diff, executingCount, modelId, pendingCount, queuedCount } = toRefs(props);
 
 const runHint = computed(() => {
-  if (confirmingCount.value > 0) {
-    return "执行正在等待风险确认";
-  }
   if (pendingCount.value > 0 || executingCount.value > 0) {
     return "执行中";
   }
@@ -115,7 +111,7 @@ const runHint = computed(() => {
   return "当前没有运行或排队任务";
 });
 
-const runHintTone = computed(() => (confirmingCount.value > 0 || queuedCount.value > 0 ? "warning" : "normal"));
+const runHintTone = computed(() => (queuedCount.value > 0 ? "warning" : "normal"));
 
 function mapChange(type: DiffItem["change_type"]): string {
   if (type === "added") {

@@ -101,7 +101,6 @@ const props = withDefaults(
     queuedCount: number;
     pendingCount: number;
     executingCount: number;
-    confirmingCount: number;
     hasActiveExecution: boolean;
     draft: string;
     mode: ConversationMode;
@@ -134,18 +133,12 @@ const assistantModelLabel = computed(() => {
   return selected?.label ?? normalized;
 });
 const executionHint = computed(() => {
-  if (props.confirmingCount > 0) {
-    return "等待风险确认…";
-  }
   if (props.pendingCount > 0 || props.executingCount > 0) {
     return "正在思考…";
   }
   return "";
 });
 const queueChipLabel = computed(() => {
-  if (props.confirmingCount > 0) {
-    return props.queuedCount > 0 ? `等待确认，队列 ${props.queuedCount}` : "等待确认";
-  }
   if (props.queuedCount > 0) {
     return `运行中，队列 ${props.queuedCount}`;
   }

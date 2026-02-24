@@ -277,6 +277,7 @@ TokenLayerContract {
 10. 会话恢复门禁：Desktop 进入 Conversation 必须先调用详情接口回填；仅后端无历史消息时允许欢迎语兜底。
 11. 流路由门禁：事件应用必须以 `event.conversation_id` 路由，禁止将多会话事件写入同一 runtime。
 12. 风险分级门禁：`run_command` 的 `pwd/ls/rg --files/git status/cat` 归类 `low`，其他命令维持 `high/critical`。
+13. 执行策略门禁：Agent 模式不得进入 `confirming/wait_confirmation`，高风险调用直接执行并审计；Plan 模式高风险调用必须返回拒绝。
 
 ### 10.5 门禁契约
 
@@ -374,7 +375,7 @@ StandardsExceptionADR {
 1. 是否符合文件行数和复杂度阈值。
 2. 是否引入非白名单设计模式或过度抽象。
 3. 是否保持工作区隔离与权限校验边界。
-4. 是否覆盖拒绝路径测试（权限拒绝、审批拒绝、Stop、回滚失败、异常恢复）。
+4. 是否覆盖拒绝路径测试（权限拒绝、共享审批拒绝、Plan 高风险拒绝、Stop、回滚失败、异常恢复）。
 5. 是否满足 token 三层规则且无硬编码样式。
 6. 是否补充必要审计日志与 trace_id 传播。
 7. 是否完成动态菜单与固定菜单语义校验（账号信息/设置）。
@@ -455,7 +456,7 @@ StandardsExceptionADR {
 
 | change_type | required_docs_to_update | required_sections | status |
 |---|---|---|---|
-| 实时事件流与审批协议（SSE + confirm + internal events） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.x/24, TECH_ARCH 9.x/10.x/11.x, PLAN Phase 5/6 增量门禁 | done |
+| 实时事件流与执行控制协议（SSE + stop/internal events，无 confirm） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.x/24, TECH_ARCH 9.x/10.x/11.x, PLAN Phase 5/6 增量门禁 | done |
 | Execution 快照字段扩展（mode/model/project revision） | PRD.md, TECH_ARCH.md | PRD 14.2, TECH_ARCH 7.5/11.3/20.x | done |
 | 同项目多 Conversation + 项目文件只读能力 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7/14, TECH_ARCH 7/9/11, PLAN Phase 5/6 | done |
 | 核心链路 strict 化（禁 fallback） | IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PLAN 门禁增量, STANDARDS 11/13/14 | done |
@@ -510,3 +511,4 @@ StandardsExceptionADR {
 | 会话订阅策略 `active + running/queued` 与防串流路由 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/16.3, TECH_ARCH 10.3/20.9, PLAN Phase 5 | done |
 | Worker 默认并发 3 与项目上下文注入 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/17, TECH_ARCH 12.4/16, PLAN Worker 门禁增量 | done |
 | `run_command` 只读命令低风险分类 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 15.3, TECH_ARCH 13.2, STANDARDS 10.4/13.1 | done |
+| Agent 模式移除风险确认链路（删除 confirm API / confirming 状态） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/15.3/24, TECH_ARCH 3.3/9.1/9.2/10.1/12.1, PLAN Phase 5/8, STANDARDS 10.4/13 | done |

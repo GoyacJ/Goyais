@@ -32,21 +32,15 @@ export function ensureExecution(runtime: ConversationRuntime, conversationId: st
 }
 
 export function applyExecutionState(execution: Execution, event: ExecutionEvent): void {
-  if (event.type === "confirmation_resolved") {
-    const decision = typeof event.payload.decision === "string" ? event.payload.decision.toLowerCase() : "";
-    execution.state = decision === "deny" ? "cancelled" : "executing";
-  } else {
-    const nextState = executionStateByEventType[event.type];
-    if (nextState) {
-      execution.state = nextState;
-    }
+  const nextState = executionStateByEventType[event.type];
+  if (nextState) {
+    execution.state = nextState;
   }
   execution.updated_at = event.timestamp;
 }
 
 const executionStateByEventType: Partial<Record<ExecutionEvent["type"], Execution["state"]>> = {
   execution_started: "executing",
-  confirmation_required: "confirming",
   execution_stopped: "cancelled",
   execution_done: "completed",
   execution_error: "failed"

@@ -109,28 +109,3 @@
   padding: 0 var(--global-space-8);
   min-width: 220px;
 }
-
-.risk-actions {
-  display: inline-flex;
-  justify-content: flex-end;
-  gap: var(--global-space-8);
-  width: 100%;
-}
-
-.risk-btn {
-  border: 0;
-  border-radius: var(--global-radius-8);
-  height: 28px;
-  padding: 0 var(--global-space-12);
-  font-size: var(--global-font-size-12);
-}
-
-.risk-btn.ghost {
-  background: var(--semantic-surface);
-  color: var(--semantic-text);
-}
-
-.risk-btn.primary {
-  background: var(--semantic-danger);
-  color: var(--semantic-bg);
-}

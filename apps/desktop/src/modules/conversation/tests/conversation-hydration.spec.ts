@@ -75,7 +75,7 @@ describe("conversation runtime hydration", () => {
     expect(runtime.executions[0]?.state).toBe("pending");
   });
 
-  it("counts pending/executing/confirming/queued states", () => {
+  it("counts pending/executing/queued states", () => {
     const runtime = ensureConversationRuntime(mockConversation, true);
     runtime.executions = [
       {
@@ -111,22 +111,6 @@ describe("conversation runtime hydration", () => {
         updated_at: new Date().toISOString()
       },
       {
-        id: "exec_confirming",
-        workspace_id: "ws_local",
-        conversation_id: mockConversation.id,
-        message_id: "msg_confirming",
-        state: "confirming",
-        mode: "agent",
-        model_id: "gpt-5.3",
-        mode_snapshot: "agent",
-        model_snapshot: { model_id: "gpt-5.3" },
-        project_revision_snapshot: 0,
-        queue_index: 2,
-        trace_id: "tr_confirming",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      {
         id: "exec_queued",
         workspace_id: "ws_local",
         conversation_id: mockConversation.id,
@@ -137,7 +121,7 @@ describe("conversation runtime hydration", () => {
         mode_snapshot: "agent",
         model_snapshot: { model_id: "gpt-5.3" },
         project_revision_snapshot: 0,
-        queue_index: 3,
+        queue_index: 2,
         trace_id: "tr_queued",
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -147,7 +131,6 @@ describe("conversation runtime hydration", () => {
     const counts = getExecutionStateCounts(runtime);
     expect(counts.pending).toBe(1);
     expect(counts.executing).toBe(1);
-    expect(counts.confirming).toBe(1);
     expect(counts.queued).toBe(1);
   });
 });

@@ -154,7 +154,7 @@
 5. Markdown 导出成功且包含完整消息轨迹。
 6. 事件链路完整可观测。
 7. Hub/Desktop 重启后，同一 Conversation 历史消息与执行状态可恢复。
-8. 发送后 300ms 内可见执行占位状态（pending/executing/confirming/queued）。
+8. 发送后 300ms 内可见执行占位状态（pending/executing/queued）。
 
 ### 依赖
 
@@ -223,14 +223,14 @@
 ### 工作内容
 
 1. Path Guard 与 Command Guard 完整覆盖。
-2. Capability Prompt 全风险类别接入。
+2. Agent/Plan 风险策略接入（Agent 直执行并审计；Plan 对高风险拒绝）。
 3. 审计分类标准化与查询能力。
 4. Watchdog（执行超时清理）与断线恢复策略。
 5. 错误码分层与前端错误映射。
 
 ### 验收标准
 
-1. 写文件/命令/网络/删除触发确认率 100%。
+1. Agent 模式高风险调用不阻塞且可停止；Plan 模式高风险拒绝率 100%。
 2. 执行超时后锁可自动释放。
 3. 关键故障场景可恢复且状态一致。
 4. 审计日志可追溯执行与审批全链路。
@@ -323,7 +323,7 @@
 | 单元测试 | 全阶段 | 队列状态机、回滚快照、策略评估、工具防护 |
 | 集成测试 | 2,4,5,7,8 | API + DB + 队列 + 回滚 + 审批 + 模型目录加载 |
 | E2E | 5,6,7,9 | 主屏幕流程、设置/账号信息菜单语义、主题模式+字体样式+字号+预设即时生效、通用设置策略即时持久化与平台降级提示、异常恢复 |
-| 安全测试 | 2,7,8 | 越权、密钥泄露、注入、路径逃逸、高风险确认 |
+| 安全测试 | 2,7,8 | 越权、密钥泄露、注入、路径逃逸、高风险执行审计与 Plan 拒绝 |
 
 ---
 
@@ -371,9 +371,9 @@
 
 ## 2026-02-24 Worker + AI 编程闭环门禁（P0 Phase 5+6 增量）
 
-1. 核心链路门禁：`Desktop -> Hub -> Worker` 必须走真实执行链路，`messages/stop/rollback/events/confirm` 禁 mock fallback。
+1. 核心链路门禁：`Desktop -> Hub -> Worker` 必须走真实执行链路，`messages/stop/rollback/events` 禁 mock fallback。
 2. 事件门禁：新增 `GET /v1/conversations/{conversation_id}/events`（SSE）与 `POST /internal/executions/{execution_id}/events/batch` 回传，支持 `last_event_id` 续传。
-3. 审批门禁：`POST /v1/executions/{execution_id}/confirm` 与 `POST /v1/conversations/{conversation_id}/stop` 必须转换为 `execution_control_commands`，由 Worker 通过 `GET /internal/executions/{execution_id}/control` 拉取。
+3. 控制门禁：`POST /v1/conversations/{conversation_id}/stop` 必须转换为 `execution_control_commands(stop)`，由 Worker 通过 `GET /internal/executions/{execution_id}/control` 拉取。
 4. 快照门禁：Execution 必须固化 `mode_snapshot/model_snapshot/project_revision_snapshot`。
 5. 多 Conversation 门禁：同项目下多 Conversation 可并行执行，单 Conversation 仍保持 FIFO + 单活执行。
 6. 项目文件只读门禁：新增 `GET /v1/projects/{project_id}/files` 与 `GET /v1/projects/{project_id}/files/content`，强制路径保护。
@@ -381,7 +381,7 @@
 8. 测试门禁：Hub `go test ./...`、Worker `uv run pytest`、Desktop `pnpm test` 与 `pnpm test:strict` 必须全绿。
 9. 并发门禁：Worker 默认 `WORKER_MAX_CONCURRENCY=3`，且允许环境变量覆盖。
 10. 上下文门禁：Worker system prompt 必须注入 `project_name/project_path`，保证“查看当前项目”可回馈。
-11. 风险门禁：`run_command` 仅只读命令自动放行，其余命令仍走高风险确认链路。
+11. 风险门禁：`run_command` 仅只读命令自动放行；其余高风险调用在 Agent 模式直接执行并审计、Plan 模式拒绝执行。
 
 ---
 
@@ -433,3 +433,4 @@
 | Hub 本地 SQLite 默认路径迁移（用户配置目录） | TECH_ARCH.md, IMPLEMENTATION_PLAN.md | TECH_ARCH 17.1, PLAN Phase 5 验收项 | done |
 | `active + running/queued` 订阅策略与防串流路由 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/16.3, TECH_ARCH 10.3/20.9, PLAN Phase 5 | done |
 | Worker 默认并发=3 + 项目上下文注入 + 只读命令低风险 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 15.3/17, TECH_ARCH 12.4/13.2/16, STANDARDS 10.4/13.1 | done |
+| Agent 模式移除风险确认链路（删除 confirm API / confirming 状态） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/15.3/24, TECH_ARCH 3.3/9.1/9.2/10.1/12.1, PLAN Phase 5/8, STANDARDS 10.4/13 | done |

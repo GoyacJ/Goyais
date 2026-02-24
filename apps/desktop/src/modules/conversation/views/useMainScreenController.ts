@@ -7,8 +7,7 @@ import {
   getExecutionStateCounts
 } from "@/modules/conversation/store";
 import {
-  useAutoModelSyncWatcher,
-  useRiskConfirmWatcher
+  useAutoModelSyncWatcher
 } from "@/modules/conversation/views/controllerWatchers";
 import { useMainScreenActions } from "@/modules/conversation/views/useMainScreenActions";
 import { useMainScreenModeling } from "@/modules/conversation/views/useMainScreenModeling";
@@ -35,12 +34,6 @@ export function useMainScreenController() {
   const editingConversationName = ref(false);
   const conversationNameDraft = ref("");
   const inspectorCollapsed = ref(false);
-  const riskConfirm = ref({
-    open: false,
-    executionId: "",
-    summary: "",
-    preview: ""
-  });
   const projectImportInProgress = ref(false);
   const projectImportFeedback = ref("");
   const projectImportError = ref("");
@@ -86,15 +79,13 @@ export function useMainScreenController() {
       : {
         queued: 0,
         pending: 0,
-        executing: 0,
-        confirming: 0
+        executing: 0
       }
   );
   const queuedCount = computed(() => executionStateCounts.value.queued);
   const pendingCount = computed(() => executionStateCounts.value.pending);
   const executingCount = computed(() => executionStateCounts.value.executing);
-  const confirmingCount = computed(() => executionStateCounts.value.confirming);
-  const activeCount = computed(() => pendingCount.value + executingCount.value + confirmingCount.value);
+  const activeCount = computed(() => pendingCount.value + executingCount.value);
   const runningState = computed(() => workspaceStatus.conversationStatus.value);
   const runningStateClass = computed(() => {
     switch (runningState.value) {
@@ -145,7 +136,6 @@ export function useMainScreenController() {
     runtime,
     modelOptions: modelState.modelOptions,
     inspectorCollapsed,
-    riskConfirm,
     editingConversationName,
     conversationNameDraft,
     projectImportInProgress,
@@ -240,11 +230,6 @@ export function useMainScreenController() {
     updateModel: actions.updateModel
   });
 
-  useRiskConfirmWatcher({
-    runtime,
-    riskConfirm
-  });
-
   return {
     ...actions,
     activeConversation,
@@ -252,7 +237,6 @@ export function useMainScreenController() {
     activeModelId: modelState.activeModelId,
     activeProject,
     authStore,
-    confirmingCount,
     conversationNameDraft,
     conversationPageByProjectId,
     editingConversationName,
@@ -269,7 +253,6 @@ export function useMainScreenController() {
     projectStore,
     projectsPage,
     queuedCount,
-    riskConfirm,
     runningState,
     runningStateClass,
     runtime,

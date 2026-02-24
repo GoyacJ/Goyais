@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.runtime.base import EmitEventFn, IsCancelledFn, WaitConfirmationFn
+from app.runtime.base import EmitEventFn, IsCancelledFn
 from app.runtime.vanilla import VanillaRuntime
 
 
@@ -14,7 +14,6 @@ class LangGraphRuntime:
         self,
         execution: dict[str, object],
         emit_event: EmitEventFn,
-        wait_confirmation: WaitConfirmationFn,
         is_cancelled: IsCancelledFn,
     ) -> None:
         await emit_event(
@@ -22,5 +21,4 @@ class LangGraphRuntime:
             "thinking_delta",
             {"stage": "runtime_fallback", "runtime": "langgraph", "fallback": "vanilla"},
         )
-        await self._fallback.run(execution, emit_event, wait_confirmation, is_cancelled)
-
+        await self._fallback.run(execution, emit_event, is_cancelled)

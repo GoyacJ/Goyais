@@ -81,8 +81,8 @@ Conversation queue_state:
       \-> rolling_back -> idle
 
 Execution state:
-  queued -> pending -> executing -> confirming -> executing -> completed
-                                   \-> failed / cancelled
+  queued -> pending -> executing -> completed
+                              \-> failed / cancelled
 
 ConversationSnapshot state:
   created -> applied -> stale
@@ -90,7 +90,7 @@ ConversationSnapshot state:
 
 不变量：
 
-1. 同一 Conversation 仅允许一个活动执行（`executing|confirming|pending(leased)`）。
+1. 同一 Conversation 仅允许一个活动执行（`pending(leased)|executing`）。
 2. 队列必须 FIFO。
 3. Stop 只影响当前执行，不清空后续队列。
 4. 回滚只允许指向当前 Conversation 内已有消息，且必须写审计。
@@ -107,7 +107,7 @@ ConversationSnapshot state:
 1. 渲染工作区/项目/对话/事件流 UI。
 2. 管理输入、模式切换、模型切换、Stop。
 3. 承接权限反馈（403、无菜单、按钮禁用）。
-4. 呈现审批弹窗、共享审批页面、管理员页面。
+4. 呈现执行状态提示、共享审批页面、管理员页面。
 
 关键模块：
 
@@ -115,7 +115,7 @@ ConversationSnapshot state:
 2. `stores/conversation`：消息、队列状态、当前执行。
 3. `stores/resource`：资源池、导入与共享视图。
 4. `stores/admin`：用户、角色、权限绑定与审批任务。
-5. `stores/execution`：事件流、风险确认、Diff 状态。
+5. `stores/execution`：事件流、风险审计、Diff 状态。
 6. `stores/general_settings`：本地通用设置策略、能力探测、即时持久化状态。
 
 ### 4.2 Hub（Go）
@@ -145,7 +145,7 @@ ConversationSnapshot state:
 
 1. 执行 Agent Loop（P0: Vanilla；P1: LangGraph）。
 2. 工具执行（文件/命令/git/patch/skills/mcp）。
-3. 高风险调用挂起并等待 Hub 决策。
+3. 高风险调用在 Agent 模式直接执行并审计；Plan 模式拒绝执行。
 4. 产出标准化事件流。
 
 执行约束：
@@ -345,9 +345,8 @@ private resource
 14. `GET /v1/conversations/{conversation_id}/export?format=markdown`
 15. `GET /v1/executions`
 16. `GET /v1/executions/{execution_id}/diff`
-17. `POST /v1/executions/{execution_id}/confirm`
-18. `POST /v1/executions/{execution_id}/commit`
-19. `POST /v1/executions/{execution_id}/discard`
+17. `POST /v1/executions/{execution_id}/commit`
+18. `POST /v1/executions/{execution_id}/discard`
 
 #### Resource / Share
 
@@ -382,7 +381,7 @@ private resource
 3. `POST /internal/executions/claim`
 4. `POST /internal/executions/{execution_id}/events/batch`
 5. `GET /internal/executions/{execution_id}/control?after_seq=&wait_ms=`
-6. `POST /v1/executions/{execution_id}/confirm` 与 `POST /v1/conversations/{conversation_id}/stop` 在 Hub 内部转换为 `execution_control_commands`（`confirm|stop`）。
+6. `POST /v1/conversations/{conversation_id}/stop` 在 Hub 内部转换为 `execution_control_commands`（`stop`），由 Worker 通过 control poll 拉取。
 7. 内部接口必须携带共享 internal token（`X-Internal-Token` 或 `Authorization: Bearer <token>`），无效或缺失返回 `401`。
 8. `trace_id` 必须贯穿 Worker claim/control/events 全链路并进入审计。
 
@@ -414,15 +413,13 @@ private resource
 3. `thinking_delta`
 4. `tool_call`
 5. `tool_result`
-6. `confirmation_required`
-7. `confirmation_resolved`
-8. `diff_generated`
-9. `execution_stopped`
-10. `rollback_requested`
-11. `snapshot_applied`
-12. `rollback_completed`
-13. `execution_done`
-14. `execution_error`
+6. `diff_generated`
+7. `execution_stopped`
+8. `rollback_requested`
+9. `snapshot_applied`
+10. `rollback_completed`
+11. `execution_done`
+12. `execution_error`
 
 ### 10.2 事件基础字段
 
@@ -673,7 +670,7 @@ CREATE TABLE execution_events (
 CREATE TABLE execution_control_commands (
   id TEXT PRIMARY KEY,
   execution_id TEXT NOT NULL,
-  command_type TEXT NOT NULL CHECK(command_type IN ('confirm','stop')),
+  command_type TEXT NOT NULL CHECK(command_type IN ('stop')),
   payload_json TEXT NOT NULL,
   seq INTEGER NOT NULL,
   created_at DATETIME NOT NULL
@@ -730,10 +727,8 @@ while True:
     if response.stop_reason == "tool_use":
         for call in response.tool_calls:
             risk = assess_risk(call)
-            if risk.requires_confirmation:
-                decision = await wait_confirmation(call)
-                if decision == "deny":
-                    append_denied_result(); continue
+            if mode == "plan" and risk.level in {"high", "critical"}:
+                emit_plan_mode_rejected(call); continue
             result = execute_tool(call)
             emit_tool_result(result)
         continue
@@ -776,7 +771,7 @@ while True:
 1. Path Guard：仅允许 repo/worktree 内路径。
 2. Command Guard：白名单命令 + 黑名单模式。
 3. `run_command` 风险分级细化：`pwd/ls/rg --files/git status/cat` 归类为 `low`，写入/联网/变更命令维持 `high/critical`。
-4. 删除/网络/命令写入均需确认。
+4. Agent 模式高风险调用直接执行并记录审计，Plan 模式高风险调用返回拒绝。
 
 ### 13.3 高风险动作
 
@@ -842,7 +837,7 @@ while True:
 ### 15.3 审计事件分类
 
 1. execution.create/cancel/done/error
-2. confirmation.approve/deny
+2. execution.stop
 3. resource.import/share_request/share_approve/share_reject/share_revoke
 4. admin.user_create/role_bind/policy_update
 5. git.commit/discard/merge_conflict
@@ -855,7 +850,7 @@ while True:
 1. 多 Conversation 并发能力可配置，默认开启并发。
 2. 单 Conversation FIFO 必须严格保证。
 3. 事件推送链路本地延迟目标 < 200ms。
-4. 执行态聚合必须暴露 `pending/executing/confirming/queued` 分态，顶部状态优先级为 `confirming > running > queued > idle`。
+4. 执行态聚合必须暴露 `pending/executing/queued` 分态，顶部状态优先级为 `running > queued > idle`。
 5. 异常恢复必须以状态一致性为第一目标。
 6. Hub/Desktop 重启后需通过 `GET /v1/conversations/{conversation_id}` 恢复历史消息、执行态与快照。
 7. i18n 强制双语齐套。
@@ -1032,8 +1027,8 @@ while True:
 2. 响应字段最小集合：`workspace_id`、`conversation_id`、`conversation_status`、`hub_url`、`connection_status`、`user_display_name`、`updated_at`。
 3. `conversation_status` 标准：`running/queued/stopped/done/error`。
 4. `conversation_status` 计算映射：
-   - `executing|confirming -> running`
-   - `queued|pending -> queued`
+   - `pending|executing -> running`
+   - `queued -> queued`
    - `completed -> done`
    - `failed -> error`
    - `cancelled|无会话|无执行 -> stopped`
@@ -1045,7 +1040,7 @@ while True:
 1. `GET /v1/conversations/{conversation_id}` 返回 `conversation/messages/executions/snapshots`，作为 Desktop 重启回填权威来源。
 2. Desktop 进入会话时必须先拉取详情并回填 runtime；仅当后端无历史消息时允许使用欢迎语兜底。
 3. 会话流应用层必须以 `event.conversation_id` 作为最终路由键，禁止仅按订阅会话 ID 写入。
-4. stream detach 条件：会话“非 active 且无未完成执行（queued/pending/executing/confirming）”时才允许断开。
+4. stream detach 条件：会话“非 active 且无未完成执行（queued/pending/executing）”时才允许断开。
 
 ## 21. 2026-02-24 会话稳定性与并发显示同步矩阵
 
@@ -1055,3 +1050,4 @@ while True:
 | Hub 默认 DB 路径改为用户配置目录并加入一次性迁移 | TECH_ARCH.md, IMPLEMENTATION_PLAN.md | TECH_ARCH 17.1, PLAN Phase 5 门禁增量 | done |
 | 会话订阅策略改为 `active + running/queued`，并增加防串流路由 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7.1/16.3, TECH_ARCH 10.3/20.9, PLAN Phase 5 门禁增量 | done |
 | 风险分级细化（`run_command` 只读命令 low） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 15.3, TECH_ARCH 13.2, STANDARDS 10.4/13.1 | done |
+| Agent 模式移除风险确认链路（删除 confirm API 与 confirming 状态） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/15.3/24, TECH_ARCH 3.3/9.1/9.2/10.1/12.1/20.8/20.9, PLAN Phase 5/8, STANDARDS 10.4/13 | done |

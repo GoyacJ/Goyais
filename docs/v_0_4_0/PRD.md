@@ -478,11 +478,9 @@ Workspace
    - `GET /v1/admin/audit`
 22. `GET /v1/conversations/{conversation_id}/events`
    - SSE 事件流（支持 `last_event_id` 断线续传）。
-23. `POST /v1/executions/{execution_id}/confirm`
-   - 审批 `approve|deny`，用于 `confirmation_required` 场景。
-24. `GET /v1/projects/{project_id}/files`
+23. `GET /v1/projects/{project_id}/files`
    - 项目文件树只读查询（`path + depth`）。
-25. `GET /v1/projects/{project_id}/files/content?path=...`
+24. `GET /v1/projects/{project_id}/files/content?path=...`
    - 项目文件内容只读预览（路径必须在项目根内）。
 
 ### 14.2 关键类型（新增字段）
@@ -541,7 +539,7 @@ Conversation {
 
 Execution {
   execution_id: string
-  state: "queued" | "pending" | "executing" | "confirming" | "completed" | "failed" | "cancelled"
+  state: "queued" | "pending" | "executing" | "completed" | "failed" | "cancelled"
   mode_snapshot: "agent" | "plan"
   model_snapshot: object
   project_revision_snapshot: number
@@ -635,7 +633,7 @@ Desktop -> Hub -> Worker
 
 1. Path Guard：文件访问限制在项目根目录/worktree。
 2. Command Guard：命令白名单 + 高危黑名单。
-3. Capability Prompt：高风险动作必须显式确认。
+3. Capability Prompt：高风险动作必须给出可审计策略提示（Agent 直接执行；Plan 返回拒绝）。
 4. 审计覆盖：执行、回滚、共享、审批、权限、密钥、MCP。
 5. 诊断脱敏：导出日志默认掩码敏感字段。
 
@@ -644,11 +642,11 @@ Desktop -> Hub -> Worker
 | 能力 | 风险 | 默认行为 |
 |------|------|----------|
 | read/search/list | low | 自动放行 |
-| write/apply_patch | high | 阻断确认 |
+| write/apply_patch | high | Agent 直接执行并审计；Plan 拒绝执行 |
 | run_command（只读命令：`pwd/ls/rg --files/git status/cat`） | low | 自动放行 |
-| run_command（写入/联网/变更命令） | high | 阻断确认 |
-| network/mcp_call | high | 阻断确认 |
-| delete/revoke_key | critical | 阻断确认 + 审计增强 |
+| run_command（写入/联网/变更命令） | high | Agent 直接执行并审计；Plan 拒绝执行 |
+| network/mcp_call | high | Agent 直接执行并审计；Plan 拒绝执行 |
+| delete/revoke_key | critical | Agent 直接执行 + 审计增强；Plan 拒绝执行 |
 
 ---
 
@@ -679,7 +677,7 @@ Desktop -> Hub -> Worker
 ### 16.3 输入区与状态规范
 
 1. 输入区动作顺序固定：`+ -> Agent/Plan -> 模型 -> 发送`。
-2. 运行状态标准：`confirming/running/queued/idle`。
+2. 运行状态标准：`running/queued/idle`（执行分态：`pending/executing/queued`）。
 3. 连接状态标准：`connected/reconnecting/disconnected`。
 4. 审批状态标准：`pending/approved/denied/revoked`。
 
@@ -745,7 +743,7 @@ Desktop -> Hub -> Worker
 11. 底部状态栏：Hub 地址与连接状态在主屏幕、账号信息、设置页一致。
 12. 连接异常：`reconnecting/disconnected` 下显示只读与重试提示。
 13. 非 Git 降级：非 Git 项目进入降级模式并限制 Commit/worktree。
-14. 高风险能力：写入/命令/网络/删除触发确认并可审计。
+14. 高风险能力：Agent 模式直接执行并可审计/可停止；Plan 模式返回拒绝。
 
 ### 19.2 测试门槛
 
@@ -805,7 +803,7 @@ Desktop -> Hub -> Worker
 | Resource | model/rule/skill/mcp 的统称 |
 | ShareRequest | 资源共享审批单据 |
 | PermissionVisibility | 菜单与操作可见性枚举 |
-| Capability Prompt | 高风险操作的人机确认机制 |
+| Capability Prompt | 高风险操作的策略提示机制（Agent 直执行、Plan 拒绝） |
 
 ---
 
@@ -837,8 +835,6 @@ event types:
 - thinking_delta
 - tool_call
 - tool_result
-- confirmation_required
-- confirmation_resolved
 - diff_generated
 - execution_stopped
 - snapshot_created
@@ -913,7 +909,7 @@ event types:
 |---|---|---|---|
 | 真实执行闭环（Desktop -> Hub -> Worker） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7/14/24, TECH_ARCH 7/9/10/11, PLAN Phase 5/6 | done |
 | Execution 快照语义（mode/model/project revision） | PRD.md, TECH_ARCH.md | PRD 14.2, TECH_ARCH 7.5/11.3 | done |
-| 审批确认与风险门禁协议（confirm + confirmation_required） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/15.3, TECH_ARCH 10/12, STANDARDS 10.4/13 | done |
+| Agent 模式移除风险确认门禁（保留审计 + stop） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 15.2/15.3, TECH_ARCH 12/13, STANDARDS 10.4/13 | done |
 | 同项目多 Conversation 并行 + 文件只读接口 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 7/14, TECH_ARCH 7/9.1/14, PLAN Phase 5/6 | done |
 
 ### 25.8 2026-02-24 模型目录全量对齐矩阵

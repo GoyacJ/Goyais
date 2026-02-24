@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"sort"
+	"strings"
+	"time"
 )
 
 func (s *AppState) hydrateExecutionDomainFromStore() {
@@ -17,8 +19,6 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	s.conversations = map[string]Conversation{}
 	s.conversationMessages = map[string][]ConversationMessage{}
 	s.conversationSnapshots = map[string][]ConversationSnapshot{}
@@ -88,6 +88,99 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 	for _, worker := range snapshot.Workers {
 		s.workers[worker.WorkerID] = worker
 	}
+	repairedExecutionIDs, removedControlCommands := repairLegacyExecutionDomainLocked(s)
+	s.mu.Unlock()
+
+	if len(repairedExecutionIDs) > 0 || removedControlCommands > 0 {
+		log.Printf(
+			"audit: repaired legacy execution domain confirming_executions=%d removed_control_commands=%d execution_ids=%v",
+			len(repairedExecutionIDs),
+			removedControlCommands,
+			repairedExecutionIDs,
+		)
+		syncExecutionDomainBestEffort(s)
+	}
+}
+
+func repairLegacyExecutionDomainLocked(state *AppState) ([]string, int) {
+	if state == nil {
+		return []string{}, 0
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	repairedExecutionIDs := make([]string, 0)
+	for executionID, execution := range state.executions {
+		if execution.State != ExecutionState("confirming") {
+			continue
+		}
+		execution.State = ExecutionStatePending
+		if strings.TrimSpace(execution.UpdatedAt) == "" {
+			execution.UpdatedAt = now
+		}
+		state.executions[executionID] = execution
+		delete(state.executionLeases, executionID)
+		repairedExecutionIDs = append(repairedExecutionIDs, executionID)
+	}
+
+	removedControlCommands := 0
+	for executionID, commands := range state.executionControlQueues {
+		filtered := make([]ExecutionControlCommand, 0, len(commands))
+		lastSeq := 0
+		for _, command := range commands {
+			if command.Type != ExecutionControlCommandTypeStop {
+				removedControlCommands++
+				continue
+			}
+			filtered = append(filtered, command)
+			if command.Seq > lastSeq {
+				lastSeq = command.Seq
+			}
+		}
+
+		if len(filtered) == 0 {
+			delete(state.executionControlQueues, executionID)
+			if lastSeq == 0 {
+				lastSeq = state.executionControlSeq[executionID]
+			}
+			state.executionControlSeq[executionID] = lastSeq
+			continue
+		}
+		state.executionControlQueues[executionID] = filtered
+		state.executionControlSeq[executionID] = lastSeq
+	}
+
+	for conversationID, conversation := range state.conversations {
+		conversation.ActiveExecutionID = nil
+		hasQueued := false
+		for _, executionID := range state.conversationExecutionOrder[conversationID] {
+			execution, exists := state.executions[executionID]
+			if !exists {
+				continue
+			}
+			if execution.State == ExecutionStatePending || execution.State == ExecutionStateExecuting {
+				activeExecutionID := executionID
+				conversation.ActiveExecutionID = &activeExecutionID
+				break
+			}
+			if execution.State == ExecutionStateQueued {
+				hasQueued = true
+			}
+		}
+
+		switch {
+		case conversation.ActiveExecutionID != nil:
+			conversation.QueueState = QueueStateRunning
+		case hasQueued:
+			conversation.QueueState = QueueStateQueued
+		default:
+			conversation.QueueState = QueueStateIdle
+		}
+
+		state.conversations[conversationID] = conversation
+	}
+
+	sort.Strings(repairedExecutionIDs)
+	return repairedExecutionIDs, removedControlCommands
 }
 
 func syncExecutionDomainBestEffort(state *AppState) {

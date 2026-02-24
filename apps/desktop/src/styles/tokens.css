@@ -173,8 +173,6 @@
   --component-badge-execution-queued-fg: var(--semantic-warning);
   --component-badge-execution-running-bg: #58637933;
   --component-badge-execution-running-fg: var(--semantic-primary);
-  --component-badge-execution-confirming-bg: #fbbf2433;
-  --component-badge-execution-confirming-fg: var(--semantic-warning);
   --component-badge-execution-success-bg: #22c55e2b;
   --component-badge-execution-success-fg: var(--semantic-success);
   --component-badge-execution-failed-bg: #ef444430;
@@ -250,10 +248,6 @@
   --component-modal-radius: var(--global-radius-16);
   --component-modal-title-fg: var(--semantic-text);
   --component-modal-body-fg: var(--semantic-text-muted);
-  --component-risk-confirm-bg: #3a1f1f;
-  --component-risk-confirm-border: var(--semantic-danger);
-  --component-risk-confirm-command-bg: var(--semantic-surface-2);
-
   --component-toast-error-bg: #3a1f1f;
   --component-toast-error-fg: var(--semantic-danger);
   --component-toast-warning-bg: #3a3017;
@@ -355,7 +349,6 @@
 
   --component-badge-execution-queued-bg: #f59e0b1f;
   --component-badge-execution-running-bg: #7e9dce33;
-  --component-badge-execution-confirming-bg: #b4530924;
   --component-badge-execution-success-bg: #15803d24;
   --component-badge-execution-failed-bg: #b91c1c24;
   --component-badge-execution-cancelled-bg: #94a3b83d;
@@ -370,7 +363,6 @@
   --component-shell-divider: #1f1f1f1a;
   --component-shell-settings-bg: #1f1f1f0a;
   --component-shell-settings-border: #1f1f1f1f;
-  --component-risk-confirm-bg: #fee2e2;
   --component-toast-error-bg: #fee2e2;
   --component-toast-warning-bg: #fef3c7;
   --component-toast-info-bg: #dbeafe;

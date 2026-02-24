@@ -79,12 +79,6 @@ export async function rollbackExecution(conversationId: string, messageId: strin
   });
 }
 
-export async function confirmExecution(executionId: string, decision: "approve" | "deny"): Promise<void> {
-  await getControlClient().post<void>(`/v1/executions/${executionId}/confirm`, {
-    decision
-  });
-}
-
 export async function commitExecution(executionId: string): Promise<void> {
   await getControlClient().post<void>(`/v1/executions/${executionId}/commit`);
 }

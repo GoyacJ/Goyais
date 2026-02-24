@@ -122,7 +122,6 @@ class ClaimLoopService:
             await self._runtime.run(
                 execution=execution,
                 emit_event=emitter.emit,
-                wait_confirmation=controls.wait_confirmation,
                 is_cancelled=controls.is_cancelled,
             )
         except Exception as exc:
@@ -179,7 +178,6 @@ class _ExecutionControls:
         self._running = False
         self._task: asyncio.Task[None] | None = None
         self._cancelled = False
-        self._decision_queue: asyncio.Queue[str] = asyncio.Queue()
 
     async def start(self) -> None:
         self._running = True
@@ -193,23 +191,6 @@ class _ExecutionControls:
 
     def is_cancelled(self, _: str) -> bool:
         return self._cancelled
-
-    async def wait_confirmation(self, _: str, timeout_seconds: int) -> str:
-        deadline = asyncio.get_running_loop().time() + timeout_seconds
-        while True:
-            if self._cancelled:
-                return "cancelled"
-            now = asyncio.get_running_loop().time()
-            if now >= deadline:
-                return "deny"
-            timeout = min(0.2, deadline - now)
-            try:
-                decision = await asyncio.wait_for(self._decision_queue.get(), timeout=timeout)
-            except TimeoutError:
-                continue
-            normalized = str(decision).strip().lower()
-            if normalized in {"approve", "deny"}:
-                return normalized
 
     async def _poll_loop(self) -> None:
         while self._running:
@@ -242,14 +223,8 @@ class _ExecutionControls:
                 if not isinstance(command, dict):
                     continue
                 command_type = str(command.get("type") or "").strip().lower()
-                payload = command.get("payload")
-                payload_map = payload if isinstance(payload, dict) else {}
                 if command_type == "stop":
                     self._cancelled = True
-                if command_type == "confirm":
-                    decision = str(payload_map.get("decision") or "").strip().lower()
-                    if decision in {"approve", "deny"}:
-                        self._decision_queue.put_nowait(decision)
 
 
 def _now_iso() -> str:

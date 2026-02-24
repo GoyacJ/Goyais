@@ -60,13 +60,6 @@ func TestInternalExecutionClaimAndControlFlow(t *testing.T) {
 		t.Fatalf("expected claim envelope with content")
 	}
 
-	confirmRes := performJSONRequest(t, router, http.MethodPost, "/v1/executions/"+executionID+"/confirm", map[string]any{
-		"decision": "approve",
-	}, authHeaders)
-	if confirmRes.Code != http.StatusOK {
-		t.Fatalf("expected confirm 200, got %d (%s)", confirmRes.Code, confirmRes.Body.String())
-	}
-
 	controlRes := performJSONRequest(t, router, http.MethodGet, "/internal/executions/"+executionID+"/control?after_seq=0&wait_ms=0", nil, internalHeaders)
 	if controlRes.Code != http.StatusOK {
 		t.Fatalf("expected control poll 200, got %d (%s)", controlRes.Code, controlRes.Body.String())
@@ -74,12 +67,8 @@ func TestInternalExecutionClaimAndControlFlow(t *testing.T) {
 	controlPayload := map[string]any{}
 	mustDecodeJSON(t, controlRes.Body.Bytes(), &controlPayload)
 	commands := controlPayload["commands"].([]any)
-	if len(commands) == 0 {
-		t.Fatalf("expected confirm command in control poll")
-	}
-	first := commands[0].(map[string]any)
-	if first["type"] != "confirm" {
-		t.Fatalf("expected command type confirm, got %#v", first["type"])
+	if len(commands) != 0 {
+		t.Fatalf("expected no control command by default, got %#v", commands)
 	}
 
 	eventBatchRes := performJSONRequest(t, router, http.MethodPost, "/internal/executions/"+executionID+"/events/batch", map[string]any{

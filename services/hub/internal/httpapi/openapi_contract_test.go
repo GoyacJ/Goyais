@@ -43,7 +43,6 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/admin/menu-visibility/{role_key}:",
 		"/v1/admin/abac-policies:",
 		"/v1/admin/audit:",
-		"/v1/executions/{execution_id}/confirm:",
 		"/internal/workers/register:",
 		"/internal/workers/{worker_id}/heartbeat:",
 		"/internal/executions/claim:",
@@ -55,6 +54,13 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		if !strings.Contains(spec, marker) {
 			t.Fatalf("openapi missing required route marker: %s", marker)
 		}
+	}
+}
+
+func TestOpenAPIDoesNotContainRemovedConfirmRoute(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	if strings.Contains(spec, "/v1/executions/{execution_id}/confirm:") {
+		t.Fatalf("openapi still contains removed confirm route")
 	}
 }
 

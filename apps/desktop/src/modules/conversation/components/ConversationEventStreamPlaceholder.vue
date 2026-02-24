@@ -1,7 +1,7 @@
 <template>
   <section class="events" data-testid="conversation-events">
     <h3>Event Stream</h3>
-    <p>执行事件流区域占位（thinking/tool/diff/confirm/result）</p>
+    <p>执行事件流区域占位（thinking/tool/diff/result）</p>
   </section>
 </template>
 

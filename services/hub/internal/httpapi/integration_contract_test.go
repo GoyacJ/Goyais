@@ -854,7 +854,7 @@ func TestProjectFilesEndpoints(t *testing.T) {
 	}
 }
 
-func TestExecutionConfirmEndpoint(t *testing.T) {
+func TestExecutionConfirmEndpointRemoved(t *testing.T) {
 	router := NewRouter()
 	workspaceID := createRemoteWorkspace(t, router, "Remote Execution Confirm", "http://127.0.0.1:9012", false)
 	token := loginRemoteWorkspace(t, router, workspaceID, "confirm_user", "pw", RoleDeveloper, true)
@@ -895,8 +895,8 @@ func TestExecutionConfirmEndpoint(t *testing.T) {
 	confirmRes := performJSONRequest(t, router, http.MethodPost, "/v1/executions/"+executionID+"/confirm", map[string]any{
 		"decision": "approve",
 	}, authHeaders)
-	if confirmRes.Code != http.StatusOK {
-		t.Fatalf("expected execution confirm 200, got %d (%s)", confirmRes.Code, confirmRes.Body.String())
+	if confirmRes.Code != http.StatusNotFound {
+		t.Fatalf("expected execution confirm route 404, got %d (%s)", confirmRes.Code, confirmRes.Body.String())
 	}
 }
 

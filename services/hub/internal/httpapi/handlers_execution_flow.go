@@ -505,13 +505,13 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 
 		conversation.QueueState = snapshot.QueueState
 		conversation.ActiveExecutionID = nil
-		for _, id := range ordered {
-			exec := state.executions[id]
-			if exec.State == ExecutionStateExecuting || exec.State == ExecutionStateConfirming || exec.State == ExecutionStatePending {
-				conversation.ActiveExecutionID = &id
-				break
+			for _, id := range ordered {
+				exec := state.executions[id]
+				if exec.State == ExecutionStateExecuting || exec.State == ExecutionStatePending {
+					conversation.ActiveExecutionID = &id
+					break
+				}
 			}
-		}
 		conversation.UpdatedAt = now
 		state.conversations[conversationID] = conversation
 		appendExecutionEventLocked(state, ExecutionEvent{

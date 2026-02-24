@@ -182,7 +182,7 @@ export function createInitialMessages(conversationId: string): ConversationMessa
 
 export function deriveQueueState(runtime: ConversationRuntime): QueueState {
   const hasRunning = runtime.executions.some((execution) =>
-    execution.state === "pending" || execution.state === "executing" || execution.state === "confirming"
+    execution.state === "pending" || execution.state === "executing"
   );
   const hasQueued = runtime.executions.some((execution) => execution.state === "queued");
   if (hasRunning) {
@@ -239,7 +239,7 @@ export function findSnapshotForMessage(conversationId: string, messageId: string
 
 export function countActiveAndQueued(runtime: ConversationRuntime): number {
   return runtime.executions.filter((execution) =>
-    execution.state === "queued" || execution.state === "pending" || execution.state === "executing" || execution.state === "confirming"
+    execution.state === "queued" || execution.state === "pending" || execution.state === "executing"
   ).length;
 }
 
@@ -247,7 +247,6 @@ export function getExecutionStateCounts(runtime: ConversationRuntime): {
   queued: number;
   pending: number;
   executing: number;
-  confirming: number;
 } {
   return runtime.executions.reduce(
     (acc, execution) => {
@@ -257,18 +256,16 @@ export function getExecutionStateCounts(runtime: ConversationRuntime): {
         acc.pending += 1;
       } else if (execution.state === "executing") {
         acc.executing += 1;
-      } else if (execution.state === "confirming") {
-        acc.confirming += 1;
       }
       return acc;
     },
-    { queued: 0, pending: 0, executing: 0, confirming: 0 }
+    { queued: 0, pending: 0, executing: 0 }
   );
 }
 
 export function hasUnfinishedExecutions(runtime: ConversationRuntime): boolean {
   const counts = getExecutionStateCounts(runtime);
-  return counts.queued > 0 || counts.pending > 0 || counts.executing > 0 || counts.confirming > 0;
+  return counts.queued > 0 || counts.pending > 0 || counts.executing > 0;
 }
 
 export function getLatestFinishedExecution(conversationId: string): Execution | undefined {

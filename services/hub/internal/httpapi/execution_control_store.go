@@ -33,8 +33,13 @@ func listExecutionControlCommandsAfterLocked(state *AppState, executionID string
 	if start >= len(items) {
 		return []ExecutionControlCommand{}, state.executionControlSeq[executionID]
 	}
-	result := make([]ExecutionControlCommand, len(items)-start)
-	copy(result, items[start:])
+	result := make([]ExecutionControlCommand, 0, len(items)-start)
+	for _, item := range items[start:] {
+		if item.Type != ExecutionControlCommandTypeStop {
+			continue
+		}
+		result = append(result, item)
+	}
 	return result, state.executionControlSeq[executionID]
 }
 

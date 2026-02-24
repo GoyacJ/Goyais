@@ -1,7 +1,6 @@
 import {
   cancelExecution,
   commitExecution,
-  confirmExecution,
   createExecution,
   discardExecution,
   loadExecutionDiff,
@@ -86,7 +85,7 @@ export async function stopConversationExecution(conversation: Conversation): Pro
     return;
   }
 
-  const active = runtime.executions.find((item) => item.state === "executing" || item.state === "confirming" || item.state === "pending");
+  const active = runtime.executions.find((item) => item.state === "executing" || item.state === "pending");
   if (!active) {
     return;
   }
@@ -178,14 +177,6 @@ export async function discardLatestDiff(conversationId: string): Promise<void> {
     if (runtime) {
       runtime.diff = [];
     }
-  } catch (error) {
-    conversationStore.error = toDisplayError(error);
-  }
-}
-
-export async function resolveExecutionConfirmation(executionId: string, decision: "approve" | "deny"): Promise<void> {
-  try {
-    await confirmExecution(executionId, decision);
   } catch (error) {
     conversationStore.error = toDisplayError(error);
   }

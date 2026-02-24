@@ -11,7 +11,6 @@ withDefaults(
     tone:
       | "queued"
       | "running"
-      | "confirming"
       | "success"
       | "failed"
       | "cancelled"
@@ -43,11 +42,6 @@ withDefaults(
 .tone-running {
   background: var(--component-badge-execution-running-bg);
   color: var(--component-badge-execution-running-fg);
-}
-
-.tone-confirming {
-  background: var(--component-badge-execution-confirming-bg);
-  color: var(--component-badge-execution-confirming-fg);
 }
 
 .tone-success {

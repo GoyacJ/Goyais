@@ -113,8 +113,6 @@ export type ExecutionEventType =
   | "thinking_delta"
   | "tool_call"
   | "tool_result"
-  | "confirmation_required"
-  | "confirmation_resolved"
   | "diff_generated"
   | "execution_stopped"
   | "execution_done"

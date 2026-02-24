@@ -3,7 +3,6 @@ import type { Router } from "vue-router";
 import {
   commitLatestDiff,
   discardLatestDiff,
-  resolveExecutionConfirmation,
   rollbackConversationToMessage,
   setConversationDraft,
   setConversationInspectorTab,
@@ -34,12 +33,6 @@ import { createRemoteConnection } from "@/modules/workspace/services";
 import { setWorkspaceToken } from "@/shared/stores/authStore";
 import type { Conversation, InspectorTabKey, Project } from "@/shared/types/api";
 import { setWorkspaceConnection, switchWorkspaceContext, upsertWorkspace } from "@/modules/workspace/store";
-type MainScreenRiskConfirmState = {
-  open: boolean;
-  executionId: string;
-  summary: string;
-  preview: string;
-};
 type MainScreenActionsInput = {
   router: Router;
   activeConversation: ComputedRef<Conversation | undefined>;
@@ -47,7 +40,6 @@ type MainScreenActionsInput = {
   runtime: ComputedRef<ConversationRuntime | undefined>;
   modelOptions: ComputedRef<Array<{ value: string; label: string }>>;
   inspectorCollapsed: Ref<boolean>;
-  riskConfirm: Ref<MainScreenRiskConfirmState>;
   editingConversationName: Ref<boolean>;
   conversationNameDraft: Ref<string>;
   projectImportInProgress: Ref<boolean>;
@@ -237,29 +229,13 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     }
     await discardLatestDiff(input.activeConversation.value.id);
   }
-  async function confirmRisk(decision: "approve" | "deny"): Promise<void> {
-    const executionId = input.riskConfirm.value.executionId.trim();
-    if (executionId === "") {
-      return;
-    }
-    await resolveExecutionConfirmation(executionId, decision);
-    if (decision === "deny") {
-      input.riskConfirm.value.open = false;
-      input.riskConfirm.value.executionId = "";
-    }
-  }
-  function closeRiskConfirm(): void {
-    input.riskConfirm.value.open = false;
-  }
   function exportPatch(): void {
     window.alert("Patch exported (design stub).");
   }
   return {
     addConversationByPrompt,
     changeInspectorTab,
-    closeRiskConfirm,
     commitDiff,
-    confirmRisk,
     createWorkspace,
     deleteConversationById,
     deleteProjectById,

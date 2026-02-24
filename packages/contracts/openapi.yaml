@@ -575,29 +575,6 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/executions/{execution_id}/confirm:
-    post:
-      summary: Confirm or deny a pending execution
-      parameters:
-        - $ref: '#/components/parameters/ExecutionIdParam'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ExecutionConfirmRequest'
-      responses:
-        '200':
-          description: Confirmation accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-        '400':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '404':
-          $ref: '#/components/responses/StandardErrorResponse'
-
   /v1/executions/{execution_id}/{action}:
     post:
       summary: Commit or discard execution result
@@ -2215,7 +2192,7 @@ components:
           type: string
         state:
           type: string
-          enum: [queued, pending, executing, confirming, completed, failed, cancelled]
+          enum: [queued, pending, executing, completed, failed, cancelled]
         mode:
           type: string
           enum: [agent, plan]
@@ -2263,14 +2240,6 @@ components:
           enum: [idle, running, queued]
         queue_index:
           type: integer
-
-    ExecutionConfirmRequest:
-      type: object
-      required: [decision]
-      properties:
-        decision:
-          type: string
-          enum: [approve, deny]
 
     RollbackRequest:
       type: object
@@ -2983,7 +2952,7 @@ components:
           type: string
         type:
           type: string
-          enum: [confirm, stop]
+          enum: [stop]
         payload:
           type: object
           additionalProperties: true

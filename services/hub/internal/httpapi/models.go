@@ -60,13 +60,12 @@ const (
 type ExecutionState string
 
 const (
-	ExecutionStateQueued     ExecutionState = "queued"
-	ExecutionStatePending    ExecutionState = "pending"
-	ExecutionStateExecuting  ExecutionState = "executing"
-	ExecutionStateConfirming ExecutionState = "confirming"
-	ExecutionStateCompleted  ExecutionState = "completed"
-	ExecutionStateFailed     ExecutionState = "failed"
-	ExecutionStateCancelled  ExecutionState = "cancelled"
+	ExecutionStateQueued    ExecutionState = "queued"
+	ExecutionStatePending   ExecutionState = "pending"
+	ExecutionStateExecuting ExecutionState = "executing"
+	ExecutionStateCompleted ExecutionState = "completed"
+	ExecutionStateFailed    ExecutionState = "failed"
+	ExecutionStateCancelled ExecutionState = "cancelled"
 )
 
 type ResourceType string
@@ -342,10 +341,6 @@ type ExecutionCreateResponse struct {
 	QueueIndex int        `json:"queue_index"`
 }
 
-type ExecutionConfirmRequest struct {
-	Decision string `json:"decision"`
-}
-
 type RollbackRequest struct {
 	MessageID string `json:"message_id"`
 }
@@ -377,8 +372,6 @@ const (
 	ExecutionEventTypeThinkingDelta        ExecutionEventType = "thinking_delta"
 	ExecutionEventTypeToolCall             ExecutionEventType = "tool_call"
 	ExecutionEventTypeToolResult           ExecutionEventType = "tool_result"
-	ExecutionEventTypeConfirmationRequired ExecutionEventType = "confirmation_required"
-	ExecutionEventTypeConfirmationResolved ExecutionEventType = "confirmation_resolved"
 	ExecutionEventTypeDiffGenerated        ExecutionEventType = "diff_generated"
 	ExecutionEventTypeExecutionStopped     ExecutionEventType = "execution_stopped"
 	ExecutionEventTypeExecutionDone        ExecutionEventType = "execution_done"
@@ -404,8 +397,7 @@ type ExecutionEventBatchRequest struct {
 type ExecutionControlCommandType string
 
 const (
-	ExecutionControlCommandTypeConfirm ExecutionControlCommandType = "confirm"
-	ExecutionControlCommandTypeStop    ExecutionControlCommandType = "stop"
+	ExecutionControlCommandTypeStop ExecutionControlCommandType = "stop"
 )
 
 type ExecutionControlCommand struct {

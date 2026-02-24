@@ -14,11 +14,9 @@ from app.tool_runtime import (
 from app.tools.subagent_tools import run_subagent
 
 EmitEventFn = Callable[[dict[str, Any], str, dict[str, Any]], Awaitable[None]]
-WaitConfirmationFn = Callable[[str, int], Awaitable[str]]
 IsCancelledFn = Callable[[str], bool]
 
 MAX_TURNS = 6
-CONFIRMATION_TIMEOUT_SECONDS = 900
 SYSTEM_PROMPT = (
     "You are Goyais worker. Prefer deterministic code edits and concise explanations. "
     "Use available tools only when necessary."
@@ -28,7 +26,6 @@ SYSTEM_PROMPT = (
 async def run_execution_loop(
     execution: dict[str, Any],
     emit_event: EmitEventFn,
-    wait_confirmation: WaitConfirmationFn,
     is_cancelled: IsCancelledFn,
 ) -> None:
     execution_id = str(execution.get("execution_id") or "").strip()
@@ -61,18 +58,6 @@ async def run_execution_loop(
                 },
             )
             return
-        if mode_snapshot == "agent" and content_risk in {"high", "critical"}:
-            decision = await _resolve_risk_confirmation(
-                execution=execution,
-                emit_event=emit_event,
-                wait_confirmation=wait_confirmation,
-                is_cancelled=is_cancelled,
-                risk_level=content_risk,
-                summary="Operation requires approval.",
-                preview=content[:400],
-            )
-            if decision != "approve":
-                return
 
         invocation = resolve_model_invocation(execution)
         messages = [
@@ -155,19 +140,6 @@ async def run_execution_loop(
                         },
                     )
                     return
-                if mode_snapshot == "agent" and risk_level in {"high", "critical"}:
-                    preview = json.dumps(tool_call.arguments, ensure_ascii=False)[:400]
-                    decision = await _resolve_risk_confirmation(
-                        execution=execution,
-                        emit_event=emit_event,
-                        wait_confirmation=wait_confirmation,
-                        is_cancelled=is_cancelled,
-                        risk_level=risk_level,
-                        summary=f"Tool requires approval: {tool_call.name}",
-                        preview=preview,
-                    )
-                    if decision != "approve":
-                        return
 
                 await emit_event(
                     execution,
@@ -261,37 +233,6 @@ async def run_execution_loop(
             "execution_error",
             {"reason": "WORKER_RUNTIME_ERROR", "message": str(exc)},
         )
-
-
-async def _resolve_risk_confirmation(
-    execution: dict[str, Any],
-    emit_event: EmitEventFn,
-    wait_confirmation: WaitConfirmationFn,
-    is_cancelled: IsCancelledFn,
-    risk_level: str,
-    summary: str,
-    preview: str,
-) -> str:
-    execution_id = str(execution.get("execution_id") or "").strip()
-    await emit_event(
-        execution,
-        "confirmation_required",
-        {"risk_level": risk_level, "summary": summary, "preview": preview},
-    )
-    decision = await wait_confirmation(execution_id, timeout_seconds=CONFIRMATION_TIMEOUT_SECONDS)
-    if decision == "cancelled" or is_cancelled(execution_id):
-        await emit_event(execution, "execution_stopped", {"reason": "stop_requested"})
-        return "cancelled"
-
-    await emit_event(execution, "confirmation_resolved", {"decision": decision})
-    if decision != "approve":
-        await emit_event(
-            execution,
-            "execution_error",
-            {"reason": "USER_DENIED", "message": "Operation denied by user."},
-        )
-        return decision
-    return "approve"
 
 
 def _build_system_prompt(execution: dict[str, Any]) -> str:

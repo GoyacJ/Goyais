@@ -69,7 +69,6 @@
           :queued-count="queuedCount"
           :pending-count="pendingCount"
           :executing-count="executingCount"
-          :confirming-count="confirmingCount"
           :has-active-execution="activeCount > 0"
           :draft="runtime?.draft ?? ''"
           :mode="runtime?.mode ?? 'agent'"
@@ -92,7 +91,6 @@
             :queued-count="queuedCount"
             :pending-count="pendingCount"
             :executing-count="executingCount"
-            :confirming-count="confirmingCount"
             :model-id="activeModelId"
             :active-tab="runtime?.inspectorTab ?? 'diff'"
             @change-tab="changeInspectorTab"
@@ -130,18 +128,6 @@
       />
     </template>
 
-    <RiskConfirmModal
-      :open="riskConfirm.open"
-      title="高风险操作确认"
-      :summary="riskConfirm.summary"
-      :preview="riskConfirm.preview"
-    >
-      <div class="risk-actions">
-        <button type="button" class="risk-btn ghost" @click="closeRiskConfirm">稍后处理</button>
-        <button type="button" class="risk-btn ghost" @click="confirmRisk('deny')">拒绝</button>
-        <button type="button" class="risk-btn primary" @click="confirmRisk('approve')">批准</button>
-      </div>
-    </RiskConfirmModal>
   </MainShell>
 </template>
 
@@ -152,7 +138,6 @@ import MainSidebarPanel from "@/modules/conversation/components/MainSidebarPanel
 import MainShell from "@/shared/shells/MainShell.vue";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import HubStatusBar from "@/shared/ui/HubStatusBar.vue";
-import RiskConfirmModal from "@/shared/ui/RiskConfirmModal.vue";
 import Topbar from "@/shared/ui/Topbar.vue";
 import { useMainScreenController } from "@/modules/conversation/views/useMainScreenController";
 
@@ -164,9 +149,6 @@ const {
   authStore,
   changeInspectorTab,
   commitDiff,
-  closeRiskConfirm,
-  confirmingCount,
-  confirmRisk,
   conversationNameDraft,
   conversationPageByProjectId,
   createWorkspace,
@@ -195,7 +177,6 @@ const {
   projectImportInProgress,
   projectsPage,
   queuedCount,
-  riskConfirm,
   rollbackMessage,
   runningState,
   runningStateClass,

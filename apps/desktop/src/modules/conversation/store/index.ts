@@ -21,7 +21,6 @@ export {
   commitLatestDiff,
   discardLatestDiff,
   refreshExecutionDiff,
-  resolveExecutionConfirmation,
   rollbackConversationToMessage,
   stopConversationExecution,
   submitConversationMessage

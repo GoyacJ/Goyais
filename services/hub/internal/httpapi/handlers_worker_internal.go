@@ -243,6 +243,7 @@ func InternalExecutionEventsBatchHandler(state *AppState) http.HandlerFunc {
 			if event.Payload == nil {
 				event.Payload = map[string]any{}
 			}
+			event.Type = normalizeLegacyExecutionEventType(event.Type, event.Payload)
 			conversation, exists := state.conversations[event.ConversationID]
 			if !exists {
 				state.mu.Unlock()
@@ -257,17 +258,6 @@ func InternalExecutionEventsBatchHandler(state *AppState) http.HandlerFunc {
 				execution.State = ExecutionStateExecuting
 				conversation.ActiveExecutionID = &execution.ID
 				conversation.QueueState = QueueStateRunning
-			case ExecutionEventTypeConfirmationRequired:
-				execution.State = ExecutionStateConfirming
-				conversation.ActiveExecutionID = &execution.ID
-				conversation.QueueState = QueueStateRunning
-			case ExecutionEventTypeConfirmationResolved:
-				decision, _ := event.Payload["decision"].(string)
-				if strings.EqualFold(strings.TrimSpace(decision), "deny") {
-					execution.State = ExecutionStateCancelled
-				} else {
-					execution.State = ExecutionStateExecuting
-				}
 			case ExecutionEventTypeExecutionDone:
 				execution.State = ExecutionStateCompleted
 			case ExecutionEventTypeExecutionError:
@@ -319,6 +309,21 @@ func InternalExecutionEventsBatchHandler(state *AppState) http.HandlerFunc {
 			"accepted": true,
 			"events":   normalized,
 		})
+	}
+}
+
+func normalizeLegacyExecutionEventType(eventType ExecutionEventType, payload map[string]any) ExecutionEventType {
+	switch strings.TrimSpace(string(eventType)) {
+	case "confirmation_required":
+		return ExecutionEventTypeExecutionStarted
+	case "confirmation_resolved":
+		decision, _ := payload["decision"].(string)
+		if strings.EqualFold(strings.TrimSpace(decision), "deny") {
+			return ExecutionEventTypeExecutionStopped
+		}
+		return ExecutionEventTypeExecutionStarted
+	default:
+		return eventType
 	}
 }
 
