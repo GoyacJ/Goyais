@@ -68,10 +68,22 @@ function buildExecutionTraceViewModel(
 ): ExecutionTraceViewModel {
   const detailLevel = execution.agent_config_snapshot?.trace_detail_level ?? "verbose";
   const durationSec = resolveDurationSeconds(execution, events, now);
+  const messageDurationSec = resolveMessageDurationSeconds(execution, now);
   const thinkingCount = events.filter((item) => item.type === "thinking_delta").length;
   const toolCallCount = events.filter((item) => item.type === "tool_call").length;
   const toolFailedCount = events.filter((item) => item.type === "tool_result" && item.payload.ok === false).length;
-  const summary = buildSummary(execution.state, durationSec, thinkingCount, toolCallCount, toolFailedCount);
+  const tokensIn = toNonNegativeInteger(execution.tokens_in);
+  const tokensOut = toNonNegativeInteger(execution.tokens_out);
+  const summary = buildSummary(
+    execution.state,
+    durationSec,
+    messageDurationSec,
+    thinkingCount,
+    toolCallCount,
+    toolFailedCount,
+    tokensIn,
+    tokensOut
+  );
 
   return {
     executionId: execution.id,
@@ -95,6 +107,16 @@ function sortEvents(events: ExecutionEvent[]): ExecutionEvent[] {
 
 function resolveDurationSeconds(execution: Execution, events: ExecutionEvent[], now: Date): number {
   const startedAt = resolveStartedAt(execution, events);
+  const endedAt = resolveEndedAt(execution, now);
+  const durationMs = endedAt.getTime() - startedAt.getTime();
+  if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    return 0;
+  }
+  return Math.round(durationMs / 1000);
+}
+
+function resolveMessageDurationSeconds(execution: Execution, now: Date): number {
+  const startedAt = toDateOrNow(execution.created_at);
   const endedAt = resolveEndedAt(execution, now);
   const durationMs = endedAt.getTime() - startedAt.getTime();
   if (!Number.isFinite(durationMs) || durationMs <= 0) {
@@ -127,14 +149,18 @@ function toDateOrNow(input: string): Date {
 function buildSummary(
   state: ExecutionState,
   durationSec: number,
+  messageDurationSec: number,
   thinkingCount: number,
   toolCallCount: number,
-  toolFailedCount: number
+  toolFailedCount: number,
+  tokensIn: number | null,
+  tokensOut: number | null
 ): string {
   if (state === "queued") {
     return "排队中，等待执行";
   }
-  const base = `已思考 ${durationSec}s，调用 ${toolCallCount} 个工具`;
+  const tokenSummary = formatTokenSummary(tokensIn, tokensOut);
+  const base = `已思考 ${durationSec}s，调用 ${toolCallCount} 个工具，Token ${tokenSummary}，消息执行 ${messageDurationSec}s`;
   if (state === "failed") {
     return toolFailedCount > 0 ? `执行失败，${base}，其中 ${toolFailedCount} 个失败` : `执行失败，${base}`;
   }
@@ -143,9 +169,26 @@ function buildSummary(
   }
   if (state === "pending" || state === "executing") {
     const thinkingText = thinkingCount > 0 ? `已思考 ${durationSec}s` : `执行中 ${durationSec}s`;
-    return `${thinkingText}，已调用 ${toolCallCount} 个工具`;
+    return `${thinkingText}，已调用 ${toolCallCount} 个工具，Token ${tokenSummary}，消息执行 ${messageDurationSec}s`;
   }
   return base;
+}
+
+function formatTokenSummary(tokensIn: number | null, tokensOut: number | null): string {
+  if (tokensIn === null || tokensOut === null) {
+    return "N/A";
+  }
+  return `in ${tokensIn} / out ${tokensOut} / total ${tokensIn + tokensOut}`;
+}
+
+function toNonNegativeInteger(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+  if (value < 0) {
+    return 0;
+  }
+  return Math.trunc(value);
 }
 
 function toExecutionTraceStep(event: ExecutionEvent, detailLevel: TraceDetailLevel, index: number): ExecutionTraceStep {

@@ -422,6 +422,20 @@
 
 ---
 
+## 2026-02-25 Token 可观测性与主屏空态门禁（增量）
+
+1. 数据门禁：Hub `executions` 必须持久化 `tokens_in/tokens_out`，并支持旧库平滑迁移默认值。
+2. 聚合门禁：Hub 处理 Worker 事件时，必须吸收 `payload.usage.input_tokens/output_tokens` 聚合到 execution，不得回退为仅前端临时计算。
+3. 展示门禁：主对话区过程摘要必须展示 `Token in/out/total` 与 `消息执行时长`；usage 缺失时显示 `N/A`。
+4. 初始化门禁：新建 Conversation 不得写入固定欢迎语；前端本地兜底同样禁止注入固定欢迎语。
+5. 选择门禁：刷新会话列表不得自动选中第一条；删除当前会话后必须保持 `activeConversationId=""`。
+6. 空态门禁：未选中 Conversation 时主屏幕只能渲染空态，不显示对话区、发送区与 Inspector。
+7. Inspector 门禁：`Export Patch` 必须调用 `GET /v1/executions/{execution_id}/patch` 并触发文件下载，不得保留 stub。
+8. 观测门禁：Inspector Run 需展示最近执行 token/时长摘要；Risk 需展示 `low/high/critical` 真实统计。
+9. 回归门禁：Hub `go test ./internal/httpapi`、Worker usage 相关 pytest、Desktop conversation/project 相关 vitest 必须覆盖并通过。
+
+---
+
 ## 关键风险与缓解
 
 | 风险 | 阶段 | 缓解 |
@@ -486,3 +500,12 @@
 | 终态消息门禁（首次终态才落消息） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/16.3, TECH_ARCH 20.9/20.11, STANDARDS 10.4/11 | done |
 | SSE `last_event_id` 续传防重放 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.1, TECH_ARCH 20.9, PLAN 事件门禁 | done |
 | Worker `tool_call/tool_result.call_id` 可选扩展 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/16.3, TECH_ARCH 9.2/20.11, PLAN Worker 门禁, STANDARDS 10.4/15 | done |
+
+## 27. 2026-02-25 Token 可观测性与主屏空态同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| Execution token 字段与 usage 聚合入库 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.2/16.3, TECH_ARCH 10.2/11.3/20.12, PLAN 2026-02-25 增量门禁, STANDARDS 10.4/15 | done |
+| 新会话移除固定欢迎语（Hub + Desktop） | PRD.md, TECH_ARCH.md | PRD 7.2/19.1, TECH_ARCH 20.9/20.12 | done |
+| 未选中会话空态与禁用自动首条选中 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 16.1/19.1, TECH_ARCH 14.1/20.12, PLAN 2026-02-25 增量门禁 | done |
+| Inspector Export Patch 真链路 + Run/Risk 指标补齐 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 8.2/14.1/19.1, TECH_ARCH 9.1/20.12, PLAN 2026-02-25 增量门禁, STANDARDS 10.4/13 | done |

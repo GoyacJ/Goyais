@@ -211,6 +211,7 @@ Workspace
    - 释放 Conversation 锁；
    - 若队列非空，自动拉起下一条。
 3. 追加发送：不打断当前运行，仅入队。
+4. 新建 Conversation 不得自动写入固定欢迎语；首条可见消息应来自真实用户输入或系统事件。
 
 ### 7.3 回滚语义（回滚到此处）
 
@@ -482,6 +483,14 @@ Workspace
    - 项目文件树只读查询（`path + depth`）。
 24. `GET /v1/projects/{project_id}/files/content?path=...`
    - 项目文件内容只读预览（路径必须在项目根内）。
+25. `GET /v1/executions/{execution_id}/diff`
+   - 查询 execution 变更摘要与文件列表。
+26. `POST /v1/executions/{execution_id}/commit`
+   - 提交该次 execution 产生的变更。
+27. `POST /v1/executions/{execution_id}/discard`
+   - 丢弃该次 execution 产生的变更。
+28. `GET /v1/executions/{execution_id}/patch`
+   - 导出该次 execution 的 patch 文本（Git 项目优先 binary diff；非 Git 降级可读补丁）。
 
 ### 14.2 关键类型（新增字段）
 
@@ -543,6 +552,8 @@ Execution {
   mode_snapshot: "agent" | "plan"
   model_snapshot: object
   project_revision_snapshot: number
+  tokens_in: number
+  tokens_out: number
 }
 
 ConversationSnapshot {
@@ -663,6 +674,7 @@ Desktop -> Hub -> Worker
    - 中部：Conversation 区（AI 左/用户右）+ 输入区。
    - 右侧：Inspector（变更记录/执行状态/文件/风险）。
    - 底部：Hub 地址与连接状态。
+3. 未选中 Conversation 时，右侧主工作区必须显示空态，不渲染 Conversation 区、输入区与 Inspector。
 
 ### 16.2 账号信息与设置
 
@@ -680,6 +692,8 @@ Desktop -> Hub -> Worker
 2. 运行状态标准：`running/queued/idle`（执行分态：`pending/executing/queued`）。
 3. 连接状态标准：`connected/reconnecting/disconnected`。
 4. 审批状态标准：`pending/approved/denied/revoked`。
+5. 过程摘要标准：执行中简要摘要应至少包含“思考时长、工具调用个数、Token 输入/输出/总计、消息执行时间”。
+6. Token 缺失场景显示 `N/A`，不得用 `0` 冒充真实统计。
 
 ### 16.4 设计实践约束
 
@@ -744,6 +758,9 @@ Desktop -> Hub -> Worker
 12. 连接异常：`reconnecting/disconnected` 下显示只读与重试提示。
 13. 非 Git 降级：非 Git 项目进入降级模式并限制 Commit/worktree。
 14. 高风险能力：Agent 模式直接执行并可审计/可停止；Plan 模式返回拒绝。
+15. 新建 Conversation：不出现固定欢迎语。
+16. 主屏幕空态：未选中 Conversation 时右侧为空态，且不显示输入区与 Inspector。
+17. Inspector 导出：`Export Patch` 必须触发真实下载，不得为占位提示。
 
 ### 19.2 测试门槛
 
@@ -978,3 +995,17 @@ event types:
 | 事件幂等与终态消息门禁（防重复落消息） | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/16.3, TECH_ARCH 20.9/20.11, STANDARDS 10.4/11 | done |
 | SSE `last_event_id` 续传与重连去重 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.1, TECH_ARCH 20.9, PLAN 事件门禁 | done |
 | `tool_call/tool_result` 增加可选 `call_id`（向后兼容） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/16.3, TECH_ARCH 9.2/20.11, PLAN Worker 门禁, STANDARDS 10.4/15 | done |
+
+### 25.14 2026-02-25 Token/执行时长展示与主屏空态矩阵
+
+1. 执行过程摘要新增 Token 指标（输入/输出/总计）与消息执行时间，缺失 usage 时展示 `N/A`。
+2. 新建 Conversation 不再自动写入固定欢迎语；历史会话数据保留不做物理清理。
+3. 关闭“自动选中第一条会话”，未选中 Conversation 时主工作区展示空态且不渲染对话区/输入区/Inspector。
+4. Inspector 能力补齐：Run 展示最近执行 token/时长，Risk 展示会话风险统计，Export Patch 走真实后端导出。
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| Execution token 指标（in/out/total）与消息执行时长展示 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.2/16.3, TECH_ARCH 9.1/11.3/20.12, PLAN 2026-02-25 增量门禁, STANDARDS 10.4/15 | done |
+| 新会话移除固定欢迎语写入 | PRD.md, TECH_ARCH.md | PRD 7.2/19.1, TECH_ARCH 20.9/20.12 | done |
+| 主屏未选中会话空态 + 关闭自动选中第一条 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 16.1/19.1, TECH_ARCH 14.1/20.12, PLAN 2026-02-25 增量门禁 | done |
+| Inspector Export Patch 实链路与 Run/Risk 指标补齐 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 8.2/14.1/19.1, TECH_ARCH 9.1/20.12, PLAN 2026-02-25 增量门禁, STANDARDS 10.4/13 | done |

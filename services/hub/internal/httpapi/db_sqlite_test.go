@@ -196,6 +196,20 @@ func TestAuthzStoreCreatesWorkspaceAgentConfigSchema(t *testing.T) {
 	if !hasExecutionSnapshotColumn {
 		t.Fatalf("expected executions.agent_config_snapshot_json to exist")
 	}
+	hasTokensInColumn, hasTokensInErr := tableHasColumn(store.db, "executions", "tokens_in")
+	if hasTokensInErr != nil {
+		t.Fatalf("check executions tokens_in failed: %v", hasTokensInErr)
+	}
+	if !hasTokensInColumn {
+		t.Fatalf("expected executions.tokens_in to exist")
+	}
+	hasTokensOutColumn, hasTokensOutErr := tableHasColumn(store.db, "executions", "tokens_out")
+	if hasTokensOutErr != nil {
+		t.Fatalf("check executions tokens_out failed: %v", hasTokensOutErr)
+	}
+	if !hasTokensOutColumn {
+		t.Fatalf("expected executions.tokens_out to exist")
+	}
 
 	if err := store.ensureWorkspaceSeeds("ws_agent_schema"); err != nil {
 		t.Fatalf("ensure workspace seeds failed: %v", err)

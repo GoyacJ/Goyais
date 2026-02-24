@@ -1,6 +1,6 @@
 import { getControlClient } from "@/shared/services/clients";
 import { withApiFallback } from "@/shared/services/fallback";
-import { createMockId, mockData } from "@/shared/services/mockData";
+import { mockData } from "@/shared/services/mockData";
 import { connectConversationEvents } from "@/shared/services/sseClient";
 import type {
   Conversation,
@@ -51,18 +51,9 @@ export async function getConversationDetail(
       if (!conversation) {
         throw new Error("Conversation not found");
       }
-      const createdAt = new Date().toISOString();
       return {
         conversation,
-        messages: [
-          {
-            id: createMockId("msg"),
-            conversation_id: conversation.id,
-            role: "assistant",
-            content: "欢迎使用 Goyais，当前会话已准备就绪。",
-            created_at: createdAt
-          }
-        ],
+        messages: [],
         executions: [],
         snapshots: []
       };
@@ -91,6 +82,10 @@ export async function discardExecution(executionId: string): Promise<void> {
 
 export async function loadExecutionDiff(executionId: string): Promise<DiffItem[]> {
   return getControlClient().get<DiffItem[]>(`/v1/executions/${executionId}/diff`);
+}
+
+export async function exportExecutionPatch(executionId: string): Promise<string> {
+  return getControlClient().get<string>(`/v1/executions/${executionId}/patch`);
 }
 
 export function resolveDiffCapability(isGitProject: boolean): DiffCapability {

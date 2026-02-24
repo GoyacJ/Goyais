@@ -109,8 +109,8 @@ func (s *authzStore) replaceExecutionDomainSnapshot(snapshot executionDomainSnap
 			agentConfigSnapshotJSON = string(encoded)
 		}
 		if _, err = tx.Exec(
-			`INSERT INTO executions(id, workspace_id, conversation_id, message_id, state, mode, model_id, mode_snapshot, model_snapshot_json, agent_config_snapshot_json, project_revision_snapshot, queue_index, trace_id, created_at, updated_at)
-			 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			`INSERT INTO executions(id, workspace_id, conversation_id, message_id, state, mode, model_id, mode_snapshot, model_snapshot_json, agent_config_snapshot_json, tokens_in, tokens_out, project_revision_snapshot, queue_index, trace_id, created_at, updated_at)
+			 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			item.ID,
 			item.WorkspaceID,
 			item.ConversationID,
@@ -121,6 +121,8 @@ func (s *authzStore) replaceExecutionDomainSnapshot(snapshot executionDomainSnap
 			string(item.ModeSnapshot),
 			string(modelSnapshotJSON),
 			agentConfigSnapshotJSON,
+			item.TokensIn,
+			item.TokensOut,
 			item.ProjectRevisionSnapshot,
 			item.QueueIndex,
 			item.TraceID,

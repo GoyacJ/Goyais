@@ -181,7 +181,7 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 	_ = snapshotRows.Close()
 
 	executionRows, err := s.db.Query(
-		`SELECT id, workspace_id, conversation_id, message_id, state, mode, model_id, mode_snapshot, model_snapshot_json, agent_config_snapshot_json, project_revision_snapshot, queue_index, trace_id, created_at, updated_at
+		`SELECT id, workspace_id, conversation_id, message_id, state, mode, model_id, mode_snapshot, model_snapshot_json, agent_config_snapshot_json, tokens_in, tokens_out, project_revision_snapshot, queue_index, trace_id, created_at, updated_at
 		 FROM executions
 		 ORDER BY created_at ASC, id ASC`,
 	)
@@ -208,6 +208,8 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 			&modeSnapshotRaw,
 			&modelSnapshotJSON,
 			&agentConfigJSON,
+			&item.TokensIn,
+			&item.TokensOut,
 			&item.ProjectRevisionSnapshot,
 			&item.QueueIndex,
 			&item.TraceID,

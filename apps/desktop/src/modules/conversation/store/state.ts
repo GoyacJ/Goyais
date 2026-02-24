@@ -2,8 +2,7 @@ import { reactive } from "vue";
 
 import { resolveDiffCapability } from "@/modules/conversation/services";
 import {
-  buildConversationSnapshot,
-  createInitialMessages
+  buildConversationSnapshot
 } from "@/modules/conversation/store/conversationSnapshots";
 import { normalizeExecutionList } from "@/modules/conversation/store/executionMerge";
 import type {
@@ -125,7 +124,7 @@ export function hydrateConversationRuntime(
   const runtime = ensureConversationRuntime(conversation, isGitProject);
   runtime.mode = detail.conversation.default_mode;
   runtime.modelId = detail.conversation.model_id;
-  runtime.messages = detail.messages.length > 0 ? detail.messages.map((message) => ({ ...message })) : createInitialMessages(conversation.id);
+  runtime.messages = detail.messages.map((message) => ({ ...message }));
   runtime.executions = detail.executions.map((execution) => ({
     ...execution,
     model_snapshot: {

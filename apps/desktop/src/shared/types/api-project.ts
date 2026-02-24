@@ -106,6 +106,8 @@ export type Execution = {
     show_process_trace: boolean;
     trace_detail_level: TraceDetailLevel;
   };
+  tokens_in?: number;
+  tokens_out?: number;
   project_revision_snapshot: number;
   queue_index: number;
   trace_id: string;

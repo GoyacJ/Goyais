@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -907,6 +908,188 @@ func TestConversationDetailEndpointReturnsMessagesExecutionsAndSnapshots(t *test
 	}
 }
 
+func TestConversationStartsWithoutWelcomeMessage(t *testing.T) {
+	router := NewRouter()
+	workspaceID := createRemoteWorkspace(t, router, "Remote Conversation Empty Start", "http://127.0.0.1:9016", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "conversation_empty_user", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
+		"workspace_id":   workspaceID,
+		"directory_path": "/tmp/conversation-empty-start-alpha",
+	}, authHeaders)
+	if projectRes.Code != http.StatusCreated {
+		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
+	}
+	projectPayload := map[string]any{}
+	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
+	projectID := projectPayload["id"].(string)
+
+	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+		"workspace_id": workspaceID,
+		"name":         "NoWelcome",
+	}, authHeaders)
+	if convRes.Code != http.StatusCreated {
+		t.Fatalf("expected create conversation 201, got %d (%s)", convRes.Code, convRes.Body.String())
+	}
+	conversationPayload := map[string]any{}
+	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
+	conversationID := conversationPayload["id"].(string)
+
+	detailRes := performJSONRequest(t, router, http.MethodGet, "/v1/conversations/"+conversationID, nil, authHeaders)
+	if detailRes.Code != http.StatusOK {
+		t.Fatalf("expected conversation detail 200, got %d (%s)", detailRes.Code, detailRes.Body.String())
+	}
+	detailPayload := map[string]any{}
+	mustDecodeJSON(t, detailRes.Body.Bytes(), &detailPayload)
+	messages, ok := detailPayload["messages"].([]any)
+	if !ok {
+		t.Fatalf("expected messages array, got %#v", detailPayload["messages"])
+	}
+	if len(messages) != 0 {
+		t.Fatalf("expected no default welcome messages, got %#v", messages)
+	}
+}
+
+func TestExecutionPatchEndpointFallbackForNonGitProject(t *testing.T) {
+	router := NewRouter()
+	workspaceID := createRemoteWorkspace(t, router, "Remote Patch NonGit", "http://127.0.0.1:9017", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "patch_non_git_user", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+	internalHeaders := map[string]string{"X-Internal-Token": defaultHubInternalToken}
+
+	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
+		"workspace_id":   workspaceID,
+		"directory_path": "/tmp/patch-non-git-alpha",
+	}, authHeaders)
+	if projectRes.Code != http.StatusCreated {
+		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
+	}
+	projectPayload := map[string]any{}
+	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
+	projectID := projectPayload["id"].(string)
+
+	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+		"workspace_id": workspaceID,
+		"name":         "PatchNonGit",
+	}, authHeaders)
+	if convRes.Code != http.StatusCreated {
+		t.Fatalf("expected create conversation 201, got %d (%s)", convRes.Code, convRes.Body.String())
+	}
+	conversationPayload := map[string]any{}
+	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
+	conversationID := conversationPayload["id"].(string)
+
+	createExecutionRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
+		"content": "read current project",
+	}, authHeaders)
+	if createExecutionRes.Code != http.StatusCreated {
+		t.Fatalf("expected create execution 201, got %d (%s)", createExecutionRes.Code, createExecutionRes.Body.String())
+	}
+	createExecutionPayload := map[string]any{}
+	mustDecodeJSON(t, createExecutionRes.Body.Bytes(), &createExecutionPayload)
+	executionID := createExecutionPayload["execution"].(map[string]any)["id"].(string)
+
+	eventBatchRes := performJSONRequest(t, router, http.MethodPost, "/internal/executions/"+executionID+"/events/batch", map[string]any{
+		"events": []map[string]any{
+			{
+				"event_id":        "evt_patch_non_git_diff",
+				"execution_id":    executionID,
+				"conversation_id": conversationID,
+				"type":            "diff_generated",
+				"sequence":        1,
+				"queue_index":     0,
+				"payload": map[string]any{
+					"diff": []map[string]any{
+						{
+							"id":          "diff_1",
+							"path":        "README.md",
+							"change_type": "modified",
+							"summary":     "update readme",
+						},
+					},
+				},
+			},
+		},
+	}, internalHeaders)
+	if eventBatchRes.Code != http.StatusAccepted {
+		t.Fatalf("expected events batch 202, got %d (%s)", eventBatchRes.Code, eventBatchRes.Body.String())
+	}
+
+	patchRes := performJSONRequest(t, router, http.MethodGet, "/v1/executions/"+executionID+"/patch", nil, authHeaders)
+	if patchRes.Code != http.StatusOK {
+		t.Fatalf("expected patch export 200, got %d (%s)", patchRes.Code, patchRes.Body.String())
+	}
+	if !strings.Contains(patchRes.Body.String(), "README.md") {
+		t.Fatalf("expected fallback patch to include README.md, got %s", patchRes.Body.String())
+	}
+}
+
+func TestExecutionPatchEndpointUsesGitDiffWhenProjectIsGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is required for git patch endpoint test")
+	}
+	repoDir := t.TempDir()
+	mustRunGitCommand(t, repoDir, "init")
+	mustRunGitCommand(t, repoDir, "config", "user.email", "dev@goyais.local")
+	mustRunGitCommand(t, repoDir, "config", "user.name", "goyais")
+
+	readmePath := filepath.Join(repoDir, "README.md")
+	if err := os.WriteFile(readmePath, []byte("hello\n"), 0o644); err != nil {
+		t.Fatalf("write README failed: %v", err)
+	}
+	mustRunGitCommand(t, repoDir, "add", "README.md")
+	mustRunGitCommand(t, repoDir, "commit", "-m", "init")
+	if err := os.WriteFile(readmePath, []byte("hello world\n"), 0o644); err != nil {
+		t.Fatalf("update README failed: %v", err)
+	}
+
+	router := NewRouter()
+	workspaceID := createRemoteWorkspace(t, router, "Remote Patch Git", "http://127.0.0.1:9018", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "patch_git_user", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
+		"workspace_id":   workspaceID,
+		"directory_path": repoDir,
+	}, authHeaders)
+	if projectRes.Code != http.StatusCreated {
+		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
+	}
+	projectPayload := map[string]any{}
+	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
+	projectID := projectPayload["id"].(string)
+
+	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+		"workspace_id": workspaceID,
+		"name":         "PatchGit",
+	}, authHeaders)
+	if convRes.Code != http.StatusCreated {
+		t.Fatalf("expected create conversation 201, got %d (%s)", convRes.Code, convRes.Body.String())
+	}
+	conversationPayload := map[string]any{}
+	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
+	conversationID := conversationPayload["id"].(string)
+
+	createExecutionRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
+		"content": "show git patch",
+	}, authHeaders)
+	if createExecutionRes.Code != http.StatusCreated {
+		t.Fatalf("expected create execution 201, got %d (%s)", createExecutionRes.Code, createExecutionRes.Body.String())
+	}
+	createExecutionPayload := map[string]any{}
+	mustDecodeJSON(t, createExecutionRes.Body.Bytes(), &createExecutionPayload)
+	executionID := createExecutionPayload["execution"].(map[string]any)["id"].(string)
+
+	patchRes := performJSONRequest(t, router, http.MethodGet, "/v1/executions/"+executionID+"/patch", nil, authHeaders)
+	if patchRes.Code != http.StatusOK {
+		t.Fatalf("expected patch export 200, got %d (%s)", patchRes.Code, patchRes.Body.String())
+	}
+	if !strings.Contains(patchRes.Body.String(), "diff --git a/README.md b/README.md") {
+		t.Fatalf("expected git patch output, got %s", patchRes.Body.String())
+	}
+}
+
 func TestProjectFilesEndpoints(t *testing.T) {
 	router := NewRouter()
 	workspaceID := createRemoteWorkspace(t, router, "Remote Project Files", "http://127.0.0.1:9011", false)
@@ -1007,4 +1190,14 @@ func asString(value any) string {
 		return raw
 	}
 	return ""
+}
+
+func mustRunGitCommand(t *testing.T, repoDir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repoDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("run git %v failed: %v (%s)", args, err, strings.TrimSpace(string(output)))
+	}
 }

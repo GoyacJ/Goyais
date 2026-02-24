@@ -299,3 +299,55 @@ def test_tool_events_include_call_id_for_tool_and_subagent(monkeypatch) -> None:
     assert len(tool_results) == 2
     assert {item["payload"].get("call_id") for item in tool_calls} == {"tc_read_1", "tc_sub_1"}
     assert {item["payload"].get("call_id") for item in tool_results} == {"tc_read_1", "tc_sub_1"}
+
+
+def test_execution_done_includes_accumulated_usage(monkeypatch) -> None:
+    events: list[dict[str, Any]] = []
+
+    async def fake_run_model_turn(invocation, messages, tools):
+        del invocation, messages, tools
+        return ModelTurnResult(
+            text="done with usage",
+            tool_calls=[],
+            raw_response={},
+            usage={"input_tokens": 12, "output_tokens": 8, "total_tokens": 20},
+        )
+
+    def fake_resolve_model_invocation(execution):
+        del execution
+        return ModelInvocation(
+            vendor="local",
+            model_id="llama3:8b",
+            base_url="http://127.0.0.1:11434/v1",
+            api_key="",
+            timeout_ms=30_000,
+            params={},
+        )
+
+    async def emit_event(execution, event_type, payload):
+        del execution
+        events.append({"type": event_type, "payload": payload})
+
+    def is_cancelled(execution_id: str) -> bool:
+        del execution_id
+        return False
+
+    monkeypatch.setattr(execution_engine, "run_model_turn", fake_run_model_turn)
+    monkeypatch.setattr(execution_engine, "resolve_model_invocation", fake_resolve_model_invocation)
+
+    execution = {
+        "execution_id": "exec_usage_accumulated",
+        "mode_snapshot": "agent",
+        "content": "读取当前项目",
+        "model_id": "llama3:8b",
+    }
+
+    asyncio.run(run_execution_loop(execution, emit_event, is_cancelled))
+
+    done_events = [event for event in events if event["type"] == "execution_done"]
+    assert len(done_events) == 1
+    assert done_events[0]["payload"]["usage"] == {
+        "input_tokens": 12,
+        "output_tokens": 8,
+        "total_tokens": 20,
+    }

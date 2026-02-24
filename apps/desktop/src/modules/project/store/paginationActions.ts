@@ -157,9 +157,7 @@ async function loadConversationsPage(projectId: string, input: { cursor: string 
     page.nextCursor = response.next_cursor;
     const hasActiveConversation = response.items.some((conversation) => conversation.id === projectStore.activeConversationId);
     if (!hasActiveConversation) {
-      projectStore.activeConversationId = response.items[0]?.id ?? "";
-    } else if (projectStore.activeConversationId === "") {
-      projectStore.activeConversationId = response.items[0]?.id ?? "";
+      projectStore.activeConversationId = "";
     }
   } catch (error) {
     projectStore.error = toDisplayError(error);

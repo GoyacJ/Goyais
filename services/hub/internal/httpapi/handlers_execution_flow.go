@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
+	"os/exec"
 	"sort"
 	"strings"
 	"time"
@@ -269,6 +271,8 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 			ModeSnapshot:            resolvedMode,
 			ModelSnapshot:           resolvedModelSnapshot,
 			AgentConfigSnapshot:     toExecutionAgentConfigSnapshot(workspaceAgentConfig),
+			TokensIn:                0,
+			TokensOut:               0,
 			ProjectRevisionSnapshot: project.CurrentRevision,
 			QueueIndex:              queueIndex,
 			TraceID:                 TraceIDFromContext(r.Context()),
@@ -632,6 +636,53 @@ func ExecutionDiffHandler(state *AppState) http.HandlerFunc {
 	}
 }
 
+func ExecutionPatchHandler(state *AppState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
+				"method": r.Method, "path": r.URL.Path,
+			})
+			return
+		}
+		executionID := strings.TrimSpace(r.PathValue("execution_id"))
+		state.mu.RLock()
+		execution, exists := state.executions[executionID]
+		diff := append([]DiffItem{}, state.executionDiffs[executionID]...)
+		projectPath, projectIsGit, _ := lookupProjectExecutionContextLocked(state, execution)
+		state.mu.RUnlock()
+		if !exists {
+			WriteStandardError(w, r, http.StatusNotFound, "EXECUTION_NOT_FOUND", "Execution does not exist", map[string]any{"execution_id": executionID})
+			return
+		}
+		_, authErr := authorizeAction(
+			state,
+			r,
+			execution.WorkspaceID,
+			"conversation.read",
+			authorizationResource{WorkspaceID: execution.WorkspaceID},
+			authorizationContext{OperationType: "read"},
+		)
+		if authErr != nil {
+			authErr.write(w, r)
+			return
+		}
+
+		patchContent, err := renderExecutionPatchContent(projectPath, projectIsGit, executionID, diff)
+		if err != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "PATCH_EXPORT_FAILED", "Failed to export patch", map[string]any{
+				"execution_id": executionID,
+				"error":        err.Error(),
+			})
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.patch\"", executionID))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(patchContent))
+	}
+}
+
 func ExecutionActionHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -721,6 +772,45 @@ func ExecutionActionHandler(state *AppState) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	}
+}
+
+func renderExecutionPatchContent(projectPath string, isGitProject bool, executionID string, diffItems []DiffItem) (string, error) {
+	if isGitProject && strings.TrimSpace(projectPath) != "" {
+		cmd := exec.Command("git", "-C", projectPath, "diff", "--binary")
+		output, err := cmd.CombinedOutput()
+		if err == nil {
+			patch := string(output)
+			if strings.TrimSpace(patch) != "" {
+				return patch, nil
+			}
+		}
+	}
+	return renderFallbackPatch(executionID, diffItems), nil
+}
+
+func renderFallbackPatch(executionID string, diffItems []DiffItem) string {
+	buffer := bytes.NewBufferString("")
+	buffer.WriteString("# Goyais Patch Export\n")
+	buffer.WriteString(fmt.Sprintf("# execution_id: %s\n\n", executionID))
+	if len(diffItems) == 0 {
+		buffer.WriteString("# No diff entries were captured for this execution.\n")
+		return buffer.String()
+	}
+
+	for _, item := range diffItems {
+		buffer.WriteString("--- ")
+		buffer.WriteString(item.Path)
+		buffer.WriteString("\n")
+		buffer.WriteString("+++ ")
+		buffer.WriteString(item.Path)
+		buffer.WriteString("\n")
+		buffer.WriteString("@@ ")
+		buffer.WriteString(item.ChangeType)
+		buffer.WriteString(" @@\n")
+		buffer.WriteString(item.Summary)
+		buffer.WriteString("\n\n")
+	}
+	return buffer.String()
 }
 
 func deriveNextQueueIndexLocked(state *AppState, conversationID string) int {

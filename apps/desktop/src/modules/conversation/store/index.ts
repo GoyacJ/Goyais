@@ -2,6 +2,7 @@ export {
   appendRuntimeEvent,
   clearConversationTimer,
   getExecutionStateCounts,
+  getLatestFinishedExecution,
   hasUnfinishedExecutions,
   hydrateConversationRuntime,
   conversationStore,

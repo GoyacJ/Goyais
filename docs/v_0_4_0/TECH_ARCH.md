@@ -347,6 +347,7 @@ private resource
 16. `GET /v1/executions/{execution_id}/diff`
 17. `POST /v1/executions/{execution_id}/commit`
 18. `POST /v1/executions/{execution_id}/discard`
+19. `GET /v1/executions/{execution_id}/patch`
 
 #### Resource / Share
 
@@ -793,6 +794,7 @@ while True:
 4. 设置页：固定菜单（主题、国际化、更新与诊断、通用设置）。
 5. 工作区共享配置页：Agent/模型/Rules/Skills/MCP，按入口与权限展示能力差异。
 6. 项目配置入口：同时出现在账号信息与设置中。
+7. 未选中 Conversation 时，主屏幕右侧必须展示空态；Conversation 区、输入区与 Inspector 不得渲染。
 
 ### 14.2 关键交互约束
 
@@ -1038,7 +1040,7 @@ while True:
 ### 20.9 Conversation 详情读取与重启恢复
 
 1. `GET /v1/conversations/{conversation_id}` 返回 `conversation/messages/executions/snapshots`，作为 Desktop 重启回填权威来源。
-2. Desktop 进入会话时必须先拉取详情并回填 runtime；仅当后端无历史消息时允许使用欢迎语兜底。
+2. Desktop 进入会话时必须先拉取详情并回填 runtime；不得再注入固定欢迎语兜底消息。
 3. 会话流应用层必须以 `event.conversation_id` 作为最终路由键，禁止仅按订阅会话 ID 写入。
 4. stream detach 条件：会话“非 active 且无未完成执行（queued/pending/executing）”时才允许断开。
 
@@ -1068,6 +1070,18 @@ while True:
 7. 前端事件应用层必须维护幂等去重键（优先 `event_id`，回退 `execution_id+sequence+type`）；重复事件不得重复落状态或消息。
 8. 终态消息仅允许在 execution 首次进入终态时追加；若 execution 已处于终态，重放 `execution_done/error/stopped` 必须忽略。
 9. SSE 重连必须携带 `last_event_id`，且 Conversation runtime 需要保存并在 detach/reattach 间续传该值。
+
+### 20.12 2026-02-25 Token 可观测性与主屏空态补齐
+
+1. `Execution` 权威字段新增 `tokens_in/tokens_out`，Hub 持久化并在事件回放/详情查询中透传。
+2. Worker 事件 `thinking_delta` 与 `execution_done` payload 可选携带 `usage`（`input_tokens/output_tokens/total_tokens`）；Hub 聚合后写入 execution token 字段。
+3. 过程摘要文案必须附加 `Token in/out/total` 与 `消息执行时长`；usage 缺失时展示 `N/A`。
+4. `GET /v1/executions/{execution_id}/patch` 为 Export Patch 权威接口：
+   - Git 项目优先返回 `git diff --binary`。
+   - 非 Git 或 git diff 不可用时返回可读补丁文本降级结果。
+5. 会话列表刷新不得自动选中第一条 Conversation；删除当前会话后保持 `activeConversationId=""`。
+6. 主屏幕无 active Conversation 时必须渲染空态，不允许显示对话消息、发送框与 Inspector。
+7. Inspector Run 需显示最近 execution 的 token 与时长摘要；Risk 需基于真实事件聚合 `low/high/critical` 计数。
 
 ## 21. 2026-02-24 会话稳定性与并发显示同步矩阵
 
@@ -1103,3 +1117,12 @@ while True:
 | Worker 事件扩展 `call_id`（tool_call/tool_result） | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.1/16.3, TECH_ARCH 9.2/20.11, PLAN Worker 门禁 | done |
 | 终态消息落地幂等与事件去重 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 14.1/16.3, TECH_ARCH 20.9/20.11, STANDARDS 10.4/11 | done |
 | SSE `last_event_id` 续传与重连防重放 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 14.1, TECH_ARCH 20.9, PLAN 事件门禁 | done |
+
+## 25. 2026-02-25 Token 可观测性与主屏空态同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| Execution 增加 `tokens_in/tokens_out` 并从 usage 事件聚合 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 14.2/16.3, TECH_ARCH 10.2/11.3/20.12, PLAN 2026-02-25 增量门禁, STANDARDS 10.4/15 | done |
+| 新会话移除固定欢迎语写入与前端兜底 | PRD.md, TECH_ARCH.md | PRD 7.2/19.1, TECH_ARCH 20.9/20.12 | done |
+| 未选中会话空态与禁用自动首条选中 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md | PRD 16.1/19.1, TECH_ARCH 14.1/20.12, PLAN 2026-02-25 增量门禁 | done |
+| Inspector `Export Patch` 真正接入后端 + Run/Risk 指标补齐 | PRD.md, TECH_ARCH.md, IMPLEMENTATION_PLAN.md, DEVELOPMENT_STANDARDS.md | PRD 8.2/14.1, TECH_ARCH 9.1/20.12, PLAN 2026-02-25 增量门禁, STANDARDS 10.4/13 | done |

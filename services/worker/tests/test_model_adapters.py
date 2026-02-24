@@ -57,6 +57,11 @@ def test_run_model_turn_openai_compatible_parses_tool_calls(monkeypatch: pytest.
         captured["headers"] = headers
         captured["timeout_ms"] = timeout_ms
         return {
+            "usage": {
+                "prompt_tokens": 11,
+                "completion_tokens": 7,
+                "total_tokens": 18,
+            },
             "choices": [
                 {
                     "message": {
@@ -110,6 +115,7 @@ def test_run_model_turn_openai_compatible_parses_tool_calls(monkeypatch: pytest.
     assert len(result.tool_calls) == 1
     assert result.tool_calls[0].name == "read_file"
     assert result.tool_calls[0].arguments["path"] == "README.md"
+    assert result.usage == {"input_tokens": 11, "output_tokens": 7, "total_tokens": 18}
 
 
 def test_run_model_turn_google_parses_function_call(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -121,6 +127,11 @@ def test_run_model_turn_google_parses_function_call(monkeypatch: pytest.MonkeyPa
         captured["headers"] = headers
         captured["timeout_ms"] = timeout_ms
         return {
+            "usageMetadata": {
+                "promptTokenCount": 13,
+                "candidatesTokenCount": 9,
+                "totalTokenCount": 22,
+            },
             "candidates": [
                 {
                     "content": {
@@ -174,3 +185,4 @@ def test_run_model_turn_google_parses_function_call(monkeypatch: pytest.MonkeyPa
     assert len(result.tool_calls) == 1
     assert result.tool_calls[0].name == "write_file"
     assert result.tool_calls[0].arguments["path"] == "src/main.ts"
+    assert result.usage == {"input_tokens": 13, "output_tokens": 9, "total_tokens": 22}

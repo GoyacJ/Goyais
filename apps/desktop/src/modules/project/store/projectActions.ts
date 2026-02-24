@@ -141,13 +141,13 @@ export async function updateConversationModelById(
 }
 
 export async function deleteConversation(projectId: string, conversationId: string): Promise<void> {
+  void projectId;
   const token = resolveCurrentWorkspaceToken();
   try {
     await removeConversation(conversationId, { token });
     await refreshConversationsForActiveProject();
-    const list = projectStore.conversationsByProjectId[projectId] ?? [];
-    if (projectStore.activeConversationId === conversationId) {
-      projectStore.activeConversationId = list[0]?.id ?? "";
+    if (projectStore.activeConversationId === conversationId || projectStore.activeConversationId === "") {
+      projectStore.activeConversationId = "";
     }
   } catch (error) {
     projectStore.error = toDisplayError(error);

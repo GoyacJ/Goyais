@@ -44,6 +44,34 @@
   overflow: hidden;
 }
 
+.main-body.empty {
+  grid-template-columns: 1fr;
+}
+
+.main-empty {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--global-radius-12);
+  background: var(--semantic-surface);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--global-space-8);
+}
+
+.main-empty-title {
+  margin: 0;
+  color: var(--semantic-text);
+  font-size: var(--global-font-size-14);
+  font-weight: var(--global-font-weight-600);
+}
+
+.main-empty-description {
+  margin: 0;
+  color: var(--semantic-text-muted);
+  font-size: var(--global-font-size-12);
+}
+
 .inspector-slot {
   width: 280px;
   min-height: 0;

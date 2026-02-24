@@ -15,6 +15,8 @@ const baseExecution: Execution = {
   model_snapshot: {
     model_id: "gpt-5.3"
   },
+  tokens_in: 20,
+  tokens_out: 10,
   queue_index: 0,
   trace_id: "tr_trace_1",
   project_revision_snapshot: 0,
@@ -88,6 +90,8 @@ describe("execution trace view model", () => {
     expect(traces[0]?.executionId).toBe("exec_trace_1");
     expect(traces[0]?.summary).toContain("已思考");
     expect(traces[0]?.summary).toContain("调用 1 个工具");
+    expect(traces[0]?.summary).toContain("Token in 20 / out 10 / total 30");
+    expect(traces[0]?.summary).toContain("消息执行");
     expect(traces[0]?.steps).toHaveLength(4);
     expect(traces[0]?.steps[1]?.title).toBe("思考");
   });
@@ -172,5 +176,18 @@ describe("execution trace view model", () => {
     expect(traces).toHaveLength(1);
     expect(traces[0]?.summary).toContain("执行失败");
     expect(traces[0]?.summary).toContain("1 个失败");
+  });
+
+  it("renders token as N/A when usage is missing", () => {
+    const execution: Execution = {
+      ...baseExecution,
+      id: "exec_trace_no_usage",
+      message_id: "msg_trace_no_usage",
+      tokens_in: undefined,
+      tokens_out: undefined
+    };
+    const traces = buildExecutionTraceViewModels([baseEvent], [execution], new Date("2026-02-24T00:00:03Z"));
+    expect(traces).toHaveLength(1);
+    expect(traces[0]?.summary).toContain("Token N/A");
   });
 });

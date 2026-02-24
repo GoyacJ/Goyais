@@ -55,6 +55,7 @@ class ModelTurnResult:
     text: str
     tool_calls: list[ToolCall]
     raw_response: dict[str, Any]
+    usage: dict[str, int] = field(default_factory=dict)
 
 
 class ModelAdapterError(RuntimeError):

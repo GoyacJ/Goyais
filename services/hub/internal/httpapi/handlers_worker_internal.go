@@ -265,6 +265,14 @@ func InternalExecutionEventsBatchHandler(state *AppState) http.HandlerFunc {
 			case ExecutionEventTypeExecutionStopped:
 				execution.State = ExecutionStateCancelled
 			}
+			if tokensIn, tokensOut, ok := parseTokenUsageFromPayload(event.Payload); ok {
+				if tokensIn > execution.TokensIn {
+					execution.TokensIn = tokensIn
+				}
+				if tokensOut > execution.TokensOut {
+					execution.TokensOut = tokensOut
+				}
+			}
 
 			execution.UpdatedAt = now
 			state.executions[execution.ID] = execution

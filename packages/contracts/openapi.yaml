@@ -575,6 +575,21 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
+  /v1/executions/{execution_id}/patch:
+    get:
+      summary: Export execution patch
+      parameters:
+        - $ref: '#/components/parameters/ExecutionIdParam'
+      responses:
+        '200':
+          description: Patch content
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
   /v1/executions/{execution_id}/{action}:
     post:
       summary: Commit or discard execution result
@@ -2259,6 +2274,8 @@ components:
         - model_id
         - mode_snapshot
         - model_snapshot
+        - tokens_in
+        - tokens_out
         - project_revision_snapshot
         - queue_index
         - trace_id
@@ -2288,6 +2305,12 @@ components:
           $ref: '#/components/schemas/ModelSnapshot'
         agent_config_snapshot:
           $ref: '#/components/schemas/ExecutionAgentConfigSnapshot'
+        tokens_in:
+          type: integer
+          minimum: 0
+        tokens_out:
+          type: integer
+          minimum: 0
         project_revision_snapshot:
           type: integer
           format: int64

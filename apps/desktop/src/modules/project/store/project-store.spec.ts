@@ -122,4 +122,47 @@ describe("project store token forwarding", () => {
     expect(projectStore.error).toContain("ACCESS_DENIED");
     expect(projectStore.error).toContain("trace_id: tr_import_denied");
   });
+
+  it("does not auto-select first conversation after project refresh", async () => {
+    serviceMocks.listProjects.mockResolvedValue({
+      items: [
+        {
+          id: "proj_alpha",
+          workspace_id: "ws_remote_1",
+          name: "alpha",
+          repo_path: "/tmp/repo-alpha",
+          is_git: true,
+          default_model_id: "gpt-5.3",
+          default_mode: "agent",
+          current_revision: 0,
+          created_at: "2026-02-24T00:00:00Z",
+          updated_at: "2026-02-24T00:00:00Z"
+        }
+      ],
+      next_cursor: null
+    });
+    serviceMocks.listConversations.mockResolvedValue({
+      items: [
+        {
+          id: "conv_alpha_1",
+          workspace_id: "ws_remote_1",
+          project_id: "proj_alpha",
+          name: "Conversation 1",
+          queue_state: "idle",
+          default_mode: "agent",
+          model_id: "gpt-5.3",
+          base_revision: 0,
+          active_execution_id: null,
+          created_at: "2026-02-24T00:00:00Z",
+          updated_at: "2026-02-24T00:00:00Z"
+        }
+      ],
+      next_cursor: null
+    });
+
+    await refreshProjects();
+
+    expect(projectStore.activeProjectId).toBe("proj_alpha");
+    expect(projectStore.activeConversationId).toBe("");
+  });
 });
