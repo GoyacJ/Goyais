@@ -39,8 +39,18 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 		conversationID := message.ConversationID
 		s.conversationMessages[conversationID] = append(s.conversationMessages[conversationID], message)
 	}
+	removedLegacyWelcomeConversationIDs := make([]string, 0)
+	for conversationID, messages := range s.conversationMessages {
+		sanitizedMessages, removed := sanitizeLegacyWelcomeMessages(messages)
+		s.conversationMessages[conversationID] = sanitizedMessages
+		if removed {
+			removedLegacyWelcomeConversationIDs = append(removedLegacyWelcomeConversationIDs, conversationID)
+		}
+	}
+	sort.Strings(removedLegacyWelcomeConversationIDs)
 	for _, conversationSnapshot := range snapshot.ConversationSnapshots {
 		conversationID := conversationSnapshot.ConversationID
+		conversationSnapshot.Messages, _ = sanitizeLegacyWelcomeMessages(conversationSnapshot.Messages)
 		s.conversationSnapshots[conversationID] = append(s.conversationSnapshots[conversationID], conversationSnapshot)
 	}
 	for _, execution := range snapshot.Executions {
@@ -91,12 +101,14 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 	repairedExecutionIDs, removedControlCommands := repairLegacyExecutionDomainLocked(s)
 	s.mu.Unlock()
 
-	if len(repairedExecutionIDs) > 0 || removedControlCommands > 0 {
+	if len(repairedExecutionIDs) > 0 || removedControlCommands > 0 || len(removedLegacyWelcomeConversationIDs) > 0 {
 		log.Printf(
-			"audit: repaired legacy execution domain confirming_executions=%d removed_control_commands=%d execution_ids=%v",
+			"audit: repaired legacy execution domain confirming_executions=%d removed_control_commands=%d removed_legacy_welcome_conversations=%d execution_ids=%v conversation_ids=%v",
 			len(repairedExecutionIDs),
 			removedControlCommands,
+			len(removedLegacyWelcomeConversationIDs),
 			repairedExecutionIDs,
+			removedLegacyWelcomeConversationIDs,
 		)
 		syncExecutionDomainBestEffort(s)
 	}

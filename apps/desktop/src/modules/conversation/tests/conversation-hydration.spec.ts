@@ -133,4 +133,26 @@ describe("conversation runtime hydration", () => {
     expect(counts.executing).toBe(1);
     expect(counts.queued).toBe(1);
   });
+
+  it("removes legacy default welcome message when hydrating empty conversation", () => {
+    const detail = {
+      conversation: {
+        ...mockConversation
+      },
+      messages: [
+        {
+          id: "msg_legacy_welcome",
+          conversation_id: mockConversation.id,
+          role: "assistant" as const,
+          content: "欢迎使用 Goyais，当前会话已准备就绪。",
+          created_at: "2026-02-24T00:00:00Z"
+        }
+      ],
+      executions: [],
+      snapshots: []
+    };
+
+    const runtime = hydrateConversationRuntime(mockConversation, true, detail);
+    expect(runtime.messages).toHaveLength(0);
+  });
 });

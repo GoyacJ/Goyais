@@ -46,6 +46,7 @@ export type ConversationRuntime = {
 };
 
 export const MAX_RUNTIME_EVENTS = 1000;
+const LEGACY_CONVERSATION_READY_MESSAGE = "欢迎使用 Goyais，当前会话已准备就绪。";
 
 type ConversationState = {
   byConversationId: Record<string, ConversationRuntime>;
@@ -124,7 +125,7 @@ export function hydrateConversationRuntime(
   const runtime = ensureConversationRuntime(conversation, isGitProject);
   runtime.mode = detail.conversation.default_mode;
   runtime.modelId = detail.conversation.model_id;
-  runtime.messages = detail.messages.map((message) => ({ ...message }));
+  runtime.messages = sanitizeLegacyWelcomeMessages(detail.messages.map((message) => ({ ...message })));
   runtime.executions = detail.executions.map((execution) => ({
     ...execution,
     model_snapshot: {
@@ -136,7 +137,7 @@ export function hydrateConversationRuntime(
   }));
   runtime.snapshots = detail.snapshots.map((snapshot) => ({
     ...snapshot,
-    messages: snapshot.messages.map((message) => ({ ...message })),
+    messages: sanitizeLegacyWelcomeMessages(snapshot.messages.map((message) => ({ ...message }))),
     execution_snapshots: snapshot.execution_snapshots?.map((item) => ({ ...item })),
     execution_ids: [...snapshot.execution_ids]
   }));
@@ -147,6 +148,16 @@ export function hydrateConversationRuntime(
   runtime.diff = [];
   runtime.hydrated = true;
   return runtime;
+}
+
+function sanitizeLegacyWelcomeMessages(messages: ConversationMessage[]): ConversationMessage[] {
+  const hasUserMessage = messages.some((message) => message.role === "user");
+  if (hasUserMessage) {
+    return messages;
+  }
+  return messages.filter(
+    (message) => !(message.role === "assistant" && message.content.trim() === LEGACY_CONVERSATION_READY_MESSAGE)
+  );
 }
 
 export function getConversationRuntime(conversationId: string): ConversationRuntime | undefined {
