@@ -120,12 +120,8 @@ export function useWorkspaceProjectConfigView() {
     await refreshWorkspaceProjectBindings();
   }
 
-  async function removeProjectById(projectId: string, projectName: string): Promise<void> {
+  async function removeProjectById(projectId: string): Promise<void> {
     if (!canWrite.value) {
-      return;
-    }
-
-    if (!window.confirm(`确认移除项目 ${projectName} ?`)) {
       return;
     }
     await deleteProject(projectId);

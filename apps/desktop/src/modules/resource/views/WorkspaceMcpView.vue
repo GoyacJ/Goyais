@@ -160,20 +160,6 @@
       @save="applyExportPayload"
     />
 
-    <BaseModal :open="form.removeModalOpen">
-      <template #title>
-        <h3 class="modal-title">删除 MCP 配置</h3>
-      </template>
-
-      <p class="remove-message">确认删除 MCP「{{ form.removeConfigName }}」？该操作不可恢复。</p>
-
-      <template #footer>
-        <div class="footer-actions">
-          <BaseButton variant="ghost" @click="closeRemoveModal">取消</BaseButton>
-          <BaseButton variant="danger" :disabled="!canWrite" @click="confirmRemoveConfig">删除</BaseButton>
-        </div>
-      </template>
-    </BaseModal>
   </WorkspaceSharedShell>
 </template>
 
@@ -194,8 +180,6 @@ const {
   canWrite,
   closeExportModal,
   closeModal,
-  closeRemoveModal,
-  confirmRemoveConfig,
   connectStatusClass,
   connectSuggestion,
   connect,

@@ -31,10 +31,7 @@ export function useWorkspaceMcpView() {
     envText: "",
     enabled: true,
     message: "",
-    jsonModalOpen: false,
-    removeModalOpen: false,
-    removeConfigId: "",
-    removeConfigName: ""
+    jsonModalOpen: false
   });
 
   watch(
@@ -174,24 +171,7 @@ export function useWorkspaceMcpView() {
     if (!canWrite.value) {
       return;
     }
-    form.removeConfigId = item.id;
-    form.removeConfigName = item.name ?? "";
-    form.removeModalOpen = true;
-  }
-
-  function closeRemoveModal(): void {
-    form.removeModalOpen = false;
-    form.removeConfigId = "";
-    form.removeConfigName = "";
-  }
-
-  async function confirmRemoveConfig(): Promise<void> {
-    const configId = form.removeConfigId;
-    if (configId === "") {
-      return;
-    }
-    await deleteWorkspaceResourceConfig("mcp", configId);
-    closeRemoveModal();
+    await deleteWorkspaceResourceConfig("mcp", item.id);
   }
 
   async function openExportModal(): Promise<void> {
@@ -216,8 +196,6 @@ export function useWorkspaceMcpView() {
     canWrite,
     closeExportModal,
     closeModal,
-    closeRemoveModal,
-    confirmRemoveConfig,
     connectStatusClass,
     connectSuggestion,
     connect,

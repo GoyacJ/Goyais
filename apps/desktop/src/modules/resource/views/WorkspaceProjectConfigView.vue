@@ -24,7 +24,7 @@
             <BaseButton
               :disabled="!canWrite"
               variant="ghost"
-              @click="removeProjectById((row as { id: string; name: string }).id, (row as { id: string; name: string }).name)"
+              @click="removeProjectById((row as { id: string }).id)"
             >
               移除
             </BaseButton>

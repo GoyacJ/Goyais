@@ -122,7 +122,7 @@ export function useWorkspaceMarkdownResourceView(type: MarkdownResourceType) {
   }
 
   async function removeConfig(item: ResourceConfig): Promise<void> {
-    if (!window.confirm(`确认删除 ${item.name} ?`)) {
+    if (!canWrite.value) {
       return;
     }
     await deleteWorkspaceResourceConfig(type, item.id);

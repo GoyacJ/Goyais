@@ -7,6 +7,7 @@ import WorkspaceMcpView from "@/modules/resource/views/WorkspaceMcpView.vue";
 import WorkspaceModelView from "@/modules/resource/views/WorkspaceModelView.vue";
 import WorkspaceProjectConfigView from "@/modules/resource/views/WorkspaceProjectConfigView.vue";
 import WorkspaceRulesView from "@/modules/resource/views/WorkspaceRulesView.vue";
+import WorkspaceSkillsView from "@/modules/resource/views/WorkspaceSkillsView.vue";
 import { resetAuthStore } from "@/shared/stores/authStore";
 import { resetWorkspaceStore, setCurrentWorkspace, setWorkspaces } from "@/shared/stores/workspaceStore";
 
@@ -106,6 +107,50 @@ describe("resource module views", () => {
     expect(wrapper.text()).toContain("添加项目");
     const removeButton = wrapper.findAll("button").find((item) => item.text() === "移除");
     expect(removeButton?.classes()).toContain("variant-ghost");
+  });
+
+  it("deletes rule skill and project without confirm popup", async () => {
+    const confirmSpy = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmSpy);
+
+    const rulesWrapper = mountView(WorkspaceRulesView);
+    await flushPromises();
+    const ruleDeleteButton = rulesWrapper.findAll("button").find((item) => item.text() === "删除");
+    expect(ruleDeleteButton).toBeTruthy();
+    await ruleDeleteButton?.trigger("click");
+    await flushPromises();
+
+    const skillsWrapper = mountView(WorkspaceSkillsView);
+    await flushPromises();
+    const skillDeleteButton = skillsWrapper.findAll("button").find((item) => item.text() === "删除");
+    expect(skillDeleteButton).toBeTruthy();
+    await skillDeleteButton?.trigger("click");
+    await flushPromises();
+
+    const projectWrapper = mountView(WorkspaceProjectConfigView);
+    await flushPromises();
+    const projectRemoveButton = projectWrapper.findAll("button").find((item) => item.text() === "移除");
+    expect(projectRemoveButton).toBeTruthy();
+    await projectRemoveButton?.trigger("click");
+    await flushPromises();
+
+    expect(confirmSpy).toHaveBeenCalledTimes(0);
+    expect(findFetchCalls("DELETE", "/v1/workspaces/ws_local/resource-configs/rc_rule_1")).toHaveLength(1);
+    expect(findFetchCalls("DELETE", "/v1/workspaces/ws_local/resource-configs/rc_skill_1")).toHaveLength(1);
+    expect(findFetchCalls("DELETE", "/v1/projects/proj_alpha")).toHaveLength(1);
+  });
+
+  it("deletes mcp config directly without remove modal", async () => {
+    const wrapper = mountView(WorkspaceMcpView);
+    await flushPromises();
+
+    const deleteButton = wrapper.findAll("button").find((item) => item.text() === "删除");
+    expect(deleteButton).toBeTruthy();
+    await deleteButton?.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("删除 MCP 配置");
+    expect(findFetchCalls("DELETE", "/v1/workspaces/ws_local/resource-configs/rc_mcp_1")).toHaveLength(1);
   });
 });
 
@@ -218,6 +263,15 @@ function createApiFetchMock() {
       return new Response(null, { status: 204 });
     }
     return jsonResponse({});
+  });
+}
+
+function findFetchCalls(method: string, path: string) {
+  return (global.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(([input, init]) => {
+    const urlValue = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    const requestURL = new URL(urlValue, "http://127.0.0.1:8787");
+    const requestMethod = (init?.method ?? "GET").toUpperCase();
+    return requestMethod === method.toUpperCase() && requestURL.pathname === path;
   });
 }
 
