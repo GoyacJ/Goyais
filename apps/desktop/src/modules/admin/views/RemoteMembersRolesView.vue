@@ -34,13 +34,13 @@
             </td>
             <td>
               <div class="actions">
-                <button type="button" @click="editMember(user.id)">
+                <button type="button" aria-label="编辑成员" @click="editMember(user.id)">
                   <AppIcon name="pencil" :size="12" />
                 </button>
-                <button type="button" @click="toggleMember(user.id)">
+                <button type="button" aria-label="切换成员状态" @click="toggleMember(user.id)">
                   <AppIcon name="info" :size="12" />
                 </button>
-                <button type="button" @click="removeMember(user.id)">
+                <button type="button" aria-label="删除成员" @click="removeMember(user.id)">
                   <AppIcon name="trash-2" :size="12" />
                 </button>
               </div>
@@ -85,16 +85,16 @@
             </td>
             <td>
               <div class="actions">
-                <button type="button" @click="editRole(role.key)">
+                <button type="button" aria-label="编辑角色" @click="editRole(role.key)">
                   <AppIcon name="pencil" :size="12" />
                 </button>
-                <button type="button" @click="toggleRoleState(role.key)">
+                <button type="button" aria-label="切换角色状态" @click="toggleRoleState(role.key)">
                   <AppIcon name="info" :size="12" />
                 </button>
-                <button type="button" @click="assignPermission(role.key)">
+                <button type="button" aria-label="分配权限" @click="assignPermission(role.key)">
                   <AppIcon name="plus" :size="12" />
                 </button>
-                <button type="button" @click="removeRoleByKey(role.key)">
+                <button type="button" aria-label="删除角色" @click="removeRoleByKey(role.key)">
                   <AppIcon name="trash-2" :size="12" />
                 </button>
               </div>

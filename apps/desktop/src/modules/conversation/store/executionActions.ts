@@ -9,17 +9,22 @@ import {
 } from "@/modules/conversation/services";
 import { createExecutionEvent } from "@/modules/conversation/store/events";
 import {
+  applyExecutionState,
+  ensureExecution,
+  parseDiff,
+  restoreExecutionsFromSnapshot
+} from "@/modules/conversation/store/executionRuntime";
+import {
   conversationStore,
   createConversationSnapshot,
   ensureConversationRuntime,
   findSnapshotForMessage,
   getLatestFinishedExecution,
-  pushConversationSnapshot,
-  type ConversationRuntime
+  pushConversationSnapshot
 } from "@/modules/conversation/store/state";
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { createMockId } from "@/shared/services/mockData";
-import type { Conversation, ConversationMessage, DiffItem, Execution, ExecutionEvent } from "@/shared/types/api";
+import type { Conversation, ConversationMessage, ExecutionEvent } from "@/shared/types/api";
 
 export async function submitConversationMessage(
   conversation: Conversation,
@@ -123,9 +128,7 @@ export async function rollbackConversationToMessage(conversationId: string, mess
   }
 
   runtime.messages = snapshot.messages.map((message) => ({ ...message }));
-  runtime.executions = runtime.executions
-    .filter((execution) => snapshot.execution_ids.includes(execution.id))
-    .filter((execution) => runtime.messages.some((message) => message.id === execution.message_id));
+  runtime.executions = restoreExecutionsFromSnapshot(runtime, conversationId, snapshot);
   runtime.snapshots = runtime.snapshots.filter((item) => item.created_at <= snapshot.created_at);
   runtime.worktreeRef = snapshot.worktree_ref;
   runtime.inspectorTab = snapshot.inspector_state.tab;
@@ -242,76 +245,4 @@ export function applyIncomingExecutionEvent(conversationId: string, event: Execu
       created_at: new Date().toISOString()
     });
   }
-}
-
-function ensureExecution(runtime: ConversationRuntime, conversationId: string, event: ExecutionEvent): Execution {
-  let execution = runtime.executions.find((item) => item.id === event.execution_id);
-  if (execution) {
-    return execution;
-  }
-
-  execution = {
-    id: event.execution_id,
-    workspace_id: "",
-    conversation_id: conversationId,
-    message_id: "",
-    state: "queued",
-    mode: "agent",
-    model_id: "",
-    mode_snapshot: "agent",
-    model_snapshot: {
-      model_id: ""
-    },
-    project_revision_snapshot: 0,
-    queue_index: event.queue_index,
-    trace_id: event.trace_id,
-    created_at: event.timestamp,
-    updated_at: event.timestamp
-  };
-  runtime.executions.push(execution);
-  return execution;
-}
-
-function applyExecutionState(execution: Execution, event: ExecutionEvent): void {
-  switch (event.type) {
-    case "execution_started":
-      execution.state = "executing";
-      break;
-    case "confirmation_required":
-      execution.state = "confirming";
-      break;
-    case "confirmation_resolved": {
-      const decision = typeof event.payload.decision === "string" ? event.payload.decision.toLowerCase() : "";
-      execution.state = decision === "deny" ? "cancelled" : "executing";
-      break;
-    }
-    case "execution_stopped":
-      execution.state = "cancelled";
-      break;
-    case "execution_done":
-      execution.state = "completed";
-      break;
-    case "execution_error":
-      execution.state = "failed";
-      break;
-    default:
-      break;
-  }
-  execution.updated_at = event.timestamp;
-}
-
-function parseDiff(payload: Record<string, unknown>): DiffItem[] {
-  const raw = payload.diff;
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-
-  return raw
-    .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
-    .map((item) => ({
-      id: typeof item.id === "string" ? item.id : createMockId("diff"),
-      path: typeof item.path === "string" ? item.path : "unknown",
-      change_type: item.change_type === "added" || item.change_type === "deleted" ? item.change_type : "modified",
-      summary: typeof item.summary === "string" ? item.summary : "changed"
-    }));
 }

@@ -66,7 +66,7 @@ Workspace
 1. `Conversation` 为主术语，`Session` 不作为主语义。
 2. `WorkspaceConnection` 仅用于 remote 工作区，承载 `hub_url/username` 与连接状态。
 3. `ProjectConfig` 是项目级资源默认绑定（models/rules/skills/mcps），Conversation 仅可覆盖不反写。
-4. `ConversationSnapshot` 是回滚锚点，恢复消息游标、队列、worktree 引用、Inspector 视图状态。
+4. `ConversationSnapshot` 是回滚锚点，最小恢复集合包含：消息游标、`execution_snapshots(id/state/queue_index/message_id)`、worktree 引用、Inspector 视图状态。
 5. `Execution` 是消息触发的内部执行单元；Conversation 是队列与锁边界。
 6. `Resource` 支持 `private/shared` 与 `workspace_native/local_import` 双维度。
 7. `ShareRequest` 是共享审批权威记录，支持 `pending/approved/rejected/revoked` 全状态流转。
@@ -279,7 +279,7 @@ private resource
 
 1. 入参 `message_id` 必须属于当前 Conversation 且可追溯到有效快照。
 2. Hub 锁定 Conversation，切换状态为 `rolling_back`。
-3. 应用快照：恢复消息游标、队列、worktree_ref、Inspector 状态。
+3. 应用快照：恢复消息游标、`execution_snapshots` 对应的执行状态（含 `state/queue_index/message_id`）、worktree_ref、Inspector 状态。
 4. 重算目标消息之后的 queued 列表，释放锁并回到 `idle|running`。
 5. 回滚全过程强制写审计与事件：`rollback_requested`、`snapshot_applied`、`rollback_completed`。
 

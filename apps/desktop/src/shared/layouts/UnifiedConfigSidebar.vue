@@ -192,38 +192,21 @@ async function submitWorkspaceCreate(payload: { hub_url: string; username: strin
 }
 
 function resolveMenuIcon(key: string): string {
-  if (key === "remote_account") {
-    return "user-round";
-  }
-  if (key === "remote_members_roles") {
-    return "users";
-  }
-  if (key === "remote_permissions_audit") {
-    return "shield-check";
-  }
-  if (key === "workspace_project_config") {
-    return "file-text";
-  }
-  if (key === "workspace_agent") {
-    return "bot";
-  }
-  if (key === "workspace_model") {
-    return "cpu";
-  }
-  if (key === "workspace_rules") {
-    return "scroll-text";
-  }
-  if (key === "workspace_skills") {
-    return "wrench";
-  }
-  if (key === "workspace_mcp") {
-    return "plug-zap";
-  }
-  if (key === "settings_i18n") {
-    return "file-text";
-  }
-  return "settings";
+  return menuIconByKey[key] ?? "settings";
 }
+
+const menuIconByKey: Record<string, string> = {
+  remote_account: "user-round",
+  remote_members_roles: "users",
+  remote_permissions_audit: "shield-check",
+  workspace_project_config: "file-text",
+  workspace_agent: "bot",
+  workspace_model: "cpu",
+  workspace_rules: "scroll-text",
+  workspace_skills: "wrench",
+  workspace_mcp: "plug-zap",
+  settings_i18n: "file-text"
+};
 </script>
 
 <style scoped>

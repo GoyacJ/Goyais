@@ -78,7 +78,7 @@ const roleLabel = computed(() => props.roleLabel ?? authStore.me?.role ?? "Owner
 .dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--global-radius-full);
   background: var(--semantic-text-subtle);
 }
 

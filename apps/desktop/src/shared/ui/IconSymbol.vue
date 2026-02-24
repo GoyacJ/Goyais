@@ -25,7 +25,7 @@ const iconStyle = computed(() => ({
 
 <style scoped>
 .icon-symbol {
-  font-family: "Material Symbols Outlined", "SF Pro Text", "PingFang SC", sans-serif;
+  font-family: var(--global-font-family-icon);
   line-height: 1;
   display: inline-flex;
   align-items: center;

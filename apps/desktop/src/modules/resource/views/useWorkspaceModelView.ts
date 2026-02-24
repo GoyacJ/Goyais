@@ -14,23 +14,11 @@ import {
   setResourceSearch,
   testWorkspaceModelConfig
 } from "@/modules/resource/store";
+import { modelViewColumns, modelEnabledOptions } from "@/modules/resource/views/workspaceModelView.constants";
+import { resolveDefaultEndpointKey } from "@/modules/resource/views/workspaceModelView.vendor";
 import { authStore } from "@/shared/stores/authStore";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
-import type { ModelCatalogVendor, ModelVendorName, ResourceConfig } from "@/shared/types/api";
-
-const columns = [
-  { key: "vendor", label: "厂商" },
-  { key: "model", label: "模型" },
-  { key: "enabled", label: "状态" },
-  { key: "updated", label: "更新时间" },
-  { key: "actions", label: "动作" }
-];
-
-const enabledOptions = [
-  { value: "all", label: "全部" },
-  { value: "enabled", label: "仅启用" },
-  { value: "disabled", label: "仅停用" }
-];
+import type { ModelVendorName, ResourceConfig } from "@/shared/types/api";
 
 export function useWorkspaceModelView() {
   const canWrite = computed(() => workspaceStore.mode === "local" || authStore.capabilities.resource_write);
@@ -266,36 +254,11 @@ export function useWorkspaceModelView() {
     return new Date(value).toLocaleString();
   }
 
-  function resolveDefaultEndpointKey(vendor: ModelCatalogVendor | null | undefined): string {
-    if (!vendor || vendor.name === "Local") {
-      return "";
-    }
-    const entries = Object.entries(vendor.base_urls ?? {})
-      .map(([key, value]) => [key.trim(), value.trim()] as const)
-      .filter(([key, value]) => key !== "" && value !== "");
-    if (entries.length === 0) {
-      return "";
-    }
-    const normalizedBaseURL = normalizeURL(vendor.base_url);
-    if (normalizedBaseURL !== "") {
-      const matched = entries.find(([, value]) => normalizeURL(value) === normalizedBaseURL);
-      if (matched) {
-        return matched[0];
-      }
-    }
-    entries.sort(([a], [b]) => a.localeCompare(b));
-    return entries[0][0];
-  }
-
-  function normalizeURL(raw: string): string {
-    return raw.trim().replace(/\/+$/, "");
-  }
-
   return {
     canWrite,
-    columns,
+    columns: modelViewColumns,
     enabledFilterModel,
-    enabledOptions,
+    enabledOptions: modelEnabledOptions,
     form,
     tableEmptyText,
     testNotice,

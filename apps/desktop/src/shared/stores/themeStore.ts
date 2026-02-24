@@ -202,21 +202,12 @@ function readPersistedThemeSettings(): PersistedThemeSettings {
     }
 
     const parsed = JSON.parse(raw) as PersistedThemeSettings;
-    const next: PersistedThemeSettings = {};
-
-    if (parsed.mode === "system" || parsed.mode === "dark" || parsed.mode === "light") {
-      next.mode = parsed.mode;
-    }
-    if (parsed.fontStyle === "neutral" || parsed.fontStyle === "reading" || parsed.fontStyle === "coding") {
-      next.fontStyle = parsed.fontStyle;
-    }
-    if (parsed.fontScale === "sm" || parsed.fontScale === "md" || parsed.fontScale === "lg") {
-      next.fontScale = parsed.fontScale;
-    }
-    if (parsed.preset === "aurora_forge" || parsed.preset === "obsidian_pulse" || parsed.preset === "paper_focus") {
-      next.preset = parsed.preset;
-    }
-    return next;
+    return {
+      mode: asThemeMode(parsed.mode),
+      fontStyle: asFontStyle(parsed.fontStyle),
+      fontScale: asFontScale(parsed.fontScale),
+      preset: asThemePreset(parsed.preset)
+    };
   } catch {
     return {};
   }
@@ -257,4 +248,27 @@ function syncPresetFromValues(): void {
 function matchesPreset(preset: ThemePreset, mode: ThemeMode, fontStyle: FontStyle, fontScale: FontScale): boolean {
   const profile = THEME_PRESET_PROFILES[preset];
   return profile.mode === mode && profile.fontStyle === fontStyle && profile.fontScale === fontScale;
+}
+
+function asThemeMode(value: unknown): ThemeMode | undefined {
+  return isOneOf(value, ["system", "dark", "light"]);
+}
+
+function asFontStyle(value: unknown): FontStyle | undefined {
+  return isOneOf(value, ["neutral", "reading", "coding"]);
+}
+
+function asFontScale(value: unknown): FontScale | undefined {
+  return isOneOf(value, ["sm", "md", "lg"]);
+}
+
+function asThemePreset(value: unknown): ThemePreset | undefined {
+  return isOneOf(value, ["aurora_forge", "obsidian_pulse", "paper_focus"]);
+}
+
+function isOneOf<T extends string>(value: unknown, options: readonly T[]): T | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  return options.includes(value as T) ? (value as T) : undefined;
 }

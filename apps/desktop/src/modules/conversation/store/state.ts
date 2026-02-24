@@ -168,6 +168,14 @@ export function deriveQueueState(runtime: ConversationRuntime): QueueState {
 }
 
 export function createConversationSnapshot(runtime: ConversationRuntime, conversationId: string, rollbackPointMessageId: string): ConversationSnapshot {
+  const executionSnapshots = runtime.executions.map((execution) => ({
+    id: execution.id,
+    state: execution.state,
+    queue_index: execution.queue_index,
+    message_id: execution.message_id,
+    updated_at: execution.updated_at
+  }));
+
   return {
     id: createMockId("snap"),
     conversation_id: conversationId,
@@ -178,6 +186,7 @@ export function createConversationSnapshot(runtime: ConversationRuntime, convers
       tab: runtime.inspectorTab
     },
     messages: runtime.messages.map((message) => ({ ...message })),
+    execution_snapshots: executionSnapshots,
     execution_ids: runtime.executions.map((execution) => execution.id),
     created_at: new Date().toISOString()
   };

@@ -377,6 +377,16 @@
 
 ---
 
+## 2026-02-24 Desktop 前端治理门禁落地（增量）
+
+1. 回滚门禁：Conversation 快照恢复不得仅依赖 `execution_ids`，必须恢复 `execution_snapshots(id/state/queue_index/message_id)`。
+2. Token 门禁：`check:tokens` 必须同时覆盖“token 引用必须已定义”与“组件内禁止硬编码颜色/字体/间距/圆角”。
+3. CI 门禁：Desktop job 必须执行 `lint -> test -> test:strict -> check:tokens -> check:size -> check:complexity -> coverage:gate`。
+4. 规模门禁：TS/Vue 生产代码文件必须满足 `<=300` 行；通过 feature-first 子模块拆分落地（controller/store/actions/view-model）。
+5. 覆盖率门禁：保留 `coverage:gate` 阻断策略，若 provider 缺失或报告缺失必须明确失败并给出修复提示。
+
+---
+
 ## 关键风险与缓解
 
 | 风险 | 阶段 | 缓解 |

@@ -40,40 +40,18 @@ export function refreshNavigationVisibility(): void {
   const snapshot = getCurrentPermissionSnapshot();
 
   const visibility: MenuVisibility = { ...allEnabled };
-  const settingsKeys: MenuKey[] = ["settings_theme", "settings_i18n", "settings_general"];
 
   if (mode === "local") {
-    visibility.remote_account = "hidden";
-    visibility.remote_members_roles = "hidden";
-    visibility.remote_permissions_audit = "hidden";
+    hideRemoteAdminMenus(visibility);
   } else {
     if (snapshot) {
-      for (const key of Object.keys(visibility) as MenuKey[]) {
-        if (settingsKeys.includes(key)) {
-          continue;
-        }
-        const value = snapshot.menu_visibility[key];
-        if (isPermissionVisibility(value)) {
-          visibility[key] = value;
-        }
-      }
+      applyVisibilityFromSnapshot(visibility, snapshot.menu_visibility);
     } else {
-      visibility.remote_account = "enabled";
-      visibility.remote_members_roles = isAdmin ? "enabled" : "hidden";
-      visibility.remote_permissions_audit = isAdmin ? "enabled" : "hidden";
-      const sharedVisibility: PermissionVisibility = canWriteResource ? "enabled" : "readonly";
-      visibility.workspace_project_config = sharedVisibility;
-      visibility.workspace_agent = sharedVisibility;
-      visibility.workspace_model = sharedVisibility;
-      visibility.workspace_rules = sharedVisibility;
-      visibility.workspace_skills = sharedVisibility;
-      visibility.workspace_mcp = sharedVisibility;
+      applyDefaultRemoteVisibility(visibility, isAdmin, canWriteResource);
     }
   }
 
-  for (const key of settingsKeys) {
-    visibility[key] = "enabled";
-  }
+  enforceSettingsMenusAlwaysEnabled(visibility);
 
   navigationStore.visibility = visibility;
 }
@@ -85,3 +63,45 @@ export function getMenuVisibility(key: MenuKey): PermissionVisibility {
 function isPermissionVisibility(value: unknown): value is PermissionVisibility {
   return value === "hidden" || value === "disabled" || value === "readonly" || value === "enabled";
 }
+
+function hideRemoteAdminMenus(visibility: MenuVisibility): void {
+  visibility.remote_account = "hidden";
+  visibility.remote_members_roles = "hidden";
+  visibility.remote_permissions_audit = "hidden";
+}
+
+function applyVisibilityFromSnapshot(
+  visibility: MenuVisibility,
+  snapshot: Record<string, PermissionVisibility>
+): void {
+  for (const key of Object.keys(visibility) as MenuKey[]) {
+    if (settingsMenuKeys.includes(key)) {
+      continue;
+    }
+    const value = snapshot[key];
+    if (isPermissionVisibility(value)) {
+      visibility[key] = value;
+    }
+  }
+}
+
+function applyDefaultRemoteVisibility(visibility: MenuVisibility, isAdmin: boolean, canWriteResource: boolean): void {
+  visibility.remote_account = "enabled";
+  visibility.remote_members_roles = isAdmin ? "enabled" : "hidden";
+  visibility.remote_permissions_audit = isAdmin ? "enabled" : "hidden";
+  const sharedVisibility: PermissionVisibility = canWriteResource ? "enabled" : "readonly";
+  visibility.workspace_project_config = sharedVisibility;
+  visibility.workspace_agent = sharedVisibility;
+  visibility.workspace_model = sharedVisibility;
+  visibility.workspace_rules = sharedVisibility;
+  visibility.workspace_skills = sharedVisibility;
+  visibility.workspace_mcp = sharedVisibility;
+}
+
+function enforceSettingsMenusAlwaysEnabled(visibility: MenuVisibility): void {
+  for (const key of settingsMenuKeys) {
+    visibility[key] = "enabled";
+  }
+}
+
+const settingsMenuKeys: MenuKey[] = ["settings_theme", "settings_i18n", "settings_general"];

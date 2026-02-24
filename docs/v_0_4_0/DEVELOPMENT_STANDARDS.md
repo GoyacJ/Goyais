@@ -466,3 +466,14 @@ StandardsExceptionADR {
 | 目录严格格式 + 静默补齐 + 回退策略 | PRD.md, TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | PRD 6.3/19.1, TECH_ARCH 6.5/20.4, STANDARDS 10.4/15 | done |
 | 模型页进入自动重载（无手动按钮） | PRD.md, IMPLEMENTATION_PLAN.md | PRD 19.1, PLAN Phase 4/9 验收 | done |
 | 重载失败审计细化（manual/page_open/scheduled） | TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | TECH_ARCH 15.3/20.4, STANDARDS 10.4/13/15 | done |
+
+---
+
+## 20. 2026-02-24 Desktop 前端治理同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| Conversation 回滚快照恢复执行状态（`execution_snapshots`） | TECH_ARCH.md, IMPLEMENTATION_PLAN.md | TECH_ARCH 3.2/7.4, PLAN Desktop 前端治理门禁增量 | done |
+| Token 引用完整性与硬编码样式阻断脚本 | DEVELOPMENT_STANDARDS.md, IMPLEMENTATION_PLAN.md | STANDARDS 9.x/11.1, PLAN Desktop 前端治理门禁增量 | done |
+| CI 增量门禁（strict/tokens/size/complexity/coverage） | DEVELOPMENT_STANDARDS.md, IMPLEMENTATION_PLAN.md | STANDARDS 6.4/10.1/10.2/11.1, PLAN Desktop 前端治理门禁增量 | done |
+| TS/Vue 超行数文件拆分（feature-first 子模块化） | DEVELOPMENT_STANDARDS.md | STANDARDS 6.1/6.3/13.1 | done |

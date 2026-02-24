@@ -51,6 +51,8 @@
   --global-color-overlay-light: #1f1f1f14;
 
   --global-font-family-ui: "SF Pro Text", "PingFang SC", "Noto Sans", sans-serif;
+  --global-font-family-code: ui-monospace, "SF Mono", Menlo, monospace;
+  --global-font-family-icon: "Material Symbols Outlined", "SF Pro Text", "PingFang SC", sans-serif;
   --global-font-size-11: 11px;
   --global-font-size-12: 12px;
   --global-font-size-13: 13px;
@@ -68,17 +70,27 @@
   --global-font-weight-600: 600;
   --global-font-weight-700: 700;
 
+  --global-space-1px: 1px;
+  --global-space-2px: 2px;
   --global-space-4: 4px;
+  --global-space-6: 6px;
   --global-space-8: 8px;
+  --global-space-10: 10px;
   --global-space-12: 12px;
   --global-space-16: 16px;
+  --global-space-20: 20px;
   --global-space-24: 24px;
   --global-space-32: 32px;
   --global-space-40: 40px;
+  --global-space-neg-2px: -2px;
 
+  --global-radius-4: 4px;
+  --global-radius-6: 6px;
   --global-radius-8: 8px;
   --global-radius-12: 12px;
   --global-radius-16: 16px;
+  --global-radius-full: 50%;
+  --global-radius-pill: 999px;
 
   --global-shadow-1: 0 1px 2px rgba(5,7,13,0.35);
   --global-shadow-2: 0 6px 16px rgba(5,7,13,0.32);
@@ -107,6 +119,7 @@
   --semantic-success: var(--global-color-success-400);
   --semantic-warning: var(--global-color-warning-400);
   --semantic-focus-ring: var(--global-color-primary-300);
+  --semantic-link: var(--semantic-primary);
 
   /* =========================
    * Component Tokens
@@ -232,6 +245,7 @@
   --component-icon-action-fg-danger: var(--semantic-danger);
 
   --component-modal-bg: var(--semantic-surface);
+  --component-modal-mask-bg: #00000073;
   --component-modal-border: var(--semantic-border);
   --component-modal-radius: var(--global-radius-16);
   --component-modal-title-fg: var(--semantic-text);
@@ -360,6 +374,7 @@
   --component-toast-error-bg: #fee2e2;
   --component-toast-warning-bg: #fef3c7;
   --component-toast-info-bg: #dbeafe;
+  --component-modal-mask-bg: #00000045;
   --component-table-row-bg-selected: #5e83bd14;
   --component-table-row-selected: #5e83bd14;
 }

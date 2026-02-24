@@ -72,7 +72,7 @@
   border: 0;
   width: 24px;
   height: 24px;
-  border-radius: 50%;
+  border-radius: var(--global-radius-full);
   background: var(--semantic-surface-2);
   color: var(--semantic-text);
   display: inline-flex;
