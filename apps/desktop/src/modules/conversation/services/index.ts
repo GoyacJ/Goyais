@@ -1,12 +1,9 @@
 import { getControlClient } from "@/shared/services/clients";
 import { connectConversationEvents } from "@/shared/services/sseClient";
-import { withApiFallback } from "@/shared/services/fallback";
-import { createMockId } from "@/shared/services/mockData";
 import type {
   Conversation,
   DiffCapability,
   DiffItem,
-  Execution,
   ExecutionCreateRequest,
   ExecutionCreateResponse
 } from "@/shared/types/api";
@@ -30,89 +27,36 @@ export function streamConversationEvents(
 }
 
 export async function createExecution(conversation: Conversation, input: ExecutionCreateRequest): Promise<ExecutionCreateResponse> {
-  return withApiFallback(
-    "conversation.createExecution",
-    () => getControlClient().post<ExecutionCreateResponse>(`/v1/conversations/${conversation.id}/messages`, input),
-    () => ({
-      execution: {
-        id: createMockId("exec"),
-        workspace_id: conversation.workspace_id,
-        conversation_id: conversation.id,
-        message_id: createMockId("msg"),
-        state: "queued",
-        mode: input.mode,
-        model_id: input.model_id,
-        queue_index: 0,
-        trace_id: createMockId("tr"),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-    })
-  );
+  return getControlClient().post<ExecutionCreateResponse>(`/v1/conversations/${conversation.id}/messages`, input);
 }
 
 export async function cancelExecution(conversationId: string, executionId: string): Promise<void> {
   void executionId;
-  return withApiFallback(
-    "conversation.cancelExecution",
-    async () => {
-      await getControlClient().post<void>(`/v1/conversations/${conversationId}/stop`);
-    },
-    () => undefined
-  );
+  await getControlClient().post<void>(`/v1/conversations/${conversationId}/stop`);
 }
 
 export async function rollbackExecution(conversationId: string, messageId: string): Promise<void> {
-  return withApiFallback(
-    "conversation.rollback",
-    async () => {
-      await getControlClient().post<void>(`/v1/conversations/${conversationId}/rollback`, {
-        message_id: messageId
-      });
-    },
-    () => undefined
-  );
+  await getControlClient().post<void>(`/v1/conversations/${conversationId}/rollback`, {
+    message_id: messageId
+  });
+}
+
+export async function confirmExecution(executionId: string, decision: "approve" | "deny"): Promise<void> {
+  await getControlClient().post<void>(`/v1/executions/${executionId}/confirm`, {
+    decision
+  });
 }
 
 export async function commitExecution(executionId: string): Promise<void> {
-  return withApiFallback(
-    "conversation.commitExecution",
-    async () => {
-      await getControlClient().post<void>(`/v1/executions/${executionId}/commit`);
-    },
-    () => undefined
-  );
+  await getControlClient().post<void>(`/v1/executions/${executionId}/commit`);
 }
 
 export async function discardExecution(executionId: string): Promise<void> {
-  return withApiFallback(
-    "conversation.discardExecution",
-    async () => {
-      await getControlClient().post<void>(`/v1/executions/${executionId}/discard`);
-    },
-    () => undefined
-  );
+  await getControlClient().post<void>(`/v1/executions/${executionId}/discard`);
 }
 
 export async function loadExecutionDiff(executionId: string): Promise<DiffItem[]> {
-  return withApiFallback(
-    "conversation.loadExecutionDiff",
-    () => getControlClient().get<DiffItem[]>(`/v1/executions/${executionId}/diff`),
-    () => [
-      {
-        id: createMockId("diff"),
-        path: "src/modules/conversation/views/MainScreenView.vue",
-        change_type: "modified",
-        summary: "Refine composer layout and queue indicator"
-      },
-      {
-        id: createMockId("diff"),
-        path: "src/shared/ui/BaseButton.vue",
-        change_type: "added",
-        summary: "Introduce icon-only action style"
-      }
-    ]
-  );
+  return getControlClient().get<DiffItem[]>(`/v1/executions/${executionId}/diff`);
 }
 
 export function resolveDiffCapability(isGitProject: boolean): DiffCapability {

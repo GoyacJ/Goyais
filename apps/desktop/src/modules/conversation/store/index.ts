@@ -14,8 +14,11 @@ export {
   setConversationModel
 } from "@/modules/conversation/store/state";
 export {
+  applyIncomingExecutionEvent,
   commitLatestDiff,
   discardLatestDiff,
+  refreshExecutionDiff,
+  resolveExecutionConfirmation,
   rollbackConversationToMessage,
   stopConversationExecution,
   submitConversationMessage

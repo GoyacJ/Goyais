@@ -1,4 +1,5 @@
 import { streamConversationEvents } from "@/modules/conversation/services";
+import { applyIncomingExecutionEvent } from "@/modules/conversation/store/executionActions";
 import { conversationStore } from "@/modules/conversation/store/state";
 import { createExecutionEvent } from "@/modules/conversation/store/events";
 import type { Conversation, ExecutionEvent } from "@/shared/types/api";
@@ -20,7 +21,7 @@ export function attachConversationStream(conversation: Conversation, token?: str
       if (!current) {
         return;
       }
-      current.events.push(event as ExecutionEvent);
+      applyIncomingExecutionEvent(conversation.id, event as ExecutionEvent);
     },
     onStatusChange: (status) => {
       const current = conversationStore.byConversationId[conversation.id];

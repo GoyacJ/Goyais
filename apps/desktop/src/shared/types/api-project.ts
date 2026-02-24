@@ -16,6 +16,7 @@ export type Project = {
   is_git: boolean;
   default_model_id?: string;
   default_mode?: ConversationMode;
+  current_revision: number;
   created_at: string;
   updated_at: string;
 };
@@ -38,6 +39,7 @@ export type Conversation = {
   queue_state: QueueState;
   default_mode: ConversationMode;
   model_id: string;
+  base_revision: number;
   active_execution_id: string | null;
   created_at: string;
   updated_at: string;
@@ -75,6 +77,16 @@ export type Execution = {
   state: ExecutionState;
   mode: ConversationMode;
   model_id: string;
+  mode_snapshot: ConversationMode;
+  model_snapshot: {
+    config_id?: string;
+    vendor?: string;
+    model_id: string;
+    base_url?: string;
+    timeout_ms?: number;
+    params?: Record<string, unknown>;
+  };
+  project_revision_snapshot: number;
   queue_index: number;
   trace_id: string;
   created_at: string;
@@ -121,6 +133,8 @@ export type ExecutionCreateRequest = {
 
 export type ExecutionCreateResponse = {
   execution: Execution;
+  queue_state: QueueState;
+  queue_index: number;
 };
 
 export type ConversationRuntime = {

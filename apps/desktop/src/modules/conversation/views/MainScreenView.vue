@@ -72,6 +72,7 @@
           :draft="runtime?.draft ?? ''"
           :mode="runtime?.mode ?? 'agent'"
           :model-id="runtime?.modelId ?? 'gpt-4.1'"
+          :model-options="modelOptions"
           :placeholder="placeholder"
           @update:draft="updateDraft"
           @update:mode="updateMode"
@@ -119,6 +120,19 @@
     <template #footer>
       <HubStatusBar />
     </template>
+
+    <RiskConfirmModal
+      :open="riskConfirm.open"
+      title="高风险操作确认"
+      :summary="riskConfirm.summary"
+      :preview="riskConfirm.preview"
+    >
+      <div class="risk-actions">
+        <button type="button" class="risk-btn ghost" @click="closeRiskConfirm">稍后处理</button>
+        <button type="button" class="risk-btn ghost" @click="confirmRisk('deny')">拒绝</button>
+        <button type="button" class="risk-btn primary" @click="confirmRisk('approve')">批准</button>
+      </div>
+    </RiskConfirmModal>
   </MainShell>
 </template>
 
@@ -129,6 +143,7 @@ import MainSidebarPanel from "@/modules/conversation/components/MainSidebarPanel
 import MainShell from "@/shared/shells/MainShell.vue";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import HubStatusBar from "@/shared/ui/HubStatusBar.vue";
+import RiskConfirmModal from "@/shared/ui/RiskConfirmModal.vue";
 import Topbar from "@/shared/ui/Topbar.vue";
 import { useMainScreenController } from "@/modules/conversation/views/useMainScreenController";
 
@@ -142,6 +157,8 @@ const {
   commitDiff,
   connectionClass,
   connectionState,
+  closeRiskConfirm,
+  confirmRisk,
   conversationNameDraft,
   conversationPageByProjectId,
   createWorkspace,
@@ -168,6 +185,7 @@ const {
   projectImportInProgress,
   projectsPage,
   queuedCount,
+  riskConfirm,
   rollbackMessage,
   runningState,
   runtime,
@@ -178,6 +196,7 @@ const {
   stopExecution,
   switchWorkspace,
   updateDraft,
+  modelOptions,
   updateMode,
   updateModel,
   workspaceLabel,

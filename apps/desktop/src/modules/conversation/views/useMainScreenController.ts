@@ -1,10 +1,13 @@
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 import {
+  attachConversationStream,
   commitLatestDiff,
+  detachConversationStream,
   discardLatestDiff,
   ensureConversationRuntime,
+  resolveExecutionConfirmation,
   rollbackConversationToMessage,
   setConversationDraft,
   setConversationInspectorTab,
@@ -28,7 +31,9 @@ import {
   refreshProjects,
   renameConversationById,
   setActiveConversation,
-  setActiveProject
+  setActiveProject,
+  updateConversationModeById,
+  updateConversationModelById
 } from "@/modules/project/store";
 import { createRemoteConnection } from "@/modules/workspace/services";
 import {
@@ -49,6 +54,12 @@ export function useMainScreenController() {
   const editingConversationName = ref(false);
   const conversationNameDraft = ref("");
   const inspectorCollapsed = ref(false);
+  const riskConfirm = ref({
+    open: false,
+    executionId: "",
+    summary: "",
+    preview: ""
+  });
   const projectImportInProgress = ref(false);
   const projectImportFeedback = ref("");
   const projectImportError = ref("");
@@ -128,15 +139,52 @@ export function useMainScreenController() {
     return "disconnected";
   });
 
+  const modelOptions = computed(() => {
+    const project = activeProject.value;
+    const runtimeModel = runtime.value?.modelId ?? activeConversation.value?.model_id ?? "gpt-4.1";
+    if (!project) {
+      return [runtimeModel];
+    }
+
+    const configured = projectStore.projectConfigsByProjectId[project.id]?.model_ids ?? [];
+    const merged = [...configured, runtimeModel].filter((value, index, source) => value.trim() !== "" && source.indexOf(value) === index);
+    return merged.length > 0 ? merged : [runtimeModel];
+  });
+
   onMounted(async () => {
     await initializeWorkspaceContext();
     await refreshProjects();
+  });
+
+  onUnmounted(() => {
+    const activeId = projectStore.activeConversationId;
+    if (activeId) {
+      detachConversationStream(activeId);
+    }
   });
 
   watch(
     () => projectStore.activeProjectId,
     async () => {
       await refreshConversationsForActiveProject();
+    }
+  );
+
+  watch(
+    () => projectStore.activeConversationId,
+    (nextId, prevId) => {
+      if (prevId) {
+        detachConversationStream(prevId);
+      }
+      if (!nextId) {
+        return;
+      }
+      const conversation = (projectStore.conversationsByProjectId[projectStore.activeProjectId] ?? []).find((item) => item.id === nextId);
+      if (!conversation) {
+        return;
+      }
+      const workspaceToken = workspaceStore.currentWorkspaceId ? authStore.tokensByWorkspaceId[workspaceStore.currentWorkspaceId] : undefined;
+      attachConversationStream(conversation, workspaceToken);
     }
   );
 
@@ -149,6 +197,34 @@ export function useMainScreenController() {
     }
   );
 
+  watch(
+    () => runtime.value?.events.length ?? 0,
+    () => {
+      const events = runtime.value?.events ?? [];
+      const latest = events[events.length - 1];
+      if (!latest) {
+        return;
+      }
+
+      if (latest.type === "confirmation_required") {
+        riskConfirm.value = {
+          open: true,
+          executionId: latest.execution_id,
+          summary: typeof latest.payload.summary === "string" ? latest.payload.summary : "高风险操作需要确认",
+          preview: typeof latest.payload.preview === "string" ? latest.payload.preview : ""
+        };
+        return;
+      }
+
+      if (latest.type === "confirmation_resolved" || latest.type === "execution_done" || latest.type === "execution_error" || latest.type === "execution_stopped") {
+        if (latest.execution_id === riskConfirm.value.executionId) {
+          riskConfirm.value.open = false;
+          riskConfirm.value.executionId = "";
+        }
+      }
+    }
+  );
+
   function updateDraft(value: string): void {
     if (!activeConversation.value) {
       return;
@@ -156,18 +232,32 @@ export function useMainScreenController() {
     setConversationDraft(activeConversation.value.id, value);
   }
 
-  function updateMode(value: "agent" | "plan"): void {
-    if (!activeConversation.value) {
+  async function updateMode(value: "agent" | "plan"): Promise<void> {
+    if (!activeConversation.value || !activeProject.value) {
       return;
     }
-    setConversationMode(activeConversation.value.id, value);
+    const conversationId = activeConversation.value.id;
+    const projectId = activeProject.value.id;
+    const previousMode = runtime.value?.mode ?? activeConversation.value.default_mode;
+    setConversationMode(conversationId, value);
+    const updated = await updateConversationModeById(projectId, conversationId, value);
+    if (!updated) {
+      setConversationMode(conversationId, previousMode);
+    }
   }
 
-  function updateModel(value: string): void {
-    if (!activeConversation.value) {
+  async function updateModel(value: string): Promise<void> {
+    if (!activeConversation.value || !activeProject.value) {
       return;
     }
-    setConversationModel(activeConversation.value.id, value);
+    const conversationId = activeConversation.value.id;
+    const projectId = activeProject.value.id;
+    const previousModel = runtime.value?.modelId ?? activeConversation.value.model_id;
+    setConversationModel(conversationId, value);
+    const updated = await updateConversationModelById(projectId, conversationId, value);
+    if (!updated) {
+      setConversationModel(conversationId, previousModel);
+    }
   }
 
   function changeInspectorTab(tab: InspectorTabKey): void {
@@ -342,6 +432,22 @@ export function useMainScreenController() {
     await discardLatestDiff(activeConversation.value.id);
   }
 
+  async function confirmRisk(decision: "approve" | "deny"): Promise<void> {
+    const executionId = riskConfirm.value.executionId.trim();
+    if (executionId === "") {
+      return;
+    }
+    await resolveExecutionConfirmation(executionId, decision);
+    if (decision === "deny") {
+      riskConfirm.value.open = false;
+      riskConfirm.value.executionId = "";
+    }
+  }
+
+  function closeRiskConfirm(): void {
+    riskConfirm.value.open = false;
+  }
+
   function exportPatch(): void {
     window.alert("Patch exported (design stub).");
   }
@@ -371,6 +477,8 @@ export function useMainScreenController() {
     nonGitCapability,
     onConversationNameInput,
     openAccount,
+    closeRiskConfirm,
+    confirmRisk,
     openInspectorTab,
     openSettings,
     paginateConversations,
@@ -382,6 +490,7 @@ export function useMainScreenController() {
     projectImportInProgress,
     projectsPage,
     queuedCount,
+    riskConfirm,
     rollbackMessage,
     runningState,
     runtime,
@@ -394,6 +503,7 @@ export function useMainScreenController() {
     updateDraft,
     updateMode,
     updateModel,
+    modelOptions,
     workspaceLabel,
     workspaceStore
   };

@@ -34,6 +34,7 @@ const defaultProjects: Project[] = [
     is_git: true,
     default_mode: "agent",
     default_model_id: "gpt-4.1",
+    current_revision: 0,
     created_at: now,
     updated_at: now
   }
@@ -48,6 +49,7 @@ const defaultConversations: Conversation[] = [
     queue_state: "idle",
     default_mode: "agent",
     model_id: "gpt-4.1",
+    base_revision: 0,
     active_execution_id: null,
     created_at: now,
     updated_at: now
@@ -60,6 +62,7 @@ const defaultConversations: Conversation[] = [
     queue_state: "idle",
     default_mode: "plan",
     model_id: "gpt-4.1-mini",
+    base_revision: 0,
     active_execution_id: null,
     created_at: now,
     updated_at: now

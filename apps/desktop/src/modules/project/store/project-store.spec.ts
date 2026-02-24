@@ -89,6 +89,7 @@ describe("project store token forwarding", () => {
       name: "repo-alpha",
       repo_path: "/tmp/repo-alpha",
       is_git: true,
+      current_revision: 0,
       created_at: "2026-02-23T00:00:00Z",
       updated_at: "2026-02-23T00:00:00Z"
     };

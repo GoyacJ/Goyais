@@ -151,6 +151,7 @@ function createApiFetchMock() {
             is_git: true,
             default_model_id: "gpt-4.1",
             default_mode: "agent",
+            current_revision: 0,
             created_at: "2026-02-24T00:00:00Z",
             updated_at: "2026-02-24T00:00:00Z"
           }

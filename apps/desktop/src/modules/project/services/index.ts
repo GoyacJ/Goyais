@@ -1,7 +1,15 @@
 import { getControlClient } from "@/shared/services/clients";
 import { withApiFallback } from "@/shared/services/fallback";
 import { createMockId, mockData } from "@/shared/services/mockData";
-import type { Conversation, ListEnvelope, PaginationQuery, Project, ProjectConfig, WorkspaceProjectConfigItem } from "@/shared/types/api";
+import type {
+  Conversation,
+  ConversationMode,
+  ListEnvelope,
+  PaginationQuery,
+  Project,
+  ProjectConfig,
+  WorkspaceProjectConfigItem
+} from "@/shared/types/api";
 
 type ProjectServiceOptions = {
   token?: string;
@@ -38,6 +46,7 @@ export async function createProject(
         is_git: input.is_git,
         default_mode: "agent",
         default_model_id: "gpt-4.1",
+        current_revision: 0,
         created_at: now,
         updated_at: now
       };
@@ -93,6 +102,7 @@ export async function createConversation(project: Project, name: string, options
         queue_state: "idle",
         default_mode: project.default_mode ?? "agent",
         model_id: project.default_model_id ?? "gpt-4.1",
+        base_revision: project.current_revision ?? 0,
         active_execution_id: null,
         created_at: now,
         updated_at: now
@@ -108,15 +118,31 @@ export async function renameConversation(
   name: string,
   options: ProjectServiceOptions = {}
 ): Promise<Conversation> {
+  return patchConversation(conversationId, { name }, options);
+}
+
+export async function patchConversation(
+  conversationId: string,
+  patch: { name?: string; mode?: ConversationMode; model_id?: string },
+  options: ProjectServiceOptions = {}
+): Promise<Conversation> {
   return withApiFallback(
-    "project.renameConversation",
-    () => getControlClient().request<Conversation>(`/v1/conversations/${conversationId}`, { method: "PATCH", body: { name }, token: options.token }),
+    "project.patchConversation",
+    () => getControlClient().request<Conversation>(`/v1/conversations/${conversationId}`, { method: "PATCH", body: patch, token: options.token }),
     () => {
       const target = mockData.conversations.find((conversation) => conversation.id === conversationId);
       if (!target) {
         throw new Error("Conversation not found");
       }
-      target.name = name;
+      if (patch.name !== undefined) {
+        target.name = patch.name;
+      }
+      if (patch.mode !== undefined) {
+        target.default_mode = patch.mode;
+      }
+      if (patch.model_id !== undefined) {
+        target.model_id = patch.model_id;
+      }
       target.updated_at = new Date().toISOString();
       return target;
     }

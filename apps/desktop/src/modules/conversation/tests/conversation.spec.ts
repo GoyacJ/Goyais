@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  applyIncomingExecutionEvent,
   ensureConversationRuntime,
   resetConversationStore,
   setConversationDraft,
@@ -17,37 +18,49 @@ const mockConversation: Conversation = {
   queue_state: "idle",
   default_mode: "agent",
   model_id: "gpt-4.1",
+  base_revision: 0,
   active_execution_id: null,
   created_at: "2026-02-23T00:00:00Z",
   updated_at: "2026-02-23T00:00:00Z"
 };
 
 describe("conversation store", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     resetConversationStore();
-    vi.useFakeTimers();
     let executionCounter = 0;
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? "GET";
 
       if (url.includes("/v1/conversations/") && url.endsWith("/messages") && method === "POST") {
         executionCounter += 1;
-        return jsonResponse({
-          execution: {
-            id: `exec_${executionCounter}`,
-            workspace_id: "ws_local",
-            conversation_id: mockConversation.id,
-            message_id: `msg_${executionCounter}`,
-            state: executionCounter === 1 ? "executing" : "queued",
-            mode: "agent",
-            model_id: "gpt-4.1",
-            queue_index: executionCounter - 1,
-            trace_id: `tr_exec_${executionCounter}`,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }
-        }, 201);
+        return jsonResponse(
+          {
+            execution: {
+              id: `exec_${executionCounter}`,
+              workspace_id: "ws_local",
+              conversation_id: mockConversation.id,
+              message_id: `msg_${executionCounter}`,
+              state: executionCounter === 1 ? "pending" : "queued",
+              mode: "agent",
+              model_id: "gpt-4.1",
+              mode_snapshot: "agent",
+              model_snapshot: {
+                model_id: "gpt-4.1"
+              },
+              project_revision_snapshot: 0,
+              queue_index: executionCounter - 1,
+              trace_id: `tr_exec_${executionCounter}`,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            },
+            queue_state: executionCounter === 1 ? "running" : "queued",
+            queue_index: executionCounter - 1
+          },
+          201
+        );
       }
 
       if (url.endsWith("/stop") && method === "POST") {
@@ -83,11 +96,10 @@ describe("conversation store", () => {
   });
 
   afterEach(() => {
-    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
-  it("keeps FIFO queue and drains after completion", async () => {
+  it("submits messages and keeps server-driven execution states", async () => {
     ensureConversationRuntime(mockConversation, true);
     setConversationDraft(mockConversation.id, "first message");
     await submitConversationMessage(mockConversation, true);
@@ -96,35 +108,111 @@ describe("conversation store", () => {
     await submitConversationMessage(mockConversation, true);
 
     const runtime = ensureConversationRuntime(mockConversation, true);
-    const queuedBefore = runtime.executions.filter((item) => item.state === "queued").length;
-    expect(queuedBefore).toBe(1);
-
-    await vi.advanceTimersByTimeAsync(2300);
-    const activeAfterFirst = runtime.executions.filter((item) => item.state === "executing").length;
-    expect(activeAfterFirst).toBe(1);
-
-    await vi.advanceTimersByTimeAsync(2300);
-    const completedCount = runtime.executions.filter((item) => item.state === "completed").length;
-    expect(completedCount).toBe(2);
+    expect(runtime.executions.length).toBe(2);
+    expect(runtime.executions[0]?.state).toBe("pending");
+    expect(runtime.executions[1]?.state).toBe("queued");
   });
 
-  it("stop only cancels active execution and keeps queued items", async () => {
-    ensureConversationRuntime(mockConversation, true);
-    setConversationDraft(mockConversation.id, "active");
-    await submitConversationMessage(mockConversation, true);
-    setConversationDraft(mockConversation.id, "queued");
-    await submitConversationMessage(mockConversation, true);
+  it("applies incoming execution events to runtime", () => {
+    const runtime = ensureConversationRuntime(mockConversation, true);
+    runtime.executions.push({
+      id: "exec_1",
+      workspace_id: "ws_local",
+      conversation_id: mockConversation.id,
+      message_id: "msg_1",
+      state: "pending",
+      mode: "agent",
+      model_id: "gpt-4.1",
+      mode_snapshot: "agent",
+      model_snapshot: {
+        model_id: "gpt-4.1"
+      },
+      project_revision_snapshot: 0,
+      queue_index: 0,
+      trace_id: "tr_exec_1",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+
+    applyIncomingExecutionEvent(mockConversation.id, {
+      event_id: "evt_1",
+      execution_id: "exec_1",
+      conversation_id: mockConversation.id,
+      trace_id: "tr_exec_1",
+      sequence: 1,
+      queue_index: 0,
+      type: "execution_started",
+      timestamp: new Date().toISOString(),
+      payload: {}
+    });
+
+    applyIncomingExecutionEvent(mockConversation.id, {
+      event_id: "evt_2",
+      execution_id: "exec_1",
+      conversation_id: mockConversation.id,
+      trace_id: "tr_exec_1",
+      sequence: 2,
+      queue_index: 0,
+      type: "diff_generated",
+      timestamp: new Date().toISOString(),
+      payload: {
+        diff: [
+          {
+            id: "diff_1",
+            path: "src/main.ts",
+            change_type: "modified",
+            summary: "updated"
+          }
+        ]
+      }
+    });
+
+    applyIncomingExecutionEvent(mockConversation.id, {
+      event_id: "evt_3",
+      execution_id: "exec_1",
+      conversation_id: mockConversation.id,
+      trace_id: "tr_exec_1",
+      sequence: 3,
+      queue_index: 0,
+      type: "execution_done",
+      timestamp: new Date().toISOString(),
+      payload: {
+        content: "done"
+      }
+    });
+
+    expect(runtime.executions[0]?.state).toBe("completed");
+    expect(runtime.diff.length).toBe(1);
+    expect(runtime.messages[runtime.messages.length - 1]?.content).toContain("done");
+  });
+
+  it("stop calls backend stop endpoint", async () => {
+    const runtime = ensureConversationRuntime(mockConversation, true);
+    runtime.executions.push({
+      id: "exec_running",
+      workspace_id: "ws_local",
+      conversation_id: mockConversation.id,
+      message_id: "msg_running",
+      state: "executing",
+      mode: "agent",
+      model_id: "gpt-4.1",
+      mode_snapshot: "agent",
+      model_snapshot: {
+        model_id: "gpt-4.1"
+      },
+      project_revision_snapshot: 0,
+      queue_index: 0,
+      trace_id: "tr_running",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
 
     await stopConversationExecution(mockConversation);
 
-    const runtime = ensureConversationRuntime(mockConversation, true);
-    const cancelledCount = runtime.executions.filter((item) => item.state === "cancelled").length;
-    const queuedCount = runtime.executions.filter((item) => item.state === "queued").length;
-    const executingCount = runtime.executions.filter((item) => item.state === "executing").length;
-
-    expect(cancelledCount).toBe(1);
-    expect(queuedCount).toBe(0);
-    expect(executingCount).toBe(1);
+    const stopCalls = fetchMock.mock.calls.filter(([url, init]) => {
+      return String(url).endsWith(`/v1/conversations/${mockConversation.id}/stop`) && (init?.method ?? "GET") === "POST";
+    });
+    expect(stopCalls.length).toBe(1);
   });
 });
 

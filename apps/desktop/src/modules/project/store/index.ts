@@ -8,6 +8,7 @@ import {
   importProjectDirectory,
   listConversations,
   listProjects,
+  patchConversation,
   listWorkspaceProjectConfigs,
   removeConversation,
   removeProject,
@@ -285,6 +286,44 @@ export async function renameConversationById(projectId: string, conversationId: 
     );
   } catch (error) {
     projectStore.error = toDisplayError(error);
+  }
+}
+
+export async function updateConversationModeById(
+  projectId: string,
+  conversationId: string,
+  mode: Conversation["default_mode"]
+): Promise<boolean> {
+  const token = resolveCurrentWorkspaceToken();
+  try {
+    const updated = await patchConversation(conversationId, { mode }, { token });
+    const list = projectStore.conversationsByProjectId[projectId] ?? [];
+    projectStore.conversationsByProjectId[projectId] = list.map((conversation) =>
+      conversation.id === conversationId ? updated : conversation
+    );
+    return true;
+  } catch (error) {
+    projectStore.error = toDisplayError(error);
+    return false;
+  }
+}
+
+export async function updateConversationModelById(
+  projectId: string,
+  conversationId: string,
+  modelId: string
+): Promise<boolean> {
+  const token = resolveCurrentWorkspaceToken();
+  try {
+    const updated = await patchConversation(conversationId, { model_id: modelId }, { token });
+    const list = projectStore.conversationsByProjectId[projectId] ?? [];
+    projectStore.conversationsByProjectId[projectId] = list.map((conversation) =>
+      conversation.id === conversationId ? updated : conversation
+    );
+    return true;
+  } catch (error) {
+    projectStore.error = toDisplayError(error);
+    return false;
   }
 }
 
