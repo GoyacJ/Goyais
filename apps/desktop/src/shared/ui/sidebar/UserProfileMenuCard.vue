@@ -89,7 +89,7 @@ function onSelect(key: string): void {
 .avatar {
   width: 22px;
   height: 22px;
-  border-radius: 50%;
+  border-radius: var(--global-radius-full);
   background: var(--semantic-primary);
   color: var(--semantic-bg);
   display: inline-flex;
@@ -101,7 +101,7 @@ function onSelect(key: string): void {
 
 .user-meta {
   display: grid;
-  gap: 2px;
+  gap: var(--global-space-2px);
   text-align: left;
 }
 

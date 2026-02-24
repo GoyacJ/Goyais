@@ -39,7 +39,7 @@ p {
   line-height: var(--global-line-height-normal);
 }
 p.mono {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--global-font-family-code);
   white-space: pre-wrap;
 }
 .tone-info p {

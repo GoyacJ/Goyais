@@ -65,6 +65,13 @@ export type ConversationSnapshot = {
     tab: InspectorTabKey;
   };
   messages: ConversationMessage[];
+  execution_snapshots: Array<{
+    id: string;
+    state: ExecutionState;
+    queue_index: number;
+    message_id: string;
+    updated_at: string;
+  }>;
   execution_ids: string[];
   created_at: string;
 };

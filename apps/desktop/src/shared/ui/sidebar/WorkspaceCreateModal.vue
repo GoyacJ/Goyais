@@ -78,7 +78,7 @@ function resetForm(): void {
 .modal-mask {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--component-modal-mask-bg);
   display: grid;
   place-items: center;
   z-index: 20;

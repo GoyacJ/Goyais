@@ -1,51 +1,21 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
+import { attachConversationStream, detachConversationStream, ensureConversationRuntime } from "@/modules/conversation/store";
+import { useMainScreenActions } from "@/modules/conversation/views/useMainScreenActions";
+import { useMainScreenModeling } from "@/modules/conversation/views/useMainScreenModeling";
 import {
-  attachConversationStream,
-  commitLatestDiff,
-  detachConversationStream,
-  discardLatestDiff,
-  ensureConversationRuntime,
-  resolveExecutionConfirmation,
-  rollbackConversationToMessage,
-  setConversationDraft,
-  setConversationInspectorTab,
-  setConversationMode,
-  setConversationModel,
-  stopConversationExecution,
-  submitConversationMessage
-} from "@/modules/conversation/store";
-import {
-  addConversation,
-  deleteConversation,
-  deleteProject,
-  exportConversationById,
-  importProjectByDirectory,
-  loadNextConversationsPage,
-  loadNextProjectsPage,
-  loadPreviousConversationsPage,
-  loadPreviousProjectsPage,
   projectStore,
   refreshConversationsForActiveProject,
-  refreshProjects,
-  renameConversationById,
-  setActiveConversation,
-  setActiveProject,
-  updateConversationModeById,
-  updateConversationModelById
+  refreshProjects
 } from "@/modules/project/store";
 import { refreshResourceConfigsByType, resourceStore } from "@/modules/resource/store";
-import { createRemoteConnection } from "@/modules/workspace/services";
 import {
   initializeWorkspaceContext,
-  setWorkspaceConnection,
-  switchWorkspaceContext,
-  upsertWorkspace,
   workspaceStore
 } from "@/modules/workspace/store";
 import { useI18n } from "@/shared/i18n";
-import { authStore, setWorkspaceToken } from "@/shared/stores/authStore";
+import { authStore } from "@/shared/stores/authStore";
 import type { DiffCapability, InspectorTabKey } from "@/shared/types/api";
 
 export function useMainScreenController() {
@@ -64,6 +34,7 @@ export function useMainScreenController() {
   const projectImportInProgress = ref(false);
   const projectImportFeedback = ref("");
   const projectImportError = ref("");
+
   const inspectorTabs: Array<{ key: InspectorTabKey; label: string }> = [
     { key: "diff", label: "D" },
     { key: "run", label: "R" },
@@ -79,7 +50,6 @@ export function useMainScreenController() {
   };
 
   const activeProject = computed(() => projectStore.projects.find((item) => item.id === projectStore.activeProjectId));
-
   const activeConversation = computed(() =>
     (projectStore.conversationsByProjectId[projectStore.activeProjectId] ?? []).find(
       (item) => item.id === projectStore.activeConversationId
@@ -99,6 +69,7 @@ export function useMainScreenController() {
   const queuedCount = computed(() => runtime.value?.executions.filter((item) => item.state === "queued").length ?? 0);
   const activeCount = computed(() => runtime.value?.executions.filter((item) => item.state === "executing").length ?? 0);
   const runningState = computed(() => (activeCount.value > 0 ? "running" : "idle"));
+
   const workspaceLabel = computed(
     () => workspaceStore.workspaces.find((item) => item.id === workspaceStore.currentWorkspaceId)?.name ?? "本地工作区"
   );
@@ -129,7 +100,6 @@ export function useMainScreenController() {
     }
     return "disconnected";
   });
-
   const connectionClass = computed(() => {
     if (connectionState.value === "connected") {
       return "connected";
@@ -140,64 +110,26 @@ export function useMainScreenController() {
     return "disconnected";
   });
 
-  const modelLabelByConfigID = computed(() => {
-    const map = new Map<string, string>();
-    for (const item of resourceStore.models.items) {
-      const configID = item.id.trim();
-      const modelID = item.model?.model_id?.trim() ?? "";
-      if (configID === "" || modelID === "") {
-        continue;
-      }
-      const vendor = item.model?.vendor?.trim() ?? "-";
-      map.set(configID, `${vendor} / ${modelID}`);
-    }
-    return map;
+  const modelState = useMainScreenModeling({
+    activeProject,
+    activeConversation,
+    runtime
   });
 
-  const modelLabelByModelID = computed(() => {
-    const map = new Map<string, string>();
-    for (const item of resourceStore.models.items) {
-      if (!item.enabled) {
-        continue;
-      }
-      const modelID = item.model?.model_id?.trim() ?? "";
-      if (modelID === "" || map.has(modelID)) {
-        continue;
-      }
-      const vendor = item.model?.vendor?.trim() ?? "-";
-      map.set(modelID, `${vendor} / ${modelID}`);
-    }
-    return map;
-  });
-
-  const enabledModelIDs = computed(() => Array.from(modelLabelByModelID.value.keys()));
-  const availableModelIDs = computed(() => new Set(enabledModelIDs.value));
-
-  const modelOptions = computed<Array<{ value: string; label: string }>>(() => {
-    const project = activeProject.value;
-    const projectConfig = project ? projectStore.projectConfigsByProjectId[project.id] : undefined;
-
-    const configuredModelIDs = [
-      ...(projectConfig?.model_ids ?? []),
-      projectConfig?.default_model_id ?? ""
-    ]
-      .map((value) => resolveSemanticModelID(value))
-      .filter((value, index, source) => value !== "" && source.indexOf(value) === index)
-      .filter((value) => availableModelIDs.value.has(value));
-
-    if (configuredModelIDs.length > 0) {
-      return configuredModelIDs.map((value) => ({ value, label: resolveModelLabel(value) }));
-    }
-
-    return enabledModelIDs.value.map((value) => ({ value, label: resolveModelLabel(value) }));
-  });
-
-  const activeModelId = computed(() => {
-    const runtimeModelID = resolveSemanticModelID(runtime.value?.modelId ?? activeConversation.value?.model_id ?? "");
-    if (runtimeModelID !== "" && modelOptions.value.some((item) => item.value === runtimeModelID)) {
-      return runtimeModelID;
-    }
-    return modelOptions.value[0]?.value ?? "";
+  const actions = useMainScreenActions({
+    router,
+    activeConversation,
+    activeProject,
+    runtime,
+    modelOptions: modelState.modelOptions,
+    inspectorCollapsed,
+    riskConfirm,
+    editingConversationName,
+    conversationNameDraft,
+    projectImportInProgress,
+    projectImportFeedback,
+    projectImportError,
+    resolveSemanticModelID: modelState.resolveSemanticModelID
   });
 
   onMounted(async () => {
@@ -249,7 +181,7 @@ export function useMainScreenController() {
 
   const autoModelSyncingConversationID = ref("");
   watch(
-    [() => activeConversation.value?.id ?? "", () => activeCount.value, () => modelOptions.value],
+    [() => activeConversation.value?.id ?? "", () => activeCount.value, () => modelState.modelOptions.value],
     async ([conversationID, executingCount, options]) => {
       if (conversationID === "" || executingCount > 0 || options.length === 0) {
         return;
@@ -257,7 +189,7 @@ export function useMainScreenController() {
       if (autoModelSyncingConversationID.value === conversationID) {
         return;
       }
-      const currentModelID = resolveSemanticModelID(runtime.value?.modelId ?? activeConversation.value?.model_id ?? "");
+      const currentModelID = modelState.resolveSemanticModelID(runtime.value?.modelId ?? activeConversation.value?.model_id ?? "");
       if (currentModelID !== "" && options.some((item) => item.value === currentModelID)) {
         return;
       }
@@ -267,7 +199,7 @@ export function useMainScreenController() {
       }
       autoModelSyncingConversationID.value = conversationID;
       try {
-        await updateModel(targetModelID);
+        await actions.updateModel(targetModelID);
       } finally {
         autoModelSyncingConversationID.value = "";
       }
@@ -303,311 +235,32 @@ export function useMainScreenController() {
     }
   );
 
-  function updateDraft(value: string): void {
-    if (!activeConversation.value) {
-      return;
-    }
-    setConversationDraft(activeConversation.value.id, value);
-  }
-
-  async function updateMode(value: "agent" | "plan"): Promise<void> {
-    if (!activeConversation.value || !activeProject.value) {
-      return;
-    }
-    const conversationId = activeConversation.value.id;
-    const projectId = activeProject.value.id;
-    const previousMode = runtime.value?.mode ?? activeConversation.value.default_mode;
-    setConversationMode(conversationId, value);
-    const updated = await updateConversationModeById(projectId, conversationId, value);
-    if (!updated) {
-      setConversationMode(conversationId, previousMode);
-    }
-  }
-
-  async function updateModel(value: string): Promise<void> {
-    if (!activeConversation.value || !activeProject.value) {
-      return;
-    }
-    const targetModelID = resolveSemanticModelID(value);
-    if (targetModelID === "") {
-      return;
-    }
-    const conversationId = activeConversation.value.id;
-    const projectId = activeProject.value.id;
-    const previousModel = resolveSemanticModelID(runtime.value?.modelId ?? activeConversation.value.model_id);
-    setConversationModel(conversationId, targetModelID);
-    const updated = await updateConversationModelById(projectId, conversationId, targetModelID);
-    if (!updated) {
-      setConversationModel(conversationId, previousModel);
-    }
-  }
-
-  function resolveSemanticModelID(raw: string): string {
-    const normalized = raw.trim();
-    if (normalized === "") {
-      return "";
-    }
-    const byConfigID = modelLabelByConfigID.value.get(normalized);
-    if (byConfigID) {
-      const resolved = resourceStore.models.items.find((item) => item.id.trim() === normalized)?.model?.model_id?.trim();
-      return resolved && resolved !== "" ? resolved : normalized;
-    }
-    return normalized;
-  }
-
-  function resolveModelLabel(modelID: string): string {
-    const normalized = modelID.trim();
-    if (normalized === "") {
-      return "";
-    }
-    return modelLabelByModelID.value.get(normalized) ?? normalized;
-  }
-
-  function changeInspectorTab(tab: InspectorTabKey): void {
-    if (!activeConversation.value) {
-      return;
-    }
-    setConversationInspectorTab(activeConversation.value.id, tab);
-  }
-
-  function openInspectorTab(tab: InspectorTabKey): void {
-    inspectorCollapsed.value = false;
-    changeInspectorTab(tab);
-  }
-
-  async function sendMessage(): Promise<void> {
-    if (!activeConversation.value || !activeProject.value) {
-      return;
-    }
-    await submitConversationMessage(activeConversation.value, activeProject.value.is_git);
-  }
-
-  async function stopExecution(): Promise<void> {
-    if (!activeConversation.value) {
-      return;
-    }
-    await stopConversationExecution(activeConversation.value);
-  }
-
-  async function rollbackMessage(messageId: string): Promise<void> {
-    if (!activeConversation.value) {
-      return;
-    }
-    await rollbackConversationToMessage(activeConversation.value.id, messageId);
-  }
-
-  async function importProjectDirectoryAction(repoPath: string): Promise<void> {
-    const normalizedPath = repoPath.trim();
-    if (normalizedPath === "") {
-      return;
-    }
-
-    projectImportInProgress.value = true;
-    projectImportFeedback.value = "";
-    projectImportError.value = "";
-
-    try {
-      const created = await importProjectByDirectory(normalizedPath);
-      if (!created) {
-        projectImportError.value = projectStore.error || "PROJECT_IMPORT_FAILED: 导入项目失败";
-        return;
-      }
-      projectImportFeedback.value = `已添加项目：${created.name}`;
-      projectImportError.value = "";
-    } finally {
-      projectImportInProgress.value = false;
-    }
-  }
-
-  async function deleteProjectById(projectId: string): Promise<void> {
-    await deleteProject(projectId);
-  }
-
-  async function addConversationByPrompt(projectId: string): Promise<void> {
-    const project = projectStore.projects.find((item) => item.id === projectId);
-    if (!project) {
-      return;
-    }
-    const nextIndex = (projectStore.conversationsByProjectId[project.id] ?? []).length + 1;
-    await addConversation(project, `新对话 ${nextIndex}`);
-  }
-
-  async function deleteConversationById(projectId: string, conversationId: string): Promise<void> {
-    await deleteConversation(projectId, conversationId);
-  }
-
-  function selectConversation(projectId: string, conversationId: string): void {
-    setActiveProject(projectId);
-    setActiveConversation(conversationId);
-  }
-
-  async function exportConversation(conversationId: string): Promise<void> {
-    const markdown = await exportConversationById(conversationId);
-    if (!markdown) {
-      return;
-    }
-
-    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${conversationId}.md`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  async function createWorkspace(payload: { hub_url: string; username: string; password: string }): Promise<void> {
-    const result = await createRemoteConnection(payload);
-    upsertWorkspace(result.workspace);
-    setWorkspaceConnection(result.connection);
-    if (result.access_token) {
-      setWorkspaceToken(result.workspace.id, result.access_token);
-    }
-    await switchWorkspaceContext(result.workspace.id);
-  }
-
-  async function switchWorkspace(workspaceId: string): Promise<void> {
-    await switchWorkspaceContext(workspaceId);
-  }
-
-  async function paginateProjects(direction: "prev" | "next"): Promise<void> {
-    if (direction === "next") {
-      await loadNextProjectsPage();
-      return;
-    }
-    await loadPreviousProjectsPage();
-  }
-
-  async function paginateConversations(projectId: string, direction: "prev" | "next"): Promise<void> {
-    if (direction === "next") {
-      await loadNextConversationsPage(projectId);
-      return;
-    }
-    await loadPreviousConversationsPage(projectId);
-  }
-
-  function openAccount(): void {
-    void router.push("/remote/account");
-  }
-
-  function openSettings(): void {
-    void router.push("/settings/theme");
-  }
-
-  function startEditConversationName(): void {
-    if (!activeConversation.value) {
-      return;
-    }
-    conversationNameDraft.value = activeConversation.value.name;
-    editingConversationName.value = true;
-  }
-
-  function onConversationNameInput(event: Event): void {
-    conversationNameDraft.value = (event.target as HTMLInputElement).value;
-  }
-
-  async function saveConversationName(): Promise<void> {
-    if (!editingConversationName.value || !activeConversation.value || !activeProject.value) {
-      editingConversationName.value = false;
-      return;
-    }
-
-    const name = conversationNameDraft.value.trim();
-    editingConversationName.value = false;
-    if (name === "" || name === activeConversation.value.name) {
-      return;
-    }
-
-    await renameConversationById(activeProject.value.id, activeConversation.value.id, name);
-  }
-
-  async function commitDiff(): Promise<void> {
-    if (!activeConversation.value) {
-      return;
-    }
-    await commitLatestDiff(activeConversation.value.id);
-  }
-
-  async function discardDiff(): Promise<void> {
-    if (!activeConversation.value) {
-      return;
-    }
-    await discardLatestDiff(activeConversation.value.id);
-  }
-
-  async function confirmRisk(decision: "approve" | "deny"): Promise<void> {
-    const executionId = riskConfirm.value.executionId.trim();
-    if (executionId === "") {
-      return;
-    }
-    await resolveExecutionConfirmation(executionId, decision);
-    if (decision === "deny") {
-      riskConfirm.value.open = false;
-      riskConfirm.value.executionId = "";
-    }
-  }
-
-  function closeRiskConfirm(): void {
-    riskConfirm.value.open = false;
-  }
-
-  function exportPatch(): void {
-    window.alert("Patch exported (design stub).");
-  }
-
   return {
+    ...actions,
     activeConversation,
     activeCount,
+    activeModelId: modelState.activeModelId,
     activeProject,
-    addConversationByPrompt,
     authStore,
-    changeInspectorTab,
-    commitDiff,
     connectionClass,
     connectionState,
     conversationNameDraft,
     conversationPageByProjectId,
-    createWorkspace,
-    deleteConversationById,
-    deleteProjectById,
-    discardDiff,
     editingConversationName,
-    exportConversation,
-    exportPatch,
-    importProjectDirectory: importProjectDirectoryAction,
     inspectorCollapsed,
     inspectorTabs,
+    modelOptions: modelState.modelOptions,
     nonGitCapability,
-    onConversationNameInput,
-    openAccount,
-    closeRiskConfirm,
-    confirmRisk,
-    openInspectorTab,
-    openSettings,
-    paginateConversations,
-    paginateProjects,
     placeholder,
-    projectStore,
     projectImportError,
     projectImportFeedback,
     projectImportInProgress,
+    projectStore,
     projectsPage,
     queuedCount,
     riskConfirm,
-    rollbackMessage,
     runningState,
     runtime,
-    saveConversationName,
-    selectConversation,
-    sendMessage,
-    startEditConversationName,
-    stopExecution,
-    switchWorkspace,
-    updateDraft,
-    updateMode,
-    updateModel,
-    activeModelId,
-    modelOptions,
     workspaceLabel,
     workspaceStore
   };

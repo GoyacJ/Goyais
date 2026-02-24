@@ -30,7 +30,7 @@ withDefaults(
   align-items: center;
   justify-content: center;
   border-radius: var(--component-badge-radius);
-  padding: 2px var(--global-space-8);
+  padding: var(--global-space-2px) var(--global-space-8);
   font-size: var(--component-badge-font-size);
   font-family: var(--global-font-family-ui);
 }

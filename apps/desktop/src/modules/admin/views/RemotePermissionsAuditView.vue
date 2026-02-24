@@ -5,7 +5,6 @@
     subtitle="Remote Workspace / Permissions & Audit"
   >
     <p v-if="adminStore.error" class="error">{{ adminStore.error }}</p>
-
     <section class="card">
       <div class="card-head">
         <h3>角色菜单可见性</h3>
@@ -16,7 +15,6 @@
           <button type="button" @click="saveRoleVisibility">保存</button>
         </div>
       </div>
-
       <table class="table">
         <thead>
           <tr>
@@ -41,7 +39,6 @@
         </tbody>
       </table>
     </section>
-
     <section class="card">
       <div class="card-head">
         <h3>菜单定义</h3>
@@ -63,15 +60,14 @@
             <td><span :class="menu.enabled ? 'enabled' : 'disabled'">{{ menu.enabled ? "enabled" : "disabled" }}</span></td>
             <td>
               <div class="actions">
-                <button type="button" @click="toggleMenu(menu.key)"><AppIcon name="info" :size="12" /></button>
-                <button type="button" @click="removeMenu(menu.key)"><AppIcon name="trash-2" :size="12" /></button>
+                <button type="button" aria-label="切换菜单状态" @click="toggleMenu(menu.key)"><AppIcon name="info" :size="12" /></button>
+                <button type="button" aria-label="删除菜单" @click="removeMenu(menu.key)"><AppIcon name="trash-2" :size="12" /></button>
               </div>
             </td>
           </tr>
         </tbody>
       </table>
     </section>
-
     <section class="card">
       <div class="card-head">
         <h3>权限定义</h3>
@@ -95,15 +91,14 @@
             </td>
             <td>
               <div class="actions">
-                <button type="button" @click="togglePermission(permission.key)"><AppIcon name="info" :size="12" /></button>
-                <button type="button" @click="removePermission(permission.key)"><AppIcon name="trash-2" :size="12" /></button>
+                <button type="button" aria-label="切换权限状态" @click="togglePermission(permission.key)"><AppIcon name="info" :size="12" /></button>
+                <button type="button" aria-label="删除权限" @click="removePermission(permission.key)"><AppIcon name="trash-2" :size="12" /></button>
               </div>
             </td>
           </tr>
         </tbody>
       </table>
     </section>
-
     <section class="card">
       <div class="card-head">
         <h3>ABAC 策略</h3>
@@ -129,15 +124,14 @@
             <td><span :class="policy.enabled ? 'enabled' : 'disabled'">{{ policy.enabled ? "enabled" : "disabled" }}</span></td>
             <td>
               <div class="actions">
-                <button type="button" @click="togglePolicy(policy.id)"><AppIcon name="info" :size="12" /></button>
-                <button type="button" @click="removePolicy(policy.id)"><AppIcon name="trash-2" :size="12" /></button>
+                <button type="button" aria-label="切换策略状态" @click="togglePolicy(policy.id)"><AppIcon name="info" :size="12" /></button>
+                <button type="button" aria-label="删除策略" @click="removePolicy(policy.id)"><AppIcon name="trash-2" :size="12" /></button>
               </div>
             </td>
           </tr>
         </tbody>
       </table>
     </section>
-
     <section class="card">
       <h3>审计日志</h3>
       <table class="table">

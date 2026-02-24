@@ -131,44 +131,46 @@ export function resetGeneralSettingsStoreForTest(): void {
   state.error = "";
 }
 
+const generalSettingsFieldUpdaters: Record<GeneralSettingsFieldPath, (target: GeneralSettings, value: unknown) => void> = {
+  launchOnStartup: (target, value) => {
+    target.launchOnStartup = value as boolean;
+  },
+  defaultProjectDirectory: (target, value) => {
+    target.defaultProjectDirectory = value as string;
+  },
+  "notifications.reconnect": (target, value) => {
+    target.notifications.reconnect = value as boolean;
+  },
+  "notifications.approval": (target, value) => {
+    target.notifications.approval = value as boolean;
+  },
+  "notifications.error": (target, value) => {
+    target.notifications.error = value as boolean;
+  },
+  telemetryLevel: (target, value) => {
+    target.telemetryLevel = value as GeneralSettings["telemetryLevel"];
+  },
+  "updatePolicy.channel": (target, value) => {
+    target.updatePolicy.channel = value as GeneralSettings["updatePolicy"]["channel"];
+  },
+  "updatePolicy.checkFrequency": (target, value) => {
+    target.updatePolicy.checkFrequency = value as GeneralSettings["updatePolicy"]["checkFrequency"];
+  },
+  "updatePolicy.autoDownload": (target, value) => {
+    target.updatePolicy.autoDownload = value as boolean;
+  },
+  "diagnostics.level": (target, value) => {
+    target.diagnostics.level = value as GeneralSettings["diagnostics"]["level"];
+  },
+  "diagnostics.logRetentionDays": (target, value) => {
+    target.diagnostics.logRetentionDays = value as GeneralSettings["diagnostics"]["logRetentionDays"];
+  }
+};
+
 function setFieldValue<Path extends GeneralSettingsFieldPath>(
   target: GeneralSettings,
   path: Path,
   value: GeneralSettingsFieldValueMap[Path]
 ): void {
-  switch (path) {
-    case "launchOnStartup":
-      target.launchOnStartup = value as boolean;
-      return;
-    case "defaultProjectDirectory":
-      target.defaultProjectDirectory = value as string;
-      return;
-    case "notifications.reconnect":
-      target.notifications.reconnect = value as boolean;
-      return;
-    case "notifications.approval":
-      target.notifications.approval = value as boolean;
-      return;
-    case "notifications.error":
-      target.notifications.error = value as boolean;
-      return;
-    case "telemetryLevel":
-      target.telemetryLevel = value as GeneralSettings["telemetryLevel"];
-      return;
-    case "updatePolicy.channel":
-      target.updatePolicy.channel = value as GeneralSettings["updatePolicy"]["channel"];
-      return;
-    case "updatePolicy.checkFrequency":
-      target.updatePolicy.checkFrequency = value as GeneralSettings["updatePolicy"]["checkFrequency"];
-      return;
-    case "updatePolicy.autoDownload":
-      target.updatePolicy.autoDownload = value as boolean;
-      return;
-    case "diagnostics.level":
-      target.diagnostics.level = value as GeneralSettings["diagnostics"]["level"];
-      return;
-    case "diagnostics.logRetentionDays":
-      target.diagnostics.logRetentionDays = value as GeneralSettings["diagnostics"]["logRetentionDays"];
-      return;
-  }
+  generalSettingsFieldUpdaters[path](target, value);
 }

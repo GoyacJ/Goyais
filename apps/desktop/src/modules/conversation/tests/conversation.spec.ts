@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyIncomingExecutionEvent,
   ensureConversationRuntime,
+  rollbackConversationToMessage,
   resetConversationStore,
   setConversationDraft,
   stopConversationExecution,
@@ -213,6 +214,51 @@ describe("conversation store", () => {
       return String(url).endsWith(`/v1/conversations/${mockConversation.id}/stop`) && (init?.method ?? "GET") === "POST";
     });
     expect(stopCalls.length).toBe(1);
+  });
+
+  it("rollback restores execution states from snapshot point", async () => {
+    ensureConversationRuntime(mockConversation, true);
+    setConversationDraft(mockConversation.id, "first message");
+    await submitConversationMessage(mockConversation, true);
+    setConversationDraft(mockConversation.id, "second message");
+    await submitConversationMessage(mockConversation, true);
+
+    const runtime = ensureConversationRuntime(mockConversation, true);
+    const secondUserMessage = [...runtime.messages].reverse().find((message) => message.role === "user");
+    expect(secondUserMessage).toBeTruthy();
+
+    const firstExecution = runtime.executions[0];
+    expect(firstExecution).toBeTruthy();
+    expect(firstExecution?.state).toBe("pending");
+
+    if (firstExecution) {
+      firstExecution.state = "completed";
+    }
+    runtime.executions.push({
+      id: "exec_extra",
+      workspace_id: "ws_local",
+      conversation_id: mockConversation.id,
+      message_id: "msg_extra",
+      state: "queued",
+      mode: "agent",
+      model_id: "gpt-5.3",
+      mode_snapshot: "agent",
+      model_snapshot: {
+        model_id: "gpt-5.3"
+      },
+      project_revision_snapshot: 0,
+      queue_index: 9,
+      trace_id: "tr_exec_extra",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+
+    await rollbackConversationToMessage(mockConversation.id, secondUserMessage!.id);
+
+    expect(runtime.executions.length).toBe(1);
+    expect(runtime.executions[0]?.id).toBe(firstExecution?.id);
+    expect(runtime.executions[0]?.state).toBe("pending");
+    expect(runtime.executions[0]?.queue_index).toBe(0);
   });
 });
 

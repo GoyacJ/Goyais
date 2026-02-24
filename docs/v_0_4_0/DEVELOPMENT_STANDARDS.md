@@ -478,3 +478,14 @@ StandardsExceptionADR {
 | 内部 API v1 硬切换 | TECH_ARCH.md, IMPLEMENTATION_PLAN.md | TECH_ARCH 9.2, PLAN 2026-02-24 Worker 门禁增量 | done |
 | Hub 持久化执行全状态（替代内存主导） | TECH_ARCH.md, DEVELOPMENT_STANDARDS.md | TECH_ARCH 11.x 执行表与恢复语义, STANDARDS 10.4/11 | done |
 | P0 增加受控子代理并行（<=3） | PRD.md, TECH_ARCH.md | PRD 7.1/20.2, TECH_ARCH 12.4 | done |
+
+---
+
+## 21. 2026-02-24 Desktop 前端治理同步矩阵
+
+| change_type | required_docs_to_update | required_sections | status |
+|---|---|---|---|
+| Conversation 回滚快照恢复执行状态（`execution_snapshots`） | TECH_ARCH.md, IMPLEMENTATION_PLAN.md | TECH_ARCH 3.2/7.4, PLAN Desktop 前端治理门禁增量 | done |
+| Token 引用完整性与硬编码样式阻断脚本 | DEVELOPMENT_STANDARDS.md, IMPLEMENTATION_PLAN.md | STANDARDS 9.x/11.1, PLAN Desktop 前端治理门禁增量 | done |
+| CI 增量门禁（strict/tokens/size/complexity/coverage） | DEVELOPMENT_STANDARDS.md, IMPLEMENTATION_PLAN.md | STANDARDS 6.4/10.1/10.2/11.1, PLAN Desktop 前端治理门禁增量 | done |
+| TS/Vue 超行数文件拆分（feature-first 子模块化） | DEVELOPMENT_STANDARDS.md | STANDARDS 6.1/6.3/13.1 | done |

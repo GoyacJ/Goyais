@@ -7,12 +7,13 @@
     @dblclick="onDragRegionDoubleClick"
   >
     <div class="mac-row" data-tauri-drag-region>
-      <button class="dot danger" data-no-drag="true" type="button" title="Close" @click.stop="onCloseWindow"></button>
+      <button class="dot danger" data-no-drag="true" type="button" title="Close" aria-label="关闭窗口" @click.stop="onCloseWindow"></button>
       <button
         class="dot warning"
         data-no-drag="true"
         type="button"
         title="Minimize"
+        aria-label="最小化窗口"
         @click.stop="onMinimizeWindow"
       ></button>
       <button
@@ -20,6 +21,7 @@
         data-no-drag="true"
         type="button"
         title="Toggle Maximize"
+        aria-label="切换最大化"
         @click.stop="onToggleMaximizeWindow"
       ></button>
     </div>
@@ -33,7 +35,7 @@
         <AppIcon v-if="!collapsed" name="chevron-down" :size="14" />
       </button>
 
-      <button v-if="showCollapseToggle" class="icon-btn" type="button" @click="$emit('toggleCollapse')">
+      <button v-if="showCollapseToggle" class="icon-btn" type="button" aria-label="切换侧栏折叠" @click="$emit('toggleCollapse')">
         <AppIcon :name="collapsed ? 'chevron-right' : 'chevron-left'" :size="14" />
       </button>
     </div>
@@ -173,13 +175,13 @@ function onDragRegionDoubleClick(event: MouseEvent): void {
 .mac-row {
   display: inline-flex;
   gap: var(--global-space-8);
-  margin-top: -2px;
+  margin-top: var(--global-space-neg-2px);
 }
 
 .dot {
   width: 12px;
   height: 12px;
-  border-radius: 999px;
+  border-radius: var(--global-radius-pill);
   border: 0;
   padding: 0;
   cursor: pointer;

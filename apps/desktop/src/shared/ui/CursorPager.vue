@@ -44,7 +44,7 @@ const stateLabel = computed(() => {
   background: var(--semantic-surface-2);
   color: var(--semantic-text);
   font-size: var(--global-font-size-11);
-  padding: 2px var(--global-space-8);
+  padding: var(--global-space-2px) var(--global-space-8);
 }
 
 .pager button:disabled {
