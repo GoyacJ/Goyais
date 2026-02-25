@@ -43,7 +43,7 @@
       :class="{ 'gap-[var(--global-space-4)]': collapsed }"
     >
       <button
-        class="workspace-btn inline-flex min-h-[34px] items-center justify-between border-0 rounded-[var(--global-radius-8)] bg-[var(--semantic-surface-2)] px-[var(--global-space-12)] text-[var(--semantic-text)]"
+        class="workspace-btn inline-flex min-h-[44px] items-center justify-between border-0 rounded-[var(--global-radius-8)] bg-[var(--semantic-surface-2)] px-[var(--global-space-12)] text-[var(--semantic-text)]"
         :class="{ 'justify-center px-0': collapsed }"
         type="button"
         @click="menuOpen = !menuOpen"
@@ -60,7 +60,7 @@
 
       <button
         v-if="showCollapseToggle"
-        class="icon-btn inline-flex h-[34px] w-[34px] items-center justify-center border-0 rounded-[var(--global-radius-8)] bg-[var(--semantic-surface-2)] text-[var(--semantic-text)]"
+        class="icon-btn inline-flex h-[44px] w-[44px] items-center justify-center border-0 rounded-[var(--global-radius-8)] bg-[var(--semantic-surface-2)] text-[var(--semantic-text)]"
         type="button"
         aria-label="切换侧栏折叠"
         @click="$emit('toggleCollapse')"
@@ -76,7 +76,7 @@
       <button
         v-for="workspace in workspaceOptions"
         :key="workspace.id"
-        class="workspace-option inline-flex min-h-[32px] items-center gap-[var(--global-space-8)] border-0 rounded-[var(--global-radius-8)] bg-transparent px-[var(--global-space-8)] text-left text-[var(--semantic-text-muted)] hover:(bg-[var(--component-sidebar-item-bg-active)] text-[var(--semantic-text)])"
+        class="workspace-option inline-flex min-h-[44px] items-center gap-[var(--global-space-8)] border-0 rounded-[var(--global-radius-8)] bg-transparent px-[var(--global-space-8)] text-left text-[var(--semantic-text-muted)] hover:(bg-[var(--component-sidebar-item-bg-active)] text-[var(--semantic-text)])"
         :class="{ 'bg-[var(--component-sidebar-item-bg-active)] text-[var(--semantic-text)]': workspace.id === currentWorkspaceId }"
         type="button"
         @click="onSwitchWorkspace(workspace.id)"
@@ -86,7 +86,7 @@
       </button>
       <button
         v-if="canCreateWorkspace"
-        class="workspace-option add inline-flex min-h-[32px] items-center gap-[var(--global-space-8)] border-0 rounded-[var(--global-radius-8)] bg-transparent px-[var(--global-space-8)] text-left text-[var(--semantic-text)] hover:bg-[var(--component-sidebar-item-bg-active)]"
+        class="workspace-option add inline-flex min-h-[44px] items-center gap-[var(--global-space-8)] border-0 rounded-[var(--global-radius-8)] bg-transparent px-[var(--global-space-8)] text-left text-[var(--semantic-text)] hover:bg-[var(--component-sidebar-item-bg-active)]"
         type="button"
         @click="onCreateWorkspace"
       >

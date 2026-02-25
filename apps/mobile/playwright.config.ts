@@ -15,10 +15,11 @@ export default defineConfig({
   reporter: "list",
   use: {
     baseURL: "http://127.0.0.1:4173",
+    viewport: { width: 390, height: 844 },
     trace: "on-first-retry"
   },
   webServer: {
-    command: "pnpm dev --host 127.0.0.1 --port 4173",
+    command: "VITE_HUB_BASE_URL=http://127.0.0.1:9 pnpm dev --host 127.0.0.1 --port 4173",
     cwd: configDir,
     port: 4173,
     reuseExistingServer: !process.env.CI,

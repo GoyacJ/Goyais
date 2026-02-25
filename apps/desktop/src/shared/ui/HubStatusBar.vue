@@ -87,3 +87,17 @@ function firstNonEmpty(...values: string[]): string {
   return "";
 }
 </script>
+
+<style scoped>
+@media (max-width: 768px) {
+  footer {
+    min-height: 52px;
+    padding-left: calc(var(--global-space-8) + var(--safe-area-left));
+    padding-right: calc(var(--global-space-8) + var(--safe-area-right));
+    padding-bottom: calc(var(--global-space-4) + var(--safe-area-bottom));
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-content: center;
+  }
+}
+</style>

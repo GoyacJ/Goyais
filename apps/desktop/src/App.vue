@@ -12,4 +12,11 @@
   overflow: hidden;
   background: var(--component-shell-bg);
 }
+
+@media (max-width: 768px) {
+  .app-frame {
+    border-radius: 0;
+    overflow: visible;
+  }
+}
 </style>

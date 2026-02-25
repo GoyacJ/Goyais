@@ -27,6 +27,15 @@
         <ToastAlert v-else-if="projectImportInProgress" tone="retrying" message="正在导入项目..." />
         <ToastAlert v-else-if="projectImportFeedback !== ''" tone="info" :message="projectImportFeedback" />
         <ToastAlert v-else-if="pickerFeedback !== ''" tone="warning" :message="pickerFeedback" />
+        <ToastAlert v-if="connectionState === 'auth_required'" tone="warning" message="远程工作区鉴权已失效，请重新登录。" />
+        <button
+          v-if="connectionState === 'auth_required'"
+          class="auth-login-btn"
+          type="button"
+          @click="requestWorkspaceLogin"
+        >
+          重新登录
+        </button>
       </div>
 
       <div v-if="!collapsed" class="project-tree">
@@ -97,6 +106,7 @@ import { isRuntimeCapabilitySupported } from "@/shared/runtime";
 import { pickDirectoryPath } from "@/shared/services/directoryPicker";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import ToastAlert from "@/shared/ui/ToastAlert.vue";
+import type { ConnectionState } from "@/shared/stores/workspaceStore";
 import type { Conversation, Project, Workspace, WorkspaceMode } from "@/shared/types/api";
 import WorkspaceCreateModal from "@/shared/ui/sidebar/WorkspaceCreateModal.vue";
 import UserProfileMenuCard from "@/shared/ui/sidebar/UserProfileMenuCard.vue";
@@ -105,6 +115,7 @@ import WorkspaceSwitcherCard from "@/shared/ui/sidebar/WorkspaceSwitcherCard.vue
 const props = defineProps<{
   workspaces: Workspace[];
   currentWorkspaceId: string;
+  connectionState?: ConnectionState;
   workspaceMode: WorkspaceMode;
   workspaceName: string;
   userName: string;
@@ -142,6 +153,7 @@ const emit = defineEmits<{
   (event: "openSettings"): void;
   (event: "paginateProjects", direction: "prev" | "next"): void;
   (event: "paginateConversations", projectId: string, direction: "prev" | "next"): void;
+  (event: "loginWorkspace", payload: { workspaceId: string; username?: string; password?: string; token?: string }): void;
 }>();
 
 const collapsed = ref(false);
@@ -230,6 +242,24 @@ function handleUserMenuSelect(key: string): void {
 function submitWorkspaceCreate(payload: { hub_url: string; username: string; password: string }): void {
   emit("createWorkspace", payload);
   createWorkspaceOpen.value = false;
+}
+
+function requestWorkspaceLogin(): void {
+  const workspaceId = props.currentWorkspaceId.trim();
+  if (workspaceId === "") {
+    return;
+  }
+
+  const username = window.prompt("用户名（可空）", "") ?? "";
+  const password = window.prompt("密码（可空）", "") ?? "";
+  const token = window.prompt("Token（可空）", "") ?? "";
+
+  emit("loginWorkspace", {
+    workspaceId,
+    username: username.trim() === "" ? undefined : username.trim(),
+    password: password.trim() === "" ? undefined : password,
+    token: token.trim() === "" ? undefined : token.trim()
+  });
 }
 </script>
 

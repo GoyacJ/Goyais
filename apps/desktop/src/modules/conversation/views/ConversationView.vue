@@ -1,6 +1,6 @@
 <template>
   <section
-    class="conversation-layout grid min-h-[calc(100vh-120px)] gap-[var(--component-space-md)] [grid-template-columns:minmax(220px,280px)_1fr] max-[900px]:[grid-template-columns:minmax(0,1fr)]"
+    class="conversation-layout grid min-h-[calc(100dvh-120px)] gap-[var(--component-space-md)] [grid-template-columns:minmax(220px,280px)_1fr] max-[900px]:[grid-template-columns:minmax(0,1fr)]"
   >
     <ConversationSidebarPlaceholder />
     <div class="main-pane grid content-start gap-[var(--component-space-md)]">

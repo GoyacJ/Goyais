@@ -4,6 +4,7 @@
       <MainSidebarPanel
         :workspaces="workspaceStore.workspaces"
         :current-workspace-id="workspaceStore.currentWorkspaceId"
+        :connection-state="workspaceStore.connectionState"
         :workspace-name="workspaceLabel"
         :workspace-mode="workspaceStore.mode"
         :user-name="authStore.me?.display_name ?? 'local'"
@@ -27,6 +28,7 @@
         @open-settings="openSettings"
         @paginate-projects="paginateProjects"
         @paginate-conversations="paginateConversations"
+        @login-workspace="loginWorkspace"
       />
     </template>
 
@@ -56,6 +58,9 @@
 
         <template #right>
           <div class="right">
+            <button class="icon-btn mobile-only" type="button" @click="openInspectorMobile">
+              <AppIcon name="panel-right-open" :size="12" />
+            </button>
             <span class="state" :class="runningStateClass">{{ runningState }}</span>
           </div>
         </template>
@@ -88,7 +93,7 @@
             @toggle-trace="toggleExecutionTrace"
           />
 
-          <div class="inspector-slot" :class="{ collapsed: inspectorCollapsed }">
+          <div class="inspector-slot" :class="{ collapsed: inspectorCollapsed, 'mobile-open': !inspectorCollapsed }">
             <MainInspectorPanel
               v-if="!inspectorCollapsed"
               :diff="runtime?.diff ?? []"
@@ -123,6 +128,13 @@
               </button>
             </aside>
           </div>
+          <button
+            v-if="!inspectorCollapsed"
+            class="inspector-backdrop mobile-only"
+            type="button"
+            aria-label="关闭 Inspector"
+            @click="inspectorCollapsed = true"
+          ></button>
         </template>
 
         <div v-else class="main-empty">
@@ -145,6 +157,8 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from "vue";
+
 import MainConversationPanel from "@/modules/conversation/components/MainConversationPanel.vue";
 import MainInspectorPanel from "@/modules/conversation/components/MainInspectorPanel.vue";
 import MainSidebarPanel from "@/modules/conversation/components/MainSidebarPanel.vue";
@@ -176,6 +190,7 @@ const {
   importProjectDirectory,
   inspectorCollapsed,
   inspectorTabs,
+  loginWorkspace,
   nonGitCapability,
   onConversationNameInput,
   openAccount,
@@ -215,6 +230,19 @@ const {
   workspaceLabel,
   workspaceStore
 } = useMainScreenController();
+
+onMounted(() => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  if (window.matchMedia("(max-width: 768px)").matches) {
+    inspectorCollapsed.value = true;
+  }
+});
+
+function openInspectorMobile(): void {
+  inspectorCollapsed.value = !inspectorCollapsed.value;
+}
 
 </script>
 

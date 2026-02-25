@@ -191,8 +191,8 @@ p {
 }
 
 .action-btn {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: var(--global-radius-pill);
   background: var(--semantic-surface);
@@ -225,5 +225,46 @@ p {
 
   .message-body {
     max-width: 94%;
+  }
+}
+
+@media (max-width: 768px) {
+  .composer-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--global-space-8);
+  }
+
+  .left,
+  .right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .left {
+    flex-wrap: wrap;
+  }
+
+  .action-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .select {
+    height: 44px;
+    min-width: 132px;
+  }
+
+  .draft {
+    min-height: 112px;
+    font-size: var(--global-font-size-14);
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .rollback {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
   }
 }
