@@ -1,0 +1,45 @@
+{
+  "name": "@goyais/mobile",
+  "private": true,
+  "version": "0.4.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "VITE_RUNTIME_TARGET=mobile vite",
+    "dev:web": "VITE_RUNTIME_TARGET=mobile vite",
+    "dev:mobile": "VITE_RUNTIME_TARGET=mobile tauri ios dev",
+    "dev:ios": "VITE_RUNTIME_TARGET=mobile tauri ios dev",
+    "dev:android": "VITE_RUNTIME_TARGET=mobile tauri android dev",
+    "build": "VITE_RUNTIME_TARGET=mobile vite build",
+    "build:ios": "VITE_RUNTIME_TARGET=mobile tauri ios build",
+    "build:android": "VITE_RUNTIME_TARGET=mobile tauri android build",
+    "lint": "VITE_RUNTIME_TARGET=mobile tsc --noEmit -p tsconfig.app.json",
+    "test": "VITE_RUNTIME_TARGET=mobile vitest run",
+    "test:strict": "VITE_RUNTIME_TARGET=mobile vitest run",
+    "e2e:smoke": "playwright test --config=playwright.config.ts"
+  },
+  "dependencies": {
+    "@goyais/shared-core": "workspace:*",
+    "@tauri-apps/api": "catalog:prod",
+    "@tauri-apps/plugin-dialog": "catalog:prod",
+    "@tauri-apps/plugin-store": "catalog:prod",
+    "@vueuse/core": "catalog:frontend",
+    "lucide-vue-next": "catalog:frontend",
+    "pinia": "catalog:frontend",
+    "vue": "catalog:frontend",
+    "vue-router": "catalog:frontend"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "catalog:inlined",
+    "@playwright/test": "catalog:dev",
+    "@types/web-bluetooth": "catalog:dev",
+    "@vitejs/plugin-vue": "catalog:frontend",
+    "@vitest/coverage-v8": "catalog:frontend",
+    "@vue/test-utils": "catalog:frontend",
+    "jsdom": "catalog:dev",
+    "typescript": "catalog:dev",
+    "unocss": "catalog:frontend",
+    "vite": "catalog:frontend",
+    "vitest": "catalog:frontend"
+  }
+}

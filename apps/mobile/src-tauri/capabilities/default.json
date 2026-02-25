@@ -1,0 +1,12 @@
+{
+  "identifier": "main-mobile-capability",
+  "description": "Allow core mobile capabilities.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "store:default"
+  ]
+}

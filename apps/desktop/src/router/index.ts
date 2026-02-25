@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw, type RouterHistory } from "vue-router";
 
 import { initializeWorkspaceContext, switchWorkspaceContext } from "@/modules/workspace/store";
+import { isRuntimeCapabilitySupported, type RuntimeCapabilities } from "@/shared/runtime";
 import { canAccessAdmin } from "@/shared/stores/authStore";
 import { getMenuVisibility, refreshNavigationVisibility } from "@/shared/stores/navigationStore";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
@@ -10,6 +11,7 @@ type RouteMeta = {
   menuKey?: MenuKey;
   requiresRemote?: boolean;
   requiresAdmin?: boolean;
+  requiresCapability?: keyof RuntimeCapabilities;
 };
 
 export const routes: RouteRecordRaw[] = [
@@ -78,19 +80,19 @@ export const routes: RouteRecordRaw[] = [
     path: "/settings/theme",
     name: "settings-theme",
     component: () => import("@/modules/workspace/views/SettingsThemeView.vue"),
-    meta: { menuKey: "settings_theme" } as RouteMeta
+    meta: { menuKey: "settings_theme", requiresCapability: "supportsLocalWorkspace" } as RouteMeta
   },
   {
     path: "/settings/i18n",
     name: "settings-i18n",
     component: () => import("@/modules/workspace/views/SettingsI18nView.vue"),
-    meta: { menuKey: "settings_i18n" } as RouteMeta
+    meta: { menuKey: "settings_i18n", requiresCapability: "supportsLocalWorkspace" } as RouteMeta
   },
   {
     path: "/settings/general",
     name: "settings-general",
     component: () => import("@/modules/workspace/views/SettingsGeneralView.vue"),
-    meta: { menuKey: "settings_general" } as RouteMeta
+    meta: { menuKey: "settings_general", requiresCapability: "supportsLocalWorkspace" } as RouteMeta
   }
 ];
 
@@ -111,6 +113,9 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
     refreshNavigationVisibility();
     const meta = to.meta as RouteMeta;
     const menuKey = meta.menuKey;
+    if (meta.requiresCapability && !isRuntimeCapabilitySupported(meta.requiresCapability)) {
+      return { path: "/main", query: { reason: "capability_required" } };
+    }
 
     if (to.path.startsWith("/settings/") && workspaceStore.mode !== "local") {
       const switched = await trySwitchToLocalWorkspace();

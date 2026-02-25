@@ -1,11 +1,15 @@
 import { createApiClient, type ApiClient } from "@/shared/services/http";
-
-const CONTROL_BASE_URL = import.meta.env.VITE_HUB_BASE_URL ?? "http://127.0.0.1:8787";
-
-const controlClient = createApiClient(CONTROL_BASE_URL);
+import { getControlHubBaseUrl, validateWorkspaceHubUrl } from "@/shared/runtime";
+let controlClient: ApiClient | null = null;
+let controlClientBaseURL = "";
 const targetClients = new Map<string, ApiClient>();
 
 export function getControlClient(): ApiClient {
+  const baseURL = getControlHubBaseUrl();
+  if (controlClient === null || controlClientBaseURL !== baseURL) {
+    controlClient = createApiClient(baseURL);
+    controlClientBaseURL = baseURL;
+  }
   return controlClient;
 }
 
@@ -23,5 +27,5 @@ export function getTargetClient(hubUrl: string): ApiClient {
 }
 
 function normalizeBaseURL(raw: string): string {
-  return raw.trim().replace(/\/$/, "");
+  return validateWorkspaceHubUrl(raw);
 }

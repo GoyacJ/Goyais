@@ -18,7 +18,7 @@
           <AppIcon name="folder" :size="12" />
           <template v-if="!collapsed">项目</template>
         </span>
-        <button class="icon-btn tiny" type="button" :disabled="projectImportInProgress" @click="pickDirectory">
+        <button class="icon-btn tiny" type="button" :disabled="projectImportInProgress || !supportsDirectoryImport" @click="pickDirectory">
           <AppIcon name="plus" :size="12" />
         </button>
       </div>
@@ -93,6 +93,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 
+import { isRuntimeCapabilitySupported } from "@/shared/runtime";
 import { pickDirectoryPath } from "@/shared/services/directoryPicker";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import ToastAlert from "@/shared/ui/ToastAlert.vue";
@@ -167,6 +168,7 @@ const userMenuItems = computed(() => {
 const projectImportInProgress = computed(() => props.projectImportInProgress);
 const projectImportFeedback = computed(() => props.projectImportFeedback);
 const projectImportError = computed(() => props.projectImportError);
+const supportsDirectoryImport = isRuntimeCapabilitySupported("supportsDirectoryImport");
 
 watch(
   () => [projectImportInProgress.value, projectImportFeedback.value, projectImportError.value] as const,
@@ -186,6 +188,11 @@ function isProjectOpen(projectId: string): boolean {
 }
 
 async function pickDirectory(): Promise<void> {
+  if (!supportsDirectoryImport) {
+    pickerFeedback.value = "当前运行环境不支持目录导入";
+    return;
+  }
+
   pickerFeedback.value = "";
   try {
     const directoryPath = await pickDirectoryPath();

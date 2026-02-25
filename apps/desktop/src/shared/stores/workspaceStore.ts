@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { useStorage } from "@vueuse/core";
 
+import { isRuntimeCapabilitySupported } from "@/shared/runtime";
 import { pinia } from "@/shared/stores/pinia";
 import type { Workspace, WorkspaceConnection, WorkspaceMode } from "@/shared/types/api";
 
@@ -164,6 +165,10 @@ function clearPersistedWorkspaceRecentOrder(): void {
 }
 
 function ensureLocalWorkspace(workspaces: Workspace[]): Workspace[] {
+  if (!isRuntimeCapabilitySupported("supportsLocalWorkspace")) {
+    return workspaces.filter((workspace) => workspace.mode !== "local" && !workspace.is_default_local);
+  }
+
   const byId = new Map(workspaces.map((workspace) => [workspace.id, workspace] as const));
   let localWorkspace = workspaces.find((workspace) => workspace.mode === "local" || workspace.is_default_local);
   if (!localWorkspace) {

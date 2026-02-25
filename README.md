@@ -115,6 +115,7 @@ flowchart LR
 
 ```text
 apps/desktop            # Desktop app (Vue + Tauri)
+apps/mobile             # Mobile app (Tauri Mobile + shared Vue code)
 services/hub            # Hub service (Go)
 services/worker         # Worker service (Python)
 scripts/                # Dev/release scripts
@@ -145,6 +146,22 @@ pnpm run dev:desktop
 ```
 
 This command runs `tauri dev` and auto-prepares local sidecars (`goyais-hub` / `goyais-worker`) when missing.
+
+### Run mobile (remote-hub mode)
+
+```bash
+pnpm run dev:mobile
+```
+
+You can also run per-platform commands under `apps/mobile`:
+
+```bash
+cd apps/mobile
+pnpm dev:ios
+pnpm dev:android
+```
+
+For mobile runtime, set `VITE_HUB_BASE_URL` to your remote Hub endpoint. In release mode, `http://` is rejected by default.
 
 ### Run services separately (debug mode)
 

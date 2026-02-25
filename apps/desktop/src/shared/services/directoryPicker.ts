@@ -1,5 +1,7 @@
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
+import { isRuntimeCapabilitySupported } from "@/shared/runtime";
+
 type DesktopDirectoryFile = File & {
   path?: string;
   webkitRelativePath?: string;
@@ -13,6 +15,10 @@ type DirectoryPickAttempt = {
 const FOCUS_FALLBACK_DELAY_MS = 1000;
 
 export async function pickDirectoryPath(): Promise<string | null> {
+  if (!isRuntimeCapabilitySupported("supportsDirectoryImport")) {
+    return null;
+  }
+
   if (typeof document === "undefined" || typeof window === "undefined") {
     return null;
   }

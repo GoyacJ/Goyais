@@ -2,6 +2,10 @@
 
 interface ImportMetaEnv {
   readonly VITE_HUB_BASE_URL?: string;
+  readonly VITE_APP_VERSION?: string;
+  readonly VITE_RUNTIME_TARGET?: "desktop" | "mobile" | "web";
+  readonly VITE_REQUIRE_HTTPS_HUB?: string;
+  readonly VITE_ALLOW_INSECURE_HUB?: string;
 }
 
 interface ImportMeta {

@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 
+import { isRuntimeCapabilitySupported } from "@/shared/runtime";
 import { pinia } from "@/shared/stores/pinia";
 import { authStore } from "@/shared/stores/authStore";
 import { getCurrentPermissionSnapshot } from "@/shared/stores/permissionStore";
@@ -105,6 +106,13 @@ function applyDefaultRemoteVisibility(visibility: MenuVisibility, isAdmin: boole
 }
 
 function enforceSettingsMenusAlwaysEnabled(visibility: MenuVisibility): void {
+  if (!isRuntimeCapabilitySupported("supportsLocalWorkspace")) {
+    for (const key of settingsMenuKeys) {
+      visibility[key] = "hidden";
+    }
+    return;
+  }
+
   for (const key of settingsMenuKeys) {
     visibility[key] = "enabled";
   }

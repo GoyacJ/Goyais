@@ -66,6 +66,26 @@ jobs:
       - name: Slides build (Turbo)
         run: pnpm slides:build
 
+  mobile-lint-test:
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+      - name: Install dependencies
+        run: pnpm install
+      - name: Mobile lint
+        run: pnpm lint:mobile
+      - name: Mobile test
+        run: pnpm test:mobile
+      - name: Mobile web build
+        run: pnpm build:mobile
+
   smoke-check:
     runs-on: ubuntu-latest
     steps:

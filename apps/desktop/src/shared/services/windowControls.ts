@@ -1,3 +1,5 @@
+import { isRuntimeCapabilitySupported } from "@/shared/runtime";
+
 type TauriWindow = {
   close: () => Promise<void>;
   minimize: () => Promise<void>;
@@ -13,6 +15,10 @@ const INTERACTIVE_SELECTOR = "button,a,input,select,textarea,[role='button'],[da
 let cachedWindow: Promise<TauriWindow | null> | null = null;
 
 export async function closeCurrentWindow(): Promise<void> {
+  if (!isRuntimeCapabilitySupported("supportsWindowControls")) {
+    return;
+  }
+
   await withWindowAction((appWindow) => appWindow.close(), () => {
     if (typeof window !== "undefined" && typeof window.close === "function") {
       window.close();
@@ -21,10 +27,17 @@ export async function closeCurrentWindow(): Promise<void> {
 }
 
 export async function minimizeCurrentWindow(): Promise<void> {
+  if (!isRuntimeCapabilitySupported("supportsWindowControls")) {
+    return;
+  }
   await withWindowAction((appWindow) => appWindow.minimize());
 }
 
 export async function toggleMaximizeCurrentWindow(): Promise<void> {
+  if (!isRuntimeCapabilitySupported("supportsWindowControls")) {
+    return;
+  }
+
   await withWindowAction(async (appWindow) => {
     if (typeof appWindow.toggleMaximize === "function") {
       await appWindow.toggleMaximize();
@@ -42,6 +55,9 @@ export async function toggleMaximizeCurrentWindow(): Promise<void> {
 }
 
 export async function startCurrentWindowDragging(): Promise<void> {
+  if (!isRuntimeCapabilitySupported("supportsWindowControls")) {
+    return;
+  }
   await withWindowAction((appWindow) => appWindow.startDragging());
 }
 

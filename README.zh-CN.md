@@ -115,6 +115,7 @@ flowchart LR
 
 ```text
 apps/desktop            # 桌面应用（Vue + Tauri）
+apps/mobile             # 移动端应用（Tauri Mobile + 复用 Vue 代码）
 services/hub            # Hub 服务（Go）
 services/worker         # Worker 服务（Python）
 scripts/                # 开发/发版脚本
@@ -145,6 +146,22 @@ pnpm run dev:desktop
 ```
 
 该命令会执行 `tauri dev`，并在本机缺失时自动准备 sidecar（`goyais-hub` / `goyais-worker`）。
+
+### 启动移动端（远程 Hub 模式）
+
+```bash
+pnpm run dev:mobile
+```
+
+也可以进入 `apps/mobile` 分平台启动：
+
+```bash
+cd apps/mobile
+pnpm dev:ios
+pnpm dev:android
+```
+
+移动端运行需要配置 `VITE_HUB_BASE_URL` 指向远程 Hub；release 默认拒绝 `http://` 连接。
 
 ### 分体调试模式（可选）
 

@@ -5,7 +5,7 @@ import {
   type GeneralSettingsFieldPath,
   type UpdateCheckFrequency
 } from "@/modules/workspace/schemas/generalSettings";
-import desktopPackageJson from "../../../../package.json";
+import { isRuntimeCapabilitySupported } from "@/shared/runtime";
 
 type AutostartAdapter = {
   enable: () => Promise<void>;
@@ -41,10 +41,8 @@ const dynamicImportModule = new Function("specifier", "return import(specifier);
   specifier: string
 ) => Promise<unknown>;
 
-const FALLBACK_APP_VERSION =
-  typeof desktopPackageJson.version === "string" && desktopPackageJson.version.trim() !== ""
-    ? desktopPackageJson.version
-    : "0.4.0";
+const DEFAULT_DEV_VERSION = "0.0.0-dev";
+const FALLBACK_APP_VERSION = normalizeBuildVersion(import.meta.env.VITE_APP_VERSION);
 
 let cachedAutostartPromise: Promise<AutostartAdapter | null> | null = null;
 let cachedAppVersionPromise: Promise<string> | null = null;
@@ -53,10 +51,12 @@ let cachedUpdaterModulePromise: Promise<UpdaterModule | null> | null = null;
 export async function detectGeneralSettingsCapability(): Promise<GeneralSettingsCapability> {
   const capability = createDefaultGeneralSettingsCapability();
 
-  const autostart = await getAutostartAdapter();
-  if (autostart) {
-    capability.launchOnStartup.supported = true;
-    capability.launchOnStartup.reasonKey = "";
+  if (isRuntimeCapabilitySupported("supportsAutostart")) {
+    const autostart = await getAutostartAdapter();
+    if (autostart) {
+      capability.launchOnStartup.supported = true;
+      capability.launchOnStartup.reasonKey = "";
+    }
   }
 
   if (canUseNotificationApi()) {
@@ -241,6 +241,14 @@ function normalizeVersionValue(rawVersion: string | undefined): string {
 
   const normalized = trimmedVersion.replace(/^v/i, "");
   return normalized === "" ? FALLBACK_APP_VERSION : normalized;
+}
+
+function normalizeBuildVersion(rawVersion: string | undefined): string {
+  if (typeof rawVersion !== "string") {
+    return DEFAULT_DEV_VERSION;
+  }
+  const normalized = rawVersion.trim().replace(/^v/i, "");
+  return normalized === "" ? DEFAULT_DEV_VERSION : normalized;
 }
 
 function canUseNotificationApi(): boolean {

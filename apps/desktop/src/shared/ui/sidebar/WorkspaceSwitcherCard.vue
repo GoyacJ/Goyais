@@ -7,6 +7,7 @@
     @dblclick="onDragRegionDoubleClick"
   >
     <div
+      v-if="supportsWindowControls"
       class="mac-row inline-flex mt-[var(--global-space-neg-2px)] gap-[var(--global-space-8)]"
       :class="{ 'justify-center': collapsed }"
       data-tauri-drag-region
@@ -99,6 +100,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
+import { isRuntimeCapabilitySupported } from "@/shared/runtime";
 import {
   closeCurrentWindow,
   handleDragMouseDown,
@@ -132,6 +134,7 @@ const emit = defineEmits<{
 }>();
 
 const menuOpen = ref(false);
+const supportsWindowControls = isRuntimeCapabilitySupported("supportsWindowControls");
 
 const currentWorkspace = computed(() => props.workspaces.find((workspace) => workspace.id === props.currentWorkspaceId));
 const workspaceLabel = computed(() => currentWorkspace.value?.name ?? props.fallbackLabel);
@@ -152,22 +155,37 @@ function onCreateWorkspace(): void {
 }
 
 function onCloseWindow(): void {
+  if (!supportsWindowControls) {
+    return;
+  }
   void closeCurrentWindow();
 }
 
 function onMinimizeWindow(): void {
+  if (!supportsWindowControls) {
+    return;
+  }
   void minimizeCurrentWindow();
 }
 
 function onToggleMaximizeWindow(): void {
+  if (!supportsWindowControls) {
+    return;
+  }
   void toggleMaximizeCurrentWindow();
 }
 
 function onDragMouseDown(event: MouseEvent): void {
+  if (!supportsWindowControls) {
+    return;
+  }
   void handleDragMouseDown(event);
 }
 
 function onDragRegionDoubleClick(event: MouseEvent): void {
+  if (!supportsWindowControls) {
+    return;
+  }
   if ((event.target as HTMLElement | null)?.closest("button,a,input,select,textarea,[role='button'],[data-no-drag='true']")) {
     return;
   }
