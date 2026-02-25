@@ -2,7 +2,7 @@ import type { MessageMap } from "@/shared/i18n/messages.types";
 
 export const zhCNMessages: MessageMap = {
 
-    "app.title": "Goyais v0.4.0",
+    "app.title": "Goyais",
     "common.main": "主屏幕",
     "common.save": "保存",
     "common.cancel": "取消",

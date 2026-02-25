@@ -63,7 +63,7 @@ func probeMCPHTTPRPC(ctx context.Context, client *http.Client, endpoint string, 
 			"capabilities":    map[string]any{},
 			"clientInfo": map[string]any{
 				"name":    "goyais",
-				"version": "0.4.0",
+				"version": runtimeVersion(),
 			},
 		},
 	}

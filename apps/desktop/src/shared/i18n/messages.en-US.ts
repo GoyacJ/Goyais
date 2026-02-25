@@ -2,7 +2,7 @@ import type { MessageMap } from "@/shared/i18n/messages.types";
 
 export const enUSMessages: MessageMap = {
 
-    "app.title": "Goyais v0.4.0",
+    "app.title": "Goyais",
     "common.main": "Main Screen",
     "common.save": "Save",
     "common.cancel": "Cancel",

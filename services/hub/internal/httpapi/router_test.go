@@ -11,6 +11,7 @@ import (
 )
 
 func TestHealth(t *testing.T) {
+	t.Setenv("GOYAIS_VERSION", "")
 	router := NewRouter()
 	res := performJSONRequest(t, router, http.MethodGet, "/health", nil, nil)
 
@@ -23,8 +24,24 @@ func TestHealth(t *testing.T) {
 	if payload["ok"] != true {
 		t.Fatalf("expected ok=true, got %#v", payload["ok"])
 	}
-	if payload["version"] != "0.4.0" {
-		t.Fatalf("expected version 0.4.0, got %#v", payload["version"])
+	if payload["version"] != defaultRuntimeVersion {
+		t.Fatalf("expected version %s, got %#v", defaultRuntimeVersion, payload["version"])
+	}
+}
+
+func TestHealthUsesEnvironmentVersion(t *testing.T) {
+	t.Setenv("GOYAIS_VERSION", "v0.5.1")
+	router := NewRouter()
+	res := performJSONRequest(t, router, http.MethodGet, "/health", nil, nil)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	if payload["version"] != "0.5.1" {
+		t.Fatalf("expected version 0.5.1, got %#v", payload["version"])
 	}
 }
 
