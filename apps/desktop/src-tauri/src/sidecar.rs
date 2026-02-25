@@ -22,6 +22,23 @@ const WORKER_HEALTH_TIMEOUT: Duration = Duration::from_secs(45);
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const SIDECAR_LOG_FILE: &str = "sidecar.log";
 const HUB_DB_FILE: &str = "hub.sqlite3";
+const SIDECAR_PROXY_ENV_KEYS: [&str; 8] = [
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "NO_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+    "no_proxy",
+];
+const SIDECAR_TLS_ENV_KEYS: [&str; 5] = [
+    "SSL_CERT_FILE",
+    "REQUESTS_CA_BUNDLE",
+    "CURL_CA_BUNDLE",
+    "WORKER_TLS_CA_FILE",
+    "WORKER_TLS_INSECURE_SKIP_VERIFY",
+];
 
 #[derive(Default)]
 pub struct SidecarState {
@@ -59,6 +76,9 @@ pub fn initialize<R: Runtime + 'static>(app: &AppHandle<R>) -> Result<(), String
         ),
         ("HUB_INTERNAL_TOKEN".to_string(), internal_token.clone()),
     ];
+    let mut hub_envs = hub_envs;
+    append_passthrough_envs(&mut hub_envs, &SIDECAR_PROXY_ENV_KEYS);
+    append_passthrough_envs(&mut hub_envs, &SIDECAR_TLS_ENV_KEYS);
     let (hub_events, hub_child) = app
         .shell()
         .sidecar("goyais-hub")
@@ -88,6 +108,9 @@ pub fn initialize<R: Runtime + 'static>(app: &AppHandle<R>) -> Result<(), String
         ),
         ("HUB_INTERNAL_TOKEN".to_string(), internal_token),
     ];
+    let mut worker_envs = worker_envs;
+    append_passthrough_envs(&mut worker_envs, &SIDECAR_PROXY_ENV_KEYS);
+    append_passthrough_envs(&mut worker_envs, &SIDECAR_TLS_ENV_KEYS);
     let worker_spawn_result = app
         .shell()
         .sidecar("goyais-worker")
@@ -125,9 +148,15 @@ pub fn initialize<R: Runtime + 'static>(app: &AppHandle<R>) -> Result<(), String
     kill_children(&mut guard, &log_path);
     *guard = started;
     if worker_started {
-        log_line(&log_path, "sidecar runtime initialized (worker health check in background)");
+        log_line(
+            &log_path,
+            "sidecar runtime initialized (worker health check in background)",
+        );
     } else {
-        log_line(&log_path, "sidecar runtime initialized without worker sidecar");
+        log_line(
+            &log_path,
+            "sidecar runtime initialized without worker sidecar",
+        );
     }
     drop(guard);
 
@@ -179,36 +208,40 @@ fn wait_for_health(port: u16, timeout: Duration, log_path: &Path) -> Result<(), 
 }
 
 fn monitor_worker_health<R: Runtime + 'static>(app: AppHandle<R>, log_path: PathBuf) {
-    let _ = thread::spawn(move || match wait_for_health(WORKER_PORT, WORKER_HEALTH_TIMEOUT, &log_path) {
-        Ok(()) => {
-            log_line(&log_path, "worker sidecar healthy");
-        }
-        Err(error) => {
-            log_line(
-                &log_path,
-                &format!("worker health probe failed after startup: {error}"),
-            );
-            if let Ok(mut guard) = app.state::<SidecarState>().inner.lock() {
-                if let Some(worker) = guard.worker.take() {
-                    if let Err(kill_error) = worker.kill() {
-                        log_line(
-                            &log_path,
-                            &format!("worker sidecar kill failed after health timeout: {kill_error}"),
-                        );
-                    } else {
-                        log_line(&log_path, "worker sidecar stopped after health timeout");
-                    }
-                }
-            } else {
+    let _ = thread::spawn(move || {
+        match wait_for_health(WORKER_PORT, WORKER_HEALTH_TIMEOUT, &log_path) {
+            Ok(()) => {
+                log_line(&log_path, "worker sidecar healthy");
+            }
+            Err(error) => {
                 log_line(
                     &log_path,
-                    "failed to lock sidecar state after worker health timeout",
+                    &format!("worker health probe failed after startup: {error}"),
+                );
+                if let Ok(mut guard) = app.state::<SidecarState>().inner.lock() {
+                    if let Some(worker) = guard.worker.take() {
+                        if let Err(kill_error) = worker.kill() {
+                            log_line(
+                                &log_path,
+                                &format!(
+                                    "worker sidecar kill failed after health timeout: {kill_error}"
+                                ),
+                            );
+                        } else {
+                            log_line(&log_path, "worker sidecar stopped after health timeout");
+                        }
+                    }
+                } else {
+                    log_line(
+                        &log_path,
+                        "failed to lock sidecar state after worker health timeout",
+                    );
+                }
+                show_startup_error(
+                    &app,
+                    &format!("Worker startup timeout. Please retry launch.\n{error}"),
                 );
             }
-            show_startup_error(
-                &app,
-                &format!("Worker startup timeout. Please retry launch.\n{error}"),
-            );
         }
     });
 }
@@ -279,7 +312,25 @@ fn spawn_event_logger(
 
 fn normalized_line(bytes: &[u8]) -> Option<String> {
     let line = String::from_utf8_lossy(bytes).trim().to_string();
-    if line.is_empty() { None } else { Some(line) }
+    if line.is_empty() {
+        None
+    } else {
+        Some(line)
+    }
+}
+
+fn append_passthrough_envs(envs: &mut Vec<(String, String)>, keys: &[&str]) {
+    for key in keys {
+        if envs.iter().any(|(name, _)| name == key) {
+            continue;
+        }
+        if let Ok(value) = std::env::var(key) {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                envs.push(((*key).to_string(), trimmed.to_string()));
+            }
+        }
+    }
 }
 
 fn kill_children(sidecars: &mut ManagedSidecars, log_path: &Path) {
