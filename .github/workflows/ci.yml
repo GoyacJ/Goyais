@@ -67,7 +67,6 @@ jobs:
         run: pnpm slides:build
 
   mobile-lint-test:
-    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,6 +84,10 @@ jobs:
         run: pnpm test:mobile
       - name: Mobile web build
         run: pnpm build:mobile
+      - name: Install Playwright browsers
+        run: pnpm --filter @goyais/mobile exec playwright install --with-deps chromium
+      - name: Mobile e2e smoke
+        run: pnpm --filter @goyais/mobile e2e:smoke
 
   smoke-check:
     runs-on: ubuntu-latest

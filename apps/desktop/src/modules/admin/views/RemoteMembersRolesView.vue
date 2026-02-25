@@ -10,44 +10,46 @@
         <button type="button" @click="addMember">新增成员</button>
       </div>
 
-      <table class="table">
-        <thead>
-          <tr>
-            <th>用户名</th>
-            <th>显示名</th>
-            <th>角色</th>
-            <th>状态</th>
-            <th>动作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="user in adminStore.users" :key="user.id">
-            <td>{{ user.username }}</td>
-            <td>{{ user.display_name }}</td>
-            <td>
-              <select :value="user.role" @change="onAssignRole(user.id, $event)">
-                <option v-for="role in roleOptions" :key="role" :value="role">{{ role }}</option>
-              </select>
-            </td>
-            <td>
-              <span :class="user.enabled ? 'enabled' : 'disabled'">{{ user.enabled ? 'enabled' : 'disabled' }}</span>
-            </td>
-            <td>
-              <div class="actions">
-                <button type="button" aria-label="编辑成员" @click="editMember(user.id)">
-                  <AppIcon name="pencil" :size="12" />
-                </button>
-                <button type="button" aria-label="切换成员状态" @click="toggleMember(user.id)">
-                  <AppIcon name="info" :size="12" />
-                </button>
-                <button type="button" aria-label="删除成员" @click="removeMember(user.id)">
-                  <AppIcon name="trash-2" :size="12" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>用户名</th>
+              <th>显示名</th>
+              <th>角色</th>
+              <th>状态</th>
+              <th>动作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="user in adminStore.users" :key="user.id">
+              <td>{{ user.username }}</td>
+              <td>{{ user.display_name }}</td>
+              <td>
+                <select :value="user.role" @change="onAssignRole(user.id, $event)">
+                  <option v-for="role in roleOptions" :key="role" :value="role">{{ role }}</option>
+                </select>
+              </td>
+              <td>
+                <span :class="user.enabled ? 'enabled' : 'disabled'">{{ user.enabled ? 'enabled' : 'disabled' }}</span>
+              </td>
+              <td>
+                <div class="actions">
+                  <button type="button" aria-label="编辑成员" @click="editMember(user.id)">
+                    <AppIcon name="pencil" :size="12" />
+                  </button>
+                  <button type="button" aria-label="切换成员状态" @click="toggleMember(user.id)">
+                    <AppIcon name="info" :size="12" />
+                  </button>
+                  <button type="button" aria-label="删除成员" @click="removeMember(user.id)">
+                    <AppIcon name="trash-2" :size="12" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <CursorPager
         :can-prev="adminStore.usersPage.backStack.length > 0"
         :can-next="adminStore.usersPage.nextCursor !== null"
@@ -63,45 +65,47 @@
         <button type="button" @click="addRole">新增角色</button>
       </div>
 
-      <table class="table">
-        <thead>
-          <tr>
-            <th>角色</th>
-            <th>权限</th>
-            <th>状态</th>
-            <th>动作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="role in adminStore.roles" :key="role.key">
-            <td>{{ role.name }}</td>
-            <td>
-              <div class="permission-tags">
-                <span v-for="permission in role.permissions" :key="permission" class="tag">{{ permission }}</span>
-              </div>
-            </td>
-            <td>
-              <span :class="role.enabled ? 'enabled' : 'disabled'">{{ role.enabled ? 'enabled' : 'disabled' }}</span>
-            </td>
-            <td>
-              <div class="actions">
-                <button type="button" aria-label="编辑角色" @click="editRole(role.key)">
-                  <AppIcon name="pencil" :size="12" />
-                </button>
-                <button type="button" aria-label="切换角色状态" @click="toggleRoleState(role.key)">
-                  <AppIcon name="info" :size="12" />
-                </button>
-                <button type="button" aria-label="分配权限" @click="assignPermission(role.key)">
-                  <AppIcon name="plus" :size="12" />
-                </button>
-                <button type="button" aria-label="删除角色" @click="removeRoleByKey(role.key)">
-                  <AppIcon name="trash-2" :size="12" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>角色</th>
+              <th>权限</th>
+              <th>状态</th>
+              <th>动作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="role in adminStore.roles" :key="role.key">
+              <td>{{ role.name }}</td>
+              <td>
+                <div class="permission-tags">
+                  <span v-for="permission in role.permissions" :key="permission" class="tag">{{ permission }}</span>
+                </div>
+              </td>
+              <td>
+                <span :class="role.enabled ? 'enabled' : 'disabled'">{{ role.enabled ? 'enabled' : 'disabled' }}</span>
+              </td>
+              <td>
+                <div class="actions">
+                  <button type="button" aria-label="编辑角色" @click="editRole(role.key)">
+                    <AppIcon name="pencil" :size="12" />
+                  </button>
+                  <button type="button" aria-label="切换角色状态" @click="toggleRoleState(role.key)">
+                    <AppIcon name="info" :size="12" />
+                  </button>
+                  <button type="button" aria-label="分配权限" @click="assignPermission(role.key)">
+                    <AppIcon name="plus" :size="12" />
+                  </button>
+                  <button type="button" aria-label="删除角色" @click="removeRoleByKey(role.key)">
+                    <AppIcon name="trash-2" :size="12" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
   </AccountShell>
 </template>

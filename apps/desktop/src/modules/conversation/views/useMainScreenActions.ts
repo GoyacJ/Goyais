@@ -32,9 +32,13 @@ import {
   updateConversationModeById,
   updateConversationModelById
 } from "@/modules/project/store";
-import { createRemoteConnection } from "@/modules/workspace/services";
-import { setWorkspaceToken } from "@/shared/stores/authStore";
+import { refreshAdminData } from "@/modules/admin/store";
+import { refreshResources, refreshModelCatalog } from "@/modules/resource/store";
+import { refreshProjects } from "@/modules/project/store";
+import { createRemoteConnection, loginWorkspace as loginWorkspaceRequest } from "@/modules/workspace/services";
+import { refreshMeForCurrentWorkspace, setWorkspaceToken } from "@/shared/stores/authStore";
 import { toDisplayError } from "@/shared/services/errorMapper";
+import { workspaceStore } from "@/shared/stores/workspaceStore";
 import type { Conversation, InspectorTabKey, Project } from "@/shared/types/api";
 import { setWorkspaceConnection, switchWorkspaceContext, upsertWorkspace } from "@/modules/workspace/store";
 type MainScreenActionsInput = {
@@ -179,6 +183,39 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
   async function switchWorkspace(workspaceId: string): Promise<void> {
     await switchWorkspaceContext(workspaceId);
   }
+  async function loginWorkspace(payload: { workspaceId: string; username?: string; password?: string; token?: string }): Promise<void> {
+    const workspaceId = payload.workspaceId.trim();
+    if (workspaceId === "") {
+      return;
+    }
+
+    try {
+      const response = await loginWorkspaceRequest({
+        workspace_id: workspaceId,
+        username: payload.username?.trim() || undefined,
+        password: payload.password || undefined,
+        token: payload.token?.trim() || undefined
+      });
+
+      setWorkspaceToken(workspaceId, response.access_token, response.refresh_token);
+
+      const currentWorkspaceId = workspaceStore.currentWorkspaceId.trim();
+      if (currentWorkspaceId === workspaceId) {
+        await refreshMeForCurrentWorkspace();
+      } else {
+        await switchWorkspaceContext(workspaceId);
+      }
+
+      if (workspaceStore.connectionState === "ready") {
+        await Promise.all([refreshProjects(), refreshResources(), refreshModelCatalog()]);
+        if (workspaceStore.mode === "remote") {
+          await refreshAdminData();
+        }
+      }
+    } catch (error) {
+      setConversationError(toDisplayError(error));
+    }
+  }
   async function paginateProjects(direction: "prev" | "next"): Promise<void> {
     if (direction === "next") {
       await loadNextProjectsPage();
@@ -275,6 +312,7 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     saveConversationName,
     selectConversation,
     sendMessage,
+    loginWorkspace,
     startEditConversationName,
     stopExecution,
     switchWorkspace,

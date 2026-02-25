@@ -15,6 +15,7 @@
           <button type="button" @click="saveRoleVisibility">保存</button>
         </div>
       </div>
+      <div class="table-wrap">
       <table class="table">
         <thead>
           <tr>
@@ -38,12 +39,14 @@
           </tr>
         </tbody>
       </table>
+      </div>
     </section>
     <section class="card">
       <div class="card-head">
         <h3>菜单定义</h3>
         <button type="button" @click="addMenuNode">新增菜单</button>
       </div>
+      <div class="table-wrap">
       <table class="table">
         <thead>
           <tr>
@@ -67,12 +70,14 @@
           </tr>
         </tbody>
       </table>
+      </div>
     </section>
     <section class="card">
       <div class="card-head">
         <h3>权限定义</h3>
         <button type="button" @click="addPermission">新增权限</button>
       </div>
+      <div class="table-wrap">
       <table class="table">
         <thead>
           <tr>
@@ -98,12 +103,14 @@
           </tr>
         </tbody>
       </table>
+      </div>
     </section>
     <section class="card">
       <div class="card-head">
         <h3>ABAC 策略</h3>
         <button type="button" @click="addPolicy">新增策略</button>
       </div>
+      <div class="table-wrap">
       <table class="table">
         <thead>
           <tr>
@@ -131,9 +138,11 @@
           </tr>
         </tbody>
       </table>
+      </div>
     </section>
     <section class="card">
       <h3>审计日志</h3>
+      <div class="table-wrap">
       <table class="table">
         <thead>
           <tr>
@@ -154,6 +163,7 @@
           </tr>
         </tbody>
       </table>
+      </div>
       <CursorPager
         :can-prev="adminStore.auditsPage.backStack.length > 0"
         :can-next="adminStore.auditsPage.nextCursor !== null"
