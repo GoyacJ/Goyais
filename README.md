@@ -38,9 +38,9 @@
 
 Goyais is an open-source AI desktop platform for teams that need both delivery speed and operational control.
 Instead of letting the UI call runtime tools directly, Goyais keeps a strict control plane:
-`Desktop -> Hub -> Worker`.
+`Desktop -> Hub`.
 
-This gives you a desktop-first experience while keeping execution authority, policy checks, and orchestration in Hub.
+This gives you a desktop-first experience while keeping execution authority, policy checks, and orchestration in Hub's embedded runtime.
 The product model is built around:
 `Workspace -> Project -> Conversation -> Execution`.
 
@@ -57,11 +57,10 @@ The product model is built around:
 
 ### What Is Implemented in the Current Codebase
 
-- **Three-tier stack**:
+- **Two-tier stack**:
   - Desktop: `Tauri + Vue + TypeScript`
-  - Hub: `Go`
-  - Worker: `Python + FastAPI`
-- **Out-of-the-box local mode**: Desktop starts Hub/Worker as sidecars, performs `/health` checks, and writes sidecar runtime logs under app data.
+  - Hub: `Go + embedded agentcore runtime`
+- **Out-of-the-box local mode**: Desktop starts Hub sidecar, performs `/health` checks, and writes sidecar runtime logs under app data.
 - **Execution lifecycle APIs**: conversation message submission, queueing, stop, rollback endpoint, execution events stream, diff/patch actions.
 - **Conversation runtime features**: SSE event consumption, idempotent event merge, snapshot data structures, and Markdown export endpoint contract.
 - **Workspace/resource surface**: local + remote workspace paths, resource/model/skills/MCP related routes, project config and agent config endpoints.
@@ -77,9 +76,8 @@ Core runtime architecture and packaging flow are in place; some API branches sti
 ```mermaid
 flowchart LR
   UI[Desktop App\nTauri + Vue] -->|HTTP /v1 + SSE| HUB[Hub\nGo]
-  HUB -->|/internal/*| WORKER[Worker\nPython FastAPI]
   HUB --> DB[(SQLite)]
-  WORKER --> WT[Execution Runtime\nTools / Worktree]
+  HUB --> RT[Embedded Runtime\nTools / Worktree]
 ```
 
 ## Screenshots
@@ -117,7 +115,6 @@ flowchart LR
 apps/desktop            # Desktop app (Vue + Tauri)
 apps/mobile             # Mobile app (Tauri Mobile + shared Vue code)
 services/hub            # Hub service (Go)
-services/worker         # Worker service (Python)
 scripts/                # Dev/release scripts
 docs/                   # Product/architecture/dev docs
 ```
@@ -129,8 +126,6 @@ docs/                   # Product/architecture/dev docs
 - Node.js 22+ (CI uses Node 24)
 - pnpm 10.11+
 - Go 1.24+
-- Python 3.11+
-- [uv](https://docs.astral.sh/uv/)
 - Rust stable (Tauri)
 
 ### Install
@@ -145,7 +140,7 @@ pnpm install
 pnpm run dev:desktop
 ```
 
-This command runs `tauri dev` and auto-prepares local sidecars (`goyais-hub` / `goyais-worker`) when missing.
+This command runs `tauri dev` and auto-prepares local Hub sidecar (`goyais-hub`) when missing.
 
 ### Run mobile (remote-hub mode)
 
@@ -167,7 +162,6 @@ For mobile runtime, set `VITE_HUB_BASE_URL` to your remote Hub endpoint. In rele
 
 ```bash
 make dev-hub
-make dev-worker
 make dev-web
 ```
 
@@ -175,7 +169,6 @@ make dev-web
 
 ```bash
 curl http://127.0.0.1:8787/health
-curl http://127.0.0.1:8788/health
 ```
 
 ### Logs
@@ -211,7 +204,6 @@ VITE_API_MODE=strict VITE_ENABLE_MOCK_FALLBACK=false pnpm tauri build -- --targe
 ```bash
 TARGET_TRIPLE="$(rustc -vV | awk '/^host:/ {print $2}')"
 scripts/release/build-hub-sidecar.sh "$TARGET_TRIPLE"
-scripts/release/build-worker-sidecar.sh "$TARGET_TRIPLE"
 ```
 
 By default, release artifacts are built with `--no-sign` and uploaded to a draft release.

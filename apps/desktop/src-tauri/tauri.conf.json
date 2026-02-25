@@ -27,8 +27,7 @@
     "active": true,
     "targets": "all",
     "externalBin": [
-      "binaries/goyais-hub",
-      "binaries/goyais-worker"
+      "binaries/goyais-hub"
     ],
     "icon": [
       "icons/32x32.png",

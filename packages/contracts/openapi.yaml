@@ -558,6 +558,31 @@ paths:
               schema:
                 $ref: '#/components/schemas/ListEnvelope'
 
+  /v1/runs/{run_id}/control:
+    post:
+      summary: Control run with unified actions
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunControlRequest'
+      responses:
+        '200':
+          description: Run control applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunControlResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '409':
+          $ref: '#/components/responses/StandardErrorResponse'
+
   /v1/executions/{execution_id}/diff:
     get:
       summary: Get execution diff summary
@@ -1666,6 +1691,12 @@ components:
     ExecutionIdParam:
       in: path
       name: execution_id
+      required: true
+      schema:
+        type: string
+    RunIdParam:
+      in: path
+      name: run_id
       required: true
       schema:
         type: string
@@ -3081,3 +3112,25 @@ components:
             $ref: '#/components/schemas/ExecutionControlCommand'
         last_seq:
           type: integer
+
+    RunControlRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [stop, approve, deny, resume]
+
+    RunControlResponse:
+      type: object
+      required: [ok, run_id, state, previous_state]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        run_id:
+          type: string
+        state:
+          type: string
+        previous_state:
+          type: string

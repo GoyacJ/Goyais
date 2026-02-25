@@ -7,7 +7,6 @@
     "dev": "turbo run dev --filter=@goyais/desktop",
     "docs:dev": "turbo run docs:dev --filter=@goyais/docs-site",
     "dev:hub": "make dev-hub",
-    "dev:worker": "make dev-worker",
     "dev:desktop": "turbo run dev:desktop --filter=@goyais/desktop",
     "dev:web": "turbo run dev:web --filter=@goyais/desktop",
     "dev:mobile": "turbo run dev:mobile --filter=@goyais/mobile",

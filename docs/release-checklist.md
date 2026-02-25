@@ -2,7 +2,7 @@
 
 - 版本：v0.1
 - 更新日期：2026-02-25
-- 适用范围：Desktop + Hub + Worker 联合发布
+- 适用范围：Desktop + Hub 联合发布
 - 责任人：Release Owner（平台工程）
 - 签字记录模板：`docs/reviews/2026-02-25-release-signoff-record.md`
 
@@ -16,8 +16,7 @@
 ## 2. 代码质量门禁（必须全部通过）
 
 1. Hub：`cd services/hub && go test ./... && go vet ./...`
-2. Worker：`cd services/worker && uv run ruff check . && uv run pytest -q`
-3. Desktop：`cd apps/desktop && pnpm lint && pnpm test && pnpm coverage:gate`
+2. Desktop：`cd apps/desktop && pnpm lint && pnpm test && pnpm coverage:gate`
 
 验收标准：
 - 任一命令失败即 `NO-GO`。
@@ -27,8 +26,8 @@
 
 1. 控制面接口默认鉴权：未认证请求访问管理接口返回 401/403。
 2. 跨 workspace 访问控制：越权请求返回 403。
-3. Hub/Worker 内部 token：未配置时（非不安全模式）服务拒绝启动或拒绝请求。
-4. Worker 命令执行：危险命令与 shell 注入模式被拒绝。
+3. Hub 内部 token：未配置时（非不安全模式）服务拒绝启动或拒绝请求。
+4. Hub 内嵌工具执行：危险命令与 shell 注入模式被拒绝。
 
 验收标准：
 - 任一项回归失败即 `NO-GO`。
@@ -37,7 +36,6 @@
 
 1. 环境变量齐备：
    - `HUB_INTERNAL_TOKEN`
-   - `WORKER_INTERNAL_TOKEN`
    - 其他部署必需项（见各服务 README）
 2. 不安全开关核对：生产环境不得启用 `GOYAIS_ALLOW_INSECURE_INTERNAL_TOKEN=1`。
 3. Desktop 与 Hub API 模式一致（strict/non-strict 配置一致）。
@@ -62,7 +60,8 @@
    - 高优先级故障（P0/P1）
 2. 回滚步骤：
    - 回退到上一个稳定 tag
-   - 恢复上一版 Hub/Worker 运行配置
+   - 恢复上一版 Hub 运行配置
+   - 执行一键回滚包：`scripts/release/rollback/rollback-to-stable.sh <stable-tag-or-sha>`
    - 验证健康检查与关键接口
 3. 回滚验收：关键链路恢复且错误率回落到基线。
 

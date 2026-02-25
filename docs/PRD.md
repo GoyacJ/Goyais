@@ -7,7 +7,7 @@
 
 ## 1. 背景与目标
 
-Goyais 提供 Desktop + Hub + Worker 的协同执行能力，目标是让开发者在本地或远程工作区中完成“对话驱动的代码变更、执行与回放”。
+Goyais 提供 Desktop + Hub 的协同执行能力，目标是让开发者在本地或远程工作区中完成“对话驱动的代码变更、执行与回放”。
 
 本阶段目标：
 1. 建立可用于 RC 的安全与正确性基线。
@@ -21,7 +21,7 @@ Goyais 提供 Desktop + Hub + Worker 的协同执行能力，目标是让开发�
 1. 会话链路：创建会话、提交消息、领取执行、回传事件、前端状态合并。
 2. 控制链路：停止、回滚、提交、丢弃。
 3. 多租户与权限：workspace 级鉴权、管理接口授权边界、内部 token 管理。
-4. 工程门禁：Hub/Worker/Desktop 的测试与 lint；Desktop coverage gate。
+4. 工程门禁：Hub/Desktop 的测试与 lint；Desktop coverage gate。
 
 ### 2.2 Out of Scope
 
@@ -59,8 +59,7 @@ Goyais 提供 Desktop + Hub + Worker 的协同执行能力，目标是让开发�
 ### 5.3 工程门禁
 
 1. `services/hub`: `go test ./...` + `go vet ./...` 通过。
-2. `services/worker`: `uv run ruff check .` + `uv run pytest -q` 通过。
-3. `apps/desktop`: `pnpm lint` + `pnpm test` + `pnpm coverage:gate` 通过。
+2. `apps/desktop`: `pnpm lint` + `pnpm test` + `pnpm coverage:gate` 通过。
 
 ## 6. 里程碑
 
@@ -72,7 +71,7 @@ Goyais 提供 Desktop + Hub + Worker 的协同执行能力，目标是让开发�
 
 1. 覆盖率门禁未达标会阻塞正式发布。
 2. 若后续接口演进缺少兼容策略，可能影响 Desktop/Hub 协同。
-3. 依赖项（Node/Python/Go）版本漂移可能导致本地与 CI 行为差异。
+3. 依赖项（Node/Go）版本漂移可能导致本地与 CI 行为差异。
 
 ## 8. 发布 Go/No-Go
 

@@ -63,12 +63,6 @@ jobs:
           go-version: "1.24.x"
           cache-dependency-path: services/hub/go.sum
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - uses: astral-sh/setup-uv@v4
-
       - name: Resolve release version
         id: resolve_version
         shell: bash
@@ -87,10 +81,6 @@ jobs:
       - name: Build Hub sidecar
         shell: bash
         run: scripts/release/build-hub-sidecar.sh "${{ matrix.target }}"
-
-      - name: Build Worker sidecar
-        shell: bash
-        run: scripts/release/build-worker-sidecar.sh "${{ matrix.target }}"
 
       - name: Build and upload release assets
         uses: tauri-apps/tauri-action@v0

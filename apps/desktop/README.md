@@ -28,7 +28,6 @@ pnpm tauri:dev
 ```bash
 TARGET_TRIPLE="$(rustc -vV | awk '/^host:/ {print $2}')"
 scripts/release/build-hub-sidecar.sh "$TARGET_TRIPLE"
-scripts/release/build-worker-sidecar.sh "$TARGET_TRIPLE"
 
 # 强制重建（忽略本地已有 sidecar）
 GOYAIS_FORCE_SIDECAR_REBUILD=1 bash ../../scripts/release/ensure-local-sidecars.sh

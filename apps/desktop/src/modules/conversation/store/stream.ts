@@ -6,6 +6,7 @@ import {
   hydrateConversationRuntime
 } from "@/modules/conversation/store/state";
 import { createExecutionEvent } from "@/modules/conversation/store/events";
+import { toExecutionEventFromStreamPayload } from "@/modules/conversation/store/runEventAdapter";
 import type { Conversation, ExecutionEvent } from "@/shared/types/api";
 
 export function attachConversationStream(conversation: Conversation, token?: string): void {
@@ -128,22 +129,7 @@ function resolveLatestEventIDFromResyncPayload(event: ExecutionEvent): string {
 }
 
 function normalizeExecutionEvent(raw: unknown, fallbackConversationId: string): ExecutionEvent | null {
-  if (!raw || typeof raw !== "object") {
-    return null;
-  }
-
-  const candidate = raw as Partial<ExecutionEvent>;
-  if (typeof candidate.type !== "string") {
-    return null;
-  }
-  const normalizedConversationId = typeof candidate.conversation_id === "string" && candidate.conversation_id.trim() !== ""
-    ? candidate.conversation_id.trim()
-    : fallbackConversationId;
-
-  return {
-    ...candidate,
-    conversation_id: normalizedConversationId
-  } as ExecutionEvent;
+  return toExecutionEventFromStreamPayload(raw, fallbackConversationId);
 }
 
 function toError(value: unknown): Error {

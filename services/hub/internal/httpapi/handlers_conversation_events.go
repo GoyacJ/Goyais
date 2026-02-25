@@ -77,7 +77,7 @@ func ConversationEventsHandler(state *AppState) http.HandlerFunc {
 		}()
 
 		for _, event := range backlog {
-			if err := writeSSEEvent(w, event); err != nil {
+			if err := writeSSERunEvent(w, event); err != nil {
 				return
 			}
 			flusher.Flush()
@@ -98,7 +98,7 @@ func ConversationEventsHandler(state *AppState) http.HandlerFunc {
 				if !ok {
 					return
 				}
-				if err := writeSSEEvent(w, event); err != nil {
+				if err := writeSSERunEvent(w, event); err != nil {
 					return
 				}
 				flusher.Flush()
@@ -128,8 +128,8 @@ func buildSSEBackfillResyncEvent(conversationID string, lastEventID string, late
 	}
 }
 
-func writeSSEEvent(w http.ResponseWriter, event ExecutionEvent) error {
-	payload, err := json.Marshal(event)
+func writeSSERunEvent(w http.ResponseWriter, event ExecutionEvent) error {
+	payload, err := json.Marshal(mapExecutionEventToRunEvent(event))
 	if err != nil {
 		return err
 	}

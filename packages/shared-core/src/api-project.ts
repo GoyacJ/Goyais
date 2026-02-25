@@ -6,6 +6,7 @@ import type {
   InspectorTabKey,
   MessageRole,
   QueueState,
+  RunControlAction,
   TraceDetailLevel
 } from "./api-common";
 
@@ -136,6 +137,38 @@ export type ExecutionEvent = {
   type: ExecutionEventType;
   timestamp: string;
   payload: Record<string, unknown>;
+};
+
+export type RunEventType =
+  | "run_queued"
+  | "run_started"
+  | "run_output_delta"
+  | "run_approval_needed"
+  | "run_completed"
+  | "run_failed"
+  | "run_cancelled";
+
+export type RunEvent = {
+  type: RunEventType;
+  session_id: string;
+  run_id: string;
+  sequence: number;
+  timestamp: string;
+  payload: Record<string, unknown>;
+  event_id?: string;
+};
+
+export type ConversationStreamEvent = ExecutionEvent | RunEvent;
+
+export type RunControlRequest = {
+  action: RunControlAction;
+};
+
+export type RunControlResponse = {
+  ok: true;
+  run_id: string;
+  state: string;
+  previous_state: string;
 };
 
 export type DiffItem = {

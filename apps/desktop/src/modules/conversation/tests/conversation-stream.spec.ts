@@ -118,6 +118,36 @@ describe("conversation stream routing", () => {
     warnSpy.mockRestore();
   });
 
+  it("routes run-centric events by session_id and run_id", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    attachConversationStream(conversationA);
+    expect(typeof onEvent).toBe("function");
+
+    onEvent?.({
+      type: "run_started",
+      session_id: conversationB.id,
+      run_id: "run_stream_1",
+      sequence: 1,
+      timestamp: "2026-02-24T00:00:00Z",
+      payload: {
+        queue_index: 0,
+        trace_id: "tr_stream_1"
+      }
+    });
+
+    expect(applyIncomingExecutionEventMock).toHaveBeenCalledTimes(1);
+    expect(applyIncomingExecutionEventMock).toHaveBeenCalledWith(
+      conversationB.id,
+      expect.objectContaining({
+        conversation_id: conversationB.id,
+        execution_id: "run_stream_1",
+        type: "execution_started"
+      })
+    );
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
+  });
+
   it("passes lastEventId during attach and updates runtime lastEventId from incoming event", () => {
     const runtime = ensureConversationRuntime(conversationA, true);
     runtime.lastEventId = "evt_stream_resume_from";

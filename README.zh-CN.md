@@ -38,9 +38,9 @@
 
 Goyais 是一个面向团队协作的开源 AI 桌面平台，目标是在“交付效率”和“运行治理”之间取得平衡。
 它不让 UI 直接控制执行引擎，而是坚持明确的控制平面：
-`Desktop -> Hub -> Worker`。
+`Desktop -> Hub`。
 
-这种架构让你获得原生桌面体验，同时把执行权威、策略校验和调度统一收敛到 Hub。
+这种架构让你获得原生桌面体验，同时把执行权威、策略校验和调度统一收敛到 Hub 的内嵌运行时。
 产品对象模型固定为：
 `Workspace -> Project -> Conversation -> Execution`。
 
@@ -57,11 +57,10 @@ Goyais 是一个面向团队协作的开源 AI 桌面平台，目标是在“交
 
 ### 当前代码库已落地能力
 
-- **三层技术栈**：
+- **两层技术栈**：
   - Desktop：`Tauri + Vue + TypeScript`
-  - Hub：`Go`
-  - Worker：`Python + FastAPI`
-- **开箱即用本地模式**：Desktop 启动时自动拉起 Hub/Worker sidecar，执行 `/health` 健康检查，并把 sidecar 日志写入应用数据目录。
+  - Hub：`Go + 内嵌 agentcore runtime`
+- **开箱即用本地模式**：Desktop 启动时自动拉起 Hub sidecar，执行 `/health` 健康检查，并把 sidecar 日志写入应用数据目录。
 - **执行生命周期能力**：支持消息提交、队列排队、停止执行、回滚接口、执行事件流、diff/patch 动作。
 - **Conversation 运行时能力**：支持 SSE 事件消费、事件幂等合并、快照结构，以及 Markdown 导出接口契约。
 - **工作区与资源能力面**：覆盖本地/远程工作区、模型/规则/技能/MCP 相关接口、项目配置与 Agent 配置接口。
@@ -77,9 +76,8 @@ Goyais 是一个面向团队协作的开源 AI 桌面平台，目标是在“交
 ```mermaid
 flowchart LR
   UI[Desktop App\nTauri + Vue] -->|HTTP /v1 + SSE| HUB[Hub\nGo]
-  HUB -->|/internal/*| WORKER[Worker\nPython FastAPI]
   HUB --> DB[(SQLite)]
-  WORKER --> WT[Execution Runtime\nTools / Worktree]
+  HUB --> RT[Embedded Runtime\nTools / Worktree]
 ```
 
 ## 界面截图
@@ -117,7 +115,6 @@ flowchart LR
 apps/desktop            # 桌面应用（Vue + Tauri）
 apps/mobile             # 移动端应用（Tauri Mobile + 复用 Vue 代码）
 services/hub            # Hub 服务（Go）
-services/worker         # Worker 服务（Python）
 scripts/                # 开发/发版脚本
 docs/                   # 产品/架构/开发文档
 ```
@@ -129,8 +126,6 @@ docs/                   # 产品/架构/开发文档
 - Node.js 22+（CI 使用 Node 24）
 - pnpm 10.11+
 - Go 1.24+
-- Python 3.11+
-- [uv](https://docs.astral.sh/uv/)
 - Rust stable（Tauri）
 
 ### 安装依赖
@@ -145,7 +140,7 @@ pnpm install
 pnpm run dev:desktop
 ```
 
-该命令会执行 `tauri dev`，并在本机缺失时自动准备 sidecar（`goyais-hub` / `goyais-worker`）。
+该命令会执行 `tauri dev`，并在本机缺失时自动准备 Hub sidecar（`goyais-hub`）。
 
 ### 启动移动端（远程 Hub 模式）
 
@@ -167,7 +162,6 @@ pnpm dev:android
 
 ```bash
 make dev-hub
-make dev-worker
 make dev-web
 ```
 
@@ -175,7 +169,6 @@ make dev-web
 
 ```bash
 curl http://127.0.0.1:8787/health
-curl http://127.0.0.1:8788/health
 ```
 
 ### 日志位置
@@ -211,7 +204,6 @@ VITE_API_MODE=strict VITE_ENABLE_MOCK_FALLBACK=false pnpm tauri build -- --targe
 ```bash
 TARGET_TRIPLE="$(rustc -vV | awk '/^host:/ {print $2}')"
 scripts/release/build-hub-sidecar.sh "$TARGET_TRIPLE"
-scripts/release/build-worker-sidecar.sh "$TARGET_TRIPLE"
 ```
 
 默认使用 `--no-sign` 构建并上传到草稿 Release。

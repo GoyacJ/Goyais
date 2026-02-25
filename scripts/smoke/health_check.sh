@@ -3,7 +3,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HUB_PORT="${HUB_PORT:-8787}"
-WORKER_PORT="${WORKER_PORT:-8788}"
 DESKTOP_PORT="${DESKTOP_PORT:-5173}"
 EXPECTED_VERSION="${GOYAIS_VERSION:-0.0.0-dev}"
 
@@ -90,7 +89,7 @@ write_smoke_json() {
   local overall_status="$1"
   local summary="$2"
 
-  python3 - "$SMOKE_JSON" "$overall_status" "$summary" "$HUB_PORT" "$WORKER_PORT" "$DESKTOP_PORT" "$CHECKS_FILE" <<'PY'
+  python3 - "$SMOKE_JSON" "$overall_status" "$summary" "$HUB_PORT" "$DESKTOP_PORT" "$CHECKS_FILE" <<'PY'
 import datetime as dt
 import json
 import pathlib
@@ -100,9 +99,8 @@ smoke_path = pathlib.Path(sys.argv[1])
 overall_status = sys.argv[2]
 summary = sys.argv[3]
 hub_port = int(sys.argv[4])
-worker_port = int(sys.argv[5])
-desktop_port = int(sys.argv[6])
-checks_file = pathlib.Path(sys.argv[7])
+desktop_port = int(sys.argv[5])
+checks_file = pathlib.Path(sys.argv[6])
 
 checks = []
 if checks_file.exists():
@@ -119,7 +117,6 @@ payload = {
     "summary": summary,
     "ports": {
         "hub": hub_port,
-        "worker": worker_port,
         "desktop": desktop_port,
     },
     "checks": checks,
@@ -155,7 +152,7 @@ cleanup_and_report() {
 
   if [[ $status -ne 0 ]]; then
     echo "[smoke] failed"
-    echo "[smoke] ports: hub=${HUB_PORT} worker=${WORKER_PORT} desktop=${DESKTOP_PORT}"
+    echo "[smoke] ports: hub=${HUB_PORT} desktop=${DESKTOP_PORT}"
     echo "[smoke] artifact: ${SMOKE_JSON}"
     echo "[smoke] logs: ${LOG_DIR}"
     for file in "$LOG_DIR"/*.log; do
@@ -356,11 +353,10 @@ check_desktop_index() {
 }
 
 HUB_PORT="$(find_available_port "$HUB_PORT")"
-WORKER_PORT="$(find_available_port "$WORKER_PORT" "$HUB_PORT")"
-DESKTOP_PORT="$(find_available_port "$DESKTOP_PORT" "$HUB_PORT" "$WORKER_PORT")"
+DESKTOP_PORT="$(find_available_port "$DESKTOP_PORT" "$HUB_PORT")"
 
-echo "[smoke] selected ports: hub=${HUB_PORT} worker=${WORKER_PORT} desktop=${DESKTOP_PORT}"
-record_check "ports.selected" "pass" "hub=${HUB_PORT} worker=${WORKER_PORT} desktop=${DESKTOP_PORT}"
+echo "[smoke] selected ports: hub=${HUB_PORT} desktop=${DESKTOP_PORT}"
+record_check "ports.selected" "pass" "hub=${HUB_PORT} desktop=${DESKTOP_PORT}"
 
 echo "[smoke] starting hub"
 (
@@ -385,23 +381,6 @@ check_error_trace_consistency \
   "tr_smoke_hub" \
   "$LOG_DIR/hub_error_headers.txt" \
   "$LOG_DIR/hub_error_body.json"
-
-echo "[smoke] starting worker"
-(
-  cd "$ROOT_DIR/services/worker"
-  PORT="$WORKER_PORT" uv run python -m app.main >"$LOG_DIR/worker.log" 2>&1
-) &
-PIDS+=("$!")
-wait_for_http "worker.readiness" "http://127.0.0.1:${WORKER_PORT}/health"
-check_health_json "worker.health" "http://127.0.0.1:${WORKER_PORT}/health" "$LOG_DIR/worker_health.json"
-
-check_error_trace_consistency \
-  "worker.trace.error_consistency" \
-  "POST" \
-  "http://127.0.0.1:${WORKER_PORT}/internal/executions" \
-  "tr_smoke_worker" \
-  "$LOG_DIR/worker_error_headers.txt" \
-  "$LOG_DIR/worker_error_body.json"
 
 echo "[smoke] starting desktop web dev server"
 (

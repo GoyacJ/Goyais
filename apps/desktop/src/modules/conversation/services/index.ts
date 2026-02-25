@@ -3,6 +3,7 @@ import { getControlHubBaseUrl } from "@/shared/runtime";
 import { connectConversationEvents } from "@/shared/services/sseClient";
 import type {
   Conversation,
+  ConversationStreamEvent,
   ConversationDetailResponse,
   DiffCapability,
   DiffItem,
@@ -19,7 +20,7 @@ export function streamConversationEvents(
   options: {
     token?: string;
     initialLastEventId?: string;
-    onEvent: (event: unknown) => void;
+    onEvent: (event: ConversationStreamEvent) => void;
     onStatusChange: (status: "connected" | "reconnecting" | "disconnected") => void;
     onError: (error: Error) => void;
   }
@@ -28,7 +29,7 @@ export function streamConversationEvents(
   return connectConversationEvents(url, {
     token: options.token,
     initialLastEventId: options.initialLastEventId,
-    onEvent: options.onEvent as never,
+    onEvent: options.onEvent,
     onStatusChange: options.onStatusChange,
     onError: options.onError
   });

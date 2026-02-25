@@ -30,10 +30,9 @@ esac
 
 BIN_DIR="$ROOT_DIR/apps/desktop/src-tauri/binaries"
 HUB_BIN="$BIN_DIR/goyais-hub-$TARGET_TRIPLE$EXT"
-WORKER_BIN="$BIN_DIR/goyais-worker-$TARGET_TRIPLE$EXT"
 
 if [[ "$FORCE_REBUILD" == "1" ]]; then
-  rm -f "$HUB_BIN" "$WORKER_BIN"
+  rm -f "$HUB_BIN"
 fi
 
 if [[ ! -f "$HUB_BIN" ]]; then
@@ -43,16 +42,9 @@ else
   echo "[sidecar-prepare] hub sidecar exists: $HUB_BIN"
 fi
 
-if [[ ! -f "$WORKER_BIN" ]]; then
-  echo "[sidecar-prepare] worker sidecar missing, building..."
-  "$ROOT_DIR/scripts/release/build-worker-sidecar.sh" "$TARGET_TRIPLE"
-else
-  echo "[sidecar-prepare] worker sidecar exists: $WORKER_BIN"
-fi
-
-if [[ ! -f "$HUB_BIN" || ! -f "$WORKER_BIN" ]]; then
+if [[ ! -f "$HUB_BIN" ]]; then
   echo "[sidecar-prepare] sidecar build incomplete for $TARGET_TRIPLE" >&2
   exit 1
 fi
 
-echo "[sidecar-prepare] ready for $TARGET_TRIPLE"
+echo "[sidecar-prepare] hub sidecar ready for $TARGET_TRIPLE"

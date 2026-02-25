@@ -1,9 +1,9 @@
-import type { ExecutionEvent } from "@/shared/types/api";
+import type { ConversationStreamEvent } from "@/shared/types/api";
 
 type SseOptions = {
   token?: string;
   initialLastEventId?: string;
-  onEvent: (event: ExecutionEvent) => void;
+  onEvent: (event: ConversationStreamEvent) => void;
   onStatusChange: (status: "connected" | "reconnecting" | "disconnected") => void;
   onError: (error: Error) => void;
 };
@@ -42,7 +42,10 @@ export function connectConversationEvents(url: string, options: SseOptions): Sse
       }
 
       try {
-        const parsed = JSON.parse(messageEvent.data) as ExecutionEvent;
+        const parsed = JSON.parse(messageEvent.data) as ConversationStreamEvent & { event_id?: string };
+        if (messageEvent.lastEventId && typeof parsed === "object" && parsed !== null && parsed.event_id == null) {
+          parsed.event_id = messageEvent.lastEventId;
+        }
         options.onEvent(parsed);
       } catch (error) {
         options.onError(toError(error));

@@ -16,9 +16,7 @@ use tauri_plugin_shell::{
 };
 
 const HUB_PORT: u16 = 8787;
-const WORKER_PORT: u16 = 8788;
 const HUB_HEALTH_TIMEOUT: Duration = Duration::from_secs(10);
-const WORKER_HEALTH_TIMEOUT: Duration = Duration::from_secs(45);
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const SIDECAR_LOG_FILE: &str = "sidecar.log";
 const HUB_DB_FILE: &str = "hub.sqlite3";
@@ -32,13 +30,7 @@ const SIDECAR_PROXY_ENV_KEYS: [&str; 8] = [
     "all_proxy",
     "no_proxy",
 ];
-const SIDECAR_TLS_ENV_KEYS: [&str; 5] = [
-    "SSL_CERT_FILE",
-    "REQUESTS_CA_BUNDLE",
-    "CURL_CA_BUNDLE",
-    "WORKER_TLS_CA_FILE",
-    "WORKER_TLS_INSECURE_SKIP_VERIFY",
-];
+const SIDECAR_TLS_ENV_KEYS: [&str; 3] = ["SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"];
 
 #[derive(Default)]
 pub struct SidecarState {
@@ -48,7 +40,6 @@ pub struct SidecarState {
 #[derive(Default)]
 struct ManagedSidecars {
     hub: Option<CommandChild>,
-    worker: Option<CommandChild>,
 }
 
 pub fn initialize<R: Runtime + 'static>(app: &AppHandle<R>) -> Result<(), String> {
@@ -102,70 +93,15 @@ pub fn initialize<R: Runtime + 'static>(app: &AppHandle<R>) -> Result<(), String
     }
     log_line(&log_path, "hub sidecar healthy");
 
-    let worker_envs = vec![
-        ("PORT".to_string(), WORKER_PORT.to_string()),
-        (
-            "HUB_BASE_URL".to_string(),
-            format!("http://127.0.0.1:{HUB_PORT}"),
-        ),
-        ("GOYAIS_VERSION".to_string(), app_version),
-        ("HUB_INTERNAL_TOKEN".to_string(), internal_token),
-    ];
-    let mut worker_envs = worker_envs;
-    append_passthrough_envs(&mut worker_envs, &SIDECAR_PROXY_ENV_KEYS);
-    append_passthrough_envs(&mut worker_envs, &SIDECAR_TLS_ENV_KEYS);
-    let worker_spawn_result = app
-        .shell()
-        .sidecar("goyais-worker")
-        .map_err(|error| format!("failed to resolve worker sidecar: {error}"))
-        .and_then(|command| {
-            command
-                .envs(worker_envs)
-                .spawn()
-                .map_err(|error| format!("failed to spawn worker sidecar: {error}"))
-        });
-    match worker_spawn_result {
-        Ok((worker_events, worker_child)) => {
-            spawn_event_logger("worker", worker_events, log_path.clone());
-            log_line(&log_path, "worker sidecar spawned");
-            started.worker = Some(worker_child);
-        }
-        Err(error) => {
-            log_line(
-                &log_path,
-                &format!("worker sidecar skipped during startup: {error}"),
-            );
-            show_startup_error(
-                app,
-                &format!("Worker sidecar failed to start. Execution features may be unavailable.\n{error}"),
-            );
-        }
-    }
-
     let state = app.state::<SidecarState>();
     let mut guard = state
         .inner
         .lock()
         .map_err(|_| "failed to lock sidecar state".to_string())?;
-    let worker_started = started.worker.is_some();
     kill_children(&mut guard, &log_path);
     *guard = started;
-    if worker_started {
-        log_line(
-            &log_path,
-            "sidecar runtime initialized (worker health check in background)",
-        );
-    } else {
-        log_line(
-            &log_path,
-            "sidecar runtime initialized without worker sidecar",
-        );
-    }
+    log_line(&log_path, "sidecar runtime initialized (hub only)");
     drop(guard);
-
-    if worker_started {
-        monitor_worker_health(app.clone(), log_path);
-    }
 
     Ok(())
 }
@@ -208,45 +144,6 @@ fn wait_for_health(port: u16, timeout: Duration, log_path: &Path) -> Result<(), 
     let message = format!("health check timeout on 127.0.0.1:{port}: {last_error}");
     log_line(log_path, &message);
     Err(message)
-}
-
-fn monitor_worker_health<R: Runtime + 'static>(app: AppHandle<R>, log_path: PathBuf) {
-    let _ = thread::spawn(move || {
-        match wait_for_health(WORKER_PORT, WORKER_HEALTH_TIMEOUT, &log_path) {
-            Ok(()) => {
-                log_line(&log_path, "worker sidecar healthy");
-            }
-            Err(error) => {
-                log_line(
-                    &log_path,
-                    &format!("worker health probe failed after startup: {error}"),
-                );
-                if let Ok(mut guard) = app.state::<SidecarState>().inner.lock() {
-                    if let Some(worker) = guard.worker.take() {
-                        if let Err(kill_error) = worker.kill() {
-                            log_line(
-                                &log_path,
-                                &format!(
-                                    "worker sidecar kill failed after health timeout: {kill_error}"
-                                ),
-                            );
-                        } else {
-                            log_line(&log_path, "worker sidecar stopped after health timeout");
-                        }
-                    }
-                } else {
-                    log_line(
-                        &log_path,
-                        "failed to lock sidecar state after worker health timeout",
-                    );
-                }
-                show_startup_error(
-                    &app,
-                    &format!("Worker startup timeout. Please retry launch.\n{error}"),
-                );
-            }
-        }
-    });
 }
 
 fn probe_health(port: u16) -> Result<bool, String> {
@@ -337,14 +234,6 @@ fn append_passthrough_envs(envs: &mut Vec<(String, String)>, keys: &[&str]) {
 }
 
 fn kill_children(sidecars: &mut ManagedSidecars, log_path: &Path) {
-    if let Some(worker) = sidecars.worker.take() {
-        if let Err(error) = worker.kill() {
-            log_line(log_path, &format!("worker sidecar kill failed: {error}"));
-        } else {
-            log_line(log_path, "worker sidecar stopped");
-        }
-    }
-
     if let Some(hub) = sidecars.hub.take() {
         if let Err(error) = hub.kill() {
             log_line(log_path, &format!("hub sidecar kill failed: {error}"));
