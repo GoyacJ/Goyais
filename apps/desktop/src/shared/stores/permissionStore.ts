@@ -1,5 +1,6 @@
-import { reactive } from "vue";
+import { defineStore } from "pinia";
 
+import { pinia } from "@/shared/stores/pinia";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
 import type { PermissionSnapshot } from "@/shared/types/api";
 
@@ -7,9 +8,14 @@ type PermissionState = {
   snapshotsByWorkspaceId: Record<string, PermissionSnapshot>;
 };
 
-export const permissionStore = reactive<PermissionState>({
-  snapshotsByWorkspaceId: {}
+const usePermissionStoreDefinition = defineStore("permission", {
+  state: (): PermissionState => ({
+    snapshotsByWorkspaceId: {}
+  })
 });
+
+export const usePermissionStore = usePermissionStoreDefinition;
+export const permissionStore = usePermissionStoreDefinition(pinia);
 
 export function resetPermissionStore(): void {
   permissionStore.snapshotsByWorkspaceId = {};

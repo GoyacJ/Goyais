@@ -1,6 +1,7 @@
-import { reactive } from "vue";
+import { defineStore } from "pinia";
 
 import { getCurrentWorkspace } from "@/shared/stores/workspaceStore";
+import { pinia } from "@/shared/stores/pinia";
 import type {
   ABACPolicy,
   AdminAuditEvent,
@@ -50,7 +51,12 @@ const initialState: AdminState = {
   error: ""
 };
 
-export const adminStore = reactive<AdminState>({ ...initialState });
+const useAdminStoreDefinition = defineStore("admin", {
+  state: (): AdminState => ({ ...initialState })
+});
+
+export const useAdminStore = useAdminStoreDefinition;
+export const adminStore = useAdminStoreDefinition(pinia);
 
 export function resetAdminStore(): void {
   adminStore.users = [];

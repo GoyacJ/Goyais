@@ -1,4 +1,4 @@
-import { createMockId } from "@/shared/services/mockData";
+import { createMockId } from "@/shared/utils/id";
 import type { ExecutionEvent, ExecutionEventType } from "@/shared/types/api";
 
 export function createExecutionEvent(

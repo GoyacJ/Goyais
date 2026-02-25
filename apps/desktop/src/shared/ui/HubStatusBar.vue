@@ -1,12 +1,14 @@
 <template>
-  <footer class="status-bar">
-    <span class="left">
+  <footer
+    class="flex h-[36px] items-center justify-between gap-[var(--global-space-12)] rounded-b-[var(--global-radius-12)] bg-transparent px-[var(--global-space-12)] text-[var(--global-font-size-11)] text-[var(--semantic-text-muted)]"
+  >
+    <span class="inline-flex items-center gap-[var(--global-space-8)]">
       <AppIcon name="plug-zap" :size="12" />
       Hub: {{ hubLabel }}
     </span>
-    <span class="right">
+    <span class="inline-flex items-center gap-[var(--global-space-8)]">
       <span>{{ identityLabel }}</span>
-      <span class="dot" :class="connectionClass"></span>
+      <span class="h-[8px] w-[8px] rounded-[var(--global-radius-full)] bg-[var(--semantic-text-subtle)]" :class="connectionClass"></span>
       <span :class="connectionClass">{{ connectionLabel }}</span>
     </span>
   </footer>
@@ -52,12 +54,12 @@ const connectionLabel = computed<ConnectionStatus>(() => {
 
 const connectionClass = computed(() => {
   if (connectionLabel.value === "connected") {
-    return "connected";
+    return "text-[var(--semantic-success)]";
   }
   if (connectionLabel.value === "reconnecting") {
-    return "reconnecting";
+    return "text-[var(--semantic-warning)]";
   }
-  return "disconnected";
+  return "text-[var(--semantic-danger)]";
 });
 
 const hubLabel = computed(() => {
@@ -85,44 +87,3 @@ function firstNonEmpty(...values: string[]): string {
   return "";
 }
 </script>
-
-<style scoped>
-.status-bar {
-  height: 36px;
-  border-radius: 0 0 var(--global-radius-12) var(--global-radius-12);
-  background: transparent;
-  color: var(--semantic-text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--global-space-12);
-  font-size: var(--global-font-size-11);
-  gap: var(--global-space-12);
-}
-
-.left,
-.right {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--global-space-8);
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--global-radius-full);
-  background: var(--semantic-text-subtle);
-}
-
-.connected {
-  color: var(--semantic-success);
-}
-
-.reconnecting {
-  color: var(--semantic-warning);
-}
-
-.disconnected {
-  color: var(--semantic-danger);
-}
-</style>

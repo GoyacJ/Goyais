@@ -1,67 +1,121 @@
 <template>
-  <section class="workspace-manager">
+  <section class="workspace-manager grid gap-[var(--component-space-md)]">
     <h2>Workspace Manager</h2>
 
-    <p v-if="adminForbidden" data-testid="admin-forbidden-message" class="notice">
+    <p v-if="adminForbidden" data-testid="admin-forbidden-message" class="notice m-0 text-[var(--component-text-subtle)]">
       Admin access is not available in this workspace.
     </p>
 
-    <p v-if="workspaceStore.error" class="error">{{ workspaceStore.error }}</p>
-    <p v-if="authStore.error" class="error">{{ authStore.error }}</p>
+    <p v-if="workspaceStore.error" class="error m-0 text-[var(--danger)]">{{ workspaceStore.error }}</p>
+    <p v-if="authStore.error" class="error m-0 text-[var(--danger)]">{{ authStore.error }}</p>
 
-    <div class="panel">
+    <div
+      class="panel grid gap-[var(--component-space-sm)] border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] p-[var(--component-space-md)]"
+    >
       <h3>Workspaces</h3>
 
-      <ul class="workspace-list">
-        <li v-for="workspace in workspaceStore.workspaces" :key="workspace.id" class="workspace-item">
-          <div class="workspace-row">
+      <ul class="workspace-list m-0 grid list-none gap-[var(--component-space-sm)] p-0">
+        <li
+          v-for="workspace in workspaceStore.workspaces"
+          :key="workspace.id"
+          class="workspace-item grid gap-[var(--component-space-xs)] border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] p-[var(--component-space-sm)]"
+        >
+          <div class="workspace-row flex items-center gap-[var(--component-space-sm)]">
             <strong>{{ workspace.name }}</strong>
             <span>{{ workspace.mode }}</span>
-            <button type="button" @click="selectWorkspace(workspace.id)">Use</button>
+            <button
+              type="button"
+              class="border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] px-[var(--component-space-sm)] py-[var(--component-space-xs)] text-[var(--component-text-main)] [font:inherit]"
+              @click="selectWorkspace(workspace.id)"
+            >
+              Use
+            </button>
           </div>
 
-          <p v-if="workspace.mode === 'local'" data-testid="local-ready" class="status">Local Ready</p>
+          <p v-if="workspace.mode === 'local'" data-testid="local-ready" class="status m-0 text-[var(--component-text-subtle)]">Local Ready</p>
 
-          <div v-if="workspace.mode === 'remote' && workspace.id === workspaceStore.currentWorkspaceId" class="remote-actions">
-            <p class="status">Connection: {{ workspaceStore.connectionState }}</p>
-            <p v-if="workspace.hub_url" class="status">Target Hub: {{ workspace.hub_url }}</p>
+          <div
+            v-if="workspace.mode === 'remote' && workspace.id === workspaceStore.currentWorkspaceId"
+            class="remote-actions grid gap-[var(--component-space-xs)]"
+          >
+            <p class="status m-0 text-[var(--component-text-subtle)]">Connection: {{ workspaceStore.connectionState }}</p>
+            <p v-if="workspace.hub_url" class="status m-0 text-[var(--component-text-subtle)]">Target Hub: {{ workspace.hub_url }}</p>
 
-            <label>
+            <label class="grid gap-[var(--component-space-xs)]">
               Username
-              <input v-model="loginForm.username" type="text" placeholder="username" />
+              <input
+                v-model="loginForm.username"
+                type="text"
+                placeholder="username"
+                class="border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] px-[var(--component-space-sm)] py-[var(--component-space-xs)] text-[var(--component-text-main)] [font:inherit]"
+              />
             </label>
 
-            <label>
+            <label class="grid gap-[var(--component-space-xs)]">
               Password
-              <input v-model="loginForm.password" type="password" placeholder="password" />
+              <input
+                v-model="loginForm.password"
+                type="password"
+                placeholder="password"
+                class="border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] px-[var(--component-space-sm)] py-[var(--component-space-xs)] text-[var(--component-text-main)] [font:inherit]"
+              />
             </label>
 
-            <label>
+            <label class="grid gap-[var(--component-space-xs)]">
               Token (optional)
-              <input v-model="loginForm.token" type="text" placeholder="token" />
+              <input
+                v-model="loginForm.token"
+                type="text"
+                placeholder="token"
+                class="border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] px-[var(--component-space-sm)] py-[var(--component-space-xs)] text-[var(--component-text-main)] [font:inherit]"
+              />
             </label>
 
-            <button type="button" :disabled="workspace.login_disabled || authStore.loading" @click="submitLogin(workspace.id)">
+            <button
+              type="button"
+              :disabled="workspace.login_disabled || authStore.loading"
+              class="border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] px-[var(--component-space-sm)] py-[var(--component-space-xs)] text-[var(--component-text-main)] [font:inherit]"
+              @click="submitLogin(workspace.id)"
+            >
               Login Remote
             </button>
 
-            <p v-if="workspace.login_disabled" class="notice">Login is disabled for this workspace.</p>
+            <p v-if="workspace.login_disabled" class="notice m-0 text-[var(--component-text-subtle)]">Login is disabled for this workspace.</p>
           </div>
         </li>
       </ul>
     </div>
 
-    <div class="panel">
+    <div
+      class="panel grid gap-[var(--component-space-sm)] border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] p-[var(--component-space-md)]"
+    >
       <h3>Add Remote Workspace</h3>
-      <label>
+      <label class="grid gap-[var(--component-space-xs)]">
         Name
-        <input v-model="createForm.name" type="text" placeholder="Remote name" />
+        <input
+          v-model="createForm.name"
+          type="text"
+          placeholder="Remote name"
+          class="border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] px-[var(--component-space-sm)] py-[var(--component-space-xs)] text-[var(--component-text-main)] [font:inherit]"
+        />
       </label>
-      <label>
+      <label class="grid gap-[var(--component-space-xs)]">
         Hub URL
-        <input v-model="createForm.hubUrl" type="url" placeholder="http://127.0.0.1:8787" />
+        <input
+          v-model="createForm.hubUrl"
+          type="url"
+          placeholder="http://127.0.0.1:8787"
+          class="border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] px-[var(--component-space-sm)] py-[var(--component-space-xs)] text-[var(--component-text-main)] [font:inherit]"
+        />
       </label>
-      <button type="button" :disabled="workspaceStore.loading" @click="submitCreateRemote">Add Remote</button>
+      <button
+        type="button"
+        :disabled="workspaceStore.loading"
+        class="border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] px-[var(--component-space-sm)] py-[var(--component-space-xs)] text-[var(--component-text-main)] [font:inherit]"
+        @click="submitCreateRemote"
+      >
+        Add Remote
+      </button>
     </div>
   </section>
 </template>
@@ -173,76 +227,3 @@ function formatErrorMessage(error: unknown): string {
   return "Unknown error";
 }
 </script>
-
-<style scoped>
-.workspace-manager {
-  display: grid;
-  gap: var(--component-space-md);
-}
-
-.panel {
-  border: 1px solid var(--component-panel-border);
-  border-radius: var(--component-radius-sm);
-  background: var(--component-panel-bg);
-  padding: var(--component-space-md);
-  display: grid;
-  gap: var(--component-space-sm);
-}
-
-.workspace-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: var(--component-space-sm);
-}
-
-.workspace-item {
-  border: 1px solid var(--component-panel-border);
-  border-radius: var(--component-radius-sm);
-  padding: var(--component-space-sm);
-  display: grid;
-  gap: var(--component-space-xs);
-}
-
-.workspace-row {
-  display: flex;
-  align-items: center;
-  gap: var(--component-space-sm);
-}
-
-.remote-actions {
-  display: grid;
-  gap: var(--component-space-xs);
-}
-
-label {
-  display: grid;
-  gap: var(--component-space-xs);
-}
-
-input,
-button {
-  border: 1px solid var(--component-panel-border);
-  border-radius: var(--component-radius-sm);
-  background: var(--component-panel-bg);
-  color: var(--component-text-main);
-  padding: var(--component-space-xs) var(--component-space-sm);
-  font: inherit;
-}
-
-.notice {
-  margin: 0;
-  color: var(--component-text-subtle);
-}
-
-.status {
-  margin: 0;
-  color: var(--component-text-subtle);
-}
-
-.error {
-  margin: 0;
-  color: var(--danger);
-}
-</style>

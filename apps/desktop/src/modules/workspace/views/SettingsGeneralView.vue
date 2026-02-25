@@ -9,7 +9,7 @@
     :runtime-user-display-name="workspaceStatus.userDisplayName.value"
     :runtime-hub-url="workspaceStatus.hubURL.value"
   >
-    <div class="general-scroll">
+    <div class="general-scroll grid max-h-full min-h-0 gap-[var(--global-space-12)] overflow-y-auto overflow-x-hidden pr-[var(--global-space-4)]">
       <GeneralSettingsSection
         class="settings-section"
         :title="t('settings.general.section.startup.title')"
@@ -135,7 +135,7 @@
           :label="t('settings.general.field.currentVersion.label')"
           :description="t('settings.general.field.currentVersion.description')"
         >
-          <p class="version-value">{{ currentVersionText }}</p>
+          <p class="version-value m-0 text-[var(--global-font-size-12)] text-[var(--semantic-text)]">{{ currentVersionText }}</p>
         </GeneralSettingsRow>
 
         <GeneralSettingsRow
@@ -174,10 +174,18 @@
         </GeneralSettingsRow>
       </GeneralSettingsSection>
 
-      <section class="footer-actions">
-        <p class="status" v-if="settings.error.value !== ''">{{ settings.error.value }}</p>
-        <p class="status" v-else-if="settings.saving.value">{{ t("settings.general.status.saving") }}</p>
-        <p class="status" v-else>{{ t("settings.general.status.ready") }}</p>
+      <section
+        class="footer-actions flex items-center justify-between gap-[var(--global-space-12)] border border-dashed border-[var(--semantic-border)] rounded-[var(--global-radius-12)] bg-[var(--semantic-surface)] p-[var(--global-space-12)] max-[960px]:flex-col max-[960px]:items-stretch"
+      >
+        <p class="status m-0 text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)]" v-if="settings.error.value !== ''">
+          {{ settings.error.value }}
+        </p>
+        <p class="status m-0 text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)]" v-else-if="settings.saving.value">
+          {{ t("settings.general.status.saving") }}
+        </p>
+        <p class="status m-0 text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)]" v-else>
+          {{ t("settings.general.status.ready") }}
+        </p>
 
         <BaseButton variant="danger" :disabled="settings.loading.value || settings.saving.value" @click="resetAll">
           {{ t("settings.general.reset.action") }}
@@ -235,49 +243,3 @@ const workspaceStatus = useWorkspaceStatusSync({
   conversationId: computed(() => projectStore.activeConversationId)
 });
 </script>
-
-<style scoped>
-.settings-section {
-  margin-bottom: 0;
-}
-
-.general-scroll {
-  min-height: 0;
-  max-height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  display: grid;
-  gap: var(--global-space-12);
-  padding-right: var(--global-space-4);
-}
-
-.footer-actions {
-  border: 1px dashed var(--semantic-border);
-  border-radius: var(--global-radius-12);
-  background: var(--semantic-surface);
-  padding: var(--global-space-12);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--global-space-12);
-}
-
-.status {
-  margin: 0;
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-12);
-}
-
-.version-value {
-  margin: 0;
-  font-size: var(--global-font-size-12);
-  color: var(--semantic-text);
-}
-
-@media (max-width: 960px) {
-  .footer-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
-</style>

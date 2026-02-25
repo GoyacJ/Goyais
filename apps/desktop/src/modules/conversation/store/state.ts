@@ -1,10 +1,11 @@
-import { reactive } from "vue";
+import { defineStore } from "pinia";
 
 import { resolveDiffCapability } from "@/modules/conversation/services";
 import {
   buildConversationSnapshot
 } from "@/modules/conversation/store/conversationSnapshots";
 import { normalizeExecutionList } from "@/modules/conversation/store/executionMerge";
+import { pinia } from "@/shared/stores/pinia";
 import type {
   ConversationDetailResponse,
   ConnectionStatus,
@@ -46,7 +47,6 @@ export type ConversationRuntime = {
 };
 
 export const MAX_RUNTIME_EVENTS = 1000;
-const LEGACY_CONVERSATION_READY_MESSAGE = "欢迎使用 Goyais，当前会话已准备就绪。";
 
 type ConversationState = {
   byConversationId: Record<string, ConversationRuntime>;
@@ -64,7 +64,12 @@ const initialState: ConversationState = {
   error: ""
 };
 
-export const conversationStore = reactive<ConversationState>({ ...initialState });
+const useConversationStoreDefinition = defineStore("conversation", {
+  state: (): ConversationState => ({ ...initialState })
+});
+
+export const useConversationStore = useConversationStoreDefinition;
+export const conversationStore = useConversationStoreDefinition(pinia);
 
 export function resetConversationStore(): void {
   for (const timer of Object.values(conversationStore.timers)) {
@@ -125,7 +130,7 @@ export function hydrateConversationRuntime(
   const runtime = ensureConversationRuntime(conversation, isGitProject);
   runtime.mode = detail.conversation.default_mode;
   runtime.modelId = detail.conversation.model_id;
-  runtime.messages = sanitizeLegacyWelcomeMessages(detail.messages.map((message) => ({ ...message })));
+  runtime.messages = detail.messages.map((message) => ({ ...message }));
   runtime.executions = detail.executions.map((execution) => ({
     ...execution,
     model_snapshot: {
@@ -137,7 +142,7 @@ export function hydrateConversationRuntime(
   }));
   runtime.snapshots = detail.snapshots.map((snapshot) => ({
     ...snapshot,
-    messages: sanitizeLegacyWelcomeMessages(snapshot.messages.map((message) => ({ ...message }))),
+    messages: snapshot.messages.map((message) => ({ ...message })),
     execution_snapshots: snapshot.execution_snapshots?.map((item) => ({ ...item })),
     execution_ids: [...snapshot.execution_ids]
   }));
@@ -148,16 +153,6 @@ export function hydrateConversationRuntime(
   runtime.diff = [];
   runtime.hydrated = true;
   return runtime;
-}
-
-function sanitizeLegacyWelcomeMessages(messages: ConversationMessage[]): ConversationMessage[] {
-  const hasUserMessage = messages.some((message) => message.role === "user");
-  if (hasUserMessage) {
-    return messages;
-  }
-  return messages.filter(
-    (message) => !(message.role === "assistant" && message.content.trim() === LEGACY_CONVERSATION_READY_MESSAGE)
-  );
 }
 
 export function getConversationRuntime(conversationId: string): ConversationRuntime | undefined {

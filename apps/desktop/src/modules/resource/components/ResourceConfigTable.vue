@@ -1,7 +1,7 @@
 <template>
-  <section class="card">
-    <div class="card-head">
-      <h3>{{ title }}</h3>
+  <section class="card grid gap-[var(--global-space-12)] border border-[var(--semantic-border)] rounded-[var(--global-radius-12)] bg-[var(--semantic-surface)] p-[var(--component-card-padding)]">
+    <div class="card-head flex items-center justify-between gap-[var(--global-space-8)]">
+      <h3 class="m-0">{{ title }}</h3>
       <BaseButton
         v-if="showAdd"
         variant="secondary"
@@ -12,7 +12,7 @@
       </BaseButton>
     </div>
 
-    <div class="toolbar">
+    <div class="toolbar grid grid-cols-[minmax(0,1fr)_auto] gap-[var(--global-space-8)]">
       <BaseInput
         v-if="showSearch"
         :model-value="search"
@@ -23,25 +23,38 @@
       <slot name="toolbar-right" />
     </div>
 
-    <div class="table-wrap">
-      <table class="table">
+    <div class="table-wrap overflow-x-auto border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] p-[var(--global-space-2)]">
+      <table class="table w-full min-w-[760px] border-separate border-spacing-0">
         <thead>
           <tr>
-            <th v-for="column in columns" :key="column.key">
+            <th
+              v-for="column in columns"
+              :key="column.key"
+              class="border-b border-[var(--semantic-border)] px-[var(--global-space-12)] py-[var(--global-space-10)] text-left align-middle whitespace-nowrap text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)] [font-weight:600]"
+            >
               {{ column.label }}
             </th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="row in rows" :key="row.id as string">
-            <td v-for="column in columns" :key="column.key">
+            <td
+              v-for="column in columns"
+              :key="column.key"
+              class="border-b border-[var(--semantic-border)] px-[var(--global-space-12)] py-[var(--global-space-10)] text-left align-middle text-[var(--global-font-size-13)] leading-[1.45] text-[var(--semantic-text)]"
+            >
               <slot :name="`cell-${column.key}`" :row="row">
                 {{ row[column.key] }}
               </slot>
             </td>
           </tr>
           <tr v-if="rows.length === 0">
-            <td :colspan="columns.length" class="empty">{{ emptyText }}</td>
+            <td
+              :colspan="columns.length"
+              class="empty border-b border-[var(--semantic-border)] px-[var(--global-space-12)] py-[var(--global-space-10)] text-center text-[var(--semantic-text-subtle)]"
+            >
+              {{ emptyText }}
+            </td>
           </tr>
         </tbody>
       </table>
@@ -101,72 +114,3 @@ const emit = defineEmits<{
   (event: "next"): void;
 }>();
 </script>
-
-<style scoped>
-.card {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-12);
-  background: var(--semantic-surface);
-  padding: var(--component-card-padding);
-  display: grid;
-  gap: var(--global-space-12);
-}
-
-.card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--global-space-8);
-}
-
-.card-head h3 {
-  margin: 0;
-}
-
-.toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--global-space-8);
-}
-
-.table-wrap {
-  overflow-x: auto;
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  padding: var(--global-space-2);
-}
-
-.table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  min-width: 760px;
-}
-
-.table th,
-.table td {
-  text-align: left;
-  padding: var(--global-space-10) var(--global-space-12);
-  border-bottom: 1px solid var(--semantic-border);
-  vertical-align: middle;
-}
-
-.table th {
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-12);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.table td {
-  color: var(--semantic-text);
-  font-size: var(--global-font-size-13);
-  line-height: 1.45;
-}
-
-.empty {
-  text-align: center;
-  color: var(--semantic-text-subtle);
-}
-
-</style>

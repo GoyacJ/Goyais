@@ -1,0 +1,92 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**",
+        "build/**"
+      ]
+    },
+    "lint": {
+      "dependsOn": [
+        "^lint"
+      ],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": [
+        "^test"
+      ],
+      "outputs": []
+    },
+    "test:strict": {
+      "dependsOn": [
+        "^test:strict"
+      ],
+      "outputs": []
+    },
+    "check:tokens": {
+      "dependsOn": [
+        "^check:tokens"
+      ],
+      "outputs": []
+    },
+    "quality:gate": {
+      "dependsOn": [
+        "^quality:gate"
+      ],
+      "outputs": []
+    },
+    "coverage:gate": {
+      "dependsOn": [
+        "^coverage:gate"
+      ],
+      "outputs": []
+    },
+    "e2e:smoke": {
+      "dependsOn": [
+        "^e2e:smoke"
+      ],
+      "outputs": []
+    },
+    "docs:build": {
+      "dependsOn": [
+        "^docs:build"
+      ],
+      "outputs": [
+        ".vitepress/dist/**"
+      ]
+    },
+    "slides:build": {
+      "dependsOn": [
+        "^slides:build"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
+    },
+    "docs:dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "slides:dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "dev:web": {
+      "cache": false,
+      "persistent": true
+    },
+    "dev:desktop": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

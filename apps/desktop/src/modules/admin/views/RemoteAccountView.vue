@@ -9,33 +9,69 @@
     :runtime-user-display-name="workspaceStatus.userDisplayName.value"
     :runtime-hub-url="workspaceStatus.hubURL.value"
   >
-    <section class="card">
-      <h3>当前账号</h3>
-      <div class="kv-grid">
-        <p><span>账号名</span><strong>{{ authStore.me?.display_name ?? '-' }}</strong></p>
-        <p><span>用户 ID</span><strong>{{ authStore.me?.user_id ?? '-' }}</strong></p>
-        <p><span>角色</span><strong>{{ authStore.me?.role ?? '-' }}</strong></p>
-        <p><span>执行控制</span><strong>{{ authStore.capabilities.execution_control ? 'enabled' : 'disabled' }}</strong></p>
+    <section class="card grid gap-[var(--global-space-8)] border border-[var(--semantic-border)] rounded-[var(--global-radius-12)] bg-[var(--semantic-surface)] p-[var(--global-space-12)]">
+      <h3 class="m-0">当前账号</h3>
+      <div class="kv-grid grid grid-cols-2 gap-[var(--global-space-8)]">
+        <p class="m-0 grid gap-[var(--global-space-4)] border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-8)]">
+          <span class="text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">账号名</span>
+          <strong class="text-[var(--global-font-size-12)] text-[var(--semantic-text)]">{{ authStore.me?.display_name ?? '-' }}</strong>
+        </p>
+        <p class="m-0 grid gap-[var(--global-space-4)] border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-8)]">
+          <span class="text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">用户 ID</span>
+          <strong class="text-[var(--global-font-size-12)] text-[var(--semantic-text)]">{{ authStore.me?.user_id ?? '-' }}</strong>
+        </p>
+        <p class="m-0 grid gap-[var(--global-space-4)] border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-8)]">
+          <span class="text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">角色</span>
+          <strong class="text-[var(--global-font-size-12)] text-[var(--semantic-text)]">{{ authStore.me?.role ?? '-' }}</strong>
+        </p>
+        <p class="m-0 grid gap-[var(--global-space-4)] border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-8)]">
+          <span class="text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">执行控制</span>
+          <strong class="text-[var(--global-font-size-12)] text-[var(--semantic-text)]">{{ authStore.capabilities.execution_control ? 'enabled' : 'disabled' }}</strong>
+        </p>
       </div>
     </section>
 
-    <section class="card">
-      <h3>当前工作区</h3>
-      <div class="kv-grid">
-        <p><span>workspace_id</span><strong>{{ workspace?.id ?? '-' }}</strong></p>
-        <p><span>workspace_name</span><strong>{{ workspace?.name ?? '-' }}</strong></p>
-        <p><span>mode</span><strong>{{ workspace?.mode ?? '-' }}</strong></p>
-        <p><span>hub</span><strong>{{ workspace?.hub_url ?? 'local://workspace' }}</strong></p>
+    <section class="card grid gap-[var(--global-space-8)] border border-[var(--semantic-border)] rounded-[var(--global-radius-12)] bg-[var(--semantic-surface)] p-[var(--global-space-12)]">
+      <h3 class="m-0">当前工作区</h3>
+      <div class="kv-grid grid grid-cols-2 gap-[var(--global-space-8)]">
+        <p class="m-0 grid gap-[var(--global-space-4)] border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-8)]">
+          <span class="text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">workspace_id</span>
+          <strong class="text-[var(--global-font-size-12)] text-[var(--semantic-text)]">{{ workspace?.id ?? '-' }}</strong>
+        </p>
+        <p class="m-0 grid gap-[var(--global-space-4)] border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-8)]">
+          <span class="text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">workspace_name</span>
+          <strong class="text-[var(--global-font-size-12)] text-[var(--semantic-text)]">{{ workspace?.name ?? '-' }}</strong>
+        </p>
+        <p class="m-0 grid gap-[var(--global-space-4)] border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-8)]">
+          <span class="text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">mode</span>
+          <strong class="text-[var(--global-font-size-12)] text-[var(--semantic-text)]">{{ workspace?.mode ?? '-' }}</strong>
+        </p>
+        <p class="m-0 grid gap-[var(--global-space-4)] border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-8)]">
+          <span class="text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">hub</span>
+          <strong class="text-[var(--global-font-size-12)] text-[var(--semantic-text)]">{{ workspace?.hub_url ?? 'local://workspace' }}</strong>
+        </p>
       </div>
     </section>
 
-    <section class="card">
-      <h3>连接与会话状态</h3>
-      <div class="kv-grid">
-        <p><span>连接状态</span><strong :class="connectionClass">{{ connectionLabel }}</strong></p>
-        <p><span>当前会话状态</span><strong :class="conversationClass">{{ conversationStatusLabel }}</strong></p>
-        <p><span>活跃 Conversation</span><strong>{{ activeConversationCount }}</strong></p>
-        <p><span>排队执行</span><strong>{{ queuedExecutionCount }}</strong></p>
+    <section class="card grid gap-[var(--global-space-8)] border border-[var(--semantic-border)] rounded-[var(--global-radius-12)] bg-[var(--semantic-surface)] p-[var(--global-space-12)]">
+      <h3 class="m-0">连接与会话状态</h3>
+      <div class="kv-grid grid grid-cols-2 gap-[var(--global-space-8)]">
+        <p class="m-0 grid gap-[var(--global-space-4)] border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-8)]">
+          <span class="text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">连接状态</span>
+          <strong class="text-[var(--global-font-size-12)]" :class="connectionClass">{{ connectionLabel }}</strong>
+        </p>
+        <p class="m-0 grid gap-[var(--global-space-4)] border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-8)]">
+          <span class="text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">当前会话状态</span>
+          <strong class="text-[var(--global-font-size-12)]" :class="conversationClass">{{ conversationStatusLabel }}</strong>
+        </p>
+        <p class="m-0 grid gap-[var(--global-space-4)] border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-8)]">
+          <span class="text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">活跃 Conversation</span>
+          <strong class="text-[var(--global-font-size-12)] text-[var(--semantic-text)]">{{ activeConversationCount }}</strong>
+        </p>
+        <p class="m-0 grid gap-[var(--global-space-4)] border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-8)]">
+          <span class="text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">排队执行</span>
+          <strong class="text-[var(--global-font-size-12)] text-[var(--semantic-text)]">{{ queuedExecutionCount }}</strong>
+        </p>
       </div>
     </section>
   </AccountShell>
@@ -65,23 +101,23 @@ const conversationStatusLabel = computed(() => workspaceStatus.conversationStatu
 
 const connectionClass = computed(() => {
   if (connectionLabel.value === "connected") {
-    return "connected";
+    return "text-[var(--semantic-success)]";
   }
   if (connectionLabel.value === "reconnecting") {
-    return "reconnecting";
+    return "text-[var(--semantic-warning)]";
   }
-  return "disconnected";
+  return "text-[var(--semantic-danger)]";
 });
 
 const conversationClass = computed(() => {
   if (conversationStatusLabel.value === "running" || conversationStatusLabel.value === "done") {
-    return "connected";
+    return "text-[var(--semantic-success)]";
   }
   if (conversationStatusLabel.value === "queued") {
-    return "reconnecting";
+    return "text-[var(--semantic-warning)]";
   }
   if (conversationStatusLabel.value === "error") {
-    return "disconnected";
+    return "text-[var(--semantic-danger)]";
   }
   return "";
 });
@@ -105,56 +141,3 @@ watch(
   { immediate: true }
 );
 </script>
-
-<style scoped>
-.card {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-12);
-  background: var(--semantic-surface);
-  padding: var(--global-space-12);
-  display: grid;
-  gap: var(--global-space-8);
-}
-
-.card h3 {
-  margin: 0;
-}
-
-.kv-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--global-space-8);
-}
-
-.kv-grid p {
-  margin: 0;
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-bg);
-  padding: var(--global-space-8);
-  display: grid;
-  gap: var(--global-space-4);
-}
-
-.kv-grid span {
-  color: var(--semantic-text-subtle);
-  font-size: var(--global-font-size-11);
-}
-
-.kv-grid strong {
-  color: var(--semantic-text);
-  font-size: var(--global-font-size-12);
-}
-
-.connected {
-  color: var(--semantic-success);
-}
-
-.reconnecting {
-  color: var(--semantic-warning);
-}
-
-.disconnected {
-  color: var(--semantic-danger);
-}
-</style>

@@ -1,8 +1,22 @@
 <template>
-  <div class="pager">
-    <button type="button" :disabled="!canPrev || loading" @click="$emit('prev')">上一页</button>
-    <span class="pager-state">{{ stateLabel }}</span>
-    <button type="button" :disabled="!canNext || loading" @click="$emit('next')">下一页</button>
+  <div class="inline-flex items-center gap-[var(--global-space-8)]">
+    <button
+      type="button"
+      :disabled="!canPrev || loading"
+      class="border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-surface-2)] px-[var(--global-space-8)] py-[var(--global-space-2px)] text-[var(--global-font-size-11)] text-[var(--semantic-text)] disabled:opacity-50"
+      @click="$emit('prev')"
+    >
+      上一页
+    </button>
+    <span class="text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">{{ stateLabel }}</span>
+    <button
+      type="button"
+      :disabled="!canNext || loading"
+      class="border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-surface-2)] px-[var(--global-space-8)] py-[var(--global-space-2px)] text-[var(--global-font-size-11)] text-[var(--semantic-text)] disabled:opacity-50"
+      @click="$emit('next')"
+    >
+      下一页
+    </button>
   </div>
 </template>
 
@@ -30,29 +44,3 @@ const stateLabel = computed(() => {
   return "分页";
 });
 </script>
-
-<style scoped>
-.pager {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--global-space-8);
-}
-
-.pager button {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-surface-2);
-  color: var(--semantic-text);
-  font-size: var(--global-font-size-11);
-  padding: var(--global-space-2px) var(--global-space-8);
-}
-
-.pager button:disabled {
-  opacity: 0.5;
-}
-
-.pager-state {
-  color: var(--semantic-text-subtle);
-  font-size: var(--global-font-size-11);
-}
-</style>

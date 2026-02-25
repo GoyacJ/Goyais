@@ -1,15 +1,26 @@
 <template>
   <div
-    class="workspace-switcher"
-    :class="{ collapsed }"
+    class="workspace-switcher relative grid content-start pt-[var(--global-space-4)]"
+    :class="{ 'gap-[var(--global-space-8)]': !collapsed, 'gap-[var(--global-space-6)]': collapsed }"
     data-tauri-drag-region
     @mousedown="onDragMouseDown"
     @dblclick="onDragRegionDoubleClick"
   >
-    <div class="mac-row" data-tauri-drag-region>
-      <button class="dot danger" data-no-drag="true" type="button" title="Close" aria-label="关闭窗口" @click.stop="onCloseWindow"></button>
+    <div
+      class="mac-row inline-flex mt-[var(--global-space-neg-2px)] gap-[var(--global-space-8)]"
+      :class="{ 'justify-center': collapsed }"
+      data-tauri-drag-region
+    >
       <button
-        class="dot warning"
+        class="dot danger h-[12px] w-[12px] border-0 rounded-[var(--global-radius-pill)] bg-[var(--semantic-danger)] p-0 opacity-90 transition-all duration-[120ms] ease-linear hover:scale-105 hover:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--semantic-focus-ring)] focus-visible:outline-offset-1"
+        data-no-drag="true"
+        type="button"
+        title="Close"
+        aria-label="关闭窗口"
+        @click.stop="onCloseWindow"
+      ></button>
+      <button
+        class="dot warning h-[12px] w-[12px] border-0 rounded-[var(--global-radius-pill)] bg-[var(--semantic-warning)] p-0 opacity-90 transition-all duration-[120ms] ease-linear hover:scale-105 hover:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--semantic-focus-ring)] focus-visible:outline-offset-1"
         data-no-drag="true"
         type="button"
         title="Minimize"
@@ -17,7 +28,7 @@
         @click.stop="onMinimizeWindow"
       ></button>
       <button
-        class="dot success"
+        class="dot success h-[12px] w-[12px] border-0 rounded-[var(--global-radius-pill)] bg-[var(--semantic-success)] p-0 opacity-90 transition-all duration-[120ms] ease-linear hover:scale-105 hover:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--semantic-focus-ring)] focus-visible:outline-offset-1"
         data-no-drag="true"
         type="button"
         title="Toggle Maximize"
@@ -26,33 +37,58 @@
       ></button>
     </div>
 
-    <div class="workspace-row">
-      <button class="workspace-btn" type="button" @click="menuOpen = !menuOpen">
-        <span class="workspace-label">
+    <div
+      class="workspace-row mt-[var(--global-space-4)] grid grid-cols-[1fr_auto] gap-[var(--global-space-8)]"
+      :class="{ 'gap-[var(--global-space-4)]': collapsed }"
+    >
+      <button
+        class="workspace-btn inline-flex min-h-[34px] items-center justify-between border-0 rounded-[var(--global-radius-8)] bg-[var(--semantic-surface-2)] px-[var(--global-space-12)] text-[var(--semantic-text)]"
+        :class="{ 'justify-center px-0': collapsed }"
+        type="button"
+        @click="menuOpen = !menuOpen"
+      >
+        <span
+          class="workspace-label inline-flex items-center gap-[var(--global-space-8)]"
+          :class="{ 'w-full justify-center gap-0': collapsed }"
+        >
           <AppIcon :name="currentWorkspace?.mode === 'local' ? 'house' : 'briefcase-business'" :size="13" />
           <template v-if="!collapsed">{{ workspaceLabel }}</template>
         </span>
         <AppIcon v-if="!collapsed" name="chevron-down" :size="14" />
       </button>
 
-      <button v-if="showCollapseToggle" class="icon-btn" type="button" aria-label="切换侧栏折叠" @click="$emit('toggleCollapse')">
+      <button
+        v-if="showCollapseToggle"
+        class="icon-btn inline-flex h-[34px] w-[34px] items-center justify-center border-0 rounded-[var(--global-radius-8)] bg-[var(--semantic-surface-2)] text-[var(--semantic-text)]"
+        type="button"
+        aria-label="切换侧栏折叠"
+        @click="$emit('toggleCollapse')"
+      >
         <AppIcon :name="collapsed ? 'chevron-right' : 'chevron-left'" :size="14" />
       </button>
     </div>
 
-    <div v-if="menuOpen && !collapsed" class="workspace-menu">
+    <div
+      v-if="menuOpen && !collapsed"
+      class="workspace-menu absolute left-0 right-0 top-[calc(100%+var(--global-space-8))] z-24 grid gap-[var(--global-space-4)] border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-8)] shadow-[var(--global-shadow-2)]"
+    >
       <button
         v-for="workspace in workspaceOptions"
         :key="workspace.id"
-        class="workspace-option"
-        :class="{ active: workspace.id === currentWorkspaceId }"
+        class="workspace-option inline-flex min-h-[32px] items-center gap-[var(--global-space-8)] border-0 rounded-[var(--global-radius-8)] bg-transparent px-[var(--global-space-8)] text-left text-[var(--semantic-text-muted)] hover:(bg-[var(--component-sidebar-item-bg-active)] text-[var(--semantic-text)])"
+        :class="{ 'bg-[var(--component-sidebar-item-bg-active)] text-[var(--semantic-text)]': workspace.id === currentWorkspaceId }"
         type="button"
         @click="onSwitchWorkspace(workspace.id)"
       >
         <AppIcon :name="workspace.mode === 'local' ? 'house' : 'briefcase-business'" :size="11" />
         <span>{{ workspace.name }}</span>
       </button>
-      <button v-if="canCreateWorkspace" class="workspace-option add" type="button" @click="onCreateWorkspace">
+      <button
+        v-if="canCreateWorkspace"
+        class="workspace-option add inline-flex min-h-[32px] items-center gap-[var(--global-space-8)] border-0 rounded-[var(--global-radius-8)] bg-transparent px-[var(--global-space-8)] text-left text-[var(--semantic-text)] hover:bg-[var(--component-sidebar-item-bg-active)]"
+        type="button"
+        @click="onCreateWorkspace"
+      >
         <AppIcon name="plus" :size="11" />
         <span>新增工作区</span>
       </button>
@@ -139,150 +175,3 @@ function onDragRegionDoubleClick(event: MouseEvent): void {
   void toggleMaximizeCurrentWindow();
 }
 </script>
-
-<style scoped>
-.workspace-switcher {
-  position: relative;
-  display: grid;
-  gap: var(--global-space-8);
-  align-content: start;
-  padding-top: var(--global-space-4);
-}
-
-.workspace-switcher.collapsed {
-  gap: var(--global-space-6);
-}
-
-.workspace-switcher.collapsed .workspace-row {
-  gap: var(--global-space-4);
-}
-
-.workspace-switcher.collapsed .workspace-btn {
-  padding: 0;
-  justify-content: center;
-}
-
-.workspace-switcher.collapsed .workspace-label {
-  justify-content: center;
-  width: 100%;
-  gap: 0;
-}
-
-.workspace-switcher.collapsed .mac-row {
-  justify-content: center;
-}
-
-.mac-row {
-  display: inline-flex;
-  gap: var(--global-space-8);
-  margin-top: var(--global-space-neg-2px);
-}
-
-.dot {
-  width: 12px;
-  height: 12px;
-  border-radius: var(--global-radius-pill);
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  opacity: 0.9;
-  transition: transform 0.12s ease, opacity 0.12s ease;
-}
-
-.dot:hover {
-  transform: scale(1.05);
-  opacity: 1;
-}
-
-.dot:focus-visible {
-  outline: 1px solid var(--semantic-focus-ring);
-  outline-offset: 1px;
-}
-
-.danger {
-  background: var(--semantic-danger);
-}
-
-.warning {
-  background: var(--semantic-warning);
-}
-
-.success {
-  background: var(--semantic-success);
-}
-
-.workspace-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--global-space-8);
-  margin-top: var(--global-space-4);
-}
-
-.workspace-btn,
-.icon-btn,
-.workspace-option {
-  border: 0;
-  border-radius: var(--global-radius-8);
-  color: var(--semantic-text);
-}
-
-.workspace-btn {
-  background: var(--semantic-surface-2);
-  min-height: 34px;
-  padding: 0 var(--global-space-12);
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.workspace-label {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--global-space-8);
-}
-
-.icon-btn {
-  width: 34px;
-  height: 34px;
-  background: var(--semantic-surface-2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.workspace-menu {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + var(--global-space-8));
-  z-index: 24;
-  background: var(--semantic-bg);
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  box-shadow: var(--global-shadow-2);
-  padding: var(--global-space-8);
-  display: grid;
-  gap: var(--global-space-4);
-}
-
-.workspace-option {
-  background: transparent;
-  color: var(--semantic-text-muted);
-  min-height: 32px;
-  padding: 0 var(--global-space-8);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--global-space-8);
-  text-align: left;
-}
-
-.workspace-option.active,
-.workspace-option:hover {
-  background: var(--component-sidebar-item-bg-active);
-  color: var(--semantic-text);
-}
-
-.workspace-option.add {
-  color: var(--semantic-text);
-}
-</style>

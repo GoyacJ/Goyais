@@ -4,12 +4,25 @@
   "version": "0.4.0",
   "packageManager": "pnpm@10.11.0",
   "scripts": {
-    "dev": "make dev",
+    "dev": "turbo run dev --filter=@goyais/desktop",
+    "docs:dev": "turbo run docs:dev --filter=@goyais/docs-site",
     "dev:hub": "make dev-hub",
     "dev:worker": "make dev-worker",
-    "dev:desktop": "make dev-desktop",
-    "dev:web": "make dev-web",
-    "test": "make test",
-    "lint": "make lint"
+    "dev:desktop": "turbo run dev:desktop --filter=@goyais/desktop",
+    "dev:web": "turbo run dev:web --filter=@goyais/desktop",
+    "slides:dev": "turbo run slides:dev --filter=@goyais/slides",
+    "build": "turbo run build --filter=@goyais/desktop",
+    "lint": "turbo run lint --filter=@goyais/desktop",
+    "test": "turbo run test --filter=@goyais/desktop",
+    "test:strict": "turbo run test:strict --filter=@goyais/desktop",
+    "e2e:smoke": "turbo run e2e:smoke --filter=@goyais/desktop",
+    "check:tokens": "turbo run check:tokens --filter=@goyais/desktop",
+    "quality:gate": "turbo run quality:gate --filter=@goyais/desktop",
+    "coverage:gate": "turbo run coverage:gate --filter=@goyais/desktop",
+    "docs:build": "turbo run docs:build",
+    "slides:build": "turbo run slides:build"
+  },
+  "devDependencies": {
+    "turbo": "catalog:inlined"
   }
 }

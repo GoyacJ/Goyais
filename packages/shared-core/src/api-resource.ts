@@ -1,4 +1,4 @@
-import type { ModelVendorName, ResourceScope, ResourceType, ShareStatus } from "@/shared/types/api-common";
+import type { ModelVendorName, ResourceScope, ResourceType, ShareStatus } from "./api-common";
 
 export type Resource = {
   id: string;

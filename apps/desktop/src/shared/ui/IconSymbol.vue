@@ -1,5 +1,5 @@
 <template>
-  <span class="icon-symbol" :style="iconStyle" aria-hidden="true">{{ name }}</span>
+  <span class="[font-family:var(--global-font-family-icon)] leading-none inline-flex items-center justify-center select-none" :style="iconStyle" aria-hidden="true">{{ name }}</span>
 </template>
 
 <script setup lang="ts">
@@ -22,14 +22,3 @@ const iconStyle = computed(() => ({
   fontVariationSettings: `'FILL' 0, 'wght' ${props.weight}, 'GRAD' 0, 'opsz' ${props.size}`
 }));
 </script>
-
-<style scoped>
-.icon-symbol {
-  font-family: var(--global-font-family-icon);
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  user-select: none;
-}
-</style>

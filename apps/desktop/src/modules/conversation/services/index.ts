@@ -1,6 +1,4 @@
 import { getControlClient } from "@/shared/services/clients";
-import { withApiFallback } from "@/shared/services/fallback";
-import { mockData } from "@/shared/services/mockData";
 import { connectConversationEvents } from "@/shared/services/sseClient";
 import type {
   Conversation,
@@ -43,22 +41,7 @@ export async function getConversationDetail(
   conversationId: string,
   options: ConversationServiceOptions = {}
 ): Promise<ConversationDetailResponse> {
-  return withApiFallback(
-    "conversation.getDetail",
-    () => getControlClient().get<ConversationDetailResponse>(`/v1/conversations/${conversationId}`, { token: options.token }),
-    () => {
-      const conversation = mockData.conversations.find((item) => item.id === conversationId);
-      if (!conversation) {
-        throw new Error("Conversation not found");
-      }
-      return {
-        conversation,
-        messages: [],
-        executions: [],
-        snapshots: []
-      };
-    }
-  );
+  return getControlClient().get<ConversationDetailResponse>(`/v1/conversations/${conversationId}`, { token: options.token });
 }
 
 export async function cancelExecution(conversationId: string, executionId: string): Promise<void> {

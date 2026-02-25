@@ -1,4 +1,4 @@
-import { createMockId } from "@/shared/services/mockData";
+import { createMockId } from "@/shared/utils/id";
 import type { ConversationSnapshot, DiffItem, Execution, ExecutionEvent } from "@/shared/types/api";
 
 import {

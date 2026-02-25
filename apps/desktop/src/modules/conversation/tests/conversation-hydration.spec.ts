@@ -134,7 +134,7 @@ describe("conversation runtime hydration", () => {
     expect(counts.queued).toBe(1);
   });
 
-  it("removes legacy default welcome message when hydrating empty conversation", () => {
+  it("keeps assistant welcome message as-is when hydrating empty conversation", () => {
     const detail = {
       conversation: {
         ...mockConversation
@@ -153,6 +153,7 @@ describe("conversation runtime hydration", () => {
     };
 
     const runtime = hydrateConversationRuntime(mockConversation, true, detail);
-    expect(runtime.messages).toHaveLength(0);
+    expect(runtime.messages).toHaveLength(1);
+    expect(runtime.messages[0]?.content).toBe("欢迎使用 Goyais，当前会话已准备就绪。");
   });
 });

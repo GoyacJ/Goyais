@@ -9,13 +9,15 @@
     :runtime-user-display-name="workspaceStatus.userDisplayName.value"
     :runtime-hub-url="workspaceStatus.hubURL.value"
   >
-    <section class="theme-layout">
-      <article class="settings-panel">
-        <header class="panel-header">
-          <h3>{{ t("settings.i18n.title") }}</h3>
+    <section class="theme-layout grid min-h-0 gap-[var(--global-space-12)] [grid-template-columns:minmax(520px,920px)] max-[1140px]:[grid-template-columns:minmax(0,1fr)]">
+      <article
+        class="settings-panel grid content-start gap-[var(--global-space-12)] border border-[var(--semantic-border)] rounded-[var(--global-radius-12)] bg-[var(--semantic-surface)] p-[var(--global-space-12)]"
+      >
+        <header class="panel-header grid gap-[var(--global-space-4)]">
+          <h3 class="m-0">{{ t("settings.i18n.title") }}</h3>
         </header>
 
-        <section class="config-group">
+        <section class="config-group grid gap-[var(--global-space-8)] border-b border-[var(--semantic-divider)] pb-[var(--global-space-12)]">
           <BaseSelect data-testid="locale-select" v-model="localeModel" :options="localeOptions" />
         </section>
       </article>
@@ -55,40 +57,3 @@ const localeModel = computed<string>({
   set: (value) => setLocale(value as Locale)
 });
 </script>
-
-<style scoped>
-.theme-layout {
-  display: grid;
-  grid-template-columns: minmax(520px, 920px);
-  gap: var(--global-space-12);
-  min-height: 0;
-}
-
-.settings-panel {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-12);
-  background: var(--semantic-surface);
-  padding: var(--global-space-12);
-  display: grid;
-  gap: var(--global-space-12);
-  align-content: start;
-}
-
-.panel-header {
-  display: grid;
-  gap: var(--global-space-4);
-}
-
-.config-group {
-  display: grid;
-  gap: var(--global-space-8);
-  padding-bottom: var(--global-space-12);
-  border-bottom: 1px solid var(--semantic-divider);
-}
-
-@media (max-width: 1140px) {
-  .theme-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-</style>

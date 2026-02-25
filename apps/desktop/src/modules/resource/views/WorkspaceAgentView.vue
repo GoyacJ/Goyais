@@ -5,17 +5,23 @@
     account-subtitle="Workspace Config / Agent"
     settings-subtitle="Local Settings / Agent"
   >
-    <section class="agent-config-card">
+    <section
+      class="agent-config-card grid gap-[var(--global-space-12)] border border-[var(--semantic-border)] rounded-[var(--global-radius-12)] bg-[var(--semantic-surface)] p-[var(--global-space-16)]"
+    >
       <header class="card-head">
-        <h3>执行配置</h3>
-        <p>配置变更仅对新建 execution 生效，运行中的 execution 不会切换。</p>
+        <h3 class="m-0 text-[var(--global-font-size-14)] text-[var(--semantic-text)]">执行配置</h3>
+        <p class="mb-0 mt-[var(--global-space-4)] text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)]">
+          配置变更仅对新建 execution 生效，运行中的 execution 不会切换。
+        </p>
       </header>
 
-      <div class="field-grid">
-        <label class="field">
-          <span class="field-label">Max Model Turns</span>
+      <div class="field-grid grid gap-[var(--global-space-12)]">
+        <label class="field grid gap-[var(--global-space-6)]">
+          <span class="field-label text-[var(--global-font-size-12)] text-[var(--semantic-text)] [font-weight:var(--global-font-weight-600)]">
+            Max Model Turns
+          </span>
           <input
-            class="field-input"
+            class="field-input h-[32px] border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] px-[var(--global-space-10)] text-[var(--global-font-size-12)] text-[var(--semantic-text)]"
             type="number"
             min="4"
             max="64"
@@ -24,36 +30,44 @@
             :disabled="loading || saving || !canWrite"
             @change="onMaxTurnsChange"
           />
-          <small class="field-hint">范围 4 - 64，默认 24</small>
+          <small class="field-hint text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">范围 4 - 64，默认 24</small>
         </label>
 
-        <label class="field">
-          <span class="field-label">过程展示</span>
+        <label class="field grid gap-[var(--global-space-6)]">
+          <span class="field-label text-[var(--global-font-size-12)] text-[var(--semantic-text)] [font-weight:var(--global-font-weight-600)]">
+            过程展示
+          </span>
           <BaseSelect
             v-model="traceToggleModel"
             :options="traceToggleOptions"
             :disabled="loading || saving || !canWrite"
           />
-          <small class="field-hint">开启后在对话区展示 thinking/tool/command 过程轨迹</small>
+          <small class="field-hint text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">
+            开启后在对话区展示 thinking/tool/command 过程轨迹
+          </small>
         </label>
 
-        <label class="field">
-          <span class="field-label">展示粒度</span>
+        <label class="field grid gap-[var(--global-space-6)]">
+          <span class="field-label text-[var(--global-font-size-12)] text-[var(--semantic-text)] [font-weight:var(--global-font-weight-600)]">
+            展示粒度
+          </span>
           <BaseSelect
             v-model="traceDetailModel"
             :options="traceDetailOptions"
             :disabled="loading || saving || !canWrite || !config.display.show_process_trace"
           />
-          <small class="field-hint">`basic` 仅摘要，`verbose` 显示详细输出（截断）</small>
+          <small class="field-hint text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">
+            `basic` 仅摘要，`verbose` 显示详细输出（截断）
+          </small>
         </label>
       </div>
 
-      <footer class="card-foot">
-        <span v-if="error !== ''" class="status error">{{ error }}</span>
-        <span v-else-if="saving" class="status">保存中...</span>
-        <span v-else-if="loading" class="status">加载中...</span>
-        <span v-else class="status">已就绪</span>
-        <span v-if="!canWrite" class="readonly-tag">只读权限</span>
+      <footer class="card-foot flex items-center justify-between gap-[var(--global-space-8)]">
+        <span v-if="error !== ''" class="status text-[var(--global-font-size-12)] text-[var(--semantic-danger)]">{{ error }}</span>
+        <span v-else-if="saving" class="status text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)]">保存中...</span>
+        <span v-else-if="loading" class="status text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)]">加载中...</span>
+        <span v-else class="status text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)]">已就绪</span>
+        <span v-if="!canWrite" class="readonly-tag text-[var(--global-font-size-11)] text-[var(--semantic-warning)]">只读权限</span>
       </footer>
     </section>
   </WorkspaceSharedShell>
@@ -126,78 +140,3 @@ watch(
   }
 );
 </script>
-
-<style scoped>
-.agent-config-card {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-12);
-  background: var(--semantic-surface);
-  padding: var(--global-space-16);
-  display: grid;
-  gap: var(--global-space-12);
-}
-
-.card-head h3 {
-  margin: 0;
-  color: var(--semantic-text);
-  font-size: var(--global-font-size-14);
-}
-
-.card-head p {
-  margin: var(--global-space-4) 0 0;
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-12);
-}
-
-.field-grid {
-  display: grid;
-  gap: var(--global-space-12);
-}
-
-.field {
-  display: grid;
-  gap: var(--global-space-6);
-}
-
-.field-label {
-  color: var(--semantic-text);
-  font-size: var(--global-font-size-12);
-  font-weight: var(--global-font-weight-600);
-}
-
-.field-input {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-bg);
-  color: var(--semantic-text);
-  height: 32px;
-  padding: 0 var(--global-space-10);
-  font-size: var(--global-font-size-12);
-}
-
-.field-hint {
-  color: var(--semantic-text-subtle);
-  font-size: var(--global-font-size-11);
-}
-
-.card-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--global-space-8);
-}
-
-.status {
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-12);
-}
-
-.status.error {
-  color: var(--semantic-danger);
-}
-
-.readonly-tag {
-  color: var(--semantic-warning);
-  font-size: var(--global-font-size-11);
-}
-</style>

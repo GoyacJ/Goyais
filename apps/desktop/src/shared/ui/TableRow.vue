@@ -1,5 +1,8 @@
 <template>
-  <div class="table-row" :class="{ selected }">
+  <div
+    class="grid grid-flow-col items-center gap-[var(--global-space-12)] border-b border-[var(--component-table-row-divider)] px-[var(--global-space-12)] py-[var(--global-space-8)] text-[var(--component-table-row-fg)] hover:bg-[var(--component-table-row-bg-hover)]"
+    :class="{ 'bg-[var(--component-table-row-bg-selected)]': selected }"
+  >
     <slot />
   </div>
 </template>
@@ -14,23 +17,3 @@ withDefaults(
   }
 );
 </script>
-
-<style scoped>
-.table-row {
-  display: grid;
-  grid-auto-flow: column;
-  gap: var(--global-space-12);
-  align-items: center;
-  padding: var(--global-space-8) var(--global-space-12);
-  border-bottom: 1px solid var(--component-table-row-divider);
-  color: var(--component-table-row-fg);
-}
-
-.table-row:hover {
-  background: var(--component-table-row-bg-hover);
-}
-
-.table-row.selected {
-  background: var(--component-table-row-bg-selected);
-}
-</style>

@@ -1,5 +1,8 @@
 <template>
-  <div class="toast" :class="`tone-${tone}`">
+  <div
+    class="border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] px-[var(--global-space-12)] py-[var(--global-space-8)] text-[var(--global-font-size-12)]"
+    :class="toneClassMap[tone]"
+  >
     <slot>{{ message }}</slot>
   </div>
 </template>
@@ -9,31 +12,13 @@ defineProps<{
   tone: "error" | "warning" | "info" | "403" | "disconnected" | "retrying";
   message?: string;
 }>();
+
+const toneClassMap = {
+  error: "bg-[var(--component-toast-error-bg)] text-[var(--component-toast-error-fg)]",
+  "403": "bg-[var(--component-toast-error-bg)] text-[var(--component-toast-error-fg)]",
+  warning: "bg-[var(--component-toast-warning-bg)] text-[var(--component-toast-warning-fg)]",
+  disconnected: "bg-[var(--component-toast-warning-bg)] text-[var(--component-toast-warning-fg)]",
+  info: "bg-[var(--component-toast-info-bg)] text-[var(--component-toast-info-fg)]",
+  retrying: "bg-[var(--component-toast-info-bg)] text-[var(--component-toast-info-fg)]"
+} as const;
 </script>
-
-<style scoped>
-.toast {
-  border-radius: var(--global-radius-8);
-  padding: var(--global-space-8) var(--global-space-12);
-  border: 1px solid var(--semantic-border);
-  font-size: var(--global-font-size-12);
-}
-
-.tone-error,
-.tone-403 {
-  background: var(--component-toast-error-bg);
-  color: var(--component-toast-error-fg);
-}
-
-.tone-warning,
-.tone-disconnected {
-  background: var(--component-toast-warning-bg);
-  color: var(--component-toast-warning-fg);
-}
-
-.tone-info,
-.tone-retrying {
-  background: var(--component-toast-info-bg);
-  color: var(--component-toast-info-fg);
-}
-</style>

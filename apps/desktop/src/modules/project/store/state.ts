@@ -1,6 +1,7 @@
-import { reactive } from "vue";
+import { defineStore } from "pinia";
 
 import { getWorkspaceToken } from "@/shared/stores/authStore";
+import { pinia } from "@/shared/stores/pinia";
 import { getCurrentWorkspace } from "@/shared/stores/workspaceStore";
 import type { Conversation, Project, ProjectConfig } from "@/shared/types/api";
 
@@ -36,7 +37,12 @@ const initialState: ProjectState = {
   error: ""
 };
 
-export const projectStore = reactive<ProjectState>({ ...initialState });
+const useProjectStoreDefinition = defineStore("project", {
+  state: (): ProjectState => ({ ...initialState })
+});
+
+export const useProjectStore = useProjectStoreDefinition;
+export const projectStore = useProjectStoreDefinition(pinia);
 
 export function resetProjectStore(): void {
   projectStore.projects = [];

@@ -1,9 +1,9 @@
 <template>
-  <div class="editor-wrap">
-    <div class="pane">
-      <p v-if="label !== ''" class="pane-title">{{ label }}</p>
+  <div class="editor-wrap grid grid-cols-2 gap-[var(--global-space-10)] max-[960px]:grid-cols-1">
+    <div class="pane grid gap-[var(--global-space-6)]">
+      <p v-if="label !== ''" class="pane-title m-0 text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)]">{{ label }}</p>
       <textarea
-        class="editor"
+        class="editor min-h-[220px] resize-y border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-10)] text-[var(--global-font-size-13)] text-[var(--semantic-text)] [font-family:var(--global-font-family-code)]"
         :placeholder="placeholder"
         :value="modelValue"
         :disabled="disabled"
@@ -11,9 +11,12 @@
       />
     </div>
 
-    <div class="pane">
-      <p class="pane-title">实时预览</p>
-      <article class="preview" v-html="renderedHtml" />
+    <div class="pane grid gap-[var(--global-space-6)]">
+      <p class="pane-title m-0 text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)]">实时预览</p>
+      <article
+        class="preview min-h-[220px] overflow-auto border border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-10)] text-[var(--semantic-text)] [&_h1]:mb-[var(--global-space-8)] [&_h1]:mt-0 [&_h2]:mb-[var(--global-space-8)] [&_h2]:mt-0 [&_h3]:mb-[var(--global-space-8)] [&_h3]:mt-0 [&_h4]:mb-[var(--global-space-8)] [&_h4]:mt-0 [&_h5]:mb-[var(--global-space-8)] [&_h5]:mt-0 [&_h6]:mb-[var(--global-space-8)] [&_h6]:mt-0 [&_p]:mb-[var(--global-space-8)] [&_p]:mt-0 [&_ul]:mb-[var(--global-space-8)] [&_ul]:mt-0 [&_ul]:pl-[var(--global-space-20)] [&_ol]:mb-[var(--global-space-8)] [&_ol]:mt-0 [&_ol]:pl-[var(--global-space-20)] [&_code]:rounded-[var(--global-radius-4)] [&_code]:bg-[var(--semantic-surface-2)] [&_code]:px-[var(--global-space-4)] [&_code]:[font-family:var(--global-font-family-code)] [&_a]:text-[var(--semantic-link)]"
+        v-html="renderedHtml"
+      />
     </div>
   </div>
 </template>
@@ -122,77 +125,3 @@ function escapeHtml(input: string): string {
     .replaceAll("'", "&#39;");
 }
 </script>
-
-<style scoped>
-.editor-wrap {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--global-space-10);
-}
-
-.pane {
-  display: grid;
-  gap: var(--global-space-6);
-}
-
-.pane-title {
-  margin: 0;
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-12);
-}
-
-.editor {
-  min-height: 220px;
-  resize: vertical;
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-bg);
-  color: var(--semantic-text);
-  padding: var(--global-space-10);
-  font-size: var(--global-font-size-13);
-  font-family: var(--global-font-family-code);
-}
-
-.preview {
-  min-height: 220px;
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  background: var(--semantic-bg);
-  color: var(--semantic-text);
-  padding: var(--global-space-10);
-  overflow: auto;
-}
-
-.preview :deep(h1),
-.preview :deep(h2),
-.preview :deep(h3),
-.preview :deep(h4),
-.preview :deep(h5),
-.preview :deep(h6),
-.preview :deep(p) {
-  margin: 0 0 var(--global-space-8) 0;
-}
-
-.preview :deep(ul),
-.preview :deep(ol) {
-  margin: 0 0 var(--global-space-8) 0;
-  padding-left: var(--global-space-20);
-}
-
-.preview :deep(code) {
-  background: var(--semantic-surface-2);
-  border-radius: var(--global-radius-4);
-  padding: 0 var(--global-space-4);
-  font-family: var(--global-font-family-code);
-}
-
-.preview :deep(a) {
-  color: var(--semantic-link);
-}
-
-@media (max-width: 960px) {
-  .editor-wrap {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-</style>

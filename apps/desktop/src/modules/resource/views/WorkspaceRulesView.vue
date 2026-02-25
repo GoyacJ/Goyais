@@ -44,7 +44,7 @@
       </template>
     </ResourceConfigTable>
 
-    <BaseModal :open="form.open">
+    <BaseModal :open="form.open" @close="closeModal">
       <template #title>
         <h3 class="modal-title">{{ form.mode === 'create' ? '新增规则' : '编辑规则' }}</h3>
       </template>

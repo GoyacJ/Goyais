@@ -1,0 +1,27 @@
+{
+  "name": "@goyais/shared-core",
+  "private": true,
+  "version": "0.4.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm,cjs --dts",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "tsdown": "catalog:frontend",
+    "typescript": "catalog:dev"
+  }
+}

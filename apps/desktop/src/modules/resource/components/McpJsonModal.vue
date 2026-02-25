@@ -1,12 +1,16 @@
 <template>
-  <BaseModal :open="open">
+  <BaseModal :open="open" @close="emit('close')">
     <template #title>
-      <h3 class="title">{{ title }}</h3>
+      <h3 class="title m-0">{{ title }}</h3>
     </template>
 
-    <div class="body">
-      <textarea v-model="draftText" class="editor" spellcheck="false" />
-      <p v-if="errorMessage !== ''" class="error">{{ errorMessage }}</p>
+    <div class="body grid gap-[var(--global-space-8)]">
+      <textarea
+        v-model="draftText"
+        class="editor min-h-[min(60vh,520px)] max-h-[min(60vh,520px)] w-full resize-y border border-[var(--semantic-border)] rounded-[var(--component-input-radius)] bg-[var(--component-input-bg)] p-[var(--global-space-8)] text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)] [font-family:var(--global-font-family-ui)] whitespace-pre-wrap break-words"
+        spellcheck="false"
+      />
+      <p v-if="errorMessage !== ''" class="error m-0 text-[var(--global-font-size-12)] text-[var(--semantic-danger)]">{{ errorMessage }}</p>
     </div>
 
     <template #footer>
@@ -65,36 +69,3 @@ function saveDraft(): void {
   }
 }
 </script>
-
-<style scoped>
-.title {
-  margin: 0;
-}
-
-.body {
-  display: grid;
-  gap: var(--global-space-8);
-}
-
-.editor {
-  min-height: min(60vh, 520px);
-  max-height: min(60vh, 520px);
-  width: 100%;
-  resize: vertical;
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--component-input-radius);
-  background: var(--component-input-bg);
-  padding: var(--global-space-8);
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-12);
-  font-family: var(--global-font-family-ui);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.error {
-  margin: 0;
-  color: var(--semantic-danger);
-  font-size: var(--global-font-size-12);
-}
-</style>

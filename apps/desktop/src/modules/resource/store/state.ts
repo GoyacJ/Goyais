@@ -1,5 +1,6 @@
-import { reactive } from "vue";
+import { defineStore } from "pinia";
 
+import { pinia } from "@/shared/stores/pinia";
 import type {
   McpConnectResult,
   ModelCatalogResponse,
@@ -63,7 +64,12 @@ const initialState: ResourceStoreState = {
   error: ""
 };
 
-export const resourceStore = reactive<ResourceStoreState>({ ...initialState });
+const useResourceStoreDefinition = defineStore("resource", {
+  state: (): ResourceStoreState => ({ ...initialState })
+});
+
+export const useResourceStore = useResourceStoreDefinition;
+export const resourceStore = useResourceStoreDefinition(pinia);
 
 export function resetResourceStore(): void {
   resourceStore.models = createResourceListState();
