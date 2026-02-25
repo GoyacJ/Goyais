@@ -8,7 +8,9 @@
     ></button>
 
     <aside class="sidebar-slot" @click="onSidebarClick">
-      <slot name="sidebar" />
+      <div class="sidebar-slot-fill">
+        <slot name="sidebar" />
+      </div>
     </aside>
 
     <section class="content">
@@ -56,6 +58,12 @@ function onSidebarClick(event: MouseEvent): void {
 
 .sidebar-slot {
   min-height: 0;
+  height: 100%;
+}
+
+.sidebar-slot-fill {
+  height: 100%;
+  display: grid;
 }
 
 .content {

@@ -8,7 +8,9 @@
     ></button>
 
     <aside class="sidebar-slot" @click="onSidebarClick">
-      <LocalSettingsSidebar :active-key="activeKey" :menu-entries="menuEntries" />
+      <div class="sidebar-slot-fill">
+        <LocalSettingsSidebar :active-key="activeKey" :menu-entries="menuEntries" />
+      </div>
     </aside>
 
     <section class="content">
@@ -113,7 +115,7 @@ function onSidebarClick(event: MouseEvent): void {
 
 <style scoped>
 .layout {
-  min-height: 100dvh;
+  height: 100dvh;
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: var(--global-space-8);
@@ -123,6 +125,12 @@ function onSidebarClick(event: MouseEvent): void {
 
 .sidebar-slot {
   min-height: 0;
+  height: 100%;
+}
+
+.sidebar-slot-fill {
+  height: 100%;
+  display: grid;
 }
 
 .content {
