@@ -197,33 +197,11 @@ scripts/release/build-hub-sidecar.sh "$TARGET_TRIPLE"
 scripts/release/build-worker-sidecar.sh "$TARGET_TRIPLE"
 ```
 
-### GitHub tag release
-
-Tag push triggers `.github/workflows/release.yml` and creates a draft Release with matrix targets:
-
-- `aarch64-apple-darwin`
-- `x86_64-apple-darwin`
-- `x86_64-unknown-linux-gnu`
-- `x86_64-pc-windows-msvc`
-
-```bash
-git tag -a v0.4.0 -m "v0.4.0"
-git push origin v0.4.0
-```
-
 By default, release artifacts are built with `--no-sign` and uploaded to a draft release.
 
 ## Documentation
 
 - Chinese README: [`README.zh-CN.md`](./README.zh-CN.md)
-- v0.4.0 authority docs index: [`docs/v_0_4_0/README.md`](./docs/v_0_4_0/README.md)
-- Product requirements (v0.4.0): [`docs/v_0_4_0/PRD.md`](./docs/v_0_4_0/PRD.md)
-- Technical architecture (v0.4.0): [`docs/v_0_4_0/TECH_ARCH.md`](./docs/v_0_4_0/TECH_ARCH.md)
-- Implementation plan (v0.4.0): [`docs/v_0_4_0/IMPLEMENTATION_PLAN.md`](./docs/v_0_4_0/IMPLEMENTATION_PLAN.md)
-- Development standards (v0.4.0): [`docs/v_0_4_0/DEVELOPMENT_STANDARDS.md`](./docs/v_0_4_0/DEVELOPMENT_STANDARDS.md)
-- Dev environment guide: [`docs/dev-setup.md`](./docs/dev-setup.md)
-- Desktop module guide: [`apps/desktop/README.md`](./apps/desktop/README.md)
-- ADRs: [`docs/ADR/`](./docs/ADR)
 
 ## Contributing
 

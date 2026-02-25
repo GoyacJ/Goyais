@@ -27,3 +27,12 @@ worktrees/
 .worktrees/
 artifacts/
 services/hub/data/
+
+# local tooling / personal workspace
+.idea/
+.claude/
+.codex/
+codex/
+AGENTS.md
+openai.yaml
+learn-claude-code/

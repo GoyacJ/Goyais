@@ -197,33 +197,11 @@ scripts/release/build-hub-sidecar.sh "$TARGET_TRIPLE"
 scripts/release/build-worker-sidecar.sh "$TARGET_TRIPLE"
 ```
 
-### GitHub Tag 自动发版
-
-推送 Tag 会触发 `.github/workflows/release.yml`，并创建 Draft Release。矩阵目标：
-
-- `aarch64-apple-darwin`
-- `x86_64-apple-darwin`
-- `x86_64-unknown-linux-gnu`
-- `x86_64-pc-windows-msvc`
-
-```bash
-git tag -a v0.4.0 -m "v0.4.0"
-git push origin v0.4.0
-```
-
 默认使用 `--no-sign` 构建并上传到草稿 Release。
 
 ## 文档索引
 
 - 英文 README：[`README.md`](./README.md)
-- v0.4.0 权威文档总览：[`docs/v_0_4_0/README.md`](./docs/v_0_4_0/README.md)
-- 产品需求（v0.4.0）：[`docs/v_0_4_0/PRD.md`](./docs/v_0_4_0/PRD.md)
-- 技术架构（v0.4.0）：[`docs/v_0_4_0/TECH_ARCH.md`](./docs/v_0_4_0/TECH_ARCH.md)
-- 实施计划（v0.4.0）：[`docs/v_0_4_0/IMPLEMENTATION_PLAN.md`](./docs/v_0_4_0/IMPLEMENTATION_PLAN.md)
-- 开发标准（v0.4.0）：[`docs/v_0_4_0/DEVELOPMENT_STANDARDS.md`](./docs/v_0_4_0/DEVELOPMENT_STANDARDS.md)
-- 开发环境说明：[`docs/dev-setup.md`](./docs/dev-setup.md)
-- Desktop 模块说明：[`apps/desktop/README.md`](./apps/desktop/README.md)
-- ADR 决策记录：[`docs/ADR/`](./docs/ADR)
 
 ## 参与贡献
 
