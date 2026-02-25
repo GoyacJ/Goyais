@@ -7,7 +7,7 @@
   >
     <section class="project-config-page">
       <div class="import-row">
-        <BaseButton :disabled="!canWrite" variant="secondary" @click="addProject">添加项目</BaseButton>
+        <BaseButton :disabled="!canWrite || !supportsDirectoryImport" variant="secondary" @click="addProject">添加项目</BaseButton>
       </div>
 
       <ResourceConfigTable
@@ -179,6 +179,7 @@
 <script setup lang="ts">
 import ResourceConfigTable from "@/modules/resource/components/ResourceConfigTable.vue";
 import { useWorkspaceProjectConfigView } from "@/modules/resource/views/useWorkspaceProjectConfigView";
+import { isRuntimeCapabilitySupported } from "@/shared/runtime";
 import { pickDirectoryPath } from "@/shared/services/directoryPicker";
 import WorkspaceSharedShell from "@/shared/shells/WorkspaceSharedShell.vue";
 import BaseButton from "@/shared/ui/BaseButton.vue";
@@ -204,10 +205,14 @@ const {
   skillOptions,
   toggleListItem
 } = useWorkspaceProjectConfigView();
+const supportsDirectoryImport = isRuntimeCapabilitySupported("supportsDirectoryImport");
 
 type BindingField = "modelIds" | "ruleIds" | "skillIds" | "mcpIds";
 
 async function addProject(): Promise<void> {
+  if (!supportsDirectoryImport) {
+    return;
+  }
   const directoryPath = await pickDirectoryPath();
   if (!directoryPath) {
     return;

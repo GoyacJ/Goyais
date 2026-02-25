@@ -15,13 +15,22 @@
 </template>
 
 <script setup lang="ts">
+import { isRuntimeCapabilitySupported } from "@/shared/runtime";
 import { handleDragMouseDown, toggleMaximizeCurrentWindow } from "@/shared/services/windowControls";
 
+const supportsWindowControls = isRuntimeCapabilitySupported("supportsWindowControls");
+
 function onTopbarMouseDown(event: MouseEvent): void {
+  if (!supportsWindowControls) {
+    return;
+  }
   void handleDragMouseDown(event);
 }
 
 function onTopbarDoubleClick(event: MouseEvent): void {
+  if (!supportsWindowControls) {
+    return;
+  }
   if ((event.target as HTMLElement | null)?.closest("button,a,input,select,textarea,[role='button'],[data-no-drag='true']")) {
     return;
   }

@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HUB_PORT="${HUB_PORT:-8787}"
 WORKER_PORT="${WORKER_PORT:-8788}"
 DESKTOP_PORT="${DESKTOP_PORT:-5173}"
+EXPECTED_VERSION="${GOYAIS_VERSION:-0.0.0-dev}"
 
 ARTIFACT_DIR="$ROOT_DIR/artifacts"
 SMOKE_JSON="$ARTIFACT_DIR/smoke.json"
@@ -203,7 +204,7 @@ check_health_json() {
     return 1
   fi
 
-  if python3 - "$output_file" <<'PY'
+  if python3 - "$output_file" "$EXPECTED_VERSION" <<'PY'
 import json
 import sys
 
@@ -212,11 +213,11 @@ with open(sys.argv[1], "r", encoding="utf-8") as f:
 
 if data.get("ok") is not True:
     raise SystemExit(1)
-if data.get("version") != "0.4.0":
+if data.get("version") != sys.argv[2]:
     raise SystemExit(1)
 PY
   then
-    record_check "$check_name" "pass" "ok=true version=0.4.0"
+    record_check "$check_name" "pass" "ok=true version=${EXPECTED_VERSION}"
     return 0
   fi
 

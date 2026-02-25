@@ -1,4 +1,5 @@
 import { getControlClient } from "@/shared/services/clients";
+import { validateWorkspaceHubUrl } from "@/shared/runtime";
 import type {
   CreateWorkspaceRequest,
   ListEnvelope,
@@ -18,7 +19,10 @@ export async function listWorkspaces(query: PaginationQuery = {}): Promise<ListE
 }
 
 export async function createRemoteConnection(input: CreateWorkspaceRequest): Promise<WorkspaceConnectionResult> {
-  return getControlClient().post<WorkspaceConnectionResult>("/v1/workspaces/remote-connections", input);
+  return getControlClient().post<WorkspaceConnectionResult>("/v1/workspaces/remote-connections", {
+    ...input,
+    hub_url: validateWorkspaceHubUrl(input.hub_url)
+  });
 }
 
 export async function getWorkspaceStatus(
@@ -48,7 +52,7 @@ export async function getWorkspaceStatus(
 export async function createRemoteWorkspace(input: { name: string; hub_url: string }): Promise<Workspace> {
   return getControlClient().post<Workspace>("/v1/workspaces", {
     name: input.name,
-    hub_url: input.hub_url
+    hub_url: validateWorkspaceHubUrl(input.hub_url)
   });
 }
 

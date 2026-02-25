@@ -102,6 +102,10 @@
     "dev:desktop": {
       "cache": false,
       "persistent": true
+    },
+    "dev:mobile": {
+      "cache": false,
+      "persistent": true
     }
   }
 }

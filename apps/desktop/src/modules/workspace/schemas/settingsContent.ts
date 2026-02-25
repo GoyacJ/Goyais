@@ -43,7 +43,7 @@ export const localI18nCards = [
 export const localUpdatesCards = [
   {
     title: "版本信息",
-    lines: ["当前版本: v0.4.0", "最新版本: v0.4.2", "操作: 获取最新版本 Check Update"],
+    lines: ["当前版本: 自动读取", "最新版本: 按发布源检查", "操作: 获取最新版本 Check Update"],
     tone: "default" as const
   },
   {

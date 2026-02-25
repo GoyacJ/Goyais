@@ -1,4 +1,5 @@
 import { getControlClient } from "@/shared/services/clients";
+import { getControlHubBaseUrl } from "@/shared/runtime";
 import { connectConversationEvents } from "@/shared/services/sseClient";
 import type {
   Conversation,
@@ -89,5 +90,5 @@ export function resolveDiffCapability(isGitProject: boolean): DiffCapability {
 }
 
 function getHubBaseUrl(): string {
-  return import.meta.env.VITE_HUB_BASE_URL ?? "http://127.0.0.1:8787";
+  return getControlHubBaseUrl();
 }

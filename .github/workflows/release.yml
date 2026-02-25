@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (SemVer, with optional v prefix)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -64,6 +69,21 @@ jobs:
 
       - uses: astral-sh/setup-uv@v4
 
+      - name: Resolve release version
+        id: resolve_version
+        shell: bash
+        env:
+          RELEASE_VERSION_INPUT: ${{ github.event.inputs.version || '' }}
+        run: scripts/release/resolve-release-version.sh
+
+      - name: Prepare Tauri config override
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          cat > artifacts/tauri-release-overrides.json <<EOF
+          {"version":"${{ steps.resolve_version.outputs.goyais_version }}"}
+          EOF
+
       - name: Build Hub sidecar
         shell: bash
         run: scripts/release/build-hub-sidecar.sh "${{ matrix.target }}"
@@ -76,13 +96,16 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOYAIS_VERSION: ${{ steps.resolve_version.outputs.goyais_version }}
+          VITE_APP_VERSION: ${{ steps.resolve_version.outputs.goyais_version }}
           VITE_API_MODE: strict
           VITE_ENABLE_MOCK_FALLBACK: "false"
         with:
           projectPath: apps/desktop
           tauriScript: pnpm tauri
-          tagName: ${{ github.ref_name }}
-          releaseName: Goyais ${{ github.ref_name }}
+          tagName: ${{ steps.resolve_version.outputs.release_tag }}
+          releaseName: Goyais ${{ steps.resolve_version.outputs.release_tag }}
+          releaseAssetNamePattern: "[name]_[platform]_[arch][setup][ext]"
           releaseDraft: true
           prerelease: false
-          args: --target ${{ matrix.target }} --ci --no-sign
+          args: --target ${{ matrix.target }} --ci --no-sign --config ../../artifacts/tauri-release-overrides.json

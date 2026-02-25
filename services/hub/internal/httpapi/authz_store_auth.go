@@ -309,8 +309,9 @@ func (s *authzStore) buildPermissionSnapshot(workspaceID string, role Role) (Per
 		Permissions:      permissions,
 		MenuVisibility:   menuVisibility,
 		ActionVisibility: actionVisibility,
-		PolicyVersion:    "v0.4.0-rbac-abac-json-1",
-		GeneratedAt:      time.Now().UTC().Format(time.RFC3339),
+		// PolicyVersion tracks auth model schema, not release build version.
+		PolicyVersion: "v0.4.0-rbac-abac-json-1",
+		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
 	}, nil
 }
 

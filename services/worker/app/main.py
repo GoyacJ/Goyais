@@ -13,6 +13,7 @@ from app.trace import (
     reset_trace_id,
     set_trace_id,
 )
+from app.version import get_runtime_version
 
 
 class TraceIDFilter(logging.Filter):
@@ -56,7 +57,7 @@ async def app_lifespan(_app: FastAPI):
             await claim_loop_service.stop()
 
 
-app = FastAPI(title="Goyais Worker", version="0.4.0", lifespan=app_lifespan)
+app = FastAPI(title="Goyais Worker", version=get_runtime_version(), lifespan=app_lifespan)
 
 
 @app.middleware("http")

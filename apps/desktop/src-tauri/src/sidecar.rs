@@ -63,6 +63,7 @@ pub fn initialize<R: Runtime + 'static>(app: &AppHandle<R>) -> Result<(), String
     let log_path = app_data_dir.join(SIDECAR_LOG_FILE);
     log_line(&log_path, "initializing sidecar runtime");
 
+    let app_version = app.package_info().version.to_string();
     let internal_token = generate_internal_token();
     let hub_db_path = app_data_dir.join(HUB_DB_FILE);
 
@@ -74,6 +75,7 @@ pub fn initialize<R: Runtime + 'static>(app: &AppHandle<R>) -> Result<(), String
             "HUB_DB_PATH".to_string(),
             hub_db_path.to_string_lossy().into_owned(),
         ),
+        ("GOYAIS_VERSION".to_string(), app_version.clone()),
         ("HUB_INTERNAL_TOKEN".to_string(), internal_token.clone()),
     ];
     let mut hub_envs = hub_envs;
@@ -106,6 +108,7 @@ pub fn initialize<R: Runtime + 'static>(app: &AppHandle<R>) -> Result<(), String
             "HUB_BASE_URL".to_string(),
             format!("http://127.0.0.1:{HUB_PORT}"),
         ),
+        ("GOYAIS_VERSION".to_string(), app_version),
         ("HUB_INTERNAL_TOKEN".to_string(), internal_token),
     ];
     let mut worker_envs = worker_envs;

@@ -12,6 +12,7 @@ import (
 	"strings"
 )
 
+// Keep this seed stable across releases so existing encrypted secrets stay decryptable.
 const defaultSecretSeed = "goyais-v0.4.0-resource-secret"
 
 func encryptSecret(plain string) (string, error) {

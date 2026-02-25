@@ -60,7 +60,7 @@ func probeMCPStdio(spec *McpSpec, timeout time.Duration) ([]string, error, strin
 			"capabilities":    map[string]any{},
 			"clientInfo": map[string]any{
 				"name":    "goyais",
-				"version": "0.4.0",
+				"version": runtimeVersion(),
 			},
 		},
 	}); err != nil {
