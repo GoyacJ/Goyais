@@ -27,8 +27,6 @@ func newRouterWithDBPath(dbPath string) http.Handler {
 	mux.HandleFunc("/v1/workspaces", WorkspacesHandler(state))
 	mux.HandleFunc("/v1/workspaces/remote-connections", WorkspacesRemoteConnectionsHandler(state))
 	mux.HandleFunc("/v1/workspaces/{workspace_id}/status", WorkspaceStatusHandler(state))
-	// Backward-compatible route during migration
-	mux.HandleFunc("/v1/workspaces/remote/connect", WorkspacesRemoteConnectionsHandler(state))
 	mux.HandleFunc("/v1/auth/login", AuthLoginHandler(state))
 	mux.HandleFunc("/v1/auth/refresh", AuthRefreshHandler(state))
 	mux.HandleFunc("/v1/auth/logout", AuthLogoutHandler(state))
@@ -78,8 +76,6 @@ func newRouterWithDBPath(dbPath string) http.Handler {
 	mux.HandleFunc("/v1/workspaces/{workspace_id}/mcps/export", MCPExportHandler(state))
 	mux.HandleFunc("/v1/workspaces/{workspace_id}/project-configs", WorkspaceProjectConfigsHandler(state))
 	mux.HandleFunc("/v1/workspaces/{workspace_id}/agent-config", WorkspaceAgentConfigHandler(state))
-	// Backward-compatible route during migration
-	mux.HandleFunc("/v1/workspaces/{workspace_id}/model-catalog/sync", ModelCatalogHandler(state))
 
 	// Admin
 	mux.HandleFunc("/v1/admin/ping", AdminPingHandler(state))

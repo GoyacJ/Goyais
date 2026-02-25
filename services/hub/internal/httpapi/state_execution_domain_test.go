@@ -2,90 +2,112 @@ package httpapi
 
 import "testing"
 
-func TestRepairLegacyExecutionDomainLockedConvertsConfirmingExecution(t *testing.T) {
-	state := NewAppState(nil)
+func TestHydrateExecutionDomainFromStoreKeepsLegacyExecutionStateAndCommands(t *testing.T) {
+	store, err := openAuthzStore(":memory:")
+	if err != nil {
+		t.Fatalf("open authz store failed: %v", err)
+	}
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+
+	state := NewAppState(store)
 	conversationID := "conv_legacy"
 	executionID := "exec_confirming"
-	queuedID := "exec_queued"
+	activeExecutionID := executionID
 
-	state.conversations[conversationID] = Conversation{
-		ID:                conversationID,
-		WorkspaceID:       localWorkspaceID,
-		ProjectID:         "proj_1",
-		Name:              "Legacy Confirming",
-		QueueState:        QueueStateRunning,
-		DefaultMode:       ConversationModeAgent,
-		ModelID:           "gpt-5.3",
-		BaseRevision:      0,
-		ActiveExecutionID: &executionID,
-		CreatedAt:         "2026-02-24T00:00:00Z",
-		UpdatedAt:         "2026-02-24T00:00:00Z",
-	}
-	state.executions[executionID] = Execution{
-		ID:             executionID,
-		WorkspaceID:    localWorkspaceID,
-		ConversationID: conversationID,
-		State:          ExecutionState("confirming"),
-		QueueIndex:     0,
-		CreatedAt:      "2026-02-24T00:00:00Z",
-		UpdatedAt:      "2026-02-24T00:00:00Z",
-	}
-	state.executions[queuedID] = Execution{
-		ID:             queuedID,
-		WorkspaceID:    localWorkspaceID,
-		ConversationID: conversationID,
-		State:          ExecutionStateQueued,
-		QueueIndex:     1,
-		CreatedAt:      "2026-02-24T00:00:01Z",
-		UpdatedAt:      "2026-02-24T00:00:01Z",
-	}
-	state.conversationExecutionOrder[conversationID] = []string{executionID, queuedID}
-	state.executionLeases[executionID] = ExecutionLease{
-		ExecutionID: executionID,
-		WorkerID:    "worker-1",
-	}
-	state.executionControlQueues[executionID] = []ExecutionControlCommand{
-		{
-			ID:          "ctrl_confirm",
-			ExecutionID: executionID,
-			Type:        ExecutionControlCommandType("confirm"),
-			Seq:         1,
+	snapshot := executionDomainSnapshot{
+		Conversations: []Conversation{
+			{
+				ID:                conversationID,
+				WorkspaceID:       localWorkspaceID,
+				ProjectID:         "proj_legacy",
+				Name:              "Legacy Runtime",
+				QueueState:        QueueStateRunning,
+				DefaultMode:       ConversationModeAgent,
+				ModelID:           "gpt-5.3",
+				BaseRevision:      0,
+				ActiveExecutionID: &activeExecutionID,
+				CreatedAt:         "2026-02-24T00:00:00Z",
+				UpdatedAt:         "2026-02-24T00:00:00Z",
+			},
 		},
-		{
-			ID:          "ctrl_stop",
-			ExecutionID: executionID,
-			Type:        ExecutionControlCommandTypeStop,
-			Seq:         2,
+		Executions: []Execution{
+			{
+				ID:             executionID,
+				WorkspaceID:    localWorkspaceID,
+				ConversationID: conversationID,
+				MessageID:      "msg_legacy",
+				State:          ExecutionState("confirming"),
+				Mode:           ConversationModeAgent,
+				ModelID:        "gpt-5.3",
+				ModeSnapshot:   ConversationModeAgent,
+				ModelSnapshot: ModelSnapshot{
+					ModelID: "gpt-5.3",
+				},
+				QueueIndex: 0,
+				TraceID:    "tr_legacy",
+				CreatedAt:  "2026-02-24T00:00:00Z",
+				UpdatedAt:  "2026-02-24T00:00:00Z",
+			},
+		},
+		ExecutionControlCommands: []ExecutionControlCommand{
+			{
+				ID:          "ctrl_confirm",
+				ExecutionID: executionID,
+				Type:        ExecutionControlCommandType("confirm"),
+				Seq:         1,
+				CreatedAt:   "2026-02-24T00:00:01Z",
+			},
+			{
+				ID:          "ctrl_stop",
+				ExecutionID: executionID,
+				Type:        ExecutionControlCommandTypeStop,
+				Seq:         2,
+				CreatedAt:   "2026-02-24T00:00:02Z",
+			},
+		},
+		ExecutionLeases: []ExecutionLease{
+			{
+				ExecutionID: executionID,
+				WorkerID:    "worker-legacy",
+			},
 		},
 	}
-	state.executionControlSeq[executionID] = 2
 
-	repairedExecutionIDs, removedControlCommands := repairLegacyExecutionDomainLocked(state)
-
-	if len(repairedExecutionIDs) != 1 || repairedExecutionIDs[0] != executionID {
-		t.Fatalf("expected repaired execution ids [%s], got %#v", executionID, repairedExecutionIDs)
-	}
-	if removedControlCommands != 1 {
-		t.Fatalf("expected removed control commands=1, got %d", removedControlCommands)
-	}
-	if lease, exists := state.executionLeases[executionID]; exists {
-		t.Fatalf("expected execution lease removed, got %#v", lease)
+	if err := store.replaceExecutionDomainSnapshot(snapshot); err != nil {
+		t.Fatalf("seed execution domain snapshot failed: %v", err)
 	}
 
-	repaired := state.executions[executionID]
-	if repaired.State != ExecutionStatePending {
-		t.Fatalf("expected repaired execution state pending, got %s", repaired.State)
+	state.hydrateExecutionDomainFromStore()
+
+	restoredExecution, exists := state.executions[executionID]
+	if !exists {
+		t.Fatalf("expected execution %s to exist after hydrate", executionID)
 	}
+	if restoredExecution.State != ExecutionState("confirming") {
+		t.Fatalf("expected execution state confirming to remain unchanged, got %s", restoredExecution.State)
+	}
+
 	commands := state.executionControlQueues[executionID]
-	if len(commands) != 1 || commands[0].Type != ExecutionControlCommandTypeStop {
-		t.Fatalf("expected only stop control command, got %#v", commands)
+	if len(commands) != 2 {
+		t.Fatalf("expected 2 execution control commands, got %d", len(commands))
+	}
+	if commands[0].Type != ExecutionControlCommandType("confirm") || commands[1].Type != ExecutionControlCommandTypeStop {
+		t.Fatalf("expected confirm+stop commands preserved, got %#v", commands)
 	}
 
-	conversation := state.conversations[conversationID]
-	if conversation.QueueState != QueueStateRunning {
-		t.Fatalf("expected conversation queue state running, got %s", conversation.QueueState)
+	if _, leaseExists := state.executionLeases[executionID]; !leaseExists {
+		t.Fatalf("expected execution lease to remain after hydrate")
 	}
-	if conversation.ActiveExecutionID == nil || *conversation.ActiveExecutionID != executionID {
-		t.Fatalf("expected conversation active execution %s, got %#v", executionID, conversation.ActiveExecutionID)
+
+	restoredConversation, conversationExists := state.conversations[conversationID]
+	if !conversationExists {
+		t.Fatalf("expected conversation %s to exist after hydrate", conversationID)
+	}
+	if restoredConversation.ActiveExecutionID == nil || *restoredConversation.ActiveExecutionID != executionID {
+		t.Fatalf("expected active execution id %s preserved, got %#v", executionID, restoredConversation.ActiveExecutionID)
 	}
 }
