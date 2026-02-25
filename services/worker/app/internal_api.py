@@ -91,9 +91,15 @@ def now_iso() -> str:
 
 
 def require_internal_token(request: Request) -> JSONResponse | None:
-    expected_token = os.getenv("WORKER_INTERNAL_TOKEN", DEFAULT_INTERNAL_TOKEN).strip()
+    expected_token = _resolve_worker_internal_token()
     if expected_token == "":
-        return None
+        return standard_error_response(
+            request=request,
+            status_code=503,
+            code="AUTH_INTERNAL_TOKEN_NOT_CONFIGURED",
+            message="Internal token is not configured",
+            details={"env": "WORKER_INTERNAL_TOKEN"},
+        )
 
     provided_token = extract_internal_token(request)
     if provided_token == "":
@@ -124,3 +130,17 @@ def extract_internal_token(request: Request) -> str:
     if not authorization.startswith(BEARER_PREFIX):
         return ""
     return authorization[len(BEARER_PREFIX) :].strip()
+
+
+def _resolve_worker_internal_token() -> str:
+    token = os.getenv("WORKER_INTERNAL_TOKEN", "").strip()
+    if token != "":
+        return token
+    if _allow_insecure_internal_token_default():
+        return DEFAULT_INTERNAL_TOKEN
+    return ""
+
+
+def _allow_insecure_internal_token_default() -> bool:
+    flag = os.getenv("GOYAIS_ALLOW_INSECURE_INTERNAL_TOKEN", "").strip().lower()
+    return flag in {"1", "true", "yes"}

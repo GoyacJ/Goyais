@@ -8,6 +8,9 @@ desktop_port="${3:-5173}"
 cat <<EOT
 Goyais v0.4.0 开发启动命令（分别在三个终端执行）
 
+0) 先在每个终端设置同一个内部通信 token:
+   export HUB_INTERNAL_TOKEN='<same-random-token>'
+
 1) Hub:
    PORT=${hub_port} make dev-hub
 

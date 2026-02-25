@@ -26,6 +26,11 @@ jobs:
         with:
           python-version: '3.13'
       - uses: astral-sh/setup-uv@v4
+      - name: Worker lint
+        working-directory: services/worker
+        run: |
+          uv sync
+          uv run ruff check .
       - name: Worker tests
         working-directory: services/worker
         run: |
@@ -44,8 +49,6 @@ jobs:
           version: 10.11.0
       - name: Install dependencies
         run: pnpm install
-      - name: Install coverage provider
-        run: pnpm --filter @goyais/desktop add -D @vitest/coverage-v8 --no-frozen-lockfile
       - name: Desktop lint
         run: pnpm --filter @goyais/desktop lint
       - name: Desktop test

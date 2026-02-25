@@ -58,7 +58,16 @@ func ConversationEventsHandler(state *AppState) http.HandlerFunc {
 		w.Header().Set("X-Accel-Buffering", "no")
 
 		state.mu.Lock()
-		backlog := listExecutionEventsSinceLocked(state, conversationID, lastEventID)
+		backlog, resyncRequired := listExecutionEventsSinceLocked(state, conversationID, lastEventID)
+		if resyncRequired {
+			latestEventID := ""
+			if len(backlog) > 0 {
+				latestEventID = backlog[len(backlog)-1].EventID
+			}
+			backlog = append([]ExecutionEvent{
+				buildSSEBackfillResyncEvent(conversationID, lastEventID, latestEventID, len(backlog)),
+			}, backlog...)
+		}
 		subscriberID, subscriber := registerConversationEventSubscriberLocked(state, conversationID)
 		state.mu.Unlock()
 		defer func() {
@@ -95,6 +104,27 @@ func ConversationEventsHandler(state *AppState) http.HandlerFunc {
 				flusher.Flush()
 			}
 		}
+	}
+}
+
+func buildSSEBackfillResyncEvent(conversationID string, lastEventID string, latestEventID string, windowSize int) ExecutionEvent {
+	return ExecutionEvent{
+		EventID:        "evt_sse_resync_" + randomHex(8),
+		ExecutionID:    "",
+		ConversationID: conversationID,
+		TraceID:        GenerateTraceID(),
+		Sequence:       0,
+		QueueIndex:     0,
+		Type:           ExecutionEventTypeThinkingDelta,
+		Timestamp:      time.Now().UTC().Format(time.RFC3339),
+		Payload: map[string]any{
+			"stage":           "sse_resync_required",
+			"resync_required": true,
+			"reason":          "last_event_id_not_found",
+			"last_event_id":   lastEventID,
+			"latest_event_id": latestEventID,
+			"window_size":     windowSize,
+		},
 	}
 }
 

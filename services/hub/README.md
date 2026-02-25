@@ -6,6 +6,7 @@ Goyais v0.4.0 Hub 骨架服务（Go）。
 
 ```bash
 cd services/hub
+export HUB_INTERNAL_TOKEN='<shared-random-token>'
 PORT=8787 go run ./cmd/hub
 ```
 

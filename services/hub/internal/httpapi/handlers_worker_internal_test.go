@@ -5,6 +5,19 @@ import (
 	"testing"
 )
 
+func TestInternalRoutesRejectWhenTokenNotConfigured(t *testing.T) {
+	t.Setenv("HUB_INTERNAL_TOKEN", "")
+	t.Setenv("GOYAIS_ALLOW_INSECURE_INTERNAL_TOKEN", "")
+
+	router := NewRouter()
+	res := performJSONRequest(t, router, http.MethodPost, "/internal/executions/claim", map[string]any{
+		"worker_id": "worker-test-1",
+	}, map[string]string{"X-Internal-Token": defaultHubInternalToken})
+	if res.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when internal token is not configured, got %d (%s)", res.Code, res.Body.String())
+	}
+}
+
 func TestInternalExecutionClaimAndControlFlow(t *testing.T) {
 	router := NewRouter()
 	workspaceID := createRemoteWorkspace(t, router, "Remote Worker Flow", "http://127.0.0.1:9100", false)
@@ -43,7 +56,7 @@ func TestInternalExecutionClaimAndControlFlow(t *testing.T) {
 	mustDecodeJSON(t, messageRes.Body.Bytes(), &messagePayload)
 	executionID := messagePayload["execution"].(map[string]any)["id"].(string)
 
-	internalHeaders := map[string]string{"X-Internal-Token": defaultHubInternalToken}
+	internalHeaders := internalAuthHeaders(t)
 	claimRes := performJSONRequest(t, router, http.MethodPost, "/internal/executions/claim", map[string]any{
 		"worker_id": "worker-test-1",
 	}, internalHeaders)
@@ -131,7 +144,7 @@ func TestInternalExecutionClaimHydratesModelSnapshotFromConfig(t *testing.T) {
 	workspaceID := createRemoteWorkspace(t, router, "Remote Worker Model Snapshot", "http://127.0.0.1:9101", false)
 	token := loginRemoteWorkspace(t, router, workspaceID, "worker_model_user", "pw", RoleDeveloper, true)
 	authHeaders := map[string]string{"Authorization": "Bearer " + token}
-	internalHeaders := map[string]string{"X-Internal-Token": defaultHubInternalToken}
+	internalHeaders := internalAuthHeaders(t)
 
 	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
 		"workspace_id":   workspaceID,

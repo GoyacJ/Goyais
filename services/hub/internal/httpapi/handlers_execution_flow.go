@@ -33,7 +33,7 @@ func ConversationsHandler(state *AppState) http.HandlerFunc {
 			authErr.write(w, r)
 			return
 		}
-		if workspaceID == "" && session.WorkspaceID != localWorkspaceID {
+		if workspaceID == "" {
 			workspaceID = session.WorkspaceID
 		}
 		state.mu.RLock()
@@ -77,7 +77,7 @@ func ExecutionsHandler(state *AppState) http.HandlerFunc {
 			}
 			state.mu.RUnlock()
 		}
-		_, authErr := authorizeAction(
+		session, authErr := authorizeAction(
 			state,
 			r,
 			workspaceID,
@@ -89,10 +89,16 @@ func ExecutionsHandler(state *AppState) http.HandlerFunc {
 			authErr.write(w, r)
 			return
 		}
+		if workspaceID == "" {
+			workspaceID = session.WorkspaceID
+		}
 		state.mu.RLock()
 		items := make([]Execution, 0)
 		for _, execution := range state.executions {
 			if conversationID != "" && execution.ConversationID != conversationID {
+				continue
+			}
+			if workspaceID != "" && execution.WorkspaceID != workspaceID {
 				continue
 			}
 			items = append(items, execution)
@@ -776,7 +782,13 @@ func ExecutionActionHandler(state *AppState) http.HandlerFunc {
 
 func renderExecutionPatchContent(projectPath string, isGitProject bool, executionID string, diffItems []DiffItem) (string, error) {
 	if isGitProject && strings.TrimSpace(projectPath) != "" {
-		cmd := exec.Command("git", "-C", projectPath, "diff", "--binary")
+		args := []string{"-C", projectPath, "diff", "--binary"}
+		paths := diffPathsForGitPatch(diffItems)
+		if len(paths) > 0 {
+			args = append(args, "--")
+			args = append(args, paths...)
+		}
+		cmd := exec.Command("git", args...)
 		output, err := cmd.CombinedOutput()
 		if err == nil {
 			patch := string(output)
@@ -786,6 +798,27 @@ func renderExecutionPatchContent(projectPath string, isGitProject bool, executio
 		}
 	}
 	return renderFallbackPatch(executionID, diffItems), nil
+}
+
+func diffPathsForGitPatch(diffItems []DiffItem) []string {
+	if len(diffItems) == 0 {
+		return nil
+	}
+	unique := make(map[string]struct{}, len(diffItems))
+	paths := make([]string, 0, len(diffItems))
+	for _, item := range diffItems {
+		path := strings.TrimSpace(item.Path)
+		if path == "" {
+			continue
+		}
+		if _, exists := unique[path]; exists {
+			continue
+		}
+		unique[path] = struct{}{}
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
 }
 
 func renderFallbackPatch(executionID string, diffItems []DiffItem) string {

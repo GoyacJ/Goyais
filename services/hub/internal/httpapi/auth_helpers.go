@@ -58,7 +58,14 @@ func extractAccessToken(r *http.Request) string {
 		}
 	}
 
-	return strings.TrimSpace(r.Header.Get("X-Auth-Token"))
+	legacyToken := strings.TrimSpace(r.Header.Get("X-Auth-Token"))
+	if legacyToken != "" {
+		return legacyToken
+	}
+	if r.Method == http.MethodGet {
+		return strings.TrimSpace(r.URL.Query().Get("access_token"))
+	}
+	return ""
 }
 
 func parseRole(raw string) Role {

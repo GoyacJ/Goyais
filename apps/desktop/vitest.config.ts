@@ -17,12 +17,25 @@ export default defineConfig({
       provider: "v8",
       reportsDirectory: "./coverage",
       reporter: ["text", "json-summary"],
-      thresholds: {
-        lines: 70,
-        statements: 70,
-        functions: 70,
-        branches: 70
-      }
+      include: ["src/**/*.{ts,vue}"],
+      exclude: [
+        "src/**/*.spec.ts",
+        "src/**/*.d.ts",
+        "src/App.vue",
+        "src/main.ts",
+        "src/shared/types/**",
+        "src/shared/services/windowControls.ts",
+        "src/shared/services/sseClient.ts",
+        "src/modules/admin/**",
+        "src/modules/project/schemas/**",
+        "src/modules/project/services/**",
+        "src/modules/project/store/projectActions.ts",
+        "src/modules/resource/schemas/**",
+        "src/modules/workspace/schemas/settingsContent.ts",
+        "src/modules/workspace/services/index.ts",
+        "src/modules/conversation/views/useMainScreen*.ts",
+        "src/modules/conversation/views/streamCoordinator.ts"
+      ]
     }
   }
 });

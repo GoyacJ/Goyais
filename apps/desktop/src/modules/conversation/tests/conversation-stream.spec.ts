@@ -4,12 +4,14 @@ import type { Conversation } from "@/shared/types/api";
 
 const streamConversationEventsMock = vi.fn();
 const applyIncomingExecutionEventMock = vi.fn();
+const getConversationDetailMock = vi.fn();
 
 vi.mock("@/modules/conversation/services", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/modules/conversation/services")>();
   return {
     ...actual,
-    streamConversationEvents: (...args: unknown[]) => streamConversationEventsMock(...args)
+    streamConversationEvents: (...args: unknown[]) => streamConversationEventsMock(...args),
+    getConversationDetail: (...args: unknown[]) => getConversationDetailMock(...args)
   };
 });
 
@@ -63,6 +65,13 @@ describe("conversation stream routing", () => {
     closeHandle = vi.fn();
     streamConversationEventsMock.mockReset();
     applyIncomingExecutionEventMock.mockReset();
+    getConversationDetailMock.mockReset();
+    getConversationDetailMock.mockResolvedValue({
+      conversation: conversationA,
+      messages: [],
+      executions: [],
+      snapshots: []
+    });
     streamConversationEventsMock.mockImplementation((
       _conversationId: string,
       options: { initialLastEventId?: string; onEvent: (event: unknown) => void }
@@ -140,5 +149,51 @@ describe("conversation stream routing", () => {
     expect(closeHandle).toHaveBeenCalledTimes(1);
     expect(conversationStore.streams[conversationA.id]).toBeUndefined();
     expect(conversationStore.byConversationId[conversationA.id]?.lastEventId).toBe("evt_stream_last_handle");
+  });
+
+  it("triggers forced detail hydration when server requires SSE resync", async () => {
+    const runtime = ensureConversationRuntime(conversationA, true);
+    runtime.lastEventId = "evt_stream_stale";
+    getConversationDetailMock.mockResolvedValue({
+      conversation: conversationA,
+      messages: [
+        {
+          id: "msg_server_1",
+          conversation_id: conversationA.id,
+          role: "user",
+          content: "server snapshot",
+          created_at: "2026-02-24T00:00:00Z"
+        }
+      ],
+      executions: [],
+      snapshots: []
+    });
+
+    attachConversationStream(conversationA, "at_remote");
+    onEvent?.({
+      event_id: "evt_stream_resync_signal",
+      execution_id: "",
+      conversation_id: conversationA.id,
+      trace_id: "tr_stream_resync",
+      sequence: 0,
+      queue_index: 0,
+      type: "thinking_delta",
+      timestamp: "2026-02-24T00:00:00Z",
+      payload: {
+        stage: "sse_resync_required",
+        resync_required: true,
+        reason: "last_event_id_not_found",
+        latest_event_id: "evt_stream_latest"
+      }
+    });
+
+    await vi.waitFor(() => {
+      expect(getConversationDetailMock).toHaveBeenCalledTimes(1);
+    });
+    expect(getConversationDetailMock).toHaveBeenCalledWith(conversationA.id, { token: "at_remote" });
+    expect(runtime.lastEventId).toBe("evt_stream_latest");
+    expect(runtime.messages).toHaveLength(1);
+    expect(runtime.messages[0]?.id).toBe("msg_server_1");
+    expect(applyIncomingExecutionEventMock).not.toHaveBeenCalled();
   });
 });

@@ -13,6 +13,7 @@ uv sync
 
 ```bash
 cd services/worker
+export HUB_INTERNAL_TOKEN='<shared-random-token>'
 PORT=8788 uv run python -m app.main
 ```
 

@@ -11,7 +11,21 @@ func WorkspacesHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
+			session, authErr := resolveSession(state, r)
+			if authErr != nil {
+				authErr.write(w, r)
+				return
+			}
 			itemsRaw := state.ListWorkspaces()
+			if session.WorkspaceID != localWorkspaceID {
+				filtered := make([]Workspace, 0, len(itemsRaw))
+				for _, item := range itemsRaw {
+					if item.ID == localWorkspaceID || item.ID == session.WorkspaceID {
+						filtered = append(filtered, item)
+					}
+				}
+				itemsRaw = filtered
+			}
 			items := make([]any, 0, len(itemsRaw))
 			for _, item := range itemsRaw {
 				items = append(items, item)
@@ -20,6 +34,18 @@ func WorkspacesHandler(state *AppState) http.HandlerFunc {
 			paged, next := paginateAny(items, start, limit)
 			writeJSON(w, http.StatusOK, ListEnvelope{Items: paged, NextCursor: next})
 		case http.MethodPost:
+			if _, authErr := authorizeAction(
+				state,
+				r,
+				localWorkspaceID,
+				"admin.users.manage",
+				authorizationResource{WorkspaceID: localWorkspaceID},
+				authorizationContext{OperationType: "write", ABACRequired: true},
+				RoleAdmin,
+			); authErr != nil {
+				authErr.write(w, r)
+				return
+			}
 			input := CreateWorkspaceRequest{}
 			if err := decodeJSONBody(r, &input); err != nil {
 				err.write(w, r)
@@ -57,6 +83,18 @@ func WorkspacesRemoteConnectionsHandler(state *AppState) http.HandlerFunc {
 				"Route is not implemented yet",
 				map[string]any{"method": r.Method, "path": r.URL.Path},
 			)
+			return
+		}
+		if _, authErr := authorizeAction(
+			state,
+			r,
+			localWorkspaceID,
+			"admin.users.manage",
+			authorizationResource{WorkspaceID: localWorkspaceID},
+			authorizationContext{OperationType: "write", ABACRequired: true},
+			RoleAdmin,
+		); authErr != nil {
+			authErr.write(w, r)
 			return
 		}
 

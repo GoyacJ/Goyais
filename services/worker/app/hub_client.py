@@ -22,7 +22,7 @@ class HubRequestError(RuntimeError):
 class HubClient:
     def __init__(self) -> None:
         self.base_url = os.getenv("HUB_BASE_URL", "http://127.0.0.1:8787").strip().rstrip("/")
-        self.internal_token = os.getenv("HUB_INTERNAL_TOKEN", DEFAULT_INTERNAL_TOKEN).strip()
+        self.internal_token = _resolve_hub_internal_token()
         self.timeout_seconds = 8
 
     async def register_worker(self, worker_id: str, capabilities: dict[str, Any]) -> dict[str, Any]:
@@ -70,6 +70,9 @@ class HubClient:
     def _request_sync(
         self, method: str, path: str, payload: dict[str, Any] | None
     ) -> dict[str, Any]:
+        if self.internal_token == "":
+            raise RuntimeError("HUB_INTERNAL_TOKEN is required")
+
         body: bytes | None = None
         if payload is not None:
             body = json.dumps(payload).encode("utf-8")
@@ -99,3 +102,17 @@ class HubClient:
         if not isinstance(parsed, dict):
             raise RuntimeError("hub response must be a JSON object")
         return parsed
+
+
+def _resolve_hub_internal_token() -> str:
+    token = os.getenv("HUB_INTERNAL_TOKEN", "").strip()
+    if token != "":
+        return token
+    if _allow_insecure_internal_token_default():
+        return DEFAULT_INTERNAL_TOKEN
+    return ""
+
+
+def _allow_insecure_internal_token_default() -> bool:
+    flag = os.getenv("GOYAIS_ALLOW_INSECURE_INTERNAL_TOKEN", "").strip().lower()
+    return flag in {"1", "true", "yes"}

@@ -7,9 +7,10 @@ import (
 
 func AdminPermissionsHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceHint := adminWorkspaceHint(r)
 		session, authErr := authorizeAction(
-			state, r, "", "admin.permissions.manage",
-			authorizationResource{}, authorizationContext{OperationType: methodToOperation(r.Method), ABACRequired: true}, RoleAdmin,
+			state, r, workspaceHint, "admin.permissions.manage",
+			authorizationResource{WorkspaceID: workspaceHint}, authorizationContext{OperationType: methodToOperation(r.Method), ABACRequired: true}, RoleAdmin,
 		)
 		if authErr != nil {
 			authErr.write(w, r)
@@ -20,7 +21,7 @@ func AdminPermissionsHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		workspaceID := firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("workspace_id")), session.WorkspaceID)
+		workspaceID := firstNonEmpty(workspaceHint, session.WorkspaceID)
 		switch r.Method {
 		case http.MethodGet:
 			items, err := state.authz.listPermissions(workspaceID)
@@ -54,9 +55,10 @@ func AdminPermissionsHandler(state *AppState) http.HandlerFunc {
 
 func AdminPermissionByKeyHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceHint := adminWorkspaceHint(r)
 		session, authErr := authorizeAction(
-			state, r, "", "admin.permissions.manage",
-			authorizationResource{}, authorizationContext{OperationType: methodToOperation(r.Method), ABACRequired: true}, RoleAdmin,
+			state, r, workspaceHint, "admin.permissions.manage",
+			authorizationResource{WorkspaceID: workspaceHint}, authorizationContext{OperationType: methodToOperation(r.Method), ABACRequired: true}, RoleAdmin,
 		)
 		if authErr != nil {
 			authErr.write(w, r)
@@ -66,7 +68,7 @@ func AdminPermissionByKeyHandler(state *AppState) http.HandlerFunc {
 			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Authz store is not enabled", map[string]any{})
 			return
 		}
-		workspaceID := firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("workspace_id")), session.WorkspaceID)
+		workspaceID := firstNonEmpty(workspaceHint, session.WorkspaceID)
 		permissionKey := strings.TrimSpace(r.PathValue("permission_key"))
 		switch r.Method {
 		case http.MethodDelete:
@@ -122,9 +124,10 @@ func AdminPermissionByKeyHandler(state *AppState) http.HandlerFunc {
 
 func AdminMenusHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceHint := adminWorkspaceHint(r)
 		session, authErr := authorizeAction(
-			state, r, "", "admin.menus.manage",
-			authorizationResource{}, authorizationContext{OperationType: methodToOperation(r.Method), ABACRequired: true}, RoleAdmin,
+			state, r, workspaceHint, "admin.menus.manage",
+			authorizationResource{WorkspaceID: workspaceHint}, authorizationContext{OperationType: methodToOperation(r.Method), ABACRequired: true}, RoleAdmin,
 		)
 		if authErr != nil {
 			authErr.write(w, r)
@@ -134,7 +137,7 @@ func AdminMenusHandler(state *AppState) http.HandlerFunc {
 			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Authz store is not enabled", map[string]any{})
 			return
 		}
-		workspaceID := firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("workspace_id")), session.WorkspaceID)
+		workspaceID := firstNonEmpty(workspaceHint, session.WorkspaceID)
 		switch r.Method {
 		case http.MethodGet:
 			items, err := state.authz.listMenus(workspaceID)
@@ -168,9 +171,10 @@ func AdminMenusHandler(state *AppState) http.HandlerFunc {
 
 func AdminMenuByKeyHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceHint := adminWorkspaceHint(r)
 		session, authErr := authorizeAction(
-			state, r, "", "admin.menus.manage",
-			authorizationResource{}, authorizationContext{OperationType: methodToOperation(r.Method), ABACRequired: true}, RoleAdmin,
+			state, r, workspaceHint, "admin.menus.manage",
+			authorizationResource{WorkspaceID: workspaceHint}, authorizationContext{OperationType: methodToOperation(r.Method), ABACRequired: true}, RoleAdmin,
 		)
 		if authErr != nil {
 			authErr.write(w, r)
@@ -180,7 +184,7 @@ func AdminMenuByKeyHandler(state *AppState) http.HandlerFunc {
 			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Authz store is not enabled", map[string]any{})
 			return
 		}
-		workspaceID := firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("workspace_id")), session.WorkspaceID)
+		workspaceID := firstNonEmpty(workspaceHint, session.WorkspaceID)
 		menuKey := strings.TrimSpace(r.PathValue("menu_key"))
 		switch r.Method {
 		case http.MethodDelete:
@@ -237,9 +241,10 @@ func AdminMenuByKeyHandler(state *AppState) http.HandlerFunc {
 func AdminMenuVisibilityByRoleHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		roleKey := parseRole(strings.TrimSpace(r.PathValue("role_key")))
+		workspaceHint := adminWorkspaceHint(r)
 		session, authErr := authorizeAction(
-			state, r, "", "admin.menus.manage",
-			authorizationResource{}, authorizationContext{OperationType: methodToOperation(r.Method), ABACRequired: true}, RoleAdmin,
+			state, r, workspaceHint, "admin.menus.manage",
+			authorizationResource{WorkspaceID: workspaceHint}, authorizationContext{OperationType: methodToOperation(r.Method), ABACRequired: true}, RoleAdmin,
 		)
 		if authErr != nil {
 			authErr.write(w, r)
@@ -249,7 +254,7 @@ func AdminMenuVisibilityByRoleHandler(state *AppState) http.HandlerFunc {
 			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Authz store is not enabled", map[string]any{})
 			return
 		}
-		workspaceID := firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("workspace_id")), session.WorkspaceID)
+		workspaceID := firstNonEmpty(workspaceHint, session.WorkspaceID)
 		switch r.Method {
 		case http.MethodGet:
 			items, err := state.authz.getMenuVisibility(workspaceID, roleKey)
@@ -282,9 +287,10 @@ func AdminMenuVisibilityByRoleHandler(state *AppState) http.HandlerFunc {
 
 func AdminABACPoliciesHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceHint := adminWorkspaceHint(r)
 		session, authErr := authorizeAction(
-			state, r, "", "admin.policies.manage",
-			authorizationResource{}, authorizationContext{OperationType: methodToOperation(r.Method), ABACRequired: true}, RoleAdmin,
+			state, r, workspaceHint, "admin.policies.manage",
+			authorizationResource{WorkspaceID: workspaceHint}, authorizationContext{OperationType: methodToOperation(r.Method), ABACRequired: true}, RoleAdmin,
 		)
 		if authErr != nil {
 			authErr.write(w, r)
@@ -294,7 +300,7 @@ func AdminABACPoliciesHandler(state *AppState) http.HandlerFunc {
 			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Authz store is not enabled", map[string]any{})
 			return
 		}
-		workspaceID := firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("workspace_id")), session.WorkspaceID)
+		workspaceID := firstNonEmpty(workspaceHint, session.WorkspaceID)
 		switch r.Method {
 		case http.MethodGet:
 			items, err := state.authz.listABACPolicies(workspaceID)
@@ -325,9 +331,10 @@ func AdminABACPoliciesHandler(state *AppState) http.HandlerFunc {
 
 func AdminABACPolicyByIDHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		workspaceHint := adminWorkspaceHint(r)
 		session, authErr := authorizeAction(
-			state, r, "", "admin.policies.manage",
-			authorizationResource{}, authorizationContext{OperationType: methodToOperation(r.Method), ABACRequired: true}, RoleAdmin,
+			state, r, workspaceHint, "admin.policies.manage",
+			authorizationResource{WorkspaceID: workspaceHint}, authorizationContext{OperationType: methodToOperation(r.Method), ABACRequired: true}, RoleAdmin,
 		)
 		if authErr != nil {
 			authErr.write(w, r)
@@ -345,7 +352,7 @@ func AdminABACPolicyByIDHandler(state *AppState) http.HandlerFunc {
 				return
 			}
 			writeJSON(w, http.StatusNoContent, map[string]any{})
-			_ = state.authz.appendAudit(firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("workspace_id")), session.WorkspaceID), session.UserID, "admin.policies.manage", "abac_policy", policyID, "success", map[string]any{"operation": "delete"}, TraceIDFromContext(r.Context()))
+			_ = state.authz.appendAudit(firstNonEmpty(workspaceHint, session.WorkspaceID), session.UserID, "admin.policies.manage", "abac_policy", policyID, "success", map[string]any{"operation": "delete"}, TraceIDFromContext(r.Context()))
 		case http.MethodPatch:
 			payload := struct {
 				Name         *string        `json:"name,omitempty"`
@@ -412,4 +419,8 @@ func methodToOperation(method string) string {
 	default:
 		return "unknown"
 	}
+}
+
+func adminWorkspaceHint(r *http.Request) string {
+	return strings.TrimSpace(r.URL.Query().Get("workspace_id"))
 }
