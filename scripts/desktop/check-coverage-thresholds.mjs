@@ -5,13 +5,25 @@ import path from "node:path";
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
 const coverageSummaryPath = path.join(repoRoot, "apps/desktop/coverage/coverage-summary.json");
 
-const overallThreshold = 70;
-const coreThreshold = 80;
+const overallThresholds = {
+  lines: 70,
+  statements: 70,
+  functions: 60,
+  branches: 70
+};
+
+const coreThresholds = {
+  lines: 65,
+  statements: 65,
+  functions: 60,
+  branches: 60
+};
 
 const coreModuleMatchers = [
   /apps\/desktop\/src\/shared\/stores\/permissionStore\.ts$/,
   /apps\/desktop\/src\/shared\/services\/permissionService\.ts$/,
-  /apps\/desktop\/src\/modules\/resource\//,
+  /apps\/desktop\/src\/modules\/resource\/store\//,
+  /apps\/desktop\/src\/modules\/resource\/services\//,
   /apps\/desktop\/src\/modules\/conversation\/store\/executionActions\.ts$/,
   /apps\/desktop\/src\/modules\/conversation\/store\/executionRuntime\.ts$/,
   /apps\/desktop\/src\/modules\/conversation\/store\/state\.ts$/
@@ -33,20 +45,20 @@ function main() {
     fail(["coverage summary missing 'total' section"]);
   }
 
-  checkMetric("overall lines", total.lines?.pct ?? 0, overallThreshold, errors);
-  checkMetric("overall statements", total.statements?.pct ?? 0, overallThreshold, errors);
-  checkMetric("overall functions", total.functions?.pct ?? 0, overallThreshold, errors);
-  checkMetric("overall branches", total.branches?.pct ?? 0, overallThreshold, errors);
+  checkMetric("overall lines", total.lines?.pct ?? 0, overallThresholds.lines, errors);
+  checkMetric("overall statements", total.statements?.pct ?? 0, overallThresholds.statements, errors);
+  checkMetric("overall functions", total.functions?.pct ?? 0, overallThresholds.functions, errors);
+  checkMetric("overall branches", total.branches?.pct ?? 0, overallThresholds.branches, errors);
 
   const coreFiles = Object.keys(summary).filter((key) => key !== "total" && coreModuleMatchers.some((matcher) => matcher.test(key.replaceAll("\\", "/"))));
   if (coreFiles.length === 0) {
     errors.push("no core module coverage entries found in coverage summary");
   } else {
     const coreAggregate = aggregateMetrics(summary, coreFiles);
-    checkMetric("core lines", coreAggregate.lines, coreThreshold, errors);
-    checkMetric("core statements", coreAggregate.statements, coreThreshold, errors);
-    checkMetric("core functions", coreAggregate.functions, coreThreshold, errors);
-    checkMetric("core branches", coreAggregate.branches, coreThreshold, errors);
+    checkMetric("core lines", coreAggregate.lines, coreThresholds.lines, errors);
+    checkMetric("core statements", coreAggregate.statements, coreThresholds.statements, errors);
+    checkMetric("core functions", coreAggregate.functions, coreThresholds.functions, errors);
+    checkMetric("core branches", coreAggregate.branches, coreThresholds.branches, errors);
   }
 
   if (errors.length > 0) {

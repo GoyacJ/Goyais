@@ -8,10 +8,10 @@ dev:
 	@scripts/dev/print_commands.sh $(HUB_PORT) $(WORKER_PORT) $(DESKTOP_PORT)
 
 dev-hub:
-	@cd services/hub && PORT=$(HUB_PORT) go run ./cmd/hub
+	@cd services/hub && PORT=$(HUB_PORT) HUB_INTERNAL_TOKEN=$${HUB_INTERNAL_TOKEN:?HUB_INTERNAL_TOKEN is required} go run ./cmd/hub
 
 dev-worker:
-	@cd services/worker && PORT=$(WORKER_PORT) uv run python -m app.main
+	@cd services/worker && PORT=$(WORKER_PORT) HUB_INTERNAL_TOKEN=$${HUB_INTERNAL_TOKEN:?HUB_INTERNAL_TOKEN is required} uv run python -m app.main
 
 dev-desktop:
 	@cd apps/desktop && pnpm tauri:dev
