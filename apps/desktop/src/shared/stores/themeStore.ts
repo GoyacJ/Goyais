@@ -47,8 +47,8 @@ const THEME_PRESET_PROFILES: Record<ThemePreset, ThemePresetProfile> = {
   },
   obsidian_pulse: {
     mode: "dark",
-    fontStyle: "coding",
-    fontScale: "sm"
+    fontStyle: "neutral",
+    fontScale: "md"
   },
   paper_focus: {
     mode: "light",
@@ -197,13 +197,28 @@ function ensureColorSchemeWatcher(): void {
 }
 
 function readPersistedThemeSettings(): PersistedThemeSettings {
-  const persisted = persistedThemeSettings.value;
+  const persisted = migrateLegacyPresetDefaults(persistedThemeSettings.value);
   return {
     mode: asThemeMode(persisted?.mode),
     fontStyle: asFontStyle(persisted?.fontStyle),
     fontScale: asFontScale(persisted?.fontScale),
     preset: asThemePreset(persisted?.preset)
   };
+}
+
+function migrateLegacyPresetDefaults(persisted: PersistedThemeSettings | undefined): PersistedThemeSettings {
+  const snapshot: PersistedThemeSettings = { ...(persisted ?? {}) };
+  if (
+    snapshot.preset === "obsidian_pulse" &&
+    (snapshot.mode === undefined || snapshot.mode === "dark") &&
+    (snapshot.fontStyle === undefined || snapshot.fontStyle === "coding") &&
+    (snapshot.fontScale === undefined || snapshot.fontScale === "sm")
+  ) {
+    snapshot.mode = "dark";
+    snapshot.fontStyle = "neutral";
+    snapshot.fontScale = "md";
+  }
+  return snapshot;
 }
 
 function persistThemeSettings(): void {

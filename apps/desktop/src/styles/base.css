@@ -15,6 +15,9 @@ body {
   font-family: var(--component-font-family);
   font-size: var(--component-font-size-body);
   color: var(--component-text-main);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
 }
 
