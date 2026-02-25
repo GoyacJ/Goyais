@@ -26,7 +26,7 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 				authErr.write(w, r)
 				return
 			}
-			if workspaceID == "" && session.WorkspaceID != localWorkspaceID {
+			if workspaceID == "" {
 				workspaceID = session.WorkspaceID
 			}
 			items, err := listProjectsFromStore(state, workspaceID)

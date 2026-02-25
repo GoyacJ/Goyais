@@ -140,12 +140,9 @@ func parseTokenInt(value any) (int, bool) {
 }
 
 func isValidHubInternalToken(r *http.Request) bool {
-	expected := strings.TrimSpace(os.Getenv("HUB_INTERNAL_TOKEN"))
+	expected := resolveHubInternalToken()
 	if expected == "" {
-		expected = defaultHubInternalToken
-	}
-	if expected == "" {
-		return true
+		return false
 	}
 	token := strings.TrimSpace(r.Header.Get("X-Internal-Token"))
 	if token == "" {
@@ -155,6 +152,22 @@ func isValidHubInternalToken(r *http.Request) bool {
 		}
 	}
 	return token == expected
+}
+
+func resolveHubInternalToken() string {
+	expected := strings.TrimSpace(os.Getenv("HUB_INTERNAL_TOKEN"))
+	if expected != "" {
+		return expected
+	}
+	if allowInsecureDefaultInternalToken() {
+		return defaultHubInternalToken
+	}
+	return ""
+}
+
+func allowInsecureDefaultInternalToken() bool {
+	flag := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_ALLOW_INSECURE_INTERNAL_TOKEN")))
+	return flag == "1" || flag == "true" || flag == "yes"
 }
 
 func appendExecutionMessageLocked(state *AppState, conversationID string, role MessageRole, content string, queueIndex int, canRollback bool, createdAt string) {

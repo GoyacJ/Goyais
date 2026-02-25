@@ -1,6 +1,10 @@
-import { streamConversationEvents } from "@/modules/conversation/services";
+import { getConversationDetail, streamConversationEvents } from "@/modules/conversation/services";
 import { applyIncomingExecutionEvent } from "@/modules/conversation/store/executionActions";
-import { appendRuntimeEvent, conversationStore } from "@/modules/conversation/store/state";
+import {
+  appendRuntimeEvent,
+  conversationStore,
+  hydrateConversationRuntime
+} from "@/modules/conversation/store/state";
 import { createExecutionEvent } from "@/modules/conversation/store/events";
 import type { Conversation, ExecutionEvent } from "@/shared/types/api";
 
@@ -13,6 +17,7 @@ export function attachConversationStream(conversation: Conversation, token?: str
   if (!runtime || conversationStore.streams[conversation.id]) {
     return;
   }
+  let resyncInFlight = false;
 
   conversationStore.streams[conversation.id] = streamConversationEvents(conversation.id, {
     token,
@@ -20,6 +25,36 @@ export function attachConversationStream(conversation: Conversation, token?: str
     onEvent: (event) => {
       const incoming = normalizeExecutionEvent(event, conversation.id);
       if (!incoming) {
+        return;
+      }
+      if (isSSEBackfillResyncEvent(incoming)) {
+        const latestEventID = resolveLatestEventIDFromResyncPayload(incoming);
+        runtime.lastEventId = latestEventID;
+        if (resyncInFlight) {
+          return;
+        }
+        resyncInFlight = true;
+        void getConversationDetail(conversation.id, { token })
+          .then((detail) => {
+            const current = conversationStore.byConversationId[conversation.id];
+            if (!current) {
+              return;
+            }
+            const isGitProject = current.diffCapability.can_commit;
+            hydrateConversationRuntime(conversation, isGitProject, detail);
+            if (latestEventID !== "") {
+              current.lastEventId = latestEventID;
+            }
+          })
+          .catch((error) => {
+            conversationStore.error = toError(error).message;
+          })
+          .finally(() => {
+            resyncInFlight = false;
+          });
+        return;
+      }
+      if (resyncInFlight) {
         return;
       }
       const incomingEventID = incoming.event_id?.trim();
@@ -73,6 +108,25 @@ export function detachConversationStream(conversationId: string): void {
   delete conversationStore.streams[conversationId];
 }
 
+function isSSEBackfillResyncEvent(event: ExecutionEvent): boolean {
+  if (event.type !== "thinking_delta") {
+    return false;
+  }
+  const payload = event.payload;
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+  return payload.resync_required === true && payload.reason === "last_event_id_not_found";
+}
+
+function resolveLatestEventIDFromResyncPayload(event: ExecutionEvent): string {
+  const raw = event.payload?.latest_event_id;
+  if (typeof raw !== "string") {
+    return "";
+  }
+  return raw.trim();
+}
+
 function normalizeExecutionEvent(raw: unknown, fallbackConversationId: string): ExecutionEvent | null {
   if (!raw || typeof raw !== "object") {
     return null;
@@ -90,4 +144,11 @@ function normalizeExecutionEvent(raw: unknown, fallbackConversationId: string): 
     ...candidate,
     conversation_id: normalizedConversationId
   } as ExecutionEvent;
+}
+
+function toError(value: unknown): Error {
+  if (value instanceof Error) {
+    return value;
+  }
+  return new Error("Unknown conversation stream error");
 }

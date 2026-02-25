@@ -11,6 +11,14 @@ from app.safety.path_guard import PathGuardError, resolve_guarded_path
 from app.safety.risk_gate import classify_content_risk, classify_tool_risk
 from app.tools.subagent_tools import subagent_tool_spec
 
+__all__ = [
+    "ToolExecutionResult",
+    "classify_content_risk",
+    "classify_tool_risk",
+    "default_tools",
+    "execute_tool_call",
+]
+
 
 @dataclass(slots=True)
 class ToolExecutionResult:
@@ -171,7 +179,7 @@ def _run_command(arguments: dict[str, Any], root: Path, tool_name: str) -> ToolE
     try:
         result = subprocess.run(
             command,
-            shell=True,
+            shell=False,
             cwd=root,
             capture_output=True,
             text=True,

@@ -42,6 +42,17 @@ func resolveSessionForWorkspace(state *AppState, r *http.Request, workspaceHint 
 	return session, nil
 }
 
+func resolveTargetWorkspace(session Session, workspaceID string, resource authorizationResource) string {
+	targetWorkspace := strings.TrimSpace(workspaceID)
+	if targetWorkspace == "" {
+		targetWorkspace = strings.TrimSpace(resource.WorkspaceID)
+	}
+	if targetWorkspace == "" {
+		targetWorkspace = strings.TrimSpace(session.WorkspaceID)
+	}
+	return targetWorkspace
+}
+
 func requireAuthorization(state *AppState, r *http.Request, workspaceID string, allowedRoles ...Role) (Session, *apiError) {
 	session, err := resolveSessionForWorkspace(state, r, workspaceID)
 	if err != nil {

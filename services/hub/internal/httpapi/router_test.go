@@ -120,6 +120,112 @@ func TestCreateRemoteWorkspaceAndList(t *testing.T) {
 	}
 }
 
+func TestRemoteSessionWorkspaceListIsScoped(t *testing.T) {
+	router := NewRouter()
+	remoteA := createRemoteWorkspace(t, router, "Remote Scoped A", "http://127.0.0.1:9881", false)
+	remoteB := createRemoteWorkspace(t, router, "Remote Scoped B", "http://127.0.0.1:9882", false)
+	token := loginRemoteWorkspace(t, router, remoteA, "scoped-user", "pw", RoleDeveloper, true)
+
+	res := performJSONRequest(t, router, http.MethodGet, "/v1/workspaces", nil, map[string]string{
+		"Authorization": "Bearer " + token,
+	})
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	items := payload["items"].([]any)
+	ids := map[string]bool{}
+	for _, item := range items {
+		workspace := item.(map[string]any)
+		ids[workspace["id"].(string)] = true
+	}
+	if !ids[localWorkspaceID] {
+		t.Fatalf("expected local workspace in scoped list")
+	}
+	if !ids[remoteA] {
+		t.Fatalf("expected current remote workspace %s in scoped list", remoteA)
+	}
+	if ids[remoteB] {
+		t.Fatalf("did not expect other remote workspace %s in scoped list", remoteB)
+	}
+}
+
+func TestRemoteSessionCannotManageWorkspaceCatalog(t *testing.T) {
+	router := NewRouter()
+	remoteID := createRemoteWorkspace(t, router, "Remote Manage Denied", "http://127.0.0.1:9883", false)
+	token := loginRemoteWorkspace(t, router, remoteID, "deny-user", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	createRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces", map[string]any{
+		"name":    "Should Fail",
+		"hub_url": "http://127.0.0.1:9980",
+	}, authHeaders)
+	if createRes.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 create denied, got %d (%s)", createRes.Code, createRes.Body.String())
+	}
+
+	connectRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/remote-connections", map[string]any{
+		"name":     "Should Fail",
+		"hub_url":  "http://127.0.0.1:9981",
+		"username": "alice",
+		"password": "pw",
+	}, authHeaders)
+	if connectRes.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 remote connection denied, got %d (%s)", connectRes.Code, connectRes.Body.String())
+	}
+}
+
+func TestLocalAnonymousListEndpointsAreScopedToLocalWorkspace(t *testing.T) {
+	router := NewRouter()
+	remoteID := createRemoteWorkspace(t, router, "Remote Scoped Lists", "http://127.0.0.1:9884", false)
+	token := loginRemoteWorkspace(t, router, remoteID, "scoped-lists-user", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
+		"workspace_id":   remoteID,
+		"directory_path": "/tmp/scoped-lists-alpha",
+	}, authHeaders)
+	if projectRes.Code != http.StatusCreated {
+		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
+	}
+	projectPayload := map[string]any{}
+	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
+	projectID := projectPayload["id"].(string)
+
+	conversationRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+		"workspace_id": remoteID,
+		"name":         "ScopedConversation",
+	}, authHeaders)
+	if conversationRes.Code != http.StatusCreated {
+		t.Fatalf("expected create conversation 201, got %d (%s)", conversationRes.Code, conversationRes.Body.String())
+	}
+	conversationPayload := map[string]any{}
+	mustDecodeJSON(t, conversationRes.Body.Bytes(), &conversationPayload)
+	conversationID := conversationPayload["id"].(string)
+
+	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
+		"content": "scoped message",
+	}, authHeaders)
+	if messageRes.Code != http.StatusCreated {
+		t.Fatalf("expected create execution 201, got %d (%s)", messageRes.Code, messageRes.Body.String())
+	}
+
+	for _, path := range []string{"/v1/projects", "/v1/conversations", "/v1/executions"} {
+		res := performJSONRequest(t, router, http.MethodGet, path, nil, nil)
+		if res.Code != http.StatusOK {
+			t.Fatalf("%s expected 200, got %d (%s)", path, res.Code, res.Body.String())
+		}
+		payload := map[string]any{}
+		mustDecodeJSON(t, res.Body.Bytes(), &payload)
+		items := payload["items"].([]any)
+		if len(items) != 0 {
+			t.Fatalf("%s expected local-only empty items, got %#v", path, items)
+		}
+	}
+}
+
 func TestLoginValidationAndAuthErrors(t *testing.T) {
 	router := NewRouter()
 	remoteID := createRemoteWorkspace(t, router, "Remote B", "http://127.0.0.1:9877", false)
@@ -396,6 +502,12 @@ func loginRemoteWorkspace(t *testing.T, router http.Handler, workspaceID string,
 		t.Fatalf("expected access token in login response")
 	}
 	return payload.AccessToken
+}
+
+func internalAuthHeaders(t *testing.T) map[string]string {
+	t.Helper()
+	t.Setenv("HUB_INTERNAL_TOKEN", defaultHubInternalToken)
+	return map[string]string{"X-Internal-Token": defaultHubInternalToken}
 }
 
 func performJSONRequest(t *testing.T, router http.Handler, method string, path string, body map[string]any, headers map[string]string) *httptest.ResponseRecorder {

@@ -46,15 +46,15 @@ func appendExecutionEventLocked(state *AppState, event ExecutionEvent) Execution
 	return normalized
 }
 
-func listExecutionEventsSinceLocked(state *AppState, conversationID string, lastEventID string) []ExecutionEvent {
+func listExecutionEventsSinceLocked(state *AppState, conversationID string, lastEventID string) ([]ExecutionEvent, bool) {
 	items := state.executionEvents[conversationID]
 	if len(items) == 0 {
-		return []ExecutionEvent{}
+		return []ExecutionEvent{}, lastEventID != ""
 	}
 	if lastEventID == "" {
 		result := make([]ExecutionEvent, len(items))
 		copy(result, items)
-		return result
+		return result, false
 	}
 
 	start := 0
@@ -66,12 +66,17 @@ func listExecutionEventsSinceLocked(state *AppState, conversationID string, last
 			break
 		}
 	}
-	if !found || start >= len(items) {
-		return []ExecutionEvent{}
+	if !found {
+		result := make([]ExecutionEvent, len(items))
+		copy(result, items)
+		return result, true
+	}
+	if start >= len(items) {
+		return []ExecutionEvent{}, false
 	}
 	result := make([]ExecutionEvent, len(items)-start)
 	copy(result, items[start:])
-	return result
+	return result, false
 }
 
 func registerConversationEventSubscriberLocked(state *AppState, conversationID string) (string, chan ExecutionEvent) {

@@ -86,6 +86,16 @@ func authorizeAction(state *AppState, r *http.Request, workspaceID string, actio
 		}
 	}
 	if session.WorkspaceID == localWorkspaceID {
+		targetWorkspace := resolveTargetWorkspace(session, normalizedWorkspace, resource)
+		if targetWorkspace != "" && targetWorkspace != localWorkspaceID {
+			appendAuthzAudit(state, r, targetWorkspace, session.UserID, action, resource, "denied", map[string]any{"reason": "workspace_mismatch"})
+			return Session{}, &apiError{
+				status:  http.StatusForbidden,
+				code:    "ACCESS_DENIED",
+				message: "Workspace access is denied",
+				details: map[string]any{"workspace_id": targetWorkspace},
+			}
+		}
 		appendAuthzAudit(state, r, localWorkspaceID, session.UserID, action, resource, "success", map[string]any{"mode": "local"})
 		return session, nil
 	}
