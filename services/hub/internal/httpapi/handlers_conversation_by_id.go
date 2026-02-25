@@ -27,7 +27,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
-			messages, _ := sanitizeLegacyWelcomeMessages(state.conversationMessages[conversationID])
+			messages := append([]ConversationMessage{}, state.conversationMessages[conversationID]...)
 			snapshots := cloneConversationSnapshots(state.conversationSnapshots[conversationID])
 			executions := append([]Execution{}, listConversationExecutionsLocked(state, conversationID)...)
 			state.mu.RUnlock()
@@ -181,7 +181,7 @@ func cloneConversationSnapshots(items []ConversationSnapshot) []ConversationSnap
 	result := make([]ConversationSnapshot, 0, len(items))
 	for _, item := range items {
 		copyItem := item
-		copyItem.Messages, _ = sanitizeLegacyWelcomeMessages(item.Messages)
+		copyItem.Messages = append([]ConversationMessage{}, item.Messages...)
 		copyItem.ExecutionIDs = append([]string{}, item.ExecutionIDs...)
 		result = append(result, copyItem)
 	}

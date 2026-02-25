@@ -1,0 +1,14 @@
+{
+  "name": "@goyais/slides",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "slides:dev": "slidev slides.md --host 127.0.0.1 --port 3030",
+    "slides:build": "slidev build slides.md --out dist"
+  },
+  "devDependencies": {
+    "@slidev/cli": "catalog:frontend",
+    "@slidev/theme-default": "catalog:frontend"
+  }
+}

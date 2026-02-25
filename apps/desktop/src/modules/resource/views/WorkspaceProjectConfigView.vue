@@ -33,7 +33,7 @@
       </ResourceConfigTable>
     </section>
 
-    <BaseModal :open="form.open" class="project-binding-modal">
+    <BaseModal :open="form.open" class="project-binding-modal" @close="closeProjectBinding">
       <template #title>
         <div class="modal-header">
           <h3 class="modal-title">项目绑定配置</h3>

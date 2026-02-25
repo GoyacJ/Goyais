@@ -1,5 +1,8 @@
 <template>
-  <div class="list-item" :class="{ active }">
+  <div
+    class="flex items-center justify-between gap-[var(--global-space-8)] border border-[var(--component-list-item-border)] rounded-[var(--global-radius-8)] px-[var(--global-space-12)] py-[var(--global-space-8)] text-[var(--component-list-item-fg)] hover:bg-[var(--component-list-item-bg-hover)]"
+    :class="{ 'bg-[var(--component-list-item-bg-active)]': active }"
+  >
     <slot />
   </div>
 </template>
@@ -14,24 +17,3 @@ withDefaults(
   }
 );
 </script>
-
-<style scoped>
-.list-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--global-space-8);
-  color: var(--component-list-item-fg);
-  border: 1px solid var(--component-list-item-border);
-  border-radius: var(--global-radius-8);
-  padding: var(--global-space-8) var(--global-space-12);
-}
-
-.list-item:hover {
-  background: var(--component-list-item-bg-hover);
-}
-
-.list-item.active {
-  background: var(--component-list-item-bg-active);
-}
-</style>

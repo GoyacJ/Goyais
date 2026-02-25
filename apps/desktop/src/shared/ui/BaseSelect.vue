@@ -1,6 +1,11 @@
 <template>
-  <div class="ui-select-wrap">
-    <select class="ui-select" :value="modelValue" :disabled="disabled" @change="emitValue">
+  <div>
+    <select
+      class="h-[var(--component-input-height)] w-full border rounded-[var(--component-input-radius)] border-[var(--component-select-trigger-border)] bg-[var(--component-select-trigger-bg)] px-[var(--global-space-12)] text-[var(--global-font-size-13)] text-[var(--component-select-trigger-fg)] [font-family:var(--global-font-family-ui)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--semantic-focus-ring)]"
+      :value="modelValue"
+      :disabled="disabled"
+      @change="emitValue"
+    >
       <option v-for="option in options" :key="option.value" :value="option.value">
         {{ option.label }}
       </option>
@@ -24,21 +29,3 @@ function emitValue(event: Event): void {
   emit("update:modelValue", target.value);
 }
 </script>
-
-<style scoped>
-.ui-select {
-  height: var(--component-input-height);
-  border-radius: var(--component-input-radius);
-  border: 1px solid var(--component-select-trigger-border);
-  background: var(--component-select-trigger-bg);
-  color: var(--component-select-trigger-fg);
-  padding: 0 var(--global-space-12);
-  font-size: var(--global-font-size-13);
-  font-family: var(--global-font-family-ui);
-  width: 100%;
-}
-
-.ui-select:focus-visible {
-  outline: 1px solid var(--semantic-focus-ring);
-}
-</style>

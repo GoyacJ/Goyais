@@ -1,4 +1,4 @@
-import type { AuthMode, ConnectionStatus, ConversationStatus, Role, TraceDetailLevel, WorkspaceMode } from "@/shared/types/api-common";
+import type { AuthMode, ConnectionStatus, ConversationStatus, Role, TraceDetailLevel, WorkspaceMode } from "./api-common";
 
 export type Workspace = {
   id: string;

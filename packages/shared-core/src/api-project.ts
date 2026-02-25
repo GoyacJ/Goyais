@@ -7,7 +7,7 @@ import type {
   MessageRole,
   QueueState,
   TraceDetailLevel
-} from "@/shared/types/api-common";
+} from "./api-common";
 
 export type Project = {
   id: string;

@@ -1,15 +1,17 @@
 <template>
-  <article class="row">
-    <div class="meta">
-      <p class="label">{{ label }}</p>
-      <p v-if="description !== ''" class="description">{{ description }}</p>
-      <p v-if="status !== ''" class="status">{{ status }}</p>
-      <p v-if="unsupportedReason !== ''" class="unsupported">{{ unsupportedReason }}</p>
+  <article
+    class="row grid items-start gap-[var(--global-space-12)] border-t border-[var(--semantic-divider)] py-[var(--global-space-8)] first:(border-t-0 pt-0) [grid-template-columns:minmax(220px,1fr)_minmax(240px,360px)] max-[1180px]:[grid-template-columns:minmax(0,1fr)]"
+  >
+    <div class="meta grid gap-[var(--global-space-4)]">
+      <p class="label m-0 text-[var(--global-font-size-13)] text-[var(--semantic-text)] [font-weight:var(--global-font-weight-600)]">{{ label }}</p>
+      <p v-if="description !== ''" class="description m-0 text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)]">{{ description }}</p>
+      <p v-if="status !== ''" class="status m-0 text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)]">{{ status }}</p>
+      <p v-if="unsupportedReason !== ''" class="unsupported m-0 text-[var(--global-font-size-12)] text-[var(--semantic-warning)]">{{ unsupportedReason }}</p>
     </div>
 
-    <div class="control">
+    <div class="control grid gap-[var(--global-space-4)]">
       <slot />
-      <p v-if="hint !== ''" class="hint">{{ hint }}</p>
+      <p v-if="hint !== ''" class="hint m-0 text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)]">{{ hint }}</p>
     </div>
   </article>
 </template>
@@ -31,57 +33,3 @@ withDefaults(
   }
 );
 </script>
-
-<style scoped>
-.row {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(240px, 360px);
-  gap: var(--global-space-12);
-  align-items: start;
-  padding: var(--global-space-8) 0;
-  border-top: 1px solid var(--semantic-divider);
-}
-
-.row:first-child {
-  border-top: 0;
-  padding-top: 0;
-}
-
-.meta,
-.control {
-  display: grid;
-  gap: var(--global-space-4);
-}
-
-.label,
-.description,
-.status,
-.hint,
-.unsupported {
-  margin: 0;
-}
-
-.label {
-  color: var(--semantic-text);
-  font-size: var(--global-font-size-13);
-  font-weight: var(--global-font-weight-600);
-}
-
-.description,
-.hint,
-.status {
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-12);
-}
-
-.unsupported {
-  color: var(--semantic-warning);
-  font-size: var(--global-font-size-12);
-}
-
-@media (max-width: 1180px) {
-  .row {
-    grid-template-columns: 1fr;
-  }
-}
-</style>

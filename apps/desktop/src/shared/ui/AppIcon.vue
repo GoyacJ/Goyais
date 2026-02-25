@@ -3,7 +3,7 @@
     :is="resolvedIcon"
     :size="size"
     :stroke-width="strokeWidth"
-    class="app-icon"
+    class="inline-flex shrink-0"
     aria-hidden="true"
   />
 </template>
@@ -92,10 +92,3 @@ const iconMap = {
 
 const resolvedIcon = computed(() => iconMap[props.name as keyof typeof iconMap] ?? Square);
 </script>
-
-<style scoped>
-.app-icon {
-  display: inline-flex;
-  flex-shrink: 0;
-}
-</style>

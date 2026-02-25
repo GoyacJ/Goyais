@@ -57,11 +57,6 @@ func extractAccessToken(r *http.Request) string {
 			return strings.TrimSpace(strings.TrimPrefix(authorization, prefix))
 		}
 	}
-
-	legacyToken := strings.TrimSpace(r.Header.Get("X-Auth-Token"))
-	if legacyToken != "" {
-		return legacyToken
-	}
 	if r.Method == http.MethodGet {
 		return strings.TrimSpace(r.URL.Query().Get("access_token"))
 	}

@@ -50,11 +50,11 @@
   --global-color-overlay-dark: #101010e6;
   --global-color-overlay-light: #1f1f1f14;
 
-  --global-font-family-ui: "SF Pro Text", "PingFang SC", "Noto Sans", sans-serif;
+  --global-font-family-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --global-font-family-code: ui-monospace, "SF Mono", Menlo, monospace;
   --global-font-family-icon: "Material Symbols Outlined", "SF Pro Text", "PingFang SC", sans-serif;
-  --global-font-size-11: 11px;
-  --global-font-size-12: 12px;
+  --global-font-size-11: 12px;
+  --global-font-size-12: 13px;
   --global-font-size-13: 13px;
   --global-font-size-14: 14px;
   --global-font-size-16: 16px;

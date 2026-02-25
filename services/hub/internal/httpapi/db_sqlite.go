@@ -5,8 +5,6 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +16,6 @@ import (
 const (
 	defaultHubDBAppName    = "goyais"
 	defaultHubDBFileName   = "hub.sqlite3"
-	legacyHubDBPath        = "data/hub.sqlite3"
 	defaultAccessTokenTTL  = time.Hour
 	defaultRefreshTokenTTL = 24 * time.Hour
 )
@@ -37,9 +34,6 @@ func openAuthzStore(path string) (*authzStore, error) {
 		absPath, err := filepath.Abs(path)
 		if err != nil {
 			return nil, fmt.Errorf("resolve db path: %w", err)
-		}
-		if err := migrateLegacyHubDBPath(absPath); err != nil {
-			return nil, fmt.Errorf("migrate legacy db path: %w", err)
 		}
 
 		if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
@@ -336,120 +330,48 @@ func (s *authzStore) migrate() error {
 			return fmt.Errorf("apply migration: %w", err)
 		}
 	}
-	if err := s.migrateResourceConfigsDropNameColumn(); err != nil {
-		return fmt.Errorf("migrate resource_configs schema: %w", err)
-	}
-	if err := s.migrateProjectsAddCurrentRevision(); err != nil {
-		return fmt.Errorf("migrate projects schema: %w", err)
-	}
-	if err := s.migrateExecutionsAddAgentConfigSnapshot(); err != nil {
-		return fmt.Errorf("migrate executions schema: %w", err)
-	}
-	if err := s.migrateExecutionsAddTokenColumns(); err != nil {
-		return fmt.Errorf("migrate executions token schema: %w", err)
+	if err := s.validateStrictSchema(); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (s *authzStore) migrateExecutionsAddAgentConfigSnapshot() error {
-	hasColumn, err := tableHasColumn(s.db, "executions", "agent_config_snapshot_json")
-	if err != nil {
-		return err
+func (s *authzStore) validateStrictSchema() error {
+	requiredColumns := []struct {
+		table  string
+		column string
+	}{
+		{table: "projects", column: "current_revision"},
+		{table: "executions", column: "agent_config_snapshot_json"},
+		{table: "executions", column: "tokens_in"},
+		{table: "executions", column: "tokens_out"},
 	}
-	if hasColumn {
-		return nil
-	}
-	_, err = s.db.Exec(`ALTER TABLE executions ADD COLUMN agent_config_snapshot_json TEXT`)
-	return err
-}
-
-func (s *authzStore) migrateExecutionsAddTokenColumns() error {
-	hasTokensIn, err := tableHasColumn(s.db, "executions", "tokens_in")
-	if err != nil {
-		return err
-	}
-	if !hasTokensIn {
-		if _, err := s.db.Exec(`ALTER TABLE executions ADD COLUMN tokens_in INTEGER NOT NULL DEFAULT 0`); err != nil {
-			return err
-		}
-	}
-
-	hasTokensOut, err := tableHasColumn(s.db, "executions", "tokens_out")
-	if err != nil {
-		return err
-	}
-	if hasTokensOut {
-		return nil
-	}
-	_, err = s.db.Exec(`ALTER TABLE executions ADD COLUMN tokens_out INTEGER NOT NULL DEFAULT 0`)
-	return err
-}
-
-func (s *authzStore) migrateProjectsAddCurrentRevision() error {
-	hasCurrentRevision, err := tableHasColumn(s.db, "projects", "current_revision")
-	if err != nil {
-		return err
-	}
-	if hasCurrentRevision {
-		return nil
-	}
-	_, err = s.db.Exec(`ALTER TABLE projects ADD COLUMN current_revision INTEGER NOT NULL DEFAULT 0`)
-	return err
-}
-
-func (s *authzStore) migrateResourceConfigsDropNameColumn() error {
-	hasNameColumn, err := tableHasColumn(s.db, "resource_configs", "name")
-	if err != nil {
-		return err
-	}
-	if !hasNameColumn {
-		return nil
-	}
-
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
+	for _, field := range requiredColumns {
+		ok, err := tableHasColumn(s.db, field.table, field.column)
 		if err != nil {
-			_ = tx.Rollback()
+			return fmt.Errorf("validate schema %s.%s: %w", field.table, field.column, err)
 		}
-	}()
-
-	if _, err = tx.Exec(`DROP INDEX IF EXISTS idx_resource_configs_workspace_type`); err != nil {
-		return err
-	}
-	if _, err = tx.Exec(`ALTER TABLE resource_configs RENAME TO resource_configs_legacy`); err != nil {
-		return err
-	}
-	if _, err = tx.Exec(
-		`CREATE TABLE resource_configs (
-			id TEXT PRIMARY KEY,
-			workspace_id TEXT NOT NULL,
-			type TEXT NOT NULL,
-			enabled INTEGER NOT NULL DEFAULT 1,
-			payload_json TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		)`,
-	); err != nil {
-		return err
-	}
-	if _, err = tx.Exec(
-		`INSERT INTO resource_configs(id, workspace_id, type, enabled, payload_json, created_at, updated_at)
-		 SELECT id, workspace_id, type, enabled, payload_json, created_at, updated_at
-		 FROM resource_configs_legacy`,
-	); err != nil {
-		return err
-	}
-	if _, err = tx.Exec(`DROP TABLE resource_configs_legacy`); err != nil {
-		return err
-	}
-	if _, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_resource_configs_workspace_type ON resource_configs(workspace_id, type)`); err != nil {
-		return err
+		if !ok {
+			return fmt.Errorf("legacy db schema detected: missing required column %s.%s; remove existing hub db and restart", field.table, field.column)
+		}
 	}
 
-	return tx.Commit()
+	forbiddenLegacyColumns := []struct {
+		table  string
+		column string
+	}{
+		{table: "resource_configs", column: "name"},
+	}
+	for _, field := range forbiddenLegacyColumns {
+		ok, err := tableHasColumn(s.db, field.table, field.column)
+		if err != nil {
+			return fmt.Errorf("validate schema %s.%s: %w", field.table, field.column, err)
+		}
+		if ok {
+			return fmt.Errorf("legacy db schema detected: unexpected legacy column %s.%s; remove existing hub db and restart", field.table, field.column)
+		}
+	}
+	return nil
 }
 
 func tableHasColumn(db *sql.DB, table string, column string) (bool, error) {
@@ -650,91 +572,13 @@ func resolveHubDBPathFromEnv() string {
 func defaultHubDBPath() string {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
-		return legacyHubDBPath
+		return defaultHubDBFileName
 	}
 	configDir = strings.TrimSpace(configDir)
 	if configDir == "" {
-		return legacyHubDBPath
+		return defaultHubDBFileName
 	}
 	return filepath.Join(configDir, defaultHubDBAppName, defaultHubDBFileName)
-}
-
-func migrateLegacyHubDBPath(targetAbsPath string) error {
-	normalizedTarget := filepath.Clean(strings.TrimSpace(targetAbsPath))
-	if normalizedTarget == "" {
-		return nil
-	}
-
-	legacyAbsPath, err := filepath.Abs(legacyHubDBPath)
-	if err != nil {
-		return fmt.Errorf("resolve legacy db path: %w", err)
-	}
-	if filepath.Clean(legacyAbsPath) == normalizedTarget {
-		return nil
-	}
-
-	if _, err := os.Stat(normalizedTarget); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("check target db path: %w", err)
-	}
-
-	if _, err := os.Stat(legacyAbsPath); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("check legacy db path: %w", err)
-	}
-
-	if err := copyFilePreserveMode(legacyAbsPath, normalizedTarget); err != nil {
-		return err
-	}
-	log.Printf("audit: migrated hub sqlite db from %s to %s", legacyAbsPath, normalizedTarget)
-	return nil
-}
-
-func copyFilePreserveMode(sourcePath string, targetPath string) error {
-	sourceFile, err := os.Open(sourcePath)
-	if err != nil {
-		return fmt.Errorf("open legacy db file: %w", err)
-	}
-	defer sourceFile.Close()
-
-	stat, err := sourceFile.Stat()
-	if err != nil {
-		return fmt.Errorf("stat legacy db file: %w", err)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-		return fmt.Errorf("create target db directory: %w", err)
-	}
-
-	perm := stat.Mode().Perm()
-	if perm == 0 {
-		perm = 0o600
-	}
-	targetFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, perm)
-	if err != nil {
-		return fmt.Errorf("create target db file: %w", err)
-	}
-
-	_, copyErr := io.Copy(targetFile, sourceFile)
-	syncErr := targetFile.Sync()
-	closeErr := targetFile.Close()
-
-	if copyErr != nil {
-		_ = os.Remove(targetPath)
-		return fmt.Errorf("copy legacy db file: %w", copyErr)
-	}
-	if syncErr != nil {
-		_ = os.Remove(targetPath)
-		return fmt.Errorf("sync target db file: %w", syncErr)
-	}
-	if closeErr != nil {
-		_ = os.Remove(targetPath)
-		return fmt.Errorf("close target db file: %w", closeErr)
-	}
-	return nil
 }
 
 func boolToInt(value bool) int {

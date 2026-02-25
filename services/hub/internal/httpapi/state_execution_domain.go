@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"sort"
-	"strings"
-	"time"
 )
 
 func (s *AppState) hydrateExecutionDomainFromStore() {
@@ -39,18 +37,8 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 		conversationID := message.ConversationID
 		s.conversationMessages[conversationID] = append(s.conversationMessages[conversationID], message)
 	}
-	removedLegacyWelcomeConversationIDs := make([]string, 0)
-	for conversationID, messages := range s.conversationMessages {
-		sanitizedMessages, removed := sanitizeLegacyWelcomeMessages(messages)
-		s.conversationMessages[conversationID] = sanitizedMessages
-		if removed {
-			removedLegacyWelcomeConversationIDs = append(removedLegacyWelcomeConversationIDs, conversationID)
-		}
-	}
-	sort.Strings(removedLegacyWelcomeConversationIDs)
 	for _, conversationSnapshot := range snapshot.ConversationSnapshots {
 		conversationID := conversationSnapshot.ConversationID
-		conversationSnapshot.Messages, _ = sanitizeLegacyWelcomeMessages(conversationSnapshot.Messages)
 		s.conversationSnapshots[conversationID] = append(s.conversationSnapshots[conversationID], conversationSnapshot)
 	}
 	for _, execution := range snapshot.Executions {
@@ -98,101 +86,7 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 	for _, worker := range snapshot.Workers {
 		s.workers[worker.WorkerID] = worker
 	}
-	repairedExecutionIDs, removedControlCommands := repairLegacyExecutionDomainLocked(s)
 	s.mu.Unlock()
-
-	if len(repairedExecutionIDs) > 0 || removedControlCommands > 0 || len(removedLegacyWelcomeConversationIDs) > 0 {
-		log.Printf(
-			"audit: repaired legacy execution domain confirming_executions=%d removed_control_commands=%d removed_legacy_welcome_conversations=%d execution_ids=%v conversation_ids=%v",
-			len(repairedExecutionIDs),
-			removedControlCommands,
-			len(removedLegacyWelcomeConversationIDs),
-			repairedExecutionIDs,
-			removedLegacyWelcomeConversationIDs,
-		)
-		syncExecutionDomainBestEffort(s)
-	}
-}
-
-func repairLegacyExecutionDomainLocked(state *AppState) ([]string, int) {
-	if state == nil {
-		return []string{}, 0
-	}
-
-	now := time.Now().UTC().Format(time.RFC3339)
-	repairedExecutionIDs := make([]string, 0)
-	for executionID, execution := range state.executions {
-		if execution.State != ExecutionState("confirming") {
-			continue
-		}
-		execution.State = ExecutionStatePending
-		if strings.TrimSpace(execution.UpdatedAt) == "" {
-			execution.UpdatedAt = now
-		}
-		state.executions[executionID] = execution
-		delete(state.executionLeases, executionID)
-		repairedExecutionIDs = append(repairedExecutionIDs, executionID)
-	}
-
-	removedControlCommands := 0
-	for executionID, commands := range state.executionControlQueues {
-		filtered := make([]ExecutionControlCommand, 0, len(commands))
-		lastSeq := 0
-		for _, command := range commands {
-			if command.Type != ExecutionControlCommandTypeStop {
-				removedControlCommands++
-				continue
-			}
-			filtered = append(filtered, command)
-			if command.Seq > lastSeq {
-				lastSeq = command.Seq
-			}
-		}
-
-		if len(filtered) == 0 {
-			delete(state.executionControlQueues, executionID)
-			if lastSeq == 0 {
-				lastSeq = state.executionControlSeq[executionID]
-			}
-			state.executionControlSeq[executionID] = lastSeq
-			continue
-		}
-		state.executionControlQueues[executionID] = filtered
-		state.executionControlSeq[executionID] = lastSeq
-	}
-
-	for conversationID, conversation := range state.conversations {
-		conversation.ActiveExecutionID = nil
-		hasQueued := false
-		for _, executionID := range state.conversationExecutionOrder[conversationID] {
-			execution, exists := state.executions[executionID]
-			if !exists {
-				continue
-			}
-			if execution.State == ExecutionStatePending || execution.State == ExecutionStateExecuting {
-				activeExecutionID := executionID
-				conversation.ActiveExecutionID = &activeExecutionID
-				break
-			}
-			if execution.State == ExecutionStateQueued {
-				hasQueued = true
-			}
-		}
-
-		switch {
-		case conversation.ActiveExecutionID != nil:
-			conversation.QueueState = QueueStateRunning
-		case hasQueued:
-			conversation.QueueState = QueueStateQueued
-		default:
-			conversation.QueueState = QueueStateIdle
-		}
-
-		state.conversations[conversationID] = conversation
-	}
-
-	sort.Strings(repairedExecutionIDs)
-	return repairedExecutionIDs, removedControlCommands
 }
 
 func syncExecutionDomainBestEffort(state *AppState) {

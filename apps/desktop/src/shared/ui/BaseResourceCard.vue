@@ -1,33 +1,36 @@
 <template>
-  <BaseCard class="resource-card">
+  <BaseCard class="gap-[var(--global-space-8)]">
     <template #header>
-      <div class="card-header">
-        <div class="title">
+      <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-[var(--global-space-8)]">
+        <div class="min-w-0 text-[var(--global-font-size-13)] text-[var(--semantic-text)]">
           <slot name="title" />
         </div>
-        <div v-if="$slots.status" class="status">
+        <div v-if="$slots.status">
           <slot name="status" />
         </div>
       </div>
     </template>
 
-    <div class="summary">
+    <div class="grid gap-[var(--global-space-4)]">
       <slot />
     </div>
 
-    <details v-if="$slots.details" class="details">
-      <summary>{{ detailsLabel }}</summary>
-      <div class="details-content">
+    <details
+      v-if="$slots.details"
+      class="border border-dashed border-[var(--semantic-border)] rounded-[var(--global-radius-8)] bg-[var(--semantic-bg)] p-[var(--global-space-8)]"
+    >
+      <summary class="cursor-pointer text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)]">{{ detailsLabel }}</summary>
+      <div class="mt-[var(--global-space-8)] grid gap-[var(--global-space-4)]">
         <slot name="details" />
       </div>
     </details>
 
     <template v-if="hasActions" #footer>
-      <div class="actions">
-        <div v-if="$slots.actionsPrimary" class="actions-primary">
+      <div class="grid gap-[var(--global-space-8)]">
+        <div v-if="$slots.actionsPrimary" class="actions-primary flex flex-wrap gap-[var(--global-space-8)]">
           <slot name="actionsPrimary" />
         </div>
-        <div v-if="$slots.actionsSecondary" class="actions-secondary">
+        <div v-if="$slots.actionsSecondary" class="actions-secondary flex flex-wrap gap-[var(--global-space-8)]">
           <slot name="actionsSecondary" />
         </div>
       </div>
@@ -52,58 +55,3 @@ withDefaults(
   }
 );
 </script>
-
-<style scoped>
-.resource-card {
-  gap: var(--global-space-8);
-}
-
-.card-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--global-space-8);
-  align-items: center;
-}
-
-.title {
-  min-width: 0;
-  font-size: var(--global-font-size-13);
-  color: var(--semantic-text);
-}
-
-.summary {
-  display: grid;
-  gap: var(--global-space-4);
-}
-
-.details {
-  border: 1px dashed var(--semantic-border);
-  border-radius: var(--global-radius-8);
-  padding: var(--global-space-8);
-  background: var(--semantic-bg);
-}
-
-.details summary {
-  cursor: pointer;
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-12);
-}
-
-.details-content {
-  margin-top: var(--global-space-8);
-  display: grid;
-  gap: var(--global-space-4);
-}
-
-.actions {
-  display: grid;
-  gap: var(--global-space-8);
-}
-
-.actions-primary,
-.actions-secondary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--global-space-8);
-}
-</style>

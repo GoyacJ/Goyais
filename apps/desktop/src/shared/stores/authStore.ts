@@ -1,8 +1,9 @@
-import { reactive } from "vue";
+import { defineStore } from "pinia";
 
 import { getControlClient } from "@/shared/services/clients";
 import { ApiError } from "@/shared/services/http";
 import { getPermissionSnapshot } from "@/shared/services/permissionService";
+import { pinia } from "@/shared/stores/pinia";
 import {
   clearWorkspacePermissionSnapshot,
   resetPermissionStore,
@@ -35,7 +36,12 @@ const initialState: AuthState = {
   error: ""
 };
 
-export const authStore = reactive<AuthState>({ ...initialState });
+const useAuthStoreDefinition = defineStore("auth", {
+  state: (): AuthState => ({ ...initialState })
+});
+
+export const useAuthStore = useAuthStoreDefinition;
+export const authStore = useAuthStoreDefinition(pinia);
 
 export function resetAuthStore(): void {
   authStore.tokensByWorkspaceId = {};

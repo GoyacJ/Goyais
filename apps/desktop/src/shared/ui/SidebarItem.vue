@@ -1,5 +1,13 @@
 <template>
-  <button class="sidebar-item" :class="{ active, disabled }" :disabled="disabled" type="button">
+  <button
+    class="w-full border border-transparent rounded-[var(--global-radius-8)] bg-transparent px-[var(--global-space-12)] py-[var(--global-space-8)] text-left [font-family:var(--global-font-family-ui)] text-[var(--global-font-size-13)] text-[var(--component-sidebar-item-fg)] hover:bg-[var(--component-sidebar-item-bg-hover)]"
+    :class="{
+      'bg-[var(--component-sidebar-item-bg-active)] text-[var(--component-sidebar-item-fg-active)]': active,
+      'opacity-[var(--component-tree-item-disabled-opacity)] cursor-not-allowed': disabled
+    }"
+    :disabled="disabled"
+    type="button"
+  >
     <slot />
   </button>
 </template>
@@ -16,31 +24,3 @@ withDefaults(
   }
 );
 </script>
-
-<style scoped>
-.sidebar-item {
-  width: 100%;
-  border: 1px solid transparent;
-  border-radius: var(--global-radius-8);
-  background: transparent;
-  color: var(--component-sidebar-item-fg);
-  text-align: left;
-  padding: var(--global-space-8) var(--global-space-12);
-  font-family: var(--global-font-family-ui);
-  font-size: var(--global-font-size-13);
-}
-
-.sidebar-item:hover {
-  background: var(--component-sidebar-item-bg-hover);
-}
-
-.sidebar-item.active {
-  background: var(--component-sidebar-item-bg-active);
-  color: var(--component-sidebar-item-fg-active);
-}
-
-.sidebar-item.disabled {
-  opacity: var(--component-tree-item-disabled-opacity);
-  cursor: not-allowed;
-}
-</style>

@@ -1,0 +1,14 @@
+{
+  "name": "@goyais/docs-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vitepress dev . --host 127.0.0.1 --port 5174",
+    "docs:build": "vitepress build .",
+    "docs:preview": "vitepress preview . --host 127.0.0.1 --port 4174"
+  },
+  "devDependencies": {
+    "vitepress": "catalog:frontend"
+  }
+}

@@ -1,6 +1,12 @@
 <template>
   <button
-    :class="['ui-button', `variant-${variant}`, { loading, iconOnly }]"
+    :class="[
+      'h-[var(--component-button-height)] rounded-[var(--component-button-radius)] px-[var(--component-button-padding-x)] py-[var(--component-button-padding-y)] text-[var(--component-button-font-size)] [font-family:var(--global-font-family-ui)] border border-transparent inline-flex items-center justify-center gap-[var(--global-space-8)] cursor-pointer disabled:(bg-[var(--component-button-disabled-bg)] border-[var(--component-button-disabled-border)] text-[var(--component-button-disabled-fg)] cursor-not-allowed)',
+      variantClassMap[variant],
+      `variant-${variant}`,
+      loading ? 'opacity-[var(--component-button-loading-opacity)]' : '',
+      iconOnly ? 'w-[var(--component-button-height)] p-0' : ''
+    ]"
     :disabled="disabled || loading"
     type="button"
     @click="onClick"
@@ -29,63 +35,15 @@ const emit = defineEmits<{
   (event: "click", payload: MouseEvent): void;
 }>();
 
+const variantClassMap = {
+  primary: "bg-[var(--component-button-primary-bg)] border-[var(--component-button-primary-border)] text-[var(--component-button-primary-fg)]",
+  secondary:
+    "bg-[var(--component-button-secondary-bg)] border-[var(--component-button-secondary-border)] text-[var(--component-button-secondary-fg)]",
+  ghost: "bg-[var(--component-button-ghost-bg)] border-[var(--component-button-ghost-border)] text-[var(--component-button-ghost-fg)]",
+  danger: "bg-[var(--component-button-danger-bg)] border-[var(--component-button-danger-border)] text-[var(--component-button-danger-fg)]"
+} as const;
+
 function onClick(event: MouseEvent): void {
   emit("click", event);
 }
 </script>
-
-<style scoped>
-.ui-button {
-  height: var(--component-button-height);
-  border-radius: var(--component-button-radius);
-  padding: var(--component-button-padding-y) var(--component-button-padding-x);
-  font-size: var(--component-button-font-size);
-  font-family: var(--global-font-family-ui);
-  border: 1px solid transparent;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--global-space-8);
-  cursor: pointer;
-}
-
-.ui-button.iconOnly {
-  width: var(--component-button-height);
-  padding: 0;
-}
-
-.ui-button.variant-primary {
-  background: var(--component-button-primary-bg);
-  border-color: var(--component-button-primary-border);
-  color: var(--component-button-primary-fg);
-}
-
-.ui-button.variant-secondary {
-  background: var(--component-button-secondary-bg);
-  border-color: var(--component-button-secondary-border);
-  color: var(--component-button-secondary-fg);
-}
-
-.ui-button.variant-ghost {
-  background: var(--component-button-ghost-bg);
-  border-color: var(--component-button-ghost-border);
-  color: var(--component-button-ghost-fg);
-}
-
-.ui-button.variant-danger {
-  background: var(--component-button-danger-bg);
-  border-color: var(--component-button-danger-border);
-  color: var(--component-button-danger-fg);
-}
-
-.ui-button:disabled {
-  background: var(--component-button-disabled-bg);
-  border-color: var(--component-button-disabled-border);
-  color: var(--component-button-disabled-fg);
-  cursor: not-allowed;
-}
-
-.ui-button.loading {
-  opacity: var(--component-button-loading-opacity);
-}
-</style>

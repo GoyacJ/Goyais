@@ -1,5 +1,5 @@
 import { normalizeExecutionList } from "@/modules/conversation/store/executionMerge";
-import { createMockId } from "@/shared/services/mockData";
+import { createMockId } from "@/shared/utils/id";
 import type {
   ConversationMessage,
   ConversationSnapshot,

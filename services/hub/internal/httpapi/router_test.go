@@ -55,6 +55,27 @@ func TestCORSPreflightForModelCatalog(t *testing.T) {
 	}
 }
 
+func TestRemovedAliasRoutesReturn404(t *testing.T) {
+	router := NewRouter()
+
+	legacyRemoteConnect := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/remote/connect", map[string]any{
+		"name":     "Legacy Alias",
+		"hub_url":  "http://127.0.0.1:9999",
+		"username": "legacy",
+		"password": "legacy",
+	}, nil)
+	if legacyRemoteConnect.Code != http.StatusNotFound {
+		t.Fatalf("expected legacy remote alias route to return 404, got %d", legacyRemoteConnect.Code)
+	}
+
+	legacyCatalogSync := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/ws_local/model-catalog/sync", map[string]any{
+		"source": "manual",
+	}, nil)
+	if legacyCatalogSync.Code != http.StatusNotFound {
+		t.Fatalf("expected legacy model catalog alias route to return 404, got %d", legacyCatalogSync.Code)
+	}
+}
+
 func TestPlaceholderListEndpoints(t *testing.T) {
 	router := NewRouter()
 	paths := []string{"/v1/projects", "/v1/conversations", "/v1/executions"}
@@ -149,6 +170,32 @@ func TestRemoteSessionWorkspaceListIsScoped(t *testing.T) {
 	}
 	if ids[remoteB] {
 		t.Fatalf("did not expect other remote workspace %s in scoped list", remoteB)
+	}
+}
+
+func TestLegacyXAuthTokenHeaderIsRejected(t *testing.T) {
+	router := NewRouter()
+	remoteID := createRemoteWorkspace(t, router, "Remote Auth Header", "http://127.0.0.1:9885", false)
+	token := loginRemoteWorkspace(t, router, remoteID, "header-user", "pw", RoleDeveloper, true)
+
+	legacyHeaderRes := performJSONRequest(t, router, http.MethodGet, "/v1/workspaces/"+remoteID+"/status", nil, map[string]string{
+		"X-Auth-Token": token,
+	})
+	if legacyHeaderRes.Code != http.StatusUnauthorized {
+		t.Fatalf("expected legacy X-Auth-Token request to be rejected with 401, got %d (%s)", legacyHeaderRes.Code, legacyHeaderRes.Body.String())
+	}
+
+	legacyPayload := StandardError{}
+	mustDecodeJSON(t, legacyHeaderRes.Body.Bytes(), &legacyPayload)
+	if legacyPayload.Code != "AUTH_TOKEN_REQUIRED" {
+		t.Fatalf("expected AUTH_TOKEN_REQUIRED for legacy header auth, got %s", legacyPayload.Code)
+	}
+
+	bearerRes := performJSONRequest(t, router, http.MethodGet, "/v1/workspaces/"+remoteID+"/status", nil, map[string]string{
+		"Authorization": "Bearer " + token,
+	})
+	if bearerRes.Code != http.StatusOK {
+		t.Fatalf("expected bearer token request to succeed, got %d (%s)", bearerRes.Code, bearerRes.Body.String())
 	}
 }
 

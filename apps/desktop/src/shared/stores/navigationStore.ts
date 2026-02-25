@@ -1,5 +1,6 @@
-import { reactive } from "vue";
+import { defineStore } from "pinia";
 
+import { pinia } from "@/shared/stores/pinia";
 import { authStore } from "@/shared/stores/authStore";
 import { getCurrentPermissionSnapshot } from "@/shared/stores/permissionStore";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
@@ -25,9 +26,14 @@ const allEnabled: MenuVisibility = {
   settings_general: "enabled"
 };
 
-export const navigationStore = reactive<NavigationState>({
-  visibility: { ...allEnabled }
+const useNavigationStoreDefinition = defineStore("navigation", {
+  state: (): NavigationState => ({
+    visibility: { ...allEnabled }
+  })
 });
+
+export const useNavigationStore = useNavigationStoreDefinition;
+export const navigationStore = useNavigationStoreDefinition(pinia);
 
 export function resetNavigationStore(): void {
   navigationStore.visibility = { ...allEnabled };

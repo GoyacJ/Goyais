@@ -1,4 +1,5 @@
-import { computed, reactive } from "vue";
+import { computed } from "vue";
+import { defineStore } from "pinia";
 
 import { updateCatalogRoot } from "@/modules/resource/services";
 import {
@@ -13,6 +14,7 @@ import {
 import { loadGeneralSettings, saveGeneralSettings } from "@/modules/workspace/services/generalSettingsPersistence";
 import { applyGeneralSettingsField, detectGeneralSettingsCapability } from "@/modules/workspace/services/generalSettingsPlatform";
 import { toDisplayError } from "@/shared/services/errorMapper";
+import { pinia } from "@/shared/stores/pinia";
 import { getCurrentWorkspace } from "@/shared/stores/workspaceStore";
 
 type GeneralSettingsStoreState = {
@@ -24,52 +26,57 @@ type GeneralSettingsStoreState = {
   error: string;
 };
 
-const state = reactive<GeneralSettingsStoreState>({
-  value: createDefaultGeneralSettings(),
-  capability: createDefaultGeneralSettingsCapability(),
-  initialized: false,
-  loading: false,
-  saving: false,
-  error: ""
+const useGeneralSettingsStoreDefinition = defineStore("generalSettings", {
+  state: (): GeneralSettingsStoreState => ({
+    value: createDefaultGeneralSettings(),
+    capability: createDefaultGeneralSettingsCapability(),
+    initialized: false,
+    loading: false,
+    saving: false,
+    error: ""
+  })
 });
 
+export const useGeneralSettingsStateStore = useGeneralSettingsStoreDefinition;
+const generalSettingsStore = useGeneralSettingsStoreDefinition(pinia);
+
 export async function initializeGeneralSettings(): Promise<void> {
-  if (state.initialized || state.loading) {
+  if (generalSettingsStore.initialized || generalSettingsStore.loading) {
     return;
   }
 
-  state.loading = true;
-  state.error = "";
+  generalSettingsStore.loading = true;
+  generalSettingsStore.error = "";
 
   try {
     const [persisted, capability] = await Promise.all([loadGeneralSettings(), detectGeneralSettingsCapability()]);
 
     if (persisted) {
-      state.value = persisted;
+      generalSettingsStore.value = persisted;
     } else {
-      state.value = createDefaultGeneralSettings();
+      generalSettingsStore.value = createDefaultGeneralSettings();
     }
 
-    state.capability = capability;
-    await applyGeneralSettingsField("launchOnStartup", state.value, state.capability);
-    state.initialized = true;
+    generalSettingsStore.capability = capability;
+    await applyGeneralSettingsField("launchOnStartup", generalSettingsStore.value, generalSettingsStore.capability);
+    generalSettingsStore.initialized = true;
   } catch (error) {
-    state.value = createDefaultGeneralSettings();
-    state.capability = createDefaultGeneralSettingsCapability();
-    state.initialized = true;
-    state.error = toDisplayError(error);
+    generalSettingsStore.value = createDefaultGeneralSettings();
+    generalSettingsStore.capability = createDefaultGeneralSettingsCapability();
+    generalSettingsStore.initialized = true;
+    generalSettingsStore.error = toDisplayError(error);
   } finally {
-    state.loading = false;
+    generalSettingsStore.loading = false;
   }
 }
 
 export function useGeneralSettings() {
   return {
-    state: computed(() => state.value),
-    capability: computed(() => state.capability),
-    loading: computed(() => state.loading),
-    saving: computed(() => state.saving),
-    error: computed(() => state.error),
+    state: computed(() => generalSettingsStore.value),
+    capability: computed(() => generalSettingsStore.capability),
+    loading: computed(() => generalSettingsStore.loading),
+    saving: computed(() => generalSettingsStore.saving),
+    error: computed(() => generalSettingsStore.error),
     updateField: updateGeneralSetting,
     resetAll: resetGeneralSettings
   };
@@ -79,20 +86,20 @@ export async function updateGeneralSetting<Path extends GeneralSettingsFieldPath
   path: Path,
   value: GeneralSettingsFieldValueMap[Path]
 ): Promise<void> {
-  if (!state.initialized) {
+  if (!generalSettingsStore.initialized) {
     await initializeGeneralSettings();
   }
 
-  const next = cloneGeneralSettings(state.value);
+  const next = cloneGeneralSettings(generalSettingsStore.value);
   setFieldValue(next, path, value);
 
-  state.value = next;
-  state.saving = true;
-  state.error = "";
+  generalSettingsStore.value = next;
+  generalSettingsStore.saving = true;
+  generalSettingsStore.error = "";
 
   try {
-    await applyGeneralSettingsField(path, state.value, state.capability);
-    await saveGeneralSettings(state.value);
+    await applyGeneralSettingsField(path, generalSettingsStore.value, generalSettingsStore.capability);
+    await saveGeneralSettings(generalSettingsStore.value);
     if (path === "defaultProjectDirectory") {
       const workspace = getCurrentWorkspace();
       if (workspace?.mode === "local") {
@@ -100,35 +107,35 @@ export async function updateGeneralSetting<Path extends GeneralSettingsFieldPath
       }
     }
   } catch (error) {
-    state.error = toDisplayError(error);
+    generalSettingsStore.error = toDisplayError(error);
   } finally {
-    state.saving = false;
+    generalSettingsStore.saving = false;
   }
 }
 
 export async function resetGeneralSettings(): Promise<void> {
   const defaults = createDefaultGeneralSettings();
-  state.value = defaults;
-  state.saving = true;
-  state.error = "";
+  generalSettingsStore.value = defaults;
+  generalSettingsStore.saving = true;
+  generalSettingsStore.error = "";
 
   try {
-    await applyGeneralSettingsField("launchOnStartup", state.value, state.capability);
-    await saveGeneralSettings(state.value);
+    await applyGeneralSettingsField("launchOnStartup", generalSettingsStore.value, generalSettingsStore.capability);
+    await saveGeneralSettings(generalSettingsStore.value);
   } catch (error) {
-    state.error = toDisplayError(error);
+    generalSettingsStore.error = toDisplayError(error);
   } finally {
-    state.saving = false;
+    generalSettingsStore.saving = false;
   }
 }
 
 export function resetGeneralSettingsStoreForTest(): void {
-  state.value = createDefaultGeneralSettings();
-  state.capability = createDefaultGeneralSettingsCapability();
-  state.initialized = false;
-  state.loading = false;
-  state.saving = false;
-  state.error = "";
+  generalSettingsStore.value = createDefaultGeneralSettings();
+  generalSettingsStore.capability = createDefaultGeneralSettingsCapability();
+  generalSettingsStore.initialized = false;
+  generalSettingsStore.loading = false;
+  generalSettingsStore.saving = false;
+  generalSettingsStore.error = "";
 }
 
 const generalSettingsFieldUpdaters: Record<GeneralSettingsFieldPath, (target: GeneralSettings, value: unknown) => void> = {

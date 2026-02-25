@@ -66,6 +66,16 @@ func TestOpenAPIDoesNotContainRemovedConfirmRoute(t *testing.T) {
 	}
 }
 
+func TestOpenAPIDoesNotContainRemovedAliasRoutes(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	if strings.Contains(spec, "/v1/workspaces/remote/connect:") {
+		t.Fatalf("openapi still contains removed route alias /v1/workspaces/remote/connect")
+	}
+	if strings.Contains(spec, "/v1/workspaces/{workspace_id}/model-catalog/sync:") {
+		t.Fatalf("openapi still contains removed route alias /v1/workspaces/{workspace_id}/model-catalog/sync")
+	}
+}
+
 func TestOpenAPIConversationDetailResponseShape(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	requiredMarkers := []string{

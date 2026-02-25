@@ -1,13 +1,27 @@
 <template>
-  <div v-if="open" class="modal-mask">
-    <section class="modal">
-      <header class="title">
+  <div
+    v-if="open"
+    class="modal-mask fixed inset-0 z-[1000] grid place-items-center bg-[var(--semantic-overlay)]"
+    @click.self="onBackdropClick"
+  >
+    <section
+      ref="dialogRef"
+      class="modal grid w-[min(720px,90vw)] gap-[var(--global-space-12)] border border-[var(--component-modal-border)] rounded-[var(--component-modal-radius)] bg-[var(--component-modal-bg)] p-[var(--global-space-16)]"
+      :class="panelClass"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="ariaLabel"
+      :aria-labelledby="titleId"
+      tabindex="-1"
+      @keydown="onDialogKeydown"
+    >
+      <header :id="titleId" class="title text-[var(--component-modal-title-fg)]">
         <slot name="title" />
       </header>
-      <div class="body">
+      <div class="body text-[var(--component-modal-body-fg)]">
         <slot />
       </div>
-      <footer class="footer">
+      <footer class="footer flex justify-end gap-[var(--global-space-8)]">
         <slot name="footer" />
       </footer>
     </section>
@@ -15,40 +29,157 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{ open: boolean }>();
+import { nextTick, onBeforeUnmount, ref, watch } from "vue";
+
+const props = withDefaults(
+  defineProps<{
+    open: boolean;
+    ariaLabel?: string;
+    closeOnEsc?: boolean;
+    closeOnBackdrop?: boolean;
+    initialFocusSelector?: string;
+    panelClass?: string;
+  }>(),
+  {
+    ariaLabel: undefined,
+    closeOnEsc: true,
+    closeOnBackdrop: false,
+    initialFocusSelector: undefined,
+    panelClass: ""
+  }
+);
+
+const emit = defineEmits<{
+  (event: "close"): void;
+}>();
+
+const dialogRef = ref<HTMLElement | null>(null);
+const titleId = `base-modal-title-${Math.random().toString(36).slice(2, 10)}`;
+let restoreTarget: HTMLElement | null = null;
+
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])"
+].join(",");
+
+watch(
+  () => props.open,
+  async (open) => {
+    if (open) {
+      restoreTarget = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      await nextTick();
+      focusInitialElement();
+      return;
+    }
+
+    await nextTick();
+    restoreFocus();
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(() => {
+  restoreFocus();
+});
+
+function onBackdropClick(): void {
+  if (props.closeOnBackdrop) {
+    emit("close");
+  }
+}
+
+function onDialogKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape" && props.closeOnEsc) {
+    event.preventDefault();
+    emit("close");
+    return;
+  }
+
+  if (event.key === "Tab") {
+    trapFocus(event);
+  }
+}
+
+function focusInitialElement(): void {
+  const dialog = dialogRef.value;
+  if (!dialog) {
+    return;
+  }
+
+  if (props.initialFocusSelector) {
+    const target = dialog.querySelector<HTMLElement>(props.initialFocusSelector);
+    if (target) {
+      target.focus();
+      return;
+    }
+  }
+
+  const focusables = getFocusableElements(dialog);
+  const firstFocusable = focusables[0];
+  if (firstFocusable) {
+    firstFocusable.focus();
+    return;
+  }
+
+  dialog.focus();
+}
+
+function trapFocus(event: KeyboardEvent): void {
+  const dialog = dialogRef.value;
+  if (!dialog) {
+    return;
+  }
+
+  const focusables = getFocusableElements(dialog);
+  if (focusables.length === 0) {
+    event.preventDefault();
+    dialog.focus();
+    return;
+  }
+
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+  if (event.shiftKey) {
+    if (active === first || active === dialog || !dialog.contains(active)) {
+      event.preventDefault();
+      last?.focus();
+    }
+    return;
+  }
+
+  if (active === last || !dialog.contains(active)) {
+    event.preventDefault();
+    first?.focus();
+  }
+}
+
+function getFocusableElements(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter((item) => {
+    if (item.getAttribute("aria-hidden") === "true") {
+      return false;
+    }
+    if (item.hasAttribute("hidden")) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function restoreFocus(): void {
+  if (!restoreTarget) {
+    return;
+  }
+
+  if (restoreTarget.isConnected) {
+    restoreTarget.focus();
+  }
+
+  restoreTarget = null;
+}
 </script>
-
-<style scoped>
-.modal-mask {
-  position: fixed;
-  inset: 0;
-  background: var(--semantic-overlay);
-  display: grid;
-  place-items: center;
-  z-index: 1000;
-}
-
-.modal {
-  width: min(720px, 90vw);
-  background: var(--component-modal-bg);
-  border: 1px solid var(--component-modal-border);
-  border-radius: var(--component-modal-radius);
-  padding: var(--global-space-16);
-  display: grid;
-  gap: var(--global-space-12);
-}
-
-.title {
-  color: var(--component-modal-title-fg);
-}
-
-.body {
-  color: var(--component-modal-body-fg);
-}
-
-.footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--global-space-8);
-}
-</style>

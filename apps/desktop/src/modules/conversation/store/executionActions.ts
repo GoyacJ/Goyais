@@ -29,7 +29,7 @@ import {
   updateExecutionTransition
 } from "@/modules/conversation/store/executionEventHandlers";
 import { toDisplayError } from "@/shared/services/errorMapper";
-import { createMockId } from "@/shared/services/mockData";
+import { createMockId } from "@/shared/utils/id";
 import type { Conversation, ConversationMessage, ExecutionEvent } from "@/shared/types/api";
 
 export async function submitConversationMessage(

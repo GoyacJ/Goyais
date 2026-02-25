@@ -6,7 +6,7 @@ import {
 } from "@/modules/conversation/store/executionRuntime";
 import { shouldAppendTerminalMessage } from "@/modules/conversation/store/executionEventIdempotency";
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
-import { createMockId } from "@/shared/services/mockData";
+import { createMockId } from "@/shared/utils/id";
 import type { ConversationMessage, ExecutionEvent } from "@/shared/types/api";
 
 export type ExecutionTransition = {

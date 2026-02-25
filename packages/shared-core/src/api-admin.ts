@@ -1,4 +1,4 @@
-import type { ABACEffect, PermissionVisibility, Role } from "@/shared/types/api-common";
+import type { ABACEffect, PermissionVisibility, Role } from "./api-common";
 
 export type AdminUser = {
   id: string;

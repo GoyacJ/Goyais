@@ -1,9 +1,14 @@
 <template>
-  <header class="topbar" data-tauri-drag-region @mousedown="onTopbarMouseDown" @dblclick="onTopbarDoubleClick">
-    <div class="left">
+  <header
+    class="flex h-[40px] cursor-grab items-center justify-between rounded-t-[var(--global-radius-12)] bg-transparent px-[var(--global-space-8)]"
+    data-tauri-drag-region
+    @mousedown="onTopbarMouseDown"
+    @dblclick="onTopbarDoubleClick"
+  >
+    <div class="inline-flex items-center gap-[var(--global-space-8)]">
       <slot name="left" />
     </div>
-    <div class="right">
+    <div class="inline-flex items-center gap-[var(--global-space-8)]">
       <slot name="right" />
     </div>
   </header>
@@ -23,23 +28,3 @@ function onTopbarDoubleClick(event: MouseEvent): void {
   void toggleMaximizeCurrentWindow();
 }
 </script>
-
-<style scoped>
-.topbar {
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-radius: var(--global-radius-12) var(--global-radius-12) 0 0;
-  background: transparent;
-  padding: 0 var(--global-space-8);
-  cursor: grab;
-}
-
-.left,
-.right {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--global-space-8);
-}
-</style>

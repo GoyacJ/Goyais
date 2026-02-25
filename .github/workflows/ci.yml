@@ -49,20 +49,22 @@ jobs:
           version: 10.11.0
       - name: Install dependencies
         run: pnpm install
-      - name: Desktop lint
-        run: pnpm --filter @goyais/desktop lint
-      - name: Desktop test
-        run: pnpm --filter @goyais/desktop test
-      - name: Desktop strict test
-        run: pnpm --filter @goyais/desktop test:strict
-      - name: Desktop token gate
-        run: pnpm --filter @goyais/desktop check:tokens
-      - name: Desktop size gate
-        run: pnpm --filter @goyais/desktop check:size
-      - name: Desktop complexity gate
-        run: pnpm --filter @goyais/desktop check:complexity
-      - name: Desktop coverage gate
-        run: pnpm --filter @goyais/desktop coverage:gate
+      - name: Frontend lint (Turbo)
+        run: pnpm lint
+      - name: Frontend test (Turbo)
+        run: pnpm test
+      - name: Frontend strict test (Turbo)
+        run: pnpm test:strict
+      - name: Frontend token gate (Turbo)
+        run: pnpm check:tokens
+      - name: Frontend quality gate (Turbo)
+        run: pnpm quality:gate
+      - name: Frontend coverage gate (Turbo)
+        run: pnpm coverage:gate
+      - name: Docs build (Turbo)
+        run: pnpm docs:build
+      - name: Slides build (Turbo)
+        run: pnpm slides:build
 
   smoke-check:
     runs-on: ubuntu-latest

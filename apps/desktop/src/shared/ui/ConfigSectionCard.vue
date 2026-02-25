@@ -4,8 +4,15 @@
       <strong>{{ title }}</strong>
     </template>
 
-    <div class="lines" :class="`tone-${tone}`">
-      <p v-for="line in lines" :key="line" :class="{ mono }">{{ line }}</p>
+    <div class="grid gap-[var(--global-space-8)]">
+      <p
+        v-for="line in lines"
+        :key="line"
+        class="m-0 text-[var(--global-font-size-12)] leading-[var(--global-line-height-normal)] text-[var(--semantic-text-muted)]"
+        :class="[toneClassMap[tone], { '[font-family:var(--global-font-family-code)] whitespace-pre-wrap': mono }]"
+      >
+        {{ line }}
+      </p>
     </div>
   </BaseCard>
 </template>
@@ -25,33 +32,12 @@ withDefaults(
     mono: false
   }
 );
-</script>
 
-<style scoped>
-.lines {
-  display: grid;
-  gap: var(--global-space-8);
-}
-p {
-  margin: 0;
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-12);
-  line-height: var(--global-line-height-normal);
-}
-p.mono {
-  font-family: var(--global-font-family-code);
-  white-space: pre-wrap;
-}
-.tone-info p {
-  color: var(--component-toast-info-fg);
-}
-.tone-warning p {
-  color: var(--component-toast-warning-fg);
-}
-.tone-danger p {
-  color: var(--semantic-danger);
-}
-.tone-success p {
-  color: var(--semantic-success);
-}
-</style>
+const toneClassMap = {
+  default: "",
+  info: "text-[var(--component-toast-info-fg)]",
+  warning: "text-[var(--component-toast-warning-fg)]",
+  danger: "text-[var(--semantic-danger)]",
+  success: "text-[var(--semantic-success)]"
+} as const;
+</script>

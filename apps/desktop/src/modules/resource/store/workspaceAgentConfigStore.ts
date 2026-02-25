@@ -1,7 +1,9 @@
-import { computed, reactive } from "vue";
+import { computed } from "vue";
+import { defineStore } from "pinia";
 
 import { getWorkspaceAgentConfig, updateWorkspaceAgentConfig } from "@/modules/resource/services";
 import { toDisplayError } from "@/shared/services/errorMapper";
+import { pinia } from "@/shared/stores/pinia";
 import { getCurrentWorkspace } from "@/shared/stores/workspaceStore";
 import type { TraceDetailLevel, WorkspaceAgentConfig } from "@/shared/types/api";
 
@@ -13,20 +15,25 @@ type WorkspaceAgentConfigState = {
   error: string;
 };
 
-const state = reactive<WorkspaceAgentConfigState>({
-  value: createDefaultWorkspaceAgentConfig(""),
-  initializedWorkspaceId: "",
-  loading: false,
-  saving: false,
-  error: ""
+const useWorkspaceAgentConfigStoreDefinition = defineStore("workspaceAgentConfig", {
+  state: (): WorkspaceAgentConfigState => ({
+    value: createDefaultWorkspaceAgentConfig(""),
+    initializedWorkspaceId: "",
+    loading: false,
+    saving: false,
+    error: ""
+  })
 });
+
+export const useWorkspaceAgentConfigStateStore = useWorkspaceAgentConfigStoreDefinition;
+const workspaceAgentConfigStore = useWorkspaceAgentConfigStoreDefinition(pinia);
 
 export function useWorkspaceAgentConfigStore() {
   return {
-    config: computed(() => state.value),
-    loading: computed(() => state.loading),
-    saving: computed(() => state.saving),
-    error: computed(() => state.error),
+    config: computed(() => workspaceAgentConfigStore.value),
+    loading: computed(() => workspaceAgentConfigStore.loading),
+    saving: computed(() => workspaceAgentConfigStore.saving),
+    error: computed(() => workspaceAgentConfigStore.error),
     load: loadWorkspaceAgentConfig,
     update: updateWorkspaceAgentConfigPatch
   };
@@ -37,22 +44,22 @@ export async function loadWorkspaceAgentConfig(force = false): Promise<void> {
   if (!workspace) {
     return;
   }
-  if (!force && state.initializedWorkspaceId === workspace.id) {
+  if (!force && workspaceAgentConfigStore.initializedWorkspaceId === workspace.id) {
     return;
   }
 
-  state.loading = true;
-  state.error = "";
+  workspaceAgentConfigStore.loading = true;
+  workspaceAgentConfigStore.error = "";
   try {
     const loaded = await getWorkspaceAgentConfig(workspace.id);
-    state.value = normalizeWorkspaceAgentConfigForClient(loaded, workspace.id);
-    state.initializedWorkspaceId = workspace.id;
+    workspaceAgentConfigStore.value = normalizeWorkspaceAgentConfigForClient(loaded, workspace.id);
+    workspaceAgentConfigStore.initializedWorkspaceId = workspace.id;
   } catch (error) {
-    state.value = createDefaultWorkspaceAgentConfig(workspace.id);
-    state.initializedWorkspaceId = workspace.id;
-    state.error = toDisplayError(error);
+    workspaceAgentConfigStore.value = createDefaultWorkspaceAgentConfig(workspace.id);
+    workspaceAgentConfigStore.initializedWorkspaceId = workspace.id;
+    workspaceAgentConfigStore.error = toDisplayError(error);
   } finally {
-    state.loading = false;
+    workspaceAgentConfigStore.loading = false;
   }
 }
 
@@ -67,45 +74,45 @@ export async function updateWorkspaceAgentConfigPatch(patch: WorkspaceAgentConfi
   if (!workspace) {
     return;
   }
-  if (state.initializedWorkspaceId !== workspace.id) {
+  if (workspaceAgentConfigStore.initializedWorkspaceId !== workspace.id) {
     await loadWorkspaceAgentConfig(true);
   }
 
   const next = normalizeWorkspaceAgentConfigForClient(
     {
-      ...state.value,
+      ...workspaceAgentConfigStore.value,
       workspace_id: workspace.id,
       execution: {
-        max_model_turns: patch.max_model_turns ?? state.value.execution.max_model_turns
+        max_model_turns: patch.max_model_turns ?? workspaceAgentConfigStore.value.execution.max_model_turns
       },
       display: {
-        show_process_trace: patch.show_process_trace ?? state.value.display.show_process_trace,
-        trace_detail_level: patch.trace_detail_level ?? state.value.display.trace_detail_level
+        show_process_trace: patch.show_process_trace ?? workspaceAgentConfigStore.value.display.show_process_trace,
+        trace_detail_level: patch.trace_detail_level ?? workspaceAgentConfigStore.value.display.trace_detail_level
       }
     },
     workspace.id
   );
 
-  state.value = next;
-  state.saving = true;
-  state.error = "";
+  workspaceAgentConfigStore.value = next;
+  workspaceAgentConfigStore.saving = true;
+  workspaceAgentConfigStore.error = "";
   try {
     const saved = await updateWorkspaceAgentConfig(workspace.id, next);
-    state.value = normalizeWorkspaceAgentConfigForClient(saved, workspace.id);
-    state.initializedWorkspaceId = workspace.id;
+    workspaceAgentConfigStore.value = normalizeWorkspaceAgentConfigForClient(saved, workspace.id);
+    workspaceAgentConfigStore.initializedWorkspaceId = workspace.id;
   } catch (error) {
-    state.error = toDisplayError(error);
+    workspaceAgentConfigStore.error = toDisplayError(error);
   } finally {
-    state.saving = false;
+    workspaceAgentConfigStore.saving = false;
   }
 }
 
 export function resetWorkspaceAgentConfigStoreForTest(): void {
-  state.value = createDefaultWorkspaceAgentConfig("");
-  state.initializedWorkspaceId = "";
-  state.loading = false;
-  state.saving = false;
-  state.error = "";
+  workspaceAgentConfigStore.value = createDefaultWorkspaceAgentConfig("");
+  workspaceAgentConfigStore.initializedWorkspaceId = "";
+  workspaceAgentConfigStore.loading = false;
+  workspaceAgentConfigStore.saving = false;
+  workspaceAgentConfigStore.error = "";
 }
 
 function createDefaultWorkspaceAgentConfig(workspaceId: string): WorkspaceAgentConfig {

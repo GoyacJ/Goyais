@@ -9,10 +9,11 @@
     "dev:web": "vite",
     "sidecar:prepare": "bash ../../scripts/release/ensure-local-sidecars.sh",
     "dev:desktop": "pnpm sidecar:prepare && tauri dev",
-    "build": "cross-env VITE_API_MODE=strict VITE_ENABLE_MOCK_FALLBACK=false vite build",
+    "build": "vite build",
     "lint": "tsc --noEmit -p tsconfig.app.json",
     "test": "vitest run",
-    "test:strict": "VITE_API_MODE=strict VITE_ENABLE_MOCK_FALLBACK=false vitest run",
+    "test:strict": "vitest run",
+    "e2e:smoke": "playwright test --config=playwright.config.ts",
     "coverage": "vitest run --coverage --coverage.reporter=text --coverage.reporter=json-summary",
     "check:coverage": "node ../../scripts/desktop/check-coverage-thresholds.mjs",
     "coverage:gate": "pnpm run coverage && pnpm run check:coverage",
@@ -23,23 +24,28 @@
     "tauri:dev": "pnpm dev:desktop"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.10.1",
-    "@tauri-apps/plugin-autostart": "^2.4.1",
-    "@tauri-apps/plugin-dialog": "^2.4.0",
-    "@tauri-apps/plugin-store": "^2.4.0",
-    "lucide-vue-next": "^0.575.0",
-    "vue": "^3.5.13",
-    "vue-router": "^4.5.1"
+    "@goyais/shared-core": "workspace:*",
+    "@tauri-apps/api": "catalog:prod",
+    "@tauri-apps/plugin-autostart": "catalog:prod",
+    "@tauri-apps/plugin-dialog": "catalog:prod",
+    "@tauri-apps/plugin-store": "catalog:prod",
+    "@vueuse/core": "catalog:frontend",
+    "lucide-vue-next": "catalog:frontend",
+    "pinia": "catalog:frontend",
+    "vue": "catalog:frontend",
+    "vue-router": "catalog:frontend"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.10.0",
-    "@vitejs/plugin-vue": "^5.2.1",
-    "@vitest/coverage-v8": "3.2.4",
-    "@vue/test-utils": "^2.4.6",
-    "cross-env": "^10.1.0",
-    "jsdom": "^26.1.0",
-    "typescript": "^5.9.3",
-    "vite": "^6.4.1",
-    "vitest": "^3.2.4"
+    "@tauri-apps/cli": "catalog:inlined",
+    "@playwright/test": "catalog:dev",
+    "@types/web-bluetooth": "catalog:dev",
+    "@vitejs/plugin-vue": "catalog:frontend",
+    "@vitest/coverage-v8": "catalog:frontend",
+    "@vue/test-utils": "catalog:frontend",
+    "jsdom": "catalog:dev",
+    "typescript": "catalog:dev",
+    "unocss": "catalog:frontend",
+    "vite": "catalog:frontend",
+    "vitest": "catalog:frontend"
   }
 }

@@ -582,7 +582,7 @@ func ConversationExportHandler(state *AppState) http.HandlerFunc {
 
 		state.mu.RLock()
 		conversation, exists := state.conversations[conversationID]
-		messages, _ := sanitizeLegacyWelcomeMessages(state.conversationMessages[conversationID])
+		messages := append([]ConversationMessage{}, state.conversationMessages[conversationID]...)
 		state.mu.RUnlock()
 		if !exists {
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})

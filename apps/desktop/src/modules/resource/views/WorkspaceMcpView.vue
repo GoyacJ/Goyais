@@ -100,7 +100,7 @@
       </section>
     </section>
 
-    <BaseModal :open="form.open">
+    <BaseModal :open="form.open" @close="closeModal">
       <template #title>
         <h3 class="modal-title">{{ form.mode === 'create' ? '新增 MCP 配置' : '编辑 MCP 配置' }}</h3>
       </template>

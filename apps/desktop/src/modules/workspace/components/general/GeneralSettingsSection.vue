@@ -1,11 +1,11 @@
 <template>
-  <section class="section">
-    <header class="section-header">
-      <h3>{{ title }}</h3>
-      <p v-if="description !== ''">{{ description }}</p>
+  <section class="section grid gap-[var(--global-space-8)] border border-[var(--semantic-border)] rounded-[var(--global-radius-12)] bg-[var(--semantic-surface)] p-[var(--global-space-12)]">
+    <header class="section-header grid gap-[var(--global-space-8)]">
+      <h3 class="m-0">{{ title }}</h3>
+      <p v-if="description !== ''" class="m-0 text-[var(--global-font-size-12)] text-[var(--semantic-text-muted)]">{{ description }}</p>
     </header>
 
-    <div class="section-body">
+    <div class="section-body grid gap-[var(--global-space-8)]">
       <slot />
     </div>
   </section>
@@ -22,30 +22,3 @@ withDefaults(
   }
 );
 </script>
-
-<style scoped>
-.section {
-  border: 1px solid var(--semantic-border);
-  border-radius: var(--global-radius-12);
-  background: var(--semantic-surface);
-  padding: var(--global-space-12);
-  display: grid;
-  gap: var(--global-space-8);
-}
-
-.section-header,
-.section-body {
-  display: grid;
-  gap: var(--global-space-8);
-}
-
-.section-header h3,
-.section-header p {
-  margin: 0;
-}
-
-.section-header p {
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-12);
-}
-</style>

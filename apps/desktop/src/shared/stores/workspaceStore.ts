@@ -1,11 +1,15 @@
-import { reactive } from "vue";
+import { defineStore } from "pinia";
+import { useStorage } from "@vueuse/core";
 
+import { pinia } from "@/shared/stores/pinia";
 import type { Workspace, WorkspaceConnection, WorkspaceMode } from "@/shared/types/api";
 
 export type ConnectionState = "idle" | "loading" | "auth_required" | "ready" | "error";
 
 const CURRENT_WORKSPACE_STORAGE_KEY = "goyais.workspace.current";
 const RECENT_WORKSPACE_ORDER_STORAGE_KEY = "goyais.workspace.recent_order";
+const persistedWorkspaceId = useStorage<string>(CURRENT_WORKSPACE_STORAGE_KEY, "", undefined, { flush: "sync" });
+const persistedWorkspaceRecentOrder = useStorage<string[]>(RECENT_WORKSPACE_ORDER_STORAGE_KEY, [], undefined, { flush: "sync" });
 
 type WorkspaceState = {
   workspaces: Workspace[];
@@ -29,10 +33,15 @@ const initialState: WorkspaceState = {
   error: ""
 };
 
-export const workspaceStore = reactive<WorkspaceState>({
-  ...initialState,
-  recentWorkspaceOrder: readPersistedWorkspaceRecentOrder()
+const useWorkspaceStoreDefinition = defineStore("workspace", {
+  state: (): WorkspaceState => ({
+    ...initialState,
+    recentWorkspaceOrder: readPersistedWorkspaceRecentOrder()
+  })
 });
+
+export const useWorkspaceStore = useWorkspaceStoreDefinition;
+export const workspaceStore = useWorkspaceStoreDefinition(pinia);
 
 export function resetWorkspaceStore(): void {
   workspaceStore.workspaces = [];
@@ -127,32 +136,11 @@ function syncModeWithCurrentWorkspace(): void {
 }
 
 function readPersistedWorkspaceId(): string {
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  try {
-    return window.localStorage.getItem(CURRENT_WORKSPACE_STORAGE_KEY) ?? "";
-  } catch {
-    return "";
-  }
+  return typeof persistedWorkspaceId.value === "string" ? persistedWorkspaceId.value : "";
 }
 
 function persistWorkspaceId(workspaceId: string): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    if (workspaceId === "") {
-      window.localStorage.removeItem(CURRENT_WORKSPACE_STORAGE_KEY);
-      return;
-    }
-
-    window.localStorage.setItem(CURRENT_WORKSPACE_STORAGE_KEY, workspaceId);
-  } catch {
-    // ignore localStorage failures to avoid blocking workspace switch
-  }
+  persistedWorkspaceId.value = workspaceId;
 }
 
 function clearPersistedWorkspaceId(): void {
@@ -160,39 +148,15 @@ function clearPersistedWorkspaceId(): void {
 }
 
 function readPersistedWorkspaceRecentOrder(): string[] {
-  if (typeof window === "undefined") {
+  const order = persistedWorkspaceRecentOrder.value;
+  if (!Array.isArray(order)) {
     return [];
   }
-
-  try {
-    const raw = window.localStorage.getItem(RECENT_WORKSPACE_ORDER_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.filter((item): item is string => typeof item === "string" && item.trim() !== "");
-  } catch {
-    return [];
-  }
+  return order.filter((item): item is string => typeof item === "string" && item.trim() !== "");
 }
 
 function persistWorkspaceRecentOrder(order: string[]): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    if (order.length === 0) {
-      window.localStorage.removeItem(RECENT_WORKSPACE_ORDER_STORAGE_KEY);
-      return;
-    }
-    window.localStorage.setItem(RECENT_WORKSPACE_ORDER_STORAGE_KEY, JSON.stringify(order));
-  } catch {
-    // ignore localStorage failures to avoid blocking workspace switch
-  }
+  persistedWorkspaceRecentOrder.value = [...order];
 }
 
 function clearPersistedWorkspaceRecentOrder(): void {

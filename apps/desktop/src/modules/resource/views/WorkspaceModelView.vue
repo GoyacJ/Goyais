@@ -51,7 +51,7 @@
       </ResourceConfigTable>
     </section>
 
-    <BaseModal :open="form.open">
+    <BaseModal :open="form.open" @close="closeModal">
       <template #title>
         <h3 class="modal-title">{{ form.mode === "create" ? "新增模型配置" : "编辑模型配置" }}</h3>
       </template>
@@ -97,7 +97,7 @@
       </template>
     </BaseModal>
 
-    <BaseModal :open="deleteConfirm.open" class="delete-modal">
+    <BaseModal :open="deleteConfirm.open" class="delete-modal" @close="closeDeleteConfirm">
       <template #title>
         <h3 class="modal-title">确认删除</h3>
       </template>

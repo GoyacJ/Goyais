@@ -1,7 +1,9 @@
 <template>
-  <section class="placeholder-card">
-    <h3>{{ title }}</h3>
-    <p>{{ description }}</p>
+  <section
+    class="flex flex-col gap-[var(--component-space-xs)] border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] p-[var(--component-space-md)]"
+  >
+    <h3 class="m-0 text-[var(--component-font-size-title)]">{{ title }}</h3>
+    <p class="m-0 text-[var(--component-text-subtle)]">{{ description }}</p>
   </section>
 </template>
 
@@ -11,25 +13,3 @@ defineProps<{
   description: string;
 }>();
 </script>
-
-<style scoped>
-.placeholder-card {
-  border: 1px solid var(--component-panel-border);
-  border-radius: var(--component-radius-sm);
-  background: var(--component-panel-bg);
-  padding: var(--component-space-md);
-  display: flex;
-  flex-direction: column;
-  gap: var(--component-space-xs);
-}
-
-h3 {
-  margin: 0;
-  font-size: var(--component-font-size-title);
-}
-
-p {
-  margin: 0;
-  color: var(--component-text-subtle);
-}
-</style>

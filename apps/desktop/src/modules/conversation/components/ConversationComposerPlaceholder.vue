@@ -1,50 +1,30 @@
 <template>
-  <section class="composer" data-testid="conversation-composer">
-    <h3>Input Composer</h3>
-    <textarea disabled placeholder="输入区占位" />
-    <div class="actions">
-      <button type="button" disabled>Send</button>
-      <button type="button" disabled data-testid="conversation-stop-button">Stop</button>
+  <section
+    class="composer grid gap-[var(--component-space-sm)] border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] p-[var(--component-space-md)]"
+    data-testid="conversation-composer"
+  >
+    <h3 class="m-0 text-[var(--component-font-size-title)]">Input Composer</h3>
+    <textarea
+      disabled
+      placeholder="输入区占位"
+      class="min-h-[96px] resize-y border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] p-[var(--component-space-sm)] text-[var(--component-text-main)] [font:inherit]"
+    />
+    <div class="actions flex gap-[var(--component-space-sm)]">
+      <button
+        type="button"
+        disabled
+        class="border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] px-[var(--component-space-sm)] py-[var(--component-space-xs)] text-[var(--component-text-main)]"
+      >
+        Send
+      </button>
+      <button
+        type="button"
+        disabled
+        data-testid="conversation-stop-button"
+        class="border border-[var(--component-panel-border)] rounded-[var(--component-radius-sm)] bg-[var(--component-panel-bg)] px-[var(--component-space-sm)] py-[var(--component-space-xs)] text-[var(--component-text-main)]"
+      >
+        Stop
+      </button>
     </div>
   </section>
 </template>
-
-<style scoped>
-.composer {
-  border: 1px solid var(--component-panel-border);
-  border-radius: var(--component-radius-sm);
-  background: var(--component-panel-bg);
-  padding: var(--component-space-md);
-  display: grid;
-  gap: var(--component-space-sm);
-}
-
-h3 {
-  margin: 0;
-  font-size: var(--component-font-size-title);
-}
-
-textarea {
-  min-height: 96px;
-  resize: vertical;
-  border: 1px solid var(--component-panel-border);
-  border-radius: var(--component-radius-sm);
-  padding: var(--component-space-sm);
-  font: inherit;
-  color: var(--component-text-main);
-  background: var(--component-panel-bg);
-}
-
-.actions {
-  display: flex;
-  gap: var(--component-space-sm);
-}
-
-button {
-  border: 1px solid var(--component-panel-border);
-  border-radius: var(--component-radius-sm);
-  background: var(--component-panel-bg);
-  padding: var(--component-space-xs) var(--component-space-sm);
-  color: var(--component-text-main);
-}
-</style>
