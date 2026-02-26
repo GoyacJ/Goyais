@@ -8,8 +8,8 @@ export function getProjectConfig(projectId: string): ProjectConfig {
   }
   return {
     project_id: projectId,
-    model_ids: [],
-    default_model_id: null,
+    model_config_ids: [],
+    default_model_config_id: null,
     rule_ids: [],
     skill_ids: [],
     mcp_ids: [],

@@ -3,6 +3,7 @@ import { mount } from "@vue/test-utils";
 
 import {
   applyIncomingExecutionEvent,
+  conversationStore,
   ensureConversationRuntime,
   rollbackConversationToMessage,
   resetConversationStore,
@@ -11,6 +12,7 @@ import {
   submitConversationMessage
 } from "@/modules/conversation/store";
 import MainConversationPanel from "@/modules/conversation/components/MainConversationPanel.vue";
+import MainInspectorPanel from "@/modules/conversation/components/MainInspectorPanel.vue";
 import type { Conversation } from "@/shared/types/api";
 
 const mockConversation: Conversation = {
@@ -20,7 +22,7 @@ const mockConversation: Conversation = {
   name: "Test Conversation",
   queue_state: "idle",
   default_mode: "agent",
-  model_id: "gpt-5.3",
+  model_config_id: "rc_model_1",
   rule_ids: [],
   skill_ids: [],
   mcp_ids: [],
@@ -117,6 +119,26 @@ describe("conversation store", () => {
     expect(runtime.executions.length).toBe(2);
     expect(runtime.executions[0]?.state).toBe("pending");
     expect(runtime.executions[1]?.state).toBe("queued");
+  });
+
+  it("rejects submit when no model is configured", async () => {
+    const conversationWithoutModel: Conversation = {
+      ...mockConversation,
+      id: "conv_without_model",
+      model_config_id: ""
+    };
+    ensureConversationRuntime(conversationWithoutModel, true);
+    setConversationDraft(conversationWithoutModel.id, "hello");
+
+    await submitConversationMessage(conversationWithoutModel, true);
+
+    expect(conversationStore.error).toContain("当前项目未绑定可用模型");
+    const messageCalls = fetchMock.mock.calls.filter(([url, init]) => {
+      return String(url).endsWith(`/v1/conversations/${conversationWithoutModel.id}/messages`) && (init?.method ?? "GET") === "POST";
+    });
+    expect(messageCalls).toHaveLength(0);
+    const runtime = ensureConversationRuntime(conversationWithoutModel, true);
+    expect(runtime.messages).toHaveLength(0);
   });
 
   it("applies incoming execution events to runtime", () => {
@@ -513,6 +535,78 @@ describe("conversation store", () => {
 
     expect(wrapper.find("details.trace-disclosure").exists()).toBe(true);
     expect(wrapper.find(".trace-item").exists()).toBe(false);
+  });
+
+  it("disables send button when model options are empty", () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        draft: "hello",
+        mode: "agent",
+        modelId: "",
+        placeholder: "输入消息",
+        modelOptions: []
+      }
+    });
+    const sendButton = wrapper.find("button[aria-label='发送消息']");
+    expect(sendButton.attributes("disabled")).toBeDefined();
+  });
+
+  it("uses configured model option label for assistant identity", () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [
+          {
+            id: "msg_assistant",
+            conversation_id: mockConversation.id,
+            role: "assistant",
+            content: "hello",
+            created_at: "2026-02-24T00:00:00Z"
+          }
+        ],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        draft: "",
+        mode: "agent",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }]
+      }
+    });
+    expect(wrapper.text()).toContain("MiniMax Primary");
+  });
+
+  it("renders inspector risk model label from display name", () => {
+    const wrapper = mount(MainInspectorPanel, {
+      props: {
+        diff: [],
+        capability: {
+          can_commit: false,
+          can_discard: false,
+          can_export_patch: false
+        },
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        modelLabel: "MiniMax Primary",
+        executions: [],
+        events: [],
+        activeTab: "risk"
+      }
+    });
+    expect(wrapper.text()).toContain("模型: MiniMax Primary");
   });
 
 });

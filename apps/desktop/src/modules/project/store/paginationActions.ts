@@ -109,7 +109,10 @@ function syncActiveProject(validProjectIDs: Set<string>): void {
 }
 
 export async function refreshConversationsForActiveProject(): Promise<void> {
-  const projectId = projectStore.activeProjectId;
+  await refreshConversationsForProject(projectStore.activeProjectId);
+}
+
+export async function refreshConversationsForProject(projectId: string): Promise<void> {
   await loadConversationsPage(projectId, { cursor: null, backStack: [] });
 }
 

@@ -34,7 +34,7 @@ const conversationA: Conversation = {
   name: "A",
   queue_state: "idle",
   default_mode: "agent",
-  model_id: "gpt-5.3",
+  model_config_id: "rc_model_1",
   rule_ids: [],
   skill_ids: [],
   mcp_ids: [],

@@ -5,6 +5,8 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,8 +23,11 @@ const (
 )
 
 type authzStore struct {
-	db *sql.DB
+	db     *sql.DB
+	dbPath string
 }
+
+var legacyDBBackupCopyFile = copyFileContents
 
 func openAuthzStore(path string) (*authzStore, error) {
 	if strings.TrimSpace(path) == "" {
@@ -49,7 +54,10 @@ func openAuthzStore(path string) (*authzStore, error) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	store := &authzStore{db: db}
+	store := &authzStore{
+		db:     db,
+		dbPath: dsn,
+	}
 	if err := store.migrate(); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -193,7 +201,7 @@ func (s *authzStore) migrate() error {
 			name TEXT NOT NULL,
 			repo_path TEXT NOT NULL,
 			is_git INTEGER NOT NULL DEFAULT 1,
-			default_model_id TEXT,
+			default_model_config_id TEXT,
 			default_mode TEXT NOT NULL,
 			current_revision INTEGER NOT NULL DEFAULT 0,
 			created_at TEXT NOT NULL,
@@ -203,8 +211,8 @@ func (s *authzStore) migrate() error {
 		`CREATE TABLE IF NOT EXISTS project_configs (
 			project_id TEXT PRIMARY KEY,
 			workspace_id TEXT NOT NULL,
-			model_ids_json TEXT NOT NULL,
-			default_model_id TEXT,
+			model_config_ids_json TEXT NOT NULL,
+			default_model_config_id TEXT,
 			rule_ids_json TEXT NOT NULL,
 			skill_ids_json TEXT NOT NULL,
 			mcp_ids_json TEXT NOT NULL,
@@ -218,7 +226,7 @@ func (s *authzStore) migrate() error {
 			name TEXT NOT NULL,
 			queue_state TEXT NOT NULL,
 			default_mode TEXT NOT NULL,
-			model_id TEXT NOT NULL,
+			model_config_id TEXT NOT NULL,
 			rule_ids_json TEXT NOT NULL,
 			skill_ids_json TEXT NOT NULL,
 			mcp_ids_json TEXT NOT NULL,
@@ -312,12 +320,61 @@ func (s *authzStore) migrate() error {
 			return fmt.Errorf("apply migration: %w", err)
 		}
 	}
-	if err := s.validateStrictSchema(); err != nil {
+	if validationErr := s.validateStrictSchema(); validationErr != nil {
+		backupPath := ""
+		if shouldBackupLegacySchema(s.dbPath, validationErr) {
+			var backupErr error
+			backupPath, backupErr = backupLegacyDBFile(s.dbPath)
+			if backupErr != nil {
+				return fmt.Errorf("backup legacy db before rebuild: %w", backupErr)
+			}
+			log.Printf("legacy authz db schema detected (%s); backup created at %s", s.dbPath, backupPath)
+		}
 		if rebuildErr := s.rebuildSchema(statements); rebuildErr != nil {
-			return fmt.Errorf("rebuild schema after validation failure: %w (original: %v)", rebuildErr, err)
+			return fmt.Errorf("rebuild schema after validation failure: %w (original: %v)", rebuildErr, validationErr)
+		}
+		if backupPath != "" {
+			log.Printf("legacy authz db schema rebuild succeeded (%s) using backup %s", s.dbPath, backupPath)
 		}
 	}
 	return nil
+}
+
+func shouldBackupLegacySchema(dbPath string, validationErr error) bool {
+	if validationErr == nil {
+		return false
+	}
+	normalized := strings.TrimSpace(dbPath)
+	if normalized == "" || normalized == ":memory:" {
+		return false
+	}
+	return strings.Contains(strings.ToLower(validationErr.Error()), "legacy db schema detected")
+}
+
+func backupLegacyDBFile(dbPath string) (string, error) {
+	normalized := strings.TrimSpace(dbPath)
+	if normalized == "" || normalized == ":memory:" {
+		return "", nil
+	}
+	info, statErr := os.Stat(normalized)
+	if statErr != nil {
+		return "", fmt.Errorf("stat legacy db: %w", statErr)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("legacy db path is a directory: %s", normalized)
+	}
+
+	now := time.Now().UTC()
+	backupPath := fmt.Sprintf(
+		"%s.legacy-%s%09d.bak",
+		normalized,
+		now.Format("20060102150405"),
+		now.Nanosecond(),
+	)
+	if copyErr := legacyDBBackupCopyFile(normalized, backupPath); copyErr != nil {
+		return "", copyErr
+	}
+	return backupPath, nil
 }
 
 func (s *authzStore) rebuildSchema(statements []string) error {
@@ -367,10 +424,14 @@ func (s *authzStore) validateStrictSchema() error {
 		column string
 	}{
 		{table: "projects", column: "current_revision"},
+		{table: "projects", column: "default_model_config_id"},
+		{table: "project_configs", column: "model_config_ids_json"},
+		{table: "project_configs", column: "default_model_config_id"},
 		{table: "executions", column: "agent_config_snapshot_json"},
 		{table: "executions", column: "resource_profile_snapshot_json"},
 		{table: "executions", column: "tokens_in"},
 		{table: "executions", column: "tokens_out"},
+		{table: "conversations", column: "model_config_id"},
 		{table: "conversations", column: "rule_ids_json"},
 		{table: "conversations", column: "skill_ids_json"},
 		{table: "conversations", column: "mcp_ids_json"},
@@ -457,6 +518,33 @@ func tableExists(db *sql.DB, table string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func copyFileContents(sourcePath string, targetPath string) error {
+	sourceFile, sourceErr := os.Open(sourcePath)
+	if sourceErr != nil {
+		return fmt.Errorf("open source file: %w", sourceErr)
+	}
+	defer sourceFile.Close()
+
+	sourceInfo, sourceInfoErr := sourceFile.Stat()
+	if sourceInfoErr != nil {
+		return fmt.Errorf("read source file metadata: %w", sourceInfoErr)
+	}
+
+	targetFile, targetErr := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, sourceInfo.Mode().Perm())
+	if targetErr != nil {
+		return fmt.Errorf("open target file: %w", targetErr)
+	}
+	defer targetFile.Close()
+
+	if _, copyErr := io.Copy(targetFile, sourceFile); copyErr != nil {
+		return fmt.Errorf("copy file content: %w", copyErr)
+	}
+	if syncErr := targetFile.Sync(); syncErr != nil {
+		return fmt.Errorf("sync target file: %w", syncErr)
+	}
+	return nil
 }
 
 func (s *authzStore) ensureWorkspaceSeeds(workspaceID string) error {

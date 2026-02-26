@@ -37,7 +37,8 @@
 
 .main-body {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--global-space-12);
   height: 100%;
   min-height: 0;

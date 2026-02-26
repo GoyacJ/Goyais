@@ -88,7 +88,7 @@
           <button class="action-btn" type="button" aria-label="停止执行" :disabled="!hasActiveExecution" @click="$emit('stop')">
             <AppIcon name="square" :size="12" />
           </button>
-          <button class="action-btn send" type="button" aria-label="发送消息" @click="$emit('send')">
+          <button class="action-btn send" type="button" aria-label="发送消息" :disabled="!hasModelOptions" @click="$emit('send')">
             <AppIcon name="arrow-up" :size="12" />
           </button>
         </div>

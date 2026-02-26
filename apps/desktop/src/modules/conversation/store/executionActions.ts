@@ -41,6 +41,10 @@ export async function submitConversationMessage(
   if (content === "") {
     return;
   }
+  if (runtime.modelId.trim() === "") {
+    conversationStore.error = "当前项目未绑定可用模型，请先在项目配置中绑定模型";
+    return;
+  }
 
   runtime.draft = "";
   const queueIndex = runtime.executions.length;
@@ -64,7 +68,7 @@ export async function submitConversationMessage(
     const response = await createExecution(conversation, {
       content,
       mode: runtime.mode,
-      model_id: runtime.modelId
+      model_config_id: runtime.modelId
     });
 
     upsertExecutionFromServer(runtime, response.execution);

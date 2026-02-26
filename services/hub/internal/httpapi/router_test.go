@@ -257,6 +257,8 @@ func TestLocalAnonymousListEndpointsAreScopedToLocalWorkspace(t *testing.T) {
 	projectPayload := map[string]any{}
 	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
 	projectID := projectPayload["id"].(string)
+	modelConfigID := createModelResourceConfigForTest(t, router, remoteID, authHeaders, "OpenAI", "gpt-5.3")
+	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
 
 	conversationRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
 		"workspace_id": remoteID,

@@ -222,26 +222,26 @@ type Session struct {
 }
 
 type Project struct {
-	ID              string           `json:"id"`
-	WorkspaceID     string           `json:"workspace_id"`
-	Name            string           `json:"name"`
-	RepoPath        string           `json:"repo_path"`
-	IsGit           bool             `json:"is_git"`
-	DefaultModelID  string           `json:"default_model_id,omitempty"`
-	DefaultMode     ConversationMode `json:"default_mode,omitempty"`
-	CurrentRevision int64            `json:"current_revision"`
-	CreatedAt       string           `json:"created_at"`
-	UpdatedAt       string           `json:"updated_at"`
+	ID                   string           `json:"id"`
+	WorkspaceID          string           `json:"workspace_id"`
+	Name                 string           `json:"name"`
+	RepoPath             string           `json:"repo_path"`
+	IsGit                bool             `json:"is_git"`
+	DefaultModelConfigID string           `json:"default_model_config_id,omitempty"`
+	DefaultMode          ConversationMode `json:"default_mode,omitempty"`
+	CurrentRevision      int64            `json:"current_revision"`
+	CreatedAt            string           `json:"created_at"`
+	UpdatedAt            string           `json:"updated_at"`
 }
 
 type ProjectConfig struct {
-	ProjectID      string   `json:"project_id"`
-	ModelIDs       []string `json:"model_ids"`
-	DefaultModelID *string  `json:"default_model_id,omitempty"`
-	RuleIDs        []string `json:"rule_ids"`
-	SkillIDs       []string `json:"skill_ids"`
-	MCPIDs         []string `json:"mcp_ids"`
-	UpdatedAt      string   `json:"updated_at"`
+	ProjectID            string   `json:"project_id"`
+	ModelConfigIDs       []string `json:"model_config_ids"`
+	DefaultModelConfigID *string  `json:"default_model_config_id,omitempty"`
+	RuleIDs              []string `json:"rule_ids"`
+	SkillIDs             []string `json:"skill_ids"`
+	MCPIDs               []string `json:"mcp_ids"`
+	UpdatedAt            string   `json:"updated_at"`
 }
 
 type CreateProjectRequest struct {
@@ -266,12 +266,12 @@ type RenameConversationRequest struct {
 }
 
 type UpdateConversationRequest struct {
-	Name     *string           `json:"name,omitempty"`
-	Mode     *ConversationMode `json:"mode,omitempty"`
-	ModelID  *string           `json:"model_id,omitempty"`
-	RuleIDs  []string          `json:"rule_ids,omitempty"`
-	SkillIDs []string          `json:"skill_ids,omitempty"`
-	MCPIDs   []string          `json:"mcp_ids,omitempty"`
+	Name          *string           `json:"name,omitempty"`
+	Mode          *ConversationMode `json:"mode,omitempty"`
+	ModelConfigID *string           `json:"model_config_id,omitempty"`
+	RuleIDs       []string          `json:"rule_ids,omitempty"`
+	SkillIDs      []string          `json:"skill_ids,omitempty"`
+	MCPIDs        []string          `json:"mcp_ids,omitempty"`
 }
 
 type Conversation struct {
@@ -281,7 +281,7 @@ type Conversation struct {
 	Name              string           `json:"name"`
 	QueueState        QueueState       `json:"queue_state"`
 	DefaultMode       ConversationMode `json:"default_mode"`
-	ModelID           string           `json:"model_id"`
+	ModelConfigID     string           `json:"model_config_id"`
 	RuleIDs           []string         `json:"rule_ids"`
 	SkillIDs          []string         `json:"skill_ids"`
 	MCPIDs            []string         `json:"mcp_ids"`
@@ -368,18 +368,19 @@ type ExecutionResourceProfile struct {
 }
 
 type ModelSnapshot struct {
-	ConfigID  string         `json:"config_id,omitempty"`
-	Vendor    string         `json:"vendor,omitempty"`
-	ModelID   string         `json:"model_id"`
-	BaseURL   string         `json:"base_url,omitempty"`
-	TimeoutMS int            `json:"timeout_ms,omitempty"`
-	Params    map[string]any `json:"params,omitempty"`
+	ConfigID   string         `json:"config_id,omitempty"`
+	Vendor     string         `json:"vendor,omitempty"`
+	ModelID    string         `json:"model_id"`
+	BaseURL    string         `json:"base_url,omitempty"`
+	BaseURLKey string         `json:"base_url_key,omitempty"`
+	TimeoutMS  int            `json:"timeout_ms,omitempty"`
+	Params     map[string]any `json:"params,omitempty"`
 }
 
 type ExecutionCreateRequest struct {
-	Content string           `json:"content"`
-	Mode    ConversationMode `json:"mode"`
-	ModelID string           `json:"model_id"`
+	Content       string           `json:"content"`
+	Mode          ConversationMode `json:"mode"`
+	ModelConfigID string           `json:"model_config_id"`
 }
 
 type ExecutionCreateResponse struct {

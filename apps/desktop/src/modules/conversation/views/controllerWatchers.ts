@@ -28,7 +28,7 @@ export function useAutoModelSyncWatcher(input: AutoModelSyncWatcherInput): void 
       }
 
       const currentModelID = input.resolveSemanticModelID(
-        input.runtime.value?.modelId ?? input.activeConversation.value?.model_id ?? ""
+        input.runtime.value?.modelId ?? input.activeConversation.value?.model_config_id ?? ""
       );
       if (currentModelID !== "" && options.some((item) => item.value === currentModelID)) {
         return;

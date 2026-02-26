@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,6 +95,124 @@ func TestOpenAuthzStoreRebuildsLegacyProjectsSchema(t *testing.T) {
 	}
 }
 
+func TestOpenAuthzStoreBacksUpLegacyDBBeforeRebuild(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "hub.sqlite3")
+	legacyDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open legacy sqlite db failed: %v", err)
+	}
+	if _, err := legacyDB.Exec(`CREATE TABLE projects (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		repo_path TEXT NOT NULL,
+		is_git INTEGER NOT NULL DEFAULT 1,
+		default_model_id TEXT,
+		default_mode TEXT NOT NULL,
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	)`); err != nil {
+		t.Fatalf("create legacy projects table failed: %v", err)
+	}
+	if err := legacyDB.Close(); err != nil {
+		t.Fatalf("close legacy sqlite db failed: %v", err)
+	}
+
+	store, err := openAuthzStore(dbPath)
+	if err != nil {
+		t.Fatalf("expected open authz store to rebuild legacy schema with backup, got %v", err)
+	}
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+
+	backupPaths, globErr := filepath.Glob(dbPath + ".legacy-*.bak")
+	if globErr != nil {
+		t.Fatalf("glob legacy backup files failed: %v", globErr)
+	}
+	if len(backupPaths) != 1 {
+		t.Fatalf("expected exactly one legacy backup file, got %d (%v)", len(backupPaths), backupPaths)
+	}
+
+	backupDB, backupErr := sql.Open("sqlite", backupPaths[0])
+	if backupErr != nil {
+		t.Fatalf("open legacy backup db failed: %v", backupErr)
+	}
+	defer backupDB.Close()
+
+	hasRevisionColumnInBackup, hasRevisionColumnErr := tableHasColumn(backupDB, "projects", "current_revision")
+	if hasRevisionColumnErr != nil {
+		t.Fatalf("check backup projects.current_revision failed: %v", hasRevisionColumnErr)
+	}
+	if hasRevisionColumnInBackup {
+		t.Fatalf("expected backup db to preserve legacy schema without projects.current_revision")
+	}
+
+	hasRevisionColumnInCurrentDB, currentDBErr := tableHasColumn(store.db, "projects", "current_revision")
+	if currentDBErr != nil {
+		t.Fatalf("check current projects.current_revision failed: %v", currentDBErr)
+	}
+	if !hasRevisionColumnInCurrentDB {
+		t.Fatalf("expected rebuilt db to contain projects.current_revision")
+	}
+}
+
+func TestOpenAuthzStoreFailsWhenLegacyBackupFails(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "hub.sqlite3")
+	legacyDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open legacy sqlite db failed: %v", err)
+	}
+	if _, err := legacyDB.Exec(`CREATE TABLE projects (
+		id TEXT PRIMARY KEY,
+		workspace_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		repo_path TEXT NOT NULL,
+		is_git INTEGER NOT NULL DEFAULT 1,
+		default_model_id TEXT,
+		default_mode TEXT NOT NULL,
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	)`); err != nil {
+		t.Fatalf("create legacy projects table failed: %v", err)
+	}
+	if err := legacyDB.Close(); err != nil {
+		t.Fatalf("close legacy sqlite db failed: %v", err)
+	}
+
+	originalCopyFn := legacyDBBackupCopyFile
+	legacyDBBackupCopyFile = func(_ string, _ string) error {
+		return errors.New("forced backup failure")
+	}
+	t.Cleanup(func() {
+		legacyDBBackupCopyFile = originalCopyFn
+	})
+
+	store, openErr := openAuthzStore(dbPath)
+	if openErr == nil {
+		if store != nil {
+			_ = store.close()
+		}
+		t.Fatalf("expected open authz store to fail when legacy backup fails")
+	}
+	if !strings.Contains(openErr.Error(), "backup legacy db before rebuild") {
+		t.Fatalf("expected backup failure context in error, got %v", openErr)
+	}
+	if !strings.Contains(openErr.Error(), "forced backup failure") {
+		t.Fatalf("expected original backup error in message, got %v", openErr)
+	}
+
+	backupPaths, globErr := filepath.Glob(dbPath + ".legacy-*.bak")
+	if globErr != nil {
+		t.Fatalf("glob legacy backup files failed: %v", globErr)
+	}
+	if len(backupPaths) != 0 {
+		t.Fatalf("expected no legacy backup file created on forced failure, got %v", backupPaths)
+	}
+}
+
 func TestAuthzStoreCreatesProjectSchema(t *testing.T) {
 	store, err := openAuthzStore(":memory:")
 	if err != nil {
@@ -105,7 +224,7 @@ func TestAuthzStoreCreatesProjectSchema(t *testing.T) {
 		}
 	}()
 
-	projectColumns := []string{"id", "workspace_id", "name", "repo_path", "default_model_id", "default_mode", "current_revision", "created_at", "updated_at"}
+	projectColumns := []string{"id", "workspace_id", "name", "repo_path", "default_model_config_id", "default_mode", "current_revision", "created_at", "updated_at"}
 	for _, column := range projectColumns {
 		ok, hasErr := tableHasColumn(store.db, "projects", column)
 		if hasErr != nil {
@@ -116,7 +235,7 @@ func TestAuthzStoreCreatesProjectSchema(t *testing.T) {
 		}
 	}
 
-	projectConfigColumns := []string{"project_id", "workspace_id", "model_ids_json", "rule_ids_json", "skill_ids_json", "mcp_ids_json", "updated_at"}
+	projectConfigColumns := []string{"project_id", "workspace_id", "model_config_ids_json", "default_model_config_id", "rule_ids_json", "skill_ids_json", "mcp_ids_json", "updated_at"}
 	for _, column := range projectConfigColumns {
 		ok, hasErr := tableHasColumn(store.db, "project_configs", column)
 		if hasErr != nil {

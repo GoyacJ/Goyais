@@ -75,8 +75,11 @@ func TestRunnerRunPromptDispatchesRunLifecycle(t *testing.T) {
 	if engine.lastStart.WorkingDir != "/tmp/project" {
 		t.Fatalf("expected working dir to be forwarded, got %q", engine.lastStart.WorkingDir)
 	}
-	if engine.lastInput.Text != "hello world" {
-		t.Fatalf("expected prompt to be forwarded, got %q", engine.lastInput.Text)
+	if !strings.Contains(engine.lastInput.Text, "# User Prompt") || !strings.HasSuffix(engine.lastInput.Text, "hello world") {
+		t.Fatalf("expected prompt wrapped with user prompt block, got %q", engine.lastInput.Text)
+	}
+	if !strings.Contains(engine.lastInput.Text, "# Project Context") {
+		t.Fatalf("expected project context to be injected, got %q", engine.lastInput.Text)
 	}
 	if len(renderer.events) != 3 {
 		t.Fatalf("expected 3 rendered events, got %d", len(renderer.events))
@@ -265,8 +268,11 @@ func TestRunnerRunPromptDynamicCustomSlashExpandsIntoEnginePrompt(t *testing.T) 
 	if err != nil {
 		t.Fatalf("expected dynamic slash expansion run to succeed: %v", err)
 	}
-	if engine.lastInput.Text != "Expanded dynamic slash prompt: goyais" {
-		t.Fatalf("expected expanded prompt forwarded to engine, got %q", engine.lastInput.Text)
+	if !strings.Contains(engine.lastInput.Text, "# User Prompt") || !strings.HasSuffix(engine.lastInput.Text, "Expanded dynamic slash prompt: goyais") {
+		t.Fatalf("expected expanded prompt wrapped with user prompt block, got %q", engine.lastInput.Text)
+	}
+	if !strings.Contains(engine.lastInput.Text, "# Project Context") {
+		t.Fatalf("expected project context to be injected for expanded prompt, got %q", engine.lastInput.Text)
 	}
 }
 
@@ -456,6 +462,12 @@ func TestRunnerRunPromptInjectsProjectInstructionsRootToLeafWithOverride(t *test
 	}
 
 	injected := engine.lastInput.Text
+	if !strings.Contains(injected, "# Project Context") {
+		t.Fatalf("expected project context header in injected prompt, got %q", injected)
+	}
+	if !strings.Contains(injected, "- Root Path: "+cwd) {
+		t.Fatalf("expected cwd root path in injected prompt, got %q", injected)
+	}
 	if !strings.Contains(injected, "ROOT_RULE") {
 		t.Fatalf("expected root instructions in injected prompt, got %q", injected)
 	}

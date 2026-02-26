@@ -75,16 +75,16 @@ func TestDeriveConversationStatusLockedMappings(t *testing.T) {
 			conversationID := "conv_status_" + randomHex(6)
 			now := time.Now().UTC().Add(time.Duration(index) * time.Second).Format(time.RFC3339)
 			conversation := Conversation{
-				ID:           conversationID,
-				WorkspaceID:  workspace.ID,
-				ProjectID:    "proj_" + randomHex(4),
-				Name:         "Status Conversation",
-				QueueState:   QueueStateIdle,
-				DefaultMode:  ConversationModeAgent,
-				ModelID:      "gpt-5.3",
-				BaseRevision: 0,
-				CreatedAt:    now,
-				UpdatedAt:    now,
+				ID:            conversationID,
+				WorkspaceID:   workspace.ID,
+				ProjectID:     "proj_" + randomHex(4),
+				Name:          "Status Conversation",
+				QueueState:    QueueStateIdle,
+				DefaultMode:   ConversationModeAgent,
+				ModelConfigID: "rc_model_status",
+				BaseRevision:  0,
+				CreatedAt:     now,
+				UpdatedAt:     now,
 			}
 
 			state.mu.Lock()

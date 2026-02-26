@@ -76,6 +76,8 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 	project := map[string]any{}
 	mustDecodeJSON(t, projectRes.Body.Bytes(), &project)
 	projectID := project["id"].(string)
+	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
+	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
 
 	time.Sleep(1100 * time.Millisecond)
 
@@ -133,9 +135,9 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 	conversationID := conversation["id"].(string)
 
 	msg1 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content":  "hello",
-		"mode":     "agent",
-		"model_id": "gpt-4.1",
+		"content":         "hello",
+		"mode":            "agent",
+		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if msg1.Code != http.StatusCreated {
 		t.Fatalf("expected first message 201, got %d (%s)", msg1.Code, msg1.Body.String())
@@ -146,9 +148,9 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 	messageID := exec1["message_id"].(string)
 
 	msg2 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content":  "second",
-		"mode":     "agent",
-		"model_id": "gpt-4.1",
+		"content":         "second",
+		"mode":            "agent",
+		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if msg2.Code != http.StatusCreated {
 		t.Fatalf("expected second message 201, got %d (%s)", msg2.Code, msg2.Body.String())
@@ -468,8 +470,30 @@ func TestResourceConfigAndCatalogEndpoints(t *testing.T) {
 	modelPayload := map[string]any{}
 	mustDecodeJSON(t, createModelRes.Body.Bytes(), &modelPayload)
 	modelConfigID := modelPayload["id"].(string)
-	if _, exists := modelPayload["name"]; exists {
-		t.Fatalf("expected model config response without name field")
+	if gotName := strings.TrimSpace(asString(modelPayload["name"])); gotName != "gpt-4.1" {
+		t.Fatalf("expected model config name to fallback model_id, got %q", gotName)
+	}
+	renameModelRes := performJSONRequest(t, router, http.MethodPatch, "/v1/workspaces/"+workspaceID+"/resource-configs/"+modelConfigID, map[string]any{
+		"name": "OpenAI Primary",
+	}, authHeaders)
+	if renameModelRes.Code != http.StatusOK {
+		t.Fatalf("expected model config patch 200, got %d (%s)", renameModelRes.Code, renameModelRes.Body.String())
+	}
+	renamedModelPayload := map[string]any{}
+	mustDecodeJSON(t, renameModelRes.Body.Bytes(), &renamedModelPayload)
+	if gotName := strings.TrimSpace(asString(renamedModelPayload["name"])); gotName != "OpenAI Primary" {
+		t.Fatalf("expected patched model config name, got %q", gotName)
+	}
+	resetModelNameRes := performJSONRequest(t, router, http.MethodPatch, "/v1/workspaces/"+workspaceID+"/resource-configs/"+modelConfigID, map[string]any{
+		"name": "   ",
+	}, authHeaders)
+	if resetModelNameRes.Code != http.StatusOK {
+		t.Fatalf("expected model config reset name 200, got %d (%s)", resetModelNameRes.Code, resetModelNameRes.Body.String())
+	}
+	resetModelPayload := map[string]any{}
+	mustDecodeJSON(t, resetModelNameRes.Body.Bytes(), &resetModelPayload)
+	if gotName := strings.TrimSpace(asString(resetModelPayload["name"])); gotName != "gpt-4.1" {
+		t.Fatalf("expected blank model config name fallback model_id, got %q", gotName)
 	}
 
 	testModelRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/resource-configs/"+modelConfigID+"/test", map[string]any{}, authHeaders)
@@ -571,13 +595,13 @@ func TestProjectConfigV2Endpoints(t *testing.T) {
 	mcpID := createMCPResourceConfigForTest(t, router, workspaceID, authHeaders)
 
 	putRes := performJSONRequest(t, router, http.MethodPut, "/v1/projects/"+projectID+"/config", map[string]any{
-		"project_id":       projectID,
-		"model_ids":        []string{modelIDPrimary},
-		"default_model_id": modelIDPrimary,
-		"rule_ids":         []string{ruleID},
-		"skill_ids":        []string{skillID},
-		"mcp_ids":          []string{mcpID},
-		"updated_at":       "",
+		"project_id":              projectID,
+		"model_config_ids":        []string{modelIDPrimary},
+		"default_model_config_id": modelIDPrimary,
+		"rule_ids":                []string{ruleID},
+		"skill_ids":               []string{skillID},
+		"mcp_ids":                 []string{mcpID},
+		"updated_at":              "",
 	}, authHeaders)
 	if putRes.Code != http.StatusOK {
 		t.Fatalf("expected put project config 200, got %d (%s)", putRes.Code, putRes.Body.String())
@@ -617,13 +641,13 @@ func TestProjectConfigPersistsAcrossRouterRestart(t *testing.T) {
 	mcpID := createMCPResourceConfigForTest(t, router, workspaceID, authHeaders)
 
 	putRes := performJSONRequest(t, router, http.MethodPut, "/v1/projects/"+projectID+"/config", map[string]any{
-		"project_id":       projectID,
-		"model_ids":        []string{modelA},
-		"default_model_id": modelA,
-		"rule_ids":         []string{ruleID},
-		"skill_ids":        []string{skillID},
-		"mcp_ids":          []string{mcpID},
-		"updated_at":       "",
+		"project_id":              projectID,
+		"model_config_ids":        []string{modelA},
+		"default_model_config_id": modelA,
+		"rule_ids":                []string{ruleID},
+		"skill_ids":               []string{skillID},
+		"mcp_ids":                 []string{mcpID},
+		"updated_at":              "",
 	}, authHeaders)
 	if putRes.Code != http.StatusOK {
 		t.Fatalf("expected put project config 200, got %d (%s)", putRes.Code, putRes.Body.String())
@@ -639,8 +663,8 @@ func TestProjectConfigPersistsAcrossRouterRestart(t *testing.T) {
 	}
 	getPayload := map[string]any{}
 	mustDecodeJSON(t, getRes.Body.Bytes(), &getPayload)
-	if gotDefault := strings.TrimSpace(asString(getPayload["default_model_id"])); gotDefault != modelA {
-		t.Fatalf("expected persisted default_model_id %s, got %q", modelA, gotDefault)
+	if gotDefault := strings.TrimSpace(asString(getPayload["default_model_config_id"])); gotDefault != modelA {
+		t.Fatalf("expected persisted default_model_config_id %s, got %q", modelA, gotDefault)
 	}
 
 	listRes := performJSONRequest(t, restartRouter, http.MethodGet, "/v1/workspaces/"+workspaceID+"/project-configs", nil, restartHeaders)
@@ -662,7 +686,7 @@ func TestProjectConfigPersistsAcrossRouterRestart(t *testing.T) {
 	}
 	conversationPayload := map[string]any{}
 	mustDecodeJSON(t, createConversationRes.Body.Bytes(), &conversationPayload)
-	if gotModel := strings.TrimSpace(asString(conversationPayload["model_id"])); gotModel != modelA {
+	if gotModel := strings.TrimSpace(asString(conversationPayload["model_config_id"])); gotModel != modelA {
 		t.Fatalf("expected conversation default model %s after restart, got %q", modelA, gotModel)
 	}
 }
@@ -725,6 +749,8 @@ func TestWorkspaceAgentConfigPersistsAndExecutionSnapshotIsFrozen(t *testing.T) 
 	projectPayload := map[string]any{}
 	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
 	projectID := projectPayload["id"].(string)
+	modelConfigID := createModelResourceConfigForTest(t, restartRouter, workspaceID, restartHeaders, "OpenAI", "gpt-5.3")
+	bindProjectConfigWithModelForTest(t, restartRouter, projectID, modelConfigID, restartHeaders)
 
 	conversationRes := performJSONRequest(t, restartRouter, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
 		"workspace_id": workspaceID,
@@ -779,13 +805,13 @@ func TestConversationPatchSupportsModeAndModel(t *testing.T) {
 	projectID := projectPayload["id"].(string)
 	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
 	configRes := performJSONRequest(t, router, http.MethodPut, "/v1/projects/"+projectID+"/config", map[string]any{
-		"project_id":       projectID,
-		"model_ids":        []string{modelConfigID},
-		"default_model_id": modelConfigID,
-		"rule_ids":         []string{},
-		"skill_ids":        []string{},
-		"mcp_ids":          []string{},
-		"updated_at":       "",
+		"project_id":              projectID,
+		"model_config_ids":        []string{modelConfigID},
+		"default_model_config_id": modelConfigID,
+		"rule_ids":                []string{},
+		"skill_ids":               []string{},
+		"mcp_ids":                 []string{},
+		"updated_at":              "",
 	}, authHeaders)
 	if configRes.Code != http.StatusOK {
 		t.Fatalf("expected put project config 200, got %d (%s)", configRes.Code, configRes.Body.String())
@@ -803,9 +829,9 @@ func TestConversationPatchSupportsModeAndModel(t *testing.T) {
 	conversationID := convPayload["id"].(string)
 
 	patchRes := performJSONRequest(t, router, http.MethodPatch, "/v1/conversations/"+conversationID, map[string]any{
-		"name":     "Patch Applied",
-		"mode":     "plan",
-		"model_id": modelConfigID,
+		"name":            "Patch Applied",
+		"mode":            "plan",
+		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if patchRes.Code != http.StatusOK {
 		t.Fatalf("expected patch conversation 200, got %d (%s)", patchRes.Code, patchRes.Body.String())
@@ -818,8 +844,8 @@ func TestConversationPatchSupportsModeAndModel(t *testing.T) {
 	if got := strings.TrimSpace(asString(updated["default_mode"])); got != "plan" {
 		t.Fatalf("expected patched mode plan, got %q", got)
 	}
-	if got := strings.TrimSpace(asString(updated["model_id"])); got != modelConfigID {
-		t.Fatalf("expected patched model_id, got %q", got)
+	if got := strings.TrimSpace(asString(updated["model_config_id"])); got != modelConfigID {
+		t.Fatalf("expected patched model_config_id, got %q", got)
 	}
 }
 
@@ -839,6 +865,8 @@ func TestConversationDetailEndpointReturnsMessagesExecutionsAndSnapshots(t *test
 	projectPayload := map[string]any{}
 	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
 	projectID := projectPayload["id"].(string)
+	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
+	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
 
 	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
 		"workspace_id": workspaceID,
@@ -852,18 +880,18 @@ func TestConversationDetailEndpointReturnsMessagesExecutionsAndSnapshots(t *test
 	conversationID := convPayload["id"].(string)
 
 	msg1 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content":  "hello detail",
-		"mode":     "agent",
-		"model_id": "gpt-4.1",
+		"content":         "hello detail",
+		"mode":            "agent",
+		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if msg1.Code != http.StatusCreated {
 		t.Fatalf("expected first message 201, got %d (%s)", msg1.Code, msg1.Body.String())
 	}
 
 	msg2 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content":  "second detail",
-		"mode":     "agent",
-		"model_id": "gpt-4.1",
+		"content":         "second detail",
+		"mode":            "agent",
+		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if msg2.Code != http.StatusCreated {
 		t.Fatalf("expected second message 201, got %d (%s)", msg2.Code, msg2.Body.String())
@@ -980,6 +1008,8 @@ func TestExecutionPatchEndpointFallbackForNonGitProject(t *testing.T) {
 	projectPayload := map[string]any{}
 	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
 	projectID := projectPayload["id"].(string)
+	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
+	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
 
 	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
 		"workspace_id": workspaceID,
@@ -1045,6 +1075,8 @@ func TestExecutionPatchEndpointUsesGitDiffWhenProjectIsGit(t *testing.T) {
 	projectPayload := map[string]any{}
 	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
 	projectID := projectPayload["id"].(string)
+	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
+	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
 
 	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
 		"workspace_id": workspaceID,
@@ -1117,6 +1149,8 @@ func TestExecutionPatchEndpointScopesGitDiffToExecutionFiles(t *testing.T) {
 	projectPayload := map[string]any{}
 	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
 	projectID := projectPayload["id"].(string)
+	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
+	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
 
 	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
 		"workspace_id": workspaceID,
@@ -1217,6 +1251,8 @@ func TestExecutionConfirmEndpointRemoved(t *testing.T) {
 	projectPayload := map[string]any{}
 	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
 	projectID := projectPayload["id"].(string)
+	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
+	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
 
 	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
 		"workspace_id": workspaceID,
@@ -1261,6 +1297,28 @@ func mustRunGitCommand(t *testing.T, repoDir string, args ...string) {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("run git %v failed: %v (%s)", args, err, strings.TrimSpace(string(output)))
+	}
+}
+
+func bindProjectConfigWithModelForTest(
+	t *testing.T,
+	router http.Handler,
+	projectID string,
+	modelConfigID string,
+	authHeaders map[string]string,
+) {
+	t.Helper()
+	configRes := performJSONRequest(t, router, http.MethodPut, "/v1/projects/"+projectID+"/config", map[string]any{
+		"project_id":              projectID,
+		"model_config_ids":        []string{modelConfigID},
+		"default_model_config_id": modelConfigID,
+		"rule_ids":                []string{},
+		"skill_ids":               []string{},
+		"mcp_ids":                 []string{},
+		"updated_at":              "",
+	}, authHeaders)
+	if configRes.Code != http.StatusOK {
+		t.Fatalf("expected put project config 200, got %d (%s)", configRes.Code, configRes.Body.String())
 	}
 }
 

@@ -47,7 +47,7 @@ function onSidebarClick(event: MouseEvent): void {
 
 <style scoped>
 .screen {
-  min-height: 100dvh;
+  height: 100dvh;
   display: grid;
   grid-template-columns: auto 1fr;
   gap: var(--global-space-8);
@@ -69,9 +69,10 @@ function onSidebarClick(event: MouseEvent): void {
 .content {
   padding: 0 var(--global-space-8) 0 0;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: var(--global-space-8);
   border-radius: var(--global-radius-12);
+  height: 100%;
   min-height: 0;
   overflow: hidden;
   position: relative;
@@ -111,7 +112,7 @@ function onSidebarClick(event: MouseEvent): void {
   .content {
     padding: 0 var(--global-space-8);
     border-radius: 0;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .mobile-menu-button {

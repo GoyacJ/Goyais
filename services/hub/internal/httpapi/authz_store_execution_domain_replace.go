@@ -40,7 +40,7 @@ func (s *authzStore) replaceExecutionDomainSnapshot(snapshot executionDomainSnap
 			return marshalErr
 		}
 		if _, err = tx.Exec(
-			`INSERT INTO conversations(id, workspace_id, project_id, name, queue_state, default_mode, model_id, rule_ids_json, skill_ids_json, mcp_ids_json, base_revision, active_execution_id, created_at, updated_at)
+			`INSERT INTO conversations(id, workspace_id, project_id, name, queue_state, default_mode, model_config_id, rule_ids_json, skill_ids_json, mcp_ids_json, base_revision, active_execution_id, created_at, updated_at)
 			 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			item.ID,
 			item.WorkspaceID,
@@ -48,7 +48,7 @@ func (s *authzStore) replaceExecutionDomainSnapshot(snapshot executionDomainSnap
 			item.Name,
 			string(item.QueueState),
 			string(item.DefaultMode),
-			item.ModelID,
+			item.ModelConfigID,
 			string(ruleIDsJSON),
 			string(skillIDsJSON),
 			string(mcpIDsJSON),

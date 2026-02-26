@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/shared/services/http";
+import type { Conversation } from "@/shared/types/api";
 
 const serviceMocks = vi.hoisted(() => ({
   listProjects: vi.fn(),
@@ -20,6 +21,14 @@ const serviceMocks = vi.hoisted(() => ({
 const storeMocks = vi.hoisted(() => ({
   getCurrentWorkspace: vi.fn(),
   getWorkspaceToken: vi.fn()
+}));
+
+const conversationStoreMocks = vi.hoisted(() => ({
+  conversationStore: {
+    byConversationId: {} as Record<string, unknown>
+  },
+  detachConversationStream: vi.fn(),
+  clearConversationTimer: vi.fn()
 }));
 
 vi.mock("@/modules/project/services", () => ({
@@ -45,12 +54,19 @@ vi.mock("@/shared/stores/authStore", () => ({
   getWorkspaceToken: storeMocks.getWorkspaceToken
 }));
 
-import { importProjectByDirectory, projectStore, refreshProjects, resetProjectStore } from "@/modules/project/store";
+vi.mock("@/modules/conversation/store", () => ({
+  conversationStore: conversationStoreMocks.conversationStore,
+  detachConversationStream: conversationStoreMocks.detachConversationStream,
+  clearConversationTimer: conversationStoreMocks.clearConversationTimer
+}));
+
+import { importProjectByDirectory, projectStore, refreshProjects, resetProjectStore, updateProjectBinding } from "@/modules/project/store";
 
 describe("project store token forwarding", () => {
   beforeEach(() => {
     resetProjectStore();
     vi.clearAllMocks();
+    conversationStoreMocks.conversationStore.byConversationId = {};
 
     storeMocks.getCurrentWorkspace.mockReturnValue({
       id: "ws_remote_1",
@@ -132,7 +148,7 @@ describe("project store token forwarding", () => {
           name: "alpha",
           repo_path: "/tmp/repo-alpha",
           is_git: true,
-          default_model_id: "gpt-5.3",
+          default_model_config_id: "rc_model_1",
           default_mode: "agent",
           current_revision: 0,
           created_at: "2026-02-24T00:00:00Z",
@@ -150,7 +166,7 @@ describe("project store token forwarding", () => {
           name: "Conversation 1",
           queue_state: "idle",
           default_mode: "agent",
-          model_id: "gpt-5.3",
+          model_config_id: "rc_model_1",
           base_revision: 0,
           active_execution_id: null,
           created_at: "2026-02-24T00:00:00Z",
@@ -164,5 +180,105 @@ describe("project store token forwarding", () => {
 
     expect(projectStore.activeProjectId).toBe("proj_alpha");
     expect(projectStore.activeConversationId).toBe("");
+  });
+
+  it("refreshes conversations and clears stale runtime after project binding update", async () => {
+    const retainedConversation: Conversation = {
+      id: "conv_keep",
+      workspace_id: "ws_remote_1",
+      project_id: "proj_alpha",
+      name: "keep",
+      queue_state: "idle",
+      default_mode: "agent",
+      model_config_id: "rc_model_1",
+      rule_ids: [],
+      skill_ids: [],
+      mcp_ids: [],
+      base_revision: 0,
+      active_execution_id: null,
+      created_at: "2026-02-24T00:00:00Z",
+      updated_at: "2026-02-24T00:00:00Z"
+    };
+
+    projectStore.conversationsByProjectId.proj_alpha = [
+      {
+        ...retainedConversation,
+        id: "conv_remove",
+        name: "remove"
+      },
+      retainedConversation
+    ];
+    projectStore.activeConversationId = "conv_remove";
+    conversationStoreMocks.conversationStore.byConversationId = {
+      conv_remove: { hydrated: true },
+      conv_keep: { hydrated: true }
+    };
+
+    serviceMocks.updateProjectConfig.mockResolvedValue({
+      project_id: "proj_alpha",
+      model_config_ids: ["rc_model_1"],
+      default_model_config_id: "rc_model_1",
+      rule_ids: [],
+      skill_ids: [],
+      mcp_ids: [],
+      updated_at: "2026-02-24T01:00:00Z"
+    });
+    serviceMocks.listConversations.mockResolvedValue({
+      items: [retainedConversation],
+      next_cursor: null
+    });
+
+    const updated = await updateProjectBinding("proj_alpha", {
+      model_config_ids: ["rc_model_1"],
+      default_model_config_id: "rc_model_1",
+      rule_ids: [],
+      skill_ids: [],
+      mcp_ids: []
+    });
+
+    expect(updated).toBe(true);
+    expect(serviceMocks.updateProjectConfig).toHaveBeenCalledTimes(1);
+    expect(serviceMocks.listConversations).toHaveBeenCalledTimes(1);
+    expect(conversationStoreMocks.detachConversationStream).toHaveBeenCalledWith("conv_remove");
+    expect(conversationStoreMocks.clearConversationTimer).toHaveBeenCalledWith("conv_remove");
+    expect(conversationStoreMocks.conversationStore.byConversationId).not.toHaveProperty("conv_remove");
+    expect(projectStore.activeConversationId).toBe("");
+    expect(projectStore.conversationsByProjectId.proj_alpha).toHaveLength(1);
+    expect(projectStore.conversationsByProjectId.proj_alpha[0]?.id).toBe("conv_keep");
+  });
+
+  it("keeps modal state clean when project binding update fails", async () => {
+    projectStore.projectConfigsByProjectId.proj_alpha = {
+      project_id: "proj_alpha",
+      model_config_ids: ["rc_model_1"],
+      default_model_config_id: "rc_model_1",
+      rule_ids: [],
+      skill_ids: [],
+      mcp_ids: [],
+      updated_at: "2026-02-24T00:00:00Z"
+    };
+
+    serviceMocks.updateProjectConfig.mockRejectedValue(
+      new ApiError({
+        status: 400,
+        code: "VALIDATION_ERROR",
+        message: "model_config_id must be included in project model_config_ids",
+        traceId: "tr_bind_invalid"
+      })
+    );
+
+    const updated = await updateProjectBinding("proj_alpha", {
+      model_config_ids: ["rc_model_1"],
+      default_model_config_id: "rc_model_1",
+      rule_ids: [],
+      skill_ids: [],
+      mcp_ids: []
+    });
+
+    expect(updated).toBe(false);
+    expect(projectStore.projectConfigsByProjectId.proj_alpha?.updated_at).toBe("2026-02-24T00:00:00Z");
+    expect(projectStore.error).toContain("VALIDATION_ERROR");
+    expect(projectStore.error).toContain("tr_bind_invalid");
+    expect(serviceMocks.listConversations).not.toHaveBeenCalled();
   });
 });

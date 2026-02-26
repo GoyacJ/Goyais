@@ -107,7 +107,7 @@ export function ensureConversationRuntime(
     snapshots: [],
     draft: "",
     mode: conversation.default_mode,
-    modelId: conversation.model_id,
+    modelId: conversation.model_config_id,
     ruleIds: [...(conversation.rule_ids ?? [])],
     skillIds: [...(conversation.skill_ids ?? [])],
     mcpIds: [...(conversation.mcp_ids ?? [])],
@@ -135,7 +135,7 @@ export function hydrateConversationRuntime(
 ): ConversationRuntime {
   const runtime = ensureConversationRuntime(conversation, isGitProject);
   runtime.mode = detail.conversation.default_mode;
-  runtime.modelId = detail.conversation.model_id;
+  runtime.modelId = detail.conversation.model_config_id;
   runtime.ruleIds = [...(detail.conversation.rule_ids ?? [])];
   runtime.skillIds = [...(detail.conversation.skill_ids ?? [])];
   runtime.mcpIds = [...(detail.conversation.mcp_ids ?? [])];

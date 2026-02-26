@@ -65,7 +65,7 @@
 
     <section v-else class="card">
       <strong>Risk</strong>
-      <p class="warning">模型: {{ modelId }}</p>
+      <p class="warning">模型: {{ modelLabel }}</p>
       <p class="normal">{{ riskSummary }}</p>
       <p class="normal">low: {{ riskLow }} · high: {{ riskHigh }} · critical: {{ riskCritical }}</p>
     </section>
@@ -99,12 +99,12 @@ const props = defineProps<{
   queuedCount: number;
   pendingCount: number;
   executingCount: number;
-  modelId: string;
+  modelLabel: string;
   executions: Execution[];
   events: ExecutionEvent[];
   activeTab: InspectorTabKey;
 }>();
-const { activeTab, capability, diff, events, executions, executingCount, modelId, pendingCount, queuedCount } = toRefs(props);
+const { activeTab, capability, diff, events, executions, executingCount, modelLabel, pendingCount, queuedCount } = toRefs(props);
 
 const runHint = computed(() => {
   if (pendingCount.value > 0 || executingCount.value > 0) {

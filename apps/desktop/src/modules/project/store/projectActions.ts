@@ -1,4 +1,14 @@
 import {
+  clearConversationTimer,
+  conversationStore,
+  detachConversationStream,
+} from "@/modules/conversation/store";
+import {
+  refreshConversationsForActiveProject,
+  refreshConversationsForProject,
+  refreshProjects
+} from "@/modules/project/store/paginationActions";
+import {
   createConversation,
   createProject,
   exportConversationMarkdown,
@@ -9,10 +19,6 @@ import {
   renameConversation,
   updateProjectConfig
 } from "@/modules/project/services";
-import {
-  refreshConversationsForActiveProject,
-  refreshProjects
-} from "@/modules/project/store/paginationActions";
 import { projectStore, resolveCurrentWorkspaceToken, resolveWorkspaceToken } from "@/modules/project/store/state";
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { getCurrentWorkspace } from "@/shared/stores/workspaceStore";
@@ -124,11 +130,11 @@ export async function updateConversationModeById(
 export async function updateConversationModelById(
   projectId: string,
   conversationId: string,
-  modelId: string
+  modelConfigId: string
 ): Promise<boolean> {
   const token = resolveCurrentWorkspaceToken();
   try {
-    const updated = await patchConversation(conversationId, { model_id: modelId }, { token });
+    const updated = await patchConversation(conversationId, { model_config_id: modelConfigId }, { token });
     const list = projectStore.conversationsByProjectId[projectId] ?? [];
     projectStore.conversationsByProjectId[projectId] = list.map((conversation) =>
       conversation.id === conversationId ? updated : conversation
@@ -167,13 +173,35 @@ export async function exportConversationById(conversationId: string): Promise<st
 export async function updateProjectBinding(
   projectId: string,
   config: Omit<ProjectConfig, "project_id" | "updated_at">
-): Promise<void> {
+): Promise<boolean> {
   const token = resolveCurrentWorkspaceToken();
+  const previousConversationIDs = (projectStore.conversationsByProjectId[projectId] ?? []).map((conversation) => conversation.id);
   try {
     const updated = await updateProjectConfig(projectId, config, { token });
     projectStore.projectConfigsByProjectId[projectId] = updated;
+    await refreshConversationsForProject(projectId);
+    const nextConversationIDs = (projectStore.conversationsByProjectId[projectId] ?? []).map((conversation) => conversation.id);
+    pruneRemovedConversationRuntime(previousConversationIDs, nextConversationIDs);
+    if (!nextConversationIDs.includes(projectStore.activeConversationId)) {
+      projectStore.activeConversationId = "";
+    }
+    return true;
   } catch (error) {
     projectStore.error = toDisplayError(error);
+    return false;
+  }
+}
+
+function pruneRemovedConversationRuntime(previousConversationIDs: string[], nextConversationIDs: string[]): void {
+  const nextIDSet = new Set(nextConversationIDs.map((conversationID) => conversationID.trim()).filter((conversationID) => conversationID !== ""));
+  for (const previousConversationID of previousConversationIDs) {
+    const normalizedConversationID = previousConversationID.trim();
+    if (normalizedConversationID === "" || nextIDSet.has(normalizedConversationID)) {
+      continue;
+    }
+    detachConversationStream(normalizedConversationID);
+    clearConversationTimer(normalizedConversationID);
+    delete conversationStore.byConversationId[normalizedConversationID];
   }
 }
 

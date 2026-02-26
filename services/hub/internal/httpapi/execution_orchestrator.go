@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"goyais/services/hub/internal/agentcore/prompting"
 )
 
 type ExecutionOrchestrator struct {
@@ -316,7 +318,8 @@ func (o *ExecutionOrchestrator) executeModel(ctx context.Context, execution Exec
 		profile.ModelID = hydrated.ModelID
 	}
 
-	systemPrompt := buildExecutionSystemPrompt(o.state, execution.WorkspaceID, profile)
+	projectContext, projectContextCWD := lookupExecutionProjectPromptContext(o.state, execution)
+	systemPrompt := buildExecutionSystemPrompt(o.state, execution.WorkspaceID, profile, projectContext, projectContextCWD)
 	switch model.Vendor {
 	case ModelVendorGoogle:
 		return invokeGoogleModel(ctx, o.state, execution.WorkspaceID, model, systemPrompt, input)
@@ -327,11 +330,12 @@ func (o *ExecutionOrchestrator) executeModel(ctx context.Context, execution Exec
 
 func buildModelSpecFromExecutionSnapshot(snapshot ModelSnapshot) ModelSpec {
 	spec := ModelSpec{
-		Vendor:    ModelVendorName(strings.TrimSpace(snapshot.Vendor)),
-		ModelID:   strings.TrimSpace(snapshot.ModelID),
-		BaseURL:   strings.TrimSpace(snapshot.BaseURL),
-		TimeoutMS: snapshot.TimeoutMS,
-		Params:    cloneMapAny(snapshot.Params),
+		Vendor:     ModelVendorName(strings.TrimSpace(snapshot.Vendor)),
+		ModelID:    strings.TrimSpace(snapshot.ModelID),
+		BaseURL:    strings.TrimSpace(snapshot.BaseURL),
+		BaseURLKey: strings.TrimSpace(snapshot.BaseURLKey),
+		TimeoutMS:  snapshot.TimeoutMS,
+		Params:     cloneMapAny(snapshot.Params),
 	}
 	if key, ok := spec.Params["api_key"].(string); ok {
 		spec.APIKey = strings.TrimSpace(key)
@@ -340,15 +344,27 @@ func buildModelSpecFromExecutionSnapshot(snapshot ModelSnapshot) ModelSpec {
 	return spec
 }
 
-func buildExecutionSystemPrompt(state *AppState, workspaceID string, profile *ExecutionResourceProfile) string {
-	if profile == nil {
-		return ""
+func buildExecutionSystemPrompt(
+	state *AppState,
+	workspaceID string,
+	profile *ExecutionResourceProfile,
+	projectContext *prompting.ProjectContext,
+	projectContextCWD string,
+) string {
+	ruleIDs := []string{}
+	skillIDs := []string{}
+	mcpIDs := []string{}
+	if profile != nil {
+		ruleIDs = sanitizeIDList(profile.RuleIDs)
+		skillIDs = sanitizeIDList(profile.SkillIDs)
+		mcpIDs = sanitizeIDList(profile.MCPIDs)
 	}
-	ruleSegments := make([]string, 0, len(profile.RuleIDs))
-	skillSegments := make([]string, 0, len(profile.SkillIDs))
-	mcpSegments := make([]string, 0, len(profile.MCPIDs))
 
-	for _, id := range sanitizeIDList(profile.RuleIDs) {
+	ruleSegments := make([]string, 0, len(ruleIDs))
+	skillSegments := make([]string, 0, len(skillIDs))
+	mcpSegments := make([]string, 0, len(mcpIDs))
+
+	for _, id := range ruleIDs {
 		config, exists, err := loadWorkspaceResourceConfigRaw(state, workspaceID, id)
 		if err != nil || !exists || config.Rule == nil {
 			continue
@@ -359,7 +375,7 @@ func buildExecutionSystemPrompt(state *AppState, workspaceID string, profile *Ex
 		}
 		ruleSegments = append(ruleSegments, content)
 	}
-	for _, id := range sanitizeIDList(profile.SkillIDs) {
+	for _, id := range skillIDs {
 		config, exists, err := loadWorkspaceResourceConfigRaw(state, workspaceID, id)
 		if err != nil || !exists || config.Skill == nil {
 			continue
@@ -370,7 +386,7 @@ func buildExecutionSystemPrompt(state *AppState, workspaceID string, profile *Ex
 		}
 		skillSegments = append(skillSegments, content)
 	}
-	for _, id := range sanitizeIDList(profile.MCPIDs) {
+	for _, id := range mcpIDs {
 		config, exists, err := loadWorkspaceResourceConfigRaw(state, workspaceID, id)
 		if err != nil || !exists || config.MCP == nil {
 			continue
@@ -393,7 +409,31 @@ func buildExecutionSystemPrompt(state *AppState, workspaceID string, profile *Ex
 	if len(mcpSegments) > 0 {
 		segments = append(segments, "MCP Servers:\n"+strings.Join(mcpSegments, "\n"))
 	}
-	return strings.TrimSpace(strings.Join(segments, "\n\n"))
+	return prompting.BuildSystemPrompt(prompting.SystemPromptInput{
+		BasePrompt: strings.TrimSpace(strings.Join(segments, "\n\n")),
+		CWD:        strings.TrimSpace(projectContextCWD),
+		Env:        map[string]string{},
+		Project:    projectContext,
+	})
+}
+
+func lookupExecutionProjectPromptContext(state *AppState, execution Execution) (*prompting.ProjectContext, string) {
+	state.mu.RLock()
+	projectPath, isGitProject, projectName := lookupProjectExecutionContextLocked(state, execution)
+	state.mu.RUnlock()
+
+	projectPath = strings.TrimSpace(projectPath)
+	projectName = strings.TrimSpace(projectName)
+	if projectPath == "" && projectName == "" {
+		return nil, ""
+	}
+
+	isGit := isGitProject
+	return &prompting.ProjectContext{
+		Name:  projectName,
+		Path:  projectPath,
+		IsGit: &isGit,
+	}, projectPath
 }
 
 func invokeOpenAICompatibleModel(

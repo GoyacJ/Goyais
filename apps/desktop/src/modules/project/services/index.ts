@@ -91,7 +91,7 @@ export async function patchConversation(
   patch: {
     name?: string;
     mode?: ConversationMode;
-    model_id?: string;
+    model_config_id?: string;
     rule_ids?: string[];
     skill_ids?: string[];
     mcp_ids?: string[];

@@ -30,6 +30,7 @@ export function useWorkspaceModelView() {
     open: false,
     mode: "create" as "create" | "edit",
     configId: "",
+    name: "",
     vendor: "" as ModelVendorName | "",
     selectedCatalogModel: "",
     baseUrl: "",
@@ -130,6 +131,7 @@ export function useWorkspaceModelView() {
       open: true,
       mode: "create",
       configId: "",
+      name: "",
       vendor: (firstVendor?.name ?? "") as ModelVendorName | "",
       selectedCatalogModel: firstModel,
       baseUrl: firstVendor?.name === "Local" ? firstVendor.base_url : "",
@@ -148,6 +150,7 @@ export function useWorkspaceModelView() {
       open: true,
       mode: "edit",
       configId: item.id,
+      name: (item.name?.trim() || item.model?.model_id || "").trim(),
       vendor,
       selectedCatalogModel: item.model?.model_id ?? "",
       baseUrl: item.model?.base_url ?? "",
@@ -172,6 +175,7 @@ export function useWorkspaceModelView() {
     }
 
     const timeout = Number.parseInt(form.timeoutMs, 10);
+    const name = form.name.trim() || modelID;
     const model = {
       vendor,
       model_id: modelID,
@@ -182,9 +186,9 @@ export function useWorkspaceModelView() {
     };
 
     if (form.mode === "create") {
-      await createWorkspaceResourceConfig({ type: "model", enabled: form.enabled, model });
+      await createWorkspaceResourceConfig({ type: "model", name, enabled: form.enabled, model });
     } else {
-      await patchWorkspaceResourceConfig("model", form.configId, { enabled: form.enabled, model });
+      await patchWorkspaceResourceConfig("model", form.configId, { name, enabled: form.enabled, model });
     }
     form.open = false;
   }
@@ -199,7 +203,7 @@ export function useWorkspaceModelView() {
       showTestNotice("error", resourceStore.error || "模型测试失败");
       return;
     }
-    const modelText = `${item.model?.vendor ?? "-"} / ${item.model?.model_id ?? "-"}`;
+    const modelText = item.name?.trim() || `${item.model?.vendor ?? "-"} / ${item.model?.model_id ?? "-"}`;
     const statusText = result.status === "success" ? "成功" : "失败";
     const tone = result.status === "success" ? "info" : "error";
     const detail = result.error_code ? ` / ${result.error_code}` : "";
@@ -217,7 +221,7 @@ export function useWorkspaceModelView() {
   function removeConfig(item: ResourceConfig): void {
     deleteConfirm.open = true;
     deleteConfirm.configId = item.id;
-    deleteConfirm.modelText = `${item.model?.vendor ?? "-"} / ${item.model?.model_id ?? "-"}`;
+    deleteConfirm.modelText = item.name?.trim() || `${item.model?.vendor ?? "-"} / ${item.model?.model_id ?? "-"}`;
   }
 
   function closeDeleteConfirm(): void {

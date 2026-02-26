@@ -40,8 +40,8 @@ export function useWorkspaceProjectConfigView() {
         id: project.id,
         name: project.name,
         repoPath: project.repo_path,
-        modelCount: normalizeModelBindingIDs(config?.model_ids ?? []).length,
-        defaultModelId: resolveModelBindingDisplayName(config?.default_model_id ?? "") || "-",
+        modelCount: normalizeModelBindingIDs(config?.model_config_ids ?? []).length,
+        defaultModelId: resolveModelBindingDisplayName(config?.default_model_config_id ?? "") || "-",
         ruleCount: config?.rule_ids.length ?? 0,
         skillCount: config?.skill_ids.length ?? 0,
         mcpCount: config?.mcp_ids.length ?? 0,
@@ -67,11 +67,12 @@ export function useWorkspaceProjectConfigView() {
         if (configID === "" || modelID === "") {
           return null;
         }
-        const vendor = item.model?.vendor?.trim() ?? "-";
+        const vendor = item.model?.vendor?.trim() ?? "";
+        const displayName = item.name?.trim() || (vendor ? `${vendor} / ${modelID}` : modelID);
         const suffix = item.enabled ? "" : " (Disabled)";
         return {
           id: configID,
-          name: `${vendor} / ${modelID}${suffix}`
+          name: `${displayName}${suffix}`
         };
       })
       .filter((item): item is { id: string; name: string } => item !== null);
@@ -138,8 +139,8 @@ export function useWorkspaceProjectConfigView() {
     }
 
     const config = getProjectConfig(projectId);
-    const normalizedModelIDs = normalizeModelBindingIDs(config.model_ids);
-    const normalizedDefaultModelID = normalizeModelBindingID(config.default_model_id ?? "");
+    const normalizedModelIDs = normalizeModelBindingIDs(config.model_config_ids);
+    const normalizedDefaultModelID = normalizeModelBindingID(config.default_model_config_id ?? "");
     Object.assign(form, {
       open: true,
       projectId,
@@ -213,14 +214,19 @@ export function useWorkspaceProjectConfigView() {
     }
 
     const payload: Omit<ProjectConfig, "project_id" | "updated_at"> = {
-      model_ids: [...form.modelIds],
-      default_model_id: form.defaultModelId || null,
+      model_config_ids: [...form.modelIds],
+      default_model_config_id: form.defaultModelId || null,
       rule_ids: [...form.ruleIds],
       skill_ids: [...form.skillIds],
       mcp_ids: [...form.mcpIds]
     };
 
-    await updateProjectBinding(form.projectId, payload);
+    form.message = "";
+    const updated = await updateProjectBinding(form.projectId, payload);
+    if (!updated) {
+      form.message = projectStore.error.trim() || "保存失败，请检查项目配置";
+      return;
+    }
     await refreshWorkspaceProjectBindings();
     form.open = false;
   }
@@ -245,18 +251,6 @@ export function useWorkspaceProjectConfigView() {
     const byConfigID = resourceStore.models.items.find((item) => item.id.trim() === normalizedSelector);
     if (byConfigID) {
       return byConfigID.id.trim();
-    }
-
-    const byEnabledModelID = resourceStore.models.items.find(
-      (item) => item.enabled && (item.model?.model_id?.trim() ?? "") === normalizedSelector
-    );
-    if (byEnabledModelID) {
-      return byEnabledModelID.id.trim();
-    }
-
-    const byModelID = resourceStore.models.items.find((item) => (item.model?.model_id?.trim() ?? "") === normalizedSelector);
-    if (byModelID) {
-      return byModelID.id.trim();
     }
 
     return normalizedSelector;

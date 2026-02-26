@@ -177,18 +177,6 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 			})
 			return
 		}
-		catalogDefaultModelID := strings.TrimSpace(state.resolveWorkspaceDefaultModelID(conversationSeed.WorkspaceID))
-		enabledOnly := true
-		modelConfigs, listModelConfigsErr := listWorkspaceResourceConfigs(state, conversationSeed.WorkspaceID, resourceConfigQuery{
-			Type:    ResourceTypeModel,
-			Enabled: &enabledOnly,
-		})
-		if listModelConfigsErr != nil {
-			WriteStandardError(w, r, http.StatusInternalServerError, "RESOURCE_CONFIG_LIST_FAILED", "Failed to list model configs", map[string]any{
-				"workspace_id": conversationSeed.WorkspaceID,
-			})
-			return
-		}
 		resolvedMode := input.Mode
 		if resolvedMode == "" {
 			resolvedMode = conversationSeed.DefaultMode
@@ -196,37 +184,66 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 		if resolvedMode == "" {
 			resolvedMode = firstNonEmptyMode(project.DefaultMode, ConversationModeAgent)
 		}
-		modelSelector := strings.TrimSpace(input.ModelID)
+		modelSelector := strings.TrimSpace(input.ModelConfigID)
 		if modelSelector == "" {
-			modelSelector = strings.TrimSpace(conversationSeed.ModelID)
+			modelSelector = strings.TrimSpace(conversationSeed.ModelConfigID)
 		}
 		if modelSelector == "" {
-			modelSelector = strings.TrimSpace(derefString(projectConfig.DefaultModelID))
+			modelSelector = strings.TrimSpace(derefString(projectConfig.DefaultModelConfigID))
 		}
 		if modelSelector == "" {
-			modelSelector = strings.TrimSpace(project.DefaultModelID)
-		}
-		if modelSelector == "" {
-			modelSelector = catalogDefaultModelID
-		}
-		if modelSelector == "" {
-			WriteStandardError(w, r, http.StatusBadRequest, "MODEL_NOT_RESOLVED", "No available model found for execution", map[string]any{
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "model_config_id is required and must be configured by project", map[string]any{
 				"conversation_id": conversationID,
+			})
+			return
+		}
+		if err := validateConversationResourceSelection(
+			state,
+			conversationSeed.WorkspaceID,
+			projectConfig,
+			modelSelector,
+			conversationSeed.RuleIDs,
+			conversationSeed.SkillIDs,
+			conversationSeed.MCPIDs,
+		); err != nil {
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+			return
+		}
+		selectedModelConfig, modelConfigExists, modelConfigErr := getWorkspaceEnabledModelConfigByID(
+			state,
+			conversationSeed.WorkspaceID,
+			modelSelector,
+		)
+		if modelConfigErr != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "RESOURCE_CONFIG_LOAD_FAILED", "Failed to load model config", map[string]any{
+				"workspace_id":    conversationSeed.WorkspaceID,
+				"model_config_id": modelSelector,
+			})
+			return
+		}
+		if !modelConfigExists {
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "model_config_id is not resolvable from project config", map[string]any{
+				"model_selector": modelSelector,
 			})
 			return
 		}
 		resolvedModelID, resolvedModelSnapshot := resolveExecutionModelSnapshot(
 			state,
 			conversationSeed.WorkspaceID,
-			projectConfig,
-			modelSelector,
-			modelConfigs,
+			selectedModelConfig,
 		)
-		if strings.TrimSpace(resolvedModelID) == "" {
-			resolvedModelID = strings.TrimSpace(modelSelector)
+		if strings.TrimSpace(resolvedModelID) == "" || strings.TrimSpace(resolvedModelSnapshot.ModelID) == "" {
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "model_config_id is not resolvable from project config", map[string]any{
+				"model_selector": modelSelector,
+			})
+			return
 		}
-		if strings.TrimSpace(resolvedModelSnapshot.ModelID) == "" {
-			resolvedModelSnapshot.ModelID = resolvedModelID
+		resolvedModelConfigID := strings.TrimSpace(resolvedModelSnapshot.ConfigID)
+		if resolvedModelConfigID == "" {
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "model_config_id is not resolvable from project config", map[string]any{
+				"model_selector": modelSelector,
+			})
+			return
 		}
 		workspaceAgentConfig, workspaceAgentConfigErr := loadWorkspaceAgentConfigFromStore(state, conversationSeed.WorkspaceID)
 		if workspaceAgentConfigErr != nil {
@@ -278,7 +295,7 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 			ModeSnapshot:   resolvedMode,
 			ModelSnapshot:  resolvedModelSnapshot,
 			ResourceProfileSnapshot: &ExecutionResourceProfile{
-				ModelConfigID: strings.TrimSpace(resolvedModelSnapshot.ConfigID),
+				ModelConfigID: resolvedModelConfigID,
 				ModelID:       resolvedModelID,
 				RuleIDs:       append([]string{}, conversation.RuleIDs...),
 				SkillIDs:      append([]string{}, conversation.SkillIDs...),
@@ -317,7 +334,7 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 			conversation.QueueState = QueueStateQueued
 		}
 		conversation.DefaultMode = resolvedMode
-		conversation.ModelID = resolvedModelID
+		conversation.ModelConfigID = resolvedModelConfigID
 		conversation.UpdatedAt = now
 		state.conversations[conversationID] = conversation
 		createdExecution = execution
@@ -330,9 +347,11 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 			Type:           ExecutionEventTypeMessageReceived,
 			Timestamp:      now,
 			Payload: map[string]any{
-				"message_id": msgID,
-				"mode":       string(resolvedMode),
-				"model_id":   resolvedModelID,
+				"message_id":      msgID,
+				"mode":            string(resolvedMode),
+				"model_config_id": resolvedModelConfigID,
+				"model_name":      buildModelDisplayName(selectedModelConfig),
+				"model_id":        resolvedModelID,
 			},
 		})
 		state.mu.Unlock()

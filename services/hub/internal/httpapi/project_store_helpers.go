@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+type projectConversationsPurgeResult struct {
+	PurgedConversations int
+	PurgedExecutions    int
+}
+
 func listProjectsFromStore(state *AppState, workspaceID string) ([]Project, error) {
 	if state.authz != nil {
 		items, err := state.authz.listProjects(workspaceID)
@@ -86,34 +91,64 @@ func deleteProjectFromStore(state *AppState, projectID string) (Project, error) 
 		}
 	}
 
+	purgeProjectConversations(state, projectID)
+
 	state.mu.Lock()
 	delete(state.projects, projectID)
 	delete(state.projectConfigs, projectID)
-	for id, conv := range state.conversations {
-		if conv.ProjectID != projectID {
+	state.mu.Unlock()
+	return project, nil
+}
+
+func purgeProjectConversations(state *AppState, projectID string) projectConversationsPurgeResult {
+	normalizedProjectID := strings.TrimSpace(projectID)
+	if normalizedProjectID == "" {
+		return projectConversationsPurgeResult{}
+	}
+	state.mu.Lock()
+	result, executionIDsToCancel := purgeProjectConversationsLocked(state, normalizedProjectID)
+	state.mu.Unlock()
+
+	if state.orchestrator != nil {
+		for _, executionID := range executionIDsToCancel {
+			state.orchestrator.Cancel(executionID)
+		}
+	}
+	return result
+}
+
+func purgeProjectConversationsLocked(state *AppState, projectID string) (projectConversationsPurgeResult, []string) {
+	result := projectConversationsPurgeResult{}
+	executionIDsToCancel := make([]string, 0)
+
+	for conversationID, conversation := range state.conversations {
+		if conversation.ProjectID != projectID {
 			continue
 		}
+		result.PurgedConversations++
 		for executionID, execution := range state.executions {
-			if execution.ConversationID != id {
+			if execution.ConversationID != conversationID {
 				continue
 			}
+			executionIDsToCancel = append(executionIDsToCancel, executionID)
 			delete(state.executions, executionID)
 			delete(state.executionDiffs, executionID)
+			result.PurgedExecutions++
 		}
-		delete(state.conversations, id)
-		delete(state.conversationMessages, id)
-		delete(state.conversationSnapshots, id)
-		delete(state.conversationExecutionOrder, id)
-		delete(state.executionEvents, id)
-		delete(state.conversationEventSeq, id)
-		if subscribers, ok := state.conversationEventSubs[id]; ok {
+		delete(state.conversations, conversationID)
+		delete(state.conversationMessages, conversationID)
+		delete(state.conversationSnapshots, conversationID)
+		delete(state.conversationExecutionOrder, conversationID)
+		delete(state.executionEvents, conversationID)
+		delete(state.conversationEventSeq, conversationID)
+		if subscribers, ok := state.conversationEventSubs[conversationID]; ok {
 			for subID := range subscribers {
-				unregisterConversationEventSubscriberLocked(state, id, subID)
+				unregisterConversationEventSubscriberLocked(state, conversationID, subID)
 			}
 		}
 	}
-	state.mu.Unlock()
-	return project, nil
+
+	return result, executionIDsToCancel
 }
 
 func getProjectConfigFromStore(state *AppState, project Project) (ProjectConfig, error) {
@@ -131,7 +166,7 @@ func getProjectConfigFromStore(state *AppState, project Project) (ProjectConfig,
 			state.mu.Unlock()
 			return item, nil
 		}
-		return defaultProjectConfig(project.ID, project.DefaultModelID, project.UpdatedAt), nil
+		return defaultProjectConfig(project.ID, project.DefaultModelConfigID, project.UpdatedAt), nil
 	}
 
 	state.mu.RLock()
@@ -140,7 +175,7 @@ func getProjectConfigFromStore(state *AppState, project Project) (ProjectConfig,
 	if exists {
 		return item, nil
 	}
-	return defaultProjectConfig(project.ID, project.DefaultModelID, project.UpdatedAt), nil
+	return defaultProjectConfig(project.ID, project.DefaultModelConfigID, project.UpdatedAt), nil
 }
 
 func saveProjectConfigToStore(state *AppState, workspaceID string, config ProjectConfig) (ProjectConfig, error) {
@@ -184,7 +219,7 @@ func listWorkspaceProjectConfigItemsFromStore(state *AppState, workspaceID strin
 		}
 		config := state.projectConfigs[project.ID]
 		if strings.TrimSpace(config.ProjectID) == "" {
-			config = defaultProjectConfig(project.ID, project.DefaultModelID, project.UpdatedAt)
+			config = defaultProjectConfig(project.ID, project.DefaultModelConfigID, project.UpdatedAt)
 		}
 		items = append(items, workspaceProjectConfigItem{
 			ProjectID:   project.ID,
@@ -199,22 +234,22 @@ func listWorkspaceProjectConfigItemsFromStore(state *AppState, workspaceID strin
 	return items, nil
 }
 
-func defaultProjectConfig(projectID string, defaultModelID string, updatedAt string) ProjectConfig {
+func defaultProjectConfig(projectID string, defaultModelConfigID string, updatedAt string) ProjectConfig {
 	config := ProjectConfig{
-		ProjectID: strings.TrimSpace(projectID),
-		ModelIDs:  []string{},
-		RuleIDs:   []string{},
-		SkillIDs:  []string{},
-		MCPIDs:    []string{},
-		UpdatedAt: strings.TrimSpace(updatedAt),
+		ProjectID:      strings.TrimSpace(projectID),
+		ModelConfigIDs: []string{},
+		RuleIDs:        []string{},
+		SkillIDs:       []string{},
+		MCPIDs:         []string{},
+		UpdatedAt:      strings.TrimSpace(updatedAt),
 	}
 	if config.UpdatedAt == "" {
 		config.UpdatedAt = nowUTC()
 	}
-	normalizedDefaultModelID := strings.TrimSpace(defaultModelID)
-	if normalizedDefaultModelID != "" {
-		config.ModelIDs = []string{normalizedDefaultModelID}
-		config.DefaultModelID = toStringPtr(normalizedDefaultModelID)
+	normalizedDefaultModelConfigID := strings.TrimSpace(defaultModelConfigID)
+	if normalizedDefaultModelConfigID != "" {
+		config.ModelConfigIDs = []string{normalizedDefaultModelConfigID}
+		config.DefaultModelConfigID = toStringPtr(normalizedDefaultModelConfigID)
 	}
 	return config
 }

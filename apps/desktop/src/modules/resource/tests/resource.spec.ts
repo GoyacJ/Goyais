@@ -66,7 +66,7 @@ describe("resource module views", () => {
     expect(wrapper.text()).not.toContain("认证：http_bearer");
     expect(wrapper.text()).not.toContain("Homepage");
     expect(wrapper.text()).not.toContain("Docs");
-    expect(wrapper.text()).not.toContain("名称");
+    expect(wrapper.text()).toContain("模型名称（可选）");
     expect(wrapper.text()).not.toContain("模型 ID（可手输）");
     expect(wrapper.text()).not.toContain("Params(JSON)");
   });
@@ -172,7 +172,9 @@ describe("resource module views", () => {
     expect(findFetchCalls("DELETE", "/v1/workspaces/ws_local/resource-configs/rc_mcp_1")).toHaveLength(1);
   });
 
-  it("normalizes legacy project model ids to config ids when saving binding", async () => {
+  it("keeps model_config_ids unchanged when project binding returns non-config identifiers", async () => {
+    const confirmSpy = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmSpy);
     vi.stubGlobal("fetch", createApiFetchMock({ legacyProjectConfigModelIDs: true }));
     const wrapper = mountView(WorkspaceProjectConfigView);
     await flushPromises();
@@ -187,12 +189,61 @@ describe("resource module views", () => {
     await saveButton?.trigger("click");
     await flushPromises();
 
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
     const updateCalls = findFetchCalls("PUT", "/v1/projects/proj_alpha/config");
     expect(updateCalls).toHaveLength(1);
     const [, updateInit] = updateCalls[0] ?? [];
     const body = JSON.parse(String(updateInit?.body ?? "{}"));
-    expect(body.model_ids).toEqual(["rc_model_1"]);
-    expect(body.default_model_id).toBe("rc_model_1");
+    expect(body.model_config_ids).toEqual(["gpt-5.3"]);
+    expect(body.default_model_config_id).toBe("gpt-5.3");
+  });
+
+  it("does not save project binding when confirm is cancelled", async () => {
+    const confirmSpy = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirmSpy);
+
+    const wrapper = mountView(WorkspaceProjectConfigView);
+    await flushPromises();
+
+    const configButton = wrapper.findAll("button").find((item) => item.text() === "配置");
+    expect(configButton).toBeTruthy();
+    await configButton?.trigger("click");
+    await flushPromises();
+
+    const saveButton = wrapper.findAll("button").find((item) => item.text() === "保存");
+    expect(saveButton).toBeTruthy();
+    await saveButton?.trigger("click");
+    await flushPromises();
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    const updateCalls = findFetchCalls("PUT", "/v1/projects/proj_alpha/config");
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it("shows validation error when project binding update is rejected", async () => {
+    const confirmSpy = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmSpy);
+    vi.stubGlobal("fetch", createApiFetchMock({ rejectProjectConfigUpdate: true }));
+
+    const wrapper = mountView(WorkspaceProjectConfigView);
+    await flushPromises();
+    const initialProjectBindingLoads = findFetchCalls("GET", "/v1/workspaces/ws_local/project-configs").length;
+
+    const configButton = wrapper.findAll("button").find((item) => item.text() === "配置");
+    expect(configButton).toBeTruthy();
+    await configButton?.trigger("click");
+    await flushPromises();
+
+    const saveButton = wrapper.findAll("button").find((item) => item.text() === "保存");
+    expect(saveButton).toBeTruthy();
+    await saveButton?.trigger("click");
+    await flushPromises();
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(wrapper.text()).toContain("VALIDATION_ERROR");
+    expect(wrapper.text()).toContain("绑定配置");
+    expect(findFetchCalls("PUT", "/v1/projects/proj_alpha/config")).toHaveLength(1);
+    expect(findFetchCalls("GET", "/v1/workspaces/ws_local/project-configs")).toHaveLength(initialProjectBindingLoads);
   });
 });
 
@@ -208,7 +259,7 @@ function mountView(component: unknown) {
   });
 }
 
-function createApiFetchMock(options: { legacyProjectConfigModelIDs?: boolean } = {}) {
+function createApiFetchMock(options: { legacyProjectConfigModelIDs?: boolean; rejectProjectConfigUpdate?: boolean } = {}) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const urlValue =
       typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
@@ -262,7 +313,7 @@ function createApiFetchMock(options: { legacyProjectConfigModelIDs?: boolean } =
             name: "Alpha",
             repo_path: "/tmp/alpha",
             is_git: true,
-            default_model_id: "gpt-5.3",
+            default_model_config_id: "rc_model_1",
             default_mode: "agent",
             current_revision: 0,
             created_at: "2026-02-24T00:00:00Z",
@@ -281,8 +332,8 @@ function createApiFetchMock(options: { legacyProjectConfigModelIDs?: boolean } =
           project_name: "Alpha",
           config: {
             project_id: "proj_alpha",
-            model_ids: [modelBindingID],
-            default_model_id: modelBindingID,
+            model_config_ids: [modelBindingID],
+            default_model_config_id: modelBindingID,
             rule_ids: ["rc_rule_1"],
             skill_ids: ["rc_skill_1"],
             mcp_ids: ["rc_mcp_1"],
@@ -327,11 +378,21 @@ function createApiFetchMock(options: { legacyProjectConfigModelIDs?: boolean } =
         updated_at: "2026-02-24T00:00:00Z"
       });
     }
+    if (method === "PUT" && path === "/v1/projects/proj_alpha/config" && options.rejectProjectConfigUpdate) {
+      return jsonResponse(
+        {
+          code: "VALIDATION_ERROR",
+          message: "model_config_id must be included in project model_config_ids",
+          trace_id: "tr_bind_invalid"
+        },
+        400
+      );
+    }
     if (method === "PUT") {
       return jsonResponse({
         project_id: "proj_alpha",
-        model_ids: ["rc_model_1"],
-        default_model_id: "rc_model_1",
+        model_config_ids: ["rc_model_1"],
+        default_model_config_id: "rc_model_1",
         rule_ids: ["rc_rule_1"],
         skill_ids: ["rc_skill_1"],
         mcp_ids: ["rc_mcp_1"],

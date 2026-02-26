@@ -24,6 +24,7 @@ import (
 	slashcmd "goyais/services/hub/internal/agentcore/commands"
 	"goyais/services/hub/internal/agentcore/config"
 	mcpclient "goyais/services/hub/internal/agentcore/mcp"
+	"goyais/services/hub/internal/agentcore/prompting"
 	"goyais/services/hub/internal/agentcore/protocol"
 	"goyais/services/hub/internal/agentcore/runtime"
 	"goyais/services/hub/internal/agentcore/safety"
@@ -152,7 +153,7 @@ func NewAskExpertModelTool() Tool {
 			},
 			[]string{},
 		),
-	}, func(_ ToolContext, call ToolCall) (ToolResult, error) {
+	}, func(ctx ToolContext, call ToolCall) (ToolResult, error) {
 		question := firstNonEmptyString(call.Input, "question", "prompt")
 		if question == "" {
 			return ToolResult{}, errors.New("AskExpertModel requires question or prompt")
@@ -161,7 +162,7 @@ func NewAskExpertModelTool() Tool {
 		if expertModel == "" {
 			expertModel = "gpt-5"
 		}
-		answer, err := runExpertModelCall(question, expertModel)
+		answer, err := runExpertModelCall(question, expertModel, ctx.WorkingDir, ctx.Env)
 		if err != nil {
 			return ToolResult{}, err
 		}
@@ -1381,20 +1382,28 @@ func findMCPServerRecord(store mcpServerStore, serverName string) (mcpServerStor
 	return mcpServerStoreRecord{}, false
 }
 
-func runExpertModelCall(question string, model string) (string, error) {
+func runExpertModelCall(question string, model string, workingDir string, env map[string]string) (string, error) {
 	engine := runtime.NewLocalEngine()
 	startReq := runtime.StartSessionRequest{
 		Config: config.ResolvedConfig{
 			SessionMode:  config.SessionModeAgent,
 			DefaultModel: strings.TrimSpace(model),
 		},
-		WorkingDir: ".",
+		WorkingDir: workingDirOrDot(strings.TrimSpace(workingDir)),
 	}
 	session, err := engine.StartSession(context.Background(), startReq)
 	if err != nil {
 		return "", err
 	}
-	runID, err := engine.Submit(context.Background(), session.SessionID, runtime.UserInput{Text: strings.TrimSpace(question)})
+	injectedQuestion := prompting.InjectUserPrompt(prompting.UserPromptInput{
+		Prompt: strings.TrimSpace(question),
+		CWD:    strings.TrimSpace(workingDir),
+		Env:    env,
+	})
+	if injectedQuestion == "" {
+		injectedQuestion = strings.TrimSpace(question)
+	}
+	runID, err := engine.Submit(context.Background(), session.SessionID, runtime.UserInput{Text: injectedQuestion})
 	if err != nil {
 		return "", err
 	}

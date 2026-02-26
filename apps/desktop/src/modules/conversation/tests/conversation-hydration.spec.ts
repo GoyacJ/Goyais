@@ -15,7 +15,7 @@ const mockConversation: Conversation = {
   name: "Test Conversation",
   queue_state: "idle",
   default_mode: "agent",
-  model_id: "gpt-5.3",
+  model_config_id: "rc_model_1",
   rule_ids: [],
   skill_ids: [],
   mcp_ids: [],
@@ -35,7 +35,7 @@ describe("conversation runtime hydration", () => {
       conversation: {
         ...mockConversation,
         default_mode: "plan" as const,
-        model_id: "MiniMax-M2.5"
+        model_config_id: "rc_model_minimax"
       },
       messages: [
         {
@@ -71,7 +71,7 @@ describe("conversation runtime hydration", () => {
 
     const runtime = hydrateConversationRuntime(mockConversation, true, detail);
     expect(runtime.mode).toBe("plan");
-    expect(runtime.modelId).toBe("MiniMax-M2.5");
+    expect(runtime.modelId).toBe("rc_model_minimax");
     expect(runtime.messages.length).toBe(1);
     expect(runtime.messages[0]?.content).toBe("查看当前项目");
     expect(runtime.executions.length).toBe(1);

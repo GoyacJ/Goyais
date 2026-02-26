@@ -29,7 +29,9 @@
         </template>
 
         <template #cell-vendor="{ row }">{{ (row as ResourceConfig).model?.vendor ?? "-" }}</template>
-        <template #cell-model="{ row }">{{ (row as ResourceConfig).model?.model_id ?? "-" }}</template>
+        <template #cell-model="{ row }">
+          {{ (row as ResourceConfig).name?.trim() || (row as ResourceConfig).model?.model_id || "-" }}
+        </template>
         <template #cell-enabled="{ row }">
           <span :class="(row as ResourceConfig).enabled ? 'enabled' : 'disabled'">
             {{ (row as ResourceConfig).enabled ? "启用" : "停用" }}
@@ -62,6 +64,10 @@
         <label>
           模型
           <BaseSelect v-model="form.selectedCatalogModel" :options="vendorModelOptions" />
+        </label>
+        <label>
+          模型名称（可选）
+          <BaseInput v-model="form.name" placeholder="不填则默认使用模型 ID" />
         </label>
         <label v-if="showVendorEndpointSelector" class="full">
           Endpoint

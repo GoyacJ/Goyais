@@ -255,6 +255,7 @@ export function useMainScreenController() {
     activeConversation,
     activeCount,
     activeModelId: modelState.activeModelId,
+    activeModelLabel: modelState.activeModelLabel,
     activeProject,
     authStore,
     conversationNameDraft,

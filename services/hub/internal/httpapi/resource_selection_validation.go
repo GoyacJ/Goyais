@@ -11,8 +11,8 @@ func validateProjectConfigResourceReferences(state *AppState, workspaceID string
 		return fmt.Errorf("workspace_id is required")
 	}
 
-	for _, modelID := range sanitizeIDList(config.ModelIDs) {
-		if err := validateWorkspaceResourceReference(state, workspaceID, modelID, ResourceTypeModel); err != nil {
+	for _, modelConfigID := range sanitizeIDList(config.ModelConfigIDs) {
+		if err := validateWorkspaceModelConfigReference(state, workspaceID, modelConfigID); err != nil {
 			return err
 		}
 	}
@@ -31,13 +31,13 @@ func validateProjectConfigResourceReferences(state *AppState, workspaceID string
 			return err
 		}
 	}
-	if config.DefaultModelID != nil {
-		defaultModelID := strings.TrimSpace(*config.DefaultModelID)
-		if defaultModelID != "" {
-			if !containsString(config.ModelIDs, defaultModelID) {
-				return fmt.Errorf("default_model_id must be included in model_ids")
+	if config.DefaultModelConfigID != nil {
+		defaultModelConfigID := strings.TrimSpace(*config.DefaultModelConfigID)
+		if defaultModelConfigID != "" {
+			if !containsString(config.ModelConfigIDs, defaultModelConfigID) {
+				return fmt.Errorf("default_model_config_id must be included in model_config_ids")
 			}
-			if err := validateWorkspaceResourceReference(state, workspaceID, defaultModelID, ResourceTypeModel); err != nil {
+			if err := validateWorkspaceModelConfigReference(state, workspaceID, defaultModelConfigID); err != nil {
 				return err
 			}
 		}
@@ -49,19 +49,19 @@ func validateConversationResourceSelection(
 	state *AppState,
 	workspaceID string,
 	projectConfig ProjectConfig,
-	modelID string,
+	modelConfigID string,
 	ruleIDs []string,
 	skillIDs []string,
 	mcpIDs []string,
 ) error {
-	modelID = strings.TrimSpace(modelID)
-	if modelID == "" {
-		return fmt.Errorf("model_id cannot be empty")
+	modelConfigID = strings.TrimSpace(modelConfigID)
+	if modelConfigID == "" {
+		return fmt.Errorf("model_config_id cannot be empty")
 	}
-	if !containsString(projectConfig.ModelIDs, modelID) {
-		return fmt.Errorf("model_id must be included in project model_ids")
+	if !containsString(projectConfig.ModelConfigIDs, modelConfigID) {
+		return fmt.Errorf("model_config_id must be included in project model_config_ids")
 	}
-	if err := validateWorkspaceResourceReference(state, workspaceID, modelID, ResourceTypeModel); err != nil {
+	if err := validateWorkspaceModelConfigReference(state, workspaceID, modelConfigID); err != nil {
 		return err
 	}
 
@@ -107,4 +107,32 @@ func validateWorkspaceResourceReference(state *AppState, workspaceID string, con
 		return fmt.Errorf("resource config %s is disabled", configID)
 	}
 	return nil
+}
+
+func validateWorkspaceModelConfigReference(state *AppState, workspaceID string, modelConfigID string) error {
+	workspaceID = strings.TrimSpace(workspaceID)
+	modelConfigID = strings.TrimSpace(modelConfigID)
+	if workspaceID == "" || modelConfigID == "" {
+		return fmt.Errorf("resource config %s does not exist", modelConfigID)
+	}
+	if _, exists, err := getWorkspaceEnabledModelConfigByID(state, workspaceID, modelConfigID); err != nil {
+		return fmt.Errorf("failed to load resource config %s: %w", modelConfigID, err)
+	} else if exists {
+		return nil
+	}
+
+	item, exists, err := loadWorkspaceResourceConfigRaw(state, workspaceID, modelConfigID)
+	if err != nil {
+		return fmt.Errorf("failed to load resource config %s: %w", modelConfigID, err)
+	}
+	if !exists {
+		return fmt.Errorf("resource config %s does not exist", modelConfigID)
+	}
+	if item.Type != ResourceTypeModel {
+		return fmt.Errorf("resource config %s type mismatch: expected %s", modelConfigID, ResourceTypeModel)
+	}
+	if !item.Enabled {
+		return fmt.Errorf("resource config %s is disabled", modelConfigID)
+	}
+	return fmt.Errorf("resource config %s is invalid", modelConfigID)
 }

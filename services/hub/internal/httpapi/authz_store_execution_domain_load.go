@@ -24,7 +24,7 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 	}
 
 	conversationRows, err := s.db.Query(
-		`SELECT id, workspace_id, project_id, name, queue_state, default_mode, model_id, rule_ids_json, skill_ids_json, mcp_ids_json, base_revision, active_execution_id, created_at, updated_at
+		`SELECT id, workspace_id, project_id, name, queue_state, default_mode, model_config_id, rule_ids_json, skill_ids_json, mcp_ids_json, base_revision, active_execution_id, created_at, updated_at
 		 FROM conversations
 		 ORDER BY created_at ASC, id ASC`,
 	)
@@ -48,7 +48,7 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 			&item.Name,
 			&queueStateRaw,
 			&defaultModeRaw,
-			&item.ModelID,
+			&item.ModelConfigID,
 			&ruleIDsJSON,
 			&skillIDsJSON,
 			&mcpIDsJSON,

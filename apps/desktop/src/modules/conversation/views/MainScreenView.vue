@@ -101,7 +101,7 @@
               :queued-count="queuedCount"
               :pending-count="pendingCount"
               :executing-count="executingCount"
-              :model-id="activeModelId"
+              :model-label="activeModelLabel"
               :executions="runtime?.executions ?? []"
               :events="runtime?.events ?? []"
               :active-tab="runtime?.inspectorTab ?? 'diff'"
@@ -223,6 +223,7 @@ const {
   stopExecution,
   switchWorkspace,
   updateDraft,
+  activeModelLabel,
   activeModelId,
   modelOptions,
   updateMode,

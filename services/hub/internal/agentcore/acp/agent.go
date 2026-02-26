@@ -14,6 +14,7 @@ import (
 
 	slashcmd "goyais/services/hub/internal/agentcore/commands"
 	"goyais/services/hub/internal/agentcore/config"
+	"goyais/services/hub/internal/agentcore/prompting"
 	"goyais/services/hub/internal/agentcore/protocol"
 	"goyais/services/hub/internal/agentcore/runtime"
 	"goyais/services/hub/internal/agentcore/state"
@@ -248,8 +249,17 @@ func (a *Agent) handleSessionPrompt(params any) (any, error) {
 	stopReason := "end_turn"
 	outputText := ""
 	promptErr := func() error {
+		injectedPrompt := prompting.InjectUserPrompt(prompting.UserPromptInput{
+			Prompt: promptText,
+			CWD:    session.CWD,
+			Env:    map[string]string{},
+		})
+		if injectedPrompt == "" {
+			injectedPrompt = promptText
+		}
+
 		runID, submitErr := a.engine.Submit(promptCtx, session.EngineSessionID, runtime.UserInput{
-			Text: promptText,
+			Text: injectedPrompt,
 		})
 		if submitErr != nil {
 			return submitErr

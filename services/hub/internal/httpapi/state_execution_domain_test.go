@@ -27,7 +27,7 @@ func TestHydrateExecutionDomainFromStoreKeepsExecutionState(t *testing.T) {
 				Name:              "Legacy Runtime",
 				QueueState:        QueueStateRunning,
 				DefaultMode:       ConversationModeAgent,
-				ModelID:           "gpt-5.3",
+				ModelConfigID:     "rc_model_legacy",
 				RuleIDs:           []string{"rule_alpha"},
 				SkillIDs:          []string{"skill_alpha"},
 				MCPIDs:            []string{"mcp_alpha"},

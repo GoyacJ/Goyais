@@ -168,7 +168,7 @@
           </p>
           <div class="footer-buttons">
             <BaseButton variant="ghost" @click="closeProjectBinding">取消</BaseButton>
-            <BaseButton :disabled="!canWrite" variant="primary" @click="saveProjectBinding">保存</BaseButton>
+            <BaseButton :disabled="!canWrite" variant="primary" @click="saveProjectBindingWithConfirm">保存</BaseButton>
           </div>
         </div>
       </template>
@@ -208,6 +208,7 @@ const {
 const supportsDirectoryImport = isRuntimeCapabilitySupported("supportsDirectoryImport");
 
 type BindingField = "modelIds" | "ruleIds" | "skillIds" | "mcpIds";
+const PROJECT_BINDING_PURGE_CONFIRM_MESSAGE = "保存后将清空当前项目下所有历史对话与执行记录，是否继续？";
 
 async function addProject(): Promise<void> {
   if (!supportsDirectoryImport) {
@@ -218,6 +219,16 @@ async function addProject(): Promise<void> {
     return;
   }
   await importDirectoryProject(directoryPath);
+}
+
+async function saveProjectBindingWithConfirm(): Promise<void> {
+  if (typeof window !== "undefined") {
+    const confirmed = window.confirm(PROJECT_BINDING_PURGE_CONFIRM_MESSAGE);
+    if (!confirmed) {
+      return;
+    }
+  }
+  await saveProjectBinding();
 }
 
 function setGroupSelection(field: BindingField, mode: "all" | "none"): void {

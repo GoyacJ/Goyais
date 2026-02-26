@@ -85,7 +85,9 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     }
     const conversationId = input.activeConversation.value.id;
     const projectId = input.activeProject.value.id;
-    const previousModel = input.resolveSemanticModelID(input.runtime.value?.modelId ?? input.activeConversation.value.model_id);
+    const previousModel = input.resolveSemanticModelID(
+      input.runtime.value?.modelId ?? input.activeConversation.value.model_config_id
+    );
     setConversationModel(conversationId, targetModelID);
     const updated = await updateConversationModelById(projectId, conversationId, targetModelID);
     if (!updated) {
@@ -104,6 +106,14 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
   }
   async function sendMessage(): Promise<void> {
     if (!input.activeConversation.value || !input.activeProject.value) {
+      return;
+    }
+    const selectedModelID = input.resolveSemanticModelID(
+      input.runtime.value?.modelId ?? input.activeConversation.value.model_config_id
+    );
+    const hasAllowedModel = selectedModelID !== "" && input.modelOptions.value.some((item) => item.value === selectedModelID);
+    if (!hasAllowedModel) {
+      setConversationError("当前项目未绑定可用模型，请先在项目配置中绑定模型");
       return;
     }
     await submitConversationMessage(input.activeConversation.value, input.activeProject.value.is_git);

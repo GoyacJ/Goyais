@@ -32,6 +32,7 @@ BIN_DIR="$ROOT_DIR/apps/desktop/src-tauri/binaries"
 HUB_BIN="$BIN_DIR/goyais-hub-$TARGET_TRIPLE$EXT"
 
 if [[ "$FORCE_REBUILD" == "1" ]]; then
+  echo "[sidecar-prepare] force rebuild enabled via GOYAIS_FORCE_SIDECAR_REBUILD=1"
   rm -f "$HUB_BIN"
 fi
 

@@ -16,7 +16,7 @@ export type Project = {
   name: string;
   repo_path: string;
   is_git: boolean;
-  default_model_id?: string;
+  default_model_config_id?: string;
   default_mode?: ConversationMode;
   current_revision: number;
   created_at: string;
@@ -25,8 +25,8 @@ export type Project = {
 
 export type ProjectConfig = {
   project_id: string;
-  model_ids: string[];
-  default_model_id: string | null;
+  model_config_ids: string[];
+  default_model_config_id: string | null;
   rule_ids: string[];
   skill_ids: string[];
   mcp_ids: string[];
@@ -40,7 +40,7 @@ export type Conversation = {
   name: string;
   queue_state: QueueState;
   default_mode: ConversationMode;
-  model_id: string;
+  model_config_id: string;
   rule_ids: string[];
   skill_ids: string[];
   mcp_ids: string[];
@@ -102,6 +102,7 @@ export type Execution = {
     vendor?: string;
     model_id: string;
     base_url?: string;
+    base_url_key?: string;
     timeout_ms?: number;
     params?: Record<string, unknown>;
   };
@@ -191,7 +192,7 @@ export type DiffItem = {
 export type ExecutionCreateRequest = {
   content: string;
   mode: ConversationMode;
-  model_id: string;
+  model_config_id: string;
 };
 
 export type ExecutionCreateResponse = {

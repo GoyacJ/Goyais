@@ -14,15 +14,15 @@ func TestAuthzStoreProjectAndConfigCRUD(t *testing.T) {
 	}()
 
 	project, err := store.upsertProject(Project{
-		ID:             "proj_alpha",
-		WorkspaceID:    "ws_local",
-		Name:           "Alpha",
-		RepoPath:       "/tmp/alpha",
-		IsGit:          true,
-		DefaultModelID: "gpt-4.1",
-		DefaultMode:    ConversationModeAgent,
-		CreatedAt:      nowUTC(),
-		UpdatedAt:      nowUTC(),
+		ID:                   "proj_alpha",
+		WorkspaceID:          "ws_local",
+		Name:                 "Alpha",
+		RepoPath:             "/tmp/alpha",
+		IsGit:                true,
+		DefaultModelConfigID: "gpt-4.1",
+		DefaultMode:          ConversationModeAgent,
+		CreatedAt:            nowUTC(),
+		UpdatedAt:            nowUTC(),
 	})
 	if err != nil {
 		t.Fatalf("upsert project failed: %v", err)
@@ -40,19 +40,19 @@ func TestAuthzStoreProjectAndConfigCRUD(t *testing.T) {
 	}
 
 	savedConfig, err := store.upsertProjectConfig("ws_local", ProjectConfig{
-		ProjectID:      "proj_alpha",
-		ModelIDs:       []string{"rc_model_1", "rc_model_2"},
-		DefaultModelID: toStringPtr("rc_model_1"),
-		RuleIDs:        []string{"rc_rule_1"},
-		SkillIDs:       []string{"rc_skill_1"},
-		MCPIDs:         []string{"rc_mcp_1"},
-		UpdatedAt:      nowUTC(),
+		ProjectID:            "proj_alpha",
+		ModelConfigIDs:       []string{"rc_model_1", "rc_model_2"},
+		DefaultModelConfigID: toStringPtr("rc_model_1"),
+		RuleIDs:              []string{"rc_rule_1"},
+		SkillIDs:             []string{"rc_skill_1"},
+		MCPIDs:               []string{"rc_mcp_1"},
+		UpdatedAt:            nowUTC(),
 	})
 	if err != nil {
 		t.Fatalf("upsert project config failed: %v", err)
 	}
-	if savedConfig.DefaultModelID == nil || *savedConfig.DefaultModelID != "rc_model_1" {
-		t.Fatalf("unexpected default model id: %#v", savedConfig.DefaultModelID)
+	if savedConfig.DefaultModelConfigID == nil || *savedConfig.DefaultModelConfigID != "rc_model_1" {
+		t.Fatalf("unexpected default model id: %#v", savedConfig.DefaultModelConfigID)
 	}
 
 	config, exists, err := store.getProjectConfig("proj_alpha")
@@ -62,8 +62,8 @@ func TestAuthzStoreProjectAndConfigCRUD(t *testing.T) {
 	if !exists {
 		t.Fatalf("expected config exists")
 	}
-	if len(config.ModelIDs) != 2 || config.ModelIDs[0] != "rc_model_1" {
-		t.Fatalf("unexpected config model ids: %#v", config.ModelIDs)
+	if len(config.ModelConfigIDs) != 2 || config.ModelConfigIDs[0] != "rc_model_1" {
+		t.Fatalf("unexpected config model ids: %#v", config.ModelConfigIDs)
 	}
 
 	workspaceItems, err := store.listWorkspaceProjectConfigItems("ws_local")
@@ -76,8 +76,8 @@ func TestAuthzStoreProjectAndConfigCRUD(t *testing.T) {
 	if workspaceItems[0].ProjectName != "Alpha" {
 		t.Fatalf("unexpected project name: %q", workspaceItems[0].ProjectName)
 	}
-	if workspaceItems[0].Config.DefaultModelID == nil || *workspaceItems[0].Config.DefaultModelID != "rc_model_1" {
-		t.Fatalf("unexpected workspace default model id: %#v", workspaceItems[0].Config.DefaultModelID)
+	if workspaceItems[0].Config.DefaultModelConfigID == nil || *workspaceItems[0].Config.DefaultModelConfigID != "rc_model_1" {
+		t.Fatalf("unexpected workspace default model id: %#v", workspaceItems[0].Config.DefaultModelConfigID)
 	}
 
 	if err := store.deleteProject("proj_alpha"); err != nil {
@@ -111,15 +111,15 @@ func TestAuthzStoreWorkspaceProjectConfigFallbackToProjectDefault(t *testing.T) 
 	}()
 
 	if _, err := store.upsertProject(Project{
-		ID:             "proj_beta",
-		WorkspaceID:    "ws_local",
-		Name:           "Beta",
-		RepoPath:       "/tmp/beta",
-		IsGit:          true,
-		DefaultModelID: "gpt-4.1-mini",
-		DefaultMode:    ConversationModeAgent,
-		CreatedAt:      nowUTC(),
-		UpdatedAt:      nowUTC(),
+		ID:                   "proj_beta",
+		WorkspaceID:          "ws_local",
+		Name:                 "Beta",
+		RepoPath:             "/tmp/beta",
+		IsGit:                true,
+		DefaultModelConfigID: "gpt-4.1-mini",
+		DefaultMode:          ConversationModeAgent,
+		CreatedAt:            nowUTC(),
+		UpdatedAt:            nowUTC(),
 	}); err != nil {
 		t.Fatalf("upsert project failed: %v", err)
 	}
@@ -131,8 +131,8 @@ func TestAuthzStoreWorkspaceProjectConfigFallbackToProjectDefault(t *testing.T) 
 	if len(items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(items))
 	}
-	if len(items[0].Config.ModelIDs) != 1 || items[0].Config.ModelIDs[0] != "gpt-4.1-mini" {
-		t.Fatalf("expected fallback model ids from project default model, got %#v", items[0].Config.ModelIDs)
+	if len(items[0].Config.ModelConfigIDs) != 1 || items[0].Config.ModelConfigIDs[0] != "gpt-4.1-mini" {
+		t.Fatalf("expected fallback model ids from project default model, got %#v", items[0].Config.ModelConfigIDs)
 	}
 }
 
@@ -148,28 +148,28 @@ func TestAuthzStoreListProjectsOrdersByNewestFirst(t *testing.T) {
 	}()
 
 	if _, err := store.upsertProject(Project{
-		ID:             "proj_old",
-		WorkspaceID:    "ws_local",
-		Name:           "Old",
-		RepoPath:       "/tmp/old",
-		IsGit:          true,
-		DefaultModelID: "gpt-4.1",
-		DefaultMode:    ConversationModeAgent,
-		CreatedAt:      "2026-02-23T00:00:00Z",
-		UpdatedAt:      "2026-02-23T00:00:00Z",
+		ID:                   "proj_old",
+		WorkspaceID:          "ws_local",
+		Name:                 "Old",
+		RepoPath:             "/tmp/old",
+		IsGit:                true,
+		DefaultModelConfigID: "gpt-4.1",
+		DefaultMode:          ConversationModeAgent,
+		CreatedAt:            "2026-02-23T00:00:00Z",
+		UpdatedAt:            "2026-02-23T00:00:00Z",
 	}); err != nil {
 		t.Fatalf("upsert old project failed: %v", err)
 	}
 	if _, err := store.upsertProject(Project{
-		ID:             "proj_new",
-		WorkspaceID:    "ws_local",
-		Name:           "New",
-		RepoPath:       "/tmp/new",
-		IsGit:          true,
-		DefaultModelID: "gpt-4.1",
-		DefaultMode:    ConversationModeAgent,
-		CreatedAt:      "2026-02-23T00:00:01Z",
-		UpdatedAt:      "2026-02-23T00:00:01Z",
+		ID:                   "proj_new",
+		WorkspaceID:          "ws_local",
+		Name:                 "New",
+		RepoPath:             "/tmp/new",
+		IsGit:                true,
+		DefaultModelConfigID: "gpt-4.1",
+		DefaultMode:          ConversationModeAgent,
+		CreatedAt:            "2026-02-23T00:00:01Z",
+		UpdatedAt:            "2026-02-23T00:00:01Z",
 	}); err != nil {
 		t.Fatalf("upsert new project failed: %v", err)
 	}

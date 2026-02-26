@@ -103,11 +103,11 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				return
 			}
 
-			resourceSelectionChanged := input.ModelID != nil || input.RuleIDs != nil || input.SkillIDs != nil || input.MCPIDs != nil
+			resourceSelectionChanged := input.ModelConfigID != nil || input.RuleIDs != nil || input.SkillIDs != nil || input.MCPIDs != nil
 			if resourceSelectionChanged {
-				nextModelID := strings.TrimSpace(conversationSeed.ModelID)
-				if input.ModelID != nil {
-					nextModelID = strings.TrimSpace(*input.ModelID)
+				nextModelConfigID := strings.TrimSpace(conversationSeed.ModelConfigID)
+				if input.ModelConfigID != nil {
+					nextModelConfigID = strings.TrimSpace(*input.ModelConfigID)
 				}
 				nextRuleIDs := append([]string{}, conversationSeed.RuleIDs...)
 				if input.RuleIDs != nil {
@@ -125,7 +125,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 					state,
 					conversationSeed.WorkspaceID,
 					projectConfig,
-					nextModelID,
+					nextModelConfigID,
 					nextRuleIDs,
 					nextSkillIDs,
 					nextMCPIDs,
@@ -165,14 +165,14 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				conversation.DefaultMode = *input.Mode
 				changed = true
 			}
-			if input.ModelID != nil {
-				modelID := strings.TrimSpace(*input.ModelID)
-				if modelID == "" {
+			if input.ModelConfigID != nil {
+				modelConfigID := strings.TrimSpace(*input.ModelConfigID)
+				if modelConfigID == "" {
 					state.mu.Unlock()
-					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "model_id cannot be empty", map[string]any{})
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "model_config_id cannot be empty", map[string]any{})
 					return
 				}
-				conversation.ModelID = modelID
+				conversation.ModelConfigID = modelConfigID
 				changed = true
 			}
 			if input.RuleIDs != nil {

@@ -179,7 +179,7 @@ func encodeResourceConfigPayload(input ResourceConfig) (string, error) {
 	safe := input
 	if safe.Model != nil {
 		model := *safe.Model
-		if strings.TrimSpace(model.APIKey) != "" && strings.TrimSpace(model.APIKeyMasked) == "" {
+		if strings.TrimSpace(model.APIKey) != "" {
 			encrypted, err := encryptSecret(model.APIKey)
 			if err != nil {
 				return "", err

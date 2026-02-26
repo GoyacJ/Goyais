@@ -91,10 +91,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 			}
 
 			now := time.Now().UTC().Format(time.RFC3339)
-			defaultModelID := firstNonEmpty(derefString(config.DefaultModelID), project.DefaultModelID)
-			if strings.TrimSpace(defaultModelID) == "" {
-				defaultModelID = state.resolveWorkspaceDefaultModelID(project.WorkspaceID)
-			}
+			defaultModelConfigID := firstNonEmpty(derefString(config.DefaultModelConfigID), project.DefaultModelConfigID)
 			conversation := Conversation{
 				ID:                "conv_" + randomHex(6),
 				WorkspaceID:       project.WorkspaceID,
@@ -102,7 +99,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				Name:              firstNonEmpty(strings.TrimSpace(input.Name), "Conversation"),
 				QueueState:        QueueStateIdle,
 				DefaultMode:       project.DefaultMode,
-				ModelID:           defaultModelID,
+				ModelConfigID:     defaultModelConfigID,
 				RuleIDs:           append([]string{}, sanitizeIDList(config.RuleIDs)...),
 				SkillIDs:          append([]string{}, sanitizeIDList(config.SkillIDs)...),
 				MCPIDs:            append([]string{}, sanitizeIDList(config.MCPIDs)...),
@@ -181,7 +178,7 @@ func ProjectConfigHandler(state *AppState) http.HandlerFunc {
 				err.write(w, r)
 				return
 			}
-			_, authErr := authorizeAction(
+			session, authErr := authorizeAction(
 				state,
 				r,
 				workspaceID,
@@ -214,7 +211,7 @@ func ProjectConfigHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
-			project.DefaultModelID = firstNonEmpty(derefString(updatedConfig.DefaultModelID), project.DefaultModelID)
+			project.DefaultModelConfigID = strings.TrimSpace(derefString(updatedConfig.DefaultModelConfigID))
 			project.UpdatedAt = now
 			if _, err := saveProjectToStore(state, project); err != nil {
 				WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_UPDATE_FAILED", "Failed to update project", map[string]any{
@@ -222,7 +219,16 @@ func ProjectConfigHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
+			purgeResult := purgeProjectConversations(state, projectID)
+			syncExecutionDomainBestEffort(state)
 			writeJSON(w, http.StatusOK, updatedConfig)
+			if state.authz != nil {
+				_ = state.authz.appendAudit(workspaceID, session.UserID, "project.write", "project_config", projectID, "success", map[string]any{
+					"operation":                 "update",
+					"purged_conversation_count": purgeResult.PurgedConversations,
+					"purged_execution_count":    purgeResult.PurgedExecutions,
+				}, TraceIDFromContext(r.Context()))
+			}
 		default:
 			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
 				"method": r.Method,

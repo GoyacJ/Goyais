@@ -8,7 +8,7 @@ import (
 
 func (s *authzStore) listProjects(workspaceID string) ([]Project, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
-	query := `SELECT id, workspace_id, name, repo_path, is_git, default_model_id, default_mode, current_revision, created_at, updated_at
+	query := `SELECT id, workspace_id, name, repo_path, is_git, default_model_config_id, default_mode, current_revision, created_at, updated_at
 		FROM projects`
 	args := []any{}
 	if workspaceID != "" {
@@ -35,7 +35,7 @@ func (s *authzStore) listProjects(workspaceID string) ([]Project, error) {
 
 func (s *authzStore) getProject(projectID string) (Project, bool, error) {
 	row := s.db.QueryRow(
-		`SELECT id, workspace_id, name, repo_path, is_git, default_model_id, default_mode, current_revision, created_at, updated_at
+		`SELECT id, workspace_id, name, repo_path, is_git, default_model_config_id, default_mode, current_revision, created_at, updated_at
 		 FROM projects
 		 WHERE id=?`,
 		strings.TrimSpace(projectID),
@@ -53,14 +53,14 @@ func (s *authzStore) getProject(projectID string) (Project, bool, error) {
 func (s *authzStore) upsertProject(input Project) (Project, error) {
 	project := normalizeProjectForStorage(input)
 	_, err := s.db.Exec(
-		`INSERT INTO projects(id, workspace_id, name, repo_path, is_git, default_model_id, default_mode, current_revision, created_at, updated_at)
+		`INSERT INTO projects(id, workspace_id, name, repo_path, is_git, default_model_config_id, default_mode, current_revision, created_at, updated_at)
 		 VALUES(?,?,?,?,?,?,?,?,?,?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   workspace_id=excluded.workspace_id,
 		   name=excluded.name,
 		   repo_path=excluded.repo_path,
 		   is_git=excluded.is_git,
-		   default_model_id=excluded.default_model_id,
+		   default_model_config_id=excluded.default_model_config_id,
 		   default_mode=excluded.default_mode,
 		   current_revision=excluded.current_revision,
 		   updated_at=excluded.updated_at`,
@@ -69,7 +69,7 @@ func (s *authzStore) upsertProject(input Project) (Project, error) {
 		project.Name,
 		project.RepoPath,
 		boolToInt(project.IsGit),
-		nullWhenEmpty(project.DefaultModelID),
+		nullWhenEmpty(project.DefaultModelConfigID),
 		string(project.DefaultMode),
 		project.CurrentRevision,
 		project.CreatedAt,
@@ -120,9 +120,9 @@ type projectScanner interface {
 func scanProjectRow(scanner projectScanner) (Project, error) {
 	item := Project{}
 	var (
-		isGitInt       int
-		defaultModelID sql.NullString
-		defaultModeRaw string
+		isGitInt             int
+		defaultModelConfigID sql.NullString
+		defaultModeRaw       string
 	)
 	if err := scanner.Scan(
 		&item.ID,
@@ -130,7 +130,7 @@ func scanProjectRow(scanner projectScanner) (Project, error) {
 		&item.Name,
 		&item.RepoPath,
 		&isGitInt,
-		&defaultModelID,
+		&defaultModelConfigID,
 		&defaultModeRaw,
 		&item.CurrentRevision,
 		&item.CreatedAt,
@@ -139,7 +139,7 @@ func scanProjectRow(scanner projectScanner) (Project, error) {
 		return Project{}, err
 	}
 	item.IsGit = parseBoolInt(isGitInt)
-	item.DefaultModelID = strings.TrimSpace(defaultModelID.String)
+	item.DefaultModelConfigID = strings.TrimSpace(defaultModelConfigID.String)
 	if strings.TrimSpace(defaultModeRaw) == "" {
 		item.DefaultMode = ConversationModeAgent
 	} else {
@@ -155,7 +155,7 @@ func normalizeProjectForStorage(input Project) Project {
 	item.WorkspaceID = strings.TrimSpace(item.WorkspaceID)
 	item.Name = strings.TrimSpace(item.Name)
 	item.RepoPath = strings.TrimSpace(item.RepoPath)
-	item.DefaultModelID = strings.TrimSpace(item.DefaultModelID)
+	item.DefaultModelConfigID = strings.TrimSpace(item.DefaultModelConfigID)
 	if item.Name == "" {
 		item.Name = "Project"
 	}

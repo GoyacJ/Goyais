@@ -84,11 +84,15 @@ func ResourceConfigsHandler(state *AppState) http.HandlerFunc {
 				}
 			}
 			now := nowUTC()
+			name := strings.TrimSpace(input.Name)
+			if input.Type == ResourceTypeModel {
+				name = defaultModelResourceConfigName(name, input.Model)
+			}
 			config := ResourceConfig{
 				ID:          "rc_" + randomHex(6),
 				WorkspaceID: workspaceID,
 				Type:        input.Type,
-				Name:        strings.TrimSpace(input.Name),
+				Name:        name,
 				Enabled:     enabled,
 				Model:       input.Model,
 				Rule:        input.Rule,
@@ -210,7 +214,7 @@ func validateCreateResourceConfig(input ResourceConfigCreateRequest) error {
 }
 
 func applyPatchToResourceConfig(target *ResourceConfig, patch ResourceConfigPatchRequest) {
-	if patch.Name != nil && target.Type != ResourceTypeModel {
+	if patch.Name != nil {
 		target.Name = strings.TrimSpace(*patch.Name)
 	}
 	if patch.Enabled != nil {
@@ -232,6 +236,9 @@ func applyPatchToResourceConfig(target *ResourceConfig, patch ResourceConfigPatc
 	}
 	if patch.MCP != nil {
 		target.MCP = patch.MCP
+	}
+	if target.Type == ResourceTypeModel {
+		target.Name = defaultModelResourceConfigName(target.Name, target.Model)
 	}
 }
 
@@ -321,7 +328,7 @@ func matchesResourceConfigQuery(item ResourceConfig, query string) bool {
 
 func resourceConfigSearchText(item ResourceConfig) string {
 	if item.Type == ResourceTypeModel && item.Model != nil {
-		return strings.TrimSpace(string(item.Model.Vendor) + " " + item.Model.ModelID)
+		return strings.TrimSpace(item.Name + " " + string(item.Model.Vendor) + " " + item.Model.ModelID)
 	}
 	return strings.TrimSpace(item.Name)
 }
@@ -345,12 +352,26 @@ func normalizeResourceConfigForStorage(item *ResourceConfig) {
 	if item == nil {
 		return
 	}
-	if item.Type == ResourceTypeModel {
-		item.Name = ""
-	}
+	item.Name = strings.TrimSpace(item.Name)
 	if item.Model != nil {
 		item.Model = normalizeModelSpecForStorage(item.Model)
 	}
+	if item.Type == ResourceTypeModel {
+		item.Name = defaultModelResourceConfigName(item.Name, item.Model)
+	}
+}
+
+func defaultModelResourceConfigName(name string, model *ModelSpec) string {
+	normalizedName := strings.TrimSpace(name)
+	if normalizedName != "" {
+		return normalizedName
+	}
+	if model != nil {
+		if modelID := strings.TrimSpace(model.ModelID); modelID != "" {
+			return modelID
+		}
+	}
+	return ""
 }
 
 func validateModelSpecAgainstCatalog(state *AppState, workspaceID string, current *ModelSpec, next *ModelSpec) error {

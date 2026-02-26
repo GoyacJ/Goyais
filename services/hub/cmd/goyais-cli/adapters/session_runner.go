@@ -14,7 +14,7 @@ import (
 	slashcmd "goyais/services/hub/internal/agentcore/commands"
 	"goyais/services/hub/internal/agentcore/config"
 	inputproc "goyais/services/hub/internal/agentcore/input"
-	"goyais/services/hub/internal/agentcore/projectdocs"
+	"goyais/services/hub/internal/agentcore/prompting"
 	"goyais/services/hub/internal/agentcore/protocol"
 	"goyais/services/hub/internal/agentcore/runtime"
 	"goyais/services/hub/internal/agentcore/state"
@@ -436,20 +436,11 @@ func cloneStringMap(input map[string]string) map[string]string {
 }
 
 func injectProjectInstructions(prompt string, cwd string, env map[string]string) string {
-	trimmedPrompt := strings.TrimSpace(prompt)
-	if trimmedPrompt == "" {
-		return trimmedPrompt
-	}
-	if strings.TrimSpace(cwd) == "" {
-		return trimmedPrompt
-	}
-	projectInstructions, _ := projectdocs.LoadProjectInstructionsForCWD(cwd, env)
-	if strings.TrimSpace(projectInstructions) == "" {
-		return trimmedPrompt
-	}
-	return strings.TrimSpace(
-		projectInstructions + "\n\n---\n\n# User Prompt\n\n" + trimmedPrompt,
-	)
+	return prompting.InjectUserPrompt(prompting.UserPromptInput{
+		Prompt: prompt,
+		CWD:    cwd,
+		Env:    env,
+	})
 }
 
 func preprocessPromptMentions(prompt string, env map[string]string) string {

@@ -9,23 +9,23 @@ import (
 
 func (s *authzStore) getProjectConfig(projectID string) (ProjectConfig, bool, error) {
 	row := s.db.QueryRow(
-		`SELECT project_id, model_ids_json, default_model_id, rule_ids_json, skill_ids_json, mcp_ids_json, updated_at
+		`SELECT project_id, model_config_ids_json, default_model_config_id, rule_ids_json, skill_ids_json, mcp_ids_json, updated_at
 		 FROM project_configs
 		 WHERE project_id=?`,
 		strings.TrimSpace(projectID),
 	)
 	var (
-		item           ProjectConfig
-		modelIDsJSON   string
-		defaultModelID sql.NullString
-		ruleIDsJSON    string
-		skillIDsJSON   string
-		mcpIDsJSON     string
+		item                 ProjectConfig
+		modelConfigIDsJSON   string
+		defaultModelConfigID sql.NullString
+		ruleIDsJSON          string
+		skillIDsJSON         string
+		mcpIDsJSON           string
 	)
 	if err := row.Scan(
 		&item.ProjectID,
-		&modelIDsJSON,
-		&defaultModelID,
+		&modelConfigIDsJSON,
+		&defaultModelConfigID,
 		&ruleIDsJSON,
 		&skillIDsJSON,
 		&mcpIDsJSON,
@@ -36,7 +36,7 @@ func (s *authzStore) getProjectConfig(projectID string) (ProjectConfig, bool, er
 		}
 		return ProjectConfig{}, false, err
 	}
-	modelIDs, err := decodeJSONStringArray(modelIDsJSON)
+	modelConfigIDs, err := decodeJSONStringArray(modelConfigIDsJSON)
 	if err != nil {
 		return ProjectConfig{}, false, err
 	}
@@ -53,11 +53,11 @@ func (s *authzStore) getProjectConfig(projectID string) (ProjectConfig, bool, er
 		return ProjectConfig{}, false, err
 	}
 
-	item.ModelIDs = modelIDs
+	item.ModelConfigIDs = modelConfigIDs
 	item.RuleIDs = ruleIDs
 	item.SkillIDs = skillIDs
 	item.MCPIDs = mcpIDs
-	item.DefaultModelID = nullStringToPointer(defaultModelID)
+	item.DefaultModelConfigID = nullStringToPointer(defaultModelConfigID)
 	item = normalizeProjectConfigForStorage(item)
 	return item, true, nil
 }
@@ -66,7 +66,7 @@ func (s *authzStore) upsertProjectConfig(workspaceID string, input ProjectConfig
 	config := normalizeProjectConfigForStorage(input)
 	workspaceID = strings.TrimSpace(workspaceID)
 
-	modelIDsJSON, err := encodeJSONStringArray(config.ModelIDs)
+	modelConfigIDsJSON, err := encodeJSONStringArray(config.ModelConfigIDs)
 	if err != nil {
 		return ProjectConfig{}, err
 	}
@@ -84,20 +84,20 @@ func (s *authzStore) upsertProjectConfig(workspaceID string, input ProjectConfig
 	}
 
 	_, err = s.db.Exec(
-		`INSERT INTO project_configs(project_id, workspace_id, model_ids_json, default_model_id, rule_ids_json, skill_ids_json, mcp_ids_json, updated_at)
+		`INSERT INTO project_configs(project_id, workspace_id, model_config_ids_json, default_model_config_id, rule_ids_json, skill_ids_json, mcp_ids_json, updated_at)
 		 VALUES(?,?,?,?,?,?,?,?)
 		 ON CONFLICT(project_id) DO UPDATE SET
 		   workspace_id=excluded.workspace_id,
-		   model_ids_json=excluded.model_ids_json,
-		   default_model_id=excluded.default_model_id,
+		   model_config_ids_json=excluded.model_config_ids_json,
+		   default_model_config_id=excluded.default_model_config_id,
 		   rule_ids_json=excluded.rule_ids_json,
 		   skill_ids_json=excluded.skill_ids_json,
 		   mcp_ids_json=excluded.mcp_ids_json,
 		   updated_at=excluded.updated_at`,
 		config.ProjectID,
 		workspaceID,
-		modelIDsJSON,
-		nullWhenEmpty(derefString(config.DefaultModelID)),
+		modelConfigIDsJSON,
+		nullWhenEmpty(derefString(config.DefaultModelConfigID)),
 		ruleIDsJSON,
 		skillIDsJSON,
 		mcpIDsJSON,
@@ -114,10 +114,10 @@ func (s *authzStore) listWorkspaceProjectConfigItems(workspaceID string) ([]work
 		`SELECT
 			p.id,
 			p.name,
-			p.default_model_id,
+			p.default_model_config_id,
 			p.updated_at,
-			c.model_ids_json,
-			c.default_model_id,
+			c.model_config_ids_json,
+			c.default_model_config_id,
 			c.rule_ids_json,
 			c.skill_ids_json,
 			c.mcp_ids_json,
@@ -136,24 +136,24 @@ func (s *authzStore) listWorkspaceProjectConfigItems(workspaceID string) ([]work
 	items := make([]workspaceProjectConfigItem, 0)
 	for rows.Next() {
 		var (
-			projectID             string
-			projectName           string
-			projectDefaultModelID sql.NullString
-			projectUpdatedAt      string
-			modelIDsJSON          sql.NullString
-			configDefaultModelID  sql.NullString
-			ruleIDsJSON           sql.NullString
-			skillIDsJSON          sql.NullString
-			mcpIDsJSON            sql.NullString
-			configUpdatedAt       sql.NullString
+			projectID                   string
+			projectName                 string
+			projectDefaultModelConfigID sql.NullString
+			projectUpdatedAt            string
+			modelConfigIDsJSON          sql.NullString
+			configDefaultModelConfigID  sql.NullString
+			ruleIDsJSON                 sql.NullString
+			skillIDsJSON                sql.NullString
+			mcpIDsJSON                  sql.NullString
+			configUpdatedAt             sql.NullString
 		)
 		if err := rows.Scan(
 			&projectID,
 			&projectName,
-			&projectDefaultModelID,
+			&projectDefaultModelConfigID,
 			&projectUpdatedAt,
-			&modelIDsJSON,
-			&configDefaultModelID,
+			&modelConfigIDsJSON,
+			&configDefaultModelConfigID,
 			&ruleIDsJSON,
 			&skillIDsJSON,
 			&mcpIDsJSON,
@@ -163,24 +163,24 @@ func (s *authzStore) listWorkspaceProjectConfigItems(workspaceID string) ([]work
 		}
 
 		config := ProjectConfig{
-			ProjectID: projectID,
-			ModelIDs:  []string{},
-			RuleIDs:   []string{},
-			SkillIDs:  []string{},
-			MCPIDs:    []string{},
-			UpdatedAt: strings.TrimSpace(projectUpdatedAt),
+			ProjectID:      projectID,
+			ModelConfigIDs: []string{},
+			RuleIDs:        []string{},
+			SkillIDs:       []string{},
+			MCPIDs:         []string{},
+			UpdatedAt:      strings.TrimSpace(projectUpdatedAt),
 		}
 		if strings.TrimSpace(config.UpdatedAt) == "" {
 			config.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 		}
 
-		if modelIDsJSON.Valid {
-			modelIDs, decodeErr := decodeJSONStringArray(modelIDsJSON.String)
+		if modelConfigIDsJSON.Valid {
+			modelConfigIDs, decodeErr := decodeJSONStringArray(modelConfigIDsJSON.String)
 			if decodeErr != nil {
 				return nil, decodeErr
 			}
-			config.ModelIDs = modelIDs
-			config.DefaultModelID = nullStringToPointer(configDefaultModelID)
+			config.ModelConfigIDs = modelConfigIDs
+			config.DefaultModelConfigID = nullStringToPointer(configDefaultModelConfigID)
 			if ruleIDsJSON.Valid {
 				ruleIDs, decodeErr := decodeJSONStringArray(ruleIDsJSON.String)
 				if decodeErr != nil {
@@ -206,10 +206,10 @@ func (s *authzStore) listWorkspaceProjectConfigItems(workspaceID string) ([]work
 				config.UpdatedAt = strings.TrimSpace(configUpdatedAt.String)
 			}
 		} else {
-			defaultModel := strings.TrimSpace(projectDefaultModelID.String)
-			if defaultModel != "" {
-				config.ModelIDs = []string{defaultModel}
-				config.DefaultModelID = &defaultModel
+			defaultModelConfigID := strings.TrimSpace(projectDefaultModelConfigID.String)
+			if defaultModelConfigID != "" {
+				config.ModelConfigIDs = []string{defaultModelConfigID}
+				config.DefaultModelConfigID = &defaultModelConfigID
 			}
 		}
 
@@ -227,20 +227,20 @@ func normalizeProjectConfigForStorage(input ProjectConfig) ProjectConfig {
 	now := time.Now().UTC().Format(time.RFC3339)
 	item := input
 	item.ProjectID = strings.TrimSpace(item.ProjectID)
-	item.ModelIDs = sanitizeIDList(item.ModelIDs)
+	item.ModelConfigIDs = sanitizeIDList(item.ModelConfigIDs)
 	item.RuleIDs = sanitizeIDList(item.RuleIDs)
 	item.SkillIDs = sanitizeIDList(item.SkillIDs)
 	item.MCPIDs = sanitizeIDList(item.MCPIDs)
-	if item.DefaultModelID != nil {
-		value := strings.TrimSpace(*item.DefaultModelID)
+	if item.DefaultModelConfigID != nil {
+		value := strings.TrimSpace(*item.DefaultModelConfigID)
 		if value == "" {
-			item.DefaultModelID = nil
+			item.DefaultModelConfigID = nil
 		} else {
-			item.DefaultModelID = &value
+			item.DefaultModelConfigID = &value
 		}
 	}
-	if item.DefaultModelID != nil && !containsTrimmed(item.ModelIDs, *item.DefaultModelID) {
-		item.ModelIDs = append(item.ModelIDs, *item.DefaultModelID)
+	if item.DefaultModelConfigID != nil && !containsTrimmed(item.ModelConfigIDs, *item.DefaultModelConfigID) {
+		item.ModelConfigIDs = append(item.ModelConfigIDs, *item.DefaultModelConfigID)
 	}
 	if strings.TrimSpace(item.UpdatedAt) == "" {
 		item.UpdatedAt = now

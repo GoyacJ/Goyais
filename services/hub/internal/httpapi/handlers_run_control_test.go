@@ -21,6 +21,8 @@ func TestRunControlEndpoint_DenyQueuedRun(t *testing.T) {
 	projectPayload := map[string]any{}
 	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
 	projectID := projectPayload["id"].(string)
+	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
+	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
 
 	conversationRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
 		"workspace_id": workspaceID,
@@ -34,14 +36,16 @@ func TestRunControlEndpoint_DenyQueuedRun(t *testing.T) {
 	conversationID := conversationPayload["id"].(string)
 
 	first := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content": "first",
+		"content":         "first",
+		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if first.Code != http.StatusCreated {
 		t.Fatalf("expected first message 201, got %d (%s)", first.Code, first.Body.String())
 	}
 
 	second := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content": "second",
+		"content":         "second",
+		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if second.Code != http.StatusCreated {
 		t.Fatalf("expected second message 201, got %d (%s)", second.Code, second.Body.String())
@@ -91,6 +95,8 @@ func TestRunControlEndpoint_StopTransitionsRun(t *testing.T) {
 	projectPayload := map[string]any{}
 	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
 	projectID := projectPayload["id"].(string)
+	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
+	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
 
 	conversationRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
 		"workspace_id": workspaceID,
@@ -104,7 +110,8 @@ func TestRunControlEndpoint_StopTransitionsRun(t *testing.T) {
 	conversationID := conversationPayload["id"].(string)
 
 	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content": "stop this run",
+		"content":         "stop this run",
+		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if messageRes.Code != http.StatusCreated {
 		t.Fatalf("expected create execution 201, got %d (%s)", messageRes.Code, messageRes.Body.String())
