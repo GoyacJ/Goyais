@@ -368,13 +368,13 @@ type ExecutionResourceProfile struct {
 }
 
 type ModelSnapshot struct {
-	ConfigID   string         `json:"config_id,omitempty"`
-	Vendor     string         `json:"vendor,omitempty"`
-	ModelID    string         `json:"model_id"`
-	BaseURL    string         `json:"base_url,omitempty"`
-	BaseURLKey string         `json:"base_url_key,omitempty"`
-	TimeoutMS  int            `json:"timeout_ms,omitempty"`
-	Params     map[string]any `json:"params,omitempty"`
+	ConfigID   string            `json:"config_id,omitempty"`
+	Vendor     string            `json:"vendor,omitempty"`
+	ModelID    string            `json:"model_id"`
+	BaseURL    string            `json:"base_url,omitempty"`
+	BaseURLKey string            `json:"base_url_key,omitempty"`
+	Runtime    *ModelRuntimeSpec `json:"runtime,omitempty"`
+	Params     map[string]any    `json:"params,omitempty"`
 }
 
 type ExecutionCreateRequest struct {

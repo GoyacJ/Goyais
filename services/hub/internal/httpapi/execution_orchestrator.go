@@ -126,17 +126,6 @@ func (o *ExecutionOrchestrator) beginExecution(executionID string) (Execution, s
 	execution.State = ExecutionStateExecuting
 	execution.UpdatedAt = now
 	o.state.executions[execution.ID] = execution
-	appendExecutionEventLocked(o.state, ExecutionEvent{
-		ExecutionID:    execution.ID,
-		ConversationID: execution.ConversationID,
-		TraceID:        execution.TraceID,
-		QueueIndex:     execution.QueueIndex,
-		Type:           ExecutionEventTypeExecutionStarted,
-		Timestamp:      now,
-		Payload: map[string]any{
-			"source": "hub_orchestrator",
-		},
-	})
 
 	return execution, lookupExecutionContentLocked(o.state, execution), true
 }
@@ -310,6 +299,8 @@ func (o *ExecutionOrchestrator) executeModel(ctx context.Context, execution Exec
 	if strings.TrimSpace(model.ModelID) == "" {
 		return "", nil, fmt.Errorf("model snapshot is invalid")
 	}
+	effectiveTimeoutMS := resolveModelRequestTimeoutMS(model.Runtime)
+	o.appendExecutionStartedEvent(execution, hydrated, effectiveTimeoutMS)
 	profile := hydrated.ResourceProfileSnapshot
 	if profile == nil {
 		profile = &ExecutionResourceProfile{ModelConfigID: hydrated.ModelSnapshot.ConfigID, ModelID: hydrated.ModelID}
@@ -328,13 +319,46 @@ func (o *ExecutionOrchestrator) executeModel(ctx context.Context, execution Exec
 	}
 }
 
+func (o *ExecutionOrchestrator) appendExecutionStartedEvent(execution Execution, hydrated Execution, effectiveTimeoutMS int) {
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	o.state.mu.Lock()
+	defer o.state.mu.Unlock()
+
+	stored, exists := o.state.executions[execution.ID]
+	if !exists || stored.State != ExecutionStateExecuting {
+		return
+	}
+
+	if normalizedModelID := strings.TrimSpace(hydrated.ModelID); normalizedModelID != "" {
+		stored.ModelID = normalizedModelID
+	}
+	stored.ModelSnapshot = cloneModelSnapshot(hydrated.ModelSnapshot)
+	stored.ResourceProfileSnapshot = cloneExecutionResourceProfile(hydrated.ResourceProfileSnapshot)
+	stored.UpdatedAt = now
+	o.state.executions[stored.ID] = stored
+
+	appendExecutionEventLocked(o.state, ExecutionEvent{
+		ExecutionID:    stored.ID,
+		ConversationID: stored.ConversationID,
+		TraceID:        stored.TraceID,
+		QueueIndex:     stored.QueueIndex,
+		Type:           ExecutionEventTypeExecutionStarted,
+		Timestamp:      now,
+		Payload: map[string]any{
+			"source":               "hub_orchestrator",
+			"effective_timeout_ms": effectiveTimeoutMS,
+		},
+	})
+}
+
 func buildModelSpecFromExecutionSnapshot(snapshot ModelSnapshot) ModelSpec {
 	spec := ModelSpec{
 		Vendor:     ModelVendorName(strings.TrimSpace(snapshot.Vendor)),
 		ModelID:    strings.TrimSpace(snapshot.ModelID),
 		BaseURL:    strings.TrimSpace(snapshot.BaseURL),
 		BaseURLKey: strings.TrimSpace(snapshot.BaseURLKey),
-		TimeoutMS:  snapshot.TimeoutMS,
+		Runtime:    cloneModelRuntimeSpec(snapshot.Runtime),
 		Params:     cloneMapAny(snapshot.Params),
 	}
 	if key, ok := spec.Params["api_key"].(string); ok {
@@ -473,6 +497,7 @@ func invokeOpenAICompatibleModel(
 
 	payload, _ := json.Marshal(body)
 	endpoint := strings.TrimRight(target.BaseURL, "/") + "/chat/completions"
+	effectiveTimeoutMS := resolveModelRequestTimeoutMS(model.Runtime)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return "", nil, fmt.Errorf("build request: %w", err)
@@ -482,9 +507,9 @@ func invokeOpenAICompatibleModel(
 		return "", nil, fmt.Errorf("%s", message)
 	}
 
-	res, bodyBytes, err := doProbeRequest(req, resolveProbeTimeoutMS(model.TimeoutMS))
+	res, bodyBytes, err := doProbeRequest(req, resolveModelRequestTimeoutDuration(model.Runtime))
 	if err != nil {
-		return "", nil, err
+		return "", nil, fmt.Errorf("%s", formatModelRequestFailedMessage(endpoint, effectiveTimeoutMS, err))
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
@@ -518,6 +543,7 @@ func invokeGoogleModel(
 		modelPath = "models/" + modelPath
 	}
 	endpoint := strings.TrimRight(target.BaseURL, "/") + "/" + modelPath + ":generateContent"
+	effectiveTimeoutMS := resolveModelRequestTimeoutMS(model.Runtime)
 
 	body := map[string]any{
 		"contents": []map[string]any{
@@ -552,9 +578,9 @@ func invokeGoogleModel(
 		return "", nil, fmt.Errorf("%s", message)
 	}
 
-	res, bodyBytes, err := doProbeRequest(req, resolveProbeTimeoutMS(model.TimeoutMS))
+	res, bodyBytes, err := doProbeRequest(req, resolveModelRequestTimeoutDuration(model.Runtime))
 	if err != nil {
-		return "", nil, err
+		return "", nil, fmt.Errorf("%s", formatModelRequestFailedMessage(endpoint, effectiveTimeoutMS, err))
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {

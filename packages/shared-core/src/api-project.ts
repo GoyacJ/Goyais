@@ -103,7 +103,9 @@ export type Execution = {
     model_id: string;
     base_url?: string;
     base_url_key?: string;
-    timeout_ms?: number;
+    runtime?: {
+      request_timeout_ms?: number;
+    };
     params?: Record<string, unknown>;
   };
   resource_profile_snapshot?: {

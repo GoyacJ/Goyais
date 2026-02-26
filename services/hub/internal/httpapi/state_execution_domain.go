@@ -132,6 +132,7 @@ func captureExecutionDomainSnapshot(state *AppState) executionDomainSnapshot {
 
 func cloneModelSnapshot(input ModelSnapshot) ModelSnapshot {
 	output := input
+	output.Runtime = cloneModelRuntimeSpec(input.Runtime)
 	output.Params = cloneMapAny(input.Params)
 	return output
 }

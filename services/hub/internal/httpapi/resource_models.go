@@ -65,14 +65,18 @@ type CatalogRootResponse struct {
 }
 
 type ModelSpec struct {
-	Vendor       ModelVendorName `json:"vendor"`
-	ModelID      string          `json:"model_id"`
-	BaseURL      string          `json:"base_url,omitempty"`
-	BaseURLKey   string          `json:"base_url_key,omitempty"`
-	APIKey       string          `json:"api_key,omitempty"`
-	APIKeyMasked string          `json:"api_key_masked,omitempty"`
-	TimeoutMS    int             `json:"timeout_ms,omitempty"`
-	Params       map[string]any  `json:"params,omitempty"`
+	Vendor       ModelVendorName   `json:"vendor"`
+	ModelID      string            `json:"model_id"`
+	BaseURL      string            `json:"base_url,omitempty"`
+	BaseURLKey   string            `json:"base_url_key,omitempty"`
+	APIKey       string            `json:"api_key,omitempty"`
+	APIKeyMasked string            `json:"api_key_masked,omitempty"`
+	Runtime      *ModelRuntimeSpec `json:"runtime,omitempty"`
+	Params       map[string]any    `json:"params,omitempty"`
+}
+
+type ModelRuntimeSpec struct {
+	RequestTimeoutMS *int `json:"request_timeout_ms,omitempty"`
 }
 
 type RuleSpec struct {

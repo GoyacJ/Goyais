@@ -76,7 +76,9 @@ export type ModelSpec = {
   base_url_key?: string;
   api_key?: string;
   api_key_masked?: string;
-  timeout_ms?: number;
+  runtime?: {
+    request_timeout_ms?: number;
+  };
   params?: Record<string, unknown>;
 };
 

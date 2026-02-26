@@ -256,6 +256,17 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 				_ = executionRows.Close()
 				return snapshot, err
 			}
+			legacyModelSnapshot := struct {
+				TimeoutMS *int `json:"timeout_ms"`
+			}{}
+			if err := json.Unmarshal([]byte(modelSnapshotJSON), &legacyModelSnapshot); err != nil {
+				_ = executionRows.Close()
+				return snapshot, err
+			}
+			if (item.ModelSnapshot.Runtime == nil || item.ModelSnapshot.Runtime.RequestTimeoutMS == nil) && legacyModelSnapshot.TimeoutMS != nil {
+				value := *legacyModelSnapshot.TimeoutMS
+				item.ModelSnapshot.Runtime = &ModelRuntimeSpec{RequestTimeoutMS: &value}
+			}
 		}
 		if resourceJSON.Valid && strings.TrimSpace(resourceJSON.String) != "" {
 			resourceSnapshot := ExecutionResourceProfile{}

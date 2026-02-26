@@ -2156,8 +2156,8 @@ components:
           type: string
         base_url:
           type: string
-        timeout_ms:
-          type: integer
+        runtime:
+          $ref: '#/components/schemas/ModelRuntimeSpec'
         params:
           type: object
           additionalProperties: true
@@ -2544,6 +2544,12 @@ components:
           type: string
           format: date-time
 
+    ModelRuntimeSpec:
+      type: object
+      properties:
+        request_timeout_ms:
+          type: integer
+
     ModelSpec:
       type: object
       required: [vendor, model_id]
@@ -2561,8 +2567,8 @@ components:
           type: string
         api_key_masked:
           type: string
-        timeout_ms:
-          type: integer
+        runtime:
+          $ref: '#/components/schemas/ModelRuntimeSpec'
         params:
           type: object
           additionalProperties: true

@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	defaultModelProbeTimeoutMS = 8000
 	maxModelProbeResponseBytes = 1 << 20
 )
 
@@ -72,6 +71,8 @@ func probeOpenAICompatibleModel(model ModelSpec, probeTarget modelProbeTarget) (
 		value := "invalid_base_url"
 		return "failed", &value, "base_url is required and must be valid"
 	}
+	endpoint := strings.TrimRight(probeTarget.BaseURL, "/") + "/chat/completions"
+	effectiveTimeoutMS := resolveModelRequestTimeoutMS(model.Runtime)
 
 	body := map[string]any{
 		"model": model.ModelID,
@@ -83,7 +84,7 @@ func probeOpenAICompatibleModel(model ModelSpec, probeTarget modelProbeTarget) (
 	}
 	payload, _ := json.Marshal(body)
 
-	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(probeTarget.BaseURL, "/")+"/chat/completions", bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		value := "request_build_failed"
 		return "failed", &value, "failed to build request"
@@ -93,10 +94,10 @@ func probeOpenAICompatibleModel(model ModelSpec, probeTarget modelProbeTarget) (
 		return "failed", authCode, authMessage
 	}
 
-	res, bodyBytes, err := doProbeRequest(req, resolveProbeTimeoutMS(model.TimeoutMS))
+	res, bodyBytes, err := doProbeRequest(req, resolveModelRequestTimeoutDuration(model.Runtime))
 	if err != nil {
 		value := "request_failed"
-		return "failed", &value, "request failed: " + err.Error()
+		return "failed", &value, formatModelRequestFailedMessage(endpoint, effectiveTimeoutMS, err)
 	}
 	defer res.Body.Close()
 
@@ -119,6 +120,7 @@ func probeGoogleModel(model ModelSpec, probeTarget modelProbeTarget) (string, *s
 		modelPath = "models/" + modelPath
 	}
 	endpoint := fmt.Sprintf("%s/%s:generateContent", strings.TrimRight(probeTarget.BaseURL, "/"), modelPath)
+	effectiveTimeoutMS := resolveModelRequestTimeoutMS(model.Runtime)
 
 	body := map[string]any{
 		"contents": []map[string]any{
@@ -138,10 +140,10 @@ func probeGoogleModel(model ModelSpec, probeTarget modelProbeTarget) (string, *s
 		return "failed", authCode, authMessage
 	}
 
-	res, bodyBytes, err := doProbeRequest(req, resolveProbeTimeoutMS(model.TimeoutMS))
+	res, bodyBytes, err := doProbeRequest(req, resolveModelRequestTimeoutDuration(model.Runtime))
 	if err != nil {
 		value := "request_failed"
-		return "failed", &value, "request failed: " + err.Error()
+		return "failed", &value, formatModelRequestFailedMessage(endpoint, effectiveTimeoutMS, err)
 	}
 	defer res.Body.Close()
 
@@ -198,16 +200,6 @@ func doProbeRequest(req *http.Request, timeout time.Duration) (*http.Response, [
 	}
 	res.Body = io.NopCloser(bytes.NewReader(body))
 	return res, body, nil
-}
-
-func resolveProbeTimeoutMS(timeoutMS int) time.Duration {
-	if timeoutMS <= 0 {
-		timeoutMS = defaultModelProbeTimeoutMS
-	}
-	if timeoutMS > 120000 {
-		timeoutMS = 120000
-	}
-	return time.Duration(timeoutMS) * time.Millisecond
 }
 
 func resolveModelProbeTarget(model ModelSpec, resolveCatalogVendor func(ModelVendorName) (ModelCatalogVendor, bool)) modelProbeTarget {

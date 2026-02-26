@@ -44,3 +44,62 @@ func TestResourceConfigTestEndpoint_ModelProbeMissingAPIKeyRegression(t *testing
 		t.Fatalf("expected api_key message, got %#v", testPayload["message"])
 	}
 }
+
+func TestResourceConfigCreateRejectsOutOfRangeRuntimeTimeout(t *testing.T) {
+	router := NewRouter()
+	workspaceID := createRemoteWorkspace(t, router, "Remote Resource Timeout Range", "http://127.0.0.1:9133", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "resource_runtime_user", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	createRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/resource-configs", map[string]any{
+		"type": "model",
+		"model": map[string]any{
+			"vendor":   "OpenAI",
+			"model_id": "gpt-5.3",
+			"runtime": map[string]any{
+				"request_timeout_ms": 999,
+			},
+		},
+	}, authHeaders)
+	if createRes.Code != http.StatusBadRequest {
+		t.Fatalf("expected create model config 400 for invalid runtime timeout, got %d (%s)", createRes.Code, createRes.Body.String())
+	}
+}
+
+func TestResourceConfigPatchRejectsOutOfRangeRuntimeTimeout(t *testing.T) {
+	router := NewRouter()
+	workspaceID := createRemoteWorkspace(t, router, "Remote Resource Timeout Patch", "http://127.0.0.1:9134", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "resource_runtime_user", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	createRes := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/"+workspaceID+"/resource-configs", map[string]any{
+		"type": "model",
+		"model": map[string]any{
+			"vendor":   "OpenAI",
+			"model_id": "gpt-5.3",
+			"api_key":  "sk-test",
+		},
+	}, authHeaders)
+	if createRes.Code != http.StatusCreated {
+		t.Fatalf("expected create model config 201, got %d (%s)", createRes.Code, createRes.Body.String())
+	}
+	payload := map[string]any{}
+	mustDecodeJSON(t, createRes.Body.Bytes(), &payload)
+	configID := strings.TrimSpace(asString(payload["id"]))
+	if configID == "" {
+		t.Fatalf("expected model config id")
+	}
+
+	patchRes := performJSONRequest(t, router, http.MethodPatch, "/v1/workspaces/"+workspaceID+"/resource-configs/"+configID, map[string]any{
+		"model": map[string]any{
+			"vendor":   "OpenAI",
+			"model_id": "gpt-5.3",
+			"runtime": map[string]any{
+				"request_timeout_ms": 120001,
+			},
+		},
+	}, authHeaders)
+	if patchRes.Code != http.StatusBadRequest {
+		t.Fatalf("expected patch model config 400 for invalid runtime timeout, got %d (%s)", patchRes.Code, patchRes.Body.String())
+	}
+}

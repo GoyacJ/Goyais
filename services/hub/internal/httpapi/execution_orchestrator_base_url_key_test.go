@@ -9,11 +9,14 @@ func TestInvokeOpenAICompatibleModel_UsesSnapshotBaseURLKey(t *testing.T) {
 		ModelID:    "MiniMax-M2.5",
 		BaseURLKey: "china",
 		Params:     map[string]any{"api_key": "sk-test"},
-		TimeoutMS:  5000,
+		Runtime:    &ModelRuntimeSpec{RequestTimeoutMS: intPtr(5000)},
 	}
 	model := buildModelSpecFromExecutionSnapshot(snapshot)
 	if model.BaseURLKey != "china" {
 		t.Fatalf("expected base_url_key to be preserved, got %q", model.BaseURLKey)
+	}
+	if model.Runtime == nil || model.Runtime.RequestTimeoutMS == nil || *model.Runtime.RequestTimeoutMS != 5000 {
+		t.Fatalf("expected runtime.request_timeout_ms 5000, got %#v", model.Runtime)
 	}
 
 	target := resolveModelProbeTarget(model, func(vendor ModelVendorName) (ModelCatalogVendor, bool) {

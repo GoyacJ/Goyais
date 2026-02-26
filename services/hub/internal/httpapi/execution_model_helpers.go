@@ -28,7 +28,7 @@ func resolveExecutionModelSnapshot(
 		Vendor:     strings.TrimSpace(string(modelConfig.Model.Vendor)),
 		ModelID:    modelID,
 		BaseURLKey: strings.TrimSpace(modelConfig.Model.BaseURLKey),
-		TimeoutMS:  modelConfig.Model.TimeoutMS,
+		Runtime:    cloneModelRuntimeSpec(modelConfig.Model.Runtime),
 	}
 	if modelConfig.Model.Vendor == ModelVendorLocal {
 		snapshot.BaseURL = resolveModelBaseURLForExecution(state, workspaceID, modelConfig.Model)
@@ -67,9 +67,7 @@ func hydrateExecutionModelSnapshotForWorker(state *AppState, execution Execution
 	} else {
 		snapshot.BaseURL = ""
 	}
-	if model.TimeoutMS > 0 {
-		snapshot.TimeoutMS = model.TimeoutMS
-	}
+	snapshot.Runtime = cloneModelRuntimeSpec(model.Runtime)
 
 	params := cloneMapAny(snapshot.Params)
 	if len(model.Params) > 0 {

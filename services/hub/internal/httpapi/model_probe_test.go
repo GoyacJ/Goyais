@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRunModelConfigTest_SupportedVendors(t *testing.T) {
@@ -167,5 +168,42 @@ func TestRunModelConfigTest_UsesBaseURLKey(t *testing.T) {
 	)
 	if result.Status != "success" {
 		t.Fatalf("expected success, got %s (%s)", result.Status, result.Message)
+	}
+}
+
+func TestRunModelConfigTest_UsesRuntimeTimeout(t *testing.T) {
+	slowServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(1200 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"cmpl_1","choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer slowServer.Close()
+
+	result := runModelConfigTest(
+		ResourceConfig{
+			ID: "rc_runtime_timeout",
+			Model: &ModelSpec{
+				Vendor:  ModelVendorOpenAI,
+				ModelID: "gpt-5.3",
+				APIKey:  "sk-test",
+				Runtime: &ModelRuntimeSpec{RequestTimeoutMS: intPtr(1000)},
+			},
+		},
+		func(vendor ModelVendorName) (ModelCatalogVendor, bool) {
+			if vendor == ModelVendorOpenAI {
+				return ModelCatalogVendor{Name: vendor, BaseURL: slowServer.URL, Auth: ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer"}}, true
+			}
+			return ModelCatalogVendor{}, false
+		},
+	)
+	if result.Status != "failed" {
+		t.Fatalf("expected failed status, got %s", result.Status)
+	}
+	if result.ErrorCode == nil || *result.ErrorCode != "request_failed" {
+		raw, _ := json.Marshal(result)
+		t.Fatalf("expected request_failed, got %s", string(raw))
+	}
+	if !strings.Contains(result.Message, "effective_timeout_ms=1000") {
+		t.Fatalf("expected timeout marker in error message, got %q", result.Message)
 	}
 }

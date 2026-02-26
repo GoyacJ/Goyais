@@ -78,6 +78,10 @@ func ResourceConfigsHandler(state *AppState) http.HandlerFunc {
 			}
 			if input.Model != nil {
 				input.Model = normalizeModelSpecForStorage(input.Model)
+				if err := validateModelRuntimeSpec(input.Model.Runtime); err != nil {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
 				if err := validateModelSpecAgainstCatalog(state, workspaceID, nil, input.Model); err != nil {
 					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
 					return
@@ -150,6 +154,10 @@ func ResourceConfigByIDHandler(state *AppState) http.HandlerFunc {
 			currentModel := origin.Model
 			applyPatchToResourceConfig(&origin, patch)
 			if origin.Type == ResourceTypeModel && origin.Model != nil {
+				if err := validateModelRuntimeSpec(origin.Model.Runtime); err != nil {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
 				if err := validateModelSpecAgainstCatalog(state, workspaceID, currentModel, origin.Model); err != nil {
 					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
 					return
@@ -342,6 +350,7 @@ func normalizeModelSpecForStorage(spec *ModelSpec) *ModelSpec {
 	next.ModelID = strings.TrimSpace(next.ModelID)
 	next.BaseURL = strings.TrimSpace(next.BaseURL)
 	next.BaseURLKey = strings.TrimSpace(next.BaseURLKey)
+	next.Runtime = normalizeModelRuntimeSpec(next.Runtime)
 	if next.Vendor != ModelVendorLocal {
 		next.BaseURL = ""
 	}

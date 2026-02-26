@@ -81,6 +81,7 @@
         <label>
           Timeout (ms)
           <BaseInput v-model="form.timeoutMs" placeholder="30000" />
+          <span class="hint">默认 30000，范围 1000-120000</span>
         </label>
         <label class="full">
           API Key

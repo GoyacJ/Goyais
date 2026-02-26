@@ -157,7 +157,7 @@ export function useWorkspaceModelView() {
       baseUrlKey: item.model?.base_url_key ?? "",
       apiKey: "",
       apiKeyHint: item.model?.api_key_masked ? `当前: ${item.model.api_key_masked}（不填写将保留旧值）` : "",
-      timeoutMs: item.model?.timeout_ms ? String(item.model.timeout_ms) : "",
+      timeoutMs: item.model?.runtime?.request_timeout_ms ? String(item.model.runtime.request_timeout_ms) : "",
       enabled: item.enabled
     });
   }
@@ -174,7 +174,17 @@ export function useWorkspaceModelView() {
       return;
     }
 
-    const timeout = Number.parseInt(form.timeoutMs, 10);
+    const timeoutInput = form.timeoutMs.trim();
+    const hasTimeoutInput = timeoutInput !== "";
+    const timeout = hasTimeoutInput ? Number.parseInt(timeoutInput, 10) : Number.NaN;
+    if (hasTimeoutInput && Number.isNaN(timeout)) {
+      showTestNotice("error", "Timeout 必须是整数毫秒值");
+      return;
+    }
+    if (!Number.isNaN(timeout) && (timeout < 1000 || timeout > 120000)) {
+      showTestNotice("error", "Timeout 范围必须在 1000-120000ms");
+      return;
+    }
     const name = form.name.trim() || modelID;
     const model = {
       vendor,
@@ -182,7 +192,7 @@ export function useWorkspaceModelView() {
       base_url: vendor === "Local" ? form.baseUrl.trim() || undefined : undefined,
       base_url_key: vendor === "Local" ? undefined : form.baseUrlKey.trim() || undefined,
       api_key: form.apiKey.trim() || undefined,
-      timeout_ms: Number.isNaN(timeout) ? undefined : timeout
+      runtime: Number.isNaN(timeout) ? undefined : { request_timeout_ms: timeout }
     };
 
     if (form.mode === "create") {
