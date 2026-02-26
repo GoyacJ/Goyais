@@ -36,6 +36,8 @@ type EvaluationInput struct {
 	SessionMode string
 	RiskLevel   RiskLevel
 	Approved    bool
+	SafeMode    bool
+	Env         map[string]string
 }
 
 type Evaluation struct {
@@ -54,6 +56,17 @@ func NewGate(policy Policy) *Gate {
 func (g *Gate) Evaluate(input EvaluationInput) Evaluation {
 	mode := strings.TrimSpace(strings.ToLower(input.SessionMode))
 	risk := normalizeRiskLevel(input.RiskLevel)
+	sandboxDecision := DecideSystemSandboxForToolCall(SystemSandboxInput{
+		ToolName: input.ToolName,
+		SafeMode: input.SafeMode,
+		Env:      input.Env,
+	})
+	if sandboxDecision.Required && !sandboxDecision.Enabled {
+		return Evaluation{
+			Decision: DecisionDeny,
+			Reason:   "system sandbox is required but unavailable",
+		}
+	}
 
 	if mode == "plan" && riskAtOrAbove(risk, g.policy.PlanModeThreshold) {
 		return Evaluation{

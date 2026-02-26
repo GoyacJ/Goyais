@@ -4,30 +4,29 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"goyais/services/hub/cmd/goyais-cli/adapters"
+	"goyais/services/hub/cmd/goyais-cli/cli/commands"
 )
 
 const helpLiteText = "" +
-	"Usage: kode [options] [command] [prompt]\n\n" +
+	"Usage: goyais-cli [options] [command] [prompt]\n\n" +
 	"Common options:\n" +
 	"  -h, --help           Show full help\n" +
 	"  -v, --version        Show version\n" +
 	"  -p, --print          Print response and exit (non-interactive)\n" +
 	"  -c, --cwd <cwd>      Set working directory\n"
 
-const fullHelpUnavailableText = "" +
-	"error: full help requires a configured runtime engine\n" +
-	"hint: use --help-lite for bootstrap usage\n"
-
 type PromptRunner interface {
 	RunPrompt(ctx context.Context, req adapters.RunRequest) error
 }
 
 type InteractiveRequest struct {
-	CWD string
-	Env map[string]string
+	CWD                  string
+	Env                  map[string]string
+	DisableSlashCommands bool
 }
 
 type InteractiveRunner interface {
@@ -72,6 +71,16 @@ func NewApp(deps Dependencies) *App {
 }
 
 func (a *App) Run(ctx context.Context, args []string) int {
+	if isTopLevelHelpArg(args) {
+		cwd, _ := os.Getwd()
+		a.writeOut("%s", renderFullHelp(cwd))
+		return 0
+	}
+
+	if handled, code := commands.TryDispatch(args, a.stdout, a.stderr); handled {
+		return code
+	}
+
 	options, err := ParseOptions(args)
 	if err != nil {
 		a.writeErr("error: %v\n", err)
@@ -83,7 +92,10 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		return 0
 	}
 	if options.Help {
-		a.writeErr("%s", fullHelpUnavailableText)
+		if handled, code := commands.TryDispatch([]string{"--help"}, a.stdout, a.stderr); handled {
+			return code
+		}
+		a.writeErr("error: help is not available\n")
 		return 1
 	}
 
@@ -97,7 +109,17 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	}
 
 	if options.Print {
-		if strings.TrimSpace(options.Prompt) == "" {
+		normalizedInputFormat := strings.ToLower(strings.TrimSpace(options.InputFormat))
+		if normalizedInputFormat == "" {
+			normalizedInputFormat = "text"
+		}
+		prompt := strings.TrimSpace(options.Prompt)
+
+		if normalizedInputFormat == "stream-json" && prompt != "" {
+			a.writeErr("error: --input-format=stream-json cannot be used with a prompt argument\n")
+			return 1
+		}
+		if normalizedInputFormat != "stream-json" && prompt == "" {
 			a.writeErr("error: prompt is required when --print is set\n")
 			return 1
 		}
@@ -106,9 +128,19 @@ func (a *App) Run(ctx context.Context, args []string) int {
 			return 1
 		}
 		err := a.promptRunner.RunPrompt(ctx, adapters.RunRequest{
-			Prompt: options.Prompt,
-			CWD:    options.CWD,
-			Env:    cloneEnv(a.env),
+			Prompt:               prompt,
+			CWD:                  options.CWD,
+			Env:                  cloneEnv(a.env),
+			DisableSlashCommands: options.DisableSlashCommands,
+			OutputFormat:         options.OutputFormat,
+			InputFormat:          options.InputFormat,
+			JSONSchema:           options.JSONSchema,
+			PermissionPromptTool: options.PermissionPromptTool,
+			ReplayUserMessages:   options.ReplayUserMessages,
+			IncludePartial:       options.IncludePartialMessages,
+			Verbose:              options.Verbose,
+			Model:                options.Model,
+			PermissionMode:       options.PermissionMode,
 		})
 		if err != nil {
 			a.writeErr("error: %v\n", err)
@@ -122,8 +154,9 @@ func (a *App) Run(ctx context.Context, args []string) int {
 		return 1
 	}
 	if err := a.interactiveRunner.RunInteractive(ctx, InteractiveRequest{
-		CWD: options.CWD,
-		Env: cloneEnv(a.env),
+		CWD:                  options.CWD,
+		Env:                  cloneEnv(a.env),
+		DisableSlashCommands: options.DisableSlashCommands,
 	}); err != nil {
 		a.writeErr("error: %v\n", err)
 		return 1

@@ -1,0 +1,3 @@
+# CLAUDE
+
+Initialized by /init.

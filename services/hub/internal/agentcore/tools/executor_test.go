@@ -83,3 +83,36 @@ func TestExecutorDeniesHighRiskToolInPlanMode(t *testing.T) {
 		t.Fatalf("expected DeniedError, got %T: %v", err, err)
 	}
 }
+
+func TestExecutorDeniesWhenSystemSandboxRequiredButUnavailable(t *testing.T) {
+	registry := NewRegistry()
+	if err := registry.Register(NewRunCommandTool()); err != nil {
+		t.Fatalf("register run_command tool failed: %v", err)
+	}
+
+	executor := NewExecutor(registry, safety.NewGate(safety.DefaultPolicy()))
+	_, err := executor.Execute(context.Background(), ExecutionRequest{
+		SessionMode: "agent",
+		SafeMode:    true,
+		Approved:    true,
+		ToolContext: ToolContext{
+			Env: map[string]string{
+				"GOYAIS_SYSTEM_SANDBOX":           "required",
+				"GOYAIS_SYSTEM_SANDBOX_AVAILABLE": "0",
+			},
+		},
+		ToolCall: ToolCall{
+			Name: "run_command",
+			Input: map[string]any{
+				"command": "echo denied",
+			},
+		},
+	})
+	if err == nil {
+		t.Fatalf("expected denied error when required sandbox is unavailable")
+	}
+	var deniedErr *DeniedError
+	if !errors.As(err, &deniedErr) {
+		t.Fatalf("expected DeniedError, got %T: %v", err, err)
+	}
+}

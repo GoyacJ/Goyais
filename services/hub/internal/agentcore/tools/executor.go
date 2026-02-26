@@ -10,6 +10,7 @@ import (
 
 type ExecutionRequest struct {
 	SessionMode string
+	SafeMode    bool
 	Approved    bool
 	ToolContext ToolContext
 	ToolCall    ToolCall
@@ -46,6 +47,8 @@ func (e *Executor) Execute(ctx context.Context, req ExecutionRequest) (ToolResul
 		SessionMode: req.SessionMode,
 		RiskLevel:   spec.RiskLevel,
 		Approved:    req.Approved,
+		SafeMode:    req.SafeMode,
+		Env:         req.ToolContext.Env,
 	})
 	switch assessment.Decision {
 	case safety.DecisionRequireApproval:

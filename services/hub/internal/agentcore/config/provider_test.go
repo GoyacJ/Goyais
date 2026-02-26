@@ -13,21 +13,21 @@ func TestStaticProviderLoadReturnsValidatedConfig(t *testing.T) {
 		},
 	}
 
-	got, err := provider.Load("~/.kode/config.json", "./.kode/settings.json", map[string]string{
-		"KODE_DEBUG": "1",
+	got, err := provider.Load("~/.goyais/config.json", "./.goyais/settings.json", map[string]string{
+		"GOYAIS_DEBUG": "1",
 	})
 	if err != nil {
 		t.Fatalf("expected config to load, got error: %v", err)
 	}
 
-	if got.GlobalPath != "~/.kode/config.json" {
+	if got.GlobalPath != "~/.goyais/config.json" {
 		t.Fatalf("expected global path to be captured, got %q", got.GlobalPath)
 	}
-	if got.ProjectPath != "./.kode/settings.json" {
+	if got.ProjectPath != "./.goyais/settings.json" {
 		t.Fatalf("expected project path to be captured, got %q", got.ProjectPath)
 	}
-	if got.Env["KODE_DEBUG"] != "1" {
-		t.Fatalf("expected env KODE_DEBUG=1, got %#v", got.Env)
+	if got.Env["GOYAIS_DEBUG"] != "1" {
+		t.Fatalf("expected env GOYAIS_DEBUG=1, got %#v", got.Env)
 	}
 }
 

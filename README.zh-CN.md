@@ -65,6 +65,11 @@ Goyais 是一个面向团队协作的开源 AI 桌面平台，目标是在“交
 - **Conversation 运行时能力**：支持 SSE 事件消费、事件幂等合并、快照结构，以及 Markdown 导出接口契约。
 - **工作区与资源能力面**：覆盖本地/远程工作区、模型/规则/技能/MCP 相关接口、项目配置与 Agent 配置接口。
 - **发布流水线能力**：支持 sidecar 集成打包、三平台构建，以及 Tag 触发的 GitHub Draft Release。
+- **`goyais-cli` 运行时强化能力（已落地）**：
+  - 在回归检查场景下提供确定性本地响应（`--print` 检查不再回显原 prompt）。
+  - 支持项目指令发现链（`AGENTS.override.md -> AGENTS.md -> CLAUDE.md`），并实现 root 到 cwd 分层拼接和大小上限。
+  - 支持 system sandbox 环境变量控制，并在 required 模式下执行失败闭锁。
+  - 输入体验快捷能力已接入测试与回归 gate：外部编辑器（`:edit`/`.edit`，含 `$VISUAL/$EDITOR` 回退）、换行不提交（`meta+enter`）、模型轮换快捷键、多行粘贴占位并在提交前还原、图片粘贴占位流程（macOS 能力 + 平台降级提示）、多路径粘贴自动转 `@path`（含空格路径自动加引号）。
 
 ### 当前状态说明
 

@@ -20,9 +20,19 @@ func NewRunCommandTool() Tool {
 
 func (t *RunCommandTool) Spec() ToolSpec {
 	return ToolSpec{
-		Name:        "run_command",
-		Description: "Execute a shell command in the working directory.",
-		RiskLevel:   safety.RiskLevelHigh,
+		Name:             "run_command",
+		Description:      "Execute a shell command in the working directory.",
+		RiskLevel:        safety.RiskLevelHigh,
+		ReadOnly:         false,
+		ConcurrencySafe:  false,
+		NeedsPermissions: true,
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"command": map[string]any{"type": "string"},
+			},
+			"required": []string{"command"},
+		},
 	}
 }
 
@@ -31,6 +41,14 @@ func (t *RunCommandTool) Execute(ctx ToolContext, call ToolCall) (ToolResult, er
 	command = strings.TrimSpace(command)
 	if command == "" {
 		return ToolResult{}, errors.New("run_command requires non-empty command")
+	}
+	sandboxDecision := safety.DecideSystemSandboxForToolCall(safety.SystemSandboxInput{
+		ToolName: "run_command",
+		SafeMode: readSafeModeFromEnv(ctx.Env),
+		Env:      ctx.Env,
+	})
+	if sandboxDecision.Required && !sandboxDecision.Enabled {
+		return ToolResult{}, errors.New("system sandbox is required but unavailable")
 	}
 
 	execCtx := ctx.Context
@@ -63,6 +81,13 @@ func (t *RunCommandTool) Execute(ctx ToolContext, call ToolCall) (ToolResult, er
 		"stdout":    stdout.String(),
 		"stderr":    stderr.String(),
 		"ok":        err == nil,
+		"sandbox": map[string]any{
+			"mode":          string(sandboxDecision.Mode),
+			"enabled":       sandboxDecision.Enabled,
+			"required":      sandboxDecision.Required,
+			"allow_network": sandboxDecision.AllowNetwork,
+			"available":     sandboxDecision.Available,
+		},
 	}
 	if err != nil {
 		var exitErr *exec.ExitError
@@ -71,6 +96,16 @@ func (t *RunCommandTool) Execute(ctx ToolContext, call ToolCall) (ToolResult, er
 		}
 	}
 	return ToolResult{Output: output}, nil
+}
+
+func readSafeModeFromEnv(env map[string]string) bool {
+	value := strings.TrimSpace(env["GOYAIS_SAFE_MODE"])
+	switch strings.ToLower(value) {
+	case "1", "true", "yes", "y", "on", "enable", "enabled":
+		return true
+	default:
+		return false
+	}
 }
 
 func resolveShellCommand(command string) (string, []string) {

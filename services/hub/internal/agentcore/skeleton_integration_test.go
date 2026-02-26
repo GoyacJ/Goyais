@@ -16,8 +16,8 @@ func TestSkeletonModulesComposeForRunLifecycle(t *testing.T) {
 			DefaultModel: "gpt-5",
 		},
 	}
-	resolved, err := provider.Load("~/.kode/config.json", "./.kode/settings.json", map[string]string{
-		"KODE_DEBUG": "0",
+	resolved, err := provider.Load("~/.goyais/config.json", "./.goyais/settings.json", map[string]string{
+		"GOYAIS_DEBUG": "0",
 	})
 	if err != nil {
 		t.Fatalf("expected config to load: %v", err)

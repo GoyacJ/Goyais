@@ -10,9 +10,18 @@ func NewEchoTool() Tool {
 
 func (t *EchoTool) Spec() ToolSpec {
 	return ToolSpec{
-		Name:        "echo",
-		Description: "Echoes the input text as output.",
-		RiskLevel:   safety.RiskLevelLow,
+		Name:             "echo",
+		Description:      "Echoes the input text as output.",
+		RiskLevel:        safety.RiskLevelLow,
+		ReadOnly:         true,
+		ConcurrencySafe:  true,
+		NeedsPermissions: false,
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"text": map[string]any{"type": "string"},
+			},
+		},
 	}
 }
 

@@ -65,6 +65,11 @@ The product model is built around:
 - **Conversation runtime features**: SSE event consumption, idempotent event merge, snapshot data structures, and Markdown export endpoint contract.
 - **Workspace/resource surface**: local + remote workspace paths, resource/model/skills/MCP related routes, project config and agent config endpoints.
 - **Release pipeline**: multi-platform Tauri packaging with sidecar binaries and tag-triggered draft GitHub Releases.
+- **`goyais-cli` runtime hardening slice**:
+  - Deterministic local response behavior for regression checks (non-echo for `--print` checks).
+  - Project instruction discovery chain (`AGENTS.override.md -> AGENTS.md -> CLAUDE.md`) with root-to-cwd layering and size limits.
+  - System sandbox env controls and required-mode fail-close behavior in tool execution.
+  - Input UX shortcuts covered by tests and regression gate: external editor (`:edit`/`.edit` with `$VISUAL/$EDITOR` fallback), newline without submit (`meta+enter`), model cycle shortcut, multiline paste placeholders with pre-submit restore, image paste placeholder flow (macOS-capable with platform downgrade messaging), and multi-path paste to `@path` mentions (quoted when paths contain spaces).
 
 ### Current Status
 

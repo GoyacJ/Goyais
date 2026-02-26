@@ -22,8 +22,11 @@ func main() {
 				DefaultModel: "gpt-5",
 			},
 		},
-		Engine:   runtime.UnimplementedEngine{},
-		Renderer: tui.NewEventRenderer(os.Stdout, os.Stderr),
+		Engine:      runtime.NewLocalEngine(),
+		Renderer:    tui.NewEventRenderer(os.Stdout, os.Stderr),
+		Input:       os.Stdin,
+		Output:      os.Stdout,
+		ErrorOutput: os.Stderr,
 	}
 
 	shell := tui.Shell{
@@ -51,8 +54,9 @@ type interactiveShellRunner struct {
 
 func (i interactiveShellRunner) RunInteractive(ctx context.Context, req cli.InteractiveRequest) error {
 	return i.shell.Run(ctx, tui.RunRequest{
-		CWD: req.CWD,
-		Env: req.Env,
+		CWD:                  req.CWD,
+		Env:                  req.Env,
+		DisableSlashCommands: req.DisableSlashCommands,
 	})
 }
 

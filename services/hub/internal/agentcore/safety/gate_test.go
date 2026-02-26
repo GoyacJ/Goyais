@@ -35,3 +35,25 @@ func TestGateEvaluateMatrix(t *testing.T) {
 		t.Fatalf("expected plan mode high-risk call to be denied, got %q", planDenied.Decision)
 	}
 }
+
+func TestGateEvaluate_SystemSandboxRequiredFailClosed(t *testing.T) {
+	gate := NewGate(DefaultPolicy())
+
+	denied := gate.Evaluate(EvaluationInput{
+		ToolName:    "run_command",
+		SessionMode: "agent",
+		RiskLevel:   RiskLevelHigh,
+		Approved:    true,
+		SafeMode:    true,
+		Env: map[string]string{
+			"GOYAIS_SYSTEM_SANDBOX":           "required",
+			"GOYAIS_SYSTEM_SANDBOX_AVAILABLE": "0",
+		},
+	})
+	if denied.Decision != DecisionDeny {
+		t.Fatalf("expected deny when required sandbox unavailable, got %q", denied.Decision)
+	}
+	if denied.Reason == "" {
+		t.Fatalf("expected deny reason to be present")
+	}
+}

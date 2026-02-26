@@ -7,9 +7,13 @@ import (
 )
 
 type ToolSpec struct {
-	Name        string
-	Description string
-	RiskLevel   safety.RiskLevel
+	Name             string
+	Description      string
+	RiskLevel        safety.RiskLevel
+	InputSchema      map[string]any
+	ReadOnly         bool
+	ConcurrencySafe  bool
+	NeedsPermissions bool
 }
 
 type ToolCall struct {
