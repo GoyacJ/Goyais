@@ -6,8 +6,6 @@
     settings-subtitle="Local Settings / Models"
   >
     <section class="model-list-only">
-      <ToastAlert v-if="testNotice.open" :tone="testNotice.tone" :message="testNotice.message" />
-
       <ResourceConfigTable
         title="模型列表"
         :columns="columns"
@@ -121,7 +119,6 @@ import BaseButton from "@/shared/ui/BaseButton.vue";
 import BaseInput from "@/shared/ui/BaseInput.vue";
 import BaseModal from "@/shared/ui/BaseModal.vue";
 import BaseSelect from "@/shared/ui/BaseSelect.vue";
-import ToastAlert from "@/shared/ui/ToastAlert.vue";
 
 const {
   canWrite,
@@ -141,7 +138,6 @@ const {
   runModelTest,
   saveConfig,
   tableEmptyText,
-  testNotice,
   deleteConfirm,
   toggleEnabled,
   closeDeleteConfirm,

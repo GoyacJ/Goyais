@@ -17,6 +17,7 @@ import {
 import { modelViewColumns, modelEnabledOptions } from "@/modules/resource/views/workspaceModelView.constants";
 import { resolveDefaultEndpointKey } from "@/modules/resource/views/workspaceModelView.vendor";
 import { authStore } from "@/shared/stores/authStore";
+import { showToast, type ToastTone } from "@/shared/stores/toastStore";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
 import type { ModelVendorName, ResourceConfig } from "@/shared/types/api";
 
@@ -74,17 +75,11 @@ export function useWorkspaceModelView() {
     return "暂无数据";
   });
 
-  const testNotice = reactive({
-    open: false,
-    tone: "info" as "error" | "warning" | "info" | "403" | "disconnected" | "retrying",
-    message: ""
-  });
   const deleteConfirm = reactive({
     open: false,
     configId: "",
     modelText: ""
   });
-  let testNoticeTimer: ReturnType<typeof setTimeout> | null = null;
 
   watch(
     () => workspaceStore.currentWorkspaceId,
@@ -211,16 +206,12 @@ export function useWorkspaceModelView() {
     showTestNotice(tone, `${modelText} 测试${statusText}，${result.latency_ms}ms${detail}：${result.message}`);
   }
 
-  function showTestNotice(tone: "error" | "warning" | "info" | "403" | "disconnected" | "retrying", message: string): void {
-    testNotice.tone = tone;
-    testNotice.message = message;
-    testNotice.open = true;
-    if (testNoticeTimer) {
-      clearTimeout(testNoticeTimer);
-    }
-    testNoticeTimer = setTimeout(() => {
-      testNotice.open = false;
-    }, 3200);
+  function showTestNotice(tone: ToastTone, message: string): void {
+    showToast({
+      key: "workspace-model-test",
+      tone,
+      message
+    });
   }
 
   function removeConfig(item: ResourceConfig): void {
@@ -261,7 +252,6 @@ export function useWorkspaceModelView() {
     enabledOptions: modelEnabledOptions,
     form,
     tableEmptyText,
-    testNotice,
     deleteConfirm,
     onSearch,
     openCreate,

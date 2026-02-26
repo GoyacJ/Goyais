@@ -2,7 +2,12 @@
   <div class="app-frame">
     <RouterView />
   </div>
+  <GlobalToastHost />
 </template>
+
+<script setup lang="ts">
+import GlobalToastHost from "@/shared/ui/GlobalToastHost.vue";
+</script>
 
 <style scoped>
 .app-frame {

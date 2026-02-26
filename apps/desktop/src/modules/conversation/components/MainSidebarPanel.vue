@@ -22,14 +22,8 @@
           <AppIcon name="plus" :size="12" />
         </button>
       </div>
-      <div v-if="!collapsed" class="import-feedback">
-        <ToastAlert v-if="projectImportError !== ''" tone="error" :message="projectImportError" />
-        <ToastAlert v-else-if="projectImportInProgress" tone="retrying" message="正在导入项目..." />
-        <ToastAlert v-else-if="projectImportFeedback !== ''" tone="info" :message="projectImportFeedback" />
-        <ToastAlert v-else-if="pickerFeedback !== ''" tone="warning" :message="pickerFeedback" />
-        <ToastAlert v-if="connectionState === 'auth_required'" tone="warning" message="远程工作区鉴权已失效，请重新登录。" />
+      <div v-if="!collapsed && connectionState === 'auth_required'" class="import-feedback">
         <button
-          v-if="connectionState === 'auth_required'"
           class="auth-login-btn"
           type="button"
           @click="requestWorkspaceLogin"
@@ -100,17 +94,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 
 import { isRuntimeCapabilitySupported } from "@/shared/runtime";
 import { pickDirectoryPath } from "@/shared/services/directoryPicker";
+import { dismissToastByKey, showToast } from "@/shared/stores/toastStore";
 import AppIcon from "@/shared/ui/AppIcon.vue";
-import ToastAlert from "@/shared/ui/ToastAlert.vue";
 import type { ConnectionState } from "@/shared/stores/workspaceStore";
 import type { Conversation, Project, Workspace, WorkspaceMode } from "@/shared/types/api";
 import WorkspaceCreateModal from "@/shared/ui/sidebar/WorkspaceCreateModal.vue";
 import UserProfileMenuCard from "@/shared/ui/sidebar/UserProfileMenuCard.vue";
 import WorkspaceSwitcherCard from "@/shared/ui/sidebar/WorkspaceSwitcherCard.vue";
+
+const PROJECT_IMPORT_TOAST_KEY = "project-import-status";
+const AUTH_REQUIRED_TOAST_KEY = "workspace-auth-required";
 
 const props = defineProps<{
   workspaces: Workspace[];
@@ -158,7 +155,6 @@ const emit = defineEmits<{
 
 const collapsed = ref(false);
 const createWorkspaceOpen = ref(false);
-const pickerFeedback = ref("");
 
 const projectOpen = reactive<Record<string, boolean>>({});
 
@@ -185,10 +181,51 @@ const supportsDirectoryImport = isRuntimeCapabilitySupported("supportsDirectoryI
 watch(
   () => [projectImportInProgress.value, projectImportFeedback.value, projectImportError.value] as const,
   ([inProgress, feedback, error]) => {
-    if (inProgress || feedback !== "" || error !== "") {
-      pickerFeedback.value = "";
+    if (inProgress) {
+      showToast({
+        key: PROJECT_IMPORT_TOAST_KEY,
+        tone: "retrying",
+        message: "正在导入项目...",
+        persistent: true
+      });
+      return;
     }
-  }
+    if (error !== "") {
+      showToast({
+        key: PROJECT_IMPORT_TOAST_KEY,
+        tone: "error",
+        message: error
+      });
+      return;
+    }
+    if (feedback !== "") {
+      showToast({
+        key: PROJECT_IMPORT_TOAST_KEY,
+        tone: "info",
+        message: feedback
+      });
+      return;
+    }
+    dismissToastByKey(PROJECT_IMPORT_TOAST_KEY);
+  },
+  { immediate: true }
+);
+
+watch(
+  () => props.connectionState,
+  (connectionState) => {
+    if (connectionState === "auth_required") {
+      showToast({
+        key: AUTH_REQUIRED_TOAST_KEY,
+        tone: "warning",
+        message: "远程工作区鉴权已失效，请重新登录。",
+        persistent: true
+      });
+      return;
+    }
+    dismissToastByKey(AUTH_REQUIRED_TOAST_KEY);
+  },
+  { immediate: true }
 );
 
 function toggleProject(projectId: string): void {
@@ -201,25 +238,36 @@ function isProjectOpen(projectId: string): boolean {
 
 async function pickDirectory(): Promise<void> {
   if (!supportsDirectoryImport) {
-    pickerFeedback.value = "当前运行环境不支持目录导入";
+    showToast({
+      tone: "warning",
+      message: "当前运行环境不支持目录导入"
+    });
     return;
   }
 
-  pickerFeedback.value = "";
   try {
     const directoryPath = await pickDirectoryPath();
     if (!directoryPath) {
-      pickerFeedback.value = "未选择目录或目录读取失败，请重试";
+      showToast({
+        tone: "warning",
+        message: "未选择目录或目录读取失败，请重试"
+      });
       return;
     }
     const normalizedPath = directoryPath.trim();
     if (normalizedPath === "") {
-      pickerFeedback.value = "未选择目录或目录读取失败，请重试";
+      showToast({
+        tone: "warning",
+        message: "未选择目录或目录读取失败，请重试"
+      });
       return;
     }
     emit("importProject", normalizedPath);
   } catch {
-    pickerFeedback.value = "目录选择失败，请重试";
+    showToast({
+      tone: "warning",
+      message: "目录选择失败，请重试"
+    });
   }
 }
 
@@ -261,6 +309,11 @@ function requestWorkspaceLogin(): void {
     token: token.trim() === "" ? undefined : token.trim()
   });
 }
+
+onBeforeUnmount(() => {
+  dismissToastByKey(PROJECT_IMPORT_TOAST_KEY);
+  dismissToastByKey(AUTH_REQUIRED_TOAST_KEY);
+});
 </script>
 
 <style scoped src="./MainSidebarPanel.css"></style>
