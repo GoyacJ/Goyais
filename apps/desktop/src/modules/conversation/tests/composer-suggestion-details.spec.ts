@@ -140,6 +140,24 @@ describe("composerSuggestionDetails", () => {
     expect(localized[0]?.detail).toBe("处理 .docx 文档并尽量保持版式与格式一致。");
   });
 
+  it("shows model name as label and keeps canonical @model:id in meta", () => {
+    const suggestions: ComposerSuggestion[] = [
+      {
+        kind: "resource",
+        label: "@model:rc_model_1",
+        detail: "MiniMax-M2.5",
+        insert_text: "@model:rc_model_1",
+        replace_start: 0,
+        replace_end: 7
+      }
+    ];
+
+    const localized = localizeComposerSuggestionDetails(suggestions, (key) => key);
+    expect(localized[0]?.label).toBe("@model:MiniMax-M2.5");
+    expect(localized[0]?.detail).toBe("@model:rc_model_1");
+    expect(localized[0]?.insert_text).toBe("@model:rc_model_1");
+  });
+
   it("does not render detail for file suggestions", () => {
     const suggestions: ComposerSuggestion[] = [
       {

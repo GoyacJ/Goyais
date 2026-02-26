@@ -82,7 +82,7 @@ export function localizeComposerSuggestionDetails(
   suggestions: ComposerSuggestion[],
   translate: (key: string) => string
 ): ComposerSuggestion[] {
-  return suggestions.map((suggestion) => localizeComposerSuggestionDetail(suggestion, translate));
+  return suggestions.map((suggestion) => presentComposerSuggestion(localizeComposerSuggestionDetail(suggestion, translate)));
 }
 
 function localizeComposerSuggestionDetail(
@@ -134,6 +134,29 @@ function localizeComposerSuggestionDetail(
   }
 
   return suggestion;
+}
+
+function presentComposerSuggestion(suggestion: ComposerSuggestion): ComposerSuggestion {
+  if (suggestion.kind !== "resource") {
+    return suggestion;
+  }
+  const resourceType = extractResourceType(suggestion);
+  if (resourceType !== "model") {
+    return suggestion;
+  }
+  const displayName = normalizeText(suggestion.detail);
+  if (displayName === "") {
+    return suggestion;
+  }
+  const canonicalLabel = normalizeText(suggestion.label);
+  if (canonicalLabel === "") {
+    return suggestion;
+  }
+  return {
+    ...suggestion,
+    label: `@model:${displayName}`,
+    detail: canonicalLabel
+  };
 }
 
 function resolveResourceTypeDetailKey(type: string): string {
