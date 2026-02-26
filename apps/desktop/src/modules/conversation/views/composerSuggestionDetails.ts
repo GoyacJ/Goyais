@@ -41,6 +41,43 @@ const BUILTIN_COMMAND_DETAIL_KEYS: Record<string, string> = {
   todo: "conversation.composer.suggestion.command.todos"
 };
 
+const SKILL_COMMAND_DETAIL_KEYS: Record<string, string> = {
+  doc: "conversation.composer.suggestion.command.skill.doc",
+  "doc-coauthoring": "conversation.composer.suggestion.command.skill.doc-coauthoring",
+  docx: "conversation.composer.suggestion.command.skill.docx",
+  figma: "conversation.composer.suggestion.command.skill.figma",
+  "frontend-design": "conversation.composer.suggestion.command.skill.frontend-design",
+  "gh-address-comments": "conversation.composer.suggestion.command.skill.gh-address-comments",
+  "gh-fix-ci": "conversation.composer.suggestion.command.skill.gh-fix-ci",
+  "internal-comms": "conversation.composer.suggestion.command.skill.internal-comms",
+  "mcp-builder": "conversation.composer.suggestion.command.skill.mcp-builder",
+  nuxt: "conversation.composer.suggestion.command.skill.nuxt",
+  pdf: "conversation.composer.suggestion.command.skill.pdf",
+  pinia: "conversation.composer.suggestion.command.skill.pinia",
+  playwright: "conversation.composer.suggestion.command.skill.playwright",
+  pnpm: "conversation.composer.suggestion.command.skill.pnpm",
+  pptx: "conversation.composer.suggestion.command.skill.pptx",
+  "skill-creator": "conversation.composer.suggestion.command.skill.skill-creator",
+  "slack-gif-creator": "conversation.composer.suggestion.command.skill.slack-gif-creator",
+  slidev: "conversation.composer.suggestion.command.skill.slidev",
+  "theme-factory": "conversation.composer.suggestion.command.skill.theme-factory",
+  tsdown: "conversation.composer.suggestion.command.skill.tsdown",
+  turborepo: "conversation.composer.suggestion.command.skill.turborepo",
+  unocss: "conversation.composer.suggestion.command.skill.unocss",
+  vite: "conversation.composer.suggestion.command.skill.vite",
+  vitepress: "conversation.composer.suggestion.command.skill.vitepress",
+  vitest: "conversation.composer.suggestion.command.skill.vitest",
+  vue: "conversation.composer.suggestion.command.skill.vue",
+  "vue-best-practices": "conversation.composer.suggestion.command.skill.vue-best-practices",
+  "vue-router-best-practices": "conversation.composer.suggestion.command.skill.vue-router-best-practices",
+  "vue-testing-best-practices": "conversation.composer.suggestion.command.skill.vue-testing-best-practices",
+  "vueuse-functions": "conversation.composer.suggestion.command.skill.vueuse-functions",
+  "web-artifacts-builder": "conversation.composer.suggestion.command.skill.web-artifacts-builder",
+  "web-design-guidelines": "conversation.composer.suggestion.command.skill.web-design-guidelines",
+  "webapp-testing": "conversation.composer.suggestion.command.skill.webapp-testing",
+  xlsx: "conversation.composer.suggestion.command.skill.xlsx"
+};
+
 export function localizeComposerSuggestionDetails(
   suggestions: ComposerSuggestion[],
   translate: (key: string) => string
@@ -55,7 +92,7 @@ function localizeComposerSuggestionDetail(
   if (suggestion.kind === "command") {
     const commandName = extractCommandName(suggestion);
     const fallback = normalizeText(suggestion.detail);
-    const key = BUILTIN_COMMAND_DETAIL_KEYS[commandName];
+    const key = BUILTIN_COMMAND_DETAIL_KEYS[commandName] ?? SKILL_COMMAND_DETAIL_KEYS[commandName];
     if (!key) {
       return suggestion;
     }

@@ -16,6 +16,12 @@ import { useMainScreenActions } from "@/modules/conversation/views/useMainScreen
 import { useMainScreenModeling } from "@/modules/conversation/views/useMainScreenModeling";
 import { createConversationStreamCoordinator } from "@/modules/conversation/views/streamCoordinator";
 import { localizeComposerSuggestionDetails } from "@/modules/conversation/views/composerSuggestionDetails";
+import {
+  dedupeComposerSuggestions,
+  resolveLocalSuggestionLimit,
+  resolveSuggestionContext,
+  shouldRequestRemoteSuggestions
+} from "@/modules/conversation/views/composerSuggestionPolicy";
 import { getComposerCatalog, suggestComposerInput } from "@/modules/conversation/services";
 import {
   projectStore,
@@ -211,21 +217,26 @@ export function useMainScreenController() {
       composerSuggestions.value = [];
       return;
     }
+    const sequence = ++composerSuggestSequence;
+    composerSuggesting.value = false;
     const currentDraft = input.draft;
     const cursor = Math.max(0, Math.min(input.cursor, currentDraft.length));
-    const localSuggestions = localizeComposerSuggestionDetails(
-      buildLocalComposerSuggestions(currentDraft, cursor, composerCatalog.value, 12),
-      t
-    );
-    composerSuggestions.value = localSuggestions;
-    const shouldForceRemote = isFileMentionToken(currentDraft, cursor);
-    if (localSuggestions.length === 0 && !shouldForceRemote) {
-      composerSuggestSequence += 1;
-      composerSuggesting.value = false;
+    const context = resolveSuggestionContext(currentDraft, cursor);
+    if (context.kind === "none") {
       composerSuggestions.value = [];
       return;
     }
-    const sequence = ++composerSuggestSequence;
+    const localLimit = resolveLocalSuggestionLimit(context, composerCatalog.value, 12);
+    const localSuggestions = dedupeComposerSuggestions(
+      localizeComposerSuggestionDetails(
+        buildLocalComposerSuggestions(currentDraft, cursor, composerCatalog.value, localLimit),
+        t
+      )
+    );
+    composerSuggestions.value = localSuggestions;
+    if (!shouldRequestRemoteSuggestions(context, localSuggestions.length)) {
+      return;
+    }
     composerSuggesting.value = true;
     try {
       const response = await suggestComposerInput(conversationId, {
@@ -236,8 +247,11 @@ export function useMainScreenController() {
       if (sequence !== composerSuggestSequence) {
         return;
       }
-      composerSuggestions.value = response.suggestions.length > 0
-        ? localizeComposerSuggestionDetails(response.suggestions, t)
+      const localizedRemoteSuggestions = dedupeComposerSuggestions(
+        localizeComposerSuggestionDetails(response.suggestions, t)
+      );
+      composerSuggestions.value = localizedRemoteSuggestions.length > 0
+        ? localizedRemoteSuggestions
         : localSuggestions;
     } catch {
       if (sequence !== composerSuggestSequence) {
@@ -371,12 +385,6 @@ export function useMainScreenController() {
       tokenEnd,
       token: draft.slice(tokenStart, cursor)
     };
-  }
-
-  function isFileMentionToken(draft: string, cursor: number): boolean {
-    const safeCursor = Math.max(0, Math.min(cursor, draft.length));
-    const { token } = resolveActiveToken(draft, safeCursor);
-    return token.trim().toLowerCase().startsWith("@file:");
   }
 
   const streamCoordinator = createConversationStreamCoordinator({
