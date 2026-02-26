@@ -1,10 +1,10 @@
 import {
   cancelExecution,
   commitExecution,
-  createExecution,
   discardExecution,
   loadExecutionDiff,
-  rollbackExecution
+  rollbackExecution,
+  submitComposerInput
 } from "@/modules/conversation/services";
 import { createExecutionEvent } from "@/modules/conversation/store/events";
 import {
@@ -30,11 +30,14 @@ import {
 } from "@/modules/conversation/store/executionEventHandlers";
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { createMockId } from "@/shared/utils/id";
-import type { Conversation, ConversationMessage, ExecutionEvent } from "@/shared/types/api";
+import type { ComposerResourceSelection, Conversation, ConversationMessage, ExecutionEvent } from "@/shared/types/api";
 
 export async function submitConversationMessage(
   conversation: Conversation,
-  isGitProject: boolean
+  isGitProject: boolean,
+  options: {
+    catalogRevision?: string;
+  } = {}
 ): Promise<void> {
   const runtime = ensureConversationRuntime(conversation, isGitProject);
   const content = runtime.draft.trim();
@@ -65,11 +68,24 @@ export async function submitConversationMessage(
   );
 
   try {
-    const response = await createExecution(conversation, {
-      content,
+    const response = await submitComposerInput(conversation, {
+      raw_input: content,
       mode: runtime.mode,
-      model_config_id: runtime.modelId
+      model_config_id: runtime.modelId.trim() || undefined,
+      selected_resources: extractSelectedResources(content),
+      catalog_revision: options.catalogRevision
     });
+
+    if (response.kind === "command_result") {
+      runtime.messages.push({
+        id: createMockId("msg"),
+        conversation_id: conversation.id,
+        role: "system",
+        content: response.command_result.output,
+        created_at: new Date().toISOString()
+      });
+      return;
+    }
 
     upsertExecutionFromServer(runtime, response.execution);
     dedupeExecutions(runtime);
@@ -90,6 +106,31 @@ export async function submitConversationMessage(
       created_at: new Date().toISOString()
     });
   }
+}
+
+function extractSelectedResources(rawInput: string): ComposerResourceSelection[] {
+  const normalized = rawInput.trim();
+  if (normalized === "") {
+    return [];
+  }
+  const mentionPattern = /@(?<type>model|rule|skill|mcp|file):(?<id>[\w./-]+)/g;
+  const seen = new Set<string>();
+  const selections: ComposerResourceSelection[] = [];
+  for (const match of normalized.matchAll(mentionPattern)) {
+    const typeRaw = (match.groups?.type ?? "").trim();
+    const id = (match.groups?.id ?? "").trim();
+    if (typeRaw === "" || id === "") {
+      continue;
+    }
+    const type = typeRaw as ComposerResourceSelection["type"];
+    const key = `${type}:${id}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    selections.push({ type, id });
+  }
+  return selections;
 }
 
 export async function stopConversationExecution(conversation: Conversation): Promise<void> {

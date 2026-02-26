@@ -482,7 +482,7 @@ func TestRunnerRunPromptInjectsProjectInstructionsRootToLeafWithOverride(t *test
 	}
 }
 
-func TestRunnerRunPromptPreprocessesAgentMentionsAndKeepsFileMentions(t *testing.T) {
+func TestRunnerRunPromptStripsComposerResourceMentionsAndInjectsFilePathMentions(t *testing.T) {
 	events := make(chan protocol.RunEvent, 2)
 	events <- protocol.RunEvent{
 		Type:      protocol.RunEventTypeRunOutputDelta,
@@ -520,29 +520,27 @@ func TestRunnerRunPromptPreprocessesAgentMentionsAndKeepsFileMentions(t *testing
 	}
 
 	err := runner.RunPrompt(context.Background(), RunRequest{
-		Prompt: "please @run-agent-reviewer inspect @src/main.go and @run-agent-ghost",
+		Prompt: "please @rule:rc_rule inspect @file:src/main.go and @skill:rc_skill",
 		CWD:    t.TempDir(),
-		Env: map[string]string{
-			"GOYAIS_MENTION_AGENTS": "reviewer",
-		},
+		Env:    map[string]string{},
 	})
 	if err != nil {
 		t.Fatalf("run prompt failed: %v", err)
 	}
 
 	injected := engine.lastInput.Text
-	if !strings.Contains(injected, "run-agent:reviewer") {
-		t.Fatalf("expected known mention routing directive, got %q", injected)
+	if strings.Contains(injected, "@rule:rc_rule") || strings.Contains(injected, "@skill:rc_skill") {
+		t.Fatalf("expected composer resource mentions to be stripped, got %q", injected)
 	}
-	if !strings.Contains(injected, "unknown mention ignored: @run-agent-ghost") {
-		t.Fatalf("expected unknown mention warning, got %q", injected)
+	if strings.Contains(injected, "@file:src/main.go") {
+		t.Fatalf("expected @file mention token to be stripped, got %q", injected)
 	}
-	if !strings.Contains(injected, "@src/main.go") {
-		t.Fatalf("expected @file mention preserved, got %q", injected)
+	if !strings.Contains(injected, "please inspect src/main.go and") {
+		t.Fatalf("expected @file mention path to be injected, got %q", injected)
 	}
 }
 
-func TestRunnerRunPromptIgnoresLegacyMentionAllowlistEnv(t *testing.T) {
+func TestRunnerRunPromptUsesModelMentionAsModelOverride(t *testing.T) {
 	events := make(chan protocol.RunEvent, 2)
 	events <- protocol.RunEvent{
 		Type:      protocol.RunEventTypeRunOutputDelta,
@@ -579,28 +577,21 @@ func TestRunnerRunPromptIgnoresLegacyMentionAllowlistEnv(t *testing.T) {
 		Renderer: &collectRenderer{},
 	}
 
-	legacyKey := "K" + "ODE_MENTION_AGENTS"
 	err := runner.RunPrompt(context.Background(), RunRequest{
-		Prompt: "please @run-agent-reviewer inspect @src/main.go",
+		Prompt: "@model:gpt-4.1-mini summarize project",
 		CWD:    t.TempDir(),
-		Env: map[string]string{
-			"GOYAIS_MENTION_AGENTS": "architect",
-			legacyKey:               "reviewer",
-		},
+		Env:    map[string]string{},
 	})
 	if err != nil {
 		t.Fatalf("run prompt failed: %v", err)
 	}
 
+	if engine.lastStart.Config.DefaultModel != "gpt-4.1-mini" {
+		t.Fatalf("expected model mention to override model selection, got %q", engine.lastStart.Config.DefaultModel)
+	}
 	injected := engine.lastInput.Text
-	if strings.Contains(injected, "run-agent:reviewer") {
-		t.Fatalf("expected legacy mention allowlist to be ignored, got %q", injected)
-	}
-	if !strings.Contains(injected, "unknown mention ignored: @run-agent-reviewer") {
-		t.Fatalf("expected unknown mention warning for reviewer, got %q", injected)
-	}
-	if !strings.Contains(injected, "@src/main.go") {
-		t.Fatalf("expected @file mention preserved, got %q", injected)
+	if strings.Contains(injected, "@model:gpt-4.1-mini") {
+		t.Fatalf("expected model mention to be stripped from prompt, got %q", injected)
 	}
 }
 

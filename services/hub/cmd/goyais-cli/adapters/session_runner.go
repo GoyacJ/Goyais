@@ -13,7 +13,7 @@ import (
 	printmode "goyais/services/hub/internal/agentcore/cli/printmode"
 	slashcmd "goyais/services/hub/internal/agentcore/commands"
 	"goyais/services/hub/internal/agentcore/config"
-	inputproc "goyais/services/hub/internal/agentcore/input"
+	composercore "goyais/services/hub/internal/agentcore/input/composer"
 	"goyais/services/hub/internal/agentcore/prompting"
 	"goyais/services/hub/internal/agentcore/protocol"
 	"goyais/services/hub/internal/agentcore/runtime"
@@ -178,48 +178,50 @@ func (e printModeExecutor) ExecuteTurn(ctx context.Context, req printmode.TurnRe
 }
 
 func (r Runner) executePrompt(ctx context.Context, req RunRequest, modelOverride string) (promptExecution, error) {
-	prompt := strings.TrimSpace(req.Prompt)
+	trimmedPrompt := strings.TrimSpace(req.Prompt)
+	if trimmedPrompt == "" {
+		return promptExecution{}, errors.New("prompt is required")
+	}
+	parsed := composercore.Parse(trimmedPrompt)
+	prompt := parsed.PromptText
+	if parsed.IsCommand && !req.DisableSlashCommands {
+		dispatch, err := composercore.DispatchCommand(ctx, parsed.CommandText, req.CWD, req.Env)
+		if err != nil {
+			return promptExecution{}, fmt.Errorf("dispatch command: %w", err)
+		}
+		if dispatch.Kind == composercore.CommandKindControl {
+			events := buildSlashEvents(dispatch.Output)
+			output := strings.TrimSpace(dispatch.Output)
+			chunks := []string{}
+			if output != "" {
+				chunks = append(chunks, output)
+			}
+			runID := ""
+			if len(events) > 0 {
+				runID = events[0].RunID
+			}
+			return promptExecution{
+				SessionID:    "slash",
+				RunID:        runID,
+				Events:       events,
+				Output:       output,
+				OutputChunks: chunks,
+				IsError:      false,
+			}, nil
+		}
+		prompt = strings.TrimSpace(dispatch.ExpandedPrompt)
+		if prompt == "" {
+			return promptExecution{}, errors.New("command expanded to empty prompt")
+		}
+		parsed = composercore.ParsePrompt(prompt)
+	}
 	if prompt == "" {
 		return promptExecution{}, errors.New("prompt is required")
 	}
-
-	dispatch, err := slashcmd.Dispatch(ctx, nil, slashcmd.DispatchRequest{
-		Prompt:               prompt,
-		WorkingDir:           req.CWD,
-		Env:                  req.Env,
-		DisableSlashCommands: req.DisableSlashCommands,
-	})
-	if err != nil {
-		return promptExecution{}, fmt.Errorf("dispatch slash command: %w", err)
+	modelMentionID := resolveModelMention(parsed.MentionedRefs)
+	if modelMentionID != "" {
+		modelOverride = modelMentionID
 	}
-	if dispatch.Handled && len(dispatch.ExpandedPrompts) == 0 {
-		events := buildSlashEvents(dispatch.Output)
-		output := strings.TrimSpace(dispatch.Output)
-		chunks := []string{}
-		if output != "" {
-			chunks = append(chunks, output)
-		}
-		runID := ""
-		if len(events) > 0 {
-			runID = events[0].RunID
-		}
-		return promptExecution{
-			SessionID:    "slash",
-			RunID:        runID,
-			Events:       events,
-			Output:       output,
-			OutputChunks: chunks,
-			IsError:      false,
-		}, nil
-	}
-	if dispatch.Handled && len(dispatch.ExpandedPrompts) > 0 {
-		expanded := strings.TrimSpace(strings.Join(dispatch.ExpandedPrompts, "\n\n"))
-		if expanded == "" {
-			return promptExecution{}, errors.New("slash command expanded to empty prompt")
-		}
-		prompt = expanded
-	}
-	prompt = preprocessPromptMentions(prompt, req.Env)
 
 	if r.ConfigProvider == nil {
 		return promptExecution{}, errors.New("config provider is required")
@@ -443,27 +445,15 @@ func injectProjectInstructions(prompt string, cwd string, env map[string]string)
 	})
 }
 
-func preprocessPromptMentions(prompt string, env map[string]string) string {
-	knownAgents := parseMentionAgentAllowlist(env)
-	processed := inputproc.ProcessMentions(prompt, knownAgents)
-	return strings.TrimSpace(processed.Prompt)
-}
-
-func parseMentionAgentAllowlist(env map[string]string) []string {
-	raw := strings.TrimSpace(env["GOYAIS_MENTION_AGENTS"])
-	if raw == "" {
-		return nil
-	}
-	parts := strings.FieldsFunc(raw, func(r rune) bool {
-		return r == ',' || r == ';' || r == ' ' || r == '\t' || r == '\n'
-	})
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		token := strings.TrimSpace(strings.ToLower(part))
-		if token == "" {
+func resolveModelMention(refs []composercore.ResourceRef) string {
+	for _, ref := range refs {
+		if ref.Type != composercore.ResourceTypeModel {
 			continue
 		}
-		out = append(out, token)
+		id := strings.TrimSpace(ref.ID)
+		if id != "" {
+			return id
+		}
 	}
-	return out
+	return ""
 }

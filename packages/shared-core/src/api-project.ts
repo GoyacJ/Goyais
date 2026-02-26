@@ -114,6 +114,7 @@ export type Execution = {
     rule_ids?: string[];
     skill_ids?: string[];
     mcp_ids?: string[];
+    project_file_paths?: string[];
   };
   agent_config_snapshot?: {
     max_model_turns: number;
@@ -191,17 +192,74 @@ export type DiffItem = {
   summary: string;
 };
 
-export type ExecutionCreateRequest = {
-  content: string;
-  mode: ConversationMode;
-  model_config_id: string;
+export type ComposerResourceType = "model" | "rule" | "skill" | "mcp" | "file";
+
+export type ComposerResourceSelection = {
+  type: ComposerResourceType;
+  id: string;
 };
 
-export type ExecutionCreateResponse = {
-  execution: Execution;
-  queue_state: QueueState;
-  queue_index: number;
+export type ComposerCommandCatalogItem = {
+  name: string;
+  description: string;
+  kind: "control" | "prompt";
 };
+
+export type ComposerResourceCatalogItem = {
+  type: ComposerResourceType;
+  id: string;
+  name: string;
+};
+
+export type ComposerCatalog = {
+  revision: string;
+  commands: ComposerCommandCatalogItem[];
+  resources: ComposerResourceCatalogItem[];
+};
+
+export type ComposerSuggestion = {
+  kind: "command" | "resource_type" | "resource";
+  label: string;
+  detail?: string;
+  insert_text: string;
+  replace_start: number;
+  replace_end: number;
+};
+
+export type ComposerSuggestRequest = {
+  draft: string;
+  cursor: number;
+  limit?: number;
+  catalog_revision?: string;
+};
+
+export type ComposerSuggestResponse = {
+  revision: string;
+  suggestions: ComposerSuggestion[];
+};
+
+export type ComposerSubmitRequest = {
+  raw_input: string;
+  mode: ConversationMode;
+  model_config_id?: string;
+  selected_resources?: ComposerResourceSelection[];
+  catalog_revision?: string;
+};
+
+export type ComposerSubmitResponse =
+  | {
+    kind: "command_result";
+    command_result: {
+      command: string;
+      output: string;
+    };
+  }
+  | {
+    kind: "execution_enqueued";
+    execution: Execution;
+    queue_state: QueueState;
+    queue_index: number;
+  };
 
 export type ConversationRuntime = {
   mode: ConversationMode;

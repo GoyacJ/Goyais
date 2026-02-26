@@ -134,8 +134,8 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 	mustDecodeJSON(t, conversationRes.Body.Bytes(), &conversation)
 	conversationID := conversation["id"].(string)
 
-	msg1 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content":         "hello",
+	msg1 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input":       "hello",
 		"mode":            "agent",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
@@ -147,8 +147,8 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 	exec1 := msg1Payload["execution"].(map[string]any)
 	messageID := exec1["message_id"].(string)
 
-	msg2 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content":         "second",
+	msg2 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input":       "second",
 		"mode":            "agent",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
@@ -763,8 +763,8 @@ func TestWorkspaceAgentConfigPersistsAndExecutionSnapshotIsFrozen(t *testing.T) 
 	mustDecodeJSON(t, conversationRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	createExecutionRes := performJSONRequest(t, restartRouter, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content": "show current project",
+	createExecutionRes := performJSONRequest(t, restartRouter, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input": "show current project",
 	}, restartHeaders)
 	if createExecutionRes.Code != http.StatusCreated {
 		t.Fatalf("expected create execution 201, got %d (%s)", createExecutionRes.Code, createExecutionRes.Body.String())
@@ -879,8 +879,8 @@ func TestConversationDetailEndpointReturnsMessagesExecutionsAndSnapshots(t *test
 	mustDecodeJSON(t, convRes.Body.Bytes(), &convPayload)
 	conversationID := convPayload["id"].(string)
 
-	msg1 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content":         "hello detail",
+	msg1 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input":       "hello detail",
 		"mode":            "agent",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
@@ -888,8 +888,8 @@ func TestConversationDetailEndpointReturnsMessagesExecutionsAndSnapshots(t *test
 		t.Fatalf("expected first message 201, got %d (%s)", msg1.Code, msg1.Body.String())
 	}
 
-	msg2 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content":         "second detail",
+	msg2 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input":       "second detail",
 		"mode":            "agent",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
@@ -1022,8 +1022,8 @@ func TestExecutionPatchEndpointFallbackForNonGitProject(t *testing.T) {
 	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	createExecutionRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content": "read current project",
+	createExecutionRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input": "read current project",
 	}, authHeaders)
 	if createExecutionRes.Code != http.StatusCreated {
 		t.Fatalf("expected create execution 201, got %d (%s)", createExecutionRes.Code, createExecutionRes.Body.String())
@@ -1089,8 +1089,8 @@ func TestExecutionPatchEndpointUsesGitDiffWhenProjectIsGit(t *testing.T) {
 	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	createExecutionRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content": "show git patch",
+	createExecutionRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input": "show git patch",
 	}, authHeaders)
 	if createExecutionRes.Code != http.StatusCreated {
 		t.Fatalf("expected create execution 201, got %d (%s)", createExecutionRes.Code, createExecutionRes.Body.String())
@@ -1163,8 +1163,8 @@ func TestExecutionPatchEndpointScopesGitDiffToExecutionFiles(t *testing.T) {
 	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	createExecutionRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content": "show scoped git patch",
+	createExecutionRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input": "show scoped git patch",
 	}, authHeaders)
 	if createExecutionRes.Code != http.StatusCreated {
 		t.Fatalf("expected create execution 201, got %d (%s)", createExecutionRes.Code, createExecutionRes.Body.String())
@@ -1265,8 +1265,8 @@ func TestExecutionConfirmEndpointRemoved(t *testing.T) {
 	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content": "update file and run command",
+	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input": "update file and run command",
 	}, authHeaders)
 	if messageRes.Code != http.StatusCreated {
 		t.Fatalf("expected create execution 201, got %d (%s)", messageRes.Code, messageRes.Body.String())

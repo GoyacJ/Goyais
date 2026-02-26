@@ -15,6 +15,7 @@ import {
 } from "@/modules/conversation/store";
 import { exportExecutionPatch } from "@/modules/conversation/services";
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import { buildNameFromFirstMessage, isDefaultConversationName } from "@/modules/conversation/views/conversationNamePolicy";
 import {
   addConversation,
   deleteConversation,
@@ -47,6 +48,7 @@ type MainScreenActionsInput = {
   activeProject: ComputedRef<Project | undefined>;
   runtime: ComputedRef<ConversationRuntime | undefined>;
   modelOptions: ComputedRef<Array<{ value: string; label: string }>>;
+  composerCatalogRevision: ComputedRef<string>;
   inspectorCollapsed: Ref<boolean>;
   editingConversationName: Ref<boolean>;
   conversationNameDraft: Ref<string>;
@@ -108,15 +110,38 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     if (!input.activeConversation.value || !input.activeProject.value) {
       return;
     }
+    const conversation = input.activeConversation.value;
+    const project = input.activeProject.value;
+    const runtime = input.runtime.value;
     const selectedModelID = input.resolveSemanticModelID(
-      input.runtime.value?.modelId ?? input.activeConversation.value.model_config_id
+      runtime?.modelId ?? conversation.model_config_id
     );
     const hasAllowedModel = selectedModelID !== "" && input.modelOptions.value.some((item) => item.value === selectedModelID);
     if (!hasAllowedModel) {
       setConversationError("当前项目未绑定可用模型，请先在项目配置中绑定模型");
       return;
     }
-    await submitConversationMessage(input.activeConversation.value, input.activeProject.value.is_git);
+
+    const conversationId = conversation.id;
+    const projectId = project.id;
+    const conversationName = conversation.name;
+    const firstDraft = runtime?.draft ?? "";
+    const hasUserMessageBeforeSend = (runtime?.messages ?? []).some((message) => message.role === "user");
+    const nextName = buildNameFromFirstMessage(firstDraft);
+    const shouldAutoRename =
+      isDefaultConversationName(conversationName) && !hasUserMessageBeforeSend && nextName !== "";
+
+    try {
+      await submitConversationMessage(conversation, project.is_git, {
+        catalogRevision: input.composerCatalogRevision.value
+      });
+    } catch (error) {
+      setConversationError(toDisplayError(error));
+    }
+
+    if (shouldAutoRename) {
+      await renameConversationById(projectId, conversationId, nextName);
+    }
   }
   async function stopExecution(): Promise<void> {
     if (!input.activeConversation.value) {

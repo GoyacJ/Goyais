@@ -40,8 +40,8 @@ func TestConversationEventsSSE_EmitsRunSemantics(t *testing.T) {
 	mustDecodeJSON(t, conversationRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content": "trigger sse",
+	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input": "trigger sse",
 	}, authHeaders)
 	if messageRes.Code != http.StatusCreated {
 		t.Fatalf("expected message 201, got %d (%s)", messageRes.Code, messageRes.Body.String())
@@ -136,8 +136,8 @@ func TestConversationEventsSSE_ResyncBackfillWhenLastEventMissing(t *testing.T) 
 	mustDecodeJSON(t, conversationRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content": "trigger sse resync",
+	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input": "trigger sse resync",
 	}, authHeaders)
 	if messageRes.Code != http.StatusCreated {
 		t.Fatalf("expected message 201, got %d (%s)", messageRes.Code, messageRes.Body.String())

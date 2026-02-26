@@ -84,9 +84,13 @@
             :model-id="activeModelId"
             :model-options="modelOptions"
             :placeholder="placeholder"
+            :composer-suggestions="composerSuggestions"
+            :composer-suggesting="composerSuggesting"
             @update:draft="updateDraft"
             @update:mode="updateMode"
             @update:model="updateModel"
+            @request-suggestions="requestComposerSuggestions"
+            @clear-suggestions="clearComposerSuggestions"
             @send="sendMessage"
             @stop="stopExecution"
             @rollback="rollbackMessage"
@@ -175,7 +179,10 @@ const {
   addConversationByPrompt,
   authStore,
   changeInspectorTab,
+  clearComposerSuggestions,
   commitDiff,
+  composerSuggestions,
+  composerSuggesting,
   conversationNameDraft,
   conversationPageByProjectId,
   createWorkspace,
@@ -214,6 +221,7 @@ const {
   runtimeConnectionStatus,
   runtimeHubLabel,
   runtimeUserDisplayName,
+  requestComposerSuggestions,
   toggleExecutionTrace,
   runtime,
   saveConversationName,

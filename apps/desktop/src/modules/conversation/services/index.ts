@@ -2,13 +2,16 @@ import { getControlClient } from "@/shared/services/clients";
 import { getControlHubBaseUrl } from "@/shared/runtime";
 import { connectConversationEvents } from "@/shared/services/sseClient";
 import type {
+  ComposerCatalog,
+  ComposerSubmitRequest,
+  ComposerSubmitResponse,
+  ComposerSuggestRequest,
+  ComposerSuggestResponse,
   Conversation,
   ConversationStreamEvent,
   ConversationDetailResponse,
   DiffCapability,
-  DiffItem,
-  ExecutionCreateRequest,
-  ExecutionCreateResponse
+  DiffItem
 } from "@/shared/types/api";
 
 type ConversationServiceOptions = {
@@ -35,8 +38,22 @@ export function streamConversationEvents(
   });
 }
 
-export async function createExecution(conversation: Conversation, input: ExecutionCreateRequest): Promise<ExecutionCreateResponse> {
-  return getControlClient().post<ExecutionCreateResponse>(`/v1/conversations/${conversation.id}/messages`, input);
+export async function getComposerCatalog(conversationId: string): Promise<ComposerCatalog> {
+  return getControlClient().get<ComposerCatalog>(`/v1/conversations/${conversationId}/input/catalog`);
+}
+
+export async function suggestComposerInput(
+  conversationId: string,
+  input: ComposerSuggestRequest
+): Promise<ComposerSuggestResponse> {
+  return getControlClient().post<ComposerSuggestResponse>(`/v1/conversations/${conversationId}/input/suggest`, input);
+}
+
+export async function submitComposerInput(
+  conversation: Conversation,
+  input: ComposerSubmitRequest
+): Promise<ComposerSubmitResponse> {
+  return getControlClient().post<ComposerSubmitResponse>(`/v1/conversations/${conversation.id}/input/submit`, input);
 }
 
 export async function getConversationDetail(

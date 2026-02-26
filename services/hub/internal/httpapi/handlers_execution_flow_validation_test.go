@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func TestConversationMessagesRejectsOutOfProjectResourceSelection(t *testing.T) {
+func TestConversationInputSubmitRejectsOutOfProjectResourceSelection(t *testing.T) {
 	testCases := []struct {
 		name         string
 		mutate       func(*Conversation)
@@ -19,7 +19,7 @@ func TestConversationMessagesRejectsOutOfProjectResourceSelection(t *testing.T) 
 			mutate: func(conversation *Conversation) {
 				conversation.ModelConfigID = "rc_model_blocked"
 			},
-			requestBody:  map[string]any{"content": "hello"},
+			requestBody:  map[string]any{"raw_input": "hello"},
 			wantContains: "model_config_id must be included in project model_config_ids",
 		},
 		{
@@ -27,7 +27,7 @@ func TestConversationMessagesRejectsOutOfProjectResourceSelection(t *testing.T) 
 			mutate: func(conversation *Conversation) {
 				conversation.RuleIDs = []string{"rc_rule_blocked"}
 			},
-			requestBody:  map[string]any{"content": "hello"},
+			requestBody:  map[string]any{"raw_input": "hello"},
 			wantContains: "rule_id rc_rule_blocked is not allowed by project config",
 		},
 		{
@@ -35,7 +35,7 @@ func TestConversationMessagesRejectsOutOfProjectResourceSelection(t *testing.T) 
 			mutate: func(conversation *Conversation) {
 				conversation.SkillIDs = []string{"rc_skill_blocked"}
 			},
-			requestBody:  map[string]any{"content": "hello"},
+			requestBody:  map[string]any{"raw_input": "hello"},
 			wantContains: "skill_id rc_skill_blocked is not allowed by project config",
 		},
 		{
@@ -43,7 +43,7 @@ func TestConversationMessagesRejectsOutOfProjectResourceSelection(t *testing.T) 
 			mutate: func(conversation *Conversation) {
 				conversation.MCPIDs = []string{"rc_mcp_blocked"}
 			},
-			requestBody:  map[string]any{"content": "hello"},
+			requestBody:  map[string]any{"raw_input": "hello"},
 			wantContains: "mcp_id rc_mcp_blocked is not allowed by project config",
 		},
 		{
@@ -52,7 +52,7 @@ func TestConversationMessagesRejectsOutOfProjectResourceSelection(t *testing.T) 
 				conversation.ModelConfigID = "rc_model_allowed"
 			},
 			requestBody: map[string]any{
-				"content":         "hello",
+				"raw_input":       "hello",
 				"model_config_id": "rc_model_unknown",
 			},
 			wantContains: "model_config_id must be included in project model_config_ids",
@@ -68,9 +68,9 @@ func TestConversationMessagesRejectsOutOfProjectResourceSelection(t *testing.T) 
 			state.conversations[conversationID] = conversation
 
 			mux := http.NewServeMux()
-			mux.HandleFunc("/v1/conversations/{conversation_id}/messages", ConversationMessagesHandler(state))
+			mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
 
-			res := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", testCase.requestBody, nil)
+			res := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", testCase.requestBody, nil)
 			if res.Code != http.StatusBadRequest {
 				t.Fatalf("expected 400 validation error, got %d (%s)", res.Code, res.Body.String())
 			}
@@ -97,7 +97,7 @@ func TestConversationMessagesRejectsOutOfProjectResourceSelection(t *testing.T) 
 	}
 }
 
-func TestConversationMessagesAllowParallelExecutionsAcrossConversations(t *testing.T) {
+func TestConversationInputSubmitAllowsParallelExecutionsAcrossConversations(t *testing.T) {
 	state, conversationAID := seedConversationMessageValidationState(t)
 	now := time.Now().UTC().Format(time.RFC3339)
 
@@ -119,17 +119,17 @@ func TestConversationMessagesAllowParallelExecutionsAcrossConversations(t *testi
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/conversations/{conversation_id}/messages", ConversationMessagesHandler(state))
+	mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
 
-	messageARes := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationAID+"/messages", map[string]any{
-		"content":         "message a",
+	messageARes := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationAID+"/input/submit", map[string]any{
+		"raw_input":       "message a",
 		"model_config_id": "rc_model_allowed",
 	}, nil)
 	if messageARes.Code != http.StatusCreated {
 		t.Fatalf("expected conversation A message 201, got %d (%s)", messageARes.Code, messageARes.Body.String())
 	}
-	messageBRes := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationBID+"/messages", map[string]any{
-		"content":         "message b",
+	messageBRes := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationBID+"/input/submit", map[string]any{
+		"raw_input":       "message b",
 		"model_config_id": "rc_model_allowed",
 	}, nil)
 	if messageBRes.Code != http.StatusCreated {
@@ -165,7 +165,7 @@ func TestConversationMessagesAllowParallelExecutionsAcrossConversations(t *testi
 	}
 }
 
-func TestConversationMessagesRejectsWhenProjectHasNoModelBinding(t *testing.T) {
+func TestConversationInputSubmitRejectsWhenProjectHasNoModelBinding(t *testing.T) {
 	state, conversationID := seedConversationMessageValidationState(t)
 	conversation := state.conversations[conversationID]
 	projectID := conversation.ProjectID
@@ -179,10 +179,10 @@ func TestConversationMessagesRejectsWhenProjectHasNoModelBinding(t *testing.T) {
 	state.conversations[conversationID] = conversation
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/conversations/{conversation_id}/messages", ConversationMessagesHandler(state))
+	mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
 
-	res := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content": "hello",
+	res := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input": "hello",
 	}, nil)
 	if res.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 validation error, got %d (%s)", res.Code, res.Body.String())

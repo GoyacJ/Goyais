@@ -360,11 +360,12 @@ type ExecutionAgentConfigSnapshot struct {
 }
 
 type ExecutionResourceProfile struct {
-	ModelConfigID string   `json:"model_config_id,omitempty"`
-	ModelID       string   `json:"model_id"`
-	RuleIDs       []string `json:"rule_ids,omitempty"`
-	SkillIDs      []string `json:"skill_ids,omitempty"`
-	MCPIDs        []string `json:"mcp_ids,omitempty"`
+	ModelConfigID    string   `json:"model_config_id,omitempty"`
+	ModelID          string   `json:"model_id"`
+	RuleIDs          []string `json:"rule_ids,omitempty"`
+	SkillIDs         []string `json:"skill_ids,omitempty"`
+	MCPIDs           []string `json:"mcp_ids,omitempty"`
+	ProjectFilePaths []string `json:"project_file_paths,omitempty"`
 }
 
 type ModelSnapshot struct {
@@ -377,16 +378,79 @@ type ModelSnapshot struct {
 	Params     map[string]any    `json:"params,omitempty"`
 }
 
-type ExecutionCreateRequest struct {
-	Content       string           `json:"content"`
-	Mode          ConversationMode `json:"mode"`
-	ModelConfigID string           `json:"model_config_id"`
+type ComposerResourceType string
+
+const (
+	ComposerResourceTypeModel ComposerResourceType = "model"
+	ComposerResourceTypeRule  ComposerResourceType = "rule"
+	ComposerResourceTypeSkill ComposerResourceType = "skill"
+	ComposerResourceTypeMCP   ComposerResourceType = "mcp"
+	ComposerResourceTypeFile  ComposerResourceType = "file"
+)
+
+type ComposerSelectedResource struct {
+	Type ComposerResourceType `json:"type"`
+	ID   string               `json:"id"`
 }
 
-type ExecutionCreateResponse struct {
-	Execution  Execution  `json:"execution"`
-	QueueState QueueState `json:"queue_state"`
-	QueueIndex int        `json:"queue_index"`
+type ComposerSubmitRequest struct {
+	RawInput          string                     `json:"raw_input"`
+	Mode              ConversationMode           `json:"mode"`
+	ModelConfigID     string                     `json:"model_config_id,omitempty"`
+	SelectedResources []ComposerSelectedResource `json:"selected_resources,omitempty"`
+	CatalogRevision   string                     `json:"catalog_revision,omitempty"`
+}
+
+type ComposerCommandCatalogItem struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Kind        string `json:"kind"`
+}
+
+type ComposerResourceCatalogItem struct {
+	Type ComposerResourceType `json:"type"`
+	ID   string               `json:"id"`
+	Name string               `json:"name"`
+}
+
+type ComposerCatalogResponse struct {
+	Revision  string                        `json:"revision"`
+	Commands  []ComposerCommandCatalogItem  `json:"commands"`
+	Resources []ComposerResourceCatalogItem `json:"resources"`
+}
+
+type ComposerSuggestRequest struct {
+	Draft           string `json:"draft"`
+	Cursor          int    `json:"cursor"`
+	Limit           int    `json:"limit,omitempty"`
+	CatalogRevision string `json:"catalog_revision,omitempty"`
+}
+
+type ComposerSuggestion struct {
+	Kind         string `json:"kind"`
+	Label        string `json:"label"`
+	Detail       string `json:"detail,omitempty"`
+	InsertText   string `json:"insert_text"`
+	ReplaceStart int    `json:"replace_start"`
+	ReplaceEnd   int    `json:"replace_end"`
+}
+
+type ComposerSuggestResponse struct {
+	Revision    string               `json:"revision"`
+	Suggestions []ComposerSuggestion `json:"suggestions"`
+}
+
+type ComposerCommandResult struct {
+	Command string `json:"command"`
+	Output  string `json:"output"`
+}
+
+type ComposerSubmitResponse struct {
+	Kind          string                 `json:"kind"`
+	CommandResult *ComposerCommandResult `json:"command_result,omitempty"`
+	Execution     *Execution             `json:"execution,omitempty"`
+	QueueState    QueueState             `json:"queue_state,omitempty"`
+	QueueIndex    *int                   `json:"queue_index,omitempty"`
 }
 
 type RollbackRequest struct {

@@ -437,9 +437,24 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/messages:
+  /v1/conversations/{conversation_id}/input/catalog:
+    get:
+      summary: Get composer input catalog
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+      responses:
+        '200':
+          description: Composer catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComposerCatalogResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations/{conversation_id}/input/suggest:
     post:
-      summary: Enqueue conversation message and create execution
+      summary: Suggest composer tokens for draft input
       parameters:
         - $ref: '#/components/parameters/ConversationIdParam'
       requestBody:
@@ -447,17 +462,48 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ExecutionCreateRequest'
+              $ref: '#/components/schemas/ComposerSuggestRequest'
       responses:
-        '201':
-          description: Created execution
+        '200':
+          description: Composer suggestions
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExecutionCreateResponse'
+                $ref: '#/components/schemas/ComposerSuggestResponse'
         '400':
           $ref: '#/components/responses/StandardErrorResponse'
         '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations/{conversation_id}/input/submit:
+    post:
+      summary: Submit composer input with strict command and resource validation
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComposerSubmitRequest'
+      responses:
+        '200':
+          description: Command result response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComposerSubmitResponse'
+        '201':
+          description: Execution enqueued response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComposerSubmitResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '409':
           $ref: '#/components/responses/StandardErrorResponse'
 
   /v1/conversations/{conversation_id}/events:
@@ -1862,7 +1908,7 @@ components:
           type: string
         is_git:
           type: boolean
-        default_model_id:
+        default_model_config_id:
           type: string
         default_mode:
           type: string
@@ -1901,15 +1947,15 @@ components:
 
     ProjectConfig:
       type: object
-      required: [project_id, model_ids, rule_ids, skill_ids, mcp_ids, updated_at]
+      required: [project_id, model_config_ids, rule_ids, skill_ids, mcp_ids, updated_at]
       properties:
         project_id:
           type: string
-        model_ids:
+        model_config_ids:
           type: array
           items:
             type: string
-        default_model_id:
+        default_model_config_id:
           type: [string, 'null']
         rule_ids:
           type: array
@@ -1980,7 +2026,7 @@ components:
         - name
         - queue_state
         - default_mode
-        - model_id
+        - model_config_id
         - rule_ids
         - skill_ids
         - mcp_ids
@@ -2002,7 +2048,7 @@ components:
         default_mode:
           type: string
           enum: [agent, plan]
-        model_id:
+        model_config_id:
           type: string
         rule_ids:
           type: array
@@ -2129,7 +2175,7 @@ components:
         mode:
           type: string
           enum: [agent, plan]
-        model_id:
+        model_config_id:
           type: string
         rule_ids:
           type: array
@@ -2193,6 +2239,10 @@ components:
           items:
             type: string
         mcp_ids:
+          type: array
+          items:
+            type: string
+        project_file_paths:
           type: array
           items:
             type: string
@@ -2262,29 +2312,151 @@ components:
           type: string
           format: date-time
 
-    ExecutionCreateRequest:
+    ComposerSelectedResource:
       type: object
-      required: [content]
+      required: [type, id]
       properties:
-        content:
+        type:
+          type: string
+          enum: [model, rule, skill, mcp, file]
+        id:
+          type: string
+
+    ComposerCommandCatalogItem:
+      type: object
+      required: [name, description, kind]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        kind:
+          type: string
+          enum: [control, prompt]
+
+    ComposerResourceCatalogItem:
+      type: object
+      required: [type, id, name]
+      properties:
+        type:
+          type: string
+          enum: [model, rule, skill, mcp, file]
+        id:
+          type: string
+        name:
+          type: string
+
+    ComposerCatalogResponse:
+      type: object
+      required: [revision, commands, resources]
+      properties:
+        revision:
+          type: string
+        commands:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComposerCommandCatalogItem'
+        resources:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComposerResourceCatalogItem'
+
+    ComposerSuggestRequest:
+      type: object
+      required: [draft, cursor]
+      properties:
+        draft:
+          type: string
+        cursor:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+        catalog_revision:
+          type: string
+
+    ComposerSuggestion:
+      type: object
+      required: [kind, label, insert_text, replace_start, replace_end]
+      properties:
+        kind:
+          type: string
+          enum: [command, resource_type, resource]
+        label:
+          type: string
+        detail:
+          type: string
+        insert_text:
+          type: string
+        replace_start:
+          type: integer
+          minimum: 0
+        replace_end:
+          type: integer
+          minimum: 0
+
+    ComposerSuggestResponse:
+      type: object
+      required: [revision, suggestions]
+      properties:
+        revision:
+          type: string
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComposerSuggestion'
+
+    ComposerSubmitRequest:
+      type: object
+      required: [raw_input]
+      properties:
+        raw_input:
           type: string
         mode:
           type: string
           enum: [agent, plan]
-        model_id:
+        model_config_id:
+          type: string
+        selected_resources:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComposerSelectedResource'
+        catalog_revision:
           type: string
 
-    ExecutionCreateResponse:
+    ComposerCommandResult:
       type: object
-      required: [execution, queue_state, queue_index]
+      required: [command, output]
       properties:
-        execution:
-          $ref: '#/components/schemas/Execution'
-        queue_state:
+        command:
           type: string
-          enum: [idle, running, queued]
-        queue_index:
-          type: integer
+        output:
+          type: string
+
+    ComposerSubmitResponse:
+      oneOf:
+        - type: object
+          required: [kind, command_result]
+          properties:
+            kind:
+              type: string
+              enum: [command_result]
+            command_result:
+              $ref: '#/components/schemas/ComposerCommandResult'
+        - type: object
+          required: [kind, execution, queue_state, queue_index]
+          properties:
+            kind:
+              type: string
+              enum: [execution_enqueued]
+            execution:
+              $ref: '#/components/schemas/Execution'
+            queue_state:
+              type: string
+              enum: [idle, running, queued]
+            queue_index:
+              type: integer
 
     RollbackRequest:
       type: object

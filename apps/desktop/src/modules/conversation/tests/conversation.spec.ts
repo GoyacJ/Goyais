@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import {
   applyIncomingExecutionEvent,
@@ -42,10 +44,11 @@ describe("conversation store", () => {
       const url = String(input);
       const method = init?.method ?? "GET";
 
-      if (url.includes("/v1/conversations/") && url.endsWith("/messages") && method === "POST") {
+      if (url.includes("/v1/conversations/") && url.endsWith("/input/submit") && method === "POST") {
         executionCounter += 1;
         return jsonResponse(
           {
+            kind: "execution_enqueued",
             execution: {
               id: `exec_${executionCounter}`,
               workspace_id: "ws_local",
@@ -134,7 +137,7 @@ describe("conversation store", () => {
 
     expect(conversationStore.error).toContain("当前项目未绑定可用模型");
     const messageCalls = fetchMock.mock.calls.filter(([url, init]) => {
-      return String(url).endsWith(`/v1/conversations/${conversationWithoutModel.id}/messages`) && (init?.method ?? "GET") === "POST";
+      return String(url).endsWith(`/v1/conversations/${conversationWithoutModel.id}/input/submit`) && (init?.method ?? "GET") === "POST";
     });
     expect(messageCalls).toHaveLength(0);
     const runtime = ensureConversationRuntime(conversationWithoutModel, true);
@@ -586,6 +589,285 @@ describe("conversation store", () => {
       }
     });
     expect(wrapper.text()).toContain("MiniMax Primary");
+  });
+
+  it("requests composer suggestions when draft input changes", async () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        draft: "",
+        mode: "agent",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }],
+        composerSuggestions: [],
+        composerSuggesting: false
+      }
+    });
+
+    const textarea = wrapper.find("textarea.draft");
+    await textarea.setValue("@ru");
+
+    const events = wrapper.emitted("request-suggestions");
+    expect(events?.length).toBeGreaterThan(0);
+    expect(events?.[events.length - 1]?.[0]).toEqual({
+      draft: "@ru",
+      cursor: 3
+    });
+  });
+
+  it("keeps composer draft textarea full width via css rule", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/modules/conversation/components/MainConversationPanel.css"), "utf8");
+    expect(css).toContain(".draft {");
+    expect(css).toContain("width: 100%;");
+    expect(css).toContain("box-sizing: border-box;");
+  });
+
+  it("renders suggestion labels without duplicate @ or / prefix columns", () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        draft: "/he",
+        mode: "agent",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }],
+        composerSuggestions: [
+          {
+            kind: "command",
+            label: "/help",
+            detail: "Show help information",
+            insert_text: "/help",
+            replace_start: 0,
+            replace_end: 3
+          },
+          {
+            kind: "resource",
+            label: "@rule:rc_rule_allowed",
+            detail: "Rule Display Name",
+            insert_text: "@rule:rc_rule_allowed",
+            replace_start: 0,
+            replace_end: 3
+          }
+        ],
+        composerSuggesting: false
+      }
+    });
+
+    expect(wrapper.find(".suggestion-kind").exists()).toBe(false);
+    const [commandItem, resourceItem] = wrapper.findAll(".suggestion-item");
+    expect(commandItem?.text().match(/\/help/g)?.length ?? 0).toBe(1);
+    expect(resourceItem?.text().match(/@rule:rc_rule_allowed/g)?.length ?? 0).toBe(1);
+    expect(commandItem?.text()).toContain("Show help information");
+    expect(resourceItem?.text()).toContain("Rule Display Name");
+  });
+
+  it("does not render suggestion meta for file candidates", () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        draft: "@file:src/m",
+        mode: "agent",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }],
+        composerSuggestions: [
+          {
+            kind: "resource",
+            label: "@file:src/main.ts",
+            detail: "",
+            insert_text: "@file:src/main.ts",
+            replace_start: 0,
+            replace_end: 11
+          }
+        ],
+        composerSuggesting: false
+      }
+    });
+
+    expect(wrapper.find(".suggestion-meta").exists()).toBe(false);
+  });
+
+  it("scrolls active suggestion into view when moving with arrow keys", async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView
+    });
+
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        draft: "@r",
+        mode: "agent",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }],
+        composerSuggestions: [
+          {
+            kind: "resource",
+            label: "@rule:one",
+            insert_text: "@rule:one",
+            replace_start: 0,
+            replace_end: 2
+          },
+          {
+            kind: "resource",
+            label: "@rule:two",
+            insert_text: "@rule:two",
+            replace_start: 0,
+            replace_end: 2
+          }
+        ],
+        composerSuggesting: false
+      }
+    });
+
+    const textarea = wrapper.find("textarea.draft");
+    await textarea.trigger("keydown", { key: "ArrowDown" });
+    await Promise.resolve();
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+  });
+
+  it("requests suggestions for @file token", async () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        draft: "",
+        mode: "agent",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }],
+        composerSuggestions: [],
+        composerSuggesting: false
+      }
+    });
+
+    const textarea = wrapper.find("textarea.draft");
+    await textarea.setValue("@file:sr");
+
+    const events = wrapper.emitted("request-suggestions");
+    expect(events?.length).toBeGreaterThan(0);
+    expect(events?.[events.length - 1]?.[0]).toEqual({
+      draft: "@file:sr",
+      cursor: 8
+    });
+  });
+
+  it("applies active composer suggestion with enter instead of sending message", async () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        draft: "@ru",
+        mode: "agent",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }],
+        composerSuggestions: [
+          {
+            kind: "resource",
+            label: "@rule:rc_rule_allowed",
+            insert_text: "@rule:rc_rule_allowed",
+            replace_start: 0,
+            replace_end: 3
+          }
+        ],
+        composerSuggesting: false
+      }
+    });
+
+    const textarea = wrapper.find("textarea.draft");
+    await textarea.trigger("keydown", { key: "Enter" });
+
+    expect(wrapper.emitted("update:draft")?.[0]?.[0]).toBe("@rule:rc_rule_allowed ");
+    expect(wrapper.emitted("send")).toBeUndefined();
+  });
+
+  it("applies resource type suggestion and immediately requests child suggestions", async () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        draft: "@",
+        mode: "agent",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }],
+        composerSuggestions: [
+          {
+            kind: "resource_type",
+            label: "@rule:",
+            detail: "规则配置",
+            insert_text: "@rule:",
+            replace_start: 0,
+            replace_end: 1
+          }
+        ],
+        composerSuggesting: false
+      }
+    });
+
+    const textarea = wrapper.find("textarea.draft");
+    await textarea.trigger("keydown", { key: "Enter" });
+
+    expect(wrapper.emitted("update:draft")?.[0]?.[0]).toBe("@rule:");
+    const emittedRequests = wrapper.emitted("request-suggestions") ?? [];
+    expect(emittedRequests.length).toBeGreaterThan(0);
+    expect(emittedRequests[emittedRequests.length - 1]?.[0]).toEqual({
+      draft: "@rule:",
+      cursor: 6
+    });
+    expect(wrapper.emitted("clear-suggestions")).toBeUndefined();
+    expect(wrapper.emitted("send")).toBeUndefined();
   });
 
   it("renders inspector risk model label from display name", () => {

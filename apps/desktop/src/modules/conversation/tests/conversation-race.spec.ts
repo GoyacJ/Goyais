@@ -39,6 +39,7 @@ describe("conversation execution race", () => {
   it("keeps a single terminal execution when done arrives before create response", async () => {
     let resolveCreate: (() => void) | undefined;
     const createResponse = {
+      kind: "execution_enqueued" as const,
       execution: {
         id: "exec_race_1",
         workspace_id: "ws_local",
@@ -64,7 +65,7 @@ describe("conversation execution race", () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? "GET";
-      if (url.endsWith(`/v1/conversations/${mockConversation.id}/messages`) && method === "POST") {
+      if (url.endsWith(`/v1/conversations/${mockConversation.id}/input/submit`) && method === "POST") {
         return new Promise<Response>((resolve) => {
           resolveCreate = () => resolve(jsonResponse(createResponse, 201));
         });

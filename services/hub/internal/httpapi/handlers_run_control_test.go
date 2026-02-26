@@ -35,16 +35,16 @@ func TestRunControlEndpoint_DenyQueuedRun(t *testing.T) {
 	mustDecodeJSON(t, conversationRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	first := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content":         "first",
+	first := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input":         "first",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if first.Code != http.StatusCreated {
 		t.Fatalf("expected first message 201, got %d (%s)", first.Code, first.Body.String())
 	}
 
-	second := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content":         "second",
+	second := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input":         "second",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if second.Code != http.StatusCreated {
@@ -109,8 +109,8 @@ func TestRunControlEndpoint_StopTransitionsRun(t *testing.T) {
 	mustDecodeJSON(t, conversationRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content":         "stop this run",
+	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input":         "stop this run",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if messageRes.Code != http.StatusCreated {

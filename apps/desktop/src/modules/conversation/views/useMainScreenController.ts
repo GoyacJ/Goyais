@@ -15,6 +15,8 @@ import { useRunningActionsView } from "@/modules/conversation/views/useRunningAc
 import { useMainScreenActions } from "@/modules/conversation/views/useMainScreenActions";
 import { useMainScreenModeling } from "@/modules/conversation/views/useMainScreenModeling";
 import { createConversationStreamCoordinator } from "@/modules/conversation/views/streamCoordinator";
+import { localizeComposerSuggestionDetails } from "@/modules/conversation/views/composerSuggestionDetails";
+import { getComposerCatalog, suggestComposerInput } from "@/modules/conversation/services";
 import {
   projectStore,
   refreshConversationsForActiveProject,
@@ -28,7 +30,8 @@ import {
 import { useI18n } from "@/shared/i18n";
 import { authStore } from "@/shared/stores/authStore";
 import { useWorkspaceStatusSync } from "@/shared/stores/workspaceStatusStore";
-import type { DiffCapability, InspectorTabKey } from "@/shared/types/api";
+import { setConversationError } from "@/modules/conversation/store";
+import type { ComposerCatalog, ComposerSuggestion, DiffCapability, InspectorTabKey } from "@/shared/types/api";
 
 export function useMainScreenController() {
   const router = useRouter();
@@ -40,6 +43,14 @@ export function useMainScreenController() {
   const projectImportInProgress = ref(false);
   const projectImportFeedback = ref("");
   const projectImportError = ref("");
+  const composerCatalog = ref<ComposerCatalog>({
+    revision: "",
+    commands: [],
+    resources: []
+  });
+  const composerSuggestions = ref<ComposerSuggestion[]>([]);
+  const composerSuggesting = ref(false);
+  let composerSuggestSequence = 0;
 
   const inspectorTabs: Array<{ key: InspectorTabKey; label: string }> = [
     { key: "diff", label: "D" },
@@ -150,12 +161,15 @@ export function useMainScreenController() {
     runtime
   });
 
+  const composerCatalogRevision = computed(() => composerCatalog.value.revision);
+
   const actions = useMainScreenActions({
     router,
     activeConversation,
     activeProject,
     runtime,
     modelOptions: modelState.modelOptions,
+    composerCatalogRevision,
     inspectorCollapsed,
     editingConversationName,
     conversationNameDraft,
@@ -164,6 +178,206 @@ export function useMainScreenController() {
     projectImportError,
     resolveSemanticModelID: modelState.resolveSemanticModelID
   });
+
+  async function refreshComposerCatalogForActiveConversation(): Promise<void> {
+    const conversationId = activeConversation.value?.id?.trim() ?? "";
+    if (conversationId === "") {
+      composerCatalog.value = {
+        revision: "",
+        commands: [],
+        resources: []
+      };
+      composerSuggestions.value = [];
+      return;
+    }
+    try {
+      composerCatalog.value = await getComposerCatalog(conversationId);
+    } catch (error) {
+      composerCatalog.value = {
+        revision: "",
+        commands: [],
+        resources: []
+      };
+      composerSuggestions.value = [];
+      setConversationError(String((error as Error)?.message ?? "加载输入目录失败"));
+    }
+  }
+
+  async function requestComposerSuggestions(input: { draft: string; cursor: number }): Promise<void> {
+    const conversationId = activeConversation.value?.id?.trim() ?? "";
+    if (conversationId === "") {
+      composerSuggestSequence += 1;
+      composerSuggesting.value = false;
+      composerSuggestions.value = [];
+      return;
+    }
+    const currentDraft = input.draft;
+    const cursor = Math.max(0, Math.min(input.cursor, currentDraft.length));
+    const localSuggestions = localizeComposerSuggestionDetails(
+      buildLocalComposerSuggestions(currentDraft, cursor, composerCatalog.value, 12),
+      t
+    );
+    composerSuggestions.value = localSuggestions;
+    const shouldForceRemote = isFileMentionToken(currentDraft, cursor);
+    if (localSuggestions.length === 0 && !shouldForceRemote) {
+      composerSuggestSequence += 1;
+      composerSuggesting.value = false;
+      composerSuggestions.value = [];
+      return;
+    }
+    const sequence = ++composerSuggestSequence;
+    composerSuggesting.value = true;
+    try {
+      const response = await suggestComposerInput(conversationId, {
+        draft: currentDraft,
+        cursor,
+        catalog_revision: composerCatalog.value.revision
+      });
+      if (sequence !== composerSuggestSequence) {
+        return;
+      }
+      composerSuggestions.value = response.suggestions.length > 0
+        ? localizeComposerSuggestionDetails(response.suggestions, t)
+        : localSuggestions;
+    } catch {
+      if (sequence !== composerSuggestSequence) {
+        return;
+      }
+      composerSuggestions.value = localSuggestions;
+    } finally {
+      if (sequence === composerSuggestSequence) {
+        composerSuggesting.value = false;
+      }
+    }
+  }
+
+  function clearComposerSuggestions(): void {
+    composerSuggestions.value = [];
+  }
+
+  function buildLocalComposerSuggestions(
+    draft: string,
+    cursor: number,
+    catalog: ComposerCatalog,
+    limit: number
+  ): ComposerSuggestion[] {
+    const safeCursor = Math.max(0, Math.min(cursor, draft.length));
+    const { tokenStart, tokenEnd, token } = resolveActiveToken(draft, safeCursor);
+    const trimmedToken = token.trim();
+    if (!trimmedToken.startsWith("@") && !trimmedToken.startsWith("/")) {
+      return [];
+    }
+
+    if (trimmedToken.startsWith("/")) {
+      const commandQuery = trimmedToken.slice(1).toLowerCase();
+      return catalog.commands
+        .filter((item) => item.name.toLowerCase().includes(commandQuery))
+        .slice(0, limit)
+        .map((item) => ({
+          kind: "command",
+          label: `/${item.name}`,
+          detail: stringsOrEmpty(item.description),
+          insert_text: `/${item.name}`,
+          replace_start: tokenStart,
+          replace_end: tokenEnd
+        }));
+    }
+
+    const resourceToken = trimmedToken.slice(1);
+    const [resourceTypeRaw, resourceQueryRaw] = resourceToken.split(":", 2);
+    const resourceType = resourceTypeRaw?.trim().toLowerCase() ?? "";
+    if (!resourceToken.includes(":")) {
+      return ["model", "rule", "skill", "mcp", "file"]
+        .filter((type) => type.includes(resourceType))
+        .slice(0, limit)
+        .map((type) => ({
+          kind: "resource_type",
+          label: `@${type}:`,
+          detail: resolveResourceTypeSuggestionDetail(type),
+          insert_text: `@${type}:`,
+          replace_start: tokenStart,
+          replace_end: tokenEnd
+        }));
+    }
+
+    if (!["model", "rule", "skill", "mcp", "file"].includes(resourceType)) {
+      return [];
+    }
+
+    const resourceQuery = (resourceQueryRaw ?? "").trim().toLowerCase();
+    return catalog.resources
+      .filter((resource) => resource.type === resourceType)
+      .filter((resource) => {
+        if (resourceQuery === "") {
+          return true;
+        }
+        return resource.id.toLowerCase().includes(resourceQuery) || resource.name.toLowerCase().includes(resourceQuery);
+      })
+      .slice(0, limit)
+      .map((resource) => ({
+        kind: "resource",
+        label: `@${resource.type}:${resource.id}`,
+        detail: resolveResourceSuggestionDetail(resource),
+        insert_text: `@${resource.type}:${resource.id}`,
+        replace_start: tokenStart,
+        replace_end: tokenEnd
+      }));
+  }
+
+  function resolveResourceTypeSuggestionDetail(type: string): string {
+    switch (type) {
+      case "model":
+        return t("conversation.composer.suggestion.type.model");
+      case "rule":
+        return t("conversation.composer.suggestion.type.rule");
+      case "skill":
+        return t("conversation.composer.suggestion.type.skill");
+      case "mcp":
+        return t("conversation.composer.suggestion.type.mcp");
+      default:
+        return "";
+    }
+  }
+
+  function resolveResourceSuggestionDetail(resource: { type: string; id: string; name: string }): string {
+    if (resource.type === "file") {
+      return "";
+    }
+    const normalizedName = stringsOrEmpty(resource.name);
+    const normalizedID = stringsOrEmpty(resource.id);
+    if (normalizedName === "" || normalizedName.toLowerCase() === normalizedID.toLowerCase()) {
+      return "";
+    }
+    return normalizedName;
+  }
+
+  function stringsOrEmpty(value: string | undefined): string {
+    return (value ?? "").trim();
+  }
+
+  function resolveActiveToken(draft: string, cursor: number): { tokenStart: number; tokenEnd: number; token: string } {
+    let tokenStart = cursor;
+    while (tokenStart > 0 && !/\s/.test(draft[tokenStart - 1] ?? "")) {
+      tokenStart -= 1;
+    }
+
+    let tokenEnd = cursor;
+    while (tokenEnd < draft.length && !/\s/.test(draft[tokenEnd] ?? "")) {
+      tokenEnd += 1;
+    }
+
+    return {
+      tokenStart,
+      tokenEnd,
+      token: draft.slice(tokenStart, cursor)
+    };
+  }
+
+  function isFileMentionToken(draft: string, cursor: number): boolean {
+    const safeCursor = Math.max(0, Math.min(cursor, draft.length));
+    const { token } = resolveActiveToken(draft, safeCursor);
+    return token.trim().toLowerCase().startsWith("@file:");
+  }
 
   const streamCoordinator = createConversationStreamCoordinator({
     projects: () => projectStore.projects,
@@ -176,6 +390,7 @@ export function useMainScreenController() {
   onMounted(async () => {
     await initializeWorkspaceContext();
     await Promise.all([refreshProjects(), refreshResourceConfigsByType("model")]);
+    await refreshComposerCatalogForActiveConversation();
     streamCoordinator.syncConversationStreams();
   });
 
@@ -195,6 +410,7 @@ export function useMainScreenController() {
     () => projectStore.activeConversationId,
     (nextId) => {
       if (!nextId) {
+        void refreshComposerCatalogForActiveConversation();
         streamCoordinator.syncConversationStreams();
         return;
       }
@@ -205,7 +421,17 @@ export function useMainScreenController() {
       }
       ensureConversationRuntime(context.conversation, context.isGitProject);
       void streamCoordinator.hydrateConversationDetail(context, true);
+      void refreshComposerCatalogForActiveConversation();
       streamCoordinator.syncConversationStreams();
+    }
+  );
+
+  watch(
+    () => runtime.value?.draft ?? "",
+    (draftValue) => {
+      if (draftValue.trim() === "") {
+        clearComposerSuggestions();
+      }
     }
   );
 
@@ -238,6 +464,7 @@ export function useMainScreenController() {
       projectImportFeedback.value = "";
       projectImportError.value = "";
       void refreshResourceConfigsByType("model");
+      void refreshComposerCatalogForActiveConversation();
       streamCoordinator.syncConversationStreams();
     }
   );
@@ -269,6 +496,11 @@ export function useMainScreenController() {
     pendingCount,
     placeholder,
     activeTraceCount,
+    composerCatalog,
+    composerSuggesting,
+    composerSuggestions,
+    requestComposerSuggestions,
+    clearComposerSuggestions,
     executionTraces,
     projectImportError,
     projectImportFeedback,
