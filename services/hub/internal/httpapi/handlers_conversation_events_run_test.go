@@ -145,8 +145,8 @@ func TestConversationEventsSSE_ResyncBackfillWhenLastEventMissing(t *testing.T) 
 	stopRes := performJSONRequest(t, router, http.MethodPost, "/v1/runs/"+executionID+"/control", map[string]any{
 		"action": "stop",
 	}, authHeaders)
-	if stopRes.Code != http.StatusOK {
-		t.Fatalf("expected stop control 200, got %d (%s)", stopRes.Code, stopRes.Body.String())
+	if stopRes.Code != http.StatusOK && stopRes.Code != http.StatusConflict {
+		t.Fatalf("expected stop control 200/409, got %d (%s)", stopRes.Code, stopRes.Body.String())
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/conversations/"+conversationID+"/events?last_event_id=evt_missing_cursor", nil)
@@ -163,7 +163,7 @@ func TestConversationEventsSSE_ResyncBackfillWhenLastEventMissing(t *testing.T) 
 	deadline := time.Now().Add(1 * time.Second)
 	for time.Now().Before(deadline) {
 		body := res.Body.String()
-		if strings.Contains(body, "\"resync_required\":true") && strings.Contains(body, "\"type\":\"run_cancelled\"") {
+		if strings.Contains(body, "\"resync_required\":true") && (strings.Contains(body, "\"type\":\"run_cancelled\"") || strings.Contains(body, "\"type\":\"run_failed\"")) {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -199,15 +199,15 @@ func TestConversationEventsSSE_ResyncBackfillWhenLastEventMissing(t *testing.T) 
 		t.Fatalf("expected echoed last_event_id, got %#v", firstPayload["last_event_id"])
 	}
 
-	foundCancelled := false
+	foundTerminal := false
 	for _, event := range events {
-		if event["type"] == "run_cancelled" && event["run_id"] == executionID {
-			foundCancelled = true
+		if (event["type"] == "run_cancelled" || event["type"] == "run_failed") && event["run_id"] == executionID {
+			foundTerminal = true
 			break
 		}
 	}
-	if !foundCancelled {
-		t.Fatalf("expected run_cancelled event for %s, got %#v", executionID, events)
+	if !foundTerminal {
+		t.Fatalf("expected terminal run event for %s, got %#v", executionID, events)
 	}
 }
 

@@ -239,6 +239,7 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 		now := time.Now().UTC().Format(time.RFC3339)
 		var createdExecution Execution
 		var queueState QueueState
+		nextExecutionToSubmit := ""
 		state.mu.Lock()
 		conversation, exists := state.conversations[conversationID]
 		if !exists {
@@ -267,15 +268,22 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 			executionState = ExecutionStatePending
 		}
 		execution := Execution{
-			ID:                      "exec_" + randomHex(6),
-			WorkspaceID:             conversation.WorkspaceID,
-			ConversationID:          conversationID,
-			MessageID:               msgID,
-			State:                   executionState,
-			Mode:                    resolvedMode,
-			ModelID:                 resolvedModelID,
-			ModeSnapshot:            resolvedMode,
-			ModelSnapshot:           resolvedModelSnapshot,
+			ID:             "exec_" + randomHex(6),
+			WorkspaceID:    conversation.WorkspaceID,
+			ConversationID: conversationID,
+			MessageID:      msgID,
+			State:          executionState,
+			Mode:           resolvedMode,
+			ModelID:        resolvedModelID,
+			ModeSnapshot:   resolvedMode,
+			ModelSnapshot:  resolvedModelSnapshot,
+			ResourceProfileSnapshot: &ExecutionResourceProfile{
+				ModelConfigID: strings.TrimSpace(resolvedModelSnapshot.ConfigID),
+				ModelID:       resolvedModelID,
+				RuleIDs:       append([]string{}, conversation.RuleIDs...),
+				SkillIDs:      append([]string{}, conversation.SkillIDs...),
+				MCPIDs:        append([]string{}, conversation.MCPIDs...),
+			},
 			AgentConfigSnapshot:     toExecutionAgentConfigSnapshot(workspaceAgentConfig),
 			TokensIn:                0,
 			TokensOut:               0,
@@ -304,6 +312,7 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 		if conversation.ActiveExecutionID == nil {
 			conversation.ActiveExecutionID = &execution.ID
 			conversation.QueueState = QueueStateRunning
+			nextExecutionToSubmit = execution.ID
 		} else {
 			conversation.QueueState = QueueStateQueued
 		}
@@ -328,6 +337,9 @@ func ConversationMessagesHandler(state *AppState) http.HandlerFunc {
 		})
 		state.mu.Unlock()
 		syncExecutionDomainBestEffort(state)
+		if nextExecutionToSubmit != "" && state.orchestrator != nil {
+			state.orchestrator.Submit(nextExecutionToSubmit)
+		}
 		if state.authz != nil {
 			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "conversation.write", "conversation", conversationID, "success", map[string]any{"operation": "send_message"}, TraceIDFromContext(r.Context()))
 		}
@@ -370,6 +382,8 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
+		cancelExecutionID := ""
+		nextExecutionToSubmit := ""
 		state.mu.Lock()
 		conversation, exists := state.conversations[conversationID]
 		if !exists {
@@ -383,10 +397,7 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 			execution.State = ExecutionStateCancelled
 			execution.UpdatedAt = now
 			state.executions[execution.ID] = execution
-			delete(state.executionLeases, execution.ID)
-			appendExecutionControlCommandLocked(state, execution.ID, ExecutionControlCommandTypeStop, map[string]any{
-				"reason": "user_stop",
-			})
+			cancelExecutionID = execution.ID
 			appendExecutionEventLocked(state, ExecutionEvent{
 				ExecutionID:    execution.ID,
 				ConversationID: conversationID,
@@ -407,11 +418,18 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 		} else {
 			conversation.ActiveExecutionID = &nextID
 			conversation.QueueState = QueueStateRunning
+			nextExecutionToSubmit = nextID
 		}
 		conversation.UpdatedAt = now
 		state.conversations[conversationID] = conversation
 		state.mu.Unlock()
 		syncExecutionDomainBestEffort(state)
+		if cancelExecutionID != "" && state.orchestrator != nil {
+			state.orchestrator.Cancel(cancelExecutionID)
+		}
+		if nextExecutionToSubmit != "" && state.orchestrator != nil {
+			state.orchestrator.Submit(nextExecutionToSubmit)
+		}
 		if state.authz != nil {
 			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "execution.control", "conversation", conversationID, "success", map[string]any{"operation": "stop"}, TraceIDFromContext(r.Context()))
 		}
@@ -884,22 +902,6 @@ func startNextQueuedExecutionLocked(state *AppState, conversationID string) stri
 		return id
 	}
 	return ""
-}
-
-func dispatchExecutionToWorkerBestEffort(state *AppState, r *http.Request, session Session, execution Execution) {
-	_ = state
-	_ = r
-	_ = session
-	_ = execution
-}
-
-func dispatchExecutionEventToWorkerBestEffort(state *AppState, r *http.Request, session Session, execution Execution, eventType string, sequence int) {
-	_ = state
-	_ = r
-	_ = session
-	_ = execution
-	_ = eventType
-	_ = sequence
 }
 
 func findSnapshotByMessageID(items []ConversationSnapshot, messageID string) (ConversationSnapshot, bool) {

@@ -62,6 +62,8 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
+		cancelExecutionID := ""
+		nextExecutionToSubmit := ""
 		state.mu.Lock()
 		execution, exists := state.executions[runID]
 		if !exists {
@@ -121,6 +123,10 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			}
 			conversation.ActiveExecutionID = &execution.ID
 			conversation.QueueState = QueueStateRunning
+			if execution.State == ExecutionStateQueued {
+				execution.State = ExecutionStatePending
+				nextExecutionToSubmit = execution.ID
+			}
 			appendExecutionEventLocked(state, ExecutionEvent{
 				ExecutionID:    execution.ID,
 				ConversationID: execution.ConversationID,
@@ -134,11 +140,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 				},
 			})
 		case corestate.ControlActionDeny, corestate.ControlActionStop:
-			delete(state.executionLeases, execution.ID)
-			appendExecutionControlCommandLocked(state, execution.ID, ExecutionControlCommandTypeStop, map[string]any{
-				"source": "run_control",
-				"action": string(action),
-			})
+			cancelExecutionID = execution.ID
 			appendExecutionEventLocked(state, ExecutionEvent{
 				ExecutionID:    execution.ID,
 				ConversationID: execution.ConversationID,
@@ -160,6 +162,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 				} else {
 					conversation.ActiveExecutionID = &nextID
 					conversation.QueueState = QueueStateRunning
+					nextExecutionToSubmit = nextID
 				}
 			} else {
 				conversation.QueueState = deriveQueueStateLocked(state, conversation.ID, conversation.ActiveExecutionID)
@@ -173,6 +176,12 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		state.conversations[conversation.ID] = conversation
 		state.mu.Unlock()
 		syncExecutionDomainBestEffort(state)
+		if cancelExecutionID != "" && state.orchestrator != nil {
+			state.orchestrator.Cancel(cancelExecutionID)
+		}
+		if nextExecutionToSubmit != "" && state.orchestrator != nil {
+			state.orchestrator.Submit(nextExecutionToSubmit)
+		}
 
 		if state.authz != nil {
 			_ = state.authz.appendAudit(

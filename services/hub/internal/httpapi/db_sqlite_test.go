@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestOpenAuthzStoreRejectsLegacyResourceConfigsSchema(t *testing.T) {
+func TestOpenAuthzStoreRebuildsLegacyResourceConfigsSchema(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "hub.sqlite3")
 	legacyDB, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -35,19 +35,25 @@ func TestOpenAuthzStoreRejectsLegacyResourceConfigsSchema(t *testing.T) {
 		t.Fatalf("close legacy sqlite db failed: %v", err)
 	}
 
-	_, err = openAuthzStore(dbPath)
-	if err == nil {
-		t.Fatalf("expected open authz store to reject legacy resource_configs schema")
+	store, err := openAuthzStore(dbPath)
+	if err != nil {
+		t.Fatalf("expected open authz store to rebuild legacy schema, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "resource_configs.name") {
-		t.Fatalf("expected clear schema mismatch error for resource_configs.name, got %v", err)
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+	ok, hasErr := tableHasColumn(store.db, "conversations", "rule_ids_json")
+	if hasErr != nil {
+		t.Fatalf("check conversations.rule_ids_json failed: %v", hasErr)
 	}
-	if !strings.Contains(strings.ToLower(err.Error()), "legacy db schema") {
-		t.Fatalf("expected legacy db schema hint in error, got %v", err)
+	if !ok {
+		t.Fatalf("expected conversations.rule_ids_json to exist after rebuild")
 	}
 }
 
-func TestOpenAuthzStoreRejectsLegacyProjectsSchema(t *testing.T) {
+func TestOpenAuthzStoreRebuildsLegacyProjectsSchema(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "hub.sqlite3")
 	legacyDB, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -70,12 +76,21 @@ func TestOpenAuthzStoreRejectsLegacyProjectsSchema(t *testing.T) {
 		t.Fatalf("close legacy sqlite db failed: %v", err)
 	}
 
-	_, err = openAuthzStore(dbPath)
-	if err == nil {
-		t.Fatalf("expected open authz store to reject legacy projects schema")
+	store, err := openAuthzStore(dbPath)
+	if err != nil {
+		t.Fatalf("expected open authz store to rebuild legacy projects schema, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "projects.current_revision") {
-		t.Fatalf("expected clear schema mismatch error for projects.current_revision, got %v", err)
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+	ok, hasErr := tableHasColumn(store.db, "projects", "current_revision")
+	if hasErr != nil {
+		t.Fatalf("check projects.current_revision failed: %v", hasErr)
+	}
+	if !ok {
+		t.Fatalf("expected projects.current_revision to exist after rebuild")
 	}
 }
 

@@ -88,7 +88,14 @@ export async function renameConversation(
 
 export async function patchConversation(
   conversationId: string,
-  patch: { name?: string; mode?: ConversationMode; model_id?: string },
+  patch: {
+    name?: string;
+    mode?: ConversationMode;
+    model_id?: string;
+    rule_ids?: string[];
+    skill_ids?: string[];
+    mcp_ids?: string[];
+  },
   options: ProjectServiceOptions = {}
 ): Promise<Conversation> {
   return getControlClient().request<Conversation>(`/v1/conversations/${conversationId}`, {

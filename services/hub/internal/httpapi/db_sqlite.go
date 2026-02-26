@@ -219,6 +219,9 @@ func (s *authzStore) migrate() error {
 			queue_state TEXT NOT NULL,
 			default_mode TEXT NOT NULL,
 			model_id TEXT NOT NULL,
+			rule_ids_json TEXT NOT NULL,
+			skill_ids_json TEXT NOT NULL,
+			mcp_ids_json TEXT NOT NULL,
 			base_revision INTEGER NOT NULL DEFAULT 0,
 			active_execution_id TEXT,
 			created_at TEXT NOT NULL,
@@ -257,6 +260,7 @@ func (s *authzStore) migrate() error {
 			model_id TEXT NOT NULL,
 			mode_snapshot TEXT NOT NULL,
 			model_snapshot_json TEXT NOT NULL,
+			resource_profile_snapshot_json TEXT,
 			agent_config_snapshot_json TEXT,
 			tokens_in INTEGER NOT NULL DEFAULT 0,
 			tokens_out INTEGER NOT NULL DEFAULT 0,
@@ -279,28 +283,6 @@ func (s *authzStore) migrate() error {
 			payload_json TEXT NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_execution_events_conversation_sequence ON execution_events(conversation_id, sequence)`,
-		`CREATE TABLE IF NOT EXISTS execution_control_commands (
-			id TEXT PRIMARY KEY,
-			execution_id TEXT NOT NULL,
-			type TEXT NOT NULL,
-			payload_json TEXT NOT NULL,
-			seq INTEGER NOT NULL,
-			created_at TEXT NOT NULL
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_execution_control_commands_execution_seq ON execution_control_commands(execution_id, seq)`,
-		`CREATE TABLE IF NOT EXISTS execution_leases (
-			execution_id TEXT PRIMARY KEY,
-			worker_id TEXT NOT NULL,
-			lease_version INTEGER NOT NULL,
-			lease_expires_at TEXT NOT NULL,
-			run_attempt INTEGER NOT NULL
-		)`,
-		`CREATE TABLE IF NOT EXISTS workers (
-			worker_id TEXT PRIMARY KEY,
-			capabilities_json TEXT NOT NULL,
-			status TEXT NOT NULL,
-			last_heartbeat TEXT NOT NULL
-		)`,
 		`CREATE TABLE IF NOT EXISTS resource_configs (
 				id TEXT PRIMARY KEY,
 				workspace_id TEXT NOT NULL,
@@ -331,9 +313,52 @@ func (s *authzStore) migrate() error {
 		}
 	}
 	if err := s.validateStrictSchema(); err != nil {
-		return err
+		if rebuildErr := s.rebuildSchema(statements); rebuildErr != nil {
+			return fmt.Errorf("rebuild schema after validation failure: %w (original: %v)", rebuildErr, err)
+		}
 	}
 	return nil
+}
+
+func (s *authzStore) rebuildSchema(statements []string) error {
+	dropStatements := []string{
+		`DROP TABLE IF EXISTS workspace_connections`,
+		`DROP TABLE IF EXISTS workspace_agent_configs`,
+		`DROP TABLE IF EXISTS sessions`,
+		`DROP TABLE IF EXISTS role_grants`,
+		`DROP TABLE IF EXISTS permission_visibility`,
+		`DROP TABLE IF EXISTS menus`,
+		`DROP TABLE IF EXISTS permissions`,
+		`DROP TABLE IF EXISTS roles`,
+		`DROP TABLE IF EXISTS users`,
+		`DROP TABLE IF EXISTS abac_policies`,
+		`DROP TABLE IF EXISTS audit_logs`,
+		`DROP TABLE IF EXISTS workspace_catalog_roots`,
+		`DROP TABLE IF EXISTS project_configs`,
+		`DROP TABLE IF EXISTS projects`,
+		`DROP TABLE IF EXISTS conversation_snapshots`,
+		`DROP TABLE IF EXISTS conversation_messages`,
+		`DROP TABLE IF EXISTS execution_events`,
+		`DROP TABLE IF EXISTS executions`,
+		`DROP TABLE IF EXISTS conversations`,
+		`DROP TABLE IF EXISTS execution_control_commands`,
+		`DROP TABLE IF EXISTS execution_leases`,
+		`DROP TABLE IF EXISTS workers`,
+		`DROP TABLE IF EXISTS resource_test_logs`,
+		`DROP TABLE IF EXISTS resource_configs`,
+		`DROP TABLE IF EXISTS workspaces`,
+	}
+	for _, statement := range dropStatements {
+		if _, err := s.db.Exec(statement); err != nil {
+			return err
+		}
+	}
+	for _, statement := range statements {
+		if _, err := s.db.Exec(statement); err != nil {
+			return err
+		}
+	}
+	return s.validateStrictSchema()
 }
 
 func (s *authzStore) validateStrictSchema() error {
@@ -343,8 +368,12 @@ func (s *authzStore) validateStrictSchema() error {
 	}{
 		{table: "projects", column: "current_revision"},
 		{table: "executions", column: "agent_config_snapshot_json"},
+		{table: "executions", column: "resource_profile_snapshot_json"},
 		{table: "executions", column: "tokens_in"},
 		{table: "executions", column: "tokens_out"},
+		{table: "conversations", column: "rule_ids_json"},
+		{table: "conversations", column: "skill_ids_json"},
+		{table: "conversations", column: "mcp_ids_json"},
 	}
 	for _, field := range requiredColumns {
 		ok, err := tableHasColumn(s.db, field.table, field.column)
@@ -368,7 +397,21 @@ func (s *authzStore) validateStrictSchema() error {
 			return fmt.Errorf("validate schema %s.%s: %w", field.table, field.column, err)
 		}
 		if ok {
-			return fmt.Errorf("legacy db schema detected: unexpected legacy column %s.%s; remove existing hub db and restart", field.table, field.column)
+			return fmt.Errorf("legacy db schema detected: unexpected legacy column %s.%s", field.table, field.column)
+		}
+	}
+	forbiddenLegacyTables := []string{
+		"execution_control_commands",
+		"execution_leases",
+		"workers",
+	}
+	for _, table := range forbiddenLegacyTables {
+		exists, err := tableExists(s.db, table)
+		if err != nil {
+			return fmt.Errorf("validate schema table %s: %w", table, err)
+		}
+		if exists {
+			return fmt.Errorf("legacy db schema detected: unexpected table %s", table)
 		}
 	}
 	return nil
@@ -401,6 +444,19 @@ func tableHasColumn(db *sql.DB, table string, column string) (bool, error) {
 		return false, err
 	}
 	return false, nil
+}
+
+func tableExists(db *sql.DB, table string) (bool, error) {
+	row := db.QueryRow(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1`, strings.TrimSpace(table))
+	var exists int
+	err := row.Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (s *authzStore) ensureWorkspaceSeeds(workspaceID string) error {

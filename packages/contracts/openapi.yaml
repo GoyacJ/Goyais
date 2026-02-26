@@ -1508,144 +1508,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ListEnvelope'
 
-  /internal/workers/register:
-    post:
-      summary: Worker register endpoint
-      parameters:
-        - $ref: '#/components/parameters/InternalTokenHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WorkerRegisterRequest'
-      responses:
-        '202':
-          description: Worker registered
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-        '401':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '400':
-          $ref: '#/components/responses/StandardErrorResponse'
-
-  /internal/workers/{worker_id}/heartbeat:
-    post:
-      summary: Worker heartbeat endpoint
-      parameters:
-        - in: path
-          name: worker_id
-          required: true
-          schema:
-            type: string
-        - $ref: '#/components/parameters/InternalTokenHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WorkerHeartbeatRequest'
-      responses:
-        '202':
-          description: Heartbeat accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-        '401':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '400':
-          $ref: '#/components/responses/StandardErrorResponse'
-
-  /internal/executions/claim:
-    post:
-      summary: Worker claims one pending execution with lease
-      parameters:
-        - $ref: '#/components/parameters/InternalTokenHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ExecutionClaimRequest'
-      responses:
-        '200':
-          description: Claim result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExecutionClaimResponse'
-        '401':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '400':
-          $ref: '#/components/responses/StandardErrorResponse'
-
-  /internal/executions/{execution_id}/events/batch:
-    post:
-      summary: Worker uploads execution events in batch
-      parameters:
-        - $ref: '#/components/parameters/ExecutionIdParam'
-        - $ref: '#/components/parameters/InternalTokenHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ExecutionEventBatchRequest'
-      responses:
-        '202':
-          description: Events accepted
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [accepted, events]
-                properties:
-                  accepted:
-                    type: boolean
-                  events:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ExecutionEvent'
-        '401':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '400':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '404':
-          $ref: '#/components/responses/StandardErrorResponse'
-
-  /internal/executions/{execution_id}/control:
-    get:
-      summary: Worker long-polls control commands for an execution
-      parameters:
-        - $ref: '#/components/parameters/ExecutionIdParam'
-        - $ref: '#/components/parameters/InternalTokenHeader'
-        - in: query
-          name: after_seq
-          schema:
-            type: integer
-            minimum: 0
-        - in: query
-          name: wait_ms
-          schema:
-            type: integer
-            minimum: 0
-      responses:
-        '200':
-          description: Control command list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExecutionControlPollResponse'
-        '401':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '404':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '404':
-          $ref: '#/components/responses/StandardErrorResponse'
-
 components:
   parameters:
     CursorParam:
@@ -1663,13 +1525,6 @@ components:
         maximum: 100
         default: 20
       description: Page size for cursor-based pagination.
-    InternalTokenHeader:
-      in: header
-      name: X-Internal-Token
-      required: true
-      schema:
-        type: string
-      description: Shared internal token used by Hub when invoking Worker internal endpoints.
     WorkspaceIdParam:
       in: path
       name: workspace_id
@@ -2126,6 +1981,9 @@ components:
         - queue_state
         - default_mode
         - model_id
+        - rule_ids
+        - skill_ids
+        - mcp_ids
         - base_revision
         - created_at
         - updated_at
@@ -2146,6 +2004,18 @@ components:
           enum: [agent, plan]
         model_id:
           type: string
+        rule_ids:
+          type: array
+          items:
+            type: string
+        skill_ids:
+          type: array
+          items:
+            type: string
+        mcp_ids:
+          type: array
+          items:
+            type: string
         base_revision:
           type: integer
           format: int64
@@ -2261,6 +2131,18 @@ components:
           enum: [agent, plan]
         model_id:
           type: string
+        rule_ids:
+          type: array
+          items:
+            type: string
+        skill_ids:
+          type: array
+          items:
+            type: string
+        mcp_ids:
+          type: array
+          items:
+            type: string
 
     ModelSnapshot:
       type: object
@@ -2293,6 +2175,27 @@ components:
         trace_detail_level:
           type: string
           enum: [basic, verbose]
+
+    ExecutionResourceProfile:
+      type: object
+      required: [model_id]
+      properties:
+        model_config_id:
+          type: string
+        model_id:
+          type: string
+        rule_ids:
+          type: array
+          items:
+            type: string
+        skill_ids:
+          type: array
+          items:
+            type: string
+        mcp_ids:
+          type: array
+          items:
+            type: string
 
     Execution:
       type: object
@@ -2335,6 +2238,8 @@ components:
           enum: [agent, plan]
         model_snapshot:
           $ref: '#/components/schemas/ModelSnapshot'
+        resource_profile_snapshot:
+          $ref: '#/components/schemas/ExecutionResourceProfile'
         agent_config_snapshot:
           $ref: '#/components/schemas/ExecutionAgentConfigSnapshot'
         tokens_in:
@@ -2983,71 +2888,6 @@ components:
         context_expr:
           $ref: '#/components/schemas/ABACExpression'
 
-    WorkerRegisterRequest:
-      type: object
-      required: [worker_id]
-      properties:
-        worker_id:
-          type: string
-        capabilities:
-          type: object
-          additionalProperties: true
-
-    WorkerHeartbeatRequest:
-      type: object
-      properties:
-        status:
-          type: string
-
-    ExecutionLease:
-      type: object
-      required: [execution_id, worker_id, lease_version, lease_expires_at, run_attempt]
-      properties:
-        execution_id:
-          type: string
-        worker_id:
-          type: string
-        lease_version:
-          type: integer
-        lease_expires_at:
-          type: string
-          format: date-time
-        run_attempt:
-          type: integer
-
-    ExecutionClaimRequest:
-      type: object
-      required: [worker_id]
-      properties:
-        worker_id:
-          type: string
-        lease_seconds:
-          type: integer
-
-    ExecutionClaimEnvelope:
-      type: object
-      required: [execution, lease, content, project_is_git]
-      properties:
-        execution:
-          $ref: '#/components/schemas/Execution'
-        lease:
-          $ref: '#/components/schemas/ExecutionLease'
-        content:
-          type: string
-        project_path:
-          type: string
-        project_is_git:
-          type: boolean
-
-    ExecutionClaimResponse:
-      type: object
-      required: [claimed]
-      properties:
-        claimed:
-          type: boolean
-        execution:
-          $ref: '#/components/schemas/ExecutionClaimEnvelope'
-
     ExecutionEvent:
       type: object
       required: [event_id, execution_id, conversation_id, type, sequence, queue_index]
@@ -3081,37 +2921,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ExecutionEvent'
-
-    ExecutionControlCommand:
-      type: object
-      required: [id, execution_id, type, payload, seq, created_at]
-      properties:
-        id:
-          type: string
-        execution_id:
-          type: string
-        type:
-          type: string
-          enum: [stop]
-        payload:
-          type: object
-          additionalProperties: true
-        seq:
-          type: integer
-        created_at:
-          type: string
-          format: date-time
-
-    ExecutionControlPollResponse:
-      type: object
-      required: [commands, last_seq]
-      properties:
-        commands:
-          type: array
-          items:
-            $ref: '#/components/schemas/ExecutionControlCommand'
-        last_seq:
-          type: integer
 
     RunControlRequest:
       type: object

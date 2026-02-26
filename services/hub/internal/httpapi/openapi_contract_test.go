@@ -46,11 +46,6 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/admin/menu-visibility/{role_key}:",
 		"/v1/admin/abac-policies:",
 		"/v1/admin/audit:",
-		"/internal/workers/register:",
-		"/internal/workers/{worker_id}/heartbeat:",
-		"/internal/executions/claim:",
-		"/internal/executions/{execution_id}/events/batch:",
-		"/internal/executions/{execution_id}/control:",
 	}
 
 	for _, marker := range requiredMarkers {
@@ -74,6 +69,22 @@ func TestOpenAPIDoesNotContainRemovedAliasRoutes(t *testing.T) {
 	}
 	if strings.Contains(spec, "/v1/workspaces/{workspace_id}/model-catalog/sync:") {
 		t.Fatalf("openapi still contains removed route alias /v1/workspaces/{workspace_id}/model-catalog/sync")
+	}
+}
+
+func TestOpenAPIDoesNotContainInternalWorkerRoutes(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	disallowedMarkers := []string{
+		"/internal/workers/register:",
+		"/internal/workers/{worker_id}/heartbeat:",
+		"/internal/executions/claim:",
+		"/internal/executions/{execution_id}/events/batch:",
+		"/internal/executions/{execution_id}/control:",
+	}
+	for _, marker := range disallowedMarkers {
+		if strings.Contains(spec, marker) {
+			t.Fatalf("openapi still contains removed internal route marker: %s", marker)
+		}
 	}
 }
 

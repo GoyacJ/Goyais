@@ -103,6 +103,9 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				QueueState:        QueueStateIdle,
 				DefaultMode:       project.DefaultMode,
 				ModelID:           defaultModelID,
+				RuleIDs:           append([]string{}, sanitizeIDList(config.RuleIDs)...),
+				SkillIDs:          append([]string{}, sanitizeIDList(config.SkillIDs)...),
+				MCPIDs:            append([]string{}, sanitizeIDList(config.MCPIDs)...),
 				BaseRevision:      project.CurrentRevision,
 				ActiveExecutionID: nil,
 				CreatedAt:         now,
@@ -196,8 +199,8 @@ func ProjectConfigHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
-			if input.DefaultModelID != nil && !containsString(input.ModelIDs, *input.DefaultModelID) {
-				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "default_model_id must be included in model_ids", map[string]any{})
+			if err := validateProjectConfigResourceReferences(state, workspaceID, input); err != nil {
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
 				return
 			}
 

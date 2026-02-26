@@ -7,30 +7,24 @@ import (
 )
 
 type executionDomainSnapshot struct {
-	Conversations            []Conversation
-	ConversationMessages     []ConversationMessage
-	ConversationSnapshots    []ConversationSnapshot
-	Executions               []Execution
-	ExecutionEvents          []ExecutionEvent
-	ExecutionControlCommands []ExecutionControlCommand
-	ExecutionLeases          []ExecutionLease
-	Workers                  []WorkerRegistration
+	Conversations         []Conversation
+	ConversationMessages  []ConversationMessage
+	ConversationSnapshots []ConversationSnapshot
+	Executions            []Execution
+	ExecutionEvents       []ExecutionEvent
 }
 
 func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, error) {
 	snapshot := executionDomainSnapshot{
-		Conversations:            []Conversation{},
-		ConversationMessages:     []ConversationMessage{},
-		ConversationSnapshots:    []ConversationSnapshot{},
-		Executions:               []Execution{},
-		ExecutionEvents:          []ExecutionEvent{},
-		ExecutionControlCommands: []ExecutionControlCommand{},
-		ExecutionLeases:          []ExecutionLease{},
-		Workers:                  []WorkerRegistration{},
+		Conversations:         []Conversation{},
+		ConversationMessages:  []ConversationMessage{},
+		ConversationSnapshots: []ConversationSnapshot{},
+		Executions:            []Execution{},
+		ExecutionEvents:       []ExecutionEvent{},
 	}
 
 	conversationRows, err := s.db.Query(
-		`SELECT id, workspace_id, project_id, name, queue_state, default_mode, model_id, base_revision, active_execution_id, created_at, updated_at
+		`SELECT id, workspace_id, project_id, name, queue_state, default_mode, model_id, rule_ids_json, skill_ids_json, mcp_ids_json, base_revision, active_execution_id, created_at, updated_at
 		 FROM conversations
 		 ORDER BY created_at ASC, id ASC`,
 	)
@@ -42,6 +36,9 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 		var (
 			queueStateRaw      string
 			defaultModeRaw     string
+			ruleIDsJSON        string
+			skillIDsJSON       string
+			mcpIDsJSON         string
 			activeExecutionRaw sql.NullString
 		)
 		if err := conversationRows.Scan(
@@ -52,6 +49,9 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 			&queueStateRaw,
 			&defaultModeRaw,
 			&item.ModelID,
+			&ruleIDsJSON,
+			&skillIDsJSON,
+			&mcpIDsJSON,
 			&item.BaseRevision,
 			&activeExecutionRaw,
 			&item.CreatedAt,
@@ -62,6 +62,33 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 		}
 		item.QueueState = QueueState(strings.TrimSpace(queueStateRaw))
 		item.DefaultMode = ConversationMode(strings.TrimSpace(defaultModeRaw))
+		if strings.TrimSpace(ruleIDsJSON) != "" {
+			if err := json.Unmarshal([]byte(ruleIDsJSON), &item.RuleIDs); err != nil {
+				_ = conversationRows.Close()
+				return snapshot, err
+			}
+		}
+		if item.RuleIDs == nil {
+			item.RuleIDs = []string{}
+		}
+		if strings.TrimSpace(skillIDsJSON) != "" {
+			if err := json.Unmarshal([]byte(skillIDsJSON), &item.SkillIDs); err != nil {
+				_ = conversationRows.Close()
+				return snapshot, err
+			}
+		}
+		if item.SkillIDs == nil {
+			item.SkillIDs = []string{}
+		}
+		if strings.TrimSpace(mcpIDsJSON) != "" {
+			if err := json.Unmarshal([]byte(mcpIDsJSON), &item.MCPIDs); err != nil {
+				_ = conversationRows.Close()
+				return snapshot, err
+			}
+		}
+		if item.MCPIDs == nil {
+			item.MCPIDs = []string{}
+		}
 		if activeExecutionRaw.Valid && strings.TrimSpace(activeExecutionRaw.String) != "" {
 			value := strings.TrimSpace(activeExecutionRaw.String)
 			item.ActiveExecutionID = &value
@@ -181,7 +208,7 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 	_ = snapshotRows.Close()
 
 	executionRows, err := s.db.Query(
-		`SELECT id, workspace_id, conversation_id, message_id, state, mode, model_id, mode_snapshot, model_snapshot_json, agent_config_snapshot_json, tokens_in, tokens_out, project_revision_snapshot, queue_index, trace_id, created_at, updated_at
+		`SELECT id, workspace_id, conversation_id, message_id, state, mode, model_id, mode_snapshot, model_snapshot_json, resource_profile_snapshot_json, agent_config_snapshot_json, tokens_in, tokens_out, project_revision_snapshot, queue_index, trace_id, created_at, updated_at
 		 FROM executions
 		 ORDER BY created_at ASC, id ASC`,
 	)
@@ -195,6 +222,7 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 			modeRaw           string
 			modeSnapshotRaw   string
 			modelSnapshotJSON string
+			resourceJSON      sql.NullString
 			agentConfigJSON   sql.NullString
 		)
 		if err := executionRows.Scan(
@@ -207,6 +235,7 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 			&item.ModelID,
 			&modeSnapshotRaw,
 			&modelSnapshotJSON,
+			&resourceJSON,
 			&agentConfigJSON,
 			&item.TokensIn,
 			&item.TokensOut,
@@ -227,6 +256,14 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 				_ = executionRows.Close()
 				return snapshot, err
 			}
+		}
+		if resourceJSON.Valid && strings.TrimSpace(resourceJSON.String) != "" {
+			resourceSnapshot := ExecutionResourceProfile{}
+			if err := json.Unmarshal([]byte(resourceJSON.String), &resourceSnapshot); err != nil {
+				_ = executionRows.Close()
+				return snapshot, err
+			}
+			item.ResourceProfileSnapshot = &resourceSnapshot
 		}
 		if agentConfigJSON.Valid && strings.TrimSpace(agentConfigJSON.String) != "" {
 			configSnapshot := ExecutionAgentConfigSnapshot{}
@@ -289,114 +326,6 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 		return snapshot, err
 	}
 	_ = eventRows.Close()
-
-	controlRows, err := s.db.Query(
-		`SELECT id, execution_id, type, payload_json, seq, created_at
-		 FROM execution_control_commands
-		 ORDER BY execution_id ASC, seq ASC, id ASC`,
-	)
-	if err != nil {
-		return snapshot, err
-	}
-	for controlRows.Next() {
-		item := ExecutionControlCommand{}
-		var (
-			typeRaw     string
-			payloadJSON string
-		)
-		if err := controlRows.Scan(
-			&item.ID,
-			&item.ExecutionID,
-			&typeRaw,
-			&payloadJSON,
-			&item.Seq,
-			&item.CreatedAt,
-		); err != nil {
-			_ = controlRows.Close()
-			return snapshot, err
-		}
-		item.Type = ExecutionControlCommandType(strings.TrimSpace(typeRaw))
-		if strings.TrimSpace(payloadJSON) != "" {
-			if err := json.Unmarshal([]byte(payloadJSON), &item.Payload); err != nil {
-				_ = controlRows.Close()
-				return snapshot, err
-			}
-		}
-		if item.Payload == nil {
-			item.Payload = map[string]any{}
-		}
-		snapshot.ExecutionControlCommands = append(snapshot.ExecutionControlCommands, item)
-	}
-	if err := controlRows.Err(); err != nil {
-		_ = controlRows.Close()
-		return snapshot, err
-	}
-	_ = controlRows.Close()
-
-	leaseRows, err := s.db.Query(
-		`SELECT execution_id, worker_id, lease_version, lease_expires_at, run_attempt
-		 FROM execution_leases
-		 ORDER BY execution_id ASC`,
-	)
-	if err != nil {
-		return snapshot, err
-	}
-	for leaseRows.Next() {
-		item := ExecutionLease{}
-		if err := leaseRows.Scan(
-			&item.ExecutionID,
-			&item.WorkerID,
-			&item.LeaseVersion,
-			&item.LeaseExpiresAt,
-			&item.RunAttempt,
-		); err != nil {
-			_ = leaseRows.Close()
-			return snapshot, err
-		}
-		snapshot.ExecutionLeases = append(snapshot.ExecutionLeases, item)
-	}
-	if err := leaseRows.Err(); err != nil {
-		_ = leaseRows.Close()
-		return snapshot, err
-	}
-	_ = leaseRows.Close()
-
-	workerRows, err := s.db.Query(
-		`SELECT worker_id, capabilities_json, status, last_heartbeat
-		 FROM workers
-		 ORDER BY worker_id ASC`,
-	)
-	if err != nil {
-		return snapshot, err
-	}
-	for workerRows.Next() {
-		item := WorkerRegistration{}
-		var capabilitiesJSON string
-		if err := workerRows.Scan(
-			&item.WorkerID,
-			&capabilitiesJSON,
-			&item.Status,
-			&item.LastHeartbeat,
-		); err != nil {
-			_ = workerRows.Close()
-			return snapshot, err
-		}
-		if strings.TrimSpace(capabilitiesJSON) != "" {
-			if err := json.Unmarshal([]byte(capabilitiesJSON), &item.Capabilities); err != nil {
-				_ = workerRows.Close()
-				return snapshot, err
-			}
-		}
-		if item.Capabilities == nil {
-			item.Capabilities = map[string]any{}
-		}
-		snapshot.Workers = append(snapshot.Workers, item)
-	}
-	if err := workerRows.Err(); err != nil {
-		_ = workerRows.Close()
-		return snapshot, err
-	}
-	_ = workerRows.Close()
 
 	return snapshot, nil
 }

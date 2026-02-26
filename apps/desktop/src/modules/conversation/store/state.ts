@@ -33,6 +33,9 @@ export type ConversationRuntime = {
   draft: string;
   mode: ConversationMode;
   modelId: string;
+  ruleIds: string[];
+  skillIds: string[];
+  mcpIds: string[];
   status: ConnectionStatus;
   diff: DiffItem[];
   diffCapability: DiffCapability;
@@ -105,6 +108,9 @@ export function ensureConversationRuntime(
     draft: "",
     mode: conversation.default_mode,
     modelId: conversation.model_id,
+    ruleIds: [...(conversation.rule_ids ?? [])],
+    skillIds: [...(conversation.skill_ids ?? [])],
+    mcpIds: [...(conversation.mcp_ids ?? [])],
     status: "connected",
     diff: [],
     diffCapability: resolveDiffCapability(isGitProject),
@@ -130,6 +136,9 @@ export function hydrateConversationRuntime(
   const runtime = ensureConversationRuntime(conversation, isGitProject);
   runtime.mode = detail.conversation.default_mode;
   runtime.modelId = detail.conversation.model_id;
+  runtime.ruleIds = [...(detail.conversation.rule_ids ?? [])];
+  runtime.skillIds = [...(detail.conversation.skill_ids ?? [])];
+  runtime.mcpIds = [...(detail.conversation.mcp_ids ?? [])];
   runtime.messages = detail.messages.map((message) => ({ ...message }));
   runtime.executions = detail.executions.map((execution) => ({
     ...execution,

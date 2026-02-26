@@ -73,6 +73,68 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				err.write(w, r)
 				return
 			}
+			state.mu.RLock()
+			conversationSeed, exists := state.conversations[conversationID]
+			state.mu.RUnlock()
+			if !exists {
+				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
+					"conversation_id": conversationID,
+				})
+				return
+			}
+			project, projectExists, projectErr := getProjectFromStore(state, conversationSeed.ProjectID)
+			if projectErr != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_READ_FAILED", "Failed to read project", map[string]any{
+					"project_id": conversationSeed.ProjectID,
+				})
+				return
+			}
+			if !projectExists {
+				WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{
+					"project_id": conversationSeed.ProjectID,
+				})
+				return
+			}
+			projectConfig, configErr := getProjectConfigFromStore(state, project)
+			if configErr != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_CONFIG_READ_FAILED", "Failed to read project config", map[string]any{
+					"project_id": conversationSeed.ProjectID,
+				})
+				return
+			}
+
+			resourceSelectionChanged := input.ModelID != nil || input.RuleIDs != nil || input.SkillIDs != nil || input.MCPIDs != nil
+			if resourceSelectionChanged {
+				nextModelID := strings.TrimSpace(conversationSeed.ModelID)
+				if input.ModelID != nil {
+					nextModelID = strings.TrimSpace(*input.ModelID)
+				}
+				nextRuleIDs := append([]string{}, conversationSeed.RuleIDs...)
+				if input.RuleIDs != nil {
+					nextRuleIDs = sanitizeIDList(input.RuleIDs)
+				}
+				nextSkillIDs := append([]string{}, conversationSeed.SkillIDs...)
+				if input.SkillIDs != nil {
+					nextSkillIDs = sanitizeIDList(input.SkillIDs)
+				}
+				nextMCPIDs := append([]string{}, conversationSeed.MCPIDs...)
+				if input.MCPIDs != nil {
+					nextMCPIDs = sanitizeIDList(input.MCPIDs)
+				}
+				if err := validateConversationResourceSelection(
+					state,
+					conversationSeed.WorkspaceID,
+					projectConfig,
+					nextModelID,
+					nextRuleIDs,
+					nextSkillIDs,
+					nextMCPIDs,
+				); err != nil {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
+			}
+
 			state.mu.Lock()
 			conversation, exists := state.conversations[conversationID]
 			if !exists {
@@ -113,9 +175,21 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				conversation.ModelID = modelID
 				changed = true
 			}
+			if input.RuleIDs != nil {
+				conversation.RuleIDs = sanitizeIDList(input.RuleIDs)
+				changed = true
+			}
+			if input.SkillIDs != nil {
+				conversation.SkillIDs = sanitizeIDList(input.SkillIDs)
+				changed = true
+			}
+			if input.MCPIDs != nil {
+				conversation.MCPIDs = sanitizeIDList(input.MCPIDs)
+				changed = true
+			}
 			if !changed {
 				state.mu.Unlock()
-				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "at least one of name/mode/model_id is required", map[string]any{})
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "at least one conversation field must be updated", map[string]any{})
 				return
 			}
 			conversation.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
@@ -150,9 +224,9 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				}
 				delete(state.executions, executionID)
 				delete(state.executionDiffs, executionID)
-				delete(state.executionLeases, executionID)
-				delete(state.executionControlQueues, executionID)
-				delete(state.executionControlSeq, executionID)
+				if state.orchestrator != nil {
+					state.orchestrator.Cancel(executionID)
+				}
 			}
 			delete(state.conversations, conversationID)
 			delete(state.conversationMessages, conversationID)

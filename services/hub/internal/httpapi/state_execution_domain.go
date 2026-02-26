@@ -24,11 +24,7 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 	s.executions = map[string]Execution{}
 	s.executionEvents = map[string][]ExecutionEvent{}
 	s.executionDiffs = map[string][]DiffItem{}
-	s.executionControlQueues = map[string][]ExecutionControlCommand{}
-	s.executionControlSeq = map[string]int{}
 	s.conversationEventSeq = map[string]int{}
-	s.executionLeases = map[string]ExecutionLease{}
-	s.workers = map[string]WorkerRegistration{}
 
 	for _, conversation := range snapshot.Conversations {
 		s.conversations[conversation.ID] = conversation
@@ -73,19 +69,6 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 			s.executionDiffs[event.ExecutionID] = parseDiffItemsFromPayload(event.Payload)
 		}
 	}
-	for _, command := range snapshot.ExecutionControlCommands {
-		executionID := command.ExecutionID
-		s.executionControlQueues[executionID] = append(s.executionControlQueues[executionID], command)
-		if command.Seq > s.executionControlSeq[executionID] {
-			s.executionControlSeq[executionID] = command.Seq
-		}
-	}
-	for _, lease := range snapshot.ExecutionLeases {
-		s.executionLeases[lease.ExecutionID] = lease
-	}
-	for _, worker := range snapshot.Workers {
-		s.workers[worker.WorkerID] = worker
-	}
 	s.mu.Unlock()
 }
 
@@ -104,14 +87,11 @@ func captureExecutionDomainSnapshot(state *AppState) executionDomainSnapshot {
 		return executionDomainSnapshot{}
 	}
 	snapshot := executionDomainSnapshot{
-		Conversations:            []Conversation{},
-		ConversationMessages:     []ConversationMessage{},
-		ConversationSnapshots:    []ConversationSnapshot{},
-		Executions:               []Execution{},
-		ExecutionEvents:          []ExecutionEvent{},
-		ExecutionControlCommands: []ExecutionControlCommand{},
-		ExecutionLeases:          []ExecutionLease{},
-		Workers:                  []WorkerRegistration{},
+		Conversations:         []Conversation{},
+		ConversationMessages:  []ConversationMessage{},
+		ConversationSnapshots: []ConversationSnapshot{},
+		Executions:            []Execution{},
+		ExecutionEvents:       []ExecutionEvent{},
 	}
 
 	state.mu.RLock()
@@ -134,6 +114,7 @@ func captureExecutionDomainSnapshot(state *AppState) executionDomainSnapshot {
 	for _, execution := range state.executions {
 		copyExecution := execution
 		copyExecution.ModelSnapshot = cloneModelSnapshot(execution.ModelSnapshot)
+		copyExecution.ResourceProfileSnapshot = cloneExecutionResourceProfile(execution.ResourceProfileSnapshot)
 		copyExecution.AgentConfigSnapshot = cloneExecutionAgentConfigSnapshot(execution.AgentConfigSnapshot)
 		snapshot.Executions = append(snapshot.Executions, copyExecution)
 	}
@@ -144,21 +125,6 @@ func captureExecutionDomainSnapshot(state *AppState) executionDomainSnapshot {
 			snapshot.ExecutionEvents = append(snapshot.ExecutionEvents, copyEvent)
 		}
 	}
-	for _, commands := range state.executionControlQueues {
-		for _, command := range commands {
-			copyCommand := command
-			copyCommand.Payload = cloneMapAny(command.Payload)
-			snapshot.ExecutionControlCommands = append(snapshot.ExecutionControlCommands, copyCommand)
-		}
-	}
-	for _, lease := range state.executionLeases {
-		snapshot.ExecutionLeases = append(snapshot.ExecutionLeases, lease)
-	}
-	for _, worker := range state.workers {
-		copyWorker := worker
-		copyWorker.Capabilities = cloneMapAny(worker.Capabilities)
-		snapshot.Workers = append(snapshot.Workers, copyWorker)
-	}
 	state.mu.RUnlock()
 
 	return snapshot
@@ -168,6 +134,17 @@ func cloneModelSnapshot(input ModelSnapshot) ModelSnapshot {
 	output := input
 	output.Params = cloneMapAny(input.Params)
 	return output
+}
+
+func cloneExecutionResourceProfile(input *ExecutionResourceProfile) *ExecutionResourceProfile {
+	if input == nil {
+		return nil
+	}
+	output := *input
+	output.RuleIDs = append([]string{}, input.RuleIDs...)
+	output.SkillIDs = append([]string{}, input.SkillIDs...)
+	output.MCPIDs = append([]string{}, input.MCPIDs...)
+	return &output
 }
 
 func cloneMapAny(input map[string]any) map[string]any {

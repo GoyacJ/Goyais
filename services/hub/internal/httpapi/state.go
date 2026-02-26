@@ -25,12 +25,8 @@ type AppState struct {
 	executions                 map[string]Execution
 	executionEvents            map[string][]ExecutionEvent
 	executionDiffs             map[string][]DiffItem
-	executionLeases            map[string]ExecutionLease
-	executionControlQueues     map[string][]ExecutionControlCommand
-	executionControlSeq        map[string]int
 	conversationEventSeq       map[string]int
 	conversationEventSubs      map[string]map[string]chan ExecutionEvent
-	workers                    map[string]WorkerRegistration
 
 	resources             map[string]Resource
 	resourceConfigs       map[string]ResourceConfig
@@ -42,6 +38,8 @@ type AppState struct {
 	adminUsers map[string]AdminUser
 	adminRoles map[Role]AdminRole
 	adminAudit []AdminAuditEvent
+
+	orchestrator *ExecutionOrchestrator
 }
 
 func NewAppState(store *authzStore) *AppState {
@@ -58,12 +56,8 @@ func NewAppState(store *authzStore) *AppState {
 		executions:                 map[string]Execution{},
 		executionEvents:            map[string][]ExecutionEvent{},
 		executionDiffs:             map[string][]DiffItem{},
-		executionLeases:            map[string]ExecutionLease{},
-		executionControlQueues:     map[string][]ExecutionControlCommand{},
-		executionControlSeq:        map[string]int{},
 		conversationEventSeq:       map[string]int{},
 		conversationEventSubs:      map[string]map[string]chan ExecutionEvent{},
-		workers:                    map[string]WorkerRegistration{},
 		resources:                  map[string]Resource{},
 		resourceConfigs:            map[string]ResourceConfig{},
 		resourceTestLogs:           []ResourceTestLog{},
@@ -86,6 +80,7 @@ func NewAppState(store *authzStore) *AppState {
 		}
 		state.hydrateExecutionDomainFromStore()
 	}
+	state.orchestrator = NewExecutionOrchestrator(state)
 
 	state.adminRoles = defaultRoles()
 	state.adminUsers["u_local_admin"] = AdminUser{

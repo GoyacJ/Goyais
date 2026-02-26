@@ -41,6 +41,9 @@ export type Conversation = {
   queue_state: QueueState;
   default_mode: ConversationMode;
   model_id: string;
+  rule_ids: string[];
+  skill_ids: string[];
+  mcp_ids: string[];
   base_revision: number;
   active_execution_id: string | null;
   created_at: string;
@@ -101,6 +104,13 @@ export type Execution = {
     base_url?: string;
     timeout_ms?: number;
     params?: Record<string, unknown>;
+  };
+  resource_profile_snapshot?: {
+    model_config_id?: string;
+    model_id: string;
+    rule_ids?: string[];
+    skill_ids?: string[];
+    mcp_ids?: string[];
   };
   agent_config_snapshot?: {
     max_model_turns: number;
@@ -193,6 +203,9 @@ export type ExecutionCreateResponse = {
 export type ConversationRuntime = {
   mode: ConversationMode;
   modelId: string;
+  ruleIds: string[];
+  skillIds: string[];
+  mcpIds: string[];
   draft: string;
   messages: ConversationMessage[];
   executions: Execution[];

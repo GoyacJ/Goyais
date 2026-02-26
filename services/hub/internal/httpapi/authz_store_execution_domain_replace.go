@@ -14,9 +14,6 @@ func (s *authzStore) replaceExecutionDomainSnapshot(snapshot executionDomainSnap
 	}()
 
 	cleanupStatements := []string{
-		`DELETE FROM execution_control_commands`,
-		`DELETE FROM execution_leases`,
-		`DELETE FROM workers`,
 		`DELETE FROM execution_events`,
 		`DELETE FROM executions`,
 		`DELETE FROM conversation_snapshots`,
@@ -30,9 +27,21 @@ func (s *authzStore) replaceExecutionDomainSnapshot(snapshot executionDomainSnap
 	}
 
 	for _, item := range snapshot.Conversations {
+		ruleIDsJSON, marshalErr := json.Marshal(sanitizeIDList(item.RuleIDs))
+		if marshalErr != nil {
+			return marshalErr
+		}
+		skillIDsJSON, marshalErr := json.Marshal(sanitizeIDList(item.SkillIDs))
+		if marshalErr != nil {
+			return marshalErr
+		}
+		mcpIDsJSON, marshalErr := json.Marshal(sanitizeIDList(item.MCPIDs))
+		if marshalErr != nil {
+			return marshalErr
+		}
 		if _, err = tx.Exec(
-			`INSERT INTO conversations(id, workspace_id, project_id, name, queue_state, default_mode, model_id, base_revision, active_execution_id, created_at, updated_at)
-			 VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+			`INSERT INTO conversations(id, workspace_id, project_id, name, queue_state, default_mode, model_id, rule_ids_json, skill_ids_json, mcp_ids_json, base_revision, active_execution_id, created_at, updated_at)
+			 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			item.ID,
 			item.WorkspaceID,
 			item.ProjectID,
@@ -40,6 +49,9 @@ func (s *authzStore) replaceExecutionDomainSnapshot(snapshot executionDomainSnap
 			string(item.QueueState),
 			string(item.DefaultMode),
 			item.ModelID,
+			string(ruleIDsJSON),
+			string(skillIDsJSON),
+			string(mcpIDsJSON),
 			item.BaseRevision,
 			nullWhenEmpty(derefString(item.ActiveExecutionID)),
 			item.CreatedAt,
@@ -108,9 +120,17 @@ func (s *authzStore) replaceExecutionDomainSnapshot(snapshot executionDomainSnap
 			}
 			agentConfigSnapshotJSON = string(encoded)
 		}
+		var resourceProfileJSON any
+		if item.ResourceProfileSnapshot != nil {
+			encoded, encodeErr := json.Marshal(item.ResourceProfileSnapshot)
+			if encodeErr != nil {
+				return encodeErr
+			}
+			resourceProfileJSON = string(encoded)
+		}
 		if _, err = tx.Exec(
-			`INSERT INTO executions(id, workspace_id, conversation_id, message_id, state, mode, model_id, mode_snapshot, model_snapshot_json, agent_config_snapshot_json, tokens_in, tokens_out, project_revision_snapshot, queue_index, trace_id, created_at, updated_at)
-			 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			`INSERT INTO executions(id, workspace_id, conversation_id, message_id, state, mode, model_id, mode_snapshot, model_snapshot_json, resource_profile_snapshot_json, agent_config_snapshot_json, tokens_in, tokens_out, project_revision_snapshot, queue_index, trace_id, created_at, updated_at)
+			 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			item.ID,
 			item.WorkspaceID,
 			item.ConversationID,
@@ -120,6 +140,7 @@ func (s *authzStore) replaceExecutionDomainSnapshot(snapshot executionDomainSnap
 			item.ModelID,
 			string(item.ModeSnapshot),
 			string(modelSnapshotJSON),
+			resourceProfileJSON,
 			agentConfigSnapshotJSON,
 			item.TokensIn,
 			item.TokensOut,
@@ -150,56 +171,6 @@ func (s *authzStore) replaceExecutionDomainSnapshot(snapshot executionDomainSnap
 			string(item.Type),
 			item.Timestamp,
 			string(payloadJSON),
-		); err != nil {
-			return err
-		}
-	}
-
-	for _, item := range snapshot.ExecutionControlCommands {
-		payloadJSON, marshalErr := json.Marshal(item.Payload)
-		if marshalErr != nil {
-			return marshalErr
-		}
-		if _, err = tx.Exec(
-			`INSERT INTO execution_control_commands(id, execution_id, type, payload_json, seq, created_at)
-			 VALUES(?,?,?,?,?,?)`,
-			item.ID,
-			item.ExecutionID,
-			string(item.Type),
-			string(payloadJSON),
-			item.Seq,
-			item.CreatedAt,
-		); err != nil {
-			return err
-		}
-	}
-
-	for _, item := range snapshot.ExecutionLeases {
-		if _, err = tx.Exec(
-			`INSERT INTO execution_leases(execution_id, worker_id, lease_version, lease_expires_at, run_attempt)
-			 VALUES(?,?,?,?,?)`,
-			item.ExecutionID,
-			item.WorkerID,
-			item.LeaseVersion,
-			item.LeaseExpiresAt,
-			item.RunAttempt,
-		); err != nil {
-			return err
-		}
-	}
-
-	for _, item := range snapshot.Workers {
-		capabilitiesJSON, marshalErr := json.Marshal(item.Capabilities)
-		if marshalErr != nil {
-			return marshalErr
-		}
-		if _, err = tx.Exec(
-			`INSERT INTO workers(worker_id, capabilities_json, status, last_heartbeat)
-			 VALUES(?,?,?,?)`,
-			item.WorkerID,
-			string(capabilitiesJSON),
-			item.Status,
-			item.LastHeartbeat,
 		); err != nil {
 			return err
 		}

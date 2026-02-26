@@ -266,9 +266,12 @@ type RenameConversationRequest struct {
 }
 
 type UpdateConversationRequest struct {
-	Name    *string           `json:"name,omitempty"`
-	Mode    *ConversationMode `json:"mode,omitempty"`
-	ModelID *string           `json:"model_id,omitempty"`
+	Name     *string           `json:"name,omitempty"`
+	Mode     *ConversationMode `json:"mode,omitempty"`
+	ModelID  *string           `json:"model_id,omitempty"`
+	RuleIDs  []string          `json:"rule_ids,omitempty"`
+	SkillIDs []string          `json:"skill_ids,omitempty"`
+	MCPIDs   []string          `json:"mcp_ids,omitempty"`
 }
 
 type Conversation struct {
@@ -279,6 +282,9 @@ type Conversation struct {
 	QueueState        QueueState       `json:"queue_state"`
 	DefaultMode       ConversationMode `json:"default_mode"`
 	ModelID           string           `json:"model_id"`
+	RuleIDs           []string         `json:"rule_ids"`
+	SkillIDs          []string         `json:"skill_ids"`
+	MCPIDs            []string         `json:"mcp_ids"`
 	BaseRevision      int64            `json:"base_revision"`
 	ActiveExecutionID *string          `json:"active_execution_id"`
 	CreatedAt         string           `json:"created_at"`
@@ -336,6 +342,7 @@ type Execution struct {
 	ModelID                 string                        `json:"model_id"`
 	ModeSnapshot            ConversationMode              `json:"mode_snapshot"`
 	ModelSnapshot           ModelSnapshot                 `json:"model_snapshot"`
+	ResourceProfileSnapshot *ExecutionResourceProfile     `json:"resource_profile_snapshot,omitempty"`
 	AgentConfigSnapshot     *ExecutionAgentConfigSnapshot `json:"agent_config_snapshot,omitempty"`
 	TokensIn                int                           `json:"tokens_in"`
 	TokensOut               int                           `json:"tokens_out"`
@@ -350,6 +357,14 @@ type ExecutionAgentConfigSnapshot struct {
 	MaxModelTurns    int                                  `json:"max_model_turns"`
 	ShowProcessTrace bool                                 `json:"show_process_trace"`
 	TraceDetailLevel WorkspaceAgentConfigTraceDetailLevel `json:"trace_detail_level"`
+}
+
+type ExecutionResourceProfile struct {
+	ModelConfigID string   `json:"model_config_id,omitempty"`
+	ModelID       string   `json:"model_id"`
+	RuleIDs       []string `json:"rule_ids,omitempty"`
+	SkillIDs      []string `json:"skill_ids,omitempty"`
+	MCPIDs        []string `json:"mcp_ids,omitempty"`
 }
 
 type ModelSnapshot struct {
@@ -424,69 +439,6 @@ type ExecutionEvent struct {
 
 type ExecutionEventBatchRequest struct {
 	Events []ExecutionEvent `json:"events"`
-}
-
-type ExecutionControlCommandType string
-
-const (
-	ExecutionControlCommandTypeStop ExecutionControlCommandType = "stop"
-)
-
-type ExecutionControlCommand struct {
-	ID          string                      `json:"id"`
-	ExecutionID string                      `json:"execution_id"`
-	Type        ExecutionControlCommandType `json:"type"`
-	Payload     map[string]any              `json:"payload"`
-	Seq         int                         `json:"seq"`
-	CreatedAt   string                      `json:"created_at"`
-}
-
-type ExecutionControlPollResponse struct {
-	Commands []ExecutionControlCommand `json:"commands"`
-	LastSeq  int                       `json:"last_seq"`
-}
-
-type WorkerRegistration struct {
-	WorkerID      string         `json:"worker_id"`
-	Capabilities  map[string]any `json:"capabilities"`
-	Status        string         `json:"status"`
-	LastHeartbeat string         `json:"last_heartbeat"`
-}
-
-type WorkerRegisterRequest struct {
-	WorkerID     string         `json:"worker_id"`
-	Capabilities map[string]any `json:"capabilities"`
-}
-
-type WorkerHeartbeatRequest struct {
-	Status string `json:"status"`
-}
-
-type ExecutionLease struct {
-	ExecutionID    string `json:"execution_id"`
-	WorkerID       string `json:"worker_id"`
-	LeaseVersion   int    `json:"lease_version"`
-	LeaseExpiresAt string `json:"lease_expires_at"`
-	RunAttempt     int    `json:"run_attempt"`
-}
-
-type ExecutionClaimRequest struct {
-	WorkerID     string `json:"worker_id"`
-	LeaseSeconds int    `json:"lease_seconds,omitempty"`
-}
-
-type ExecutionClaimEnvelope struct {
-	Execution    Execution      `json:"execution"`
-	Lease        ExecutionLease `json:"lease"`
-	Content      string         `json:"content"`
-	ProjectName  string         `json:"project_name,omitempty"`
-	ProjectPath  string         `json:"project_path,omitempty"`
-	ProjectIsGit bool           `json:"project_is_git"`
-}
-
-type ExecutionClaimResponse struct {
-	Claimed   bool                    `json:"claimed"`
-	Execution *ExecutionClaimEnvelope `json:"execution,omitempty"`
 }
 
 type Resource struct {
