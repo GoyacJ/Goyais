@@ -2,40 +2,49 @@
   <div
     class="workspace-switcher relative grid content-start pt-[var(--global-space-4)]"
     :class="{ 'gap-[var(--global-space-8)]': !collapsed, 'gap-[var(--global-space-6)]': collapsed }"
-    data-tauri-drag-region
     @mousedown="onDragMouseDown"
-    @dblclick="onDragRegionDoubleClick"
   >
     <div
       v-if="supportsWindowControls"
-      class="mac-row inline-flex mt-[var(--global-space-neg-2px)] gap-[var(--global-space-8)]"
+      class="mac-row group inline-flex mt-[var(--global-space-neg-2px)] gap-[var(--global-space-8)]"
       :class="{ 'justify-center': collapsed }"
-      data-tauri-drag-region
     >
       <button
-        class="dot danger h-[12px] w-[12px] border-0 rounded-[var(--global-radius-pill)] bg-[var(--semantic-danger)] p-0 opacity-90 transition-all duration-[120ms] ease-linear hover:scale-105 hover:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--semantic-focus-ring)] focus-visible:outline-offset-1"
+        class="dot danger relative inline-flex h-[12px] w-[12px] items-center justify-center border-0 rounded-[var(--global-radius-pill)] bg-[var(--semantic-danger)] p-0 opacity-90 transition-all duration-[120ms] ease-linear hover:scale-105 hover:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--semantic-focus-ring)] focus-visible:outline-offset-1"
         data-no-drag="true"
         type="button"
         title="Close"
         aria-label="关闭窗口"
         @click.stop="onCloseWindow"
-      ></button>
+      >
+        <span class="dot-glyph pointer-events-none select-none text-[8px] leading-none text-black/70 opacity-0 transition-opacity duration-[120ms] ease-linear group-hover:opacity-100 group-focus-within:opacity-100">
+          ×
+        </span>
+      </button>
       <button
-        class="dot warning h-[12px] w-[12px] border-0 rounded-[var(--global-radius-pill)] bg-[var(--semantic-warning)] p-0 opacity-90 transition-all duration-[120ms] ease-linear hover:scale-105 hover:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--semantic-focus-ring)] focus-visible:outline-offset-1"
+        class="dot warning relative inline-flex h-[12px] w-[12px] items-center justify-center border-0 rounded-[var(--global-radius-pill)] bg-[var(--semantic-warning)] p-0 opacity-90 transition-all duration-[120ms] ease-linear hover:scale-105 hover:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--semantic-focus-ring)] focus-visible:outline-offset-1"
         data-no-drag="true"
         type="button"
         title="Minimize"
         aria-label="最小化窗口"
         @click.stop="onMinimizeWindow"
-      ></button>
+      >
+        <span class="dot-glyph pointer-events-none select-none text-[9px] leading-none text-black/70 opacity-0 transition-opacity duration-[120ms] ease-linear group-hover:opacity-100 group-focus-within:opacity-100">
+          −
+        </span>
+      </button>
       <button
-        class="dot success h-[12px] w-[12px] border-0 rounded-[var(--global-radius-pill)] bg-[var(--semantic-success)] p-0 opacity-90 transition-all duration-[120ms] ease-linear hover:scale-105 hover:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--semantic-focus-ring)] focus-visible:outline-offset-1"
+        class="dot success relative inline-flex h-[12px] w-[12px] items-center justify-center border-0 rounded-[var(--global-radius-pill)] bg-[var(--semantic-success)] p-0 opacity-90 transition-all duration-[120ms] ease-linear hover:scale-105 hover:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--semantic-focus-ring)] focus-visible:outline-offset-1"
         data-no-drag="true"
         type="button"
         title="Toggle Maximize"
         aria-label="切换最大化"
         @click.stop="onToggleMaximizeWindow"
-      ></button>
+      >
+        <span class="dot-glyph pointer-events-none select-none text-[8px] leading-none text-black/70 opacity-0 transition-opacity duration-[120ms] ease-linear group-hover:opacity-100 group-focus-within:opacity-100">
+          +
+        </span>
+      </button>
     </div>
 
     <div
@@ -103,7 +112,7 @@ import { computed, ref } from "vue";
 import { isRuntimeCapabilitySupported } from "@/shared/runtime";
 import {
   closeCurrentWindow,
-  handleDragMouseDown,
+  handleTitlebarMouseDown,
   minimizeCurrentWindow,
   toggleMaximizeCurrentWindow
 } from "@/shared/services/windowControls";
@@ -179,17 +188,6 @@ function onDragMouseDown(event: MouseEvent): void {
   if (!supportsWindowControls) {
     return;
   }
-  void handleDragMouseDown(event);
-}
-
-function onDragRegionDoubleClick(event: MouseEvent): void {
-  if (!supportsWindowControls) {
-    return;
-  }
-  if ((event.target as HTMLElement | null)?.closest("button,a,input,select,textarea,[role='button'],[data-no-drag='true']")) {
-    return;
-  }
-
-  void toggleMaximizeCurrentWindow();
+  void handleTitlebarMouseDown(event);
 }
 </script>

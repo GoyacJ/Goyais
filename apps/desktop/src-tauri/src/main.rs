@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod sidecar;
+mod window_prefs;
 
 use std::io;
 
@@ -17,6 +18,9 @@ fn main() {
             MacosLauncher::LaunchAgent,
             None::<Vec<&str>>,
         ))
+        .invoke_handler(tauri::generate_handler![
+            window_prefs::get_macos_titlebar_double_click_action
+        ])
         .setup(|app| {
             let handle = app.handle().clone();
             if let Err(error) = sidecar::initialize(&handle) {
