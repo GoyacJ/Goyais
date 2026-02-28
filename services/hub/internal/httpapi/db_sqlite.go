@@ -213,6 +213,8 @@ func (s *authzStore) migrate() error {
 			workspace_id TEXT NOT NULL,
 			model_config_ids_json TEXT NOT NULL,
 			default_model_config_id TEXT,
+			token_threshold INTEGER,
+			model_token_thresholds_json TEXT NOT NULL DEFAULT '{}',
 			rule_ids_json TEXT NOT NULL,
 			skill_ids_json TEXT NOT NULL,
 			mcp_ids_json TEXT NOT NULL,
@@ -323,6 +325,9 @@ func (s *authzStore) migrate() error {
 	if migrateErr := s.normalizePermissionModes(); migrateErr != nil {
 		return fmt.Errorf("normalize permission modes: %w", migrateErr)
 	}
+	if migrateErr := s.ensureProjectConfigTokenThresholdColumns(); migrateErr != nil {
+		return fmt.Errorf("ensure project config token threshold columns: %w", migrateErr)
+	}
 	if validationErr := s.validateStrictSchema(); validationErr != nil {
 		backupPath := ""
 		if shouldBackupLegacySchema(s.dbPath, validationErr) {
@@ -380,6 +385,33 @@ func (s *authzStore) normalizePermissionModes() error {
 		}
 	}
 	return nil
+}
+
+func (s *authzStore) ensureProjectConfigTokenThresholdColumns() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	hasTokenThreshold, hasTokenThresholdErr := tableHasColumn(s.db, "project_configs", "token_threshold")
+	if hasTokenThresholdErr != nil {
+		return hasTokenThresholdErr
+	}
+	if !hasTokenThreshold {
+		if _, err := s.db.Exec(`ALTER TABLE project_configs ADD COLUMN token_threshold INTEGER`); err != nil {
+			return err
+		}
+	}
+
+	hasModelThresholdsJSON, hasModelThresholdsJSONErr := tableHasColumn(s.db, "project_configs", "model_token_thresholds_json")
+	if hasModelThresholdsJSONErr != nil {
+		return hasModelThresholdsJSONErr
+	}
+	if !hasModelThresholdsJSON {
+		if _, err := s.db.Exec(`ALTER TABLE project_configs ADD COLUMN model_token_thresholds_json TEXT NOT NULL DEFAULT '{}'`); err != nil {
+			return err
+		}
+	}
+	_, err := s.db.Exec(`UPDATE project_configs SET model_token_thresholds_json='{}' WHERE model_token_thresholds_json IS NULL OR TRIM(model_token_thresholds_json)=''`)
+	return err
 }
 
 func shouldBackupLegacySchema(dbPath string, validationErr error) bool {
@@ -469,6 +501,8 @@ func (s *authzStore) validateStrictSchema() error {
 		{table: "projects", column: "default_model_config_id"},
 		{table: "project_configs", column: "model_config_ids_json"},
 		{table: "project_configs", column: "default_model_config_id"},
+		{table: "project_configs", column: "token_threshold"},
+		{table: "project_configs", column: "model_token_thresholds_json"},
 		{table: "executions", column: "agent_config_snapshot_json"},
 		{table: "executions", column: "resource_profile_snapshot_json"},
 		{table: "executions", column: "tokens_in"},

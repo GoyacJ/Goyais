@@ -331,6 +331,17 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
 			return
 		}
+		if thresholdErr := validateExecutionTokenThresholdsLocked(
+			state,
+			conversation,
+			projectConfig,
+			selectedModelConfig,
+			resolvedModelConfigID,
+		); thresholdErr != nil {
+			state.mu.Unlock()
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", thresholdErr.Error(), map[string]any{})
+			return
+		}
 
 		queueIndex := deriveNextQueueIndexLocked(state, conversationID)
 		msgID := "msg_" + randomHex(6)

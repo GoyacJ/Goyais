@@ -1896,7 +1896,7 @@ components:
 
     Project:
       type: object
-      required: [id, workspace_id, name, repo_path, is_git, current_revision, created_at, updated_at]
+      required: [id, workspace_id, name, repo_path, is_git, current_revision, tokens_in_total, tokens_out_total, tokens_total, created_at, updated_at]
       properties:
         id:
           type: string
@@ -1910,12 +1910,24 @@ components:
           type: boolean
         default_model_config_id:
           type: string
+        token_threshold:
+          type: integer
+          minimum: 1
         default_mode:
           type: string
           enum: [agent, plan]
         current_revision:
           type: integer
           format: int64
+        tokens_in_total:
+          type: integer
+          minimum: 0
+        tokens_out_total:
+          type: integer
+          minimum: 0
+        tokens_total:
+          type: integer
+          minimum: 0
         created_at:
           type: string
           format: date-time
@@ -1947,7 +1959,7 @@ components:
 
     ProjectConfig:
       type: object
-      required: [project_id, model_config_ids, rule_ids, skill_ids, mcp_ids, updated_at]
+      required: [project_id, model_config_ids, model_token_thresholds, rule_ids, skill_ids, mcp_ids, updated_at]
       properties:
         project_id:
           type: string
@@ -1957,6 +1969,14 @@ components:
             type: string
         default_model_config_id:
           type: [string, 'null']
+        token_threshold:
+          type: integer
+          minimum: 1
+        model_token_thresholds:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 1
         rule_ids:
           type: array
           items:
@@ -1975,14 +1995,41 @@ components:
 
     WorkspaceProjectConfigItem:
       type: object
-      required: [project_id, project_name, config]
+      required: [project_id, project_name, config, tokens_in_total, tokens_out_total, tokens_total, model_token_usage_by_config_id]
       properties:
         project_id:
           type: string
         project_name:
           type: string
+        tokens_in_total:
+          type: integer
+          minimum: 0
+        tokens_out_total:
+          type: integer
+          minimum: 0
+        tokens_total:
+          type: integer
+          minimum: 0
+        model_token_usage_by_config_id:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ModelTokenUsage'
         config:
           $ref: '#/components/schemas/ProjectConfig'
+
+    ModelTokenUsage:
+      type: object
+      required: [tokens_in_total, tokens_out_total, tokens_total]
+      properties:
+        tokens_in_total:
+          type: integer
+          minimum: 0
+        tokens_out_total:
+          type: integer
+          minimum: 0
+        tokens_total:
+          type: integer
+          minimum: 0
 
     WorkspaceAgentExecutionConfig:
       type: object
@@ -2749,6 +2796,9 @@ components:
           type: string
         api_key_masked:
           type: string
+        token_threshold:
+          type: integer
+          minimum: 1
         runtime:
           $ref: '#/components/schemas/ModelRuntimeSpec'
         params:
@@ -2798,7 +2848,7 @@ components:
 
     ResourceConfig:
       type: object
-      required: [id, workspace_id, type, enabled, created_at, updated_at]
+      required: [id, workspace_id, type, enabled, tokens_in_total, tokens_out_total, tokens_total, created_at, updated_at]
       properties:
         id:
           type: string
@@ -2819,6 +2869,15 @@ components:
           $ref: '#/components/schemas/SkillSpec'
         mcp:
           $ref: '#/components/schemas/McpSpec'
+        tokens_in_total:
+          type: integer
+          minimum: 0
+        tokens_out_total:
+          type: integer
+          minimum: 0
+        tokens_total:
+          type: integer
+          minimum: 0
         created_at:
           type: string
           format: date-time

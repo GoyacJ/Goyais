@@ -18,6 +18,7 @@ import { modelViewColumns, modelEnabledOptions } from "@/modules/resource/views/
 import { resolveDefaultEndpointKey } from "@/modules/resource/views/workspaceModelView.vendor";
 import { authStore } from "@/shared/stores/authStore";
 import { showToast, type ToastTone } from "@/shared/stores/toastStore";
+import { formatTokenUsageWithThreshold } from "@/shared/utils/tokenDisplay";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
 import type { ModelVendorName, ResourceConfig } from "@/shared/types/api";
 
@@ -38,6 +39,7 @@ export function useWorkspaceModelView() {
     apiKey: "",
     apiKeyHint: "",
     timeoutMs: "",
+    tokenThreshold: "",
     enabled: true,
     testMessage: ""
   });
@@ -139,6 +141,7 @@ export function useWorkspaceModelView() {
       apiKey: "",
       apiKeyHint: "",
       timeoutMs: "",
+      tokenThreshold: "",
       enabled: true
     });
   }
@@ -158,6 +161,7 @@ export function useWorkspaceModelView() {
       apiKey: "",
       apiKeyHint: item.model?.api_key_masked ? `当前: ${item.model.api_key_masked}（不填写将保留旧值）` : "",
       timeoutMs: item.model?.runtime?.request_timeout_ms ? String(item.model.runtime.request_timeout_ms) : "",
+      tokenThreshold: item.model?.token_threshold ? String(item.model.token_threshold) : "",
       enabled: item.enabled
     });
   }
@@ -185,6 +189,11 @@ export function useWorkspaceModelView() {
       showTestNotice("error", "Timeout 范围必须在 1000-120000ms");
       return;
     }
+    const normalizedTokenThreshold = parseOptionalThreshold(form.tokenThreshold);
+    if (normalizedTokenThreshold === "invalid") {
+      showTestNotice("error", "Token 阀值必须为正整数，留空表示不限");
+      return;
+    }
     const name = form.name.trim() || modelID;
     const model = {
       vendor,
@@ -192,6 +201,7 @@ export function useWorkspaceModelView() {
       base_url: vendor === "Local" ? form.baseUrl.trim() || undefined : undefined,
       base_url_key: vendor === "Local" ? undefined : form.baseUrlKey.trim() || undefined,
       api_key: form.apiKey.trim() || undefined,
+      token_threshold: normalizedTokenThreshold ?? undefined,
       runtime: Number.isNaN(timeout) ? undefined : { request_timeout_ms: timeout }
     };
 
@@ -259,6 +269,25 @@ export function useWorkspaceModelView() {
     return new Date(value).toLocaleString();
   }
 
+  function formatTokenUsage(item: ResourceConfig): string {
+    return formatTokenUsageWithThreshold(item.tokens_total, item.model?.token_threshold);
+  }
+
+  function parseOptionalThreshold(input: string): number | null | "invalid" {
+    const trimmed = input.trim();
+    if (trimmed === "") {
+      return null;
+    }
+    if (!/^[0-9]+$/.test(trimmed)) {
+      return "invalid";
+    }
+    const parsed = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return "invalid";
+    }
+    return parsed;
+  }
+
   return {
     canWrite,
     columns: modelViewColumns,
@@ -278,6 +307,7 @@ export function useWorkspaceModelView() {
     closeDeleteConfirm,
     confirmRemoveConfig,
     formatTime,
+    formatTokenUsage,
     loadNextResourceConfigsPage,
     loadPreviousResourceConfigsPage,
     resourceStore,

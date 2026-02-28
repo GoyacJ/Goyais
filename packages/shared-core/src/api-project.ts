@@ -17,6 +17,10 @@ export type Project = {
   repo_path: string;
   is_git: boolean;
   default_model_config_id?: string;
+  token_threshold?: number;
+  tokens_in_total?: number;
+  tokens_out_total?: number;
+  tokens_total?: number;
   default_mode?: PermissionMode;
   current_revision: number;
   created_at: string;
@@ -27,6 +31,8 @@ export type ProjectConfig = {
   project_id: string;
   model_config_ids: string[];
   default_model_config_id: string | null;
+  token_threshold?: number;
+  model_token_thresholds?: Record<string, number>;
   rule_ids: string[];
   skill_ids: string[];
   mcp_ids: string[];

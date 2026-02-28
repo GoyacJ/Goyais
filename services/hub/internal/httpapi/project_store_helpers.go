@@ -179,10 +179,10 @@ func getProjectConfigFromStore(state *AppState, project Project) (ProjectConfig,
 }
 
 func saveProjectConfigToStore(state *AppState, workspaceID string, config ProjectConfig) (ProjectConfig, error) {
-	item := config
+	item := normalizeProjectConfigForStorage(config)
 	var err error
 	if state.authz != nil {
-		item, err = state.authz.upsertProjectConfig(workspaceID, config)
+		item, err = state.authz.upsertProjectConfig(workspaceID, item)
 		if err != nil {
 			return ProjectConfig{}, err
 		}
@@ -236,12 +236,13 @@ func listWorkspaceProjectConfigItemsFromStore(state *AppState, workspaceID strin
 
 func defaultProjectConfig(projectID string, defaultModelConfigID string, updatedAt string) ProjectConfig {
 	config := ProjectConfig{
-		ProjectID:      strings.TrimSpace(projectID),
-		ModelConfigIDs: []string{},
-		RuleIDs:        []string{},
-		SkillIDs:       []string{},
-		MCPIDs:         []string{},
-		UpdatedAt:      strings.TrimSpace(updatedAt),
+		ProjectID:            strings.TrimSpace(projectID),
+		ModelConfigIDs:       []string{},
+		ModelTokenThresholds: map[string]int{},
+		RuleIDs:              []string{},
+		SkillIDs:             []string{},
+		MCPIDs:               []string{},
+		UpdatedAt:            strings.TrimSpace(updatedAt),
 	}
 	if config.UpdatedAt == "" {
 		config.UpdatedAt = nowUTC()

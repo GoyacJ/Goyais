@@ -10,10 +10,25 @@ func validateProjectConfigResourceReferences(state *AppState, workspaceID string
 	if workspaceID == "" {
 		return fmt.Errorf("workspace_id is required")
 	}
+	if err := validateOptionalPositiveThreshold("token_threshold", config.TokenThreshold); err != nil {
+		return err
+	}
 
 	for _, modelConfigID := range sanitizeIDList(config.ModelConfigIDs) {
 		if err := validateWorkspaceModelConfigReference(state, workspaceID, modelConfigID); err != nil {
 			return err
+		}
+	}
+	for modelConfigID, threshold := range config.ModelTokenThresholds {
+		normalizedModelConfigID := strings.TrimSpace(modelConfigID)
+		if normalizedModelConfigID == "" {
+			return fmt.Errorf("model_token_thresholds contains empty model_config_id")
+		}
+		if threshold <= 0 {
+			return fmt.Errorf("model_token_thresholds.%s must be a positive integer", normalizedModelConfigID)
+		}
+		if !containsString(config.ModelConfigIDs, normalizedModelConfigID) {
+			return fmt.Errorf("model_token_thresholds.%s must be included in model_config_ids", normalizedModelConfigID)
 		}
 	}
 	for _, ruleID := range sanitizeIDList(config.RuleIDs) {

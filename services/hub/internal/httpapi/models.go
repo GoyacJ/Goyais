@@ -236,6 +236,10 @@ type Project struct {
 	RepoPath             string           `json:"repo_path"`
 	IsGit                bool             `json:"is_git"`
 	DefaultModelConfigID string           `json:"default_model_config_id,omitempty"`
+	TokenThreshold       *int             `json:"token_threshold,omitempty"`
+	TokensInTotal        int              `json:"tokens_in_total"`
+	TokensOutTotal       int              `json:"tokens_out_total"`
+	TokensTotal          int              `json:"tokens_total"`
 	DefaultMode          ConversationMode `json:"default_mode,omitempty"`
 	CurrentRevision      int64            `json:"current_revision"`
 	CreatedAt            string           `json:"created_at"`
@@ -243,13 +247,21 @@ type Project struct {
 }
 
 type ProjectConfig struct {
-	ProjectID            string   `json:"project_id"`
-	ModelConfigIDs       []string `json:"model_config_ids"`
-	DefaultModelConfigID *string  `json:"default_model_config_id,omitempty"`
-	RuleIDs              []string `json:"rule_ids"`
-	SkillIDs             []string `json:"skill_ids"`
-	MCPIDs               []string `json:"mcp_ids"`
-	UpdatedAt            string   `json:"updated_at"`
+	ProjectID            string         `json:"project_id"`
+	ModelConfigIDs       []string       `json:"model_config_ids"`
+	DefaultModelConfigID *string        `json:"default_model_config_id,omitempty"`
+	TokenThreshold       *int           `json:"token_threshold,omitempty"`
+	ModelTokenThresholds map[string]int `json:"model_token_thresholds"`
+	RuleIDs              []string       `json:"rule_ids"`
+	SkillIDs             []string       `json:"skill_ids"`
+	MCPIDs               []string       `json:"mcp_ids"`
+	UpdatedAt            string         `json:"updated_at"`
+}
+
+type ModelTokenUsage struct {
+	TokensInTotal  int `json:"tokens_in_total"`
+	TokensOutTotal int `json:"tokens_out_total"`
+	TokensTotal    int `json:"tokens_total"`
 }
 
 type CreateProjectRequest struct {

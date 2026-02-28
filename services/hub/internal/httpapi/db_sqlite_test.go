@@ -235,7 +235,18 @@ func TestAuthzStoreCreatesProjectSchema(t *testing.T) {
 		}
 	}
 
-	projectConfigColumns := []string{"project_id", "workspace_id", "model_config_ids_json", "default_model_config_id", "rule_ids_json", "skill_ids_json", "mcp_ids_json", "updated_at"}
+	projectConfigColumns := []string{
+		"project_id",
+		"workspace_id",
+		"model_config_ids_json",
+		"default_model_config_id",
+		"token_threshold",
+		"model_token_thresholds_json",
+		"rule_ids_json",
+		"skill_ids_json",
+		"mcp_ids_json",
+		"updated_at",
+	}
 	for _, column := range projectConfigColumns {
 		ok, hasErr := tableHasColumn(store.db, "project_configs", column)
 		if hasErr != nil {

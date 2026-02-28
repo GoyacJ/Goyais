@@ -43,6 +43,8 @@ func TestAuthzStoreProjectAndConfigCRUD(t *testing.T) {
 		ProjectID:            "proj_alpha",
 		ModelConfigIDs:       []string{"rc_model_1", "rc_model_2"},
 		DefaultModelConfigID: toStringPtr("rc_model_1"),
+		TokenThreshold:       intPointer(1000),
+		ModelTokenThresholds: map[string]int{"rc_model_1": 600, "rc_model_unknown": 900},
 		RuleIDs:              []string{"rc_rule_1"},
 		SkillIDs:             []string{"rc_skill_1"},
 		MCPIDs:               []string{"rc_mcp_1"},
@@ -54,6 +56,12 @@ func TestAuthzStoreProjectAndConfigCRUD(t *testing.T) {
 	if savedConfig.DefaultModelConfigID == nil || *savedConfig.DefaultModelConfigID != "rc_model_1" {
 		t.Fatalf("unexpected default model id: %#v", savedConfig.DefaultModelConfigID)
 	}
+	if savedConfig.TokenThreshold == nil || *savedConfig.TokenThreshold != 1000 {
+		t.Fatalf("unexpected token threshold: %#v", savedConfig.TokenThreshold)
+	}
+	if len(savedConfig.ModelTokenThresholds) != 1 || savedConfig.ModelTokenThresholds["rc_model_1"] != 600 {
+		t.Fatalf("unexpected model token thresholds: %#v", savedConfig.ModelTokenThresholds)
+	}
 
 	config, exists, err := store.getProjectConfig("proj_alpha")
 	if err != nil {
@@ -64,6 +72,12 @@ func TestAuthzStoreProjectAndConfigCRUD(t *testing.T) {
 	}
 	if len(config.ModelConfigIDs) != 2 || config.ModelConfigIDs[0] != "rc_model_1" {
 		t.Fatalf("unexpected config model ids: %#v", config.ModelConfigIDs)
+	}
+	if config.TokenThreshold == nil || *config.TokenThreshold != 1000 {
+		t.Fatalf("unexpected token threshold from get: %#v", config.TokenThreshold)
+	}
+	if len(config.ModelTokenThresholds) != 1 || config.ModelTokenThresholds["rc_model_1"] != 600 {
+		t.Fatalf("unexpected model token thresholds from get: %#v", config.ModelTokenThresholds)
 	}
 
 	workspaceItems, err := store.listWorkspaceProjectConfigItems("ws_local")
@@ -78,6 +92,12 @@ func TestAuthzStoreProjectAndConfigCRUD(t *testing.T) {
 	}
 	if workspaceItems[0].Config.DefaultModelConfigID == nil || *workspaceItems[0].Config.DefaultModelConfigID != "rc_model_1" {
 		t.Fatalf("unexpected workspace default model id: %#v", workspaceItems[0].Config.DefaultModelConfigID)
+	}
+	if workspaceItems[0].Config.TokenThreshold == nil || *workspaceItems[0].Config.TokenThreshold != 1000 {
+		t.Fatalf("unexpected workspace token threshold: %#v", workspaceItems[0].Config.TokenThreshold)
+	}
+	if len(workspaceItems[0].Config.ModelTokenThresholds) != 1 || workspaceItems[0].Config.ModelTokenThresholds["rc_model_1"] != 600 {
+		t.Fatalf("unexpected workspace model token thresholds: %#v", workspaceItems[0].Config.ModelTokenThresholds)
 	}
 
 	if err := store.deleteProject("proj_alpha"); err != nil {
@@ -184,4 +204,8 @@ func TestAuthzStoreListProjectsOrdersByNewestFirst(t *testing.T) {
 	if items[0].ID != "proj_new" || items[1].ID != "proj_old" {
 		t.Fatalf("expected newest first, got %#v", items)
 	}
+}
+
+func intPointer(input int) *int {
+	return &input
 }

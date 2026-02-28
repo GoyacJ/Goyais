@@ -6,9 +6,13 @@ import (
 )
 
 type workspaceProjectConfigItem struct {
-	ProjectID   string        `json:"project_id"`
-	ProjectName string        `json:"project_name"`
-	Config      ProjectConfig `json:"config"`
+	ProjectID                 string                     `json:"project_id"`
+	ProjectName               string                     `json:"project_name"`
+	Config                    ProjectConfig              `json:"config"`
+	TokensInTotal             int                        `json:"tokens_in_total"`
+	TokensOutTotal            int                        `json:"tokens_out_total"`
+	TokensTotal               int                        `json:"tokens_total"`
+	ModelTokenUsageByConfigID map[string]ModelTokenUsage `json:"model_token_usage_by_config_id"`
 }
 
 func WorkspaceProjectConfigsHandler(state *AppState) http.HandlerFunc {
@@ -39,6 +43,27 @@ func WorkspaceProjectConfigsHandler(state *AppState) http.HandlerFunc {
 				"workspace_id": workspaceID,
 			})
 			return
+		}
+		state.mu.RLock()
+		aggregate := computeTokenUsageAggregateLocked(state)
+		state.mu.RUnlock()
+		for index := range items {
+			projectID := strings.TrimSpace(items[index].ProjectID)
+			projectTotals := aggregate.projectTotals[projectID]
+			items[index].TokensInTotal = projectTotals.Input
+			items[index].TokensOutTotal = projectTotals.Output
+			items[index].TokensTotal = projectTotals.Total
+
+			modelUsage := map[string]ModelTokenUsage{}
+			projectModelTotals := aggregate.projectModelTotals[projectID]
+			for _, modelConfigID := range items[index].Config.ModelConfigIDs {
+				normalizedModelConfigID := strings.TrimSpace(modelConfigID)
+				if normalizedModelConfigID == "" {
+					continue
+				}
+				modelUsage[normalizedModelConfigID] = toModelTokenUsage(projectModelTotals[normalizedModelConfigID])
+			}
+			items[index].ModelTokenUsageByConfigID = modelUsage
 		}
 		writeJSON(w, http.StatusOK, items)
 	}

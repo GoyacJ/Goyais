@@ -96,6 +96,13 @@
   padding: var(--global-space-4) 0;
 }
 
+.project-token {
+  color: var(--semantic-text-subtle);
+  font-size: var(--global-font-size-11);
+  line-height: var(--global-line-height-tight);
+  white-space: nowrap;
+}
+
 .row-actions {
   display: inline-flex;
   gap: var(--global-space-4);

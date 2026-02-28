@@ -115,6 +115,8 @@ describe("MainSidebarPanel", () => {
           name: "项目A",
           repo_path: "/tmp/project-a",
           is_git: true,
+          token_threshold: 200000,
+          tokens_total: 15603,
           current_revision: 0,
           created_at: "2026-02-23T00:00:00Z",
           updated_at: "2026-02-23T00:00:00Z"
@@ -146,6 +148,11 @@ describe("MainSidebarPanel", () => {
     });
 
     expect(wrapper.find(".conversation-token").text()).toBe("32");
+    expect(wrapper.find(".project-token").text()).toBe("15.6K / 200K");
+    const projectTreeButton = wrapper.find(".tree-btn");
+    const projectTreeSpans = projectTreeButton.findAll("span");
+    expect(projectTreeSpans[0]?.text()).toBe("15.6K / 200K");
+    expect(projectTreeSpans[1]?.text()).toBe("项目A");
   });
 
   it("starts inline rename on double click and emits rename on enter", async () => {

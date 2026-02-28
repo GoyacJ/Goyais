@@ -32,6 +32,9 @@
         <template #cell-model="{ row }">
           {{ (row as ResourceConfig).name?.trim() || (row as ResourceConfig).model?.model_id || "-" }}
         </template>
+        <template #cell-tokenUsage="{ row }">
+          {{ formatTokenUsage(row as ResourceConfig) }}
+        </template>
         <template #cell-enabled="{ row }">
           <span :class="(row as ResourceConfig).enabled ? 'enabled' : 'disabled'">
             {{ (row as ResourceConfig).enabled ? "启用" : "停用" }}
@@ -82,6 +85,11 @@
           Timeout (ms)
           <BaseInput v-model="form.timeoutMs" placeholder="30000" />
           <span class="hint">默认 30000，范围 1000-120000</span>
+        </label>
+        <label>
+          Token 阀值
+          <BaseInput v-model="form.tokenThreshold" placeholder="留空表示不限" />
+          <span class="hint">仅允许正整数；留空表示不限</span>
         </label>
         <label class="full">
           API Key
@@ -134,6 +142,7 @@ const {
   enabledOptions,
   form,
   formatTime,
+  formatTokenUsage,
   loadNextResourceConfigsPage,
   loadPreviousResourceConfigsPage,
   onSearch,

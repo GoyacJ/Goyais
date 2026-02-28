@@ -1,6 +1,7 @@
 export const modelViewColumns = [
   { key: "vendor", label: "厂商" },
   { key: "model", label: "模型" },
+  { key: "tokenUsage", label: "Token 用量" },
   { key: "enabled", label: "状态" },
   { key: "updated", label: "更新时间" },
   { key: "actions", label: "动作" }

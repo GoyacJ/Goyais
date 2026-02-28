@@ -42,6 +42,7 @@ func ResourceConfigsHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
+			items = decorateModelResourceConfigUsage(state, items)
 			raw := make([]any, 0, len(items))
 			for _, item := range items {
 				raw = append(raw, item)
@@ -79,6 +80,10 @@ func ResourceConfigsHandler(state *AppState) http.HandlerFunc {
 			if input.Model != nil {
 				input.Model = normalizeModelSpecForStorage(input.Model)
 				if err := validateModelRuntimeSpec(input.Model.Runtime); err != nil {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
+				if err := validateOptionalPositiveThreshold("model token_threshold", input.Model.TokenThreshold); err != nil {
 					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
 					return
 				}
@@ -155,6 +160,10 @@ func ResourceConfigByIDHandler(state *AppState) http.HandlerFunc {
 			applyPatchToResourceConfig(&origin, patch)
 			if origin.Type == ResourceTypeModel && origin.Model != nil {
 				if err := validateModelRuntimeSpec(origin.Model.Runtime); err != nil {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
+				if err := validateOptionalPositiveThreshold("model token_threshold", origin.Model.TokenThreshold); err != nil {
 					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
 					return
 				}
@@ -350,6 +359,7 @@ func normalizeModelSpecForStorage(spec *ModelSpec) *ModelSpec {
 	next.ModelID = strings.TrimSpace(next.ModelID)
 	next.BaseURL = strings.TrimSpace(next.BaseURL)
 	next.BaseURLKey = strings.TrimSpace(next.BaseURLKey)
+	next.TokenThreshold = normalizeOptionalPositiveThreshold(next.TokenThreshold)
 	next.Runtime = normalizeModelRuntimeSpec(next.Runtime)
 	if next.Vendor != ModelVendorLocal {
 		next.BaseURL = ""
@@ -422,4 +432,28 @@ func validateModelSpecAgainstCatalog(state *AppState, workspaceID string, curren
 		return fmt.Errorf("model %s/%s does not exist in catalog", vendor, modelID)
 	}
 	return fmt.Errorf("vendor %s does not exist in catalog", vendor)
+}
+
+func decorateModelResourceConfigUsage(state *AppState, items []ResourceConfig) []ResourceConfig {
+	if len(items) == 0 {
+		return items
+	}
+	state.mu.RLock()
+	aggregate := computeTokenUsageAggregateLocked(state)
+	state.mu.RUnlock()
+
+	decorated := make([]ResourceConfig, 0, len(items))
+	for _, item := range items {
+		if item.Type == ResourceTypeModel {
+			workspaceID := strings.TrimSpace(item.WorkspaceID)
+			configID := strings.TrimSpace(item.ID)
+			usageByConfig := aggregate.workspaceModelTotals[workspaceID]
+			usage := usageByConfig[configID]
+			item.TokensInTotal = usage.Input
+			item.TokensOutTotal = usage.Output
+			item.TokensTotal = usage.Total
+		}
+		decorated = append(decorated, item)
+	}
+	return decorated
 }

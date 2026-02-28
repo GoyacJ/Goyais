@@ -38,6 +38,7 @@
             <button class="tree-btn" type="button" @click="toggleProject(project.id)">
               <AppIcon :name="isProjectOpen(project.id) ? 'chevron-down' : 'chevron-right'" :size="12" />
               <AppIcon :name="isProjectOpen(project.id) ? 'folder-open' : 'folder'" :size="12" />
+              <span class="project-token">{{ resolveProjectTokenUsage(project) }}</span>
               <span>{{ project.name }}</span>
             </button>
 
@@ -114,6 +115,7 @@ import { computed, nextTick, onBeforeUnmount, reactive, ref, type ComponentPubli
 import { isRuntimeCapabilitySupported } from "@/shared/runtime";
 import { pickDirectoryPath } from "@/shared/services/directoryPicker";
 import { dismissToastByKey, showToast } from "@/shared/stores/toastStore";
+import { formatTokenUsageWithThreshold } from "@/shared/utils/tokenDisplay";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import type { ConnectionState } from "@/shared/stores/workspaceStore";
 import type { Conversation, Project, Workspace, WorkspaceMode } from "@/shared/types/api";
@@ -266,6 +268,10 @@ function resolveConversationTokenTotal(conversationId: string): number {
     return 0;
   }
   return Math.trunc(usage.total);
+}
+
+function resolveProjectTokenUsage(project: Project): string {
+  return formatTokenUsageWithThreshold(project.tokens_total, project.token_threshold);
 }
 
 function isConversationEditing(projectId: string, conversationId: string): boolean {

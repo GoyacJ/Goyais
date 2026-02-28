@@ -36,6 +36,17 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
+			projectConfigItems, configErr := listWorkspaceProjectConfigItemsFromStore(state, workspaceID)
+			if configErr != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_CONFIG_LIST_FAILED", "Failed to list project configs", map[string]any{
+					"workspace_id": workspaceID,
+				})
+				return
+			}
+			projectConfigsByID := map[string]ProjectConfig{}
+			for _, item := range projectConfigItems {
+				projectConfigsByID[item.ProjectID] = item.Config
+			}
 			sort.Slice(items, func(i, j int) bool {
 				if items[i].CreatedAt == items[j].CreatedAt {
 					if items[i].UpdatedAt == items[j].UpdatedAt {
@@ -45,6 +56,19 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 				}
 				return items[i].CreatedAt > items[j].CreatedAt
 			})
+			state.mu.RLock()
+			aggregate := computeTokenUsageAggregateLocked(state)
+			state.mu.RUnlock()
+			for index := range items {
+				projectID := strings.TrimSpace(items[index].ID)
+				if config, exists := projectConfigsByID[projectID]; exists {
+					items[index].TokenThreshold = config.TokenThreshold
+				}
+				projectTotals := aggregate.projectTotals[projectID]
+				items[index].TokensInTotal = projectTotals.Input
+				items[index].TokensOutTotal = projectTotals.Output
+				items[index].TokensTotal = projectTotals.Total
+			}
 
 			raw := make([]any, 0, len(items))
 			for _, item := range items {

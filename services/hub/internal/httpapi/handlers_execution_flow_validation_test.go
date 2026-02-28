@@ -232,6 +232,112 @@ func TestConversationInputSubmitRejectsWhenProjectHasNoModelBinding(t *testing.T
 	}
 }
 
+func TestConversationInputSubmitRejectsWhenTokenThresholdReached(t *testing.T) {
+	testCases := []struct {
+		name         string
+		configure    func(t *testing.T, state *AppState, workspaceID string, projectID string, modelConfigID string)
+		wantContains string
+	}{
+		{
+			name: "project model threshold reached",
+			configure: func(_ *testing.T, state *AppState, _ string, projectID string, modelConfigID string) {
+				config := state.projectConfigs[projectID]
+				config.ModelTokenThresholds = map[string]int{modelConfigID: 30}
+				state.projectConfigs[projectID] = config
+			},
+			wantContains: "project model token threshold reached",
+		},
+		{
+			name: "project total threshold reached",
+			configure: func(_ *testing.T, state *AppState, _ string, projectID string, _ string) {
+				config := state.projectConfigs[projectID]
+				config.TokenThreshold = intPtrForTest(30)
+				config.ModelTokenThresholds = map[string]int{}
+				state.projectConfigs[projectID] = config
+			},
+			wantContains: "project token threshold reached",
+		},
+		{
+			name: "workspace model threshold reached",
+			configure: func(t *testing.T, state *AppState, workspaceID string, _ string, modelConfigID string) {
+				setModelConfigTokenThresholdForTest(t, state, workspaceID, modelConfigID, 30)
+			},
+			wantContains: "workspace model token threshold reached",
+		},
+		{
+			name: "threshold evaluation follows priority order",
+			configure: func(t *testing.T, state *AppState, workspaceID string, projectID string, modelConfigID string) {
+				config := state.projectConfigs[projectID]
+				config.ModelTokenThresholds = map[string]int{modelConfigID: 30}
+				config.TokenThreshold = intPtrForTest(10)
+				state.projectConfigs[projectID] = config
+				setModelConfigTokenThresholdForTest(t, state, workspaceID, modelConfigID, 5)
+			},
+			wantContains: "project model token threshold reached",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			state, conversationID := seedConversationMessageValidationState(t)
+			conversation := state.conversations[conversationID]
+			seedHistoricalTokenUsageExecution(state, conversationID, conversation.ModelConfigID, 15, 15)
+			testCase.configure(t, state, conversation.WorkspaceID, conversation.ProjectID, conversation.ModelConfigID)
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
+
+			res := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+				"raw_input": "threshold check",
+			}, nil)
+			if res.Code != http.StatusBadRequest {
+				t.Fatalf("expected threshold validation error, got %d (%s)", res.Code, res.Body.String())
+			}
+
+			payload := map[string]any{}
+			mustDecodeJSON(t, res.Body.Bytes(), &payload)
+			if got := strings.TrimSpace(asString(payload["code"])); got != "VALIDATION_ERROR" {
+				t.Fatalf("expected VALIDATION_ERROR code, got %q", got)
+			}
+			message := strings.TrimSpace(asString(payload["message"]))
+			if !strings.Contains(message, testCase.wantContains) {
+				t.Fatalf("expected message containing %q, got %q", testCase.wantContains, message)
+			}
+			if !strings.Contains(message, "(30/") {
+				t.Fatalf("expected message to include usage/threshold, got %q", message)
+			}
+			if len(state.executions) != 1 {
+				t.Fatalf("expected only historical execution to remain, got %d", len(state.executions))
+			}
+			if items := state.conversationMessages[conversationID]; len(items) != 0 {
+				t.Fatalf("expected no new messages persisted, got %d", len(items))
+			}
+		})
+	}
+}
+
+func TestConversationInputSubmitAllowsWhenTokenThresholdNotReached(t *testing.T) {
+	state, conversationID := seedConversationMessageValidationState(t)
+	conversation := state.conversations[conversationID]
+	seedHistoricalTokenUsageExecution(state, conversationID, conversation.ModelConfigID, 10, 10)
+
+	projectConfig := state.projectConfigs[conversation.ProjectID]
+	projectConfig.ModelTokenThresholds = map[string]int{conversation.ModelConfigID: 21}
+	projectConfig.TokenThreshold = intPtrForTest(25)
+	state.projectConfigs[conversation.ProjectID] = projectConfig
+	setModelConfigTokenThresholdForTest(t, state, conversation.WorkspaceID, conversation.ModelConfigID, 22)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
+
+	res := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input": "threshold pass",
+	}, nil)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("expected execution created when below thresholds, got %d (%s)", res.Code, res.Body.String())
+	}
+}
+
 func seedConversationMessageValidationState(t *testing.T) (*AppState, string) {
 	t.Helper()
 
@@ -378,4 +484,61 @@ func mustSaveTestResourceConfig(t *testing.T, state *AppState, input ResourceCon
 	if _, err := saveWorkspaceResourceConfig(state, input); err != nil {
 		t.Fatalf("save resource config failed: %v", err)
 	}
+}
+
+func setModelConfigTokenThresholdForTest(t *testing.T, state *AppState, workspaceID string, modelConfigID string, threshold int) {
+	t.Helper()
+	modelConfig, exists, err := loadWorkspaceResourceConfigRaw(state, workspaceID, modelConfigID)
+	if err != nil {
+		t.Fatalf("load model config failed: %v", err)
+	}
+	if !exists {
+		t.Fatalf("expected model config %s to exist", modelConfigID)
+	}
+	if modelConfig.Model == nil {
+		modelConfig.Model = &ModelSpec{
+			Vendor:  ModelVendorOpenAI,
+			ModelID: "gpt-5.3",
+		}
+	}
+	modelConfig.Model.TokenThreshold = intPtrForTest(threshold)
+	mustSaveTestResourceConfig(t, state, modelConfig)
+}
+
+func seedHistoricalTokenUsageExecution(state *AppState, conversationID string, modelConfigID string, tokensIn int, tokensOut int) {
+	conversation, exists := state.conversations[conversationID]
+	if !exists {
+		return
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	executionID := "exec_seed_usage"
+	state.executions[executionID] = Execution{
+		ID:             executionID,
+		WorkspaceID:    conversation.WorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_seed_usage",
+		State:          ExecutionStateCompleted,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot: ModelSnapshot{
+			ConfigID: modelConfigID,
+			ModelID:  "gpt-5.3",
+		},
+		ResourceProfileSnapshot: &ExecutionResourceProfile{
+			ModelConfigID: modelConfigID,
+			ModelID:       "gpt-5.3",
+		},
+		TokensIn:                tokensIn,
+		TokensOut:               tokensOut,
+		ProjectRevisionSnapshot: 0,
+		QueueIndex:              0,
+		TraceID:                 "tr_seed_usage",
+		CreatedAt:               now,
+		UpdatedAt:               now,
+	}
+}
+
+func intPtrForTest(value int) *int {
+	return &value
 }
