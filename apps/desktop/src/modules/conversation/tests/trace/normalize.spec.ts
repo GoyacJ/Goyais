@@ -17,7 +17,7 @@ describe("trace normalize", () => {
         timestamp: "2026-02-24T00:00:02Z",
         payload: {
           stage: "assistant_output",
-          delta: "thinking"
+          delta: "Based on the project setup, I will check lint scripts first."
         }
       },
       {
@@ -46,6 +46,9 @@ describe("trace normalize", () => {
     expect(trace[0]?.id).toBe("evt_1");
     expect(trace[1]?.id).toBe("evt_2");
     expect(trace[1]?.stage).toBe("assistant_output");
+    expect(trace[0]?.operationIntentKind).toBe("command");
+    expect(trace[0]?.operationIntentValue).toBe("echo hello");
+    expect(trace[1]?.reasoningSentence).toContain("I will check lint scripts first");
   });
 
   it("redacts sensitive payload keys", () => {
@@ -75,5 +78,29 @@ describe("trace normalize", () => {
     expect(trace[0]?.payload.input).toEqual({ api_key: "***", command: "ls" });
     expect(trace[0]?.rawPayload).toContain("***");
     expect(trace[0]?.rawPayload).not.toContain("secret-value");
+  });
+
+  it("does not fallback reasoning sentence to stage placeholders", () => {
+    const events: ExecutionEvent[] = [
+      {
+        event_id: "evt_placeholder",
+        execution_id: "exec_placeholder",
+        conversation_id: "conv_1",
+        trace_id: "tr_1",
+        sequence: 1,
+        queue_index: 0,
+        type: "thinking_delta",
+        timestamp: "2026-02-24T00:00:01Z",
+        payload: {
+          stage: "model_call",
+          delta: "model_call"
+        }
+      }
+    ];
+
+    const grouped = normalizeExecutionEventsByExecution(events);
+    const trace = grouped.get("exec_placeholder") ?? [];
+
+    expect(trace[0]?.reasoningSentence).toBe("");
   });
 });

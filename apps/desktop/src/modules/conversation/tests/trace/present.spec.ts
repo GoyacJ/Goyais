@@ -68,8 +68,11 @@ describe("trace present", () => {
 
     expect(zh[0]?.summaryPrimary).toContain("调用 1 个工具");
     expect(en[0]?.summaryPrimary).toContain("tool calls");
-    expect(zh[0]?.steps[1]?.summary).toContain("高风险");
-    expect(en[0]?.steps[1]?.summary).toContain("high risk");
+    expect(zh[0]?.summaryTone).toBe("warning");
+    expect(en[0]?.summaryTone).toBe("warning");
+    expect(zh[0]?.steps[0]?.summary).toContain("Planning lint configuration updates.");
+    expect(zh[0]?.steps[1]?.summary).toContain("执行命令 pnpm lint");
+    expect(en[0]?.steps[1]?.summary).toContain("Run command pnpm lint");
   });
 
   it("does not expose raw payload for basic detail level", () => {
@@ -95,8 +98,153 @@ describe("trace present", () => {
     const withElapsed = hydrateRunningActionElapsed(baseActions, "zh-CN", new Date("2026-02-24T00:00:05Z"));
 
     expect(withElapsed).toHaveLength(1);
-    expect(withElapsed[0]?.primary).toBe("工具 Bash");
-    expect(withElapsed[0]?.secondary).toContain("command");
+    expect(withElapsed[0]?.primary).toBe("执行命令 pnpm lint");
+    expect(withElapsed[0]?.secondary).toContain("操作");
     expect(withElapsed[0]?.elapsedLabel).toBe("4s");
+  });
+
+  it("hides non-meaningful model_call thinking steps", () => {
+    const traces = buildExecutionTraceViewModelData(
+      [
+        {
+          event_id: "evt_present_placeholder_model",
+          execution_id: "exec_present_1",
+          conversation_id: "conv_present_1",
+          trace_id: "tr_present_1",
+          sequence: 0,
+          queue_index: 0,
+          type: "thinking_delta",
+          timestamp: "2026-02-24T00:00:00Z",
+          payload: {
+            stage: "model_call",
+            delta: "model_call"
+          }
+        },
+        ...events
+      ],
+      [baseExecution],
+      "zh-CN",
+      new Date("2026-02-24T00:00:03Z")
+    );
+
+    expect(traces[0]?.steps.some((step) => step.summary.includes("model_call"))).toBe(false);
+    expect(traces[0]?.steps).toHaveLength(2);
+  });
+
+  it("maps summary tone by execution state and trace signals", () => {
+    const completedExecution: Execution = {
+      ...baseExecution,
+      id: "exec_present_completed",
+      message_id: "msg_present_completed",
+      state: "completed",
+      updated_at: "2026-02-24T00:00:12Z"
+    };
+    const completedEvents: ExecutionEvent[] = [
+      {
+        ...events[1]!,
+        event_id: "evt_present_completed_call",
+        execution_id: "exec_present_completed",
+        payload: {
+          call_id: "call_completed_1",
+          name: "Read",
+          input: {
+            path: "README.md"
+          },
+          risk_level: "low"
+        }
+      },
+      {
+        ...events[1]!,
+        event_id: "evt_present_completed_result",
+        execution_id: "exec_present_completed",
+        sequence: 3,
+        type: "tool_result",
+        payload: {
+          call_id: "call_completed_1",
+          name: "Read",
+          ok: true
+        }
+      }
+    ];
+
+    const failedExecution: Execution = {
+      ...baseExecution,
+      id: "exec_present_failed",
+      message_id: "msg_present_failed",
+      state: "failed",
+      updated_at: "2026-02-24T00:00:12Z"
+    };
+    const failedEvents: ExecutionEvent[] = [
+      {
+        ...events[1]!,
+        event_id: "evt_present_failed_result",
+        execution_id: "exec_present_failed",
+        sequence: 1,
+        type: "tool_result",
+        payload: {
+          name: "Bash",
+          ok: false,
+          error: "permission denied"
+        }
+      }
+    ];
+
+    const confirmingExecution: Execution = {
+      ...baseExecution,
+      id: "exec_present_confirming",
+      message_id: "msg_present_confirming",
+      state: "confirming",
+      updated_at: "2026-02-24T00:00:12Z"
+    };
+    const confirmingEvents: ExecutionEvent[] = [
+      {
+        ...events[0]!,
+        event_id: "evt_present_approval",
+        execution_id: "exec_present_confirming",
+        sequence: 1,
+        payload: {
+          stage: "run_approval_needed",
+          call_id: "call_approval",
+          name: "Bash",
+          reason: "needs elevated privileges"
+        }
+      }
+    ];
+
+    const cancelledExecution: Execution = {
+      ...baseExecution,
+      id: "exec_present_cancelled",
+      message_id: "msg_present_cancelled",
+      state: "cancelled",
+      updated_at: "2026-02-24T00:00:12Z"
+    };
+    const cancelledEvents: ExecutionEvent[] = [
+      {
+        ...events[1]!,
+        event_id: "evt_present_cancelled_call",
+        execution_id: "exec_present_cancelled",
+        sequence: 1,
+        payload: {
+          call_id: "call_cancelled",
+          name: "Read",
+          input: {
+            path: "README.md"
+          },
+          risk_level: "low"
+        }
+      }
+    ];
+
+    const traces = buildExecutionTraceViewModelData(
+      [...completedEvents, ...failedEvents, ...confirmingEvents, ...cancelledEvents],
+      [completedExecution, failedExecution, confirmingExecution, cancelledExecution],
+      "en-US",
+      new Date("2026-02-24T00:00:13Z")
+    );
+
+    expect(traces.find((trace) => trace.executionId === "exec_present_completed")?.summaryTone).toBe("success");
+    expect(traces.find((trace) => trace.executionId === "exec_present_failed")?.summaryTone).toBe("error");
+    expect(traces.find((trace) => trace.executionId === "exec_present_confirming")?.summaryTone).toBe("warning");
+    expect(traces.find((trace) => trace.executionId === "exec_present_cancelled")?.summaryTone).toBe("neutral");
   });
 });

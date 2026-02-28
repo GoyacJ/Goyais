@@ -24,15 +24,27 @@
         </div>
       </div>
 
-      <details class="trace-disclosure" :open="trace.isExpanded" @toggle="onTraceToggle">
-        <summary class="trace-summary-inline">
-          <span class="trace-caret">&gt;</span>
-          <span class="trace-summary-text">
-            <span class="trace-summary-primary">{{ trace.summaryPrimary }}</span>
-            <span v-if="trace.summarySecondary !== ''" class="trace-summary-secondary">{{ trace.summarySecondary }}</span>
+      <div class="trace-summary-head">
+        <span class="trace-summary-text" :class="`trace-summary-tone-${trace.summaryTone}`">
+          <span class="trace-summary-primary">{{ trace.summaryPrimary }}</span>
+          <span v-if="trace.summarySecondary !== ''" class="trace-summary-secondary">{{ trace.summarySecondary }}</span>
+        </span>
+        <button
+          class="trace-summary-toggle"
+          type="button"
+          :aria-expanded="trace.isExpanded ? 'true' : 'false'"
+          :aria-controls="tracePanelId"
+          :aria-label="trace.isExpanded ? t('conversation.trace.action.collapseAria') : t('conversation.trace.action.expandAria')"
+          @click="toggleTrace(!trace.isExpanded)"
+        >
+          <span class="trace-summary-toggle-label">
+            {{ trace.isExpanded ? t("conversation.trace.action.collapse") : t("conversation.trace.action.expand") }}
           </span>
-          <span class="trace-summary-action">{{ trace.isExpanded ? t("conversation.trace.action.collapse") : t("conversation.trace.action.expand") }}</span>
-        </summary>
+          <AppIcon :name="trace.isExpanded ? 'chevron-up' : 'chevron-down'" :size="12" />
+        </button>
+      </div>
+
+      <div v-if="trace.isExpanded" :id="tracePanelId" class="trace-disclosure-panel">
         <div class="trace-steps">
           <div v-for="step in trace.steps" :key="step.id" class="trace-step-line" :data-tone="step.statusTone">
             <div class="trace-step-main">
@@ -47,15 +59,29 @@
             </details>
           </div>
         </div>
-      </details>
+        <div class="trace-panel-footer">
+          <button
+            class="trace-summary-toggle trace-summary-toggle-footer"
+            type="button"
+            :aria-label="t('conversation.trace.action.collapseAria')"
+            @click="toggleTrace(false)"
+          >
+            <span class="trace-summary-toggle-label">{{ t("conversation.trace.action.collapse") }}</span>
+            <AppIcon name="chevron-up" :size="12" />
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
+
 import type { ExecutionTraceStep, ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
 import type { RunningActionViewModel } from "@/modules/conversation/views/runningActions";
 import { useI18n } from "@/shared/i18n";
+import AppIcon from "@/shared/ui/AppIcon.vue";
 
 type ExecutionTrace = ExecutionTraceViewModel & { isExpanded: boolean; steps: ExecutionTraceStep[] };
 
@@ -70,8 +96,15 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 
-function onTraceToggle(event: Event): void {
-  emit("toggle-trace", props.trace.executionId, (event.target as HTMLDetailsElement).open);
+const tracePanelId = computed(() => `trace-panel-${sanitizeExecutionId(props.trace.executionId)}`);
+
+function toggleTrace(expanded: boolean): void {
+  emit("toggle-trace", props.trace.executionId, expanded);
+}
+
+function sanitizeExecutionId(value: string): string {
+  const normalized = value.trim().replace(/[^a-zA-Z0-9_-]/g, "-");
+  return normalized !== "" ? normalized : "unknown";
 }
 </script>
 

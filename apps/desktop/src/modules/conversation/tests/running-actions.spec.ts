@@ -88,10 +88,11 @@ describe("running actions view", () => {
 
     const actions = buildRunningActionViewModels(events, [baseExecution], "zh-CN", new Date("2026-02-24T00:00:05Z"));
     expect(actions).toHaveLength(2);
-    expect(actions.map((item) => item.primary)).toContain("模型推理");
-    expect(actions.map((item) => item.primary)).toContain("工具 read_file");
-    expect(actions.find((item) => item.primary === "工具 read_file")?.elapsedLabel).toBe("3s");
-    expect(actions.find((item) => item.primary === "工具 read_file")?.secondary).toContain("path");
+    expect(actions.map((item) => item.primary)).toContain("正在分析用户请求");
+    expect(actions.map((item) => item.primary)).toContain("读取 README.md");
+    expect(actions.find((item) => item.primary === "读取 README.md")?.elapsedLabel).toBe("3s");
+    expect(actions.find((item) => item.primary === "读取 README.md")?.secondary).toContain("path");
+    expect(actions.some((item) => item.secondary.includes("model_call"))).toBe(false);
   });
 
   it("falls back to name+sequence matching when call_id is missing", () => {
@@ -131,7 +132,7 @@ describe("running actions view", () => {
 
     const actions = buildRunningActionViewModels(events, [baseExecution], "zh-CN", new Date("2026-02-24T00:01:05Z"));
     expect(actions).toHaveLength(1);
-    expect(actions[0]?.primary).toBe("工具 read_file");
+    expect(actions[0]?.primary).toBe("调用 read_file");
     expect(actions[0]?.elapsedLabel).toBe("3s");
   });
 
@@ -182,7 +183,7 @@ describe("running actions view", () => {
 
     const actions = buildRunningActionViewModels(events, [baseExecution], "en-US", new Date("2026-02-24T00:03:03Z"));
     expect(actions).toHaveLength(1);
-    expect(actions[0]?.primary).toBe("Tool read_file");
+    expect(actions[0]?.primary).toBe("Call read_file");
     expect(actions[0]?.elapsedLabel).toBe("3s");
   });
 });

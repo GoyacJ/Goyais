@@ -15,6 +15,8 @@ export type NormalizedThinkingStage =
   | "turn_limit_reached"
   | "other";
 
+export type OperationIntentKind = "command" | "path" | "url" | "query" | "scalar" | "none";
+
 export type NormalizedTraceEvent = {
   id: string;
   executionId: string;
@@ -27,6 +29,8 @@ export type NormalizedTraceEvent = {
   rawPayload: string;
   reasoningSentence: string;
   operationSummary: string;
+  operationIntentKind: OperationIntentKind;
+  operationIntentValue: string;
   resultSummary: string;
   riskLevel: string;
   toolName: string;
@@ -42,6 +46,7 @@ export type NormalizedExecutionTrace = {
 export type TraceStepKind = "lifecycle" | "reasoning" | "tool_call" | "tool_result";
 
 export type TraceStatusTone = "neutral" | "success" | "warning" | "error";
+export type TraceSummaryTone = "primary" | "success" | "warning" | "error" | "neutral";
 
 export type ExecutionTraceStepViewModel = {
   id: string;
@@ -62,6 +67,7 @@ export type ExecutionTraceViewModelData = {
   isRunning: boolean;
   summaryPrimary: string;
   summarySecondary: string;
+  summaryTone: TraceSummaryTone;
   steps: ExecutionTraceStepViewModel[];
 };
 

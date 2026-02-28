@@ -1,8 +1,18 @@
+import type { OperationIntentKind } from "@/modules/conversation/trace/types";
+
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/g;
 const THINK_TAGS = /<\/?think>/gi;
 const SENSITIVE_KEY_PATTERN = /(token|secret|password|api[_-]?key|authorization|cookie)/i;
+const REASONING_PLACEHOLDER_PATTERN = /^(model[_\s-]?call|assistant[_\s-]?output|thinking|processing|other)$/i;
 
-const OPERATION_CANDIDATE_KEYS = ["command", "path", "filePath", "url", "q", "query"] as const;
+const OPERATION_INTENT_CANDIDATES: ReadonlyArray<{ key: string; kind: OperationIntentKind }> = [
+  { key: "command", kind: "command" },
+  { key: "path", kind: "path" },
+  { key: "filePath", kind: "path" },
+  { key: "url", kind: "url" },
+  { key: "q", kind: "query" },
+  { key: "query", kind: "query" }
+];
 
 const IGNORED_SCALAR_KEYS: ReadonlySet<string> = new Set([
   "name",
@@ -40,42 +50,59 @@ export function truncateText(value: string, maxLength: number): string {
   return `${chars.slice(0, Math.max(0, maxLength - 1)).join("")}…`;
 }
 
-export function extractReasoningSentence(delta: string, fallback: string, maxLength = 88): string {
+export function extractReasoningSentence(delta: string, maxLength = 88): string {
   const cleaned = cleanText(delta);
   if (cleaned === "") {
-    return fallback;
+    return "";
   }
   const sentence = firstSentence(cleaned);
   if (sentence === "") {
-    return fallback;
+    return "";
   }
-  return truncateText(sentence, maxLength);
+  const truncated = truncateText(sentence, maxLength);
+  if (isReasoningPlaceholder(truncated)) {
+    return "";
+  }
+  return truncated;
 }
 
-export function extractOperationSummary(payload: Record<string, unknown>): string {
+export type OperationIntent = {
+  kind: OperationIntentKind;
+  value: string;
+};
+
+export function extractOperationIntent(payload: Record<string, unknown>): OperationIntent {
   const input = asRecord(payload.input);
   const source = input ?? payload;
 
-  for (const key of OPERATION_CANDIDATE_KEYS) {
-    const value = readableScalar(source[key]);
-    if (value !== "") {
-      return truncateText(`${key}: ${value}`, 120);
-    }
+  const directIntent = resolveOperationIntentFromRecord(source);
+  if (directIntent.kind !== "none") {
+    return directIntent;
   }
 
-  const scalar = firstReadableScalar(source);
-  if (scalar !== "") {
-    return truncateText(scalar, 120);
-  }
-
-  // Fallback to top-level when input object has no readable scalar.
   if (input) {
-    const topLevel = firstReadableScalar(payload);
-    if (topLevel !== "") {
-      return truncateText(topLevel, 120);
+    const topLevelIntent = resolveOperationIntentFromRecord(payload);
+    if (topLevelIntent.kind !== "none") {
+      return topLevelIntent;
     }
   }
-  return "";
+  return { kind: "none", value: "" };
+}
+
+export function extractOperationSummary(payload: Record<string, unknown>): string {
+  const intent = extractOperationIntent(payload);
+  if (intent.kind === "none") {
+    return "";
+  }
+  if (intent.kind === "scalar") {
+    return intent.value;
+  }
+  const label = intent.kind === "path"
+    ? "path"
+    : intent.kind === "query"
+      ? "query"
+      : intent.kind;
+  return truncateText(`${label}: ${intent.value}`, 120);
 }
 
 export function extractResultSummary(payload: Record<string, unknown>, isSuccess: boolean | null): string {
@@ -168,6 +195,28 @@ function firstReadableScalar(record: Record<string, unknown>): string {
   return "";
 }
 
+function resolveOperationIntentFromRecord(record: Record<string, unknown>): OperationIntent {
+  for (const candidate of OPERATION_INTENT_CANDIDATES) {
+    const value = readableScalar(record[candidate.key]);
+    if (value !== "") {
+      return {
+        kind: candidate.kind,
+        value: truncateText(value, 120)
+      };
+    }
+  }
+
+  const scalar = firstReadableScalar(record);
+  if (scalar !== "") {
+    return {
+      kind: "scalar",
+      value: truncateText(scalar, 120)
+    };
+  }
+
+  return { kind: "none", value: "" };
+}
+
 function cleanText(value: string): string {
   return value
     .replace(THINK_TAGS, " ")
@@ -188,4 +237,12 @@ function firstSentence(value: string): string {
     return normalized;
   }
   return chars.slice(0, endIndex + 1).join("").trim();
+}
+
+function isReasoningPlaceholder(value: string): boolean {
+  const normalized = value.trim().replace(/[。.!！?？;；:：]+$/g, "");
+  if (normalized === "") {
+    return true;
+  }
+  return REASONING_PLACEHOLDER_PATTERN.test(normalized);
 }

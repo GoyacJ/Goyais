@@ -3,6 +3,7 @@ import type { ExecutionEvent } from "@/shared/types/api";
 import type { NormalizedThinkingStage, NormalizedTraceEvent, TraceEventType } from "@/modules/conversation/trace/types";
 import {
   asString,
+  extractOperationIntent,
   extractOperationSummary,
   extractReasoningSentence,
   extractResultSummary,
@@ -64,13 +65,16 @@ function normalizeExecutionEvent(event: ExecutionEvent, index: number): Normaliz
   const operationSummary = type === "tool_call" || stage === "run_approval_needed"
     ? extractOperationSummary(payload)
     : "";
+  const operationIntent = type === "tool_call" || stage === "run_approval_needed"
+    ? extractOperationIntent(payload)
+    : { kind: "none" as const, value: "" };
 
   const resultSummary = type === "tool_result"
     ? extractResultSummary(payload, isSuccess)
     : "";
 
   const reasoningSentence = type === "thinking_delta"
-    ? extractReasoningSentence(asString(payload.delta), asString(payload.stage) || "thinking")
+    ? extractReasoningSentence(asString(payload.delta))
     : "";
 
   const eventId = event.event_id.trim() || `${event.execution_id}-${event.sequence}-${index}`;
@@ -87,6 +91,8 @@ function normalizeExecutionEvent(event: ExecutionEvent, index: number): Normaliz
     rawPayload: toCompactJSON(payload, 1500),
     reasoningSentence,
     operationSummary,
+    operationIntentKind: operationIntent.kind,
+    operationIntentValue: operationIntent.value,
     resultSummary,
     riskLevel: asString(payload.risk_level).toLowerCase(),
     toolName,

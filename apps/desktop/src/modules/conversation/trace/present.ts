@@ -6,10 +6,12 @@ import type {
   ExecutionTraceViewModelData,
   NormalizedThinkingStage,
   NormalizedTraceEvent,
+  OperationIntentKind,
   RunningActionBaseViewModel,
   RunningActionType,
   RunningActionViewModelData,
   TraceLocale,
+  TraceSummaryTone,
   TraceStatusTone
 } from "@/modules/conversation/trace/types";
 import { messages } from "@/shared/i18n/messages";
@@ -39,6 +41,7 @@ export function buildExecutionTraceViewModelData(
       const normalizedEvents = groupedEvents.get(execution.id) ?? [];
       const summary = buildTraceSummary(execution, normalizedEvents, locale, now);
       const detailLevel = execution.agent_config_snapshot?.trace_detail_level ?? "verbose";
+      const visibleStepEvents = normalizedEvents.filter((event) => isMeaningfulTraceStepEvent(event));
 
       return {
         executionId: execution.id,
@@ -48,7 +51,8 @@ export function buildExecutionTraceViewModelData(
         isRunning: execution.state === "pending" || execution.state === "executing" || execution.state === "confirming",
         summaryPrimary: summary.primary,
         summarySecondary: summary.secondary,
-        steps: normalizedEvents.map((event, index) => toTraceStep(event, detailLevel, locale, index))
+        summaryTone: summary.tone,
+        steps: visibleStepEvents.map((event, index) => toTraceStep(event, detailLevel, locale, index))
       };
     });
 }
@@ -164,6 +168,10 @@ function handleThinkingDeltaEvent(
 
   if (event.stage === "model_call") {
     const actionId = `model:${execution.id}:${event.sequence}`;
+    const modelReasoning = truncateText(
+      event.reasoningSentence !== "" ? event.reasoningSentence : latestReasoningSentence,
+      88
+    );
     activeModelActionIds.push(actionId);
     activeActions.set(actionId, {
       actionId,
@@ -172,8 +180,12 @@ function handleThinkingDeltaEvent(
       type: "model",
       toolName: "",
       comparisonName: "",
-      primary: tr(locale, "conversation.running.primary.model"),
-      secondary: composeSecondary(locale, event.reasoningSentence, ""),
+      primary: modelReasoning !== ""
+        ? modelReasoning
+        : tr(locale, "conversation.running.primary.modelAnalyzing"),
+      secondary: modelReasoning !== ""
+        ? tr(locale, "conversation.running.secondary.modelReasoning", { reasoning: modelReasoning })
+        : tr(locale, "conversation.running.secondary.modelPending"),
       startedAt: event.timestamp
     });
     return;
@@ -209,7 +221,7 @@ function handleToolCallEvent(
     type,
     toolName,
     comparisonName: resolveToolNameForComparison(event.toolName),
-    primary: formatRunningPrimary(locale, type, toolName),
+    primary: formatRunningPrimary(locale, type, toolName, event.operationIntentKind, event.operationIntentValue),
     secondary: composeSecondary(locale, latestReasoningSentence, event.operationSummary),
     startedAt: event.timestamp
   });
@@ -239,7 +251,7 @@ function buildTraceSummary(
   events: NormalizedTraceEvent[],
   locale: TraceLocale,
   now: Date
-): { primary: string; secondary: string } {
+): { primary: string; secondary: string; tone: TraceSummaryTone } {
   const durationSec = resolveDurationSeconds(execution, events, now);
   const messageDurationSec = resolveMessageDurationSeconds(execution, now);
   const thinkingCount = events.filter((event) => event.type === "thinking_delta").length;
@@ -288,7 +300,39 @@ function buildTraceSummary(
     })
     : tr(locale, "conversation.trace.summary.secondary.noToken", { duration: messageDurationSec });
 
-  return { primary, secondary };
+  return {
+    primary,
+    secondary,
+    tone: resolveSummaryTone(execution, events)
+  };
+}
+
+function resolveSummaryTone(execution: Execution, events: NormalizedTraceEvent[]): TraceSummaryTone {
+  const hasFailedToolResult = events.some((event) => event.type === "tool_result" && event.isSuccess === false);
+  if (execution.state === "failed" || hasFailedToolResult) {
+    return "error";
+  }
+
+  const hasApprovalWaiting = events.some(
+    (event) => event.type === "thinking_delta" && event.stage === "run_approval_needed"
+  );
+  const hasHighRiskToolCall = events.some(
+    (event) => event.type === "tool_call" && (event.riskLevel === "high" || event.riskLevel === "critical")
+  );
+  if (execution.state === "confirming" || hasApprovalWaiting || hasHighRiskToolCall) {
+    return "warning";
+  }
+
+  if (execution.state === "completed") {
+    return "success";
+  }
+  if (execution.state === "pending" || execution.state === "executing") {
+    return "primary";
+  }
+  if (execution.state === "cancelled" || execution.state === "queued") {
+    return "neutral";
+  }
+  return "primary";
 }
 
 function toTraceStep(
@@ -315,11 +359,14 @@ function toTraceStep(
   }
 
   if (event.type === "thinking_delta") {
+    const thinkingSummary = (event.stage === "assistant_output" || event.stage === "model_call") && event.reasoningSentence !== ""
+      ? event.reasoningSentence
+      : formatThinkingStageLabel(locale, event.stage);
     return {
       id: stepId,
       kind: "reasoning",
       title: tr(locale, "conversation.trace.step.title.reasoning"),
-      summary: formatThinkingStageLabel(locale, event.stage),
+      summary: thinkingSummary,
       detail: resolveThinkingDetail(locale, event),
       timestampLabel,
       statusTone: event.stage === "run_approval_needed" ? "warning" : "neutral",
@@ -330,18 +377,20 @@ function toTraceStep(
   if (event.type === "tool_call") {
     const toolName = resolveToolName(locale, event.toolName);
     const riskLabel = toRiskLabel(locale, event.riskLevel);
+    const toolMeta = riskLabel === ""
+      ? tr(locale, "conversation.trace.step.detail.toolMeta", { tool: toolName })
+      : tr(locale, "conversation.trace.step.detail.toolMetaWithRisk", { tool: toolName, risk: riskLabel });
+    const operationDetail = event.operationSummary === ""
+      ? tr(locale, "conversation.trace.step.detail.operationFallback")
+      : tr(locale, "conversation.trace.step.detail.operation", {
+        operation: event.operationSummary
+      });
     return {
       id: stepId,
       kind: "tool_call",
       title: tr(locale, "conversation.trace.step.title.toolCall"),
-      summary: riskLabel === ""
-        ? tr(locale, "conversation.trace.step.summary.toolCall", { tool: toolName })
-        : tr(locale, "conversation.trace.step.summary.toolCallWithRisk", { tool: toolName, risk: riskLabel }),
-      detail: event.operationSummary === ""
-        ? tr(locale, "conversation.trace.step.detail.operationFallback")
-        : tr(locale, "conversation.trace.step.detail.operation", {
-          operation: event.operationSummary
-        }),
+      summary: formatIntentLabel(locale, event.operationIntentKind, event.operationIntentValue, toolName),
+      detail: `${toolMeta} · ${operationDetail}`,
       timestampLabel,
       statusTone: event.riskLevel === "high" || event.riskLevel === "critical" ? "warning" : "neutral",
       rawPayload
@@ -375,7 +424,12 @@ function resolveThinkingDetail(locale: TraceLocale, event: NormalizedTraceEvent)
     }
     return tr(locale, "conversation.trace.step.detail.waitingApproval");
   }
-  if (event.reasoningSentence !== "" && event.reasoningSentence !== "thinking") {
+
+  if (event.stage === "assistant_output" || event.stage === "model_call") {
+    return "";
+  }
+
+  if (event.reasoningSentence !== "") {
     return event.reasoningSentence;
   }
   return "";
@@ -416,17 +470,73 @@ function toRiskLabel(locale: TraceLocale, riskLevel: string): string {
   return "";
 }
 
-function formatRunningPrimary(locale: TraceLocale, type: RunningActionType, toolName: string): string {
+function formatIntentLabel(
+  locale: TraceLocale,
+  intentKind: OperationIntentKind,
+  intentValue: string,
+  toolName: string
+): string {
+  const value = truncateText(intentValue, 120);
+
+  if (intentKind === "command" && value !== "") {
+    return tr(locale, "conversation.trace.intent.command", { value });
+  }
+  if (intentKind === "path" && value !== "") {
+    return tr(locale, "conversation.trace.intent.path", { value });
+  }
+  if (intentKind === "url" && value !== "") {
+    return tr(locale, "conversation.trace.intent.url", { value });
+  }
+  if (intentKind === "query" && value !== "") {
+    return tr(locale, "conversation.trace.intent.query", { value });
+  }
+  if (intentKind === "scalar" && value !== "") {
+    return tr(locale, "conversation.trace.intent.scalar", { value });
+  }
+  return tr(locale, "conversation.trace.intent.toolFallback", { tool: toolName });
+}
+
+function isMeaningfulTraceStepEvent(event: NormalizedTraceEvent): boolean {
+  if (event.type !== "thinking_delta") {
+    return true;
+  }
+  return isMeaningfulThinkingEvent(event);
+}
+
+function isMeaningfulThinkingEvent(event: NormalizedTraceEvent): boolean {
+  if (event.type !== "thinking_delta") {
+    return true;
+  }
+
+  if (event.stage === "model_call" || event.stage === "assistant_output") {
+    return event.reasoningSentence !== "";
+  }
+  if (event.stage === "run_approval_needed") {
+    return true;
+  }
+  if (event.stage === "approval_granted" || event.stage === "approval_denied" || event.stage === "approval_resolved") {
+    return true;
+  }
+  if (event.stage === "turn_limit_reached") {
+    return true;
+  }
+  return event.reasoningSentence !== "";
+}
+
+function formatRunningPrimary(
+  locale: TraceLocale,
+  type: RunningActionType,
+  toolName: string,
+  operationIntentKind: OperationIntentKind,
+  operationIntentValue: string
+): string {
   if (type === "model") {
-    return tr(locale, "conversation.running.primary.model");
+    return tr(locale, "conversation.running.primary.modelAnalyzing");
   }
   if (type === "approval") {
     return tr(locale, "conversation.running.primary.approval", { tool: toolName });
   }
-  if (type === "subagent") {
-    return tr(locale, "conversation.running.primary.subagent", { tool: toolName });
-  }
-  return tr(locale, "conversation.running.primary.tool", { tool: toolName });
+  return formatIntentLabel(locale, operationIntentKind, operationIntentValue, toolName);
 }
 
 function composeSecondary(locale: TraceLocale, reasoning: string, operation: string): string {

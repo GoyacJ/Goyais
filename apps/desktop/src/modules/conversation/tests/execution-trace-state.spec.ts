@@ -13,6 +13,7 @@ function createTrace(overrides?: Partial<ExecutionTraceViewModel>): ExecutionTra
     isRunning: true,
     summaryPrimary: "已思考 3s · 调用 1 个工具",
     summarySecondary: "消息执行 3s",
+    summaryTone: "primary",
     steps: [],
     ...overrides
   };

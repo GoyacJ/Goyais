@@ -534,14 +534,15 @@ describe("conversation store", () => {
             isRunning: true,
             summaryPrimary: "已思考 12s · 调用 2 个工具",
             summarySecondary: "消息执行 12s",
+            summaryTone: "primary",
             isExpanded: true,
             steps: [
               {
                 id: "trace_step_1",
                 kind: "reasoning",
                 title: "思考",
-                summary: "模型调用",
-                detail: "正在推理下一步",
+                summary: "正在分析项目结构并准备建议",
+                detail: "",
                 timestampLabel: "00:00:01",
                 statusTone: "neutral",
                 rawPayload: ""
@@ -555,7 +556,7 @@ describe("conversation store", () => {
             executionId: "exec_trace_1",
             queueIndex: 0,
             type: "tool",
-            primary: "工具 read_file",
+            primary: "读取 README.md",
             secondary: "推理：查看当前项目 · 操作：path: README.md",
             startedAt: "2026-02-24T00:00:01Z",
             elapsedMs: 3000,
@@ -571,8 +572,15 @@ describe("conversation store", () => {
     });
 
     expect(wrapper.find(".execution-hint").exists()).toBe(false);
-    expect(wrapper.find(".trace-summary-inline").exists()).toBe(true);
+    expect(wrapper.find(".trace-summary-toggle").exists()).toBe(true);
+    expect(wrapper.find(".trace-caret").exists()).toBe(false);
     expect(wrapper.find(".trace-running-line").exists()).toBe(true);
+    expect(wrapper.find(".trace-panel-footer .trace-summary-toggle").exists()).toBe(true);
+    expect(wrapper.text()).not.toContain("model_call");
+    expect(wrapper.text()).not.toContain("模型推理");
+
+    wrapper.find(".trace-panel-footer .trace-summary-toggle").trigger("click");
+    expect(wrapper.emitted("toggle-trace")).toEqual([["exec_trace_1", false]]);
   });
 
   it("renders trace disclosure without legacy trace card class", () => {
@@ -602,14 +610,15 @@ describe("conversation store", () => {
             isRunning: false,
             summaryPrimary: "执行完成 · 调用 1 个工具",
             summarySecondary: "消息执行 8s",
+            summaryTone: "success",
             isExpanded: false,
             steps: [
               {
                 id: "trace_step_2",
                 kind: "tool_call",
                 title: "工具调用",
-                summary: "调用 read_file（低风险）",
-                detail: "操作：path: README.md",
+                summary: "读取 README.md",
+                detail: "工具：read_file · 风险：低风险 · 操作：path: README.md",
                 timestampLabel: "00:00:02",
                 statusTone: "warning",
                 rawPayload: ""
@@ -626,7 +635,9 @@ describe("conversation store", () => {
       }
     });
 
-    expect(wrapper.find("details.trace-disclosure").exists()).toBe(true);
+    expect(wrapper.find("details.trace-disclosure").exists()).toBe(false);
+    expect(wrapper.find(".trace-summary-toggle").exists()).toBe(true);
+    expect(wrapper.find(".trace-panel-footer .trace-summary-toggle").exists()).toBe(false);
     expect(wrapper.find(".trace-item").exists()).toBe(false);
   });
 

@@ -45,6 +45,17 @@ describe("execution trace view model", () => {
         event_id: "evt_trace_2",
         sequence: 2,
         type: "thinking_delta",
+        timestamp: "2026-02-24T00:00:03Z",
+        payload: {
+          stage: "model_call",
+          delta: "model_call"
+        }
+      },
+      {
+        ...baseEvent,
+        event_id: "evt_trace_3",
+        sequence: 3,
+        type: "thinking_delta",
         timestamp: "2026-02-24T00:00:05Z",
         payload: {
           stage: "assistant_output",
@@ -53,8 +64,8 @@ describe("execution trace view model", () => {
       },
       {
         ...baseEvent,
-        event_id: "evt_trace_3",
-        sequence: 3,
+        event_id: "evt_trace_4",
+        sequence: 4,
         type: "tool_call",
         timestamp: "2026-02-24T00:00:08Z",
         payload: {
@@ -65,8 +76,8 @@ describe("execution trace view model", () => {
       },
       {
         ...baseEvent,
-        event_id: "evt_trace_4",
-        sequence: 4,
+        event_id: "evt_trace_5",
+        sequence: 5,
         type: "tool_result",
         timestamp: "2026-02-24T00:00:10Z",
         payload: {
@@ -84,9 +95,12 @@ describe("execution trace view model", () => {
     expect(traces[0]?.summaryPrimary).toContain("调用 1 个工具");
     expect(traces[0]?.summarySecondary).toContain("Token in 20 / out 10 / total 30");
     expect(traces[0]?.summarySecondary).toContain("消息执行");
+    expect(traces[0]?.summaryTone).toBe("primary");
     expect(traces[0]?.steps).toHaveLength(4);
     expect(traces[0]?.steps[1]?.title).toBe("思考");
-    expect(traces[0]?.steps[2]?.detail).toContain("command");
+    expect(traces[0]?.steps[1]?.summary).toContain("analyzing project structure");
+    expect(traces[0]?.steps[2]?.summary).toContain("执行命令");
+    expect(traces[0]?.steps[2]?.detail).toContain("工具");
   });
 
   it("renders basic detail level without raw payload", () => {
@@ -131,7 +145,9 @@ describe("execution trace view model", () => {
     const traces = buildExecutionTraceViewModels(events, [execution], "zh-CN", new Date("2026-02-24T00:01:02Z"));
     expect(traces).toHaveLength(1);
     expect(traces[0]?.state).toBe("completed");
+    expect(traces[0]?.summaryTone).toBe("error");
     expect(traces[0]?.steps[0]?.rawPayload).toBe("");
+    expect(traces[0]?.steps[0]?.summary).toContain("读取 README.md");
     expect(traces[0]?.steps[1]?.summary).toContain("失败");
   });
 
@@ -170,6 +186,7 @@ describe("execution trace view model", () => {
     expect(traces).toHaveLength(1);
     expect(traces[0]?.summaryPrimary).toContain("执行失败");
     expect(traces[0]?.summaryPrimary).toContain("失败 1");
+    expect(traces[0]?.summaryTone).toBe("error");
   });
 
   it("renders no-token secondary summary when usage is missing", () => {
@@ -184,5 +201,6 @@ describe("execution trace view model", () => {
     expect(traces).toHaveLength(1);
     expect(traces[0]?.summarySecondary).toContain("消息执行");
     expect(traces[0]?.summarySecondary).not.toContain("Token");
+    expect(traces[0]?.summaryTone).toBe("primary");
   });
 });
