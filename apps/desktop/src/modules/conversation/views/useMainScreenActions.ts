@@ -6,6 +6,7 @@ import {
   denyConversationExecution,
   discardLatestDiff,
   getLatestFinishedExecution,
+  removeQueuedConversationExecution,
   rollbackConversationToMessage,
   setConversationDraft,
   setConversationError,
@@ -150,6 +151,12 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
       return;
     }
     await stopConversationExecution(input.activeConversation.value);
+  }
+  async function removeQueuedMessage(executionID: string): Promise<void> {
+    if (!input.activeConversation.value) {
+      return;
+    }
+    await removeQueuedConversationExecution(input.activeConversation.value, executionID);
   }
   async function approveExecution(): Promise<void> {
     if (!input.activeConversation.value) {
@@ -361,6 +368,7 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     saveConversationName,
     selectConversation,
     sendMessage,
+    removeQueuedMessage,
     approveExecution,
     denyExecution,
     loginWorkspace,

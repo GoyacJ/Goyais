@@ -71,7 +71,8 @@
       <div class="main-body" :class="{ empty: !activeConversation }">
         <template v-if="activeConversation">
           <MainConversationPanel
-            :messages="runtime?.messages ?? []"
+            :messages="visibleMessages"
+            :queued-messages="queuedMessages"
             :queued-count="queuedCount"
             :pending-count="pendingCount"
             :executing-count="executingCount"
@@ -94,6 +95,7 @@
             @clear-suggestions="clearComposerSuggestions"
             @send="sendMessage"
             @stop="stopExecution"
+            @remove-queued="removeQueuedMessage"
             @approve="approveExecution"
             @deny="denyExecution"
             @rollback="rollbackMessage"
@@ -220,7 +222,9 @@ const {
   projectImportInProgress,
   projectsPage,
   queuedCount,
+  queuedMessages,
   rollbackMessage,
+  removeQueuedMessage,
   runningState,
   runningStateClass,
   runningActions,
@@ -230,6 +234,7 @@ const {
   requestComposerSuggestions,
   toggleExecutionTrace,
   runtime,
+  visibleMessages,
   saveConversationName,
   selectConversation,
   sendMessage,

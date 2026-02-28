@@ -34,25 +34,33 @@
           />
         </div>
       </template>
-
-      <div v-if="executionHint !== ''" class="message-row assistant">
-        <div class="message-body">
-          <div class="bubble-head">
-            <AppIcon name="bot" :size="12" />
-            <span>{{ assistantModelLabel }}</span>
-          </div>
-          <div class="bubble execution-hint">
-            <p>{{ executionHint }}</p>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="hasActiveExecution" class="queue-chip">
-        <StatusBadge tone="queued" :label="queueChipLabel" />
-      </div>
     </div>
 
     <div class="composer">
+      <div
+        v-if="queuedMessages.length > 0"
+        class="queued-list"
+        role="list"
+        :aria-label="t('conversation.queue.listAria')"
+      >
+        <div v-for="queuedMessage in queuedMessages" :key="queuedMessage.executionId" class="queued-item" role="listitem">
+          <div class="queued-main">
+            <AppIcon name="corner-down-right" :size="12" />
+            <p class="queued-text" :title="queuedMessage.content.trim()">
+              {{ queuedMessage.preview !== "" ? queuedMessage.preview : t("conversation.queue.itemFallback") }}
+            </p>
+          </div>
+          <button
+            class="queued-remove"
+            type="button"
+            :aria-label="t('conversation.queue.removeAria')"
+            @click="onRemoveQueued(queuedMessage.executionId)"
+          >
+            <AppIcon name="trash-2" :size="12" />
+          </button>
+        </div>
+      </div>
+
       <div class="draft-wrap">
         <textarea
           ref="draftRef"
@@ -130,11 +138,15 @@
           >
             拒绝
           </button>
-          <button class="action-btn" type="button" aria-label="停止执行" :disabled="!hasActiveExecution" @click="$emit('stop')">
-            <AppIcon name="square" :size="12" />
-          </button>
-          <button class="action-btn send" type="button" aria-label="发送消息" :disabled="!hasModelOptions" @click="$emit('send')">
-            <AppIcon name="arrow-up" :size="12" />
+          <button
+            class="action-btn primary-action"
+            :class="{ send: !shouldShowStopAction }"
+            type="button"
+            :aria-label="primaryActionAriaLabel"
+            :disabled="isPrimaryActionDisabled"
+            @click="onPrimaryAction"
+          >
+            <AppIcon :name="shouldShowStopAction ? 'square' : 'arrow-up'" :size="12" />
           </button>
         </div>
       </div>
@@ -148,14 +160,21 @@ import type { ExecutionTraceStep, ExecutionTraceViewModel } from "@/modules/conv
 import type { RunningActionViewModel } from "@/modules/conversation/views/runningActions";
 import ExecutionTraceBlock from "@/modules/conversation/components/ExecutionTraceBlock.vue";
 import AppIcon from "@/shared/ui/AppIcon.vue";
-import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useI18n } from "@/shared/i18n";
 
 type ExecutionTrace = ExecutionTraceViewModel & { isExpanded: boolean; steps: ExecutionTraceStep[] };
+type QueuedMessageViewModel = {
+  executionId: string;
+  messageId: string;
+  queueIndex: number;
+  content: string;
+  preview: string;
+};
 
 const props = withDefaults(
   defineProps<{
     messages: ConversationMessage[];
+    queuedMessages?: QueuedMessageViewModel[];
     queuedCount: number;
     pendingCount: number;
     executingCount: number;
@@ -174,6 +193,7 @@ const props = withDefaults(
   }>(),
   {
     modelOptions: () => [],
+    queuedMessages: () => [],
     composerSuggestions: () => [],
     composerSuggesting: false,
     hasConfirmingExecution: false
@@ -198,24 +218,6 @@ const assistantModelLabel = computed(() => {
   }
   const selected = modelSelectOptions.value.find((item) => item.value === normalized);
   return selected?.label ?? normalized;
-});
-const executionHint = computed(() => {
-  if (props.activeTraceCount > 0 || props.runningActions.length > 0) {
-    return "";
-  }
-  if (props.hasConfirmingExecution) {
-    return "等待授权…";
-  }
-  if (props.pendingCount > 0 || props.executingCount > 0) {
-    return "正在思考…";
-  }
-  return "";
-});
-const queueChipLabel = computed(() => {
-  if (props.queuedCount > 0) {
-    return `运行中，队列 ${props.queuedCount}`;
-  }
-  return "运行中，可停止";
 });
 const executionTracesByMessageId = computed(() => {
   const mapped = new Map<string, ExecutionTrace[]>();
@@ -256,6 +258,7 @@ const runningActionsByExecutionId = computed(() => {
 const emit = defineEmits<{
   (event: "send"): void;
   (event: "stop"): void;
+  (event: "remove-queued", executionID: string): void;
   (event: "approve"): void;
   (event: "deny"): void;
   (event: "rollback", messageId: string): void;
@@ -276,6 +279,9 @@ const shouldStickToBottom = ref(true);
 const activeSuggestionIndex = ref(0);
 const suggestionItemRefs = ref<Array<HTMLButtonElement | null>>([]);
 const showSuggestionPanel = computed(() => props.composerSuggestions.length > 0 || props.composerSuggesting);
+const shouldShowStopAction = computed(() => props.hasActiveExecution && props.draft.trim() === "");
+const isPrimaryActionDisabled = computed(() => (shouldShowStopAction.value ? !props.hasActiveExecution : !hasModelOptions.value));
+const primaryActionAriaLabel = computed(() => (shouldShowStopAction.value ? t("conversation.stop") : t("conversation.send")));
 
 watch(
   () => props.composerSuggestions.length,
@@ -366,6 +372,18 @@ function getMessageTraces(message: ConversationMessage): ExecutionTrace[] {
 
 function onTraceToggle(executionId: string, expanded: boolean): void {
   emit("toggle-trace", executionId, expanded);
+}
+
+function onPrimaryAction(): void {
+  if (shouldShowStopAction.value) {
+    emit("stop");
+    return;
+  }
+  emit("send");
+}
+
+function onRemoveQueued(executionID: string): void {
+  emit("remove-queued", executionID);
 }
 
 function onDraftKeydown(event: KeyboardEvent): void {

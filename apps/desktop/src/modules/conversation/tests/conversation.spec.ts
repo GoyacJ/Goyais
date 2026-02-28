@@ -9,6 +9,7 @@ import {
   conversationStore,
   denyConversationExecution,
   ensureConversationRuntime,
+  removeQueuedConversationExecution,
   rollbackConversationToMessage,
   resetConversationStore,
   setConversationDraft,
@@ -440,6 +441,66 @@ describe("conversation store", () => {
     expect(requestBodies.map((item) => item.action)).toEqual(["approve", "deny"]);
   });
 
+  it("remove queued execution calls run control stop action", async () => {
+    const runtime = ensureConversationRuntime(mockConversation, true);
+    runtime.executions.push({
+      id: "exec_queued_remove",
+      workspace_id: "ws_local",
+      conversation_id: mockConversation.id,
+      message_id: "msg_queued_remove",
+      state: "queued",
+      mode: "agent",
+      model_id: "gpt-5.3",
+      mode_snapshot: "agent",
+      model_snapshot: {
+        model_id: "gpt-5.3"
+      },
+      project_revision_snapshot: 0,
+      queue_index: 1,
+      trace_id: "tr_queued_remove",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+
+    await removeQueuedConversationExecution(mockConversation, "exec_queued_remove");
+
+    const controlCalls = fetchMock.mock.calls.filter(([url, init]) => {
+      return String(url).endsWith("/v1/runs/exec_queued_remove/control") && (init?.method ?? "GET") === "POST";
+    });
+    expect(controlCalls).toHaveLength(1);
+    const requestBody = JSON.parse(String(controlCalls[0]?.[1]?.body ?? "{}")) as { action?: string };
+    expect(requestBody.action).toBe("stop");
+  });
+
+  it("remove queued execution ignores non-queued runs", async () => {
+    const runtime = ensureConversationRuntime(mockConversation, true);
+    runtime.executions.push({
+      id: "exec_executing_ignore",
+      workspace_id: "ws_local",
+      conversation_id: mockConversation.id,
+      message_id: "msg_executing_ignore",
+      state: "executing",
+      mode: "agent",
+      model_id: "gpt-5.3",
+      mode_snapshot: "agent",
+      model_snapshot: {
+        model_id: "gpt-5.3"
+      },
+      project_revision_snapshot: 0,
+      queue_index: 0,
+      trace_id: "tr_executing_ignore",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+
+    await removeQueuedConversationExecution(mockConversation, "exec_executing_ignore");
+
+    const controlCalls = fetchMock.mock.calls.filter(([url, init]) => {
+      return String(url).includes("/v1/runs/exec_executing_ignore/control") && (init?.method ?? "GET") === "POST";
+    });
+    expect(controlCalls).toHaveLength(0);
+  });
+
   it("rollback restores execution states from snapshot point", async () => {
     ensureConversationRuntime(mockConversation, true);
     setConversationDraft(mockConversation.id, "first message");
@@ -659,8 +720,103 @@ describe("conversation store", () => {
         modelOptions: []
       }
     });
-    const sendButton = wrapper.find("button[aria-label='发送消息']");
-    expect(sendButton.attributes("disabled")).toBeDefined();
+    const primaryButton = wrapper.find("button.primary-action");
+    expect(primaryButton.exists()).toBe(true);
+    expect(primaryButton.attributes("disabled")).toBeDefined();
+  });
+
+  it("switches primary action to stop when active execution has empty draft", async () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 1,
+        executingCount: 0,
+        hasActiveExecution: true,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        draft: "",
+        mode: "agent",
+        modelId: "gpt-5.3",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "gpt-5.3", label: "GPT-5.3" }]
+      }
+    });
+
+    const primaryButton = wrapper.find("button.primary-action");
+    expect(primaryButton.exists()).toBe(true);
+    expect(["停止", "Stop"]).toContain(primaryButton.attributes("aria-label"));
+    await primaryButton.trigger("click");
+    expect(wrapper.emitted("stop")).toEqual([[]]);
+    expect(wrapper.emitted("send")).toBeUndefined();
+  });
+
+  it("keeps primary action as send when draft is not empty", async () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 1,
+        executingCount: 0,
+        hasActiveExecution: true,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        draft: "继续执行",
+        mode: "agent",
+        modelId: "gpt-5.3",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "gpt-5.3", label: "GPT-5.3" }]
+      }
+    });
+
+    const primaryButton = wrapper.find("button.primary-action");
+    expect(primaryButton.exists()).toBe(true);
+    expect(["发送", "Send"]).toContain(primaryButton.attributes("aria-label"));
+    await primaryButton.trigger("click");
+    expect(wrapper.emitted("send")).toEqual([[]]);
+    expect(wrapper.emitted("stop")).toBeUndefined();
+  });
+
+  it("renders queued list and emits remove-queued action", async () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedMessages: [
+          {
+            executionId: "exec_queued_1",
+            messageId: "msg_queued_1",
+            queueIndex: 1,
+            content: "后续第一条消息",
+            preview: "后续第一条消息"
+          },
+          {
+            executionId: "exec_queued_2",
+            messageId: "msg_queued_2",
+            queueIndex: 2,
+            content: "后续第二条消息",
+            preview: "后续第二条消息"
+          }
+        ],
+        queuedCount: 2,
+        pendingCount: 1,
+        executingCount: 0,
+        hasActiveExecution: true,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        draft: "",
+        mode: "agent",
+        modelId: "gpt-5.3",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "gpt-5.3", label: "GPT-5.3" }]
+      }
+    });
+
+    expect(wrapper.findAll(".queued-item")).toHaveLength(2);
+    await wrapper.find(".queued-remove").trigger("click");
+    expect(wrapper.emitted("remove-queued")).toEqual([["exec_queued_1"]]);
   });
 
   it("uses configured model option label for assistant identity", () => {

@@ -12,6 +12,7 @@ import {
 import { buildExecutionTraceViewModels, type ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
 import { useExecutionTraceState } from "@/modules/conversation/views/useExecutionTraceState";
 import { useRunningActionsView } from "@/modules/conversation/views/useRunningActionsView";
+import { useQueueMessagesView } from "@/modules/conversation/views/useQueueMessagesView";
 import { useMainScreenActions } from "@/modules/conversation/views/useMainScreenActions";
 import { useMainScreenModeling } from "@/modules/conversation/views/useMainScreenModeling";
 import { createConversationStreamCoordinator } from "@/modules/conversation/views/streamCoordinator";
@@ -109,6 +110,11 @@ export function useMainScreenController() {
   const hasConfirmingExecution = computed(() =>
     (runtime.value?.executions ?? []).some((execution) => execution.state === "confirming")
   );
+  const {
+    queuedMessages,
+    visibleMessages,
+    visibleTraceExecutionIds
+  } = useQueueMessagesView(runtime);
   const baseExecutionTraces = computed<ExecutionTraceViewModel[]>(() => {
     const currentRuntime = runtime.value;
     if (!currentRuntime) {
@@ -119,14 +125,19 @@ export function useMainScreenController() {
     );
     return buildExecutionTraceViewModels(currentRuntime.events, tracedExecutions, locale.value);
   });
+  const visibleExecutionTraces = computed<ExecutionTraceViewModel[]>(() =>
+    baseExecutionTraces.value.filter((trace) => visibleTraceExecutionIds.value.has(trace.executionId))
+  );
   const {
     activeTraceCount,
     executionTraces,
     toggleExecutionTrace
-  } = useExecutionTraceState(baseExecutionTraces);
+  } = useExecutionTraceState(visibleExecutionTraces);
   const { runningActions } = useRunningActionsView(runtime, {
     locale,
-    executionFilter: (execution) => execution.agent_config_snapshot?.show_process_trace ?? true
+    executionFilter: (execution) =>
+      (execution.agent_config_snapshot?.show_process_trace ?? true) &&
+      visibleTraceExecutionIds.value.has(execution.id)
   });
   const runningState = computed(() => workspaceStatus.conversationStatus.value);
   const runningStateClass = computed(() => {
@@ -502,6 +513,8 @@ export function useMainScreenController() {
     conversationPageByProjectId,
     editingConversationName,
     executingCount,
+    visibleMessages,
+    queuedMessages,
     inspectorCollapsed,
     inspectorTabs,
     modelOptions: modelState.modelOptions,

@@ -154,6 +154,34 @@ export async function stopConversationExecution(conversation: Conversation): Pro
   }
 }
 
+export async function removeQueuedConversationExecution(
+  conversation: Conversation,
+  executionID: string
+): Promise<void> {
+  const runtime = conversationStore.byConversationId[conversation.id];
+  if (!runtime) {
+    return;
+  }
+
+  const normalizedExecutionID = executionID.trim();
+  if (normalizedExecutionID === "") {
+    return;
+  }
+
+  const queuedExecution = runtime.executions.find(
+    (execution) => execution.id === normalizedExecutionID && execution.state === "queued"
+  );
+  if (!queuedExecution) {
+    return;
+  }
+
+  try {
+    await controlExecutionRun(queuedExecution.id, "stop");
+  } catch (error) {
+    conversationStore.error = toDisplayError(error);
+  }
+}
+
 export async function approveConversationExecution(conversation: Conversation): Promise<void> {
   const runtime = conversationStore.byConversationId[conversation.id];
   if (!runtime) {

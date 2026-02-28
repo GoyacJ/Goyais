@@ -12,6 +12,7 @@ const conversationStoreMocks = vi.hoisted(() => ({
   denyConversationExecution: vi.fn(),
   discardLatestDiff: vi.fn(),
   getLatestFinishedExecution: vi.fn(),
+  removeQueuedConversationExecution: vi.fn(),
   rollbackConversationToMessage: vi.fn(),
   setConversationDraft: vi.fn(),
   setConversationError: vi.fn(),
@@ -183,6 +184,17 @@ describe("main screen actions - auto conversation naming", () => {
     await actions.saveConversationName();
 
     expect(projectStoreMocks.renameConversationById).toHaveBeenCalledWith(project.id, conversation.id, "手动改名");
+  });
+
+  it("removes queued execution through run control action", async () => {
+    const { actions, conversation } = createActionsContext({
+      conversationName: "已有名称",
+      draft: ""
+    });
+
+    await actions.removeQueuedMessage("exec_queued_1");
+
+    expect(conversationStoreMocks.removeQueuedConversationExecution).toHaveBeenCalledWith(conversation, "exec_queued_1");
   });
 });
 
