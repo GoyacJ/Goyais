@@ -33,10 +33,61 @@
             @toggle-trace="onTraceToggle"
           />
         </div>
+
+        <div
+          v-for="question in getMessagePendingQuestions(message)"
+          :key="`${question.executionId}:${question.questionId}`"
+          class="question-card"
+        >
+          <p class="question-title">{{ question.question }}</p>
+          <div v-if="question.options.length > 0" class="question-options" role="radiogroup">
+            <label
+              v-for="option in question.options"
+              :key="option.id"
+              class="question-option"
+            >
+              <input
+                type="radio"
+                :name="`question-${question.executionId}-${question.questionId}`"
+                :checked="getQuestionDraft(question).selectedOptionId === option.id"
+                @change="onQuestionOptionChange(question, option.id)"
+              />
+              <span class="question-option-main">
+                <span class="question-option-label">
+                  {{ option.label }}
+                  <span
+                    v-if="question.recommendedOptionId !== '' && question.recommendedOptionId === option.id"
+                    class="question-option-recommended"
+                  >
+                    Recommended
+                  </span>
+                </span>
+                <span v-if="option.description !== ''" class="question-option-description">{{ option.description }}</span>
+              </span>
+            </label>
+          </div>
+          <textarea
+            v-if="question.allowText"
+            class="question-text"
+            :value="getQuestionDraft(question).text"
+            placeholder="补充说明（可选）"
+            @input="onQuestionTextInput(question, $event)"
+          ></textarea>
+          <div class="question-actions">
+            <button
+              class="question-submit"
+              type="button"
+              :disabled="!canSubmitQuestion(question)"
+              @click="submitQuestion(question)"
+            >
+              提交回答
+            </button>
+          </div>
+        </div>
       </template>
     </div>
 
-    <div class="composer">
+    <div class="composer" :class="`composer-mode-${mode}`">
       <div
         v-if="queuedMessages.length > 0"
         class="queued-list"
@@ -98,21 +149,54 @@
 
       <div class="composer-actions">
         <div class="left">
-          <div class="plus-wrap">
+          <div ref="plusWrapRef" class="plus-wrap">
             <button class="action-btn" type="button" aria-label="更多操作" @click="plusOpen = !plusOpen">
               <AppIcon name="plus" :size="14" />
             </button>
-            <div v-if="plusOpen" class="plus-menu">
-              <button type="button" @click="insertResourceToken">{{ t("conversation.composer.menu.addResource") }}</button>
-              <button type="button" @click="insertCommandToken">{{ t("conversation.composer.menu.insertCommand") }}</button>
+            <div v-if="plusOpen" ref="plusMenuRef" class="plus-menu">
+              <button
+                v-for="(item, index) in plusMenuItems"
+                :key="`plus-item-${item.id}`"
+                type="button"
+                class="plus-menu-item"
+                :data-menu-id="item.id"
+                :class="{ active: plusMenuActiveIndex === index, expanded: item.id === 'advancedMode' && plusAdvancedModeOpen }"
+                @mouseenter="onPlusMenuItemHover(index)"
+                @click="onPlusMenuItemClick(item.id)"
+              >
+                <span>{{ item.label }}</span>
+                <span v-if="item.id === 'advancedMode'" class="plus-submenu-caret">›</span>
+              </button>
+              <div
+                v-if="plusAdvancedModeOpen"
+                ref="plusSubmenuRef"
+                class="plus-submenu"
+                :class="plusSubmenuPlacement === 'left' ? 'plus-submenu--left' : 'plus-submenu--right'"
+              >
+                <button
+                  v-for="(item, index) in permissionModeOptions"
+                  :key="`plus-mode-${item.id}`"
+                  type="button"
+                  class="plus-mode-item"
+                  :data-mode-id="item.id"
+                  :class="{ active: plusModeActiveIndex === index, selected: mode === item.id, danger: item.dangerous }"
+                  @mouseenter="onPlusModeItemHover(index)"
+                  @click="onPlusModeItemClick(index)"
+                >
+                  <span>{{ item.label }}</span>
+                  <span v-if="mode === item.id" class="plus-mode-current">{{ t("conversation.mode.current") }}</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          <select class="select" :value="mode" @change="onModeChange">
-            <option value="agent">Agent</option>
-            <option value="plan">Plan</option>
+          <select class="select" :value="quickModeValue" @change="onQuickModeChange">
+            <option v-if="isAdvancedModeActive" :value="quickModeAdvancedValue" disabled>
+              {{ quickModeAdvancedLabel }}
+            </option>
+            <option value="default">{{ getPermissionModeLabel("default") }}</option>
+            <option value="plan">{{ getPermissionModeLabel("plan") }}</option>
           </select>
-
           <select class="select" :value="modelId" :disabled="!hasModelOptions" @change="onModelChange">
             <option v-if="!hasModelOptions" value="">无可用模型</option>
             <option v-for="option in modelSelectOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
@@ -154,8 +238,12 @@
   </section>
 </template>
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUpdated, ref, watch } from "vue";
-import type { ComposerSuggestion, ConversationMessage, ConversationMode } from "@/shared/types/api";
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from "vue";
+import {
+  type ComposerSuggestion,
+  type ConversationMessage,
+  type ConversationMode
+} from "@/shared/types/api";
 import type { ExecutionTraceStep, ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
 import type { RunningActionViewModel } from "@/modules/conversation/views/runningActions";
 import ExecutionTraceBlock from "@/modules/conversation/components/ExecutionTraceBlock.vue";
@@ -170,6 +258,32 @@ type QueuedMessageViewModel = {
   content: string;
   preview: string;
 };
+type PendingQuestionOption = {
+  id: string;
+  label: string;
+  description: string;
+};
+type PendingQuestionViewModel = {
+  executionId: string;
+  messageId: string;
+  queueIndex: number;
+  questionId: string;
+  question: string;
+  options: PendingQuestionOption[];
+  recommendedOptionId: string;
+  allowText: boolean;
+  required: boolean;
+};
+type PendingQuestionDraft = {
+  selectedOptionId: string;
+  text: string;
+};
+type PlusMenuItemID = "addResource" | "insertCommand" | "advancedMode";
+type PlusMenuItem = {
+  id: PlusMenuItemID;
+  label: string;
+};
+type PlusSubmenuPlacement = "right" | "left";
 
 const props = withDefaults(
   defineProps<{
@@ -180,6 +294,7 @@ const props = withDefaults(
     executingCount: number;
     hasActiveExecution: boolean;
     hasConfirmingExecution?: boolean;
+    pendingQuestions?: PendingQuestionViewModel[];
     activeTraceCount: number;
     executionTraces: ExecutionTrace[];
     runningActions: RunningActionViewModel[];
@@ -196,7 +311,8 @@ const props = withDefaults(
     queuedMessages: () => [],
     composerSuggestions: () => [],
     composerSuggesting: false,
-    hasConfirmingExecution: false
+    hasConfirmingExecution: false,
+    pendingQuestions: () => []
   }
 );
 
@@ -263,6 +379,7 @@ const emit = defineEmits<{
   (event: "deny"): void;
   (event: "rollback", messageId: string): void;
   (event: "toggle-trace", executionId: string, expanded: boolean): void;
+  (event: "answer-question", payload: { executionId: string; questionId: string; selectedOptionId?: string; text?: string }): void;
   (event: "update:draft", value: string): void;
   (event: "update:mode", value: ConversationMode): void;
   (event: "update:model", value: string): void;
@@ -272,6 +389,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const plusOpen = ref(false);
+const plusWrapRef = ref<HTMLElement | null>(null);
+const plusMenuRef = ref<HTMLElement | null>(null);
+const plusSubmenuRef = ref<HTMLElement | null>(null);
+const plusSubmenuPlacement = ref<PlusSubmenuPlacement>("right");
 const draftRef = ref<HTMLTextAreaElement | null>(null);
 const conversationAreaRef = ref<HTMLElement | null>(null);
 const suggestionListRef = ref<HTMLElement | null>(null);
@@ -282,6 +403,33 @@ const showSuggestionPanel = computed(() => props.composerSuggestions.length > 0 
 const shouldShowStopAction = computed(() => props.hasActiveExecution && props.draft.trim() === "");
 const isPrimaryActionDisabled = computed(() => (shouldShowStopAction.value ? !props.hasActiveExecution : !hasModelOptions.value));
 const primaryActionAriaLabel = computed(() => (shouldShowStopAction.value ? t("conversation.stop") : t("conversation.send")));
+const permissionModeOptions = computed<Array<{ id: ConversationMode; label: string; dangerous: boolean }>>(() => [
+  { id: "default", label: t("conversation.mode.option.default"), dangerous: false },
+  { id: "plan", label: t("conversation.mode.option.plan"), dangerous: false },
+  { id: "acceptEdits", label: t("conversation.mode.option.acceptEdits"), dangerous: false },
+  { id: "dontAsk", label: t("conversation.mode.option.dontAsk"), dangerous: true },
+  { id: "bypassPermissions", label: t("conversation.mode.option.bypassPermissions"), dangerous: true }
+]);
+const plusMenuActiveIndex = ref(0);
+const plusModeActiveIndex = ref(0);
+const plusAdvancedModeOpen = ref(false);
+const plusMenuItems = computed<PlusMenuItem[]>(() => [
+  { id: "addResource", label: t("conversation.composer.menu.addResource") },
+  { id: "insertCommand", label: t("conversation.composer.menu.insertCommand") },
+  { id: "advancedMode", label: t("conversation.composer.menu.advancedMode") }
+]);
+const isAdvancedModeActive = computed(() => props.mode !== "default" && props.mode !== "plan");
+const quickModeAdvancedValue = computed(() => `advanced:${props.mode}`);
+const quickModeAdvancedLabel = computed(() => {
+  return `${t("conversation.mode.quick.advancedPrefix")} · ${getPermissionModeLabel(props.mode)}`;
+});
+const quickModeValue = computed<string>(() => {
+  if (isAdvancedModeActive.value) {
+    return quickModeAdvancedValue.value;
+  }
+  return props.mode === "plan" ? "plan" : "default";
+});
+const pendingQuestionDrafts = ref<Record<string, PendingQuestionDraft>>({});
 
 watch(
   () => props.composerSuggestions.length,
@@ -293,6 +441,49 @@ watch(
       activeSuggestionIndex.value = 0;
     }
   }
+);
+
+watch(
+  plusOpen,
+  (opened) => {
+    if (!opened) {
+      plusAdvancedModeOpen.value = false;
+      plusSubmenuPlacement.value = "right";
+      return;
+    }
+    plusMenuActiveIndex.value = 0;
+    plusAdvancedModeOpen.value = false;
+    plusModeActiveIndex.value = getCurrentModeIndex();
+  }
+);
+watch(plusAdvancedModeOpen, (opened) => {
+  if (!opened) {
+    plusSubmenuPlacement.value = "right";
+    return;
+  }
+  void nextTick(() => {
+    updatePlusSubmenuPlacement();
+  });
+});
+
+watch(
+  () => props.pendingQuestions,
+  (questions) => {
+    const nextDrafts: Record<string, PendingQuestionDraft> = {};
+    for (const question of questions) {
+      const key = pendingQuestionKey(question);
+      const previous = pendingQuestionDrafts.value[key];
+      const fallbackSelected = question.options.some((item) => item.id === question.recommendedOptionId)
+        ? question.recommendedOptionId
+        : "";
+      nextDrafts[key] = {
+        selectedOptionId: previous?.selectedOptionId ?? fallbackSelected,
+        text: previous?.text ?? ""
+      };
+    }
+    pendingQuestionDrafts.value = nextDrafts;
+  },
+  { immediate: true, deep: true }
 );
 
 function updateActiveSuggestionIndex(next: number): void {
@@ -334,8 +525,101 @@ function onDraftKeyup(event: KeyboardEvent): void {
   requestComposerSuggestions(event.target as HTMLTextAreaElement);
 }
 
-function onModeChange(event: Event): void {
-  emit("update:mode", (event.target as HTMLSelectElement).value as ConversationMode);
+function onQuickModeChange(event: Event): void {
+  const nextValue = (event.target as HTMLSelectElement).value;
+  if (!isQuickModeValue(nextValue)) {
+    return;
+  }
+  requestModeChange(nextValue);
+}
+
+function onAdvancedModeSelect(mode: ConversationMode): void {
+  requestModeChange(mode);
+}
+
+function requestModeChange(nextMode: ConversationMode): void {
+  if (nextMode === props.mode) {
+    plusOpen.value = false;
+    return;
+  }
+  if (isDangerousMode(nextMode)) {
+    const modeLabel = getPermissionModeLabel(nextMode);
+    const confirmMessage = `${t("conversation.mode.confirmDangerous")} (${modeLabel})`;
+    const confirmed = typeof window === "undefined"
+      ? true
+      : window.confirm(confirmMessage);
+    if (!confirmed) {
+      return;
+    }
+  }
+  emit("update:mode", nextMode);
+  plusOpen.value = false;
+}
+
+function onPlusMenuItemHover(index: number): void {
+  if (index < 0 || index >= plusMenuItems.value.length) {
+    return;
+  }
+  plusMenuActiveIndex.value = index;
+  if (plusMenuItems.value[index]?.id === "advancedMode") {
+    if (!plusAdvancedModeOpen.value) {
+      openPlusAdvancedMode();
+    }
+    return;
+  }
+  if (plusMenuItems.value[index]?.id !== "advancedMode") {
+    plusAdvancedModeOpen.value = false;
+  }
+}
+
+function onPlusMenuItemClick(itemID: PlusMenuItemID): void {
+  switch (itemID) {
+    case "addResource":
+      insertResourceToken();
+      return;
+    case "insertCommand":
+      insertCommandToken();
+      return;
+    case "advancedMode":
+      openPlusAdvancedMode();
+      return;
+    default:
+      return;
+  }
+}
+
+function onPlusModeItemHover(index: number): void {
+  if (index < 0 || index >= permissionModeOptions.value.length) {
+    return;
+  }
+  plusModeActiveIndex.value = index;
+}
+
+function onPlusModeItemClick(index: number): void {
+  const option = permissionModeOptions.value[index];
+  if (!option) {
+    return;
+  }
+  requestModeChange(option.id);
+}
+
+function openPlusAdvancedMode(): void {
+  plusAdvancedModeOpen.value = true;
+  plusSubmenuPlacement.value = "right";
+  plusModeActiveIndex.value = getCurrentModeIndex();
+  void nextTick(() => {
+    updatePlusSubmenuPlacement();
+  });
+}
+
+function getCurrentModeIndex(): number {
+  const index = permissionModeOptions.value.findIndex((item) => item.id === props.mode);
+  return index >= 0 ? index : 0;
+}
+
+function getPermissionModeLabel(mode: ConversationMode): string {
+  const option = permissionModeOptions.value.find((item) => item.id === mode);
+  return option?.label ?? mode;
 }
 
 function onModelChange(event: Event): void {
@@ -370,6 +654,17 @@ function getMessageTraces(message: ConversationMessage): ExecutionTrace[] {
   return [...merged.values()];
 }
 
+function getMessagePendingQuestions(message: ConversationMessage): PendingQuestionViewModel[] {
+  const directMatches = props.pendingQuestions.filter((item) => item.messageId === message.id);
+  if (directMatches.length > 0) {
+    return directMatches;
+  }
+  if (typeof message.queue_index !== "number") {
+    return [];
+  }
+  return props.pendingQuestions.filter((item) => item.queueIndex === message.queue_index);
+}
+
 function onTraceToggle(executionId: string, expanded: boolean): void {
   emit("toggle-trace", executionId, expanded);
 }
@@ -387,6 +682,18 @@ function onRemoveQueued(executionID: string): void {
 }
 
 function onDraftKeydown(event: KeyboardEvent): void {
+  if (
+    event.key === "Tab" &&
+    event.shiftKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey
+  ) {
+    event.preventDefault();
+    requestModeChange(quickModeValue.value === "plan" ? "default" : "plan");
+    return;
+  }
+
   if (showSuggestionPanel.value && props.composerSuggestions.length > 0) {
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -423,6 +730,68 @@ function onDraftKeydown(event: KeyboardEvent): void {
   }
   event.preventDefault();
   emit("send");
+}
+
+function getQuestionDraft(question: PendingQuestionViewModel): PendingQuestionDraft {
+  return pendingQuestionDrafts.value[pendingQuestionKey(question)] ?? {
+    selectedOptionId: "",
+    text: ""
+  };
+}
+
+function onQuestionOptionChange(question: PendingQuestionViewModel, optionID: string): void {
+  const key = pendingQuestionKey(question);
+  const current = getQuestionDraft(question);
+  pendingQuestionDrafts.value = {
+    ...pendingQuestionDrafts.value,
+    [key]: {
+      ...current,
+      selectedOptionId: optionID
+    }
+  };
+}
+
+function onQuestionTextInput(question: PendingQuestionViewModel, event: Event): void {
+  const key = pendingQuestionKey(question);
+  const current = getQuestionDraft(question);
+  pendingQuestionDrafts.value = {
+    ...pendingQuestionDrafts.value,
+    [key]: {
+      ...current,
+      text: (event.target as HTMLTextAreaElement).value
+    }
+  };
+}
+
+function canSubmitQuestion(question: PendingQuestionViewModel): boolean {
+  const draft = getQuestionDraft(question);
+  const selectedOptionID = draft.selectedOptionId.trim();
+  const text = draft.text.trim();
+  if (text !== "" && !question.allowText) {
+    return false;
+  }
+  if (selectedOptionID !== "") {
+    return question.options.length === 0 || question.options.some((item) => item.id === selectedOptionID);
+  }
+  if (text !== "") {
+    return true;
+  }
+  return !question.required;
+}
+
+function submitQuestion(question: PendingQuestionViewModel): void {
+  if (!canSubmitQuestion(question)) {
+    return;
+  }
+  const draft = getQuestionDraft(question);
+  const selectedOptionID = draft.selectedOptionId.trim();
+  const text = draft.text.trim();
+  emit("answer-question", {
+    executionId: question.executionId,
+    questionId: question.questionId,
+    selectedOptionId: selectedOptionID !== "" ? selectedOptionID : undefined,
+    text: text !== "" ? text : undefined
+  });
 }
 
 function requestComposerSuggestions(element: HTMLTextAreaElement | null): void {
@@ -504,6 +873,58 @@ function hasSuggestionDetail(suggestion: ComposerSuggestion): boolean {
   return (suggestion.detail ?? "").trim() !== "";
 }
 
+function pendingQuestionKey(question: PendingQuestionViewModel): string {
+  return `${question.executionId}:${question.questionId}`;
+}
+
+function isDangerousMode(mode: ConversationMode): boolean {
+  return mode === "dontAsk" || mode === "bypassPermissions";
+}
+
+function isQuickModeValue(value: string): value is "default" | "plan" {
+  return value === "default" || value === "plan";
+}
+
+function updatePlusSubmenuPlacement(): void {
+  if (!plusOpen.value || !plusAdvancedModeOpen.value) {
+    return;
+  }
+  if (typeof window === "undefined") {
+    plusSubmenuPlacement.value = "right";
+    return;
+  }
+  const menuElement = plusMenuRef.value;
+  const submenuElement = plusSubmenuRef.value;
+  if (!menuElement || !submenuElement) {
+    plusSubmenuPlacement.value = "right";
+    return;
+  }
+
+  const gap = 8;
+  const menuRect = menuElement.getBoundingClientRect();
+  const submenuWidth = submenuElement.getBoundingClientRect().width;
+  const roomRight = window.innerWidth - menuRect.right - gap;
+  const roomLeft = menuRect.left - gap;
+
+  if (roomRight >= submenuWidth) {
+    plusSubmenuPlacement.value = "right";
+    return;
+  }
+  if (roomLeft >= submenuWidth) {
+    plusSubmenuPlacement.value = "left";
+    return;
+  }
+  plusSubmenuPlacement.value = roomLeft > roomRight ? "left" : "right";
+}
+
+function onGlobalResize(): void {
+  if (!plusOpen.value || !plusAdvancedModeOpen.value) {
+    return;
+  }
+  updatePlusSubmenuPlacement();
+}
+
+
 function onConversationScroll(): void {
   const element = conversationAreaRef.value;
   if (!element) {
@@ -521,8 +942,113 @@ function scrollConversationToBottom(): void {
   element.scrollTop = element.scrollHeight;
 }
 
+function onGlobalPointerDown(event: PointerEvent): void {
+  const target = event.target;
+  if (!(target instanceof Node)) {
+    return;
+  }
+  if (plusOpen.value && plusWrapRef.value && !plusWrapRef.value.contains(target)) {
+    plusOpen.value = false;
+  }
+}
+
+function onGlobalKeyDown(event: KeyboardEvent): void {
+  if (!plusOpen.value) {
+    return;
+  }
+
+  const { key } = event;
+  if (
+    key !== "ArrowUp" &&
+    key !== "ArrowDown" &&
+    key !== "ArrowRight" &&
+    key !== "ArrowLeft" &&
+    key !== "Enter" &&
+    key !== "Escape"
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+
+  if (key === "Escape") {
+    plusAdvancedModeOpen.value = false;
+    plusOpen.value = false;
+    return;
+  }
+
+  if (key === "ArrowLeft") {
+    if (plusAdvancedModeOpen.value) {
+      plusAdvancedModeOpen.value = false;
+    }
+    return;
+  }
+
+  if (key === "ArrowDown") {
+    if (plusAdvancedModeOpen.value) {
+      plusModeActiveIndex.value = (plusModeActiveIndex.value + 1) % permissionModeOptions.value.length;
+    } else {
+      plusMenuActiveIndex.value = (plusMenuActiveIndex.value + 1) % plusMenuItems.value.length;
+      if (plusMenuItems.value[plusMenuActiveIndex.value]?.id !== "advancedMode") {
+        plusAdvancedModeOpen.value = false;
+      }
+    }
+    return;
+  }
+
+  if (key === "ArrowUp") {
+    if (plusAdvancedModeOpen.value) {
+      plusModeActiveIndex.value = (
+        plusModeActiveIndex.value - 1 + permissionModeOptions.value.length
+      ) % permissionModeOptions.value.length;
+    } else {
+      plusMenuActiveIndex.value = (plusMenuActiveIndex.value - 1 + plusMenuItems.value.length) % plusMenuItems.value.length;
+      if (plusMenuItems.value[plusMenuActiveIndex.value]?.id !== "advancedMode") {
+        plusAdvancedModeOpen.value = false;
+      }
+    }
+    return;
+  }
+
+  if (key === "ArrowRight") {
+    if (plusAdvancedModeOpen.value) {
+      onPlusModeItemClick(plusModeActiveIndex.value);
+      return;
+    }
+    const activeItem = plusMenuItems.value[plusMenuActiveIndex.value];
+    if (activeItem?.id === "advancedMode") {
+      openPlusAdvancedMode();
+    }
+    return;
+  }
+
+  if (key === "Enter") {
+    if (plusAdvancedModeOpen.value) {
+      onPlusModeItemClick(plusModeActiveIndex.value);
+      return;
+    }
+    const activeItem = plusMenuItems.value[plusMenuActiveIndex.value];
+    if (activeItem) {
+      onPlusMenuItemClick(activeItem.id);
+    }
+  }
+}
+
 onMounted(() => {
+  if (typeof window !== "undefined") {
+    window.addEventListener("pointerdown", onGlobalPointerDown);
+    window.addEventListener("keydown", onGlobalKeyDown);
+    window.addEventListener("resize", onGlobalResize);
+  }
   void nextTick(scrollConversationToBottom);
+});
+
+onBeforeUnmount(() => {
+  if (typeof window !== "undefined") {
+    window.removeEventListener("pointerdown", onGlobalPointerDown);
+    window.removeEventListener("keydown", onGlobalKeyDown);
+    window.removeEventListener("resize", onGlobalResize);
+  }
 });
 
 onUpdated(() => {

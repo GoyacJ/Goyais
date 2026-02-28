@@ -18,6 +18,7 @@ import {
 } from "@/modules/conversation/store";
 import MainConversationPanel from "@/modules/conversation/components/MainConversationPanel.vue";
 import MainInspectorPanel from "@/modules/conversation/components/MainInspectorPanel.vue";
+import { setLocale } from "@/shared/i18n";
 import type { Conversation } from "@/shared/types/api";
 
 const mockConversation: Conversation = {
@@ -26,7 +27,7 @@ const mockConversation: Conversation = {
   project_id: "proj_1",
   name: "Test Conversation",
   queue_state: "idle",
-  default_mode: "agent",
+  default_mode: "default",
   model_config_id: "rc_model_1",
   rule_ids: [],
   skill_ids: [],
@@ -41,6 +42,7 @@ describe("conversation store", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    setLocale("zh-CN");
     resetConversationStore();
     let executionCounter = 0;
     fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -58,9 +60,9 @@ describe("conversation store", () => {
               conversation_id: mockConversation.id,
               message_id: `msg_${executionCounter}`,
               state: executionCounter === 1 ? "pending" : "queued",
-              mode: "agent",
+              mode: "default",
               model_id: "gpt-5.3",
-              mode_snapshot: "agent",
+              mode_snapshot: "default",
               model_snapshot: {
                 model_id: "gpt-5.3"
               },
@@ -172,9 +174,9 @@ describe("conversation store", () => {
       conversation_id: mockConversation.id,
       message_id: "msg_1",
       state: "pending",
-      mode: "agent",
+      mode: "default",
       model_id: "gpt-5.3",
-      mode_snapshot: "agent",
+      mode_snapshot: "default",
       model_snapshot: {
         model_id: "gpt-5.3"
       },
@@ -237,6 +239,47 @@ describe("conversation store", () => {
     expect(runtime.messages[runtime.messages.length - 1]?.content).toContain("done");
   });
 
+  it("maps waiting_user_input run state to awaiting_input execution state", () => {
+    const runtime = ensureConversationRuntime(mockConversation, true);
+    runtime.executions.push({
+      id: "exec_wait_input",
+      workspace_id: "ws_local",
+      conversation_id: mockConversation.id,
+      message_id: "msg_wait_input",
+      state: "executing",
+      mode: "plan",
+      model_id: "gpt-5.3",
+      mode_snapshot: "plan",
+      model_snapshot: {
+        model_id: "gpt-5.3"
+      },
+      project_revision_snapshot: 0,
+      queue_index: 0,
+      trace_id: "tr_exec_wait_input",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+
+    applyIncomingExecutionEvent(mockConversation.id, {
+      event_id: "evt_wait_input",
+      execution_id: "exec_wait_input",
+      conversation_id: mockConversation.id,
+      trace_id: "tr_exec_wait_input",
+      sequence: 1,
+      queue_index: 0,
+      type: "thinking_delta",
+      timestamp: new Date().toISOString(),
+      payload: {
+        stage: "run_user_question_needed",
+        run_state: "waiting_user_input",
+        question_id: "q_plan",
+        question: "Continue with plan?"
+      }
+    });
+
+    expect(runtime.executions[0]?.state).toBe("awaiting_input");
+  });
+
   it("does not append duplicate terminal message for replayed execution_done", () => {
     const runtime = ensureConversationRuntime(mockConversation, true);
     runtime.messages.push({
@@ -253,9 +296,9 @@ describe("conversation store", () => {
       conversation_id: mockConversation.id,
       message_id: "msg_user_0",
       state: "executing",
-      mode: "agent",
+      mode: "default",
       model_id: "gpt-5.3",
-      mode_snapshot: "agent",
+      mode_snapshot: "default",
       model_snapshot: {
         model_id: "gpt-5.3"
       },
@@ -313,9 +356,9 @@ describe("conversation store", () => {
       conversation_id: mockConversation.id,
       message_id: "msg_user_0",
       state: "executing",
-      mode: "agent",
+      mode: "default",
       model_id: "gpt-5.3",
-      mode_snapshot: "agent",
+      mode_snapshot: "default",
       model_snapshot: {
         model_id: "gpt-5.3"
       },
@@ -352,9 +395,9 @@ describe("conversation store", () => {
       conversation_id: mockConversation.id,
       message_id: "msg_running",
       state: "executing",
-      mode: "agent",
+      mode: "default",
       model_id: "gpt-5.3",
-      mode_snapshot: "agent",
+      mode_snapshot: "default",
       model_snapshot: {
         model_id: "gpt-5.3"
       },
@@ -381,9 +424,9 @@ describe("conversation store", () => {
       conversation_id: mockConversation.id,
       message_id: "msg_confirming",
       state: "confirming",
-      mode: "agent",
+      mode: "default",
       model_id: "gpt-5.3",
-      mode_snapshot: "agent",
+      mode_snapshot: "default",
       model_snapshot: {
         model_id: "gpt-5.3"
       },
@@ -410,9 +453,9 @@ describe("conversation store", () => {
       conversation_id: mockConversation.id,
       message_id: "msg_confirming_control",
       state: "confirming",
-      mode: "agent",
+      mode: "default",
       model_id: "gpt-5.3",
-      mode_snapshot: "agent",
+      mode_snapshot: "default",
       model_snapshot: {
         model_id: "gpt-5.3"
       },
@@ -449,9 +492,9 @@ describe("conversation store", () => {
       conversation_id: mockConversation.id,
       message_id: "msg_queued_remove",
       state: "queued",
-      mode: "agent",
+      mode: "default",
       model_id: "gpt-5.3",
-      mode_snapshot: "agent",
+      mode_snapshot: "default",
       model_snapshot: {
         model_id: "gpt-5.3"
       },
@@ -480,9 +523,9 @@ describe("conversation store", () => {
       conversation_id: mockConversation.id,
       message_id: "msg_executing_ignore",
       state: "executing",
-      mode: "agent",
+      mode: "default",
       model_id: "gpt-5.3",
-      mode_snapshot: "agent",
+      mode_snapshot: "default",
       model_snapshot: {
         model_id: "gpt-5.3"
       },
@@ -525,9 +568,9 @@ describe("conversation store", () => {
       conversation_id: mockConversation.id,
       message_id: "msg_extra",
       state: "queued",
-      mode: "agent",
+      mode: "default",
       model_id: "gpt-5.3",
-      mode_snapshot: "agent",
+      mode_snapshot: "default",
       model_snapshot: {
         model_id: "gpt-5.3"
       },
@@ -625,7 +668,7 @@ describe("conversation store", () => {
           }
         ],
         draft: "",
-        mode: "agent",
+        mode: "default",
         modelId: "gpt-5.3",
         placeholder: "输入消息",
         modelOptions: [{ value: "gpt-5.3", label: "GPT-5.3" }]
@@ -689,7 +732,7 @@ describe("conversation store", () => {
         ],
         runningActions: [],
         draft: "",
-        mode: "agent",
+        mode: "default",
         modelId: "gpt-5.3",
         placeholder: "输入消息",
         modelOptions: [{ value: "gpt-5.3", label: "GPT-5.3" }]
@@ -714,7 +757,7 @@ describe("conversation store", () => {
         executionTraces: [],
         runningActions: [],
         draft: "hello",
-        mode: "agent",
+        mode: "default",
         modelId: "",
         placeholder: "输入消息",
         modelOptions: []
@@ -737,7 +780,7 @@ describe("conversation store", () => {
         executionTraces: [],
         runningActions: [],
         draft: "",
-        mode: "agent",
+        mode: "default",
         modelId: "gpt-5.3",
         placeholder: "输入消息",
         modelOptions: [{ value: "gpt-5.3", label: "GPT-5.3" }]
@@ -764,7 +807,7 @@ describe("conversation store", () => {
         executionTraces: [],
         runningActions: [],
         draft: "继续执行",
-        mode: "agent",
+        mode: "default",
         modelId: "gpt-5.3",
         placeholder: "输入消息",
         modelOptions: [{ value: "gpt-5.3", label: "GPT-5.3" }]
@@ -807,7 +850,7 @@ describe("conversation store", () => {
         executionTraces: [],
         runningActions: [],
         draft: "",
-        mode: "agent",
+        mode: "default",
         modelId: "gpt-5.3",
         placeholder: "输入消息",
         modelOptions: [{ value: "gpt-5.3", label: "GPT-5.3" }]
@@ -839,13 +882,371 @@ describe("conversation store", () => {
         executionTraces: [],
         runningActions: [],
         draft: "",
-        mode: "agent",
+        mode: "default",
         modelId: "rc_model_1",
         placeholder: "输入消息",
         modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }]
       }
     });
     expect(wrapper.text()).toContain("MiniMax Primary");
+  });
+
+  it("submits pending user question answer from inline card", async () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [
+          {
+            id: "msg_pending_question",
+            conversation_id: mockConversation.id,
+            role: "user",
+            content: "请继续",
+            queue_index: 0,
+            created_at: "2026-02-24T00:00:00Z"
+          }
+        ],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 1,
+        hasActiveExecution: true,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        pendingQuestions: [
+          {
+            executionId: "exec_pending_question",
+            messageId: "msg_pending_question",
+            queueIndex: 0,
+            questionId: "q_run_mode",
+            question: "选择继续策略",
+            options: [
+              { id: "opt_default", label: "Default", description: "继续标准流程" },
+              { id: "opt_plan", label: "Plan", description: "转为只读规划" }
+            ],
+            recommendedOptionId: "opt_plan",
+            allowText: true,
+            required: true
+          }
+        ],
+        draft: "",
+        mode: "plan",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }]
+      }
+    });
+
+    const optionInput = wrapper.find('input[type="radio"]');
+    await optionInput.trigger("change");
+    const noteInput = wrapper.find(".question-text");
+    await noteInput.setValue("请按建议继续");
+    await wrapper.find(".question-submit").trigger("click");
+
+    expect(wrapper.emitted("answer-question")).toEqual([
+      [{
+        executionId: "exec_pending_question",
+        questionId: "q_run_mode",
+        selectedOptionId: "opt_default",
+        text: "请按建议继续"
+      }]
+    ]);
+  });
+
+  it("toggles quick mode by Shift+Tab", async () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        pendingQuestions: [],
+        draft: "",
+        mode: "default",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }]
+      }
+    });
+
+    await wrapper.find("textarea.draft").trigger("keydown", { key: "Tab", shiftKey: true });
+    expect(wrapper.emitted("update:mode")).toEqual([["plan"]]);
+  });
+
+  it("requires confirmation before switching to dangerous mode", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm");
+    confirmSpy.mockReturnValue(false);
+
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        pendingQuestions: [],
+        draft: "",
+        mode: "default",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }]
+      }
+    });
+
+    await wrapper.find(".plus-wrap .action-btn").trigger("click");
+    await wrapper.findAll(".plus-menu-item")[2]!.trigger("click");
+    const dangerousItem = wrapper.find('[data-mode-id="dontAsk"]');
+    expect(dangerousItem.exists()).toBe(true);
+    await dangerousItem.trigger("click");
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(wrapper.emitted("update:mode")).toBeUndefined();
+
+    confirmSpy.mockRestore();
+  });
+
+  it("closes plus menu when clicking outside", async () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        pendingQuestions: [],
+        draft: "",
+        mode: "default",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }]
+      }
+    });
+
+    await wrapper.find(".plus-wrap .action-btn").trigger("click");
+    expect(wrapper.find(".plus-menu").exists()).toBe(true);
+
+    document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find(".plus-menu").exists()).toBe(false);
+  });
+
+  it("opens advanced mode submenu on hover", async () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        pendingQuestions: [],
+        draft: "",
+        mode: "default",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }]
+      }
+    });
+
+    await wrapper.find(".plus-wrap .action-btn").trigger("click");
+    expect(wrapper.find(".plus-submenu").exists()).toBe(false);
+
+    await wrapper.findAll(".plus-menu-item")[2]!.trigger("mouseenter");
+    expect(wrapper.find(".plus-submenu").exists()).toBe(true);
+  });
+
+  it("renders permission mode labels in zh-CN", async () => {
+    setLocale("zh-CN");
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        pendingQuestions: [],
+        draft: "",
+        mode: "default",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }]
+      }
+    });
+
+    await wrapper.find(".plus-wrap .action-btn").trigger("click");
+    expect(wrapper.find('[data-menu-id="advancedMode"]').text()).toContain("高级模式");
+    await wrapper.find('[data-menu-id="advancedMode"]').trigger("mouseenter");
+
+    const modeTexts = wrapper.findAll(".plus-mode-item").map((item) => item.text());
+    expect(modeTexts.some((text) => text.includes("默认"))).toBe(true);
+    expect(modeTexts.some((text) => text.includes("规划"))).toBe(true);
+    expect(modeTexts.some((text) => text.includes("接受编辑"))).toBe(true);
+    expect(modeTexts.some((text) => text.includes("不询问"))).toBe(true);
+    expect(modeTexts.some((text) => text.includes("跳过权限"))).toBe(true);
+  });
+
+  it("renders permission mode labels in en-US", async () => {
+    setLocale("en-US");
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        pendingQuestions: [],
+        draft: "",
+        mode: "default",
+        modelId: "rc_model_1",
+        placeholder: "Type message",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }]
+      }
+    });
+
+    await wrapper.find(".plus-wrap .action-btn").trigger("click");
+    expect(wrapper.find('[data-menu-id="advancedMode"]').text()).toContain("Advanced mode");
+    await wrapper.find('[data-menu-id="advancedMode"]').trigger("mouseenter");
+
+    const modeTexts = wrapper.findAll(".plus-mode-item").map((item) => item.text());
+    expect(modeTexts.some((text) => text.includes("Default"))).toBe(true);
+    expect(modeTexts.some((text) => text.includes("Plan"))).toBe(true);
+    expect(modeTexts.some((text) => text.includes("Accept Edits"))).toBe(true);
+    expect(modeTexts.some((text) => text.includes("Dont Ask"))).toBe(true);
+    expect(modeTexts.some((text) => text.includes("Bypass Permissions"))).toBe(true);
+  });
+
+  it("shows quick mode advanced placeholder when current mode is advanced", () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        pendingQuestions: [],
+        draft: "",
+        mode: "acceptEdits",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }]
+      }
+    });
+
+    const quickModeSelect = wrapper.findAll("select.select")[0]!;
+    expect((quickModeSelect.element as HTMLSelectElement).value).toBe("advanced:acceptEdits");
+    const firstOption = quickModeSelect.findAll("option")[0]!;
+    expect(firstOption.attributes("disabled")).toBeDefined();
+    expect(firstOption.text()).toContain("高级模式 · 接受编辑");
+  });
+
+  it("applies composer mode class for current mode", () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        pendingQuestions: [],
+        draft: "",
+        mode: "dontAsk",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }]
+      }
+    });
+
+    const composer = wrapper.find(".composer");
+    expect(composer.classes()).toContain("composer-mode-dontAsk");
+  });
+
+  it("supports keyboard navigation for advanced mode submenu", async () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        pendingQuestions: [],
+        draft: "",
+        mode: "default",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }]
+      }
+    });
+
+    await wrapper.find(".plus-wrap .action-btn").trigger("click");
+    expect(wrapper.find(".plus-menu").exists()).toBe(true);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find(".plus-submenu").exists()).toBe(true);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+
+    const emitted = wrapper.emitted("update:mode");
+    expect(emitted?.length).toBeGreaterThan(0);
+    expect(emitted?.[emitted.length - 1]?.[0]).toBe("acceptEdits");
+  });
+
+  it("closes advanced mode submenu on ArrowLeft", async () => {
+    const wrapper = mount(MainConversationPanel, {
+      props: {
+        messages: [],
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        hasActiveExecution: false,
+        activeTraceCount: 0,
+        executionTraces: [],
+        runningActions: [],
+        pendingQuestions: [],
+        draft: "",
+        mode: "default",
+        modelId: "rc_model_1",
+        placeholder: "输入消息",
+        modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }]
+      }
+    });
+
+    await wrapper.find(".plus-wrap .action-btn").trigger("click");
+    await wrapper.findAll(".plus-menu-item")[2]!.trigger("click");
+    expect(wrapper.find(".plus-submenu").exists()).toBe(true);
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find(".plus-submenu").exists()).toBe(false);
   });
 
   it("requests composer suggestions when draft input changes", async () => {
@@ -860,7 +1261,7 @@ describe("conversation store", () => {
         executionTraces: [],
         runningActions: [],
         draft: "",
-        mode: "agent",
+        mode: "default",
         modelId: "rc_model_1",
         placeholder: "输入消息",
         modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }],
@@ -899,7 +1300,7 @@ describe("conversation store", () => {
         executionTraces: [],
         runningActions: [],
         draft: "/he",
-        mode: "agent",
+        mode: "default",
         modelId: "rc_model_1",
         placeholder: "输入消息",
         modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }],
@@ -945,7 +1346,7 @@ describe("conversation store", () => {
         executionTraces: [],
         runningActions: [],
         draft: "@file:src/m",
-        mode: "agent",
+        mode: "default",
         modelId: "rc_model_1",
         placeholder: "输入消息",
         modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }],
@@ -984,7 +1385,7 @@ describe("conversation store", () => {
         executionTraces: [],
         runningActions: [],
         draft: "@r",
-        mode: "agent",
+        mode: "default",
         modelId: "rc_model_1",
         placeholder: "输入消息",
         modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }],
@@ -1027,7 +1428,7 @@ describe("conversation store", () => {
         executionTraces: [],
         runningActions: [],
         draft: "",
-        mode: "agent",
+        mode: "default",
         modelId: "rc_model_1",
         placeholder: "输入消息",
         modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }],
@@ -1059,7 +1460,7 @@ describe("conversation store", () => {
         executionTraces: [],
         runningActions: [],
         draft: "@ru",
-        mode: "agent",
+        mode: "default",
         modelId: "rc_model_1",
         placeholder: "输入消息",
         modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }],
@@ -1095,7 +1496,7 @@ describe("conversation store", () => {
         executionTraces: [],
         runningActions: [],
         draft: "@",
-        mode: "agent",
+        mode: "default",
         modelId: "rc_model_1",
         placeholder: "输入消息",
         modelOptions: [{ value: "rc_model_1", label: "MiniMax Primary" }],
