@@ -532,14 +532,19 @@ describe("conversation store", () => {
             queueIndex: 0,
             state: "executing",
             isRunning: true,
-            summary: "已思考 12s，已调用 2 个工具",
+            summaryPrimary: "已思考 12s · 调用 2 个工具",
+            summarySecondary: "消息执行 12s",
             isExpanded: true,
             steps: [
               {
                 id: "trace_step_1",
+                kind: "reasoning",
                 title: "思考",
-                summary: "model_call",
-                details: ""
+                summary: "模型调用",
+                detail: "正在推理下一步",
+                timestampLabel: "00:00:01",
+                statusTone: "neutral",
+                rawPayload: ""
               }
             ]
           }
@@ -550,7 +555,8 @@ describe("conversation store", () => {
             executionId: "exec_trace_1",
             queueIndex: 0,
             type: "tool",
-            label: "工具 read_file",
+            primary: "工具 read_file",
+            secondary: "推理：查看当前项目 · 操作：path: README.md",
             startedAt: "2026-02-24T00:00:01Z",
             elapsedMs: 3000,
             elapsedLabel: "3s"
@@ -594,14 +600,19 @@ describe("conversation store", () => {
             queueIndex: 1,
             state: "completed",
             isRunning: false,
-            summary: "已思考 8s，调用 1 个工具",
+            summaryPrimary: "执行完成 · 调用 1 个工具",
+            summarySecondary: "消息执行 8s",
             isExpanded: false,
             steps: [
               {
                 id: "trace_step_2",
+                kind: "tool_call",
                 title: "工具调用",
-                summary: "read_file (low)",
-                details: ""
+                summary: "调用 read_file（低风险）",
+                detail: "操作：path: README.md",
+                timestampLabel: "00:00:02",
+                statusTone: "warning",
+                rawPayload: ""
               }
             ]
           }

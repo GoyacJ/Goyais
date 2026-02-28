@@ -66,7 +66,10 @@ describe("running actions view", () => {
         timestamp: "2026-02-24T00:00:02Z",
         payload: {
           call_id: "call_b",
-          name: "read_file"
+          name: "read_file",
+          input: {
+            path: "README.md"
+          }
         }
       },
       {
@@ -83,11 +86,12 @@ describe("running actions view", () => {
       }
     ];
 
-    const actions = buildRunningActionViewModels(events, [baseExecution], new Date("2026-02-24T00:00:05Z"));
+    const actions = buildRunningActionViewModels(events, [baseExecution], "zh-CN", new Date("2026-02-24T00:00:05Z"));
     expect(actions).toHaveLength(2);
-    expect(actions.map((item) => item.label)).toContain("模型推理");
-    expect(actions.map((item) => item.label)).toContain("工具 read_file");
-    expect(actions.find((item) => item.label === "工具 read_file")?.elapsedLabel).toBe("3s");
+    expect(actions.map((item) => item.primary)).toContain("模型推理");
+    expect(actions.map((item) => item.primary)).toContain("工具 read_file");
+    expect(actions.find((item) => item.primary === "工具 read_file")?.elapsedLabel).toBe("3s");
+    expect(actions.find((item) => item.primary === "工具 read_file")?.secondary).toContain("path");
   });
 
   it("falls back to name+sequence matching when call_id is missing", () => {
@@ -125,9 +129,9 @@ describe("running actions view", () => {
       }
     ];
 
-    const actions = buildRunningActionViewModels(events, [baseExecution], new Date("2026-02-24T00:01:05Z"));
+    const actions = buildRunningActionViewModels(events, [baseExecution], "zh-CN", new Date("2026-02-24T00:01:05Z"));
     expect(actions).toHaveLength(1);
-    expect(actions[0]?.label).toBe("工具 read_file");
+    expect(actions[0]?.primary).toBe("工具 read_file");
     expect(actions[0]?.elapsedLabel).toBe("3s");
   });
 
@@ -148,15 +152,37 @@ describe("running actions view", () => {
         payload: {
           stage: "run_approval_needed",
           call_id: "call_approval_1",
-          name: "Bash"
+          name: "Bash",
+          reason: "requires high-risk permission"
         }
       }
     ];
 
-    const actions = buildRunningActionViewModels(events, [confirmingExecution], new Date("2026-02-24T00:02:04Z"));
+    const actions = buildRunningActionViewModels(events, [confirmingExecution], "zh-CN", new Date("2026-02-24T00:02:04Z"));
     expect(actions).toHaveLength(1);
     expect(actions[0]?.type).toBe("approval");
-    expect(actions[0]?.label).toBe("等待授权 Bash");
+    expect(actions[0]?.primary).toBe("等待授权 Bash");
     expect(actions[0]?.elapsedLabel).toBe("4s");
+  });
+
+  it("localizes primary labels in english locale", () => {
+    const events: ExecutionEvent[] = [
+      {
+        ...baseEvent,
+        event_id: "evt_tool_call_en",
+        type: "tool_call",
+        sequence: 1,
+        timestamp: "2026-02-24T00:03:00Z",
+        payload: {
+          call_id: "call_en",
+          name: "read_file"
+        }
+      }
+    ];
+
+    const actions = buildRunningActionViewModels(events, [baseExecution], "en-US", new Date("2026-02-24T00:03:03Z"));
+    expect(actions).toHaveLength(1);
+    expect(actions[0]?.primary).toBe("Tool read_file");
+    expect(actions[0]?.elapsedLabel).toBe("3s");
   });
 });

@@ -37,7 +37,7 @@ const baseEvent: ExecutionEvent = {
 };
 
 describe("execution trace view model", () => {
-  it("groups events by execution and builds natural summary", () => {
+  it("groups events by execution and builds readable summaries", () => {
     const events: ExecutionEvent[] = [
       baseEvent,
       {
@@ -47,8 +47,8 @@ describe("execution trace view model", () => {
         type: "thinking_delta",
         timestamp: "2026-02-24T00:00:05Z",
         payload: {
-          stage: "model_call",
-          delta: "analyzing project structure"
+          stage: "assistant_output",
+          delta: "<think>analyzing project structure and next command</think>"
         }
       },
       {
@@ -59,7 +59,8 @@ describe("execution trace view model", () => {
         timestamp: "2026-02-24T00:00:08Z",
         payload: {
           name: "run_command",
-          risk_level: "low"
+          risk_level: "low",
+          input: { command: "ls -la" }
         }
       },
       {
@@ -70,33 +71,25 @@ describe("execution trace view model", () => {
         timestamp: "2026-02-24T00:00:10Z",
         payload: {
           name: "run_command",
-          ok: true
-        }
-      },
-      {
-        ...baseEvent,
-        event_id: "evt_trace_other",
-        execution_id: "exec_other",
-        sequence: 1,
-        type: "thinking_delta",
-        payload: {
-          stage: "model_call"
+          ok: true,
+          output: "total 8\ndrwxr-xr-x"
         }
       }
     ];
 
-    const traces = buildExecutionTraceViewModels(events, [baseExecution], new Date("2026-02-24T00:00:15Z"));
+    const traces = buildExecutionTraceViewModels(events, [baseExecution], "zh-CN", new Date("2026-02-24T00:00:15Z"));
     expect(traces).toHaveLength(1);
     expect(traces[0]?.executionId).toBe("exec_trace_1");
-    expect(traces[0]?.summary).toContain("已思考");
-    expect(traces[0]?.summary).toContain("调用 1 个工具");
-    expect(traces[0]?.summary).toContain("Token in 20 / out 10 / total 30");
-    expect(traces[0]?.summary).toContain("消息执行");
+    expect(traces[0]?.summaryPrimary).toContain("已思考");
+    expect(traces[0]?.summaryPrimary).toContain("调用 1 个工具");
+    expect(traces[0]?.summarySecondary).toContain("Token in 20 / out 10 / total 30");
+    expect(traces[0]?.summarySecondary).toContain("消息执行");
     expect(traces[0]?.steps).toHaveLength(4);
     expect(traces[0]?.steps[1]?.title).toBe("思考");
+    expect(traces[0]?.steps[2]?.detail).toContain("command");
   });
 
-  it("renders basic detail level without payload details", () => {
+  it("renders basic detail level without raw payload", () => {
     const execution: Execution = {
       ...baseExecution,
       id: "exec_trace_basic",
@@ -129,16 +122,17 @@ describe("execution trace view model", () => {
         type: "tool_result",
         payload: {
           name: "read_file",
-          ok: false
+          ok: false,
+          error: "permission denied"
         }
       }
     ];
 
-    const traces = buildExecutionTraceViewModels(events, [execution], new Date("2026-02-24T00:01:02Z"));
+    const traces = buildExecutionTraceViewModels(events, [execution], "zh-CN", new Date("2026-02-24T00:01:02Z"));
     expect(traces).toHaveLength(1);
     expect(traces[0]?.state).toBe("completed");
-    expect(traces[0]?.steps[0]?.details).toBe("");
-    expect(traces[0]?.steps[1]?.summary).toContain("failed");
+    expect(traces[0]?.steps[0]?.rawPayload).toBe("");
+    expect(traces[0]?.steps[1]?.summary).toContain("失败");
   });
 
   it("handles failed execution summary with failed tool count", () => {
@@ -172,13 +166,13 @@ describe("execution trace view model", () => {
       }
     ];
 
-    const traces = buildExecutionTraceViewModels(events, [execution], new Date("2026-02-24T00:02:05Z"));
+    const traces = buildExecutionTraceViewModels(events, [execution], "zh-CN", new Date("2026-02-24T00:02:05Z"));
     expect(traces).toHaveLength(1);
-    expect(traces[0]?.summary).toContain("执行失败");
-    expect(traces[0]?.summary).toContain("1 个失败");
+    expect(traces[0]?.summaryPrimary).toContain("执行失败");
+    expect(traces[0]?.summaryPrimary).toContain("失败 1");
   });
 
-  it("renders token as N/A when usage is missing", () => {
+  it("renders no-token secondary summary when usage is missing", () => {
     const execution: Execution = {
       ...baseExecution,
       id: "exec_trace_no_usage",
@@ -186,8 +180,9 @@ describe("execution trace view model", () => {
       tokens_in: undefined,
       tokens_out: undefined
     };
-    const traces = buildExecutionTraceViewModels([baseEvent], [execution], new Date("2026-02-24T00:00:03Z"));
+    const traces = buildExecutionTraceViewModels([baseEvent], [execution], "zh-CN", new Date("2026-02-24T00:00:03Z"));
     expect(traces).toHaveLength(1);
-    expect(traces[0]?.summary).toContain("Token N/A");
+    expect(traces[0]?.summarySecondary).toContain("消息执行");
+    expect(traces[0]?.summarySecondary).not.toContain("Token");
   });
 });

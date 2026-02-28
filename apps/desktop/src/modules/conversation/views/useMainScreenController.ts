@@ -41,7 +41,7 @@ import type { ComposerCatalog, ComposerSuggestion, DiffCapability, InspectorTabK
 
 export function useMainScreenController() {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   const editingConversationName = ref(false);
   const conversationNameDraft = ref("");
@@ -117,7 +117,7 @@ export function useMainScreenController() {
     const tracedExecutions = currentRuntime.executions.filter(
       (execution) => execution.agent_config_snapshot?.show_process_trace ?? true
     );
-    return buildExecutionTraceViewModels(currentRuntime.events, tracedExecutions);
+    return buildExecutionTraceViewModels(currentRuntime.events, tracedExecutions, locale.value);
   });
   const {
     activeTraceCount,
@@ -125,6 +125,7 @@ export function useMainScreenController() {
     toggleExecutionTrace
   } = useExecutionTraceState(baseExecutionTraces);
   const { runningActions } = useRunningActionsView(runtime, {
+    locale,
     executionFilter: (execution) => execution.agent_config_snapshot?.show_process_trace ?? true
   });
   const runningState = computed(() => workspaceStatus.conversationStatus.value);

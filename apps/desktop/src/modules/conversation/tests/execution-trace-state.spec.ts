@@ -11,7 +11,8 @@ function createTrace(overrides?: Partial<ExecutionTraceViewModel>): ExecutionTra
     queueIndex: 0,
     state: "executing",
     isRunning: true,
-    summary: "已思考 3s，已调用 1 个工具",
+    summaryPrimary: "已思考 3s · 调用 1 个工具",
+    summarySecondary: "消息执行 3s",
     steps: [],
     ...overrides
   };

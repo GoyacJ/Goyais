@@ -1,25 +1,33 @@
 import { computed, onBeforeUnmount, ref, watch, type Ref } from "vue";
 
-import { buildRunningActionViewModels, type RunningActionViewModel } from "@/modules/conversation/views/runningActions";
+import {
+  applyRunningActionElapsed,
+  buildRunningActionBaseViewModels,
+  type RunningActionViewModel
+} from "@/modules/conversation/views/runningActions";
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import type { Locale } from "@/shared/i18n/messages";
 import type { Execution } from "@/shared/types/api";
 
 type RunningActionsViewOptions = {
+  locale: Ref<Locale>;
   executionFilter?: (execution: Execution) => boolean;
 };
 
 export function useRunningActionsView(
   runtime: Ref<ConversationRuntime | undefined>,
-  options: RunningActionsViewOptions = {}
+  options: RunningActionsViewOptions
 ) {
   const nowTick = ref(Date.now());
   let timer: ReturnType<typeof setInterval> | undefined;
 
   const hasRunningExecutions = computed(() =>
-    (runtime.value?.executions ?? []).some((execution) => execution.state === "pending" || execution.state === "executing")
+    (runtime.value?.executions ?? []).some(
+      (execution) => execution.state === "pending" || execution.state === "executing" || execution.state === "confirming"
+    )
   );
 
-  const runningActions = computed<RunningActionViewModel[]>(() => {
+  const baseRunningActions = computed(() => {
     const currentRuntime = runtime.value;
     if (!currentRuntime) {
       return [];
@@ -27,7 +35,11 @@ export function useRunningActionsView(
     const executions = typeof options.executionFilter === "function"
       ? currentRuntime.executions.filter((execution) => options.executionFilter?.(execution) ?? true)
       : currentRuntime.executions;
-    return buildRunningActionViewModels(currentRuntime.events, executions, new Date(nowTick.value));
+    return buildRunningActionBaseViewModels(currentRuntime.events, executions, options.locale.value);
+  });
+
+  const runningActions = computed<RunningActionViewModel[]>(() => {
+    return applyRunningActionElapsed(baseRunningActions.value, options.locale.value, new Date(nowTick.value));
   });
 
   watch(
