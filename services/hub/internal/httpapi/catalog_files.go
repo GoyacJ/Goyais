@@ -545,6 +545,8 @@ func normalizeVendorAuth(vendor ModelVendorName, input ModelCatalogVendorAuth, a
 
 func defaultVendorAuth(vendor ModelVendorName) ModelCatalogVendorAuth {
 	switch vendor {
+	case ModelVendorDeepSeek:
+		return ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer", APIKeyEnv: "DEEPSEEK_API_KEY"}
 	case ModelVendorGoogle:
 		return ModelCatalogVendorAuth{Type: "api_key_header", Header: "x-goog-api-key", APIKeyEnv: "GEMINI_API_KEY"}
 	case ModelVendorQwen:

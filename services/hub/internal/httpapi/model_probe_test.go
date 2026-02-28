@@ -40,6 +40,7 @@ func TestRunModelConfigTest_SupportedVendors(t *testing.T) {
 		auth   ModelCatalogVendorAuth
 	}{
 		{name: "openai", vendor: ModelVendorOpenAI, base: openAIServer.URL, key: "sk-test", model: "gpt-5.3", auth: ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer"}},
+		{name: "deepseek", vendor: ModelVendorDeepSeek, base: openAIServer.URL, key: "deepseek-key", model: "deepseek-chat", auth: ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer"}},
 		{name: "qwen", vendor: ModelVendorQwen, base: openAIServer.URL, key: "qwen-key", model: "qwen-plus-latest", auth: ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer"}},
 		{name: "doubao", vendor: ModelVendorDoubao, base: openAIServer.URL, key: "doubao-key", model: "doubao-seed-2-0-pro-260215", auth: ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer"}},
 		{name: "zhipu", vendor: ModelVendorZhipu, base: openAIServer.URL, key: "zhipu-key", model: "glm-5", auth: ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer"}},

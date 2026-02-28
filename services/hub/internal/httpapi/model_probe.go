@@ -44,7 +44,7 @@ func runModelConfigTest(config ResourceConfig, resolveCatalogVendor func(ModelVe
 	switch model.Vendor {
 	case ModelVendorGoogle:
 		status, code, message = probeGoogleModel(model, probeTarget)
-	case ModelVendorOpenAI, ModelVendorQwen, ModelVendorDoubao, ModelVendorZhipu, ModelVendorMiniMax, ModelVendorLocal:
+	case ModelVendorOpenAI, ModelVendorDeepSeek, ModelVendorQwen, ModelVendorDoubao, ModelVendorZhipu, ModelVendorMiniMax, ModelVendorLocal:
 		status, code, message = probeOpenAICompatibleModel(model, probeTarget)
 	default:
 		value := "unsupported_vendor"

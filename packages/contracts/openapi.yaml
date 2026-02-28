@@ -2597,7 +2597,7 @@ components:
           type: string
         vendor:
           type: string
-          enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+          enum: [OpenAI, DeepSeek, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
         model_id:
           type: string
         enabled:
@@ -2616,7 +2616,7 @@ components:
           type: array
           items:
             type: string
-            enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+            enum: [OpenAI, DeepSeek, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
 
     ModelCatalogModel:
       type: object
@@ -2649,7 +2649,7 @@ components:
       properties:
         name:
           type: string
-          enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+          enum: [OpenAI, DeepSeek, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
         homepage:
           type: string
         docs:
@@ -2728,7 +2728,7 @@ components:
       properties:
         vendor:
           type: string
-          enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+          enum: [OpenAI, DeepSeek, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
         model_id:
           type: string
         base_url:

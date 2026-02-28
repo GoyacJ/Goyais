@@ -24,6 +24,25 @@
       ]
     },
     {
+      "name": "DeepSeek",
+      "homepage": "https://platform.deepseek.com/",
+      "docs": "https://api-docs.deepseek.com/",
+      "base_url": "https://api.deepseek.com/v1",
+      "auth": {
+        "type": "http_bearer",
+        "header": "Authorization",
+        "scheme": "Bearer",
+        "api_key_env": "DEEPSEEK_API_KEY"
+      },
+      "models": [
+        { "id": "deepseek-chat", "label": "DeepSeek Chat", "enabled": true },
+        { "id": "deepseek-reasoner", "label": "DeepSeek Reasoner", "enabled": true }
+      ],
+      "notes": [
+        "DeepSeek 对话与推理模型通过 OpenAI-compatible chat/completions 接口调用。"
+      ]
+    },
+    {
       "name": "Google",
       "homepage": "https://ai.google.dev/",
       "docs": "https://ai.google.dev/gemini-api/docs/models",

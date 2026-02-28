@@ -24,7 +24,7 @@ export const workspaceModelCards = [
   {
     title: "厂商配置 Vendor",
     lines: [
-      "OpenAI · Google · Qwen · Doubao · Zhipu · MiniMax · Local",
+      "OpenAI · DeepSeek · Google · Qwen · Doubao · Zhipu · MiniMax · Local",
       "操作: 新增厂商 · 编辑密钥 · 删除厂商"
     ],
     tone: "default" as const

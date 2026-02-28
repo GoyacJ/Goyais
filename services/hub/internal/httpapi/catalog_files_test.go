@@ -31,6 +31,35 @@ func TestParseModelCatalogPayload_StrictRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestParseModelCatalogPayload_SupportsDeepSeekVendor(t *testing.T) {
+	payload := []byte(`{
+  "version": "1",
+  "vendors": [
+    {
+      "name": "DeepSeek",
+      "base_url": "https://api.deepseek.com/v1",
+      "auth": {
+        "type": "http_bearer",
+        "header": "Authorization",
+        "scheme": "Bearer",
+        "api_key_env": "DEEPSEEK_API_KEY"
+      },
+      "models": [
+        { "id": "deepseek-chat", "label": "DeepSeek Chat", "enabled": true }
+      ]
+    }
+  ]
+}`)
+
+	parsed, _, err := parseModelCatalogPayload(payload, "deepseek.json", false)
+	if err != nil {
+		t.Fatalf("expected deepseek vendor to be accepted, got %v", err)
+	}
+	if len(parsed.Vendors) != 1 || parsed.Vendors[0].Name != ModelVendorDeepSeek {
+		t.Fatalf("expected deepseek vendor in parsed result, got %#v", parsed.Vendors)
+	}
+}
+
 func TestLoadModelCatalogDetailed_LegacyAutoFillWriteback(t *testing.T) {
 	state := NewAppState(nil)
 	workspaceID := "ws_catalog_autofill"

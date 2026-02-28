@@ -3,17 +3,19 @@ package httpapi
 type ModelVendorName string
 
 const (
-	ModelVendorOpenAI  ModelVendorName = "OpenAI"
-	ModelVendorGoogle  ModelVendorName = "Google"
-	ModelVendorQwen    ModelVendorName = "Qwen"
-	ModelVendorDoubao  ModelVendorName = "Doubao"
-	ModelVendorZhipu   ModelVendorName = "Zhipu"
-	ModelVendorMiniMax ModelVendorName = "MiniMax"
-	ModelVendorLocal   ModelVendorName = "Local"
+	ModelVendorOpenAI   ModelVendorName = "OpenAI"
+	ModelVendorDeepSeek ModelVendorName = "DeepSeek"
+	ModelVendorGoogle   ModelVendorName = "Google"
+	ModelVendorQwen     ModelVendorName = "Qwen"
+	ModelVendorDoubao   ModelVendorName = "Doubao"
+	ModelVendorZhipu    ModelVendorName = "Zhipu"
+	ModelVendorMiniMax  ModelVendorName = "MiniMax"
+	ModelVendorLocal    ModelVendorName = "Local"
 )
 
 var supportedModelVendors = []ModelVendorName{
 	ModelVendorOpenAI,
+	ModelVendorDeepSeek,
 	ModelVendorGoogle,
 	ModelVendorQwen,
 	ModelVendorDoubao,
