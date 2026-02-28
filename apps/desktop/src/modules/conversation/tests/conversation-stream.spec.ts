@@ -101,15 +101,16 @@ describe("conversation stream routing", () => {
     expect(typeof onEvent).toBe("function");
 
     onEvent?.({
+      type: "run_started",
       event_id: "evt_stream_1",
-      execution_id: "exec_stream_1",
-      conversation_id: conversationB.id,
-      trace_id: "tr_stream_1",
+      session_id: conversationB.id,
+      run_id: "exec_stream_1",
       sequence: 1,
-      queue_index: 0,
-      type: "execution_started",
       timestamp: "2026-02-24T00:00:00Z",
-      payload: {}
+      payload: {
+        queue_index: 0,
+        trace_id: "tr_stream_1"
+      }
     });
 
     expect(applyIncomingExecutionEventMock).toHaveBeenCalledTimes(1);
@@ -159,15 +160,15 @@ describe("conversation stream routing", () => {
 
     expect(optionsUsed?.initialLastEventId).toBe("evt_stream_resume_from");
     onEvent?.({
+      type: "run_output_delta",
       event_id: "evt_stream_new",
-      execution_id: "exec_stream_2",
-      conversation_id: conversationA.id,
-      trace_id: "tr_stream_2",
+      session_id: conversationA.id,
+      run_id: "exec_stream_2",
       sequence: 2,
-      queue_index: 0,
-      type: "thinking_delta",
       timestamp: "2026-02-24T00:00:00Z",
       payload: {
+        queue_index: 0,
+        trace_id: "tr_stream_2",
         stage: "model_call"
       }
     });
@@ -204,15 +205,15 @@ describe("conversation stream routing", () => {
 
     attachConversationStream(conversationA, "at_remote");
     onEvent?.({
+      type: "run_output_delta",
       event_id: "evt_stream_resync_signal",
-      execution_id: "",
-      conversation_id: conversationA.id,
-      trace_id: "tr_stream_resync",
+      session_id: conversationA.id,
+      run_id: "",
       sequence: 0,
-      queue_index: 0,
-      type: "thinking_delta",
       timestamp: "2026-02-24T00:00:00Z",
       payload: {
+        queue_index: 0,
+        trace_id: "tr_stream_resync",
         stage: "sse_resync_required",
         resync_required: true,
         reason: "last_event_id_not_found",

@@ -34,7 +34,6 @@ describe("run event adapter", () => {
         sequence: 3,
         timestamp: "2026-02-25T12:01:00Z",
         payload: {
-          files: 1,
           diff: [
             { id: "diff_1", path: "README.md", change_type: "modified", summary: "updated" }
           ]
@@ -49,7 +48,28 @@ describe("run event adapter", () => {
     expect(result?.execution_id).toBe("run_adapter_2");
   });
 
-  it("passes through legacy execution event payloads", () => {
+  it("does not map run_output_delta without payload.diff to diff_generated", () => {
+    const result = toExecutionEventFromStreamPayload(
+      {
+        type: "run_output_delta",
+        session_id: "conv_adapter_3",
+        run_id: "run_adapter_3",
+        sequence: 4,
+        timestamp: "2026-02-25T12:01:30Z",
+        payload: {
+          name: "Write",
+          call_id: "call_1",
+          output: "{\"ok\":true}"
+        }
+      },
+      "conv_fallback"
+    );
+
+    expect(result).toBeTruthy();
+    expect(result?.type).toBe("tool_result");
+  });
+
+  it("returns null for legacy execution event payloads", () => {
     const result = toExecutionEventFromStreamPayload(
       {
         event_id: "evt_legacy_1",
@@ -67,10 +87,6 @@ describe("run event adapter", () => {
       "conv_fallback"
     );
 
-    expect(result).toBeTruthy();
-    expect(result?.event_id).toBe("evt_legacy_1");
-    expect(result?.type).toBe("thinking_delta");
-    expect(result?.execution_id).toBe("exec_legacy_1");
-    expect(result?.conversation_id).toBe("conv_legacy_1");
+    expect(result).toBeNull();
   });
 });

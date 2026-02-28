@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -1172,6 +1173,7 @@ func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 				"output":  output,
 				"source":  "hub_orchestrator",
 			})
+			o.appendDiffGeneratedEventFromToolResult(execution.ID, toolCtx.WorkingDir, toolName, result.Output)
 			return openAIToolResultForNextTurn{CallID: callID, Text: output}, nil
 		}
 
@@ -1491,6 +1493,98 @@ func (o *ExecutionOrchestrator) appendToolCallEvent(executionID string, payload 
 
 func (o *ExecutionOrchestrator) appendToolResultEvent(executionID string, payload map[string]any) {
 	o.appendExecutionAuxEvent(executionID, ExecutionEventTypeToolResult, payload)
+}
+
+func (o *ExecutionOrchestrator) appendDiffGeneratedEventFromToolResult(
+	executionID string,
+	workingDir string,
+	toolName string,
+	output map[string]any,
+) {
+	diffItems := buildToolResultDiffItems(workingDir, toolName, output)
+	if len(diffItems) == 0 {
+		return
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	o.state.mu.Lock()
+	execution, exists := o.state.executions[executionID]
+	if !exists {
+		o.state.mu.Unlock()
+		return
+	}
+	merged := mergeDiffItems(o.state.executionDiffs[executionID], diffItems)
+	appendExecutionEventLocked(o.state, ExecutionEvent{
+		ExecutionID:    execution.ID,
+		ConversationID: execution.ConversationID,
+		TraceID:        execution.TraceID,
+		QueueIndex:     execution.QueueIndex,
+		Type:           ExecutionEventTypeDiffGenerated,
+		Timestamp:      now,
+		Payload: map[string]any{
+			"diff":   diffItemsToPayload(merged),
+			"source": "hub_orchestrator",
+		},
+	})
+	o.state.mu.Unlock()
+}
+
+func buildToolResultDiffItems(workingDir string, toolName string, output map[string]any) []DiffItem {
+	if len(output) == 0 {
+		return nil
+	}
+	path := normalizeToolDiffPath(workingDir, asStringValue(output["path"]))
+	if path == "" {
+		return nil
+	}
+	switch strings.TrimSpace(toolName) {
+	case "Edit":
+		return []DiffItem{{
+			Path:       path,
+			ChangeType: "modified",
+			Summary:    "Edited file",
+		}}
+	case "NotebookEdit":
+		return []DiffItem{{
+			Path:       path,
+			ChangeType: "modified",
+			Summary:    "Edited notebook cell",
+		}}
+	case "Write":
+		changeType := "added"
+		if existedBefore, ok := output["existed_before"].(bool); ok && existedBefore {
+			changeType = "modified"
+		}
+		summary := "Wrote file"
+		if appendMode, ok := output["append"].(bool); ok && appendMode {
+			summary = "Appended file content"
+		}
+		return []DiffItem{{
+			Path:       path,
+			ChangeType: changeType,
+			Summary:    summary,
+		}}
+	default:
+		return nil
+	}
+}
+
+func normalizeToolDiffPath(workingDir string, rawPath string) string {
+	path := strings.TrimSpace(rawPath)
+	if path == "" {
+		return ""
+	}
+	cleaned := filepath.Clean(path)
+	root := strings.TrimSpace(workingDir)
+	if root != "" && filepath.IsAbs(cleaned) {
+		if relative, err := filepath.Rel(root, cleaned); err == nil {
+			relative = filepath.Clean(relative)
+			if relative != "." && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+				return filepath.ToSlash(relative)
+			}
+		}
+	}
+	return filepath.ToSlash(cleaned)
 }
 
 func (o *ExecutionOrchestrator) appendExecutionAuxEvent(executionID string, eventType ExecutionEventType, payload map[string]any) {

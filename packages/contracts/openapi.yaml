@@ -2110,6 +2110,7 @@ components:
       properties:
         tab:
           type: string
+          enum: [diff, run, trace, risk]
 
     ConversationSnapshot:
       type: object

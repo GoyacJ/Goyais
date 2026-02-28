@@ -66,7 +66,10 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 			s.conversationEventSeq[conversationID] = event.Sequence
 		}
 		if event.Type == ExecutionEventTypeDiffGenerated && event.ExecutionID != "" {
-			s.executionDiffs[event.ExecutionID] = parseDiffItemsFromPayload(event.Payload)
+			s.executionDiffs[event.ExecutionID] = mergeDiffItems(
+				s.executionDiffs[event.ExecutionID],
+				parseDiffItemsFromPayload(event.Payload),
+			)
 		}
 	}
 	s.mu.Unlock()

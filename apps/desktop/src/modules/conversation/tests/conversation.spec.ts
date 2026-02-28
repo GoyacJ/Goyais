@@ -1544,6 +1544,61 @@ describe("conversation store", () => {
     expect(wrapper.text()).toContain("模型: MiniMax Primary");
   });
 
+  it("renders diff tab without files tab and shows diff empty state", () => {
+    const wrapper = mount(MainInspectorPanel, {
+      props: {
+        diff: [],
+        capability: {
+          can_commit: false,
+          can_discard: false,
+          can_export_patch: true
+        },
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        modelLabel: "MiniMax Primary",
+        executions: [],
+        events: [],
+        activeTab: "diff"
+      }
+    });
+
+    const tabLabels = wrapper.findAll(".tabs .tab").map((tab) => tab.text());
+    expect(tabLabels).not.toContain("文件");
+    expect(wrapper.text()).toContain("暂无文件变更");
+  });
+
+  it("renders diff paths and change markers in diff tab", () => {
+    const wrapper = mount(MainInspectorPanel, {
+      props: {
+        diff: [
+          { id: "diff_1", path: "src/main.ts", change_type: "modified", summary: "updated" },
+          { id: "diff_2", path: "README.md", change_type: "added", summary: "created" }
+        ],
+        capability: {
+          can_commit: true,
+          can_discard: true,
+          can_export_patch: true
+        },
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        modelLabel: "MiniMax Primary",
+        executions: [],
+        events: [],
+        activeTab: "diff"
+      }
+    });
+
+    const rows = wrapper.findAll(".diff-row");
+    expect(rows).toHaveLength(2);
+    expect(wrapper.text()).toContain("src/main.ts");
+    expect(wrapper.text()).toContain("README.md");
+    expect(wrapper.text()).toContain("+");
+    expect(wrapper.text()).toContain("~");
+    expect(wrapper.text()).not.toContain("暂无文件变更");
+  });
+
   it("renders inspector trace details for selected execution", () => {
     const wrapper = mount(MainInspectorPanel, {
       props: {

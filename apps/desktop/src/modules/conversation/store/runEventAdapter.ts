@@ -1,17 +1,5 @@
 import type { ExecutionEvent, ExecutionEventType, RunEventType } from "@/shared/types/api";
 
-const executionEventTypes: readonly ExecutionEventType[] = [
-  "message_received",
-  "execution_started",
-  "thinking_delta",
-  "tool_call",
-  "tool_result",
-  "diff_generated",
-  "execution_stopped",
-  "execution_done",
-  "execution_error"
-];
-
 const runEventTypes: readonly RunEventType[] = [
   "run_queued",
   "run_started",
@@ -40,33 +28,10 @@ export function toExecutionEventFromStreamPayload(raw: unknown, fallbackConversa
     return null;
   }
 
-  if (isRunEventType(rawType)) {
-    return mapRunEventToExecutionEvent(raw, rawType, fallbackConversationId);
-  }
-
-  if (!isExecutionEventType(rawType)) {
+  if (!isRunEventType(rawType)) {
     return null;
   }
-  return normalizeLegacyExecutionEvent(raw, rawType, fallbackConversationId);
-}
-
-function normalizeLegacyExecutionEvent(
-  raw: Record<string, unknown>,
-  eventType: ExecutionEventType,
-  fallbackConversationId: string
-): ExecutionEvent {
-  const payload = asRecord(raw.payload);
-  return {
-    event_id: asString(raw.event_id),
-    execution_id: asString(raw.execution_id),
-    conversation_id: resolveConversationId(asString(raw.conversation_id), fallbackConversationId),
-    trace_id: asString(raw.trace_id),
-    sequence: asInteger(raw.sequence, 0),
-    queue_index: asInteger(raw.queue_index, asInteger(payload.queue_index, 0)),
-    type: eventType,
-    timestamp: asTimestamp(raw.timestamp),
-    payload
-  };
+  return mapRunEventToExecutionEvent(raw, rawType, fallbackConversationId);
 }
 
 function mapRunEventToExecutionEvent(
@@ -151,10 +116,6 @@ function resolveConversationId(rawConversationId: string, fallbackConversationId
     return trimmed;
   }
   return fallbackConversationId.trim();
-}
-
-function isExecutionEventType(value: string): value is ExecutionEventType {
-  return executionEventTypes.includes(value as ExecutionEventType);
 }
 
 function isRunEventType(value: string): value is RunEventType {

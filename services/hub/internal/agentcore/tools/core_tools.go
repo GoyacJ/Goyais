@@ -605,6 +605,11 @@ func NewWriteTool() Tool {
 		}
 		appendMode, _ := call.Input["append"].(bool)
 		fullPath := resolvePath(ctx.WorkingDir, path)
+		_, statErr := os.Stat(fullPath)
+		existedBefore := statErr == nil
+		if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+			return ToolResult{}, statErr
+		}
 		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 			return ToolResult{}, err
 		}
@@ -623,10 +628,11 @@ func NewWriteTool() Tool {
 			}
 		}
 		return ToolResult{Output: map[string]any{
-			"path":    fullPath,
-			"bytes":   len(content),
-			"append":  appendMode,
-			"success": true,
+			"path":           fullPath,
+			"bytes":          len(content),
+			"append":         appendMode,
+			"existed_before": existedBefore,
+			"success":        true,
 		}}, nil
 	})
 }

@@ -137,15 +137,6 @@ p {
   color: var(--semantic-warning);
 }
 
-.files-list {
-  margin: 0;
-  padding-left: var(--global-space-16);
-  color: var(--semantic-text-muted);
-  font-size: var(--global-font-size-11);
-  display: grid;
-  gap: var(--global-space-4);
-}
-
 .trace-card {
   min-height: 0;
 }

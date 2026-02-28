@@ -94,9 +94,16 @@ func TestCoreToolsKeyBehavior(t *testing.T) {
 		t.Fatalf("Edit did not modify file: %+v", readAfterEdit.Output)
 	}
 
-	mustExecuteTool(t, registry, ctx, "Write", map[string]any{"path": "new.txt", "content": "new content"})
+	firstWrite := mustExecuteTool(t, registry, ctx, "Write", map[string]any{"path": "new.txt", "content": "new content"})
+	if existedBefore, ok := firstWrite.Output["existed_before"].(bool); !ok || existedBefore {
+		t.Fatalf("Write should report existed_before=false on first write: %+v", firstWrite.Output)
+	}
 	if _, err := os.Stat(filepath.Join(workdir, "new.txt")); err != nil {
 		t.Fatalf("Write did not create file: %v", err)
+	}
+	secondWrite := mustExecuteTool(t, registry, ctx, "Write", map[string]any{"path": "new.txt", "content": "newer content"})
+	if existedBefore, ok := secondWrite.Output["existed_before"].(bool); !ok || !existedBefore {
+		t.Fatalf("Write should report existed_before=true on overwrite: %+v", secondWrite.Output)
 	}
 
 	mustExecuteTool(t, registry, ctx, "NotebookEdit", map[string]any{

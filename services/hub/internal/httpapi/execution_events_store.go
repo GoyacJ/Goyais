@@ -1,6 +1,9 @@
 package httpapi
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 const maxConversationEventHistory = 2000
 
@@ -23,6 +26,15 @@ func appendExecutionEventLocked(state *AppState, event ExecutionEvent) Execution
 	}
 	if normalized.Payload == nil {
 		normalized.Payload = map[string]any{}
+	}
+	if normalized.Type == ExecutionEventTypeDiffGenerated {
+		executionID := strings.TrimSpace(normalized.ExecutionID)
+		if executionID != "" {
+			incoming := parseDiffItemsFromPayload(normalized.Payload)
+			if len(incoming) > 0 {
+				state.executionDiffs[executionID] = mergeDiffItems(state.executionDiffs[executionID], incoming)
+			}
+		}
 	}
 	state.conversationEventSeq[normalized.ConversationID] = normalized.Sequence
 	state.executionEvents[normalized.ConversationID] = append(

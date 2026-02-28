@@ -59,6 +59,13 @@ type PendingExecutionQuestionViewModel = {
   required: boolean;
 };
 
+export const MAIN_INSPECTOR_TABS: Array<{ key: InspectorTabKey; label: string }> = [
+  { key: "diff", label: "D" },
+  { key: "run", label: "R" },
+  { key: "trace", label: "T" },
+  { key: "risk", label: "!" }
+];
+
 export function useMainScreenController() {
   const router = useRouter();
   const { t, locale } = useI18n();
@@ -78,13 +85,7 @@ export function useMainScreenController() {
   const composerSuggesting = ref(false);
   let composerSuggestSequence = 0;
 
-  const inspectorTabs: Array<{ key: InspectorTabKey; label: string }> = [
-    { key: "diff", label: "D" },
-    { key: "run", label: "R" },
-    { key: "trace", label: "T" },
-    { key: "files", label: "F" },
-    { key: "risk", label: "!" }
-  ];
+  const inspectorTabs: Array<{ key: InspectorTabKey; label: string }> = [...MAIN_INSPECTOR_TABS];
 
   const nonGitCapability: DiffCapability = {
     can_commit: false,

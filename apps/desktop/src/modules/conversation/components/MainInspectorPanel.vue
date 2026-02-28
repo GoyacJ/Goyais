@@ -26,7 +26,8 @@
         <span>{{ tf("conversation.inspector.diff.filesCount", { count: diff.length }) }}</span>
       </div>
 
-      <div class="diff-list">
+      <p v-if="diff.length === 0" class="normal">{{ t("conversation.inspector.diff.empty") }}</p>
+      <div v-else class="diff-list">
         <div v-for="item in diff" :key="item.id" class="diff-row">
           <span class="path">{{ item.path }}</span>
           <span class="stat" :class="item.change_type">{{ mapChange(item.change_type) }}</span>
@@ -86,14 +87,6 @@
           </div>
         </div>
       </template>
-    </section>
-
-    <section v-else-if="activeTab === 'files'" class="card">
-      <strong>{{ t("conversation.inspector.tab.files") }}</strong>
-      <p v-if="diff.length === 0" class="normal">{{ t("conversation.inspector.files.empty") }}</p>
-      <ul v-else class="files-list">
-        <li v-for="item in diff" :key="`${item.id}-file`">{{ item.path }}</li>
-      </ul>
     </section>
 
     <section v-else class="card">
@@ -168,7 +161,6 @@ const tabs = computed<Array<{ key: InspectorTabKey; label: string }>>(() => [
   { key: "diff", label: t("conversation.inspector.tab.diff") },
   { key: "run", label: t("conversation.inspector.tab.run") },
   { key: "trace", label: t("conversation.inspector.tab.trace") },
-  { key: "files", label: t("conversation.inspector.tab.files") },
   { key: "risk", label: t("conversation.inspector.tab.risk") }
 ]);
 
