@@ -86,6 +86,12 @@
   padding: 0 var(--global-space-2);
 }
 
+.message-actions {
+  display: inline-flex;
+  gap: var(--global-space-6);
+  justify-self: end;
+}
+
 .message-row.user .bubble-head {
   color: var(--semantic-text-muted);
 }
@@ -109,6 +115,10 @@ p {
   pointer-events: none;
   transform: translateY(-2px);
   transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.rollback.copy {
+  min-width: 56px;
 }
 
 .message-row.user:hover .rollback,

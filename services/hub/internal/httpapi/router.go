@@ -60,6 +60,7 @@ func newRouterWithDBPath(dbPath string) http.Handler {
 	mux.HandleFunc("/v1/runs/{run_id}/control", RunControlHandler(state))
 	mux.HandleFunc("/v1/executions/{execution_id}/diff", ExecutionDiffHandler(state))
 	mux.HandleFunc("/v1/executions/{execution_id}/patch", ExecutionPatchHandler(state))
+	mux.HandleFunc("/v1/executions/{execution_id}/files", ExecutionFilesHandler(state))
 	mux.HandleFunc("/v1/executions/{execution_id}/{action}", ExecutionActionHandler(state))
 
 	// Resources and sharing

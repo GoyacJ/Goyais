@@ -12,6 +12,7 @@ import type {
   ConversationDetailResponse,
   DiffCapability,
   DiffItem,
+  ExecutionFilesExportResponse,
   RunControlAction,
   RunControlResponse
 } from "@/shared/types/api";
@@ -105,6 +106,10 @@ export async function loadExecutionDiff(executionId: string): Promise<DiffItem[]
 
 export async function exportExecutionPatch(executionId: string): Promise<string> {
   return getControlClient().get<string>(`/v1/executions/${executionId}/patch`);
+}
+
+export async function exportExecutionFiles(executionId: string): Promise<ExecutionFilesExportResponse> {
+  return getControlClient().get<ExecutionFilesExportResponse>(`/v1/executions/${executionId}/files`);
 }
 
 export function resolveDiffCapability(isGitProject: boolean): DiffCapability {

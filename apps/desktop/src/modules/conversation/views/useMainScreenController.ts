@@ -4,7 +4,8 @@ import { useRouter } from "vue-router";
 import {
   conversationStore,
   ensureConversationRuntime,
-  getExecutionStateCounts
+  getExecutionStateCounts,
+  refreshExecutionDiff
 } from "@/modules/conversation/store";
 import {
   useAutoModelSyncWatcher
@@ -200,9 +201,11 @@ export function useMainScreenController() {
     activeTraceCount,
     executionTraces,
     selectedExecutionTrace,
+    selectedTraceMessageId,
     selectedTraceExecutionId,
+    selectTraceMessage,
     selectExecutionTrace
-  } = useExecutionTraceState(visibleExecutionTraces);
+  } = useExecutionTraceState(visibleExecutionTraces, visibleMessages);
   const { runningActions } = useRunningActionsView(runtime, {
     locale,
     executionFilter: (execution) =>
@@ -274,6 +277,10 @@ export function useMainScreenController() {
     selectExecutionTrace(executionId);
     actions.openInspectorTab("trace");
     inspectorCollapsed.value = false;
+  }
+
+  function selectTraceExecution(executionId: string): void {
+    selectExecutionTrace(executionId);
   }
 
   async function refreshComposerCatalogForActiveConversation(): Promise<void> {
@@ -521,6 +528,11 @@ export function useMainScreenController() {
       ensureConversationRuntime(context.conversation, context.isGitProject);
       void streamCoordinator.hydrateConversationDetail(context, true);
       void refreshComposerCatalogForActiveConversation();
+      const currentRuntime = conversationStore.byConversationId[nextId];
+      const latestExecution = currentRuntime?.executions[currentRuntime.executions.length - 1];
+      if (latestExecution) {
+        void refreshExecutionDiff(nextId, latestExecution.id);
+      }
       streamCoordinator.syncConversationStreams();
     }
   );
@@ -553,6 +565,25 @@ export function useMainScreenController() {
     () => {
       streamCoordinator.syncConversationStreams();
     }
+  );
+
+  watch(
+    () => ({
+      conversationId: activeConversation.value?.id ?? "",
+      executionIds: (runtime.value?.executions ?? []).map((execution) => execution.id).join("|"),
+      diffCount: runtime.value?.diff.length ?? 0
+    }),
+    ({ conversationId, diffCount }) => {
+      if (conversationId === "" || diffCount > 0) {
+        return;
+      }
+      const latestExecution = runtime.value?.executions[runtime.value.executions.length - 1];
+      if (!latestExecution) {
+        return;
+      }
+      void refreshExecutionDiff(conversationId, latestExecution.id);
+    },
+    { immediate: true }
   );
 
   watch(
@@ -622,7 +653,10 @@ export function useMainScreenController() {
     runtimeHubLabel: workspaceStatus.hubURL,
     runtimeUserDisplayName: workspaceStatus.userDisplayName,
     runningActions,
+    selectTraceExecution,
+    selectTraceMessage,
     selectTraceInInspector,
+    selectedTraceMessageId,
     workspaceLabel,
     workspaceStore
   };

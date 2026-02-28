@@ -83,11 +83,15 @@ func parseDiffItemRecord(record map[string]any) (DiffItem, bool) {
 	if record == nil {
 		return DiffItem{}, false
 	}
+	addedLines := normalizeOptionalDiffLineCount(record["added_lines"])
+	deletedLines := normalizeOptionalDiffLineCount(record["deleted_lines"])
 	return normalizeDiffItem(DiffItem{
-		ID:         asStringValue(record["id"]),
-		Path:       asStringValue(record["path"]),
-		ChangeType: asStringValue(record["change_type"]),
-		Summary:    asStringValue(record["summary"]),
+		ID:           asStringValue(record["id"]),
+		Path:         asStringValue(record["path"]),
+		ChangeType:   asStringValue(record["change_type"]),
+		Summary:      asStringValue(record["summary"]),
+		AddedLines:   addedLines,
+		DeletedLines: deletedLines,
 	})
 }
 
@@ -105,10 +109,12 @@ func normalizeDiffItem(item DiffItem) (DiffItem, bool) {
 		summary = "File changed"
 	}
 	return DiffItem{
-		ID:         id,
-		Path:       path,
-		ChangeType: normalizeDiffChangeType(item.ChangeType),
-		Summary:    summary,
+		ID:           id,
+		Path:         path,
+		ChangeType:   normalizeDiffChangeType(item.ChangeType),
+		Summary:      summary,
+		AddedLines:   normalizeOptionalDiffLineCount(item.AddedLines),
+		DeletedLines: normalizeOptionalDiffLineCount(item.DeletedLines),
 	}, true
 }
 
@@ -138,6 +144,8 @@ func mergeDiffItems(existing []DiffItem, incoming []DiffItem) []DiffItem {
 			if strings.TrimSpace(result[index].ID) == "" {
 				result[index].ID = normalized.ID
 			}
+			result[index].AddedLines = normalized.AddedLines
+			result[index].DeletedLines = normalized.DeletedLines
 			return
 		}
 		indexByPath[normalized.Path] = len(result)
@@ -164,13 +172,27 @@ func diffItemsToPayload(items []DiffItem) []map[string]any {
 			continue
 		}
 		payload = append(payload, map[string]any{
-			"id":          normalized.ID,
-			"path":        normalized.Path,
-			"change_type": normalized.ChangeType,
-			"summary":     normalized.Summary,
+			"id":            normalized.ID,
+			"path":          normalized.Path,
+			"change_type":   normalized.ChangeType,
+			"summary":       normalized.Summary,
+			"added_lines":   normalized.AddedLines,
+			"deleted_lines": normalized.DeletedLines,
 		})
 	}
 	return payload
+}
+
+func normalizeOptionalDiffLineCount(value any) *int {
+	parsed, ok := parseTokenInt(value)
+	if !ok {
+		return nil
+	}
+	if parsed < 0 {
+		parsed = 0
+	}
+	result := parsed
+	return &result
 }
 
 func asStringValue(value any) string {
@@ -209,6 +231,21 @@ func parseTokenUsageFromPayload(payload map[string]any) (int, int, bool) {
 
 func parseTokenInt(value any) (int, bool) {
 	switch typed := value.(type) {
+	case *int:
+		if typed == nil {
+			return 0, false
+		}
+		return *typed, true
+	case *int32:
+		if typed == nil {
+			return 0, false
+		}
+		return int(*typed), true
+	case *int64:
+		if typed == nil {
+			return 0, false
+		}
+		return int(*typed), true
 	case int:
 		return typed, true
 	case int32:

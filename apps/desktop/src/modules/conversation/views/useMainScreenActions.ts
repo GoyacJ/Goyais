@@ -6,7 +6,6 @@ import {
   commitLatestDiff,
   denyConversationExecution,
   discardLatestDiff,
-  getLatestFinishedExecution,
   removeQueuedConversationExecution,
   rollbackConversationToMessage,
   setConversationDraft,
@@ -17,7 +16,7 @@ import {
   stopConversationExecution,
   submitConversationMessage
 } from "@/modules/conversation/store";
-import { exportExecutionPatch } from "@/modules/conversation/services";
+import { exportExecutionFiles } from "@/modules/conversation/services";
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
 import { buildNameFromFirstMessage, isDefaultConversationName } from "@/modules/conversation/views/conversationNamePolicy";
 import {
@@ -44,7 +43,7 @@ import { createRemoteConnection, loginWorkspace as loginWorkspaceRequest } from 
 import { refreshMeForCurrentWorkspace, setWorkspaceToken } from "@/shared/stores/authStore";
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
-import type { Conversation, InspectorTabKey, PermissionMode, Project } from "@/shared/types/api";
+import type { Conversation, Execution, InspectorTabKey, PermissionMode, Project } from "@/shared/types/api";
 import { setWorkspaceConnection, switchWorkspaceContext, upsertWorkspace } from "@/modules/workspace/store";
 type MainScreenActionsInput = {
   router: Router;
@@ -346,25 +345,61 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     await discardLatestDiff(input.activeConversation.value.id);
   }
   async function exportPatch(): Promise<void> {
-    if (!input.activeConversation.value) {
-      return;
-    }
-    const execution = getLatestFinishedExecution(input.activeConversation.value.id);
+    const execution = resolveDiffTargetExecution();
     if (!execution) {
+      setConversationError("DIFF_NOT_FOUND: no execution found for current diff list");
       return;
     }
     try {
-      const patch = await exportExecutionPatch(execution.id);
-      const blob = new Blob([patch], { type: "text/plain;charset=utf-8" });
+      const filesArchive = await exportExecutionFiles(execution.id);
+      const bytesBuffer = decodeBase64(filesArchive.archive_base64);
+      const blob = new Blob([bytesBuffer], { type: "application/zip" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${execution.id}.patch`;
+      link.download = filesArchive.file_name.trim() || `${execution.id}-files.zip`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (error) {
       setConversationError(toDisplayError(error));
     }
+  }
+
+  function resolveDiffTargetExecution(): Execution | undefined {
+    const runtime = input.runtime.value;
+    if (!runtime) {
+      return undefined;
+    }
+    const diffExecutionID = runtime.diffExecutionId?.trim() ?? "";
+    if (diffExecutionID !== "") {
+      const matched = runtime.executions.find((item) => item.id === diffExecutionID);
+      if (matched) {
+        return matched;
+      }
+    }
+    const latestTerminalExecution = [...runtime.executions]
+      .reverse()
+      .find((item) => item.state === "completed" || item.state === "failed" || item.state === "cancelled");
+    if (latestTerminalExecution) {
+      return latestTerminalExecution;
+    }
+    // Fall back to latest execution when terminal one is not available yet.
+    return runtime.executions[runtime.executions.length - 1];
+  }
+
+  function decodeBase64(inputBase64: string): ArrayBuffer {
+    const normalized = inputBase64.trim();
+    if (normalized === "") {
+      return new ArrayBuffer(0);
+    }
+    const binary = atob(normalized);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    const buffer = new ArrayBuffer(bytes.length);
+    new Uint8Array(buffer).set(bytes);
+    return buffer;
   }
   return {
     addConversationByPrompt,

@@ -11,14 +11,23 @@
             <div class="bubble">
               <p>{{ message.content }}</p>
             </div>
-            <button
-              v-if="message.role === 'user' && message.can_rollback"
-              class="rollback"
-              type="button"
-              @click="$emit('rollback', message.id)"
-            >
-              回滚到此处
-            </button>
+            <div v-if="message.role === 'user'" class="message-actions">
+              <button
+                v-if="message.can_rollback"
+                class="rollback"
+                type="button"
+                @click="$emit('rollback', message.id)"
+              >
+                {{ t("conversation.message.rollback") }}
+              </button>
+              <button
+                class="rollback copy"
+                type="button"
+                @click="copyUserMessage(message.content)"
+              >
+                {{ t("conversation.message.copy") }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -249,6 +258,7 @@ import type { RunningActionViewModel } from "@/modules/conversation/views/runnin
 import ExecutionTraceBlock from "@/modules/conversation/components/ExecutionTraceBlock.vue";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import { useI18n } from "@/shared/i18n";
+import { showToast } from "@/shared/stores/toastStore";
 
 type ExecutionTrace = ExecutionTraceViewModel;
 type QueuedMessageViewModel = {
@@ -669,6 +679,25 @@ function onTraceSelect(executionId: string): void {
   emit("select-trace", executionId);
 }
 
+async function copyUserMessage(content: string): Promise<void> {
+  const value = content.trim();
+  if (value === "") {
+    return;
+  }
+  try {
+    await copyTextToClipboard(value);
+    showToast({
+      tone: "success",
+      message: t("conversation.message.copySuccess")
+    });
+  } catch {
+    showToast({
+      tone: "error",
+      message: t("conversation.message.copyFailed")
+    });
+  }
+}
+
 function onPrimaryAction(): void {
   if (shouldShowStopAction.value) {
     emit("stop");
@@ -922,6 +951,29 @@ function onGlobalResize(): void {
     return;
   }
   updatePlusSubmenuPlacement();
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  if (typeof document === "undefined") {
+    throw new Error("Clipboard API unavailable");
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error("Clipboard copy failed");
+  }
 }
 
 

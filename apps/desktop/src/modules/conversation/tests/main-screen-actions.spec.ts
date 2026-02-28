@@ -4,7 +4,7 @@ import type { Router } from "vue-router";
 
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
 import { useMainScreenActions } from "@/modules/conversation/views/useMainScreenActions";
-import type { Conversation, ConversationMessage, Project } from "@/shared/types/api";
+import type { Conversation, ConversationMessage, Execution, Project } from "@/shared/types/api";
 
 const conversationStoreMocks = vi.hoisted(() => ({
   approveConversationExecution: vi.fn(),
@@ -47,7 +47,7 @@ const projectStoreMocks = vi.hoisted(() => ({
 }));
 
 const conversationServiceMocks = vi.hoisted(() => ({
-  exportExecutionPatch: vi.fn()
+  exportExecutionFiles: vi.fn()
 }));
 
 const workspaceServiceMocks = vi.hoisted(() => ({
@@ -207,18 +207,85 @@ describe("main screen actions - auto conversation naming", () => {
 
     expect(conversationStoreMocks.removeQueuedConversationExecution).toHaveBeenCalledWith(conversation, "exec_queued_1");
   });
+
+  it("exports files using runtime diffExecutionId target", async () => {
+    conversationServiceMocks.exportExecutionFiles.mockResolvedValue({
+      file_name: "exec_target-files.zip",
+      archive_base64: "QQ=="
+    });
+    const originalCreateObjectURL = (URL as typeof URL & { createObjectURL?: (obj: Blob | MediaSource) => string }).createObjectURL;
+    const originalRevokeObjectURL = (URL as typeof URL & { revokeObjectURL?: (url: string) => void }).revokeObjectURL;
+    const createObjectURLSpy = vi.fn(() => "blob:files");
+    const revokeObjectURLSpy = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURLSpy
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURLSpy
+    });
+    const originalCreateElement = document.createElement.bind(document);
+    const clickSpy = vi.fn();
+    const createElementSpy = vi.spyOn(document, "createElement").mockImplementation(((tagName: string) => {
+      const element = originalCreateElement(tagName);
+      if (tagName.toLowerCase() === "a") {
+        (element as HTMLAnchorElement).click = clickSpy;
+      }
+      return element;
+    }) as typeof document.createElement);
+
+    const { actions } = createActionsContext({
+      conversationName: "已有名称",
+      draft: "",
+      runtimeExecutions: [
+        createExecution("exec_target", "completed"),
+        createExecution("exec_latest", "completed")
+      ],
+      diffExecutionId: "exec_target"
+    });
+
+    await actions.exportPatch();
+
+    expect(conversationServiceMocks.exportExecutionFiles).toHaveBeenCalledWith("exec_target");
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURLSpy).toHaveBeenCalledTimes(1);
+
+    createElementSpy.mockRestore();
+    if (originalCreateObjectURL) {
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        value: originalCreateObjectURL
+      });
+    } else {
+      Reflect.deleteProperty(URL, "createObjectURL");
+    }
+    if (originalRevokeObjectURL) {
+      Object.defineProperty(URL, "revokeObjectURL", {
+        configurable: true,
+        value: originalRevokeObjectURL
+      });
+    } else {
+      Reflect.deleteProperty(URL, "revokeObjectURL");
+    }
+  });
 });
 
 function createActionsContext(input: {
   conversationName: string;
   draft: string;
   runtimeMessages?: ConversationMessage[];
+  runtimeExecutions?: Execution[];
+  diffExecutionId?: string;
 }) {
   const conversation = createConversation(input.conversationName);
   const project = createProject();
   const runtimeValue = createRuntime({
     draft: input.draft,
-    messages: input.runtimeMessages ?? []
+    messages: input.runtimeMessages ?? [],
+    executions: input.runtimeExecutions ?? [],
+    diffExecutionId: input.diffExecutionId ?? ""
   });
 
   const activeConversationRef = ref<Conversation | undefined>(conversation);
@@ -292,6 +359,27 @@ function createProject(): Project {
   };
 }
 
+function createExecution(id: string, state: Execution["state"]): Execution {
+  return {
+    id,
+    workspace_id: "ws_1",
+    conversation_id: "conv_1",
+    message_id: `msg_${id}`,
+    state,
+    mode: "default",
+    model_id: "rc_model_1",
+    mode_snapshot: "default",
+    model_snapshot: {
+      model_id: "rc_model_1"
+    },
+    project_revision_snapshot: 0,
+    queue_index: 0,
+    trace_id: `tr_${id}`,
+    created_at: "2026-02-26T00:00:00Z",
+    updated_at: "2026-02-26T00:00:00Z"
+  };
+}
+
 function createRuntime(overrides: Partial<ConversationRuntime> = {}): ConversationRuntime {
   return {
     messages: [],
@@ -306,6 +394,7 @@ function createRuntime(overrides: Partial<ConversationRuntime> = {}): Conversati
     mcpIds: [],
     status: "connected",
     diff: [],
+    diffExecutionId: "",
     diffCapability: {
       can_commit: true,
       can_discard: true,

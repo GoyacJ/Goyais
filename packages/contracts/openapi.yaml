@@ -661,6 +661,21 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
+  /v1/executions/{execution_id}/files:
+    get:
+      summary: Export execution files as zip archive
+      parameters:
+        - $ref: '#/components/parameters/ExecutionIdParam'
+      responses:
+        '200':
+          description: Files archive payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionFilesExportResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
   /v1/executions/{execution_id}/{action}:
     post:
       summary: Commit or discard execution result
@@ -2534,6 +2549,21 @@ components:
           type: string
           enum: [added, modified, deleted]
         summary:
+          type: string
+        added_lines:
+          type: integer
+          minimum: 0
+        deleted_lines:
+          type: integer
+          minimum: 0
+
+    ExecutionFilesExportResponse:
+      type: object
+      required: [file_name, archive_base64]
+      properties:
+        file_name:
+          type: string
+        archive_base64:
           type: string
 
     ProjectFileEntry:

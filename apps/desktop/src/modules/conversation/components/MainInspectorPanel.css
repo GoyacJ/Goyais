@@ -95,6 +95,7 @@
 .stat {
   font-size: var(--global-font-size-12);
   font-weight: var(--global-font-weight-700);
+  font-variant-numeric: tabular-nums;
 }
 
 .stat.added {
@@ -167,6 +168,63 @@ p {
   font-size: var(--global-font-size-11);
   line-height: 1.45;
   word-break: break-word;
+}
+
+.trace-message-list {
+  display: grid;
+  gap: var(--global-space-4);
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.trace-message-btn {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-8);
+  background: var(--semantic-surface);
+  color: var(--semantic-text);
+  padding: var(--global-space-6) var(--global-space-8);
+  display: grid;
+  gap: var(--global-space-2);
+  text-align: left;
+}
+
+.trace-message-btn.active {
+  border-color: color-mix(in srgb, var(--semantic-primary) 60%, var(--semantic-border));
+  background: color-mix(in srgb, var(--semantic-primary) 12%, var(--semantic-surface));
+}
+
+.trace-message-text {
+  font-size: var(--global-font-size-11);
+  line-height: 1.4;
+  color: var(--semantic-text);
+  word-break: break-word;
+}
+
+.trace-message-meta {
+  font-size: var(--global-font-size-11);
+  line-height: 1.3;
+  color: var(--semantic-text-subtle);
+}
+
+.trace-execution-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--global-space-4);
+}
+
+.trace-execution-btn {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-pill);
+  background: var(--semantic-surface);
+  color: var(--semantic-text-subtle);
+  padding: var(--global-space-3) var(--global-space-8);
+  font-size: var(--global-font-size-11);
+}
+
+.trace-execution-btn.active {
+  border-color: color-mix(in srgb, var(--semantic-primary) 60%, var(--semantic-border));
+  color: var(--semantic-text);
+  background: color-mix(in srgb, var(--semantic-primary) 12%, var(--semantic-surface));
 }
 
 .trace-steps {

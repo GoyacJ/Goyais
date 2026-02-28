@@ -1505,6 +1505,7 @@ func (o *ExecutionOrchestrator) appendDiffGeneratedEventFromToolResult(
 	if len(diffItems) == 0 {
 		return
 	}
+	diffItems = enrichDiffItemsWithGitNumstat(workingDir, diffItems)
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	o.state.mu.Lock()

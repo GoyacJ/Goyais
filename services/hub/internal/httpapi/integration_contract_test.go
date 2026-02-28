@@ -1,6 +1,9 @@
 package httpapi
 
 import (
+	"archive/zip"
+	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -1183,6 +1186,119 @@ func TestExecutionPatchEndpointScopesGitDiffToExecutionFiles(t *testing.T) {
 	}
 	if !strings.Contains(patchBody, "diff --git a/NOTES.md b/NOTES.md") {
 		t.Fatalf("expected patch to include NOTES.md diff without scoped event filtering, got %s", patchBody)
+	}
+}
+
+func TestExecutionFilesEndpointExportsZipForGitProject(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is required for files export endpoint test")
+	}
+	repoDir := t.TempDir()
+	mustRunGitCommand(t, repoDir, "init")
+	mustRunGitCommand(t, repoDir, "config", "user.email", "dev@goyais.local")
+	mustRunGitCommand(t, repoDir, "config", "user.name", "goyais")
+
+	readmePath := filepath.Join(repoDir, "README.md")
+	removedPath := filepath.Join(repoDir, "REMOVED.md")
+	if err := os.WriteFile(readmePath, []byte("hello\n"), 0o644); err != nil {
+		t.Fatalf("write README failed: %v", err)
+	}
+	if err := os.WriteFile(removedPath, []byte("remove me\n"), 0o644); err != nil {
+		t.Fatalf("write REMOVED failed: %v", err)
+	}
+	mustRunGitCommand(t, repoDir, "add", "README.md", "REMOVED.md")
+	mustRunGitCommand(t, repoDir, "commit", "-m", "init")
+
+	if err := os.WriteFile(readmePath, []byte("hello exported\n"), 0o644); err != nil {
+		t.Fatalf("update README failed: %v", err)
+	}
+	if err := os.Remove(removedPath); err != nil {
+		t.Fatalf("remove REMOVED failed: %v", err)
+	}
+
+	router := NewRouter()
+	workspaceID := createRemoteWorkspace(t, router, "Remote Files Export", "http://127.0.0.1:9020", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "files_export_user", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
+		"workspace_id":   workspaceID,
+		"directory_path": repoDir,
+	}, authHeaders)
+	if projectRes.Code != http.StatusCreated {
+		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
+	}
+	projectPayload := map[string]any{}
+	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
+	projectID := projectPayload["id"].(string)
+	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
+	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
+
+	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+		"workspace_id": workspaceID,
+		"name":         "FilesExport",
+	}, authHeaders)
+	if convRes.Code != http.StatusCreated {
+		t.Fatalf("expected create conversation 201, got %d (%s)", convRes.Code, convRes.Body.String())
+	}
+	conversationPayload := map[string]any{}
+	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
+	conversationID := conversationPayload["id"].(string)
+
+	createExecutionRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input": "export modified files",
+	}, authHeaders)
+	if createExecutionRes.Code != http.StatusCreated {
+		t.Fatalf("expected create execution 201, got %d (%s)", createExecutionRes.Code, createExecutionRes.Body.String())
+	}
+	createExecutionPayload := map[string]any{}
+	mustDecodeJSON(t, createExecutionRes.Body.Bytes(), &createExecutionPayload)
+	executionID := createExecutionPayload["execution"].(map[string]any)["id"].(string)
+
+	filesRes := performJSONRequest(t, router, http.MethodGet, "/v1/executions/"+executionID+"/files", nil, authHeaders)
+	if filesRes.Code != http.StatusOK {
+		t.Fatalf("expected files export 200, got %d (%s)", filesRes.Code, filesRes.Body.String())
+	}
+	exportPayload := map[string]any{}
+	mustDecodeJSON(t, filesRes.Body.Bytes(), &exportPayload)
+
+	fileName := strings.TrimSpace(asString(exportPayload["file_name"]))
+	if fileName == "" || !strings.HasSuffix(fileName, "-files.zip") {
+		t.Fatalf("expected files export name with -files.zip suffix, got %q", fileName)
+	}
+
+	encodedArchive := strings.TrimSpace(asString(exportPayload["archive_base64"]))
+	if encodedArchive == "" {
+		t.Fatalf("expected non-empty archive_base64")
+	}
+	archiveBytes, err := base64.StdEncoding.DecodeString(encodedArchive)
+	if err != nil {
+		t.Fatalf("decode archive_base64 failed: %v", err)
+	}
+
+	reader, err := zip.NewReader(bytes.NewReader(archiveBytes), int64(len(archiveBytes)))
+	if err != nil {
+		t.Fatalf("open zip archive failed: %v", err)
+	}
+	zipContents := map[string]string{}
+	for _, file := range reader.File {
+		handle, openErr := file.Open()
+		if openErr != nil {
+			t.Fatalf("open zip file %s failed: %v", file.Name, openErr)
+		}
+		body, readErr := io.ReadAll(handle)
+		_ = handle.Close()
+		if readErr != nil {
+			t.Fatalf("read zip file %s failed: %v", file.Name, readErr)
+		}
+		zipContents[file.Name] = string(body)
+	}
+
+	if !strings.Contains(zipContents["README.md"], "hello exported") {
+		t.Fatalf("expected README.md updated content in archive, got %#v", zipContents["README.md"])
+	}
+	if !strings.Contains(zipContents["_goyais_export_manifest.txt"], "REMOVED.md") {
+		t.Fatalf("expected missing files manifest to include REMOVED.md, got %#v", zipContents["_goyais_export_manifest.txt"])
 	}
 }
 

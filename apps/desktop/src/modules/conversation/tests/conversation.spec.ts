@@ -138,6 +138,42 @@ describe("conversation store", () => {
     expect(runtime.executions[1]?.state).toBe("queued");
   });
 
+  it("retries submit after catalog stale by refreshing catalog revision", async () => {
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse(
+        {
+          code: "CATALOG_STALE",
+          message: "Composer catalog revision is stale; refresh catalog and retry",
+          details: { current_revision: "rev_fresh_1" },
+          trace_id: "tr_catalog_stale"
+        },
+        409
+      )
+    );
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse({
+        revision: "rev_fresh_1",
+        commands: [],
+        resources: []
+      })
+    );
+
+    ensureConversationRuntime(mockConversation, true);
+    setConversationDraft(mockConversation.id, "retry message");
+    await submitConversationMessage(mockConversation, true, {
+      catalogRevision: "rev_old_1"
+    });
+
+    const submitCalls = fetchMock.mock.calls.filter(([url, init]) =>
+      String(url).endsWith(`/v1/conversations/${mockConversation.id}/input/submit`) && (init?.method ?? "GET") === "POST"
+    );
+    expect(submitCalls).toHaveLength(2);
+    const secondBody = JSON.parse(String(submitCalls[1]?.[1]?.body ?? "{}")) as { catalog_revision?: string };
+    expect(secondBody.catalog_revision).toBe("rev_fresh_1");
+    const runtime = ensureConversationRuntime(mockConversation, true);
+    expect(runtime.executions.length).toBe(1);
+  });
+
   it("rejects submit when no model is configured", async () => {
     const conversationWithoutModel: Conversation = {
       ...mockConversation,
@@ -587,6 +623,61 @@ describe("conversation store", () => {
     expect(runtime.executions[0]?.id).toBe(firstExecution?.id);
     expect(runtime.executions[0]?.state).toBe("pending");
     expect(runtime.executions[0]?.queue_index).toBe(0);
+  });
+
+  it("does not apply local snapshot when rollback api fails", async () => {
+    ensureConversationRuntime(mockConversation, true);
+    setConversationDraft(mockConversation.id, "first message");
+    await submitConversationMessage(mockConversation, true);
+    setConversationDraft(mockConversation.id, "second message");
+    await submitConversationMessage(mockConversation, true);
+
+    const runtime = ensureConversationRuntime(mockConversation, true);
+    const secondUserMessage = [...runtime.messages].reverse().find((message) => message.role === "user");
+    expect(secondUserMessage).toBeTruthy();
+
+    const firstExecution = runtime.executions[0];
+    expect(firstExecution).toBeTruthy();
+    if (firstExecution) {
+      firstExecution.state = "completed";
+    }
+    runtime.executions.push({
+      id: "exec_rollback_fail_extra",
+      workspace_id: "ws_local",
+      conversation_id: mockConversation.id,
+      message_id: "msg_rollback_fail_extra",
+      state: "queued",
+      mode: "default",
+      model_id: "gpt-5.3",
+      mode_snapshot: "default",
+      model_snapshot: {
+        model_id: "gpt-5.3"
+      },
+      project_revision_snapshot: 0,
+      queue_index: 9,
+      trace_id: "tr_exec_rollback_fail_extra",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+    const beforeExecutionIds = runtime.executions.map((item) => item.id);
+
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse(
+        {
+          code: "ROLLBACK_RESTORE_FAILED",
+          message: "rollback failed",
+          details: {},
+          trace_id: "tr_rollback_failed"
+        },
+        500
+      )
+    );
+
+    await rollbackConversationToMessage(mockConversation.id, secondUserMessage!.id);
+
+    expect(runtime.executions.map((item) => item.id)).toEqual(beforeExecutionIds);
+    expect(runtime.executions.find((item) => item.id === firstExecution?.id)?.state).toBe("completed");
+    expect(runtime.executions.some((item) => item.id === "exec_rollback_fail_extra")).toBe(true);
   });
 
   it("caps runtime events to prevent unbounded growth", () => {
@@ -1568,12 +1659,12 @@ describe("conversation store", () => {
     expect(wrapper.text()).toContain("暂无文件变更");
   });
 
-  it("renders diff paths and change markers in diff tab", () => {
+  it("renders diff paths and line counts in diff tab", () => {
     const wrapper = mount(MainInspectorPanel, {
       props: {
         diff: [
-          { id: "diff_1", path: "src/main.ts", change_type: "modified", summary: "updated" },
-          { id: "diff_2", path: "README.md", change_type: "added", summary: "created" }
+          { id: "diff_1", path: "src/main.ts", change_type: "modified", summary: "updated", added_lines: 12, deleted_lines: 3 },
+          { id: "diff_2", path: "README.md", change_type: "added", summary: "created", added_lines: 4, deleted_lines: 0 }
         ],
         capability: {
           can_commit: true,
@@ -1594,8 +1685,8 @@ describe("conversation store", () => {
     expect(rows).toHaveLength(2);
     expect(wrapper.text()).toContain("src/main.ts");
     expect(wrapper.text()).toContain("README.md");
-    expect(wrapper.text()).toContain("+");
-    expect(wrapper.text()).toContain("~");
+    expect(wrapper.text()).toContain("+12 / -3");
+    expect(wrapper.text()).toContain("+4 / -0");
     expect(wrapper.text()).not.toContain("暂无文件变更");
   });
 
@@ -1615,7 +1706,26 @@ describe("conversation store", () => {
         executions: [],
         events: [],
         activeTab: "trace",
+        selectedTraceMessageId: "msg_trace_target",
         selectedTraceExecutionId: "exec_trace_target",
+        messages: [
+          {
+            id: "msg_trace_old",
+            conversation_id: mockConversation.id,
+            role: "user",
+            content: "旧用户消息",
+            queue_index: 0,
+            created_at: "2026-02-24T00:00:00Z"
+          },
+          {
+            id: "msg_trace_target",
+            conversation_id: mockConversation.id,
+            role: "user",
+            content: "目标用户消息",
+            queue_index: 1,
+            created_at: "2026-02-24T00:00:01Z"
+          }
+        ],
         executionTraces: [
           {
             executionId: "exec_trace_old",
@@ -1676,6 +1786,24 @@ describe("conversation store", () => {
         executions: [],
         events: [],
         activeTab: "trace",
+        messages: [
+          {
+            id: "msg_trace_first",
+            conversation_id: mockConversation.id,
+            role: "user",
+            content: "第一条用户消息",
+            queue_index: 0,
+            created_at: "2026-02-24T00:00:00Z"
+          },
+          {
+            id: "msg_trace_latest",
+            conversation_id: mockConversation.id,
+            role: "user",
+            content: "第二条用户消息",
+            queue_index: 1,
+            created_at: "2026-02-24T00:00:01Z"
+          }
+        ],
         selectedTraceExecutionId: "",
         executionTraces: [
           {

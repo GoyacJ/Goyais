@@ -34,7 +34,11 @@ export function updateExecutionTransition(
 
 export function applyDiffUpdate(runtime: ConversationRuntime, event: ExecutionEvent): void {
   if (event.type === "diff_generated") {
-    runtime.diff = parseDiff(event.payload);
+    const incoming = parseDiff(event.payload);
+    if (incoming.length > 0) {
+      runtime.diff = mergeDiffByPath(runtime.diff, incoming);
+      runtime.diffExecutionId = event.execution_id.trim();
+    }
   }
 }
 
@@ -167,4 +171,15 @@ function appendTerminalMessage(runtime: ConversationRuntime, message: Conversati
     return;
   }
   runtime.messages.splice(insertAfter + 1, 0, message);
+}
+
+function mergeDiffByPath(existing: ConversationRuntime["diff"], incoming: ConversationRuntime["diff"]): ConversationRuntime["diff"] {
+  const mergedByPath = new Map<string, ConversationRuntime["diff"][number]>();
+  for (const item of existing) {
+    mergedByPath.set(item.path, item);
+  }
+  for (const item of incoming) {
+    mergedByPath.set(item.path, item);
+  }
+  return [...mergedByPath.values()];
 }

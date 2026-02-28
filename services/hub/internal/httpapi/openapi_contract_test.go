@@ -30,6 +30,7 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/conversations/{conversation_id}/export:",
 		"/v1/runs/{run_id}/control:",
 		"/v1/executions/{execution_id}/patch:",
+		"/v1/executions/{execution_id}/files:",
 		"/v1/workspaces/{workspace_id}/model-catalog:",
 		"/v1/workspaces/{workspace_id}/catalog-root:",
 		"/v1/workspaces/{workspace_id}/resource-configs:",
@@ -106,6 +107,24 @@ func TestOpenAPIConversationDetailResponseShape(t *testing.T) {
 	for _, marker := range requiredMarkers {
 		if !strings.Contains(spec, marker) {
 			t.Fatalf("openapi missing conversation detail marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPIExecutionDiffAndFilesSchemaShape(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"DiffItem:",
+		"added_lines:",
+		"deleted_lines:",
+		"ExecutionFilesExportResponse:",
+		"file_name:",
+		"archive_base64:",
+		"/v1/executions/{execution_id}/files:",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing execution diff/files marker: %s", marker)
 		}
 	}
 }

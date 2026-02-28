@@ -112,6 +112,7 @@ function createRuntime(overrides: Partial<ConversationRuntime>): ConversationRun
     mcpIds: [],
     status: "connected",
     diff: [],
+    diffExecutionId: "",
     diffCapability: {
       can_commit: true,
       can_discard: true,

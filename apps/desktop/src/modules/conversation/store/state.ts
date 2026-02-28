@@ -38,6 +38,7 @@ export type ConversationRuntime = {
   mcpIds: string[];
   status: ConnectionStatus;
   diff: DiffItem[];
+  diffExecutionId: string;
   diffCapability: DiffCapability;
   inspectorTab: InspectorTabKey;
   worktreeRef: string | null;
@@ -113,6 +114,7 @@ export function ensureConversationRuntime(
     mcpIds: [...(conversation.mcp_ids ?? [])],
     status: "connected",
     diff: [],
+    diffExecutionId: "",
     diffCapability: resolveDiffCapability(isGitProject),
     inspectorTab: "diff",
     worktreeRef: null,
@@ -160,6 +162,7 @@ export function hydrateConversationRuntime(
   runtime.worktreeRef = latestSnapshot?.worktree_ref ?? null;
   runtime.inspectorTab = latestSnapshot?.inspector_state.tab ?? "diff";
   runtime.diff = [];
+  runtime.diffExecutionId = "";
   runtime.hydrated = true;
   return runtime;
 }

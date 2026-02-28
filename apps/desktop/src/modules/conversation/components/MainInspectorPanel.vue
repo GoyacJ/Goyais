@@ -30,7 +30,7 @@
       <div v-else class="diff-list">
         <div v-for="item in diff" :key="item.id" class="diff-row">
           <span class="path">{{ item.path }}</span>
-          <span class="stat" :class="item.change_type">{{ mapChange(item.change_type) }}</span>
+          <span class="stat" :class="item.change_type">{{ formatDiffLineCount(item) }}</span>
         </div>
       </div>
 
@@ -66,26 +66,58 @@
 
     <section v-else-if="activeTab === 'trace'" class="card trace-card">
       <strong>{{ t("conversation.inspector.tab.trace") }}</strong>
-      <p v-if="!selectedTrace" class="normal">{{ t("conversation.inspector.trace.empty") }}</p>
+      <p v-if="traceMessageItems.length === 0" class="normal">{{ t("conversation.inspector.trace.empty") }}</p>
       <template v-else>
-        <p class="normal">{{ tf("conversation.inspector.trace.execution", { id: selectedTrace.executionId }) }}</p>
-        <p class="trace-summary-primary" :data-tone="selectedTrace.summaryTone">{{ selectedTrace.summaryPrimary }}</p>
-        <p v-if="selectedTrace.summarySecondary !== ''" class="trace-summary-secondary">{{ selectedTrace.summarySecondary }}</p>
-
-        <div class="trace-steps">
-          <div v-for="step in selectedTrace.steps" :key="step.id" class="trace-step" :data-tone="step.statusTone">
-            <div class="trace-step-main">
-              <span class="trace-step-title">{{ step.title }}</span>
-              <span class="trace-step-summary">{{ step.summary }}</span>
-              <span v-if="step.timestampLabel !== ''" class="trace-step-time">{{ step.timestampLabel }}</span>
-            </div>
-            <p v-if="step.detail !== ''" class="trace-step-detail">{{ step.detail }}</p>
-            <details v-if="step.rawPayload !== ''" class="trace-step-raw">
-              <summary class="trace-step-raw-summary">{{ t("conversation.trace.raw.expand") }}</summary>
-              <pre class="trace-step-raw-content">{{ step.rawPayload }}</pre>
-            </details>
-          </div>
+        <div class="trace-message-list">
+          <button
+            v-for="item in traceMessageItems"
+            :key="item.id"
+            class="trace-message-btn"
+            :class="{ active: item.id === selectedTraceMessage?.id }"
+            type="button"
+            @click="$emit('selectTraceMessage', item.id)"
+          >
+            <span class="trace-message-text">{{ item.preview }}</span>
+            <span class="trace-message-meta">{{ tf("conversation.inspector.trace.executionCount", { count: item.traces.length }) }}</span>
+          </button>
         </div>
+
+        <p v-if="selectedTraceMessageTraces.length === 0" class="normal">{{ t("conversation.inspector.trace.messageEmpty") }}</p>
+        <template v-else>
+          <div class="trace-execution-list">
+            <button
+              v-for="trace in selectedTraceMessageTraces"
+              :key="trace.executionId"
+              class="trace-execution-btn"
+              :class="{ active: trace.executionId === selectedTrace?.executionId }"
+              type="button"
+              @click="$emit('selectTraceExecution', trace.executionId)"
+            >
+              {{ tf("conversation.inspector.trace.executionShort", { id: trace.executionId }) }}
+            </button>
+          </div>
+
+          <template v-if="selectedTrace">
+            <p class="normal">{{ tf("conversation.inspector.trace.execution", { id: selectedTrace.executionId }) }}</p>
+            <p class="trace-summary-primary" :data-tone="selectedTrace.summaryTone">{{ selectedTrace.summaryPrimary }}</p>
+            <p v-if="selectedTrace.summarySecondary !== ''" class="trace-summary-secondary">{{ selectedTrace.summarySecondary }}</p>
+
+            <div class="trace-steps">
+              <div v-for="step in selectedTrace.steps" :key="step.id" class="trace-step" :data-tone="step.statusTone">
+                <div class="trace-step-main">
+                  <span class="trace-step-title">{{ step.title }}</span>
+                  <span class="trace-step-summary">{{ step.summary }}</span>
+                  <span v-if="step.timestampLabel !== ''" class="trace-step-time">{{ step.timestampLabel }}</span>
+                </div>
+                <p v-if="step.detail !== ''" class="trace-step-detail">{{ step.detail }}</p>
+                <details v-if="step.rawPayload !== ''" class="trace-step-raw">
+                  <summary class="trace-step-raw-summary">{{ t("conversation.trace.raw.expand") }}</summary>
+                  <pre class="trace-step-raw-content">{{ step.rawPayload }}</pre>
+                </details>
+              </div>
+            </div>
+          </template>
+        </template>
       </template>
     </section>
 
@@ -115,13 +147,15 @@ import { computed, toRefs } from "vue";
 import type { ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
 import { useI18n } from "@/shared/i18n";
 import AppIcon from "@/shared/ui/AppIcon.vue";
-import type { DiffCapability, DiffItem, Execution, ExecutionEvent, InspectorTabKey } from "@/shared/types/api";
+import type { ConversationMessage, DiffCapability, DiffItem, Execution, ExecutionEvent, InspectorTabKey } from "@/shared/types/api";
 
 defineEmits<{
   (event: "commit"): void;
   (event: "discard"): void;
   (event: "exportPatch"): void;
   (event: "changeTab", tab: InspectorTabKey): void;
+  (event: "selectTraceMessage", messageId: string): void;
+  (event: "selectTraceExecution", executionId: string): void;
   (event: "toggleCollapse"): void;
 }>();
 
@@ -134,11 +168,15 @@ const props = withDefaults(defineProps<{
   modelLabel: string;
   executions: Execution[];
   events: ExecutionEvent[];
+  messages?: ConversationMessage[];
   executionTraces?: ExecutionTraceViewModel[];
+  selectedTraceMessageId?: string;
   selectedTraceExecutionId?: string;
   activeTab: InspectorTabKey;
 }>(), {
+  messages: () => [],
   executionTraces: () => [],
+  selectedTraceMessageId: "",
   selectedTraceExecutionId: ""
 });
 
@@ -148,11 +186,13 @@ const {
   diff,
   events,
   executions,
+  messages,
   executionTraces,
   executingCount,
   modelLabel,
   pendingCount,
   queuedCount,
+  selectedTraceMessageId,
   selectedTraceExecutionId
 } = toRefs(props);
 
@@ -210,18 +250,92 @@ const latestExecutionMetrics = computed(() => {
   return tf("conversation.inspector.run.metrics", { token: tokenLabel, duration: durationSec });
 });
 
-const selectedTrace = computed<ExecutionTraceViewModel | null>(() => {
-  if (executionTraces.value.length <= 0) {
+const traceMessageItems = computed<Array<{
+  id: string;
+  preview: string;
+  queueIndex: number;
+  traces: ExecutionTraceViewModel[];
+}>>(() => {
+  const tracesByMessageId = new Map<string, ExecutionTraceViewModel[]>();
+  const tracesByQueueIndex = new Map<number, ExecutionTraceViewModel[]>();
+  for (const trace of executionTraces.value) {
+    const messageId = trace.messageId.trim();
+    if (messageId !== "") {
+      const list = tracesByMessageId.get(messageId) ?? [];
+      list.push(trace);
+      tracesByMessageId.set(messageId, list);
+    }
+    const queueIndex = trace.queueIndex;
+    const queueList = tracesByQueueIndex.get(queueIndex) ?? [];
+    queueList.push(trace);
+    tracesByQueueIndex.set(queueIndex, queueList);
+  }
+
+  const result: Array<{
+    id: string;
+    preview: string;
+    queueIndex: number;
+    traces: ExecutionTraceViewModel[];
+  }> = [];
+  for (const message of messages.value) {
+    if (message.role !== "user") {
+      continue;
+    }
+    const messageId = message.id.trim();
+    if (messageId === "") {
+      continue;
+    }
+    const directMatches = tracesByMessageId.get(messageId) ?? [];
+    const queueMatches = typeof message.queue_index === "number"
+      ? tracesByQueueIndex.get(message.queue_index) ?? []
+      : [];
+    const merged = new Map<string, ExecutionTraceViewModel>();
+    for (const trace of directMatches) {
+      merged.set(trace.executionId, trace);
+    }
+    for (const trace of queueMatches) {
+      merged.set(trace.executionId, trace);
+    }
+    result.push({
+      id: messageId,
+      preview: buildTraceMessagePreview(message.content),
+      queueIndex: typeof message.queue_index === "number" ? message.queue_index : Number.MAX_SAFE_INTEGER,
+      traces: [...merged.values()].sort((left, right) => left.queueIndex - right.queueIndex)
+    });
+  }
+  return result;
+});
+
+const selectedTraceMessage = computed(() => {
+  if (traceMessageItems.value.length === 0) {
     return null;
   }
-  const selectedExecutionId = selectedTraceExecutionId.value.trim();
-  if (selectedExecutionId !== "") {
-    const matched = executionTraces.value.find((trace) => trace.executionId === selectedExecutionId);
+  const selectedMessageId = selectedTraceMessageId.value.trim();
+  if (selectedMessageId !== "") {
+    const matched = traceMessageItems.value.find((message) => message.id === selectedMessageId);
     if (matched) {
       return matched;
     }
   }
-  return executionTraces.value[executionTraces.value.length - 1] ?? null;
+  const latestWithTrace = [...traceMessageItems.value].reverse().find((item) => item.traces.length > 0);
+  return latestWithTrace ?? traceMessageItems.value[traceMessageItems.value.length - 1] ?? null;
+});
+
+const selectedTraceMessageTraces = computed(() => selectedTraceMessage.value?.traces ?? []);
+
+const selectedTrace = computed<ExecutionTraceViewModel | null>(() => {
+  const traces = selectedTraceMessageTraces.value;
+  if (traces.length <= 0) {
+    return null;
+  }
+  const selectedExecutionId = selectedTraceExecutionId.value.trim();
+  if (selectedExecutionId !== "") {
+    const matched = traces.find((trace) => trace.executionId === selectedExecutionId);
+    if (matched) {
+      return matched;
+    }
+  }
+  return traces[traces.length - 1] ?? null;
 });
 
 const riskCounters = computed(() => {
@@ -257,14 +371,24 @@ const riskSummary = computed(() => {
   return tf("conversation.inspector.risk.summary.total", { total });
 });
 
-function mapChange(type: DiffItem["change_type"]): string {
-  if (type === "added") {
-    return "+";
+function formatDiffLineCount(item: DiffItem): string {
+  const added = toOptionalNonNegativeInteger(item.added_lines);
+  const deleted = toOptionalNonNegativeInteger(item.deleted_lines);
+  if (added === null || deleted === null) {
+    return "--";
   }
-  if (type === "deleted") {
-    return "-";
+  return `+${added} / -${deleted}`;
+}
+
+function buildTraceMessagePreview(content: string): string {
+  const normalized = content.trim().replace(/\s+/g, " ");
+  if (normalized === "") {
+    return t("conversation.inspector.trace.messageFallback");
   }
-  return "~";
+  if (normalized.length <= 60) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 57)}...`;
 }
 
 function toDateOrNow(input: string): Date {

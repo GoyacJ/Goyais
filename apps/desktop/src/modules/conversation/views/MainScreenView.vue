@@ -118,12 +118,16 @@
               :pending-count="pendingCount"
               :executing-count="executingCount"
               :model-label="activeModelLabel"
+              :messages="visibleMessages"
               :executions="runtime?.executions ?? []"
               :events="runtime?.events ?? []"
               :execution-traces="executionTraces"
+              :selected-trace-message-id="selectedTraceMessageId"
               :selected-trace-execution-id="selectedTraceExecutionId"
               :active-tab="runtime?.inspectorTab ?? 'diff'"
               @change-tab="changeInspectorTab"
+              @select-trace-message="selectTraceMessage"
+              @select-trace-execution="selectTraceExecution"
               @commit="commitDiff"
               @discard="discardDiff"
               @export-patch="exportPatch"
@@ -247,6 +251,9 @@ const {
   runtimeUserDisplayName,
   requestComposerSuggestions,
   selectTraceInInspector,
+  selectTraceMessage,
+  selectTraceExecution,
+  selectedTraceMessageId,
   selectedTraceExecutionId,
   runtime,
   visibleMessages,

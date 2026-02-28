@@ -3,6 +3,8 @@ import {
   commitExecution,
   controlExecutionRun,
   discardExecution,
+  getComposerCatalog,
+  getConversationDetail,
   loadExecutionDiff,
   rollbackExecution,
   submitComposerInput
@@ -20,7 +22,7 @@ import {
   createConversationSnapshot,
   ensureConversationRuntime,
   findSnapshotForMessage,
-  getLatestFinishedExecution,
+  hydrateConversationRuntime,
   pushConversationSnapshot
 } from "@/modules/conversation/store/state";
 import {
@@ -30,8 +32,9 @@ import {
   updateExecutionTransition
 } from "@/modules/conversation/store/executionEventHandlers";
 import { toDisplayError } from "@/shared/services/errorMapper";
+import { ApiError } from "@/shared/services/http";
 import { createMockId } from "@/shared/utils/id";
-import type { ComposerResourceSelection, Conversation, ConversationMessage, ExecutionEvent } from "@/shared/types/api";
+import type { ComposerResourceSelection, Conversation, ConversationMessage, Execution, ExecutionEvent } from "@/shared/types/api";
 
 export async function submitConversationMessage(
   conversation: Conversation,
@@ -69,13 +72,27 @@ export async function submitConversationMessage(
   );
 
   try {
-    const response = await submitComposerInput(conversation, {
+    const baseInput = {
       raw_input: content,
       mode: runtime.mode,
       model_config_id: runtime.modelId.trim() || undefined,
       selected_resources: extractSelectedResources(content),
       catalog_revision: options.catalogRevision
-    });
+    };
+    let response;
+    try {
+      response = await submitComposerInput(conversation, baseInput);
+    } catch (error) {
+      if (isCatalogStaleError(error)) {
+        const catalog = await getComposerCatalog(conversation.id);
+        response = await submitComposerInput(conversation, {
+          ...baseInput,
+          catalog_revision: catalog.revision
+        });
+      } else {
+        throw error;
+      }
+    }
 
     if (response.kind === "command_result") {
       runtime.messages.push({
@@ -280,10 +297,26 @@ export async function rollbackConversationToMessage(conversationId: string, mess
     await rollbackExecution(conversationId, messageId);
   } catch (error) {
     conversationStore.error = toDisplayError(error);
+    return;
+  }
+
+  try {
+    const detail = await getConversationDetail(conversationId);
+    hydrateConversationRuntime(
+      detail.conversation,
+      runtime.diffCapability.can_commit || runtime.diffCapability.can_discard,
+      detail
+    );
+    runtime.diff = [];
+    runtime.diffExecutionId = "";
+    return;
+  } catch {
+    // Fall back to local snapshot recovery if detail refresh fails.
   }
 
   const snapshot = findSnapshotForMessage(conversationId, messageId);
   if (!snapshot) {
+    conversationStore.error = "ROLLBACK_SYNC_FAILED: rollback succeeded but local state refresh failed";
     return;
   }
 
@@ -293,6 +326,7 @@ export async function rollbackConversationToMessage(conversationId: string, mess
   runtime.worktreeRef = snapshot.worktree_ref;
   runtime.inspectorTab = snapshot.inspector_state.tab;
   runtime.diff = [];
+  runtime.diffExecutionId = "";
 
   appendRuntimeEvent(
     runtime,
@@ -312,8 +346,9 @@ export async function rollbackConversationToMessage(conversationId: string, mess
 }
 
 export async function commitLatestDiff(conversationId: string): Promise<void> {
-  const execution = getLatestFinishedExecution(conversationId);
+  const execution = resolveDiffTargetExecution(conversationId);
   if (!execution) {
+    conversationStore.error = "DIFF_NOT_FOUND: no execution found for current diff list";
     return;
   }
 
@@ -322,6 +357,7 @@ export async function commitLatestDiff(conversationId: string): Promise<void> {
     const runtime = conversationStore.byConversationId[conversationId];
     if (runtime) {
       runtime.diff = [];
+      runtime.diffExecutionId = "";
     }
   } catch (error) {
     conversationStore.error = toDisplayError(error);
@@ -329,8 +365,9 @@ export async function commitLatestDiff(conversationId: string): Promise<void> {
 }
 
 export async function discardLatestDiff(conversationId: string): Promise<void> {
-  const execution = getLatestFinishedExecution(conversationId);
+  const execution = resolveDiffTargetExecution(conversationId);
   if (!execution) {
+    conversationStore.error = "DIFF_NOT_FOUND: no execution found for current diff list";
     return;
   }
 
@@ -339,6 +376,7 @@ export async function discardLatestDiff(conversationId: string): Promise<void> {
     const runtime = conversationStore.byConversationId[conversationId];
     if (runtime) {
       runtime.diff = [];
+      runtime.diffExecutionId = "";
     }
   } catch (error) {
     conversationStore.error = toDisplayError(error);
@@ -352,9 +390,28 @@ export async function refreshExecutionDiff(conversationId: string, executionId: 
   }
   try {
     runtime.diff = await loadExecutionDiff(executionId);
+    runtime.diffExecutionId = executionId;
   } catch (error) {
     conversationStore.error = toDisplayError(error);
   }
+}
+
+function resolveDiffTargetExecution(conversationId: string): Execution | undefined {
+  const runtime = conversationStore.byConversationId[conversationId];
+  if (!runtime) {
+    return undefined;
+  }
+  const targetExecutionId = runtime.diffExecutionId.trim();
+  if (targetExecutionId !== "") {
+    const matched = runtime.executions.find((execution) => execution.id === targetExecutionId);
+    if (matched) {
+      return matched;
+    }
+  }
+  return [...runtime.executions]
+    .reverse()
+    .find((execution) => execution.state === "completed" || execution.state === "failed" || execution.state === "cancelled")
+    ?? runtime.executions[runtime.executions.length - 1];
 }
 
 export function applyIncomingExecutionEvent(conversationId: string, event: ExecutionEvent): void {
@@ -373,5 +430,18 @@ export function applyIncomingExecutionEvent(conversationId: string, event: Execu
 
   const transition = updateExecutionTransition(runtime, conversationId, event);
   applyDiffUpdate(runtime, event);
+  if (
+    event.execution_id.trim() !== "" &&
+    (event.type === "diff_generated" ||
+      event.type === "execution_done" ||
+      event.type === "execution_error" ||
+      event.type === "execution_stopped")
+  ) {
+    void refreshExecutionDiff(conversationId, event.execution_id);
+  }
   appendTerminalMessageFromEvent(runtime, conversationId, event, transition);
+}
+
+function isCatalogStaleError(error: unknown): boolean {
+  return error instanceof ApiError && error.code === "CATALOG_STALE";
 }

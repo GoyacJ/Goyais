@@ -481,10 +481,17 @@ type RollbackRequest struct {
 }
 
 type DiffItem struct {
-	ID         string `json:"id"`
-	Path       string `json:"path"`
-	ChangeType string `json:"change_type"`
-	Summary    string `json:"summary"`
+	ID           string `json:"id"`
+	Path         string `json:"path"`
+	ChangeType   string `json:"change_type"`
+	Summary      string `json:"summary"`
+	AddedLines   *int   `json:"added_lines,omitempty"`
+	DeletedLines *int   `json:"deleted_lines,omitempty"`
+}
+
+type ExecutionFilesExportResponse struct {
+	FileName      string `json:"file_name"`
+	ArchiveBase64 string `json:"archive_base64"`
 }
 
 type ProjectFileEntry struct {

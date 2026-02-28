@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { useExecutionTraceState } from "@/modules/conversation/views/useExecutionTraceState";
 import type { ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
+import type { ConversationMessage } from "@/shared/types/api";
 
 function createTrace(overrides?: Partial<ExecutionTraceViewModel>): ExecutionTraceViewModel {
   return {
@@ -25,8 +26,13 @@ describe("execution trace selection state", () => {
       createTrace({ executionId: "exec_trace_state_1" }),
       createTrace({ executionId: "exec_trace_state_2", queueIndex: 1 })
     ]);
-    const { selectedExecutionTrace, selectedTraceExecutionId } = useExecutionTraceState(baseTraces);
+    const baseMessages = ref<ConversationMessage[]>([
+      createUserMessage("msg_trace_state_1", 0),
+      createUserMessage("msg_trace_state_2", 1)
+    ]);
+    const { selectedExecutionTrace, selectedTraceExecutionId, selectedTraceMessageId } = useExecutionTraceState(baseTraces, baseMessages);
 
+    expect(selectedTraceMessageId.value).toBe("msg_trace_state_2");
     expect(selectedTraceExecutionId.value).toBe("exec_trace_state_2");
     expect(selectedExecutionTrace.value?.executionId).toBe("exec_trace_state_2");
   });
@@ -36,7 +42,11 @@ describe("execution trace selection state", () => {
       createTrace({ executionId: "exec_trace_state_1" }),
       createTrace({ executionId: "exec_trace_state_2", queueIndex: 1 })
     ]);
-    const { selectedExecutionTrace, selectedTraceExecutionId, selectExecutionTrace } = useExecutionTraceState(baseTraces);
+    const baseMessages = ref<ConversationMessage[]>([
+      createUserMessage("msg_trace_state_1", 0),
+      createUserMessage("msg_trace_state_2", 1)
+    ]);
+    const { selectedExecutionTrace, selectedTraceExecutionId, selectExecutionTrace } = useExecutionTraceState(baseTraces, baseMessages);
 
     selectExecutionTrace("exec_trace_state_1");
     expect(selectedTraceExecutionId.value).toBe("exec_trace_state_1");
@@ -56,7 +66,11 @@ describe("execution trace selection state", () => {
       createTrace({ executionId: "exec_trace_state_1" }),
       createTrace({ executionId: "exec_trace_state_2", queueIndex: 1 })
     ]);
-    const { selectedTraceExecutionId, selectExecutionTrace } = useExecutionTraceState(baseTraces);
+    const baseMessages = ref<ConversationMessage[]>([
+      createUserMessage("msg_trace_state_1", 0),
+      createUserMessage("msg_trace_state_2", 1)
+    ]);
+    const { selectedTraceExecutionId, selectExecutionTrace } = useExecutionTraceState(baseTraces, baseMessages);
 
     selectExecutionTrace("exec_trace_state_1");
     expect(selectedTraceExecutionId.value).toBe("exec_trace_state_1");
@@ -67,3 +81,14 @@ describe("execution trace selection state", () => {
     expect(selectedTraceExecutionId.value).toBe("exec_trace_state_2");
   });
 });
+
+function createUserMessage(id: string, queueIndex: number): ConversationMessage {
+  return {
+    id,
+    conversation_id: "conv_trace_state_1",
+    role: "user",
+    content: "hello",
+    queue_index: queueIndex,
+    created_at: "2026-02-24T00:00:00Z"
+  };
+}

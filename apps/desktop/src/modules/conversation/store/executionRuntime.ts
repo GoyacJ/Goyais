@@ -130,8 +130,20 @@ export function parseDiff(payload: Record<string, unknown>): DiffItem[] {
       id: typeof item.id === "string" ? item.id : createMockId("diff"),
       path: typeof item.path === "string" ? item.path : "unknown",
       change_type: item.change_type === "added" || item.change_type === "deleted" ? item.change_type : "modified",
-      summary: typeof item.summary === "string" ? item.summary : "changed"
+      summary: typeof item.summary === "string" ? item.summary : "changed",
+      added_lines: toOptionalNonNegativeInteger(item.added_lines),
+      deleted_lines: toOptionalNonNegativeInteger(item.deleted_lines)
     }));
+}
+
+function toOptionalNonNegativeInteger(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return undefined;
+  }
+  if (value < 0) {
+    return 0;
+  }
+  return Math.trunc(value);
 }
 
 export function restoreExecutionsFromSnapshot(

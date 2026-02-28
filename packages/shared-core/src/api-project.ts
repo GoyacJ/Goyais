@@ -204,6 +204,13 @@ export type DiffItem = {
   path: string;
   change_type: DiffChangeType;
   summary: string;
+  added_lines?: number;
+  deleted_lines?: number;
+};
+
+export type ExecutionFilesExportResponse = {
+  file_name: string;
+  archive_base64: string;
 };
 
 export type ComposerResourceType = "model" | "rule" | "skill" | "mcp" | "file";
