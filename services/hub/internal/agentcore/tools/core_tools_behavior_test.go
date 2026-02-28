@@ -153,7 +153,7 @@ func TestCoreToolsKeyBehavior(t *testing.T) {
 		t.Fatalf("EnterPlanMode unexpected output: %+v", enter.Output)
 	}
 	exit := mustExecuteTool(t, registry, ctx, "ExitPlanMode", map[string]any{})
-	if toString(exit.Output["mode"]) != "agent" {
+	if toString(exit.Output["mode"]) != "default" {
 		t.Fatalf("ExitPlanMode unexpected output: %+v", exit.Output)
 	}
 

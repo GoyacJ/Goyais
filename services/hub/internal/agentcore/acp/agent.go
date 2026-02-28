@@ -55,7 +55,7 @@ func NewAgent(peer *Peer, opts AgentOptions) *Agent {
 	if opts.ConfigProvider == nil {
 		opts.ConfigProvider = config.StaticProvider{
 			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeAgent,
+				SessionMode:  config.SessionModeDefault,
 				DefaultModel: "gpt-5",
 			},
 		}

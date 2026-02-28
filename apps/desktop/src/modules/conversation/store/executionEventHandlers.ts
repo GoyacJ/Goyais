@@ -51,6 +51,9 @@ export function appendTerminalMessageFromEvent(
     case "execution_error":
       appendExecutionErrorMessage(runtime, conversationId, event, transition);
       break;
+    case "thinking_delta":
+      appendUserAnswerMessage(runtime, conversationId, event);
+      break;
     default:
       break;
   }
@@ -90,6 +93,48 @@ function appendExecutionErrorMessage(
     id: createMockId("msg"),
     conversation_id: conversationId,
     role: "system",
+    content,
+    queue_index: event.queue_index,
+    created_at: new Date().toISOString()
+  });
+}
+
+function appendUserAnswerMessage(
+  runtime: ConversationRuntime,
+  conversationId: string,
+  event: ExecutionEvent
+): void {
+  const stage = asNonEmptyString(event.payload.stage);
+  if (stage !== "run_user_question_resolved") {
+    return;
+  }
+  const selectedOptionLabel = asNonEmptyString(event.payload.selected_option_label);
+  const selectedOptionID = asNonEmptyString(event.payload.selected_option_id);
+  const text = asNonEmptyString(event.payload.text);
+  const question = asNonEmptyString(event.payload.question);
+  const answerLine = selectedOptionLabel || selectedOptionID;
+  const lines = [
+    question ? `Question: ${question}` : "",
+    answerLine ? `Answer: ${answerLine}` : "",
+    text ? `Note: ${text}` : ""
+  ].filter((item) => item !== "");
+  if (lines.length === 0) {
+    return;
+  }
+  const content = lines.join("\n");
+  const duplicated = runtime.messages.some((message) =>
+    message.role === "user" &&
+    typeof message.queue_index === "number" &&
+    message.queue_index === event.queue_index &&
+    message.content.trim() === content
+  );
+  if (duplicated) {
+    return;
+  }
+  appendTerminalMessage(runtime, {
+    id: createMockId("msg"),
+    conversation_id: conversationId,
+    role: "user",
     content,
     queue_index: event.queue_index,
     created_at: new Date().toISOString()

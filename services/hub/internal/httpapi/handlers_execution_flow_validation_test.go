@@ -109,7 +109,7 @@ func TestConversationInputSubmitAllowsParallelExecutionsAcrossConversations(t *t
 		ProjectID:     conversationA.ProjectID,
 		Name:          "Validation Conversation B",
 		QueueState:    QueueStateIdle,
-		DefaultMode:   ConversationModeAgent,
+		DefaultMode:   PermissionModeDefault,
 		ModelConfigID: conversationA.ModelConfigID,
 		RuleIDs:       append([]string{}, conversationA.RuleIDs...),
 		SkillIDs:      append([]string{}, conversationA.SkillIDs...),
@@ -162,6 +162,31 @@ func TestConversationInputSubmitAllowsParallelExecutionsAcrossConversations(t *t
 	defer state.mu.RUnlock()
 	if len(state.executions) != 2 {
 		t.Fatalf("expected two executions in state, got %d", len(state.executions))
+	}
+}
+
+func TestConversationInputSubmitRejectsLegacyAgentModeValue(t *testing.T) {
+	state, conversationID := seedConversationMessageValidationState(t)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
+
+	res := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input": "hello",
+		"mode":      "agent",
+	}, nil)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 validation error for legacy mode, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	if got := strings.TrimSpace(asString(payload["code"])); got != "VALIDATION_ERROR" {
+		t.Fatalf("expected VALIDATION_ERROR, got %q", got)
+	}
+	message := strings.TrimSpace(asString(payload["message"]))
+	if !strings.Contains(message, "mode must be default, acceptEdits, plan, dontAsk, or bypassPermissions") {
+		t.Fatalf("unexpected message: %q", message)
 	}
 }
 
@@ -231,7 +256,7 @@ func seedConversationMessageValidationState(t *testing.T) (*AppState, string) {
 		Name:                 "Validation Project",
 		RepoPath:             "/tmp/validation-project",
 		DefaultModelConfigID: allowedModelID,
-		DefaultMode:          ConversationModeAgent,
+		DefaultMode:          PermissionModeDefault,
 		CreatedAt:            now,
 		UpdatedAt:            now,
 	}
@@ -251,7 +276,7 @@ func seedConversationMessageValidationState(t *testing.T) (*AppState, string) {
 		ProjectID:     projectID,
 		Name:          "Validation Conversation",
 		QueueState:    QueueStateIdle,
-		DefaultMode:   ConversationModeAgent,
+		DefaultMode:   PermissionModeDefault,
 		ModelConfigID: allowedModelID,
 		RuleIDs:       []string{allowedRuleID},
 		SkillIDs:      []string{allowedSkillID},

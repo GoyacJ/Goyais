@@ -43,12 +43,14 @@ func (e *Executor) Execute(ctx context.Context, req ExecutionRequest) (ToolResul
 	}
 	spec := tool.Spec()
 	assessment := e.gate.Evaluate(safety.EvaluationInput{
-		ToolName:    spec.Name,
-		SessionMode: req.SessionMode,
-		RiskLevel:   spec.RiskLevel,
-		Approved:    req.Approved,
-		SafeMode:    req.SafeMode,
-		Env:         req.ToolContext.Env,
+		ToolName:         spec.Name,
+		SessionMode:      req.SessionMode,
+		RiskLevel:        spec.RiskLevel,
+		ReadOnly:         spec.ReadOnly,
+		NeedsPermissions: spec.NeedsPermissions,
+		Approved:         req.Approved,
+		SafeMode:         req.SafeMode,
+		Env:              req.ToolContext.Env,
 	})
 	switch assessment.Decision {
 	case safety.DecisionRequireApproval:

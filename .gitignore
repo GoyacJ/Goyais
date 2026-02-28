@@ -34,8 +34,8 @@ services/hub/data/
 .codex/
 codex/
 AGENTS.md
+!/AGENTS.md
 openai.yaml
-learn-claude-code/
 docs/reviews/
 apps/desktop/test-results/
 apps/mobile/test-results/

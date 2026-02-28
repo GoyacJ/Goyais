@@ -72,6 +72,7 @@ func NewDefaultRegistry() *Registry {
 	r.Register(Command{Name: "messages-debug", Description: "Toggle messages debug mode.", Handler: messagesDebugHandler})
 	r.Register(Command{Name: "model", Description: "Show or set model for current session.", Handler: modelHandler})
 	r.Register(Command{Name: "modelstatus", Aliases: []string{"ms", "model-status"}, Description: "Show resolved model status.", Handler: modelStatusHandler})
+	r.Register(Command{Name: "mode", Description: "Show or set permission mode for current session.", Handler: modeHandler})
 	r.Register(Command{Name: "onboarding", Description: "Show onboarding progress summary.", Handler: onboardingHandler})
 	r.Register(Command{Name: "output-style", Description: "Show or set output style.", Handler: outputStyleHandler})
 	r.Register(Command{Name: "plugin", Description: "Manage plugin state.", Handler: cliBridgeHandler([]string{"plugin"}, true)})
@@ -79,6 +80,7 @@ func NewDefaultRegistry() *Registry {
 	r.Register(Command{Name: "refresh-commands", Description: "Refresh slash command catalog cache.", Handler: refreshCommandsHandler})
 	r.Register(Command{Name: "release-notes", Description: "Show latest release notes pointer.", Handler: releaseNotesHandler})
 	r.Register(Command{Name: "rename", Description: "Rename current conversation.", Handler: renameHandler})
+	r.Register(Command{Name: "plan", Description: "Shortcut to switch mode to plan.", Handler: planHandler})
 	r.Register(Command{Name: "resume", Description: "Resume a previous conversation.", Handler: cliBridgeHandler([]string{"resume"}, false)})
 	r.Register(Command{Name: "review", Description: "Create lightweight review task.", Handler: reviewHandler})
 	r.Register(Command{Name: "statusline", Description: "Toggle statusline display state.", Handler: statuslineHandler})
@@ -286,6 +288,46 @@ func modelStatusHandler(_ context.Context, req DispatchRequest, _ []string) (str
 		authState = "logged_in"
 	}
 	return fmt.Sprintf("Model status:\n  active_model: %s\n  source: slash-state\n  auth_state: %s", model, authState), nil
+}
+
+var permissionModeOrder = []string{"default", "acceptEdits", "plan", "dontAsk", "bypassPermissions"}
+
+func modeHandler(_ context.Context, req DispatchRequest, args []string) (string, error) {
+	state, err := loadSlashState(req.WorkingDir)
+	if err != nil {
+		return "", err
+	}
+	if len(args) == 0 {
+		current := strings.TrimSpace(state.PermissionMode)
+		if current == "" {
+			current = "default"
+		}
+		return fmt.Sprintf("Permission mode:\n  current_mode: %s\n  available: %s", current, strings.Join(permissionModeOrder, ", ")), nil
+	}
+	next := strings.TrimSpace(args[0])
+	if next == "" {
+		return "Usage: /mode <default|acceptEdits|plan|dontAsk|bypassPermissions>", nil
+	}
+	supported := false
+	for _, item := range permissionModeOrder {
+		if next == item {
+			supported = true
+			break
+		}
+	}
+	if !supported {
+		return "", fmt.Errorf("unsupported mode %q; expected one of: %s", next, strings.Join(permissionModeOrder, ", "))
+	}
+	state.PermissionMode = next
+	state.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	if err := saveSlashState(req.WorkingDir, state); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Permission mode switched to %s.", next), nil
+}
+
+func planHandler(ctx context.Context, req DispatchRequest, _ []string) (string, error) {
+	return modeHandler(ctx, req, []string{"plan"})
 }
 
 func reviewHandler(_ context.Context, _ DispatchRequest, args []string) (string, error) {
@@ -719,6 +761,7 @@ func saveSlashTodos(path string, doc slashTodoDoc) error {
 }
 
 type slashState struct {
+	PermissionMode    string   `json:"permission_mode,omitempty"`
 	Model             string   `json:"model,omitempty"`
 	OutputStyle       string   `json:"output_style,omitempty"`
 	StatuslineEnabled bool     `json:"statusline_enabled"`
@@ -736,12 +779,12 @@ func loadSlashState(workingDir string) (slashState, error) {
 	path := slashStatePath(workingDir)
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return slashState{Tags: []string{}}, nil
+		return slashState{Tags: []string{}, PermissionMode: "default"}, nil
 	}
 	if err != nil {
 		return slashState{}, err
 	}
-	state := slashState{Tags: []string{}}
+	state := slashState{Tags: []string{}, PermissionMode: "default"}
 	if len(raw) == 0 {
 		return state, nil
 	}
@@ -750,6 +793,9 @@ func loadSlashState(workingDir string) (slashState, error) {
 	}
 	if state.Tags == nil {
 		state.Tags = []string{}
+	}
+	if strings.TrimSpace(state.PermissionMode) == "" {
+		state.PermissionMode = "default"
 	}
 	return state, nil
 }

@@ -20,7 +20,7 @@ func TestAuthzStoreProjectAndConfigCRUD(t *testing.T) {
 		RepoPath:             "/tmp/alpha",
 		IsGit:                true,
 		DefaultModelConfigID: "gpt-4.1",
-		DefaultMode:          ConversationModeAgent,
+		DefaultMode:          PermissionModeDefault,
 		CreatedAt:            nowUTC(),
 		UpdatedAt:            nowUTC(),
 	})
@@ -117,7 +117,7 @@ func TestAuthzStoreWorkspaceProjectConfigFallbackToProjectDefault(t *testing.T) 
 		RepoPath:             "/tmp/beta",
 		IsGit:                true,
 		DefaultModelConfigID: "gpt-4.1-mini",
-		DefaultMode:          ConversationModeAgent,
+		DefaultMode:          PermissionModeDefault,
 		CreatedAt:            nowUTC(),
 		UpdatedAt:            nowUTC(),
 	}); err != nil {
@@ -154,7 +154,7 @@ func TestAuthzStoreListProjectsOrdersByNewestFirst(t *testing.T) {
 		RepoPath:             "/tmp/old",
 		IsGit:                true,
 		DefaultModelConfigID: "gpt-4.1",
-		DefaultMode:          ConversationModeAgent,
+		DefaultMode:          PermissionModeDefault,
 		CreatedAt:            "2026-02-23T00:00:00Z",
 		UpdatedAt:            "2026-02-23T00:00:00Z",
 	}); err != nil {
@@ -167,7 +167,7 @@ func TestAuthzStoreListProjectsOrdersByNewestFirst(t *testing.T) {
 		RepoPath:             "/tmp/new",
 		IsGit:                true,
 		DefaultModelConfigID: "gpt-4.1",
-		DefaultMode:          ConversationModeAgent,
+		DefaultMode:          PermissionModeDefault,
 		CreatedAt:            "2026-02-23T00:00:01Z",
 		UpdatedAt:            "2026-02-23T00:00:01Z",
 	}); err != nil {

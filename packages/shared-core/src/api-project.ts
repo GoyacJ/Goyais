@@ -1,10 +1,10 @@
 import type {
-  ConversationMode,
   DiffCapability,
   DiffChangeType,
   ExecutionState,
   InspectorTabKey,
   MessageRole,
+  PermissionMode,
   QueueState,
   RunControlAction,
   TraceDetailLevel
@@ -17,7 +17,7 @@ export type Project = {
   repo_path: string;
   is_git: boolean;
   default_model_config_id?: string;
-  default_mode?: ConversationMode;
+  default_mode?: PermissionMode;
   current_revision: number;
   created_at: string;
   updated_at: string;
@@ -39,7 +39,7 @@ export type Conversation = {
   project_id: string;
   name: string;
   queue_state: QueueState;
-  default_mode: ConversationMode;
+  default_mode: PermissionMode;
   model_config_id: string;
   rule_ids: string[];
   skill_ids: string[];
@@ -94,9 +94,9 @@ export type Execution = {
   conversation_id: string;
   message_id: string;
   state: ExecutionState;
-  mode: ConversationMode;
+  mode: PermissionMode;
   model_id: string;
-  mode_snapshot: ConversationMode;
+  mode_snapshot: PermissionMode;
   model_snapshot: {
     config_id?: string;
     vendor?: string;
@@ -176,6 +176,11 @@ export type ConversationStreamEvent = ExecutionEvent | RunEvent;
 
 export type RunControlRequest = {
   action: RunControlAction;
+  answer?: {
+    question_id: string;
+    selected_option_id?: string;
+    text?: string;
+  };
 };
 
 export type RunControlResponse = {
@@ -240,7 +245,7 @@ export type ComposerSuggestResponse = {
 
 export type ComposerSubmitRequest = {
   raw_input: string;
-  mode: ConversationMode;
+  mode: PermissionMode;
   model_config_id?: string;
   selected_resources?: ComposerResourceSelection[];
   catalog_revision?: string;
@@ -262,7 +267,7 @@ export type ComposerSubmitResponse =
   };
 
 export type ConversationRuntime = {
-  mode: ConversationMode;
+  mode: PermissionMode;
   modelId: string;
   ruleIds: string[];
   skillIds: string[];

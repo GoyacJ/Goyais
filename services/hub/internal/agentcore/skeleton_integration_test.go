@@ -12,7 +12,7 @@ import (
 func TestSkeletonModulesComposeForRunLifecycle(t *testing.T) {
 	provider := config.StaticProvider{
 		Config: config.ResolvedConfig{
-			SessionMode:  config.SessionModeAgent,
+			SessionMode:  config.SessionModeDefault,
 			DefaultModel: "gpt-5",
 		},
 	}

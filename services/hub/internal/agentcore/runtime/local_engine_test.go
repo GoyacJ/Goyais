@@ -17,7 +17,7 @@ func TestLocalEngineRunLifecycle(t *testing.T) {
 
 	session, err := engine.StartSession(ctx, StartSessionRequest{
 		Config: config.ResolvedConfig{
-			SessionMode:  config.SessionModeAgent,
+			SessionMode:  config.SessionModeDefault,
 			DefaultModel: "gpt-5",
 		},
 		WorkingDir: "/tmp/goyais-local-engine",
@@ -71,7 +71,7 @@ func TestLocalEngineSubmitReturnsDeterministicMathResponse(t *testing.T) {
 
 	session, err := engine.StartSession(ctx, StartSessionRequest{
 		Config: config.ResolvedConfig{
-			SessionMode:  config.SessionModeAgent,
+			SessionMode:  config.SessionModeDefault,
 			DefaultModel: "gpt-5",
 		},
 		WorkingDir: "/tmp/goyais-local-engine",
@@ -111,7 +111,7 @@ func TestLocalEngineSubmitFallbackResponseIsNotEcho(t *testing.T) {
 
 	session, err := engine.StartSession(ctx, StartSessionRequest{
 		Config: config.ResolvedConfig{
-			SessionMode:  config.SessionModeAgent,
+			SessionMode:  config.SessionModeDefault,
 			DefaultModel: "gpt-5",
 		},
 		WorkingDir: "/tmp/goyais-local-engine",
@@ -151,7 +151,7 @@ func TestLocalEngineControlStopEmitsCancelledEvent(t *testing.T) {
 
 	session, err := engine.StartSession(ctx, StartSessionRequest{
 		Config: config.ResolvedConfig{
-			SessionMode:  config.SessionModeAgent,
+			SessionMode:  config.SessionModeDefault,
 			DefaultModel: "gpt-5",
 		},
 		WorkingDir: "/tmp/goyais-local-engine",

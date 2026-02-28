@@ -48,7 +48,11 @@ export function buildExecutionTraceViewModelData(
         messageId: execution.message_id,
         queueIndex: execution.queue_index,
         state: execution.state,
-        isRunning: execution.state === "pending" || execution.state === "executing" || execution.state === "confirming",
+        isRunning:
+          execution.state === "pending" ||
+          execution.state === "executing" ||
+          execution.state === "confirming" ||
+          execution.state === "awaiting_input",
         summaryPrimary: summary.primary,
         summarySecondary: summary.secondary,
         summaryTone: summary.tone,
@@ -64,7 +68,13 @@ export function buildRunningActionBaseViewModelData(
 ): RunningActionBaseViewModel[] {
   const groupedEvents = normalizeExecutionEventsByExecution(events);
   const runningExecutions = executions
-    .filter((execution) => execution.state === "pending" || execution.state === "executing" || execution.state === "confirming")
+    .filter(
+      (execution) =>
+        execution.state === "pending" ||
+        execution.state === "executing" ||
+        execution.state === "confirming" ||
+        execution.state === "awaiting_input"
+    )
     .sort((left, right) => {
       if (left.queue_index !== right.queue_index) {
         return left.queue_index - right.queue_index;
@@ -157,9 +167,36 @@ function handleThinkingDeltaEvent(
     return;
   }
 
-  if (event.stage === "approval_granted" || event.stage === "approval_denied" || event.stage === "approval_resolved") {
+  if (event.stage === "run_user_question_needed") {
+    const questionID = String(event.payload.question_id ?? "").trim();
+    const actionId = questionID !== ""
+      ? `user_input:${execution.id}:${questionID}`
+      : `user_input:${execution.id}:seq:${event.sequence}`;
+    const question = String(event.payload.question ?? "").trim();
+    activeActions.set(actionId, {
+      actionId,
+      executionId: execution.id,
+      queueIndex: execution.queue_index,
+      type: "user_input",
+      toolName: "",
+      comparisonName: "",
+      primary: question !== ""
+        ? tr(locale, "conversation.running.primary.userInputQuestion", { question: truncateText(question, 72) })
+        : tr(locale, "conversation.running.primary.userInput"),
+      secondary: composeSecondary(locale, latestReasoningSentence, event.operationSummary),
+      startedAt: event.timestamp
+    });
+    return;
+  }
+
+  if (
+    event.stage === "approval_granted" ||
+    event.stage === "approval_denied" ||
+    event.stage === "approval_resolved" ||
+    event.stage === "run_user_question_resolved"
+  ) {
     for (const action of [...activeActions.values()]) {
-      if (action.type === "approval") {
+      if (action.type === "approval" || action.type === "user_input") {
         activeActions.delete(action.actionId);
       }
     }
@@ -287,6 +324,11 @@ function buildTraceSummary(
       duration: durationSec,
       tools: toolCallCount
     });
+  } else if (execution.state === "awaiting_input") {
+    primary = tr(locale, "conversation.trace.summary.awaitingInput", {
+      duration: durationSec,
+      tools: toolCallCount
+    });
   } else {
     primary = tr(locale, "conversation.trace.summary.completed", { tools: toolCallCount });
   }
@@ -316,10 +358,15 @@ function resolveSummaryTone(execution: Execution, events: NormalizedTraceEvent[]
   const hasApprovalWaiting = events.some(
     (event) => event.type === "thinking_delta" && event.stage === "run_approval_needed"
   );
+  const hasUserQuestionWaiting = events.some(
+    (event) => event.type === "thinking_delta" && event.stage === "run_user_question_needed"
+  ) && !events.some(
+    (event) => event.type === "thinking_delta" && event.stage === "run_user_question_resolved"
+  );
   const hasHighRiskToolCall = events.some(
     (event) => event.type === "tool_call" && (event.riskLevel === "high" || event.riskLevel === "critical")
   );
-  if (execution.state === "confirming" || hasApprovalWaiting || hasHighRiskToolCall) {
+  if (execution.state === "confirming" || execution.state === "awaiting_input" || hasApprovalWaiting || hasUserQuestionWaiting || hasHighRiskToolCall) {
     return "warning";
   }
 
@@ -369,7 +416,7 @@ function toTraceStep(
       summary: thinkingSummary,
       detail: resolveThinkingDetail(locale, event),
       timestampLabel,
-      statusTone: event.stage === "run_approval_needed" ? "warning" : "neutral",
+      statusTone: event.stage === "run_approval_needed" || event.stage === "run_user_question_needed" ? "warning" : "neutral",
       rawPayload
     };
   }
@@ -425,6 +472,14 @@ function resolveThinkingDetail(locale: TraceLocale, event: NormalizedTraceEvent)
     return tr(locale, "conversation.trace.step.detail.waitingApproval");
   }
 
+  if (event.stage === "run_user_question_needed") {
+    const question = String(event.payload.question ?? "").trim();
+    if (question !== "") {
+      return tr(locale, "conversation.trace.step.detail.userQuestion", { question });
+    }
+    return tr(locale, "conversation.trace.step.detail.waitingUserInput");
+  }
+
   if (event.stage === "assistant_output" || event.stage === "model_call") {
     return "";
   }
@@ -443,6 +498,10 @@ function formatThinkingStageLabel(locale: TraceLocale, stage: NormalizedThinking
       return tr(locale, "conversation.trace.stage.assistantOutput");
     case "run_approval_needed":
       return tr(locale, "conversation.trace.stage.approvalNeeded");
+    case "run_user_question_needed":
+      return tr(locale, "conversation.trace.stage.userQuestionNeeded");
+    case "run_user_question_resolved":
+      return tr(locale, "conversation.trace.stage.userQuestionResolved");
     case "approval_granted":
       return tr(locale, "conversation.trace.stage.approvalGranted");
     case "approval_denied":
@@ -514,6 +573,9 @@ function isMeaningfulThinkingEvent(event: NormalizedTraceEvent): boolean {
   if (event.stage === "run_approval_needed") {
     return true;
   }
+  if (event.stage === "run_user_question_needed" || event.stage === "run_user_question_resolved") {
+    return true;
+  }
   if (event.stage === "approval_granted" || event.stage === "approval_denied" || event.stage === "approval_resolved") {
     return true;
   }
@@ -535,6 +597,9 @@ function formatRunningPrimary(
   }
   if (type === "approval") {
     return tr(locale, "conversation.running.primary.approval", { tool: toolName });
+  }
+  if (type === "user_input") {
+    return tr(locale, "conversation.running.primary.userInput");
   }
   return formatIntentLabel(locale, operationIntentKind, operationIntentValue, toolName);
 }

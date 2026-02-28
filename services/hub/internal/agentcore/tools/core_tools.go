@@ -845,8 +845,11 @@ func NewAskUserQuestionTool() Tool {
 		NeedsPermissions: false,
 		InputSchema: schemaObject(
 			map[string]any{
-				"question": schemaString("Question to ask user."),
-				"options":  schemaArray("Optional options."),
+				"question":              schemaString("Question to ask user."),
+				"options":               schemaArray("Optional options."),
+				"recommended_option_id": schemaString("Recommended option id."),
+				"allow_text":            schemaBoolean("Allow free-form text answer."),
+				"required":              schemaBoolean("Require answer before continue."),
 			},
 			[]string{"question"},
 		),
@@ -855,12 +858,39 @@ func NewAskUserQuestionTool() Tool {
 		if err != nil {
 			return ToolResult{}, err
 		}
-		options := normalizeStringList(call.Input["options"])
+		options, err := normalizeAskUserOptions(call.Input["options"])
+		if err != nil {
+			return ToolResult{}, err
+		}
+		recommendedOptionID := strings.TrimSpace(firstNonEmptyString(call.Input, "recommended_option_id"))
+		if recommendedOptionID != "" {
+			found := false
+			for _, option := range options {
+				if strings.TrimSpace(fmt.Sprint(option["id"])) == recommendedOptionID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return ToolResult{}, errors.New("AskUserQuestion recommended_option_id must match one of options[].id")
+			}
+		}
+		allowText, hasAllowText := call.Input["allow_text"].(bool)
+		if !hasAllowText {
+			allowText = true
+		}
+		required, hasRequired := call.Input["required"].(bool)
+		if !hasRequired {
+			required = true
+		}
 		return ToolResult{Output: map[string]any{
-			"question":            question,
-			"options":             options,
-			"requires_user_input": true,
-			"answer":              nil,
+			"question":              question,
+			"options":               options,
+			"recommended_option_id": recommendedOptionID,
+			"allow_text":            allowText,
+			"required":              required,
+			"requires_user_input":   true,
+			"answer":                nil,
 		}}, nil
 	})
 }
@@ -893,7 +923,7 @@ func NewExitPlanModeTool() Tool {
 		InputSchema:      schemaObject(map[string]any{}, []string{}),
 	}, func(_ ToolContext, _ ToolCall) (ToolResult, error) {
 		return ToolResult{Output: map[string]any{
-			"mode":   "agent",
+			"mode":   "default",
 			"status": "exited",
 		}}, nil
 	})
@@ -1386,7 +1416,7 @@ func runExpertModelCall(question string, model string, workingDir string, env ma
 	engine := runtime.NewLocalEngine()
 	startReq := runtime.StartSessionRequest{
 		Config: config.ResolvedConfig{
-			SessionMode:  config.SessionModeAgent,
+			SessionMode:  config.SessionModeDefault,
 			DefaultModel: strings.TrimSpace(model),
 		},
 		WorkingDir: workingDirOrDot(strings.TrimSpace(workingDir)),
@@ -1670,6 +1700,64 @@ func normalizeStringList(value any) []string {
 	default:
 		return []string{}
 	}
+}
+
+func normalizeAskUserOptions(value any) ([]map[string]any, error) {
+	rawItems := []any{}
+	switch typed := value.(type) {
+	case nil:
+		return []map[string]any{}, nil
+	case []any:
+		rawItems = typed
+	case []string:
+		rawItems = make([]any, 0, len(typed))
+		for _, item := range typed {
+			rawItems = append(rawItems, item)
+		}
+	default:
+		return nil, errors.New("AskUserQuestion options must be an array")
+	}
+
+	options := make([]map[string]any, 0, len(rawItems))
+	seenIDs := map[string]struct{}{}
+	for idx, item := range rawItems {
+		switch typed := item.(type) {
+		case string:
+			label := strings.TrimSpace(typed)
+			if label == "" {
+				continue
+			}
+			id := fmt.Sprintf("option_%d", idx+1)
+			options = append(options, map[string]any{
+				"id":          id,
+				"label":       label,
+				"description": "",
+			})
+			seenIDs[id] = struct{}{}
+		case map[string]any:
+			id := strings.TrimSpace(fmt.Sprint(typed["id"]))
+			label := strings.TrimSpace(fmt.Sprint(typed["label"]))
+			description := strings.TrimSpace(fmt.Sprint(typed["description"]))
+			if label == "" {
+				return nil, fmt.Errorf("AskUserQuestion option %d missing label", idx)
+			}
+			if id == "" {
+				id = fmt.Sprintf("option_%d", idx+1)
+			}
+			if _, exists := seenIDs[id]; exists {
+				return nil, fmt.Errorf("AskUserQuestion option id %q is duplicated", id)
+			}
+			options = append(options, map[string]any{
+				"id":          id,
+				"label":       label,
+				"description": description,
+			})
+			seenIDs[id] = struct{}{}
+		default:
+			return nil, fmt.Errorf("AskUserQuestion option %d must be string or object", idx)
+		}
+	}
+	return options, nil
 }
 
 func errString(err error) any {

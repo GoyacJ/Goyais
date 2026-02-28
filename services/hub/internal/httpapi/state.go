@@ -23,6 +23,7 @@ type AppState struct {
 	conversationSnapshots      map[string][]ConversationSnapshot
 	conversationExecutionOrder map[string][]string
 	executions                 map[string]Execution
+	pendingUserQuestions       map[string]pendingUserQuestion
 	executionEvents            map[string][]ExecutionEvent
 	executionDiffs             map[string][]DiffItem
 	conversationEventSeq       map[string]int
@@ -54,6 +55,7 @@ func NewAppState(store *authzStore) *AppState {
 		conversationSnapshots:      map[string][]ConversationSnapshot{},
 		conversationExecutionOrder: map[string][]string{},
 		executions:                 map[string]Execution{},
+		pendingUserQuestions:       map[string]pendingUserQuestion{},
 		executionEvents:            map[string][]ExecutionEvent{},
 		executionDiffs:             map[string][]DiffItem{},
 		conversationEventSeq:       map[string]int{},

@@ -320,6 +320,9 @@ func (s *authzStore) migrate() error {
 			return fmt.Errorf("apply migration: %w", err)
 		}
 	}
+	if migrateErr := s.normalizePermissionModes(); migrateErr != nil {
+		return fmt.Errorf("normalize permission modes: %w", migrateErr)
+	}
 	if validationErr := s.validateStrictSchema(); validationErr != nil {
 		backupPath := ""
 		if shouldBackupLegacySchema(s.dbPath, validationErr) {
@@ -335,6 +338,45 @@ func (s *authzStore) migrate() error {
 		}
 		if backupPath != "" {
 			log.Printf("legacy authz db schema rebuild succeeded (%s) using backup %s", s.dbPath, backupPath)
+		}
+	}
+	return nil
+}
+
+func (s *authzStore) normalizePermissionModes() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	validModes := []string{
+		string(PermissionModeDefault),
+		string(PermissionModeAcceptEdits),
+		string(PermissionModePlan),
+		string(PermissionModeDontAsk),
+		string(PermissionModeBypassPermissions),
+	}
+	inExpr := "'" + strings.Join(validModes, "','") + "'"
+	now := time.Now().UTC().Format(time.RFC3339)
+	updates := []string{
+		fmt.Sprintf(`UPDATE projects
+			SET default_mode='%s', updated_at='%s'
+			WHERE TRIM(default_mode)='' OR LOWER(TRIM(default_mode))='agent' OR default_mode NOT IN (%s)`,
+			string(PermissionModeDefault), now, inExpr),
+		fmt.Sprintf(`UPDATE conversations
+			SET default_mode='%s', updated_at='%s'
+			WHERE TRIM(default_mode)='' OR LOWER(TRIM(default_mode))='agent' OR default_mode NOT IN (%s)`,
+			string(PermissionModeDefault), now, inExpr),
+		fmt.Sprintf(`UPDATE executions
+			SET mode='%s', updated_at='%s'
+			WHERE TRIM(mode)='' OR LOWER(TRIM(mode))='agent' OR mode NOT IN (%s)`,
+			string(PermissionModeDefault), now, inExpr),
+		fmt.Sprintf(`UPDATE executions
+			SET mode_snapshot='%s', updated_at='%s'
+			WHERE TRIM(mode_snapshot)='' OR LOWER(TRIM(mode_snapshot))='agent' OR mode_snapshot NOT IN (%s)`,
+			string(PermissionModeDefault), now, inExpr),
+	}
+	for _, statement := range updates {
+		if _, err := s.db.Exec(statement); err != nil {
+			return err
 		}
 	}
 	return nil

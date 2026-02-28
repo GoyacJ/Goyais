@@ -70,9 +70,18 @@ export async function cancelExecution(conversationId: string, executionId: strin
   await getControlClient().post<void>(`/v1/conversations/${conversationId}/stop`);
 }
 
-export async function controlExecutionRun(executionId: string, action: RunControlAction): Promise<RunControlResponse> {
+export async function controlExecutionRun(
+  executionId: string,
+  action: RunControlAction,
+  answer?: {
+    question_id: string;
+    selected_option_id?: string;
+    text?: string;
+  }
+): Promise<RunControlResponse> {
   return getControlClient().post<RunControlResponse>(`/v1/runs/${executionId}/control`, {
-    action
+    action,
+    ...(answer ? { answer } : {})
   });
 }
 

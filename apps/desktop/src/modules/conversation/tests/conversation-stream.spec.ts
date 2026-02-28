@@ -33,7 +33,7 @@ const conversationA: Conversation = {
   project_id: "proj_stream",
   name: "A",
   queue_state: "idle",
-  default_mode: "agent",
+  default_mode: "default",
   model_config_id: "rc_model_1",
   rule_ids: [],
   skill_ids: [],

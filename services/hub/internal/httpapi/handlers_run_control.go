@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -9,7 +10,14 @@ import (
 )
 
 type runControlRequest struct {
-	Action string `json:"action"`
+	Action string                 `json:"action"`
+	Answer *runControlAnswerInput `json:"answer,omitempty"`
+}
+
+type runControlAnswerInput struct {
+	QuestionID       string `json:"question_id"`
+	SelectedOptionID string `json:"selected_option_id,omitempty"`
+	Text             string `json:"text,omitempty"`
 }
 
 func RunControlHandler(state *AppState) http.HandlerFunc {
@@ -34,10 +42,33 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		}
 		action, actionErr := mapRunControlAction(input.Action)
 		if actionErr != nil {
-			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "action must be one of stop/approve/deny/resume", map[string]any{
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "action must be one of stop/approve/deny/resume/answer", map[string]any{
 				"action": input.Action,
 			})
 			return
+		}
+		var answerPayload *ExecutionUserAnswer
+		if action == corestate.ControlActionAnswer {
+			if input.Answer == nil {
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "answer payload is required for action=answer", map[string]any{})
+				return
+			}
+			questionID := strings.TrimSpace(input.Answer.QuestionID)
+			selectedOptionID := strings.TrimSpace(input.Answer.SelectedOptionID)
+			text := strings.TrimSpace(input.Answer.Text)
+			if questionID == "" {
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "answer.question_id is required", map[string]any{})
+				return
+			}
+			if selectedOptionID == "" && text == "" {
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "answer.selected_option_id or answer.text is required", map[string]any{})
+				return
+			}
+			answerPayload = &ExecutionUserAnswer{
+				QuestionID:       questionID,
+				SelectedOptionID: selectedOptionID,
+				Text:             text,
+			}
 		}
 
 		state.mu.RLock()
@@ -65,6 +96,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		cancelExecutionID := ""
 		nextExecutionToSubmit := ""
 		var controlSignalAction *corestate.ControlAction
+		var controlSignalAnswer *ExecutionUserAnswer
 		state.mu.Lock()
 		execution, exists := state.executions[runID]
 		if !exists {
@@ -236,17 +268,87 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			} else {
 				conversation.QueueState = deriveQueueStateLocked(state, conversation.ID, conversation.ActiveExecutionID)
 			}
+		case corestate.ControlActionAnswer:
+			if conversation.ActiveExecutionID != nil && *conversation.ActiveExecutionID != execution.ID {
+				state.mu.Unlock()
+				WriteStandardError(w, r, http.StatusConflict, "RUN_ALREADY_ACTIVE", "Another run is currently active", map[string]any{
+					"active_run_id": *conversation.ActiveExecutionID,
+					"run_id":        execution.ID,
+				})
+				return
+			}
+			if execution.State != ExecutionStateAwaitingInput {
+				state.mu.Unlock()
+				WriteStandardError(w, r, http.StatusConflict, "RUN_CONTROL_STATE_CONFLICT", "answer action requires awaiting_input state", map[string]any{
+					"run_id": runID,
+					"state":  execution.State,
+					"action": action,
+				})
+				return
+			}
+			pendingQuestion, hasPendingQuestion := state.pendingUserQuestions[execution.ID]
+			if !hasPendingQuestion {
+				state.mu.Unlock()
+				WriteStandardError(w, r, http.StatusConflict, "RUN_CONTROL_STATE_CONFLICT", "run is not waiting for user input", map[string]any{
+					"run_id": runID,
+					"state":  execution.State,
+					"action": action,
+				})
+				return
+			}
+			if answerValidationErr := validateRunControlAnswer(pendingQuestion, *answerPayload); answerValidationErr != nil {
+				state.mu.Unlock()
+				WriteStandardError(w, r, answerValidationErr.StatusCode, answerValidationErr.Code, answerValidationErr.Message, answerValidationErr.Details)
+				return
+			}
+			desiredState = ExecutionStateExecuting
+			activeID := execution.ID
+			conversation.ActiveExecutionID = &activeID
+			conversation.QueueState = QueueStateRunning
+			actionCopy := action
+			controlSignalAction = &actionCopy
+			controlSignalAnswer = answerPayload
+			answerMessage := buildRunControlAnswerMessage(pendingQuestion, *answerPayload)
+			if strings.TrimSpace(answerMessage) != "" {
+				appendExecutionMessageLocked(state, execution.ConversationID, MessageRoleUser, answerMessage, execution.QueueIndex, false, now)
+			}
+			selectedOptionLabel := resolvePendingQuestionOptionLabel(pendingQuestion, answerPayload.SelectedOptionID)
+			delete(state.pendingUserQuestions, execution.ID)
+			appendExecutionEventLocked(state, ExecutionEvent{
+				ExecutionID:    execution.ID,
+				ConversationID: execution.ConversationID,
+				TraceID:        TraceIDFromContext(r.Context()),
+				QueueIndex:     execution.QueueIndex,
+				Type:           ExecutionEventTypeThinkingDelta,
+				Timestamp:      now,
+				Payload: map[string]any{
+					"stage":                 "run_user_question_resolved",
+					"action":                string(action),
+					"question_id":           answerPayload.QuestionID,
+					"question":              pendingQuestion.Question,
+					"selected_option_id":    answerPayload.SelectedOptionID,
+					"selected_option_label": selectedOptionLabel,
+					"text":                  answerPayload.Text,
+					"source":                "run_control",
+				},
+			})
 		}
 
 		execution.State = desiredState
 		execution.UpdatedAt = now
 		state.executions[execution.ID] = execution
+		if desiredState != ExecutionStateAwaitingInput {
+			delete(state.pendingUserQuestions, execution.ID)
+		}
 		conversation.UpdatedAt = now
 		state.conversations[conversation.ID] = conversation
 		state.mu.Unlock()
 		syncExecutionDomainBestEffort(state)
 		if controlSignalAction != nil && state.orchestrator != nil {
-			state.orchestrator.Control(execution.ID, *controlSignalAction)
+			state.orchestrator.Control(execution.ID, executionControlSignal{
+				Action: *controlSignalAction,
+				Answer: controlSignalAnswer,
+			})
 		}
 		if cancelExecutionID != "" && state.orchestrator != nil {
 			state.orchestrator.Cancel(cancelExecutionID)
@@ -278,4 +380,137 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			"previous_state": previousState,
 		})
 	}
+}
+
+type runControlAnswerValidationError struct {
+	StatusCode int
+	Code       string
+	Message    string
+	Details    map[string]any
+}
+
+func validateRunControlAnswer(question pendingUserQuestion, answer ExecutionUserAnswer) *runControlAnswerValidationError {
+	questionID := strings.TrimSpace(answer.QuestionID)
+	if questionID == "" {
+		return &runControlAnswerValidationError{
+			StatusCode: http.StatusBadRequest,
+			Code:       "VALIDATION_ERROR",
+			Message:    "answer.question_id is required",
+			Details:    map[string]any{},
+		}
+	}
+	if questionID != strings.TrimSpace(question.QuestionID) {
+		return &runControlAnswerValidationError{
+			StatusCode: http.StatusBadRequest,
+			Code:       "VALIDATION_ERROR",
+			Message:    "answer.question_id does not match pending question",
+			Details: map[string]any{
+				"question_id":         questionID,
+				"pending_question_id": strings.TrimSpace(question.QuestionID),
+			},
+		}
+	}
+
+	selectedOptionID := strings.TrimSpace(answer.SelectedOptionID)
+	text := strings.TrimSpace(answer.Text)
+	if selectedOptionID == "" && text == "" {
+		return &runControlAnswerValidationError{
+			StatusCode: http.StatusBadRequest,
+			Code:       "VALIDATION_ERROR",
+			Message:    "answer.selected_option_id or answer.text is required",
+			Details:    map[string]any{},
+		}
+	}
+
+	if text != "" && !question.AllowText {
+		return &runControlAnswerValidationError{
+			StatusCode: http.StatusBadRequest,
+			Code:       "VALIDATION_ERROR",
+			Message:    "answer.text is not allowed for this question",
+			Details: map[string]any{
+				"question_id": questionID,
+			},
+		}
+	}
+
+	optionIDs := map[string]struct{}{}
+	for _, item := range question.Options {
+		optionID := strings.TrimSpace(fmt.Sprintf("%v", item["id"]))
+		if optionID == "" {
+			continue
+		}
+		optionIDs[optionID] = struct{}{}
+	}
+	if selectedOptionID != "" {
+		if len(optionIDs) == 0 {
+			return &runControlAnswerValidationError{
+				StatusCode: http.StatusBadRequest,
+				Code:       "VALIDATION_ERROR",
+				Message:    "answer.selected_option_id is invalid for this question",
+				Details: map[string]any{
+					"question_id":        questionID,
+					"selected_option_id": selectedOptionID,
+				},
+			}
+		}
+		if _, ok := optionIDs[selectedOptionID]; !ok {
+			return &runControlAnswerValidationError{
+				StatusCode: http.StatusBadRequest,
+				Code:       "VALIDATION_ERROR",
+				Message:    "answer.selected_option_id does not match available options",
+				Details: map[string]any{
+					"question_id":        questionID,
+					"selected_option_id": selectedOptionID,
+				},
+			}
+		}
+	}
+
+	if question.Required && selectedOptionID == "" && text == "" {
+		return &runControlAnswerValidationError{
+			StatusCode: http.StatusBadRequest,
+			Code:       "VALIDATION_ERROR",
+			Message:    "answer.selected_option_id or answer.text is required",
+			Details:    map[string]any{},
+		}
+	}
+
+	return nil
+}
+
+func resolvePendingQuestionOptionLabel(question pendingUserQuestion, optionID string) string {
+	normalizedOptionID := strings.TrimSpace(optionID)
+	if normalizedOptionID == "" {
+		return ""
+	}
+	for _, item := range question.Options {
+		candidateID := strings.TrimSpace(fmt.Sprintf("%v", item["id"]))
+		if candidateID != normalizedOptionID {
+			continue
+		}
+		label := strings.TrimSpace(fmt.Sprintf("%v", item["label"]))
+		if label != "" {
+			return label
+		}
+		return normalizedOptionID
+	}
+	return normalizedOptionID
+}
+
+func buildRunControlAnswerMessage(question pendingUserQuestion, answer ExecutionUserAnswer) string {
+	lines := []string{}
+	questionText := strings.TrimSpace(question.Question)
+	if questionText != "" {
+		lines = append(lines, "Question: "+questionText)
+	}
+	optionID := strings.TrimSpace(answer.SelectedOptionID)
+	if optionID != "" {
+		optionLabel := resolvePendingQuestionOptionLabel(question, optionID)
+		lines = append(lines, "Answer: "+optionLabel)
+	}
+	text := strings.TrimSpace(answer.Text)
+	if text != "" {
+		lines = append(lines, "Note: "+text)
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }

@@ -8,7 +8,7 @@ import (
 func TestStaticProviderLoadReturnsValidatedConfig(t *testing.T) {
 	provider := StaticProvider{
 		Config: ResolvedConfig{
-			SessionMode:  SessionModeAgent,
+			SessionMode:  SessionModeDefault,
 			DefaultModel: "gpt-5",
 		},
 	}

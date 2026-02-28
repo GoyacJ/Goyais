@@ -16,7 +16,7 @@ const mockConversation: Conversation = {
   project_id: "proj_1",
   name: "Race Conversation",
   queue_state: "idle",
-  default_mode: "agent",
+  default_mode: "default",
   model_config_id: "rc_model_1",
   rule_ids: [],
   skill_ids: [],
@@ -46,9 +46,9 @@ describe("conversation execution race", () => {
         conversation_id: mockConversation.id,
         message_id: "msg_race_1",
         state: "pending" as const,
-        mode: "agent" as const,
+        mode: "default" as const,
         model_id: "gpt-5.3",
-        mode_snapshot: "agent" as const,
+        mode_snapshot: "default" as const,
         model_snapshot: {
           model_id: "gpt-5.3"
         },

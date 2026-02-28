@@ -176,7 +176,7 @@ func newHarnessWithEngine(t *testing.T, baseDir string, engine runtime.Engine) *
 	_ = NewAgent(peer, AgentOptions{
 		ConfigProvider: config.StaticProvider{
 			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeAgent,
+				SessionMode:  config.SessionModeDefault,
 				DefaultModel: "gpt-5",
 			},
 		},

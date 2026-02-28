@@ -152,7 +152,7 @@ func TestRunControlEndpoint_DenyConfirmingRunResumesExecution(t *testing.T) {
 		ProjectID:         "proj_" + randomHex(4),
 		Name:              "Confirming Run",
 		QueueState:        QueueStateRunning,
-		DefaultMode:       ConversationModeAgent,
+		DefaultMode:       PermissionModeDefault,
 		ModelConfigID:     "rc_model_test",
 		ActiveExecutionID: &activeExecutionID,
 		CreatedAt:         now,
@@ -164,9 +164,9 @@ func TestRunControlEndpoint_DenyConfirmingRunResumesExecution(t *testing.T) {
 		ConversationID: conversationID,
 		MessageID:      "msg_" + randomHex(4),
 		State:          ExecutionStateConfirming,
-		Mode:           ConversationModeAgent,
+		Mode:           PermissionModeDefault,
 		ModelID:        "gpt-5.3",
-		ModeSnapshot:   ConversationModeAgent,
+		ModeSnapshot:   PermissionModeDefault,
 		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
 		QueueIndex:     0,
 		TraceID:        "tr_" + randomHex(4),
@@ -190,5 +190,227 @@ func TestRunControlEndpoint_DenyConfirmingRunResumesExecution(t *testing.T) {
 	mustDecodeJSON(t, res.Body.Bytes(), &payload)
 	if got := strings.TrimSpace(asString(payload["state"])); got != string(ExecutionStateExecuting) {
 		t.Fatalf("expected state executing after deny confirming run, got %q", got)
+	}
+}
+
+func TestRunControlEndpoint_AnswerAwaitingInputTransitionsToExecuting(t *testing.T) {
+	state := NewAppState(nil)
+	handler := RunControlHandler(state)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	conversationID := "conv_awaiting_" + randomHex(4)
+	executionID := "exec_awaiting_" + randomHex(4)
+	activeExecutionID := executionID
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:                conversationID,
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_" + randomHex(4),
+		Name:              "Awaiting Input Run",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     "rc_model_test",
+		ActiveExecutionID: &activeExecutionID,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	state.executions[executionID] = Execution{
+		ID:             executionID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_" + randomHex(4),
+		State:          ExecutionStateAwaitingInput,
+		Mode:           PermissionModePlan,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModePlan,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_" + randomHex(4),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	state.pendingUserQuestions[executionID] = pendingUserQuestion{
+		QuestionID: "q_choose_mode",
+		Question:   "Choose mode",
+		Options: []map[string]any{
+			{"id": "opt_default", "label": "Default"},
+			{"id": "opt_plan", "label": "Plan"},
+		},
+		AllowText: false,
+		Required:  true,
+	}
+	state.conversationExecutionOrder[conversationID] = []string{executionID}
+	state.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/runs/"+executionID+"/control", strings.NewReader(`{"action":"answer","answer":{"question_id":"q_choose_mode","selected_option_id":"opt_plan"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("run_id", executionID)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected run control answer 200, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	if got := strings.TrimSpace(asString(payload["state"])); got != string(ExecutionStateExecuting) {
+		t.Fatalf("expected state executing after answer, got %q", got)
+	}
+
+	state.mu.RLock()
+	_, pendingExists := state.pendingUserQuestions[executionID]
+	state.mu.RUnlock()
+	if pendingExists {
+		t.Fatalf("expected pending question cleared for execution %s", executionID)
+	}
+}
+
+func TestRunControlEndpoint_AnswerRejectsMismatchedQuestionID(t *testing.T) {
+	state := NewAppState(nil)
+	handler := RunControlHandler(state)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	conversationID := "conv_awaiting_mismatch_" + randomHex(4)
+	executionID := "exec_awaiting_mismatch_" + randomHex(4)
+	activeExecutionID := executionID
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:                conversationID,
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_" + randomHex(4),
+		Name:              "Awaiting Input Mismatch",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     "rc_model_test",
+		ActiveExecutionID: &activeExecutionID,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	state.executions[executionID] = Execution{
+		ID:             executionID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_" + randomHex(4),
+		State:          ExecutionStateAwaitingInput,
+		Mode:           PermissionModePlan,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModePlan,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_" + randomHex(4),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	state.pendingUserQuestions[executionID] = pendingUserQuestion{
+		QuestionID: "q_expected",
+		Question:   "Choose one option",
+		Options: []map[string]any{
+			{"id": "opt_a", "label": "A"},
+		},
+		AllowText: true,
+		Required:  true,
+	}
+	state.conversationExecutionOrder[conversationID] = []string{executionID}
+	state.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/runs/"+executionID+"/control", strings.NewReader(`{"action":"answer","answer":{"question_id":"q_other","selected_option_id":"opt_a"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("run_id", executionID)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected run control answer mismatch 400, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	state.mu.RLock()
+	execution := state.executions[executionID]
+	_, pendingExists := state.pendingUserQuestions[executionID]
+	state.mu.RUnlock()
+	if execution.State != ExecutionStateAwaitingInput {
+		t.Fatalf("expected execution state awaiting_input after mismatch, got %s", execution.State)
+	}
+	if !pendingExists {
+		t.Fatalf("expected pending question to remain after mismatch")
+	}
+}
+
+func TestRunControlEndpoint_AnswerRejectsInvalidOptionAndDuplicateAnswer(t *testing.T) {
+	state := NewAppState(nil)
+	handler := RunControlHandler(state)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	conversationID := "conv_awaiting_option_" + randomHex(4)
+	executionID := "exec_awaiting_option_" + randomHex(4)
+	activeExecutionID := executionID
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:                conversationID,
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_" + randomHex(4),
+		Name:              "Awaiting Input Option Validation",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     "rc_model_test",
+		ActiveExecutionID: &activeExecutionID,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	state.executions[executionID] = Execution{
+		ID:             executionID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_" + randomHex(4),
+		State:          ExecutionStateAwaitingInput,
+		Mode:           PermissionModePlan,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModePlan,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_" + randomHex(4),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	state.pendingUserQuestions[executionID] = pendingUserQuestion{
+		QuestionID: "q_option",
+		Question:   "Choose an option",
+		Options: []map[string]any{
+			{"id": "opt_valid", "label": "Valid"},
+		},
+		AllowText: true,
+		Required:  true,
+	}
+	state.conversationExecutionOrder[conversationID] = []string{executionID}
+	state.mu.Unlock()
+
+	invalidReq := httptest.NewRequest(http.MethodPost, "/v1/runs/"+executionID+"/control", strings.NewReader(`{"action":"answer","answer":{"question_id":"q_option","selected_option_id":"opt_invalid"}}`))
+	invalidReq.Header.Set("Content-Type", "application/json")
+	invalidReq.SetPathValue("run_id", executionID)
+	invalidRes := httptest.NewRecorder()
+	handler.ServeHTTP(invalidRes, invalidReq)
+	if invalidRes.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid option 400, got %d (%s)", invalidRes.Code, invalidRes.Body.String())
+	}
+
+	validReq := httptest.NewRequest(http.MethodPost, "/v1/runs/"+executionID+"/control", strings.NewReader(`{"action":"answer","answer":{"question_id":"q_option","selected_option_id":"opt_valid"}}`))
+	validReq.Header.Set("Content-Type", "application/json")
+	validReq.SetPathValue("run_id", executionID)
+	validRes := httptest.NewRecorder()
+	handler.ServeHTTP(validRes, validReq)
+	if validRes.Code != http.StatusOK {
+		t.Fatalf("expected valid answer 200, got %d (%s)", validRes.Code, validRes.Body.String())
+	}
+
+	duplicateReq := httptest.NewRequest(http.MethodPost, "/v1/runs/"+executionID+"/control", strings.NewReader(`{"action":"answer","answer":{"question_id":"q_option","selected_option_id":"opt_valid"}}`))
+	duplicateReq.Header.Set("Content-Type", "application/json")
+	duplicateReq.SetPathValue("run_id", executionID)
+	duplicateRes := httptest.NewRecorder()
+	handler.ServeHTTP(duplicateRes, duplicateReq)
+	if duplicateRes.Code != http.StatusConflict {
+		t.Fatalf("expected duplicate answer 409, got %d (%s)", duplicateRes.Code, duplicateRes.Body.String())
 	}
 }

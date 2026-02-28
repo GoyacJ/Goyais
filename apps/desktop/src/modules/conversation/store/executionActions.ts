@@ -141,7 +141,7 @@ export async function stopConversationExecution(conversation: Conversation): Pro
   }
 
   const active = runtime.executions.find(
-    (item) => item.state === "executing" || item.state === "pending" || item.state === "confirming"
+    (item) => item.state === "executing" || item.state === "pending" || item.state === "confirming" || item.state === "awaiting_input"
   );
   if (!active) {
     return;
@@ -213,6 +213,45 @@ export async function denyConversationExecution(conversation: Conversation): Pro
 
   try {
     await controlExecutionRun(confirming.id, "deny");
+  } catch (error) {
+    conversationStore.error = toDisplayError(error);
+  }
+}
+
+export async function answerConversationExecutionQuestion(
+  conversation: Conversation,
+  input: {
+    executionId: string;
+    questionId: string;
+    selectedOptionId?: string;
+    text?: string;
+  }
+): Promise<void> {
+  const runtime = conversationStore.byConversationId[conversation.id];
+  if (!runtime) {
+    return;
+  }
+  const executionID = input.executionId.trim();
+  const questionID = input.questionId.trim();
+  const selectedOptionID = input.selectedOptionId?.trim() ?? "";
+  const text = input.text?.trim() ?? "";
+  if (executionID === "" || questionID === "") {
+    return;
+  }
+  if (selectedOptionID === "" && text === "") {
+    return;
+  }
+  const awaitingInput = runtime.executions.find((item) => item.id === executionID && item.state === "awaiting_input");
+  if (!awaitingInput) {
+    return;
+  }
+
+  try {
+    await controlExecutionRun(awaitingInput.id, "answer", {
+      question_id: questionID,
+      selected_option_id: selectedOptionID || undefined,
+      text: text || undefined
+    });
   } catch (error) {
     conversationStore.error = toDisplayError(error);
   }

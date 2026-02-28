@@ -140,11 +140,7 @@ func scanProjectRow(scanner projectScanner) (Project, error) {
 	}
 	item.IsGit = parseBoolInt(isGitInt)
 	item.DefaultModelConfigID = strings.TrimSpace(defaultModelConfigID.String)
-	if strings.TrimSpace(defaultModeRaw) == "" {
-		item.DefaultMode = ConversationModeAgent
-	} else {
-		item.DefaultMode = ConversationMode(defaultModeRaw)
-	}
+	item.DefaultMode = NormalizePermissionMode(defaultModeRaw)
 	return normalizeProjectForStorage(item), nil
 }
 
@@ -163,7 +159,10 @@ func normalizeProjectForStorage(input Project) Project {
 		item.RepoPath = "."
 	}
 	if item.DefaultMode == "" {
-		item.DefaultMode = ConversationModeAgent
+		item.DefaultMode = DefaultPermissionMode()
+	}
+	if !IsValidPermissionMode(item.DefaultMode) {
+		item.DefaultMode = DefaultPermissionMode()
 	}
 	if item.CurrentRevision < 0 {
 		item.CurrentRevision = 0

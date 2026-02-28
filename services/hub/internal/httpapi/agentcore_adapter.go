@@ -75,6 +75,8 @@ func mapExecutionStateToRunState(executionState ExecutionState) (corestate.RunSt
 		return corestate.RunStateRunning, nil
 	case string(ExecutionStateConfirming), string(corestate.RunStateWaitingApproval):
 		return corestate.RunStateWaitingApproval, nil
+	case string(ExecutionStateAwaitingInput), string(corestate.RunStateWaitingUserInput):
+		return corestate.RunStateWaitingUserInput, nil
 	case string(ExecutionStateCompleted):
 		return corestate.RunStateCompleted, nil
 	case string(ExecutionStateFailed):
@@ -97,6 +99,8 @@ func mapRunStateToExecutionState(runState corestate.RunState, current ExecutionS
 		return ExecutionStatePending
 	case corestate.RunStateWaitingApproval:
 		return ExecutionStateConfirming
+	case corestate.RunStateWaitingUserInput:
+		return ExecutionStateAwaitingInput
 	case corestate.RunStateCompleted:
 		return ExecutionStateCompleted
 	case corestate.RunStateFailed:
@@ -118,6 +122,8 @@ func mapRunControlAction(raw string) (corestate.ControlAction, error) {
 		return corestate.ControlActionDeny, nil
 	case string(corestate.ControlActionResume):
 		return corestate.ControlActionResume, nil
+	case string(corestate.ControlActionAnswer):
+		return corestate.ControlActionAnswer, nil
 	default:
 		return "", fmt.Errorf("unsupported control action %q", raw)
 	}

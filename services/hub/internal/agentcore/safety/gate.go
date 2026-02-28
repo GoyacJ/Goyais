@@ -32,12 +32,14 @@ func DefaultPolicy() Policy {
 }
 
 type EvaluationInput struct {
-	ToolName    string
-	SessionMode string
-	RiskLevel   RiskLevel
-	Approved    bool
-	SafeMode    bool
-	Env         map[string]string
+	ToolName         string
+	SessionMode      string
+	RiskLevel        RiskLevel
+	ReadOnly         bool
+	NeedsPermissions bool
+	Approved         bool
+	SafeMode         bool
+	Env              map[string]string
 }
 
 type Evaluation struct {
@@ -68,12 +70,46 @@ func (g *Gate) Evaluate(input EvaluationInput) Evaluation {
 		}
 	}
 
-	if mode == "plan" && riskAtOrAbove(risk, g.policy.PlanModeThreshold) {
+	normalizedToolName := strings.TrimSpace(strings.ToLower(input.ToolName))
+	isEditTool := normalizedToolName == "edit" || normalizedToolName == "write" || normalizedToolName == "notebookedit"
+
+	switch mode {
+	case "plan":
+		if !input.ReadOnly && normalizedToolName != strings.ToLower("AskUserQuestion") {
+			return Evaluation{
+				Decision: DecisionDeny,
+				Reason:   "plan mode only allows read-only tools",
+			}
+		}
 		return Evaluation{
-			Decision: DecisionDeny,
-			Reason:   "plan mode rejects high-risk tool usage",
+			Decision: DecisionAllow,
+			Reason:   "plan mode allows read-only tools",
+		}
+	case "dontask":
+		if input.NeedsPermissions {
+			return Evaluation{
+				Decision: DecisionDeny,
+				Reason:   "dontAsk mode denies tools requiring permissions",
+			}
+		}
+		return Evaluation{
+			Decision: DecisionAllow,
+			Reason:   "dontAsk mode allows tool without permissions",
+		}
+	case "bypasspermissions":
+		return Evaluation{
+			Decision: DecisionAllow,
+			Reason:   "bypassPermissions mode skips approval prompts",
+		}
+	case "acceptedits":
+		if input.NeedsPermissions && isEditTool {
+			return Evaluation{
+				Decision: DecisionAllow,
+				Reason:   "acceptEdits mode auto-approves edit tools",
+			}
 		}
 	}
+
 	if riskAtOrAbove(risk, g.policy.ApprovalThreshold) && !input.Approved {
 		return Evaluation{
 			Decision: DecisionRequireApproval,

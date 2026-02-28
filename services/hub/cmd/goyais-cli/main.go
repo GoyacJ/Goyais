@@ -18,7 +18,7 @@ func main() {
 	runner := &adapters.Runner{
 		ConfigProvider: config.StaticProvider{
 			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeAgent,
+				SessionMode:  config.SessionModeDefault,
 				DefaultModel: "gpt-5",
 			},
 		},

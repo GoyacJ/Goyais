@@ -16,7 +16,7 @@ func TestExecutorRunsLowRiskTool(t *testing.T) {
 
 	executor := NewExecutor(registry, safety.NewGate(safety.DefaultPolicy()))
 	result, err := executor.Execute(context.Background(), ExecutionRequest{
-		SessionMode: "agent",
+		SessionMode: "default",
 		ToolCall: ToolCall{
 			Name: "echo",
 			Input: map[string]any{
@@ -40,7 +40,7 @@ func TestExecutorRequiresApprovalForHighRiskTool(t *testing.T) {
 
 	executor := NewExecutor(registry, safety.NewGate(safety.DefaultPolicy()))
 	_, err := executor.Execute(context.Background(), ExecutionRequest{
-		SessionMode: "agent",
+		SessionMode: "default",
 		Approved:    false,
 		ToolCall: ToolCall{
 			Name: "run_command",
@@ -92,7 +92,7 @@ func TestExecutorDeniesWhenSystemSandboxRequiredButUnavailable(t *testing.T) {
 
 	executor := NewExecutor(registry, safety.NewGate(safety.DefaultPolicy()))
 	_, err := executor.Execute(context.Background(), ExecutionRequest{
-		SessionMode: "agent",
+		SessionMode: "default",
 		SafeMode:    true,
 		Approved:    true,
 		ToolContext: ToolContext{

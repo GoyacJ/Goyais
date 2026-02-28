@@ -5,9 +5,10 @@ const executionStateRank: Record<Execution["state"], number> = {
   pending: 1,
   executing: 2,
   confirming: 3,
-  cancelled: 4,
-  failed: 5,
-  completed: 6
+  awaiting_input: 4,
+  cancelled: 5,
+  failed: 6,
+  completed: 7
 };
 
 export function cloneExecution(execution: Execution): Execution {
@@ -45,7 +46,9 @@ export function resolveMergedExecutionState(
   // Approval flow can temporarily move running state between executing and confirming.
   if (
     (current === "executing" && incoming === "confirming") ||
-    (current === "confirming" && incoming === "executing")
+    (current === "confirming" && incoming === "executing") ||
+    (current === "executing" && incoming === "awaiting_input") ||
+    (current === "awaiting_input" && incoming === "executing")
   ) {
     return incoming;
   }

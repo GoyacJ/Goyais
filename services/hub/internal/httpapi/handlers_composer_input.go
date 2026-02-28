@@ -152,9 +152,11 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "raw_input is required", map[string]any{})
 			return
 		}
-		if input.Mode != "" && input.Mode != ConversationModeAgent && input.Mode != ConversationModePlan {
-			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "mode must be agent or plan", map[string]any{})
-			return
+		if input.Mode != "" {
+			if _, ok := ParsePermissionMode(string(input.Mode)); !ok {
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "mode must be default, acceptEdits, plan, dontAsk, or bypassPermissions", map[string]any{})
+				return
+			}
 		}
 
 		catalog, err := buildComposerCatalog(state, conversationSeed.WorkspaceID, projectConfig, project.RepoPath)
@@ -239,8 +241,9 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			resolvedMode = conversationSeed.DefaultMode
 		}
 		if resolvedMode == "" {
-			resolvedMode = firstNonEmptyMode(project.DefaultMode, ConversationModeAgent)
+			resolvedMode = firstNonEmptyMode(project.DefaultMode, PermissionModeDefault)
 		}
+		resolvedMode = NormalizePermissionMode(string(resolvedMode))
 
 		resolvedModelConfigID := strings.TrimSpace(input.ModelConfigID)
 		if explicitModels := selectionByType[ComposerResourceTypeModel]; len(explicitModels) > 0 {

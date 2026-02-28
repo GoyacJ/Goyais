@@ -17,7 +17,7 @@ func TestToolsSafetyIntegration_DefaultPolicy(t *testing.T) {
 	executor := tools.NewExecutor(registry, safety.NewGate(safety.DefaultPolicy()))
 
 	echoResult, err := executor.Execute(context.Background(), tools.ExecutionRequest{
-		SessionMode: "agent",
+		SessionMode: "default",
 		ToolCall: tools.ToolCall{
 			Name: "echo",
 			Input: map[string]any{
@@ -33,7 +33,7 @@ func TestToolsSafetyIntegration_DefaultPolicy(t *testing.T) {
 	}
 
 	_, err = executor.Execute(context.Background(), tools.ExecutionRequest{
-		SessionMode: "agent",
+		SessionMode: "default",
 		ToolCall: tools.ToolCall{
 			Name: "run_command",
 			Input: map[string]any{

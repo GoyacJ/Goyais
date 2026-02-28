@@ -1,6 +1,7 @@
 import type { ComputedRef, Ref } from "vue";
 import type { Router } from "vue-router";
 import {
+  answerConversationExecutionQuestion,
   approveConversationExecution,
   commitLatestDiff,
   denyConversationExecution,
@@ -43,7 +44,7 @@ import { createRemoteConnection, loginWorkspace as loginWorkspaceRequest } from 
 import { refreshMeForCurrentWorkspace, setWorkspaceToken } from "@/shared/stores/authStore";
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
-import type { Conversation, InspectorTabKey, Project } from "@/shared/types/api";
+import type { Conversation, InspectorTabKey, PermissionMode, Project } from "@/shared/types/api";
 import { setWorkspaceConnection, switchWorkspaceContext, upsertWorkspace } from "@/modules/workspace/store";
 type MainScreenActionsInput = {
   router: Router;
@@ -67,7 +68,7 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     }
     setConversationDraft(input.activeConversation.value.id, value);
   }
-  async function updateMode(value: "agent" | "plan"): Promise<void> {
+  async function updateMode(value: PermissionMode): Promise<void> {
     if (!input.activeConversation.value || !input.activeProject.value) {
       return;
     }
@@ -169,6 +170,17 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
       return;
     }
     await denyConversationExecution(input.activeConversation.value);
+  }
+  async function answerExecutionQuestion(inputPayload: {
+    executionId: string;
+    questionId: string;
+    selectedOptionId?: string;
+    text?: string;
+  }): Promise<void> {
+    if (!input.activeConversation.value) {
+      return;
+    }
+    await answerConversationExecutionQuestion(input.activeConversation.value, inputPayload);
   }
   async function rollbackMessage(messageId: string): Promise<void> {
     if (!input.activeConversation.value) {
@@ -371,6 +383,7 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     removeQueuedMessage,
     approveExecution,
     denyExecution,
+    answerExecutionQuestion,
     loginWorkspace,
     startEditConversationName,
     stopExecution,

@@ -136,7 +136,7 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 
 	msg1 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
 		"raw_input":       "hello",
-		"mode":            "agent",
+		"mode":            "default",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if msg1.Code != http.StatusCreated {
@@ -149,7 +149,7 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 
 	msg2 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
 		"raw_input":       "second",
-		"mode":            "agent",
+		"mode":            "default",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if msg2.Code != http.StatusCreated {
@@ -881,7 +881,7 @@ func TestConversationDetailEndpointReturnsMessagesExecutionsAndSnapshots(t *test
 
 	msg1 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
 		"raw_input":       "hello detail",
-		"mode":            "agent",
+		"mode":            "default",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if msg1.Code != http.StatusCreated {
@@ -890,7 +890,7 @@ func TestConversationDetailEndpointReturnsMessagesExecutionsAndSnapshots(t *test
 
 	msg2 := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
 		"raw_input":       "second detail",
-		"mode":            "agent",
+		"mode":            "default",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if msg2.Code != http.StatusCreated {

@@ -247,7 +247,8 @@ export function countActiveAndQueued(runtime: ConversationRuntime): number {
     execution.state === "queued" ||
     execution.state === "pending" ||
     execution.state === "executing" ||
-    execution.state === "confirming"
+    execution.state === "confirming" ||
+    execution.state === "awaiting_input"
   ).length;
 }
 
@@ -263,7 +264,7 @@ export function getExecutionStateCounts(runtime: ConversationRuntime): {
         acc.queued += 1;
       } else if (execution.state === "pending") {
         acc.pending += 1;
-      } else if (execution.state === "executing" || execution.state === "confirming") {
+      } else if (execution.state === "executing" || execution.state === "confirming" || execution.state === "awaiting_input") {
         acc.executing += 1;
       }
       return acc;

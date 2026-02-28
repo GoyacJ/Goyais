@@ -84,3 +84,17 @@ func TestMachineResumeFromWaitingApprovalResumesRun(t *testing.T) {
 		t.Fatalf("expected running state after resume, got %q", m.State())
 	}
 }
+
+func TestMachineAnswerFromWaitingUserInputResumesRun(t *testing.T) {
+	m, err := NewMachine(RunStateWaitingUserInput)
+	if err != nil {
+		t.Fatalf("unexpected constructor error: %v", err)
+	}
+
+	if err := m.ApplyControl(ControlActionAnswer); err != nil {
+		t.Fatalf("expected answer to continue waiting user input run, got %v", err)
+	}
+	if m.State() != RunStateRunning {
+		t.Fatalf("expected running state after answer, got %q", m.State())
+	}
+}

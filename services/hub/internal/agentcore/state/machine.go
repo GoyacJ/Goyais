@@ -8,12 +8,13 @@ import (
 type RunState string
 
 const (
-	RunStateQueued          RunState = "queued"
-	RunStateRunning         RunState = "running"
-	RunStateWaitingApproval RunState = "waiting_approval"
-	RunStateCompleted       RunState = "completed"
-	RunStateFailed          RunState = "failed"
-	RunStateCancelled       RunState = "cancelled"
+	RunStateQueued           RunState = "queued"
+	RunStateRunning          RunState = "running"
+	RunStateWaitingApproval  RunState = "waiting_approval"
+	RunStateWaitingUserInput RunState = "waiting_user_input"
+	RunStateCompleted        RunState = "completed"
+	RunStateFailed           RunState = "failed"
+	RunStateCancelled        RunState = "cancelled"
 )
 
 type ControlAction string
@@ -23,6 +24,7 @@ const (
 	ControlActionApprove ControlAction = "approve"
 	ControlActionDeny    ControlAction = "deny"
 	ControlActionResume  ControlAction = "resume"
+	ControlActionAnswer  ControlAction = "answer"
 )
 
 type Machine struct {
@@ -35,12 +37,18 @@ var allowedTransitions = map[RunState]map[RunState]struct{}{
 		RunStateCancelled: {},
 	},
 	RunStateRunning: {
-		RunStateWaitingApproval: {},
-		RunStateCompleted:       {},
-		RunStateFailed:          {},
-		RunStateCancelled:       {},
+		RunStateWaitingApproval:  {},
+		RunStateWaitingUserInput: {},
+		RunStateCompleted:        {},
+		RunStateFailed:           {},
+		RunStateCancelled:        {},
 	},
 	RunStateWaitingApproval: {
+		RunStateRunning:   {},
+		RunStateFailed:    {},
+		RunStateCancelled: {},
+	},
+	RunStateWaitingUserInput: {
 		RunStateRunning:   {},
 		RunStateFailed:    {},
 		RunStateCancelled: {},
@@ -88,6 +96,11 @@ func (m *Machine) ApplyControl(action ControlAction) error {
 		return m.Transition(RunStateCancelled)
 	case ControlActionResume:
 		return m.transitionForResumeLikeAction(action)
+	case ControlActionAnswer:
+		if m.state == RunStateWaitingUserInput {
+			return m.Transition(RunStateRunning)
+		}
+		return fmt.Errorf("control action %q is invalid in state %q", action, m.state)
 	default:
 		return fmt.Errorf("unknown control action %q", action)
 	}

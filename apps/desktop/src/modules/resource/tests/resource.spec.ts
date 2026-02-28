@@ -314,7 +314,7 @@ function createApiFetchMock(options: { legacyProjectConfigModelIDs?: boolean; re
             repo_path: "/tmp/alpha",
             is_git: true,
             default_model_config_id: "rc_model_1",
-            default_mode: "agent",
+            default_mode: "default",
             current_revision: 0,
             created_at: "2026-02-24T00:00:00Z",
             updated_at: "2026-02-24T00:00:00Z"

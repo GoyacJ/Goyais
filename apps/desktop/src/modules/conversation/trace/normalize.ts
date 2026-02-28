@@ -65,7 +65,7 @@ function normalizeExecutionEvent(event: ExecutionEvent, index: number): Normaliz
   const operationSummary = type === "tool_call" || stage === "run_approval_needed"
     ? extractOperationSummary(payload)
     : "";
-  const operationIntent = type === "tool_call" || stage === "run_approval_needed"
+  const operationIntent = type === "tool_call" || stage === "run_approval_needed" || stage === "run_user_question_needed"
     ? extractOperationIntent(payload)
     : { kind: "none" as const, value: "" };
 
@@ -106,6 +106,8 @@ function normalizeThinkingStage(value: string): NormalizedThinkingStage {
     case "model_call":
     case "assistant_output":
     case "run_approval_needed":
+    case "run_user_question_needed":
+    case "run_user_question_resolved":
     case "approval_granted":
     case "approval_denied":
     case "approval_resolved":

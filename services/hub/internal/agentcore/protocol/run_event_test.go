@@ -31,7 +31,7 @@ func TestRunEventValidateAcceptsMinimalEnvelope(t *testing.T) {
 		Sequence:  0,
 		Timestamp: time.Now().UTC(),
 		Payload: map[string]any{
-			"mode": "agent",
+			"mode": "default",
 		},
 	}
 

@@ -9,8 +9,11 @@ import (
 type SessionMode string
 
 const (
-	SessionModeAgent SessionMode = "agent"
-	SessionModePlan  SessionMode = "plan"
+	SessionModeDefault           SessionMode = "default"
+	SessionModeAcceptEdits       SessionMode = "acceptEdits"
+	SessionModePlan              SessionMode = "plan"
+	SessionModeDontAsk           SessionMode = "dontAsk"
+	SessionModeBypassPermissions SessionMode = "bypassPermissions"
 )
 
 type ResolvedConfig struct {
@@ -26,7 +29,13 @@ func (c ResolvedConfig) Validate() error {
 	if mode == "" {
 		return errors.New("session_mode is required")
 	}
-	if mode != SessionModeAgent && mode != SessionModePlan {
+	switch mode {
+	case SessionModeDefault,
+		SessionModeAcceptEdits,
+		SessionModePlan,
+		SessionModeDontAsk,
+		SessionModeBypassPermissions:
+	default:
 		return fmt.Errorf("session_mode %q is not supported", mode)
 	}
 	if strings.TrimSpace(c.DefaultModel) == "" {

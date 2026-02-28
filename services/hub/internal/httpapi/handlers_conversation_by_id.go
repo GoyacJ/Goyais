@@ -156,13 +156,13 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				changed = true
 			}
 			if input.Mode != nil {
-				mode := strings.TrimSpace(string(*input.Mode))
-				if mode != string(ConversationModeAgent) && mode != string(ConversationModePlan) {
+				mode, ok := ParsePermissionMode(string(*input.Mode))
+				if !ok {
 					state.mu.Unlock()
-					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "mode must be agent or plan", map[string]any{})
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "mode must be default, acceptEdits, plan, dontAsk, or bypassPermissions", map[string]any{})
 					return
 				}
-				conversation.DefaultMode = *input.Mode
+				conversation.DefaultMode = mode
 				changed = true
 			}
 			if input.ModelConfigID != nil {

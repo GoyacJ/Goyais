@@ -54,7 +54,7 @@ func TestRunnerRunPromptDispatchesRunLifecycle(t *testing.T) {
 	runner := Runner{
 		ConfigProvider: config.StaticProvider{
 			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeAgent,
+				SessionMode:  config.SessionModeDefault,
 				DefaultModel: "gpt-5",
 			},
 		},
@@ -91,7 +91,7 @@ func TestRunnerRunPromptRejectsEmptyPrompt(t *testing.T) {
 	runner := Runner{
 		ConfigProvider: config.StaticProvider{
 			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeAgent,
+				SessionMode:  config.SessionModeDefault,
 				DefaultModel: "gpt-5",
 			},
 		},
@@ -118,7 +118,7 @@ func TestRunnerRunPromptReturnsErrorWhenEngineSubmitFails(t *testing.T) {
 	runner := Runner{
 		ConfigProvider: config.StaticProvider{
 			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeAgent,
+				SessionMode:  config.SessionModeDefault,
 				DefaultModel: "gpt-5",
 			},
 		},
@@ -189,7 +189,7 @@ func TestRunnerRunPromptDisableSlashUsesEngine(t *testing.T) {
 	runner := Runner{
 		ConfigProvider: config.StaticProvider{
 			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeAgent,
+				SessionMode:  config.SessionModeDefault,
 				DefaultModel: "gpt-5",
 			},
 		},
@@ -253,7 +253,7 @@ func TestRunnerRunPromptDynamicCustomSlashExpandsIntoEnginePrompt(t *testing.T) 
 	runner := Runner{
 		ConfigProvider: config.StaticProvider{
 			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeAgent,
+				SessionMode:  config.SessionModeDefault,
 				DefaultModel: "gpt-5",
 			},
 		},
@@ -313,7 +313,7 @@ func TestRunnerRunPromptUsesSlashStateModelOverride(t *testing.T) {
 	runner := Runner{
 		ConfigProvider: config.StaticProvider{
 			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeAgent,
+				SessionMode:  config.SessionModeDefault,
 				DefaultModel: "gpt-5",
 			},
 		},
@@ -343,7 +343,7 @@ func TestRunnerRunPromptContextCancelStopsActiveRun(t *testing.T) {
 	runner := Runner{
 		ConfigProvider: config.StaticProvider{
 			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeAgent,
+				SessionMode:  config.SessionModeDefault,
 				DefaultModel: "gpt-5",
 			},
 		},
@@ -442,7 +442,7 @@ func TestRunnerRunPromptInjectsProjectInstructionsRootToLeafWithOverride(t *test
 	runner := Runner{
 		ConfigProvider: config.StaticProvider{
 			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeAgent,
+				SessionMode:  config.SessionModeDefault,
 				DefaultModel: "gpt-5",
 			},
 		},
@@ -511,7 +511,7 @@ func TestRunnerRunPromptStripsComposerResourceMentionsAndInjectsFilePathMentions
 	runner := Runner{
 		ConfigProvider: config.StaticProvider{
 			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeAgent,
+				SessionMode:  config.SessionModeDefault,
 				DefaultModel: "gpt-5",
 			},
 		},
@@ -569,7 +569,7 @@ func TestRunnerRunPromptUsesModelMentionAsModelOverride(t *testing.T) {
 	runner := Runner{
 		ConfigProvider: config.StaticProvider{
 			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeAgent,
+				SessionMode:  config.SessionModeDefault,
 				DefaultModel: "gpt-5",
 			},
 		},

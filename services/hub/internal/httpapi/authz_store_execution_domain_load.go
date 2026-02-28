@@ -61,7 +61,7 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 			return snapshot, err
 		}
 		item.QueueState = QueueState(strings.TrimSpace(queueStateRaw))
-		item.DefaultMode = ConversationMode(strings.TrimSpace(defaultModeRaw))
+		item.DefaultMode = NormalizePermissionMode(defaultModeRaw)
 		if strings.TrimSpace(ruleIDsJSON) != "" {
 			if err := json.Unmarshal([]byte(ruleIDsJSON), &item.RuleIDs); err != nil {
 				_ = conversationRows.Close()
@@ -249,8 +249,8 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 			return snapshot, err
 		}
 		item.State = ExecutionState(strings.TrimSpace(stateRaw))
-		item.Mode = ConversationMode(strings.TrimSpace(modeRaw))
-		item.ModeSnapshot = ConversationMode(strings.TrimSpace(modeSnapshotRaw))
+		item.Mode = NormalizePermissionMode(modeRaw)
+		item.ModeSnapshot = NormalizePermissionMode(modeSnapshotRaw)
 		if strings.TrimSpace(modelSnapshotJSON) != "" {
 			if err := json.Unmarshal([]byte(modelSnapshotJSON), &item.ModelSnapshot); err != nil {
 				_ = executionRows.Close()

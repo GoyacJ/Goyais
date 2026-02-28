@@ -22,9 +22,9 @@ export function ensureExecution(runtime: ConversationRuntime, conversationId: st
     conversation_id: conversationId,
     message_id: "",
     state: "queued",
-    mode: "agent",
+    mode: "default",
     model_id: "",
-    mode_snapshot: "agent",
+    mode_snapshot: "default",
     model_snapshot: {
       model_id: ""
     },
@@ -42,6 +42,11 @@ export function applyExecutionState(execution: Execution, event: ExecutionEvent)
     const runState = asString(event.payload.run_state);
     if (runState === "waiting_approval") {
       execution.state = resolveMergedExecutionState(execution.state, "confirming");
+      execution.updated_at = event.timestamp;
+      return;
+    }
+    if (runState === "waiting_user_input") {
+      execution.state = resolveMergedExecutionState(execution.state, "awaiting_input");
       execution.updated_at = event.timestamp;
       return;
     }
@@ -155,9 +160,9 @@ export function restoreExecutionsFromSnapshot(
         conversation_id: conversationId,
         message_id: item.message_id,
         state: item.state,
-        mode: "agent",
+        mode: "default",
         model_id: "",
-        mode_snapshot: "agent",
+        mode_snapshot: "default",
         model_snapshot: {
           model_id: ""
         },

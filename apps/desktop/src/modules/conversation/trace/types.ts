@@ -9,6 +9,8 @@ export type NormalizedThinkingStage =
   | "model_call"
   | "assistant_output"
   | "run_approval_needed"
+  | "run_user_question_needed"
+  | "run_user_question_resolved"
   | "approval_granted"
   | "approval_denied"
   | "approval_resolved"
@@ -71,7 +73,7 @@ export type ExecutionTraceViewModelData = {
   steps: ExecutionTraceStepViewModel[];
 };
 
-export type RunningActionType = "model" | "tool" | "subagent" | "approval";
+export type RunningActionType = "model" | "tool" | "subagent" | "approval" | "user_input";
 
 export type RunningActionBaseViewModel = {
   actionId: string;

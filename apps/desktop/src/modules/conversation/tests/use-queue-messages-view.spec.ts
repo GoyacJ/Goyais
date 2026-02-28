@@ -105,7 +105,7 @@ function createRuntime(overrides: Partial<ConversationRuntime>): ConversationRun
     executions: [],
     snapshots: [],
     draft: "",
-    mode: "agent",
+    mode: "default",
     modelId: "rc_model_1",
     ruleIds: [],
     skillIds: [],
@@ -157,9 +157,9 @@ function createExecution(id: string, queueIndex: number, state: "queued" | "pend
     conversation_id: "conv_1",
     message_id: `msg_${queueIndex}`,
     state,
-    mode: "agent" as const,
+    mode: "default" as const,
     model_id: "gpt-5.3",
-    mode_snapshot: "agent" as const,
+    mode_snapshot: "default" as const,
     model_snapshot: {
       model_id: "gpt-5.3"
     },

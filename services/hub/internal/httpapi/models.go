@@ -50,23 +50,30 @@ const (
 	QueueStateQueued  QueueState = "queued"
 )
 
-type ConversationMode string
+type PermissionMode string
 
 const (
-	ConversationModeAgent ConversationMode = "agent"
-	ConversationModePlan  ConversationMode = "plan"
+	PermissionModeDefault           PermissionMode = "default"
+	PermissionModeAcceptEdits       PermissionMode = "acceptEdits"
+	PermissionModePlan              PermissionMode = "plan"
+	PermissionModeDontAsk           PermissionMode = "dontAsk"
+	PermissionModeBypassPermissions PermissionMode = "bypassPermissions"
 )
+
+// Backward-compatible type alias for existing references while moving to PermissionMode.
+type ConversationMode = PermissionMode
 
 type ExecutionState string
 
 const (
-	ExecutionStateQueued     ExecutionState = "queued"
-	ExecutionStatePending    ExecutionState = "pending"
-	ExecutionStateExecuting  ExecutionState = "executing"
-	ExecutionStateConfirming ExecutionState = "confirming"
-	ExecutionStateCompleted  ExecutionState = "completed"
-	ExecutionStateFailed     ExecutionState = "failed"
-	ExecutionStateCancelled  ExecutionState = "cancelled"
+	ExecutionStateQueued        ExecutionState = "queued"
+	ExecutionStatePending       ExecutionState = "pending"
+	ExecutionStateExecuting     ExecutionState = "executing"
+	ExecutionStateConfirming    ExecutionState = "confirming"
+	ExecutionStateAwaitingInput ExecutionState = "awaiting_input"
+	ExecutionStateCompleted     ExecutionState = "completed"
+	ExecutionStateFailed        ExecutionState = "failed"
+	ExecutionStateCancelled     ExecutionState = "cancelled"
 )
 
 type ResourceType string

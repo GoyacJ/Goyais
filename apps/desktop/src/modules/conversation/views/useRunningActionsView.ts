@@ -23,7 +23,11 @@ export function useRunningActionsView(
 
   const hasRunningExecutions = computed(() =>
     (runtime.value?.executions ?? []).some(
-      (execution) => execution.state === "pending" || execution.state === "executing" || execution.state === "confirming"
+      (execution) =>
+        execution.state === "pending" ||
+        execution.state === "executing" ||
+        execution.state === "confirming" ||
+        execution.state === "awaiting_input"
     )
   );
 

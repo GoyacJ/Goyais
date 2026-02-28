@@ -9,9 +9,9 @@ const baseExecution: Execution = {
   conversation_id: "conv_trace_1",
   message_id: "msg_trace_1",
   state: "executing",
-  mode: "agent",
+  mode: "default",
   model_id: "gpt-5.3",
-  mode_snapshot: "agent",
+  mode_snapshot: "default",
   model_snapshot: {
     model_id: "gpt-5.3"
   },

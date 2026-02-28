@@ -26,7 +26,18 @@ type ExecutionOrchestrator struct {
 
 type executionRuntimeHandle struct {
 	cancel  context.CancelFunc
-	control chan corestate.ControlAction
+	control chan executionControlSignal
+}
+
+type ExecutionUserAnswer struct {
+	QuestionID       string
+	SelectedOptionID string
+	Text             string
+}
+
+type executionControlSignal struct {
+	Action corestate.ControlAction
+	Answer *ExecutionUserAnswer
 }
 
 func NewExecutionOrchestrator(state *AppState) *ExecutionOrchestrator {
@@ -53,7 +64,7 @@ func (o *ExecutionOrchestrator) Submit(executionID string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	o.active[normalizedExecutionID] = &executionRuntimeHandle{
 		cancel:  cancel,
-		control: make(chan corestate.ControlAction, 8),
+		control: make(chan executionControlSignal, 8),
 	}
 	o.mu.Unlock()
 
@@ -91,7 +102,7 @@ func (o *ExecutionOrchestrator) finish(executionID string) {
 	}
 }
 
-func (o *ExecutionOrchestrator) Control(executionID string, action corestate.ControlAction) bool {
+func (o *ExecutionOrchestrator) Control(executionID string, signal executionControlSignal) bool {
 	if o == nil {
 		return false
 	}
@@ -107,13 +118,13 @@ func (o *ExecutionOrchestrator) Control(executionID string, action corestate.Con
 		return false
 	}
 
-	if action == corestate.ControlActionStop {
+	if signal.Action == corestate.ControlActionStop {
 		handle.cancel()
 		return true
 	}
 
 	select {
-	case handle.control <- action:
+	case handle.control <- signal:
 		return true
 	default:
 		// Keep latest decision without blocking callers.
@@ -122,14 +133,14 @@ func (o *ExecutionOrchestrator) Control(executionID string, action corestate.Con
 		default:
 		}
 		select {
-		case handle.control <- action:
+		case handle.control <- signal:
 		default:
 		}
 		return true
 	}
 }
 
-func (o *ExecutionOrchestrator) getControlChannel(executionID string) (<-chan corestate.ControlAction, bool) {
+func (o *ExecutionOrchestrator) getControlChannel(executionID string) (<-chan executionControlSignal, bool) {
 	if o == nil {
 		return nil, false
 	}
@@ -193,6 +204,7 @@ func (o *ExecutionOrchestrator) beginExecution(executionID string) (Execution, s
 	execution.State = ExecutionStateExecuting
 	execution.UpdatedAt = now
 	o.state.executions[execution.ID] = execution
+	delete(o.state.pendingUserQuestions, execution.ID)
 
 	return execution, lookupExecutionContentLocked(o.state, execution), true
 }
@@ -219,6 +231,7 @@ func (o *ExecutionOrchestrator) transitionExecutionToCompleted(executionID strin
 		execution.TokensOut = tokensOut
 	}
 	o.state.executions[execution.ID] = execution
+	delete(o.state.pendingUserQuestions, execution.ID)
 
 	appendExecutionMessageLocked(o.state, execution.ConversationID, MessageRoleAssistant, strings.TrimSpace(output), execution.QueueIndex, false, now)
 	appendExecutionEventLocked(o.state, ExecutionEvent{
@@ -273,6 +286,7 @@ func (o *ExecutionOrchestrator) transitionExecutionToFailed(executionID string, 
 	execution.State = ExecutionStateFailed
 	execution.UpdatedAt = now
 	o.state.executions[execution.ID] = execution
+	delete(o.state.pendingUserQuestions, execution.ID)
 
 	message := firstNonEmpty(strings.TrimSpace(executionErr.Error()), "Execution failed.")
 	appendExecutionMessageLocked(o.state, execution.ConversationID, MessageRoleSystem, message, execution.QueueIndex, false, now)
@@ -327,6 +341,7 @@ func (o *ExecutionOrchestrator) transitionExecutionToCancelled(executionID strin
 	execution.State = ExecutionStateCancelled
 	execution.UpdatedAt = now
 	o.state.executions[execution.ID] = execution
+	delete(o.state.pendingUserQuestions, execution.ID)
 	appendExecutionEventLocked(o.state, ExecutionEvent{
 		ExecutionID:    execution.ID,
 		ConversationID: execution.ConversationID,
@@ -1122,6 +1137,33 @@ func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 			},
 		})
 		if execErr == nil {
+			if requiresUserInputFromToolResult(result.Output) {
+				question := normalizePendingUserQuestion(result.Output, callID, toolName)
+				o.transitionExecutionToAwaitingInput(execution.ID, question)
+				answer, waitErr := o.waitForUserAnswer(ctx, execution.ID, question.QuestionID)
+				if waitErr != nil {
+					return openAIToolResultForNextTurn{}, waitErr
+				}
+				outputPayload := cloneMapAny(result.Output)
+				outputPayload["requires_user_input"] = false
+				outputPayload["answer"] = map[string]any{
+					"question_id":        answer.QuestionID,
+					"selected_option_id": answer.SelectedOptionID,
+					"text":               answer.Text,
+				}
+				output := renderToolOutputForModel(outputPayload)
+				o.appendToolResultEvent(execution.ID, map[string]any{
+					"name":        toolName,
+					"call_id":     callID,
+					"ok":          true,
+					"output":      output,
+					"question":    question.Question,
+					"question_id": question.QuestionID,
+					"source":      "hub_orchestrator",
+				})
+				return openAIToolResultForNextTurn{CallID: callID, Text: output}, nil
+			}
+
 			output := renderToolOutputForModel(result.Output)
 			o.appendToolResultEvent(execution.ID, map[string]any{
 				"name":    toolName,
@@ -1187,10 +1229,43 @@ func (o *ExecutionOrchestrator) waitForApprovalAction(ctx context.Context, execu
 		select {
 		case <-ctx.Done():
 			return "", ctx.Err()
-		case action := <-control:
-			switch action {
+		case signal := <-control:
+			switch signal.Action {
 			case corestate.ControlActionApprove, corestate.ControlActionResume, corestate.ControlActionDeny, corestate.ControlActionStop:
-				return action, nil
+				return signal.Action, nil
+			default:
+				continue
+			}
+		}
+	}
+}
+
+func (o *ExecutionOrchestrator) waitForUserAnswer(ctx context.Context, executionID string, questionID string) (ExecutionUserAnswer, error) {
+	control, exists := o.getControlChannel(executionID)
+	if !exists || control == nil {
+		return ExecutionUserAnswer{}, errors.New("execution control channel is unavailable")
+	}
+	normalizedQuestionID := strings.TrimSpace(questionID)
+	for {
+		select {
+		case <-ctx.Done():
+			return ExecutionUserAnswer{}, ctx.Err()
+		case signal := <-control:
+			switch signal.Action {
+			case corestate.ControlActionStop, corestate.ControlActionDeny:
+				return ExecutionUserAnswer{}, context.Canceled
+			case corestate.ControlActionAnswer:
+				if signal.Answer == nil {
+					continue
+				}
+				answer := *signal.Answer
+				if normalizedQuestionID != "" && strings.TrimSpace(answer.QuestionID) != normalizedQuestionID {
+					continue
+				}
+				if strings.TrimSpace(answer.SelectedOptionID) == "" && strings.TrimSpace(answer.Text) == "" {
+					continue
+				}
+				return answer, nil
 			default:
 				continue
 			}
@@ -1250,6 +1325,7 @@ func (o *ExecutionOrchestrator) transitionExecutionToExecuting(executionID strin
 		execution.State = ExecutionStateExecuting
 		execution.UpdatedAt = now
 		o.state.executions[execution.ID] = execution
+		delete(o.state.pendingUserQuestions, execution.ID)
 		if conversation, ok := o.state.conversations[execution.ConversationID]; ok {
 			activeID := execution.ID
 			conversation.ActiveExecutionID = &activeID
@@ -1268,6 +1344,136 @@ func (o *ExecutionOrchestrator) transitionExecutionToExecuting(executionID strin
 				"stage":  strings.TrimSpace(stage),
 				"action": strings.TrimSpace(action),
 				"source": "hub_orchestrator",
+			},
+		})
+	}
+	o.state.mu.Unlock()
+	syncExecutionDomainBestEffort(o.state)
+}
+
+type pendingUserQuestion struct {
+	QuestionID          string
+	Question            string
+	Options             []map[string]any
+	RecommendedOptionID string
+	AllowText           bool
+	Required            bool
+	CallID              string
+	ToolName            string
+}
+
+func requiresUserInputFromToolResult(output map[string]any) bool {
+	if len(output) == 0 {
+		return false
+	}
+	required, _ := output["requires_user_input"].(bool)
+	return required
+}
+
+func normalizePendingUserQuestion(output map[string]any, fallbackCallID string, fallbackToolName string) pendingUserQuestion {
+	questionID := strings.TrimSpace(fmt.Sprint(output["question_id"]))
+	if questionID == "" {
+		questionID = strings.TrimSpace(fallbackCallID)
+	}
+	if questionID == "" {
+		questionID = "question_" + randomHex(6)
+	}
+	question := strings.TrimSpace(fmt.Sprint(output["question"]))
+	if question == "" {
+		question = "Please choose one option to continue."
+	}
+	options := []map[string]any{}
+	if rawOptions, ok := output["options"].([]any); ok {
+		for idx, item := range rawOptions {
+			switch typed := item.(type) {
+			case string:
+				label := strings.TrimSpace(typed)
+				if label == "" {
+					continue
+				}
+				options = append(options, map[string]any{
+					"id":          fmt.Sprintf("option_%d", idx+1),
+					"label":       label,
+					"description": "",
+				})
+			case map[string]any:
+				id := strings.TrimSpace(fmt.Sprint(typed["id"]))
+				label := strings.TrimSpace(fmt.Sprint(typed["label"]))
+				description := strings.TrimSpace(fmt.Sprint(typed["description"]))
+				if label == "" {
+					continue
+				}
+				if id == "" {
+					id = fmt.Sprintf("option_%d", idx+1)
+				}
+				options = append(options, map[string]any{
+					"id":          id,
+					"label":       label,
+					"description": description,
+				})
+			}
+		}
+	}
+	recommendedOptionID := strings.TrimSpace(fmt.Sprint(output["recommended_option_id"]))
+	allowText, hasAllowText := output["allow_text"].(bool)
+	if !hasAllowText {
+		allowText = true
+	}
+	required, hasRequired := output["required"].(bool)
+	if !hasRequired {
+		required = true
+	}
+	return pendingUserQuestion{
+		QuestionID:          questionID,
+		Question:            question,
+		Options:             options,
+		RecommendedOptionID: recommendedOptionID,
+		AllowText:           allowText,
+		Required:            required,
+		CallID:              strings.TrimSpace(fallbackCallID),
+		ToolName:            strings.TrimSpace(fallbackToolName),
+	}
+}
+
+func (o *ExecutionOrchestrator) transitionExecutionToAwaitingInput(executionID string, question pendingUserQuestion) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	o.state.mu.Lock()
+	execution, exists := o.state.executions[executionID]
+	if !exists {
+		o.state.mu.Unlock()
+		return
+	}
+	if execution.State != ExecutionStateCancelled {
+		execution.State = ExecutionStateAwaitingInput
+		execution.UpdatedAt = now
+		o.state.executions[execution.ID] = execution
+		o.state.pendingUserQuestions[execution.ID] = question
+		if conversation, ok := o.state.conversations[execution.ConversationID]; ok {
+			activeID := execution.ID
+			conversation.ActiveExecutionID = &activeID
+			conversation.QueueState = QueueStateRunning
+			conversation.UpdatedAt = now
+			o.state.conversations[conversation.ID] = conversation
+		}
+		appendExecutionEventLocked(o.state, ExecutionEvent{
+			ExecutionID:    execution.ID,
+			ConversationID: execution.ConversationID,
+			TraceID:        execution.TraceID,
+			QueueIndex:     execution.QueueIndex,
+			Type:           ExecutionEventTypeThinkingDelta,
+			Timestamp:      now,
+			Payload: map[string]any{
+				"stage":                 "run_user_question_needed",
+				"run_state":             "waiting_user_input",
+				"name":                  question.ToolName,
+				"call_id":               question.CallID,
+				"question_id":           question.QuestionID,
+				"question":              question.Question,
+				"options":               question.Options,
+				"recommended_option_id": question.RecommendedOptionID,
+				"allow_text":            question.AllowText,
+				"required":              question.Required,
+				"source":                "hub_orchestrator",
 			},
 		})
 	}
