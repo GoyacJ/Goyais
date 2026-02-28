@@ -338,3 +338,110 @@ func TestProjectConversationsHandlerPostDoesNotFallbackToCatalogDefaultModel(t *
 		t.Fatalf("expected empty model_config_id when project has no default, got %q", got)
 	}
 }
+
+func TestProjectConversationsHandlerGetIncludesTokenUsageTotals(t *testing.T) {
+	state := NewAppState(nil)
+	now := time.Now().UTC().Format(time.RFC3339)
+	projectID := "proj_usage_sidebar"
+	conversationID := "conv_usage_sidebar"
+	executionOneID := "exec_usage_sidebar_1"
+	executionTwoID := "exec_usage_sidebar_2"
+
+	state.projects[projectID] = Project{
+		ID:          projectID,
+		WorkspaceID: localWorkspaceID,
+		Name:        "Usage Sidebar",
+		RepoPath:    "/tmp/usage-sidebar",
+		DefaultMode: PermissionModeDefault,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	state.projectConfigs[projectID] = ProjectConfig{
+		ProjectID:      projectID,
+		ModelConfigIDs: []string{},
+		RuleIDs:        []string{},
+		SkillIDs:       []string{},
+		MCPIDs:         []string{},
+		UpdatedAt:      now,
+	}
+	state.conversations[conversationID] = Conversation{
+		ID:            conversationID,
+		WorkspaceID:   localWorkspaceID,
+		ProjectID:     projectID,
+		Name:          "Conversation Usage",
+		QueueState:    QueueStateIdle,
+		DefaultMode:   PermissionModeDefault,
+		ModelConfigID: "rc_model_1",
+		RuleIDs:       []string{},
+		SkillIDs:      []string{},
+		MCPIDs:        []string{},
+		BaseRevision:  0,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	state.conversationExecutionOrder[conversationID] = []string{executionOneID, executionTwoID}
+	state.executions[executionOneID] = Execution{
+		ID:             executionOneID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_usage_sidebar_1",
+		State:          ExecutionStateCompleted,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot: ModelSnapshot{
+			ModelID: "gpt-5",
+		},
+		TokensIn:                10,
+		TokensOut:               20,
+		ProjectRevisionSnapshot: 0,
+		QueueIndex:              1,
+		TraceID:                 "tr_usage_sidebar_1",
+		CreatedAt:               now,
+		UpdatedAt:               now,
+	}
+	state.executions[executionTwoID] = Execution{
+		ID:             executionTwoID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_usage_sidebar_2",
+		State:          ExecutionStateCompleted,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot: ModelSnapshot{
+			ModelID: "gpt-5",
+		},
+		TokensIn:                3,
+		TokensOut:               7,
+		ProjectRevisionSnapshot: 0,
+		QueueIndex:              2,
+		TraceID:                 "tr_usage_sidebar_2",
+		CreatedAt:               now,
+		UpdatedAt:               now,
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/projects/{project_id}/conversations", ProjectConversationsHandler(state))
+	res := performJSONRequest(t, mux, http.MethodGet, "/v1/projects/"+projectID+"/conversations", nil, nil)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected list conversations 200, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	items := payload["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected one conversation, got %d", len(items))
+	}
+	conversation := items[0].(map[string]any)
+	if got := int(conversation["tokens_in_total"].(float64)); got != 13 {
+		t.Fatalf("expected tokens_in_total 13, got %d", got)
+	}
+	if got := int(conversation["tokens_out_total"].(float64)); got != 27 {
+		t.Fatalf("expected tokens_out_total 27, got %d", got)
+	}
+	if got := int(conversation["tokens_total"].(float64)); got != 40 {
+		t.Fatalf("expected tokens_total 40, got %d", got)
+	}
+}

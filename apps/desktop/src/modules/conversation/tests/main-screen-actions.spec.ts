@@ -186,6 +186,17 @@ describe("main screen actions - auto conversation naming", () => {
     expect(projectStoreMocks.renameConversationById).toHaveBeenCalledWith(project.id, conversation.id, "手动改名");
   });
 
+  it("renames conversation by explicit project and conversation id", async () => {
+    const { actions, project, conversation } = createActionsContext({
+      conversationName: "已有名称",
+      draft: ""
+    });
+
+    await actions.renameConversation(project.id, conversation.id, "  新名字  ");
+
+    expect(projectStoreMocks.renameConversationById).toHaveBeenCalledWith(project.id, conversation.id, "新名字");
+  });
+
   it("removes queued execution through run control action", async () => {
     const { actions, conversation } = createActionsContext({
       conversationName: "已有名称",

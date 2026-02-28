@@ -11,6 +11,7 @@
         :projects="projectStore.projects"
         :projects-page="projectsPage"
         :conversations-by-project-id="projectStore.conversationsByProjectId"
+        :conversation-token-usage-by-id="conversationTokenUsageById"
         :conversation-page-by-project-id="conversationPageByProjectId"
         :active-conversation-id="projectStore.activeConversationId"
         :project-import-in-progress="projectImportInProgress"
@@ -24,6 +25,7 @@
         @export-conversation="exportConversation"
         @delete-conversation="deleteConversationById"
         @select-conversation="selectConversation"
+        @rename-conversation="renameConversation"
         @open-account="openAccount"
         @open-settings="openSettings"
         @paginate-projects="paginateProjects"
@@ -49,6 +51,9 @@
               />
             </template>
             <strong v-else>{{ activeConversation?.name ?? 'Conversation' }}</strong>
+            <span v-if="activeConversation" class="token-usage">
+              Token in {{ activeConversationTokenUsage.input }} / out {{ activeConversationTokenUsage.output }} / total {{ activeConversationTokenUsage.total }}
+            </span>
 
             <button v-if="activeConversation" class="icon-btn" type="button" @click="startEditConversationName">
               <AppIcon name="pencil" :size="12" />
@@ -183,6 +188,7 @@ import { useMainScreenController } from "@/modules/conversation/views/useMainScr
 
 const {
   activeConversation,
+  activeConversationTokenUsage,
   activeCount,
   activeProject,
   addConversationByPrompt,
@@ -194,6 +200,7 @@ const {
   composerSuggestions,
   composerSuggesting,
   conversationNameDraft,
+  conversationTokenUsageById,
   conversationPageByProjectId,
   createWorkspace,
   deleteConversationById,
@@ -230,6 +237,7 @@ const {
   queuedCount,
   queuedMessages,
   rollbackMessage,
+  renameConversation,
   removeQueuedMessage,
   runningState,
   runningStateClass,

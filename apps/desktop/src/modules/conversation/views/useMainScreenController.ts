@@ -16,6 +16,7 @@ import { useQueueMessagesView } from "@/modules/conversation/views/useQueueMessa
 import { useMainScreenActions } from "@/modules/conversation/views/useMainScreenActions";
 import { useMainScreenModeling } from "@/modules/conversation/views/useMainScreenModeling";
 import { createConversationStreamCoordinator } from "@/modules/conversation/views/streamCoordinator";
+import { resolveConversationUsage } from "@/modules/conversation/views/conversationTokenUsage";
 import { localizeComposerSuggestionDetails } from "@/modules/conversation/views/composerSuggestionDetails";
 import {
   dedupeComposerSuggestions,
@@ -29,7 +30,7 @@ import {
   refreshConversationsForActiveProject,
   refreshProjects
 } from "@/modules/project/store";
-import { refreshResourceConfigsByType, resourceStore } from "@/modules/resource/store";
+import { refreshResourceConfigsByType } from "@/modules/resource/store";
 import {
   initializeWorkspaceContext,
   workspaceStore
@@ -106,6 +107,18 @@ export function useMainScreenController() {
       return undefined;
     }
     return ensureConversationRuntime(conversation, project.is_git);
+  });
+  const activeConversationTokenUsage = computed(() =>
+    resolveConversationUsage(activeConversation.value, runtime.value)
+  );
+  const conversationTokenUsageById = computed(() => {
+    const result: Record<string, { input: number; output: number; total: number }> = {};
+    for (const list of Object.values(projectStore.conversationsByProjectId)) {
+      for (const conversation of list) {
+        result[conversation.id] = resolveConversationUsage(conversation, conversationStore.byConversationId[conversation.id]);
+      }
+    }
+    return result;
   });
 
   const workspaceStatus = useWorkspaceStatusSync({
@@ -565,6 +578,7 @@ export function useMainScreenController() {
   return {
     ...actions,
     activeConversation,
+    activeConversationTokenUsage,
     activeCount,
     hasConfirmingExecution,
     pendingQuestions,
@@ -573,6 +587,7 @@ export function useMainScreenController() {
     activeProject,
     authStore,
     conversationNameDraft,
+    conversationTokenUsageById,
     conversationPageByProjectId,
     editingConversationName,
     executingCount,

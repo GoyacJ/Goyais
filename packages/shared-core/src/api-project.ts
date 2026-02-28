@@ -46,6 +46,9 @@ export type Conversation = {
   mcp_ids: string[];
   base_revision: number;
   active_execution_id: string | null;
+  tokens_in_total?: number;
+  tokens_out_total?: number;
+  tokens_total?: number;
   created_at: string;
   updated_at: string;
 };

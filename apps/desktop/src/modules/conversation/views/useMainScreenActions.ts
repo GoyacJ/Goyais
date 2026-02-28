@@ -226,6 +226,13 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     setActiveProject(projectId);
     setActiveConversation(conversationId);
   }
+  async function renameConversation(projectId: string, conversationId: string, name: string): Promise<void> {
+    const normalizedName = name.trim();
+    if (projectId.trim() === "" || conversationId.trim() === "" || normalizedName === "") {
+      return;
+    }
+    await renameConversationById(projectId, conversationId, normalizedName);
+  }
   async function exportConversation(conversationId: string): Promise<void> {
     const markdown = await exportConversationById(conversationId);
     if (!markdown) {
@@ -379,6 +386,7 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     rollbackMessage,
     saveConversationName,
     selectConversation,
+    renameConversation,
     sendMessage,
     removeQueuedMessage,
     approveExecution,

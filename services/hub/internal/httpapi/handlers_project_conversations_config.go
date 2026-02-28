@@ -46,7 +46,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 			items := make([]Conversation, 0)
 			for _, conv := range state.conversations {
 				if conv.ProjectID == projectID {
-					items = append(items, conv)
+					items = append(items, decorateConversationUsageLocked(state, conv))
 				}
 			}
 			state.mu.RUnlock()

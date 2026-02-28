@@ -45,7 +45,7 @@ func ConversationsHandler(state *AppState) http.HandlerFunc {
 			if workspaceID != "" && conv.WorkspaceID != workspaceID {
 				continue
 			}
-			items = append(items, conv)
+			items = append(items, decorateConversationUsageLocked(state, conv))
 		}
 		state.mu.RUnlock()
 		sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt < items[j].CreatedAt })

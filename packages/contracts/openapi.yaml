@@ -2067,6 +2067,15 @@ components:
           format: int64
         active_execution_id:
           type: [string, 'null']
+        tokens_in_total:
+          type: integer
+          minimum: 0
+        tokens_out_total:
+          type: integer
+          minimum: 0
+        tokens_total:
+          type: integer
+          minimum: 0
         created_at:
           type: string
           format: date-time

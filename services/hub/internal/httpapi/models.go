@@ -295,6 +295,9 @@ type Conversation struct {
 	MCPIDs            []string         `json:"mcp_ids"`
 	BaseRevision      int64            `json:"base_revision"`
 	ActiveExecutionID *string          `json:"active_execution_id"`
+	TokensInTotal     int              `json:"tokens_in_total"`
+	TokensOutTotal    int              `json:"tokens_out_total"`
+	TokensTotal       int              `json:"tokens_total"`
 	CreatedAt         string           `json:"created_at"`
 	UpdatedAt         string           `json:"updated_at"`
 }

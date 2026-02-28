@@ -30,6 +30,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			messages := append([]ConversationMessage{}, state.conversationMessages[conversationID]...)
 			snapshots := cloneConversationSnapshots(state.conversationSnapshots[conversationID])
 			executions := append([]Execution{}, listConversationExecutionsLocked(state, conversationID)...)
+			conversation = decorateConversationUsageLocked(state, conversation)
 			state.mu.RUnlock()
 
 			_, authErr := authorizeAction(
@@ -196,7 +197,10 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			state.conversations[conversationID] = conversation
 			state.mu.Unlock()
 			syncExecutionDomainBestEffort(state)
-			writeJSON(w, http.StatusOK, conversation)
+			state.mu.RLock()
+			responseConversation := decorateConversationUsageLocked(state, conversation)
+			state.mu.RUnlock()
+			writeJSON(w, http.StatusOK, responseConversation)
 		case http.MethodDelete:
 			_, authErr := authorizeAction(
 				state,

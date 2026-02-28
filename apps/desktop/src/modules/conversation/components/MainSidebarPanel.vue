@@ -58,13 +58,28 @@
               class="conversation-item"
               :class="{ active: conversation.id === activeConversationId }"
             >
-              <button
-                class="conversation-main"
-                type="button"
-                @click="$emit('selectConversation', project.id, conversation.id)"
-              >
-                {{ conversation.name }}
-              </button>
+              <div class="conversation-main-wrap">
+                <span class="conversation-token">{{ resolveConversationTokenTotal(conversation.id) }}</span>
+                <input
+                  v-if="isConversationEditing(project.id, conversation.id)"
+                  :ref="setEditingInputRef"
+                  class="conversation-rename-input"
+                  :value="editingDraft"
+                  @input="onConversationRenameInput"
+                  @keydown.enter.prevent="commitConversationRename(project.id, conversation)"
+                  @keydown.esc.prevent="cancelConversationRename"
+                  @blur="commitConversationRename(project.id, conversation)"
+                />
+                <button
+                  v-else
+                  class="conversation-main"
+                  type="button"
+                  @click="$emit('selectConversation', project.id, conversation.id)"
+                  @dblclick.stop="startConversationRename(project.id, conversation)"
+                >
+                  {{ conversation.name }}
+                </button>
+              </div>
               <div class="row-actions">
                 <button class="icon-btn tiny" type="button" @click.stop="$emit('exportConversation', conversation.id)">
                   <AppIcon name="file-down" :size="10" />
@@ -94,7 +109,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, reactive, ref, type ComponentPublicInstance, watch } from "vue";
 
 import { isRuntimeCapabilitySupported } from "@/shared/runtime";
 import { pickDirectoryPath } from "@/shared/services/directoryPicker";
@@ -123,6 +138,7 @@ const props = defineProps<{
     loading: boolean;
   };
   conversationsByProjectId: Record<string, Conversation[]>;
+  conversationTokenUsageById: Record<string, { input: number; output: number; total: number }>;
   conversationPageByProjectId: Record<
     string,
     {
@@ -146,6 +162,7 @@ const emit = defineEmits<{
   (event: "exportConversation", conversationId: string): void;
   (event: "deleteConversation", projectId: string, conversationId: string): void;
   (event: "selectConversation", projectId: string, conversationId: string): void;
+  (event: "renameConversation", projectId: string, conversationId: string, name: string): void;
   (event: "openAccount"): void;
   (event: "openSettings"): void;
   (event: "paginateProjects", direction: "prev" | "next"): void;
@@ -155,6 +172,10 @@ const emit = defineEmits<{
 
 const collapsed = ref(false);
 const createWorkspaceOpen = ref(false);
+const editingProjectId = ref("");
+const editingConversationId = ref("");
+const editingDraft = ref("");
+const editingInputRef = ref<HTMLInputElement | null>(null);
 
 const projectOpen = reactive<Record<string, boolean>>({});
 
@@ -234,6 +255,57 @@ function toggleProject(projectId: string): void {
 
 function isProjectOpen(projectId: string): boolean {
   return projectOpen[projectId] ?? true;
+}
+
+function resolveConversationTokenTotal(conversationId: string): number {
+  const usage = props.conversationTokenUsageById[conversationId];
+  if (!usage || typeof usage.total !== "number" || !Number.isFinite(usage.total)) {
+    return 0;
+  }
+  if (usage.total <= 0) {
+    return 0;
+  }
+  return Math.trunc(usage.total);
+}
+
+function isConversationEditing(projectId: string, conversationId: string): boolean {
+  return editingProjectId.value === projectId && editingConversationId.value === conversationId;
+}
+
+function setEditingInputRef(element: Element | ComponentPublicInstance | null): void {
+  editingInputRef.value = element instanceof HTMLInputElement ? element : null;
+}
+
+async function startConversationRename(projectId: string, conversation: Conversation): Promise<void> {
+  emit("selectConversation", projectId, conversation.id);
+  editingProjectId.value = projectId;
+  editingConversationId.value = conversation.id;
+  editingDraft.value = conversation.name;
+  await nextTick();
+  editingInputRef.value?.focus();
+  editingInputRef.value?.select();
+}
+
+function onConversationRenameInput(event: Event): void {
+  editingDraft.value = (event.target as HTMLInputElement).value;
+}
+
+function cancelConversationRename(): void {
+  editingProjectId.value = "";
+  editingConversationId.value = "";
+  editingDraft.value = "";
+}
+
+function commitConversationRename(projectId: string, conversation: Conversation): void {
+  if (!isConversationEditing(projectId, conversation.id)) {
+    return;
+  }
+  const nextName = editingDraft.value.trim();
+  cancelConversationRename();
+  if (nextName === "" || nextName === conversation.name) {
+    return;
+  }
+  emit("renameConversation", projectId, conversation.id, nextName);
 }
 
 async function pickDirectory(): Promise<void> {

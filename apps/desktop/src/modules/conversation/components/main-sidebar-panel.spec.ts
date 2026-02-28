@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MainSidebarPanel from "@/modules/conversation/components/MainSidebarPanel.vue";
 import { pickDirectoryPath } from "@/shared/services/directoryPicker";
 import { dismissToastByKey, showToast } from "@/shared/stores/toastStore";
+import type { Conversation, Project } from "@/shared/types/api";
 
 vi.mock("@/shared/services/directoryPicker", () => ({
   pickDirectoryPath: vi.fn()
@@ -104,6 +105,140 @@ describe("MainSidebarPanel", () => {
       })
     );
   });
+
+  it("renders conversation token totals in list prefix", () => {
+    const wrapper = mountSidebar({
+      projects: [
+        {
+          id: "proj_1",
+          workspace_id: "ws_local",
+          name: "项目A",
+          repo_path: "/tmp/project-a",
+          is_git: true,
+          current_revision: 0,
+          created_at: "2026-02-23T00:00:00Z",
+          updated_at: "2026-02-23T00:00:00Z"
+        }
+      ],
+      conversationsByProjectId: {
+        proj_1: [
+          {
+            id: "conv_1",
+            workspace_id: "ws_local",
+            project_id: "proj_1",
+            name: "会话A",
+            queue_state: "idle",
+            default_mode: "default",
+            model_config_id: "rc_model_1",
+            rule_ids: [],
+            skill_ids: [],
+            mcp_ids: [],
+            base_revision: 0,
+            active_execution_id: null,
+            created_at: "2026-02-23T00:00:00Z",
+            updated_at: "2026-02-23T00:00:00Z"
+          }
+        ]
+      },
+      conversationTokenUsageById: {
+        conv_1: { input: 12, output: 20, total: 32 }
+      }
+    });
+
+    expect(wrapper.find(".conversation-token").text()).toBe("32");
+  });
+
+  it("starts inline rename on double click and emits rename on enter", async () => {
+    const wrapper = mountSidebar({
+      projects: [
+        {
+          id: "proj_1",
+          workspace_id: "ws_local",
+          name: "项目A",
+          repo_path: "/tmp/project-a",
+          is_git: true,
+          current_revision: 0,
+          created_at: "2026-02-23T00:00:00Z",
+          updated_at: "2026-02-23T00:00:00Z"
+        }
+      ],
+      conversationsByProjectId: {
+        proj_1: [
+          {
+            id: "conv_1",
+            workspace_id: "ws_local",
+            project_id: "proj_1",
+            name: "会话A",
+            queue_state: "idle",
+            default_mode: "default",
+            model_config_id: "rc_model_1",
+            rule_ids: [],
+            skill_ids: [],
+            mcp_ids: [],
+            base_revision: 0,
+            active_execution_id: null,
+            created_at: "2026-02-23T00:00:00Z",
+            updated_at: "2026-02-23T00:00:00Z"
+          }
+        ]
+      }
+    });
+
+    await wrapper.find(".conversation-main").trigger("dblclick");
+    const input = wrapper.find(".conversation-rename-input");
+    expect(input.exists()).toBe(true);
+
+    await input.setValue("会话B");
+    await input.trigger("keydown.enter");
+
+    expect(wrapper.emitted("renameConversation")).toEqual([["proj_1", "conv_1", "会话B"]]);
+    expect(wrapper.emitted("selectConversation")).toEqual([["proj_1", "conv_1"]]);
+  });
+
+  it("cancels inline rename on escape without emit", async () => {
+    const wrapper = mountSidebar({
+      projects: [
+        {
+          id: "proj_1",
+          workspace_id: "ws_local",
+          name: "项目A",
+          repo_path: "/tmp/project-a",
+          is_git: true,
+          current_revision: 0,
+          created_at: "2026-02-23T00:00:00Z",
+          updated_at: "2026-02-23T00:00:00Z"
+        }
+      ],
+      conversationsByProjectId: {
+        proj_1: [
+          {
+            id: "conv_1",
+            workspace_id: "ws_local",
+            project_id: "proj_1",
+            name: "会话A",
+            queue_state: "idle",
+            default_mode: "default",
+            model_config_id: "rc_model_1",
+            rule_ids: [],
+            skill_ids: [],
+            mcp_ids: [],
+            base_revision: 0,
+            active_execution_id: null,
+            created_at: "2026-02-23T00:00:00Z",
+            updated_at: "2026-02-23T00:00:00Z"
+          }
+        ]
+      }
+    });
+
+    await wrapper.find(".conversation-main").trigger("dblclick");
+    const input = wrapper.find(".conversation-rename-input");
+    await input.setValue("会话B");
+    await input.trigger("keydown.esc");
+
+    expect(wrapper.find(".conversation-rename-input").exists()).toBe(false);
+    expect(wrapper.emitted("renameConversation")).toBeUndefined();
+  });
 });
 
 function mountSidebar(
@@ -112,6 +247,9 @@ function mountSidebar(
     projectImportFeedback: string;
     projectImportError: string;
     connectionState: string;
+    projects: Project[];
+    conversationsByProjectId: Record<string, Conversation[]>;
+    conversationTokenUsageById: Record<string, { input: number; output: number; total: number }>;
   }> = {}
 ) {
   const now = "2026-02-23T00:00:00Z";
@@ -140,6 +278,7 @@ function mountSidebar(
         loading: false
       },
       conversationsByProjectId: {},
+      conversationTokenUsageById: {},
       conversationPageByProjectId: {},
       activeConversationId: "",
       projectImportInProgress: false,
