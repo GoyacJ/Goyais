@@ -81,8 +81,9 @@
             :active-trace-count="activeTraceCount"
             :execution-traces="executionTraces"
             :running-actions="runningActions"
+            :pending-questions="pendingQuestions"
             :draft="runtime?.draft ?? ''"
-            :mode="runtime?.mode ?? 'agent'"
+            :mode="runtime?.mode ?? 'default'"
             :model-id="activeModelId"
             :model-options="modelOptions"
             :placeholder="placeholder"
@@ -98,8 +99,9 @@
             @remove-queued="removeQueuedMessage"
             @approve="approveExecution"
             @deny="denyExecution"
+            @answer-question="answerExecutionQuestion"
             @rollback="rollbackMessage"
-            @toggle-trace="toggleExecutionTrace"
+            @select-trace="selectTraceInInspector"
           />
 
           <div class="inspector-slot" :class="{ collapsed: inspectorCollapsed, 'mobile-open': !inspectorCollapsed }">
@@ -113,6 +115,8 @@
               :model-label="activeModelLabel"
               :executions="runtime?.executions ?? []"
               :events="runtime?.events ?? []"
+              :execution-traces="executionTraces"
+              :selected-trace-execution-id="selectedTraceExecutionId"
               :active-tab="runtime?.inspectorTab ?? 'diff'"
               @change-tab="changeInspectorTab"
               @commit="commitDiff"
@@ -195,6 +199,7 @@ const {
   deleteConversationById,
   deleteProjectById,
   denyExecution,
+  answerExecutionQuestion,
   discardDiff,
   editingConversationName,
   executingCount,
@@ -214,6 +219,7 @@ const {
   paginateProjects,
   placeholder,
   pendingCount,
+  pendingQuestions,
   hasConfirmingExecution,
   projectStore,
   activeTraceCount,
@@ -232,7 +238,8 @@ const {
   runtimeHubLabel,
   runtimeUserDisplayName,
   requestComposerSuggestions,
-  toggleExecutionTrace,
+  selectTraceInInspector,
+  selectedTraceExecutionId,
   runtime,
   visibleMessages,
   saveConversationName,

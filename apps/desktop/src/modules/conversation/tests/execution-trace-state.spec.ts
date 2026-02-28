@@ -19,27 +19,51 @@ function createTrace(overrides?: Partial<ExecutionTraceViewModel>): ExecutionTra
   };
 }
 
-describe("execution trace expansion state", () => {
-  it("keeps running traces collapsed by default and stays collapsed after finished", async () => {
-    const baseTraces = ref<ExecutionTraceViewModel[]>([createTrace()]);
-    const { executionTraces } = useExecutionTraceState(baseTraces);
+describe("execution trace selection state", () => {
+  it("selects latest trace by default", () => {
+    const baseTraces = ref<ExecutionTraceViewModel[]>([
+      createTrace({ executionId: "exec_trace_state_1" }),
+      createTrace({ executionId: "exec_trace_state_2", queueIndex: 1 })
+    ]);
+    const { selectedExecutionTrace, selectedTraceExecutionId } = useExecutionTraceState(baseTraces);
 
-    expect(executionTraces.value[0]?.isExpanded).toBe(false);
-
-    baseTraces.value = [createTrace({ state: "completed", isRunning: false })];
-    await nextTick();
-    expect(executionTraces.value[0]?.isExpanded).toBe(false);
+    expect(selectedTraceExecutionId.value).toBe("exec_trace_state_2");
+    expect(selectedExecutionTrace.value?.executionId).toBe("exec_trace_state_2");
   });
 
-  it("keeps user preference after manual toggle", async () => {
-    const baseTraces = ref<ExecutionTraceViewModel[]>([createTrace()]);
-    const { executionTraces, toggleExecutionTrace } = useExecutionTraceState(baseTraces);
+  it("keeps user-selected trace when list updates", async () => {
+    const baseTraces = ref<ExecutionTraceViewModel[]>([
+      createTrace({ executionId: "exec_trace_state_1" }),
+      createTrace({ executionId: "exec_trace_state_2", queueIndex: 1 })
+    ]);
+    const { selectedExecutionTrace, selectedTraceExecutionId, selectExecutionTrace } = useExecutionTraceState(baseTraces);
 
-    toggleExecutionTrace("exec_trace_state_1", false);
-    expect(executionTraces.value[0]?.isExpanded).toBe(false);
+    selectExecutionTrace("exec_trace_state_1");
+    expect(selectedTraceExecutionId.value).toBe("exec_trace_state_1");
 
-    baseTraces.value = [createTrace({ state: "executing", isRunning: true })];
+    baseTraces.value = [
+      createTrace({ executionId: "exec_trace_state_1", state: "completed", isRunning: false }),
+      createTrace({ executionId: "exec_trace_state_2", queueIndex: 1 })
+    ];
     await nextTick();
-    expect(executionTraces.value[0]?.isExpanded).toBe(false);
+
+    expect(selectedTraceExecutionId.value).toBe("exec_trace_state_1");
+    expect(selectedExecutionTrace.value?.executionId).toBe("exec_trace_state_1");
+  });
+
+  it("falls back to latest trace when selected trace disappears", async () => {
+    const baseTraces = ref<ExecutionTraceViewModel[]>([
+      createTrace({ executionId: "exec_trace_state_1" }),
+      createTrace({ executionId: "exec_trace_state_2", queueIndex: 1 })
+    ]);
+    const { selectedTraceExecutionId, selectExecutionTrace } = useExecutionTraceState(baseTraces);
+
+    selectExecutionTrace("exec_trace_state_1");
+    expect(selectedTraceExecutionId.value).toBe("exec_trace_state_1");
+
+    baseTraces.value = [createTrace({ executionId: "exec_trace_state_2", queueIndex: 1 })];
+    await nextTick();
+
+    expect(selectedTraceExecutionId.value).toBe("exec_trace_state_2");
   });
 });

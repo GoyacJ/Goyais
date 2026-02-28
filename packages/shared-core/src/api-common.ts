@@ -2,11 +2,28 @@ export type WorkspaceMode = "local" | "remote";
 export type AuthMode = "disabled" | "password_or_token" | "token_only";
 export type Role = "viewer" | "developer" | "approver" | "admin";
 export type QueueState = "idle" | "running" | "queued";
-export type ConversationMode = "agent" | "plan";
+export type PermissionMode = "default" | "acceptEdits" | "plan" | "dontAsk" | "bypassPermissions";
+// Backward-compatible type name for existing imports.
+export type ConversationMode = PermissionMode;
 export type ConversationStatus = "running" | "queued" | "stopped" | "done" | "error";
-export type ExecutionState = "queued" | "pending" | "executing" | "confirming" | "completed" | "failed" | "cancelled";
-export type RunState = "queued" | "running" | "waiting_approval" | "completed" | "failed" | "cancelled";
-export type RunControlAction = "stop" | "approve" | "deny" | "resume";
+export type ExecutionState =
+  | "queued"
+  | "pending"
+  | "executing"
+  | "confirming"
+  | "awaiting_input"
+  | "completed"
+  | "failed"
+  | "cancelled";
+export type RunState =
+  | "queued"
+  | "running"
+  | "waiting_approval"
+  | "waiting_user_input"
+  | "completed"
+  | "failed"
+  | "cancelled";
+export type RunControlAction = "stop" | "approve" | "deny" | "resume" | "answer";
 export type PermissionVisibility = "hidden" | "disabled" | "readonly" | "enabled";
 export type ABACEffect = "allow" | "deny";
 export type ConnectionStatus = "connected" | "reconnecting" | "disconnected";
@@ -14,7 +31,7 @@ export type ResourceType = "model" | "rule" | "skill" | "mcp";
 export type ResourceScope = "private" | "shared";
 export type ShareStatus = "pending" | "approved" | "denied" | "revoked";
 export type ModelVendorName = "OpenAI" | "DeepSeek" | "Google" | "Qwen" | "Doubao" | "Zhipu" | "MiniMax" | "Local";
-export type InspectorTabKey = "diff" | "run" | "files" | "risk";
+export type InspectorTabKey = "diff" | "run" | "trace" | "files" | "risk";
 export type MessageRole = "user" | "assistant" | "system";
 export type DiffChangeType = "added" | "modified" | "deleted";
 export type TraceDetailLevel = "basic" | "verbose";
@@ -59,3 +76,26 @@ export type DiffCapability = {
   can_export_patch: boolean;
   reason?: string;
 };
+
+export const PERMISSION_MODE_IDS: PermissionMode[] = [
+  "default",
+  "acceptEdits",
+  "plan",
+  "dontAsk",
+  "bypassPermissions"
+];
+
+export const PRIMARY_PERMISSION_MODE_IDS: PermissionMode[] = ["default", "plan"];
+
+export function isPermissionMode(value: string): value is PermissionMode {
+  const normalized = value.trim();
+  return (PERMISSION_MODE_IDS as string[]).includes(normalized);
+}
+
+export function normalizePermissionMode(value: string): PermissionMode {
+  return isPermissionMode(value) ? value : "default";
+}
+
+export function isDangerousPermissionMode(value: PermissionMode): boolean {
+  return value === "dontAsk" || value === "bypassPermissions";
+}

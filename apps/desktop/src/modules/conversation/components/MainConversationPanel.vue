@@ -30,7 +30,7 @@
           <ExecutionTraceBlock
             :trace="trace"
             :running-actions="getRunningActions(trace.executionId)"
-            @toggle-trace="onTraceToggle"
+            @select-trace="onTraceSelect"
           />
         </div>
 
@@ -244,13 +244,13 @@ import {
   type ConversationMessage,
   type ConversationMode
 } from "@/shared/types/api";
-import type { ExecutionTraceStep, ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
+import type { ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
 import type { RunningActionViewModel } from "@/modules/conversation/views/runningActions";
 import ExecutionTraceBlock from "@/modules/conversation/components/ExecutionTraceBlock.vue";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import { useI18n } from "@/shared/i18n";
 
-type ExecutionTrace = ExecutionTraceViewModel & { isExpanded: boolean; steps: ExecutionTraceStep[] };
+type ExecutionTrace = ExecutionTraceViewModel;
 type QueuedMessageViewModel = {
   executionId: string;
   messageId: string;
@@ -378,7 +378,7 @@ const emit = defineEmits<{
   (event: "approve"): void;
   (event: "deny"): void;
   (event: "rollback", messageId: string): void;
-  (event: "toggle-trace", executionId: string, expanded: boolean): void;
+  (event: "select-trace", executionId: string): void;
   (event: "answer-question", payload: { executionId: string; questionId: string; selectedOptionId?: string; text?: string }): void;
   (event: "update:draft", value: string): void;
   (event: "update:mode", value: ConversationMode): void;
@@ -665,8 +665,8 @@ function getMessagePendingQuestions(message: ConversationMessage): PendingQuesti
   return props.pendingQuestions.filter((item) => item.queueIndex === message.queue_index);
 }
 
-function onTraceToggle(executionId: string, expanded: boolean): void {
-  emit("toggle-trace", executionId, expanded);
+function onTraceSelect(executionId: string): void {
+  emit("select-trace", executionId);
 }
 
 function onPrimaryAction(): void {

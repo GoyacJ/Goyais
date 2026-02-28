@@ -639,7 +639,6 @@ describe("conversation store", () => {
             summaryPrimary: "已思考 12s · 调用 2 个工具",
             summarySecondary: "消息执行 12s",
             summaryTone: "primary",
-            isExpanded: true,
             steps: [
               {
                 id: "trace_step_1",
@@ -676,15 +675,14 @@ describe("conversation store", () => {
     });
 
     expect(wrapper.find(".execution-hint").exists()).toBe(false);
-    expect(wrapper.find(".trace-summary-toggle").exists()).toBe(true);
+    expect(wrapper.find(".trace-summary-brief").exists()).toBe(true);
     expect(wrapper.find(".trace-caret").exists()).toBe(false);
     expect(wrapper.find(".trace-running-line").exists()).toBe(true);
-    expect(wrapper.find(".trace-panel-footer .trace-summary-toggle").exists()).toBe(true);
     expect(wrapper.text()).not.toContain("model_call");
     expect(wrapper.text()).not.toContain("模型推理");
 
-    wrapper.find(".trace-panel-footer .trace-summary-toggle").trigger("click");
-    expect(wrapper.emitted("toggle-trace")).toEqual([["exec_trace_1", false]]);
+    wrapper.find(".trace-summary-brief").trigger("click");
+    expect(wrapper.emitted("select-trace")).toEqual([["exec_trace_1"]]);
   });
 
   it("renders trace disclosure without legacy trace card class", () => {
@@ -715,7 +713,6 @@ describe("conversation store", () => {
             summaryPrimary: "执行完成 · 调用 1 个工具",
             summarySecondary: "消息执行 8s",
             summaryTone: "success",
-            isExpanded: false,
             steps: [
               {
                 id: "trace_step_2",
@@ -739,9 +736,7 @@ describe("conversation store", () => {
       }
     });
 
-    expect(wrapper.find("details.trace-disclosure").exists()).toBe(false);
-    expect(wrapper.find(".trace-summary-toggle").exists()).toBe(true);
-    expect(wrapper.find(".trace-panel-footer .trace-summary-toggle").exists()).toBe(false);
+    expect(wrapper.find(".trace-summary-brief").exists()).toBe(true);
     expect(wrapper.find(".trace-item").exists()).toBe(false);
   });
 
@@ -1547,6 +1542,139 @@ describe("conversation store", () => {
       }
     });
     expect(wrapper.text()).toContain("模型: MiniMax Primary");
+  });
+
+  it("renders inspector trace details for selected execution", () => {
+    const wrapper = mount(MainInspectorPanel, {
+      props: {
+        diff: [],
+        capability: {
+          can_commit: false,
+          can_discard: false,
+          can_export_patch: false
+        },
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        modelLabel: "MiniMax Primary",
+        executions: [],
+        events: [],
+        activeTab: "trace",
+        selectedTraceExecutionId: "exec_trace_target",
+        executionTraces: [
+          {
+            executionId: "exec_trace_old",
+            messageId: "msg_trace_old",
+            queueIndex: 0,
+            state: "completed",
+            isRunning: false,
+            summaryPrimary: "执行完成 · 调用 1 个工具",
+            summarySecondary: "消息执行 8s",
+            summaryTone: "success",
+            steps: []
+          },
+          {
+            executionId: "exec_trace_target",
+            messageId: "msg_trace_target",
+            queueIndex: 1,
+            state: "failed",
+            isRunning: false,
+            summaryPrimary: "执行失败 · 调用 2 个工具（失败 1）",
+            summarySecondary: "Token in 2 / out 3 / total 5 · 消息执行 5s",
+            summaryTone: "error",
+            steps: [
+              {
+                id: "trace_step_1",
+                kind: "tool_call",
+                title: "工具调用",
+                summary: "执行命令 ls -la",
+                detail: "工具：run_command · 风险：低风险 · 操作：command: ls -la",
+                timestampLabel: "00:00:03",
+                statusTone: "warning",
+                rawPayload: "{\"name\":\"run_command\"}"
+              }
+            ]
+          }
+        ]
+      }
+    });
+
+    expect(wrapper.text()).toContain("执行: exec_trace_target");
+    expect(wrapper.text()).toContain("执行失败 · 调用 2 个工具（失败 1）");
+    expect(wrapper.text()).toContain("执行命令 ls -la");
+    expect(wrapper.text()).toContain("查看原始数据");
+  });
+
+  it("falls back to latest trace when inspector selected id is empty", () => {
+    const wrapper = mount(MainInspectorPanel, {
+      props: {
+        diff: [],
+        capability: {
+          can_commit: false,
+          can_discard: false,
+          can_export_patch: false
+        },
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        modelLabel: "MiniMax Primary",
+        executions: [],
+        events: [],
+        activeTab: "trace",
+        selectedTraceExecutionId: "",
+        executionTraces: [
+          {
+            executionId: "exec_trace_first",
+            messageId: "msg_trace_first",
+            queueIndex: 0,
+            state: "completed",
+            isRunning: false,
+            summaryPrimary: "执行完成 · 调用 1 个工具",
+            summarySecondary: "消息执行 4s",
+            summaryTone: "success",
+            steps: []
+          },
+          {
+            executionId: "exec_trace_latest",
+            messageId: "msg_trace_latest",
+            queueIndex: 1,
+            state: "completed",
+            isRunning: false,
+            summaryPrimary: "执行完成 · 调用 2 个工具",
+            summarySecondary: "消息执行 6s",
+            summaryTone: "success",
+            steps: []
+          }
+        ]
+      }
+    });
+
+    expect(wrapper.text()).toContain("执行: exec_trace_latest");
+    expect(wrapper.text()).toContain("执行完成 · 调用 2 个工具");
+  });
+
+  it("renders empty state when inspector trace tab has no data", () => {
+    const wrapper = mount(MainInspectorPanel, {
+      props: {
+        diff: [],
+        capability: {
+          can_commit: false,
+          can_discard: false,
+          can_export_patch: false
+        },
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        modelLabel: "MiniMax Primary",
+        executions: [],
+        events: [],
+        activeTab: "trace",
+        executionTraces: [],
+        selectedTraceExecutionId: ""
+      }
+    });
+
+    expect(wrapper.text()).toContain("暂无详细过程");
   });
 
 });

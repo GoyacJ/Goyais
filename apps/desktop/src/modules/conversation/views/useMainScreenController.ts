@@ -38,7 +38,25 @@ import { useI18n } from "@/shared/i18n";
 import { authStore } from "@/shared/stores/authStore";
 import { useWorkspaceStatusSync } from "@/shared/stores/workspaceStatusStore";
 import { setConversationError } from "@/modules/conversation/store";
-import type { ComposerCatalog, ComposerSuggestion, DiffCapability, InspectorTabKey } from "@/shared/types/api";
+import type { ComposerCatalog, ComposerSuggestion, DiffCapability, ExecutionEvent, InspectorTabKey } from "@/shared/types/api";
+
+type PendingQuestionOptionViewModel = {
+  id: string;
+  label: string;
+  description: string;
+};
+
+type PendingExecutionQuestionViewModel = {
+  executionId: string;
+  messageId: string;
+  queueIndex: number;
+  questionId: string;
+  question: string;
+  options: PendingQuestionOptionViewModel[];
+  recommendedOptionId: string;
+  allowText: boolean;
+  required: boolean;
+};
 
 export function useMainScreenController() {
   const router = useRouter();
@@ -62,6 +80,7 @@ export function useMainScreenController() {
   const inspectorTabs: Array<{ key: InspectorTabKey; label: string }> = [
     { key: "diff", label: "D" },
     { key: "run", label: "R" },
+    { key: "trace", label: "T" },
     { key: "files", label: "F" },
     { key: "risk", label: "!" }
   ];
@@ -110,6 +129,41 @@ export function useMainScreenController() {
   const hasConfirmingExecution = computed(() =>
     (runtime.value?.executions ?? []).some((execution) => execution.state === "confirming")
   );
+  const pendingQuestions = computed<PendingExecutionQuestionViewModel[]>(() => {
+    const currentRuntime = runtime.value;
+    if (!currentRuntime) {
+      return [];
+    }
+    const executionByID = new Map(currentRuntime.executions.map((execution) => [execution.id, execution]));
+    const pendingByExecution = new Map<string, PendingExecutionQuestionViewModel>();
+
+    for (const event of currentRuntime.events) {
+      const pending = toPendingQuestionFromEvent(event, executionByID);
+      if (pending) {
+        pendingByExecution.set(pending.executionId, pending);
+        continue;
+      }
+      if (isPendingQuestionResolvedEvent(event)) {
+        const executionID = event.execution_id.trim();
+        if (executionID === "") {
+          continue;
+        }
+        const questionID = stringOrEmpty(event.payload.question_id);
+        if (questionID === "") {
+          pendingByExecution.delete(executionID);
+          continue;
+        }
+        const current = pendingByExecution.get(executionID);
+        if (current && current.questionId === questionID) {
+          pendingByExecution.delete(executionID);
+        }
+      }
+    }
+
+    return [...pendingByExecution.values()]
+      .filter((item) => executionByID.get(item.executionId)?.state === "awaiting_input")
+      .sort((left, right) => left.queueIndex - right.queueIndex);
+  });
   const {
     queuedMessages,
     visibleMessages,
@@ -131,7 +185,9 @@ export function useMainScreenController() {
   const {
     activeTraceCount,
     executionTraces,
-    toggleExecutionTrace
+    selectedExecutionTrace,
+    selectedTraceExecutionId,
+    selectExecutionTrace
   } = useExecutionTraceState(visibleExecutionTraces);
   const { runningActions } = useRunningActionsView(runtime, {
     locale,
@@ -199,6 +255,12 @@ export function useMainScreenController() {
     projectImportError,
     resolveSemanticModelID: modelState.resolveSemanticModelID
   });
+
+  function selectTraceInInspector(executionId: string): void {
+    selectExecutionTrace(executionId);
+    actions.openInspectorTab("trace");
+    inspectorCollapsed.value = false;
+  }
 
   async function refreshComposerCatalogForActiveConversation(): Promise<void> {
     const conversationId = activeConversation.value?.id?.trim() ?? "";
@@ -505,6 +567,7 @@ export function useMainScreenController() {
     activeConversation,
     activeCount,
     hasConfirmingExecution,
+    pendingQuestions,
     activeModelId: modelState.activeModelId,
     activeModelLabel: modelState.activeModelLabel,
     activeProject,
@@ -528,6 +591,8 @@ export function useMainScreenController() {
     requestComposerSuggestions,
     clearComposerSuggestions,
     executionTraces,
+    selectedExecutionTrace,
+    selectedTraceExecutionId,
     projectImportError,
     projectImportFeedback,
     projectImportInProgress,
@@ -541,8 +606,99 @@ export function useMainScreenController() {
     runtimeHubLabel: workspaceStatus.hubURL,
     runtimeUserDisplayName: workspaceStatus.userDisplayName,
     runningActions,
-    toggleExecutionTrace,
+    selectTraceInInspector,
     workspaceLabel,
     workspaceStore
   };
+}
+
+function toPendingQuestionFromEvent(
+  event: ExecutionEvent,
+  executionByID: Map<string, { id: string; message_id: string; queue_index: number }>
+): PendingExecutionQuestionViewModel | null {
+  if (event.type !== "thinking_delta") {
+    return null;
+  }
+  if (stringOrEmpty(event.payload.stage) !== "run_user_question_needed") {
+    return null;
+  }
+  const executionID = event.execution_id.trim();
+  if (executionID === "") {
+    return null;
+  }
+  const execution = executionByID.get(executionID);
+  if (!execution) {
+    return null;
+  }
+  const questionID = stringOrEmpty(event.payload.question_id);
+  const question = stringOrEmpty(event.payload.question);
+  if (questionID === "" || question === "") {
+    return null;
+  }
+  const options = normalizePendingQuestionOptions(event.payload.options);
+  const allowTextRaw = event.payload.allow_text;
+  const requiredRaw = event.payload.required;
+  const allowText = typeof allowTextRaw === "boolean" ? allowTextRaw : true;
+  const required = typeof requiredRaw === "boolean" ? requiredRaw : true;
+  const recommendedOptionId = stringOrEmpty(event.payload.recommended_option_id);
+
+  if (!allowText && options.length === 0) {
+    return null;
+  }
+
+  return {
+    executionId: executionID,
+    messageId: execution.message_id,
+    queueIndex: execution.queue_index,
+    questionId: questionID,
+    question,
+    options,
+    recommendedOptionId,
+    allowText,
+    required
+  };
+}
+
+function isPendingQuestionResolvedEvent(event: ExecutionEvent): boolean {
+  return event.type === "thinking_delta" && stringOrEmpty(event.payload.stage) === "run_user_question_resolved";
+}
+
+function normalizePendingQuestionOptions(raw: unknown): PendingQuestionOptionViewModel[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const options: PendingQuestionOptionViewModel[] = [];
+  for (const item of raw) {
+    if (typeof item === "string") {
+      const label = item.trim();
+      if (label === "") {
+        continue;
+      }
+      options.push({
+        id: `option_${options.length + 1}`,
+        label,
+        description: ""
+      });
+      continue;
+    }
+    if (typeof item !== "object" || item === null) {
+      continue;
+    }
+    const entry = item as Record<string, unknown>;
+    const label = stringOrEmpty(entry.label);
+    if (label === "") {
+      continue;
+    }
+    const id = stringOrEmpty(entry.id) || `option_${options.length + 1}`;
+    options.push({
+      id,
+      label,
+      description: stringOrEmpty(entry.description)
+    });
+  }
+  return options;
+}
+
+function stringOrEmpty(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }

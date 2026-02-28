@@ -2,65 +2,63 @@ import { computed, ref, watch, type Ref } from "vue";
 
 import type { ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
 
-export type ExecutionTraceViewState = ExecutionTraceViewModel & {
-  isExpanded: boolean;
-};
-
 export function useExecutionTraceState(baseExecutionTraces: Ref<ExecutionTraceViewModel[]>) {
-  const traceExpandedByExecutionId = ref<Record<string, boolean>>({});
-  const tracePinnedByExecutionId = ref<Record<string, boolean>>({});
-
-  const executionTraces = computed<ExecutionTraceViewState[]>(() =>
-    baseExecutionTraces.value.map((trace) => ({
-      ...trace,
-      isExpanded: traceExpandedByExecutionId.value[trace.executionId] ?? false
-    }))
-  );
+  const selectedTraceExecutionId = ref("");
+  const executionTraces = computed<ExecutionTraceViewModel[]>(() => baseExecutionTraces.value);
   const activeTraceCount = computed(() => executionTraces.value.filter((trace) => trace.isRunning).length);
+  const selectedExecutionTrace = computed<ExecutionTraceViewModel | undefined>(() => {
+    const traces = executionTraces.value;
+    if (traces.length <= 0) {
+      return undefined;
+    }
+    const normalizedSelectedExecutionId = selectedTraceExecutionId.value.trim();
+    if (normalizedSelectedExecutionId !== "") {
+      const selectedTrace = traces.find((trace) => trace.executionId === normalizedSelectedExecutionId);
+      if (selectedTrace) {
+        return selectedTrace;
+      }
+    }
+    return traces[traces.length - 1];
+  });
 
   watch(
     baseExecutionTraces,
     (traces) => {
-      const expanded = { ...traceExpandedByExecutionId.value };
-      const pinned = { ...tracePinnedByExecutionId.value };
-      const traceIDs = new Set(traces.map((trace) => trace.executionId));
-
-      for (const executionId of Object.keys(expanded)) {
-        if (!traceIDs.has(executionId)) {
-          delete expanded[executionId];
-          delete pinned[executionId];
-        }
+      if (traces.length <= 0) {
+        selectedTraceExecutionId.value = "";
+        return;
       }
-      for (const trace of traces) {
-        if (!(trace.executionId in expanded)) {
-          expanded[trace.executionId] = false;
-          continue;
-        }
-        if (!pinned[trace.executionId] && !trace.isRunning) {
-          expanded[trace.executionId] = false;
-        }
+      const selectedExecutionId = selectedTraceExecutionId.value.trim();
+      if (selectedExecutionId === "") {
+        selectedTraceExecutionId.value = traces[traces.length - 1]?.executionId ?? "";
+        return;
       }
-
-      traceExpandedByExecutionId.value = expanded;
-      tracePinnedByExecutionId.value = pinned;
+      const isStillVisible = traces.some((trace) => trace.executionId === selectedExecutionId);
+      if (isStillVisible) {
+        return;
+      }
+      selectedTraceExecutionId.value = traces[traces.length - 1]?.executionId ?? "";
     },
     { immediate: true }
   );
 
-  function toggleExecutionTrace(executionId: string, expanded: boolean): void {
-    traceExpandedByExecutionId.value = {
-      ...traceExpandedByExecutionId.value,
-      [executionId]: expanded
-    };
-    tracePinnedByExecutionId.value = {
-      ...tracePinnedByExecutionId.value,
-      [executionId]: true
-    };
+  function selectExecutionTrace(executionId: string): void {
+    const normalizedExecutionId = executionId.trim();
+    if (normalizedExecutionId === "") {
+      return;
+    }
+    const matchedTrace = executionTraces.value.some((trace) => trace.executionId === normalizedExecutionId);
+    if (!matchedTrace) {
+      return;
+    }
+    selectedTraceExecutionId.value = normalizedExecutionId;
   }
 
   return {
     activeTraceCount,
     executionTraces,
-    toggleExecutionTrace
+    selectedExecutionTrace,
+    selectedTraceExecutionId,
+    selectExecutionTrace
   };
 }

@@ -1,8 +1,8 @@
 <template>
   <aside class="inspector">
     <div class="head">
-      <p class="title">Inspector</p>
-      <button class="collapse-btn" type="button" title="最小化 Inspector" @click="$emit('toggleCollapse')">
+      <p class="title">{{ t("conversation.inspector.title") }}</p>
+      <button class="collapse-btn" type="button" :title="t('conversation.inspector.action.collapse')" @click="$emit('toggleCollapse')">
         <AppIcon name="panel-right-close" :size="12" />
       </button>
     </div>
@@ -22,8 +22,8 @@
 
     <section v-if="activeTab === 'diff'" class="card">
       <div class="card-head">
-        <strong>Diff</strong>
-        <span>{{ diff.length }} files</span>
+        <strong>{{ t("conversation.inspector.tab.diff") }}</strong>
+        <span>{{ tf("conversation.inspector.diff.filesCount", { count: diff.length }) }}</span>
       </div>
 
       <div class="diff-list">
@@ -35,39 +35,83 @@
 
       <div class="actions">
         <button class="action" type="button" :disabled="!capability.can_commit" @click="$emit('commit')">
-          Commit
+          {{ t("conversation.inspector.action.commit") }}
         </button>
         <button class="action" type="button" :disabled="!capability.can_discard" @click="$emit('discard')">
-          Discard
+          {{ t("conversation.inspector.action.discard") }}
         </button>
         <button class="action" type="button" :disabled="!capability.can_export_patch" @click="$emit('exportPatch')">
-          Export Patch
+          {{ t("conversation.inspector.action.exportPatch") }}
         </button>
       </div>
       <p v-if="capability.reason" class="reason">{{ capability.reason }}</p>
     </section>
 
     <section v-else-if="activeTab === 'run'" class="card">
-      <strong>Execution</strong>
-      <p>Pending: {{ pendingCount }} · Executing: {{ executingCount }} · Queued: {{ queuedCount }}</p>
+      <strong>{{ t("conversation.inspector.tab.run") }}</strong>
+      <p>
+        {{
+          tf("conversation.inspector.run.counts", {
+            pending: pendingCount,
+            executing: executingCount,
+            queued: queuedCount
+          })
+        }}
+      </p>
       <p v-if="latestExecutionLabel" class="normal">{{ latestExecutionLabel }}</p>
       <p v-if="latestExecutionMetrics" class="normal">{{ latestExecutionMetrics }}</p>
       <p :class="runHintTone">{{ runHint }}</p>
     </section>
 
+    <section v-else-if="activeTab === 'trace'" class="card trace-card">
+      <strong>{{ t("conversation.inspector.tab.trace") }}</strong>
+      <p v-if="!selectedTrace" class="normal">{{ t("conversation.inspector.trace.empty") }}</p>
+      <template v-else>
+        <p class="normal">{{ tf("conversation.inspector.trace.execution", { id: selectedTrace.executionId }) }}</p>
+        <p class="trace-summary-primary" :data-tone="selectedTrace.summaryTone">{{ selectedTrace.summaryPrimary }}</p>
+        <p v-if="selectedTrace.summarySecondary !== ''" class="trace-summary-secondary">{{ selectedTrace.summarySecondary }}</p>
+
+        <div class="trace-steps">
+          <div v-for="step in selectedTrace.steps" :key="step.id" class="trace-step" :data-tone="step.statusTone">
+            <div class="trace-step-main">
+              <span class="trace-step-title">{{ step.title }}</span>
+              <span class="trace-step-summary">{{ step.summary }}</span>
+              <span v-if="step.timestampLabel !== ''" class="trace-step-time">{{ step.timestampLabel }}</span>
+            </div>
+            <p v-if="step.detail !== ''" class="trace-step-detail">{{ step.detail }}</p>
+            <details v-if="step.rawPayload !== ''" class="trace-step-raw">
+              <summary class="trace-step-raw-summary">{{ t("conversation.trace.raw.expand") }}</summary>
+              <pre class="trace-step-raw-content">{{ step.rawPayload }}</pre>
+            </details>
+          </div>
+        </div>
+      </template>
+    </section>
+
     <section v-else-if="activeTab === 'files'" class="card">
-      <strong>Files</strong>
-      <p v-if="diff.length === 0" class="normal">暂无文件变更</p>
+      <strong>{{ t("conversation.inspector.tab.files") }}</strong>
+      <p v-if="diff.length === 0" class="normal">{{ t("conversation.inspector.files.empty") }}</p>
       <ul v-else class="files-list">
         <li v-for="item in diff" :key="`${item.id}-file`">{{ item.path }}</li>
       </ul>
     </section>
 
     <section v-else class="card">
-      <strong>Risk</strong>
-      <p class="warning">模型: {{ modelLabel }}</p>
+      <strong>{{ t("conversation.inspector.tab.risk") }}</strong>
+      <p class="warning">{{ tf("conversation.inspector.risk.model", { model: modelLabel }) }}</p>
       <p class="normal">{{ riskSummary }}</p>
-      <p class="normal">low: {{ riskLow }} · high: {{ riskHigh }} · critical: {{ riskCritical }}</p>
+      <p class="normal">
+        {{
+          tf("conversation.inspector.risk.counts", {
+            lowLabel: t("conversation.trace.risk.low"),
+            low: riskLow,
+            highLabel: t("conversation.trace.risk.high"),
+            high: riskHigh,
+            criticalLabel: t("conversation.trace.risk.critical"),
+            critical: riskCritical
+          })
+        }}
+      </p>
     </section>
   </aside>
 </template>
@@ -75,6 +119,8 @@
 <script setup lang="ts">
 import { computed, toRefs } from "vue";
 
+import type { ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
+import { useI18n } from "@/shared/i18n";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import type { DiffCapability, DiffItem, Execution, ExecutionEvent, InspectorTabKey } from "@/shared/types/api";
 
@@ -86,14 +132,7 @@ defineEmits<{
   (event: "toggleCollapse"): void;
 }>();
 
-const tabs: Array<{ key: InspectorTabKey; label: string }> = [
-  { key: "diff", label: "Diff" },
-  { key: "run", label: "Run" },
-  { key: "files", label: "Files" },
-  { key: "risk", label: "Risk" }
-];
-
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   diff: DiffItem[];
   capability: DiffCapability;
   queuedCount: number;
@@ -102,18 +141,45 @@ const props = defineProps<{
   modelLabel: string;
   executions: Execution[];
   events: ExecutionEvent[];
+  executionTraces?: ExecutionTraceViewModel[];
+  selectedTraceExecutionId?: string;
   activeTab: InspectorTabKey;
-}>();
-const { activeTab, capability, diff, events, executions, executingCount, modelLabel, pendingCount, queuedCount } = toRefs(props);
+}>(), {
+  executionTraces: () => [],
+  selectedTraceExecutionId: ""
+});
+
+const {
+  activeTab,
+  capability,
+  diff,
+  events,
+  executions,
+  executionTraces,
+  executingCount,
+  modelLabel,
+  pendingCount,
+  queuedCount,
+  selectedTraceExecutionId
+} = toRefs(props);
+
+const { t } = useI18n();
+const tabs = computed<Array<{ key: InspectorTabKey; label: string }>>(() => [
+  { key: "diff", label: t("conversation.inspector.tab.diff") },
+  { key: "run", label: t("conversation.inspector.tab.run") },
+  { key: "trace", label: t("conversation.inspector.tab.trace") },
+  { key: "files", label: t("conversation.inspector.tab.files") },
+  { key: "risk", label: t("conversation.inspector.tab.risk") }
+]);
 
 const runHint = computed(() => {
   if (pendingCount.value > 0 || executingCount.value > 0) {
-    return "执行中";
+    return t("conversation.inspector.run.hint.executing");
   }
   if (queuedCount.value > 0) {
-    return "消息将按 FIFO 排队执行";
+    return t("conversation.inspector.run.hint.queued");
   }
-  return "当前没有运行或排队任务";
+  return t("conversation.inspector.run.hint.idle");
 });
 
 const runHintTone = computed(() => (queuedCount.value > 0 ? "warning" : "normal"));
@@ -126,7 +192,10 @@ const latestExecutionLabel = computed(() => {
   if (!latestExecution.value) {
     return "";
   }
-  return `最近执行: ${latestExecution.value.id} (${latestExecution.value.state})`;
+  return tf("conversation.inspector.run.latestExecution", {
+    id: latestExecution.value.id,
+    state: latestExecution.value.state
+  });
 });
 
 const latestExecutionMetrics = computed(() => {
@@ -140,9 +209,27 @@ const latestExecutionMetrics = computed(() => {
   const tokensIn = toOptionalNonNegativeInteger(execution.tokens_in);
   const tokensOut = toOptionalNonNegativeInteger(execution.tokens_out);
   const tokenLabel = tokensIn === null || tokensOut === null
-    ? "Token N/A"
-    : `Token in ${tokensIn} / out ${tokensOut} / total ${tokensIn + tokensOut}`;
-  return `${tokenLabel} · 消息执行 ${durationSec}s`;
+    ? t("conversation.inspector.run.tokenNotAvailable")
+    : tf("conversation.inspector.run.tokenUsage", {
+      input: tokensIn,
+      output: tokensOut,
+      total: tokensIn + tokensOut
+    });
+  return tf("conversation.inspector.run.metrics", { token: tokenLabel, duration: durationSec });
+});
+
+const selectedTrace = computed<ExecutionTraceViewModel | null>(() => {
+  if (executionTraces.value.length <= 0) {
+    return null;
+  }
+  const selectedExecutionId = selectedTraceExecutionId.value.trim();
+  if (selectedExecutionId !== "") {
+    const matched = executionTraces.value.find((trace) => trace.executionId === selectedExecutionId);
+    if (matched) {
+      return matched;
+    }
+  }
+  return executionTraces.value[executionTraces.value.length - 1] ?? null;
 });
 
 const riskCounters = computed(() => {
@@ -173,9 +260,9 @@ const riskCritical = computed(() => riskCounters.value.critical);
 const riskSummary = computed(() => {
   const total = riskLow.value + riskHigh.value + riskCritical.value;
   if (total === 0) {
-    return "当前会话暂无工具风险事件。";
+    return t("conversation.inspector.risk.summary.empty");
   }
-  return `当前会话累计 ${total} 次工具风险事件。`;
+  return tf("conversation.inspector.risk.summary.total", { total });
 });
 
 function mapChange(type: DiffItem["change_type"]): string {
@@ -208,6 +295,16 @@ function toOptionalNonNegativeInteger(value: unknown): number | null {
     return 0;
   }
   return Math.trunc(value);
+}
+
+function tf(key: string, params: Record<string, string | number>): string {
+  const template = t(key);
+  return template.replace(/\{(\w+)\}/g, (_, token: string) => {
+    if (!(token in params)) {
+      return `{${token}}`;
+    }
+    return String(params[token]);
+  });
 }
 </script>
 
