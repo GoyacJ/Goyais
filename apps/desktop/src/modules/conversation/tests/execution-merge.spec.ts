@@ -21,6 +21,23 @@ describe("execution merge", () => {
     expect(normalized[0]?.id).toBe("exec_1");
     expect(normalized[0]?.state).toBe("completed");
   });
+
+  it("allows execution state to move between executing and confirming", () => {
+    const duplicated: Execution[] = [
+      buildExecution({
+        id: "exec_2",
+        state: "confirming"
+      }),
+      buildExecution({
+        id: "exec_2",
+        state: "executing"
+      })
+    ];
+
+    const normalized = normalizeExecutionList(duplicated);
+    expect(normalized).toHaveLength(1);
+    expect(normalized[0]?.state).toBe("executing");
+  });
 });
 
 function buildExecution(

@@ -90,7 +90,7 @@ function buildExecutionTraceViewModel(
     messageId: execution.message_id,
     queueIndex: execution.queue_index,
     state: execution.state,
-    isRunning: execution.state === "pending" || execution.state === "executing",
+    isRunning: execution.state === "pending" || execution.state === "executing" || execution.state === "confirming",
     summary,
     steps: events.map((event, index) => toExecutionTraceStep(event, detailLevel, index))
   };
@@ -170,6 +170,9 @@ function buildSummary(
   if (state === "pending" || state === "executing") {
     const thinkingText = thinkingCount > 0 ? `已思考 ${durationSec}s` : `执行中 ${durationSec}s`;
     return `${thinkingText}，已调用 ${toolCallCount} 个工具，Token ${tokenSummary}，消息执行 ${messageDurationSec}s`;
+  }
+  if (state === "confirming") {
+    return `等待授权，已思考 ${durationSec}s，已调用 ${toolCallCount} 个工具，Token ${tokenSummary}，消息执行 ${messageDurationSec}s`;
   }
   return base;
 }

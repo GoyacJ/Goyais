@@ -29,7 +29,7 @@ func mapExecutionEventToRunEvent(event ExecutionEvent) protocol.RunEvent {
 	}
 
 	return protocol.RunEvent{
-		Type:      mapExecutionEventTypeToRunEventType(event.Type),
+		Type:      mapExecutionEventToRunEventType(event),
 		SessionID: resolveSessionIDFromExecutionEvent(event),
 		RunID:     resolveRunIDFromExecutionEvent(event),
 		Sequence:  sequence,
@@ -38,7 +38,8 @@ func mapExecutionEventToRunEvent(event ExecutionEvent) protocol.RunEvent {
 	}
 }
 
-func mapExecutionEventTypeToRunEventType(eventType ExecutionEventType) protocol.RunEventType {
+func mapExecutionEventToRunEventType(event ExecutionEvent) protocol.RunEventType {
+	eventType := event.Type
 	switch eventType {
 	case ExecutionEventTypeMessageReceived:
 		return protocol.RunEventTypeRunQueued
@@ -50,8 +51,12 @@ func mapExecutionEventTypeToRunEventType(eventType ExecutionEventType) protocol.
 		return protocol.RunEventTypeRunFailed
 	case ExecutionEventTypeExecutionStopped:
 		return protocol.RunEventTypeRunCancelled
-	case ExecutionEventTypeThinkingDelta,
-		ExecutionEventTypeToolCall,
+	case ExecutionEventTypeThinkingDelta:
+		if stage := strings.TrimSpace(asStringValue(event.Payload["stage"])); stage == "run_approval_needed" {
+			return protocol.RunEventTypeRunApprovalNeeded
+		}
+		return protocol.RunEventTypeRunOutputDelta
+	case ExecutionEventTypeToolCall,
 		ExecutionEventTypeToolResult,
 		ExecutionEventTypeDiffGenerated:
 		return protocol.RunEventTypeRunOutputDelta
@@ -68,7 +73,7 @@ func mapExecutionStateToRunState(executionState ExecutionState) (corestate.RunSt
 		return corestate.RunStateQueued, nil
 	case string(ExecutionStateExecuting):
 		return corestate.RunStateRunning, nil
-	case "confirming", string(corestate.RunStateWaitingApproval):
+	case string(ExecutionStateConfirming), string(corestate.RunStateWaitingApproval):
 		return corestate.RunStateWaitingApproval, nil
 	case string(ExecutionStateCompleted):
 		return corestate.RunStateCompleted, nil
@@ -86,12 +91,12 @@ func mapRunStateToExecutionState(runState corestate.RunState, current ExecutionS
 	case corestate.RunStateQueued:
 		return ExecutionStateQueued
 	case corestate.RunStateRunning:
-		if current == ExecutionStateExecuting {
+		if current == ExecutionStateExecuting || current == ExecutionStateConfirming {
 			return ExecutionStateExecuting
 		}
 		return ExecutionStatePending
 	case corestate.RunStateWaitingApproval:
-		return ExecutionState("confirming")
+		return ExecutionStateConfirming
 	case corestate.RunStateCompleted:
 		return ExecutionStateCompleted
 	case corestate.RunStateFailed:

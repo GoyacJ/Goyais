@@ -130,4 +130,33 @@ describe("running actions view", () => {
     expect(actions[0]?.label).toBe("工具 read_file");
     expect(actions[0]?.elapsedLabel).toBe("3s");
   });
+
+  it("shows approval action while execution is confirming", () => {
+    const confirmingExecution: Execution = {
+      ...baseExecution,
+      id: "exec_confirming_1",
+      state: "confirming"
+    };
+    const events: ExecutionEvent[] = [
+      {
+        ...baseEvent,
+        execution_id: "exec_confirming_1",
+        event_id: "evt_approval_needed",
+        type: "thinking_delta",
+        sequence: 1,
+        timestamp: "2026-02-24T00:02:00Z",
+        payload: {
+          stage: "run_approval_needed",
+          call_id: "call_approval_1",
+          name: "Bash"
+        }
+      }
+    ];
+
+    const actions = buildRunningActionViewModels(events, [confirmingExecution], new Date("2026-02-24T00:02:04Z"));
+    expect(actions).toHaveLength(1);
+    expect(actions[0]?.type).toBe("approval");
+    expect(actions[0]?.label).toBe("等待授权 Bash");
+    expect(actions[0]?.elapsedLabel).toBe("4s");
+  });
 });

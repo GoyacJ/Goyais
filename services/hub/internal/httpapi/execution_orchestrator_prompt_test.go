@@ -99,3 +99,21 @@ func TestBuildExecutionSystemPromptIncludesResourceSections(t *testing.T) {
 		t.Fatalf("expected mcp section, got %q", prompt)
 	}
 }
+
+func TestBuildExecutionSystemPromptIncludesBaselineInstructions(t *testing.T) {
+	state := NewAppState(nil)
+	prompt := buildExecutionSystemPrompt(
+		state,
+		localWorkspaceID,
+		&ExecutionResourceProfile{},
+		nil,
+		"",
+	)
+
+	if !strings.Contains(prompt, "You are a terminal-first software engineering agent.") {
+		t.Fatalf("expected baseline role instruction, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "Use absolute file paths when referring to files.") {
+		t.Fatalf("expected baseline output policy instruction, got %q", prompt)
+	}
+}

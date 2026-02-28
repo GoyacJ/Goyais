@@ -1,6 +1,7 @@
 import {
   cancelExecution,
   commitExecution,
+  controlExecutionRun,
   discardExecution,
   loadExecutionDiff,
   rollbackExecution,
@@ -139,13 +140,51 @@ export async function stopConversationExecution(conversation: Conversation): Pro
     return;
   }
 
-  const active = runtime.executions.find((item) => item.state === "executing" || item.state === "pending");
+  const active = runtime.executions.find(
+    (item) => item.state === "executing" || item.state === "pending" || item.state === "confirming"
+  );
   if (!active) {
     return;
   }
 
   try {
     await cancelExecution(conversation.id, active.id);
+  } catch (error) {
+    conversationStore.error = toDisplayError(error);
+  }
+}
+
+export async function approveConversationExecution(conversation: Conversation): Promise<void> {
+  const runtime = conversationStore.byConversationId[conversation.id];
+  if (!runtime) {
+    return;
+  }
+
+  const confirming = runtime.executions.find((item) => item.state === "confirming");
+  if (!confirming) {
+    return;
+  }
+
+  try {
+    await controlExecutionRun(confirming.id, "approve");
+  } catch (error) {
+    conversationStore.error = toDisplayError(error);
+  }
+}
+
+export async function denyConversationExecution(conversation: Conversation): Promise<void> {
+  const runtime = conversationStore.byConversationId[conversation.id];
+  if (!runtime) {
+    return;
+  }
+
+  const confirming = runtime.executions.find((item) => item.state === "confirming");
+  if (!confirming) {
+    return;
+  }
+
+  try {
+    await controlExecutionRun(confirming.id, "deny");
   } catch (error) {
     conversationStore.error = toDisplayError(error);
   }

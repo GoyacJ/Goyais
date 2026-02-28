@@ -244,7 +244,10 @@ export function findSnapshotForMessage(conversationId: string, messageId: string
 export function countActiveAndQueued(runtime: ConversationRuntime): number {
   const executions = normalizeExecutionList(runtime.executions);
   return executions.filter((execution) =>
-    execution.state === "queued" || execution.state === "pending" || execution.state === "executing"
+    execution.state === "queued" ||
+    execution.state === "pending" ||
+    execution.state === "executing" ||
+    execution.state === "confirming"
   ).length;
 }
 
@@ -260,7 +263,7 @@ export function getExecutionStateCounts(runtime: ConversationRuntime): {
         acc.queued += 1;
       } else if (execution.state === "pending") {
         acc.pending += 1;
-      } else if (execution.state === "executing") {
+      } else if (execution.state === "executing" || execution.state === "confirming") {
         acc.executing += 1;
       }
       return acc;

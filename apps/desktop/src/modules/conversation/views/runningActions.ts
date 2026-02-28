@@ -1,6 +1,6 @@
 import type { Execution, ExecutionEvent } from "@/shared/types/api";
 
-export type RunningActionType = "model" | "tool" | "subagent";
+export type RunningActionType = "model" | "tool" | "subagent" | "approval";
 
 export type RunningActionViewModel = {
   actionId: string;
@@ -36,7 +36,7 @@ export function buildRunningActionViewModels(
 ): RunningActionViewModel[] {
   const groupedEvents = groupExecutionEvents(events);
   const runningExecutions = executions
-    .filter((execution) => execution.state === "pending" || execution.state === "executing")
+    .filter((execution) => execution.state === "pending" || execution.state === "executing" || execution.state === "confirming")
     .sort((left, right) => {
       if (left.queue_index !== right.queue_index) {
         return left.queue_index - right.queue_index;
@@ -128,6 +128,29 @@ function handleThinkingDeltaEvent(
   activeModelActionIds: string[]
 ): void {
   const stage = asString(event.payload.stage);
+  if (stage === "run_approval_needed") {
+    const callID = asString(event.payload.call_id);
+    const actionId = callID !== ""
+      ? `approval:${execution.id}:${callID}`
+      : `approval:${execution.id}:seq:${event.sequence}`;
+    activeActions.set(actionId, {
+      actionId,
+      executionId: execution.id,
+      queueIndex: execution.queue_index,
+      type: "approval",
+      name: asString(event.payload.name) || "tool",
+      startedAt: event.timestamp
+    });
+    return;
+  }
+  if (stage === "approval_granted" || stage === "approval_denied" || stage === "approval_resolved") {
+    for (const action of [...activeActions.values()]) {
+      if (action.type === "approval") {
+        activeActions.delete(action.actionId);
+      }
+    }
+    return;
+  }
   if (stage === "model_call") {
     const actionId = `model:${execution.id}:${event.sequence}`;
     activeModelActionIds.push(actionId);
@@ -206,6 +229,9 @@ function asString(value: unknown): string {
 function toRunningActionLabel(action: ActiveAction): string {
   if (action.type === "model") {
     return "模型推理";
+  }
+  if (action.type === "approval") {
+    return `等待授权 ${action.name}`;
   }
   if (action.type === "subagent") {
     return `子代理 ${action.name}`;

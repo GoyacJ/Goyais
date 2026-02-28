@@ -38,6 +38,14 @@ export function ensureExecution(runtime: ConversationRuntime, conversationId: st
 }
 
 export function applyExecutionState(execution: Execution, event: ExecutionEvent): void {
+  if (event.type === "thinking_delta") {
+    const runState = asString(event.payload.run_state);
+    if (runState === "waiting_approval") {
+      execution.state = resolveMergedExecutionState(execution.state, "confirming");
+      execution.updated_at = event.timestamp;
+      return;
+    }
+  }
   const nextState = executionStateByEventType[event.type];
   if (nextState) {
     execution.state = resolveMergedExecutionState(execution.state, nextState);
@@ -56,6 +64,10 @@ const executionStateByEventType: Partial<Record<ExecutionEvent["type"], Executio
   execution_done: "completed",
   execution_error: "failed"
 };
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
 
 function parseUsageFromPayload(payload: Record<string, unknown>): { inputTokens: number; outputTokens: number } | null {
   const usage = payload.usage;

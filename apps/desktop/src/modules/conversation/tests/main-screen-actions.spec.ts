@@ -7,7 +7,9 @@ import { useMainScreenActions } from "@/modules/conversation/views/useMainScreen
 import type { Conversation, ConversationMessage, Project } from "@/shared/types/api";
 
 const conversationStoreMocks = vi.hoisted(() => ({
+  approveConversationExecution: vi.fn(),
   commitLatestDiff: vi.fn(),
+  denyConversationExecution: vi.fn(),
   discardLatestDiff: vi.fn(),
   getLatestFinishedExecution: vi.fn(),
   rollbackConversationToMessage: vi.fn(),

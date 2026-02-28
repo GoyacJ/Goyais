@@ -64,6 +64,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		now := time.Now().UTC().Format(time.RFC3339)
 		cancelExecutionID := ""
 		nextExecutionToSubmit := ""
+		var controlSignalAction *corestate.ControlAction
 		state.mu.Lock()
 		execution, exists := state.executions[runID]
 		if !exists {
@@ -121,11 +122,29 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
-			conversation.ActiveExecutionID = &execution.ID
+			activeID := execution.ID
+			conversation.ActiveExecutionID = &activeID
 			conversation.QueueState = QueueStateRunning
 			if execution.State == ExecutionStateQueued {
 				execution.State = ExecutionStatePending
 				nextExecutionToSubmit = execution.ID
+			} else if execution.State == ExecutionStateConfirming {
+				desiredState = ExecutionStateExecuting
+				actionCopy := action
+				controlSignalAction = &actionCopy
+				appendExecutionEventLocked(state, ExecutionEvent{
+					ExecutionID:    execution.ID,
+					ConversationID: execution.ConversationID,
+					TraceID:        TraceIDFromContext(r.Context()),
+					QueueIndex:     execution.QueueIndex,
+					Type:           ExecutionEventTypeThinkingDelta,
+					Timestamp:      now,
+					Payload: map[string]any{
+						"stage":  "approval_resolved",
+						"action": string(action),
+						"source": "run_control",
+					},
+				})
 			}
 			appendExecutionEventLocked(state, ExecutionEvent{
 				ExecutionID:    execution.ID,
@@ -139,7 +158,57 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 					"source": "run_control",
 				},
 			})
-		case corestate.ControlActionDeny, corestate.ControlActionStop:
+		case corestate.ControlActionDeny:
+			if execution.State == ExecutionStateConfirming {
+				desiredState = ExecutionStateExecuting
+				actionCopy := action
+				controlSignalAction = &actionCopy
+				appendExecutionEventLocked(state, ExecutionEvent{
+					ExecutionID:    execution.ID,
+					ConversationID: execution.ConversationID,
+					TraceID:        TraceIDFromContext(r.Context()),
+					QueueIndex:     execution.QueueIndex,
+					Type:           ExecutionEventTypeThinkingDelta,
+					Timestamp:      now,
+					Payload: map[string]any{
+						"stage":  "approval_denied",
+						"action": string(action),
+						"source": "run_control",
+					},
+				})
+				activeID := execution.ID
+				conversation.ActiveExecutionID = &activeID
+				conversation.QueueState = QueueStateRunning
+			} else {
+				cancelExecutionID = execution.ID
+				appendExecutionEventLocked(state, ExecutionEvent{
+					ExecutionID:    execution.ID,
+					ConversationID: execution.ConversationID,
+					TraceID:        TraceIDFromContext(r.Context()),
+					QueueIndex:     execution.QueueIndex,
+					Type:           ExecutionEventTypeExecutionStopped,
+					Timestamp:      now,
+					Payload: map[string]any{
+						"action": string(action),
+						"source": "run_control",
+					},
+				})
+
+				if conversation.ActiveExecutionID != nil && *conversation.ActiveExecutionID == execution.ID {
+					conversation.ActiveExecutionID = nil
+					nextID := startNextQueuedExecutionLocked(state, conversation.ID)
+					if nextID == "" {
+						conversation.QueueState = QueueStateIdle
+					} else {
+						conversation.ActiveExecutionID = &nextID
+						conversation.QueueState = QueueStateRunning
+						nextExecutionToSubmit = nextID
+					}
+				} else {
+					conversation.QueueState = deriveQueueStateLocked(state, conversation.ID, conversation.ActiveExecutionID)
+				}
+			}
+		case corestate.ControlActionStop:
 			cancelExecutionID = execution.ID
 			appendExecutionEventLocked(state, ExecutionEvent{
 				ExecutionID:    execution.ID,
@@ -176,6 +245,9 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		state.conversations[conversation.ID] = conversation
 		state.mu.Unlock()
 		syncExecutionDomainBestEffort(state)
+		if controlSignalAction != nil && state.orchestrator != nil {
+			state.orchestrator.Control(execution.ID, *controlSignalAction)
+		}
 		if cancelExecutionID != "" && state.orchestrator != nil {
 			state.orchestrator.Cancel(cancelExecutionID)
 		}

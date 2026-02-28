@@ -2,7 +2,10 @@ package httpapi
 
 import (
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestRunControlEndpoint_DenyQueuedRun(t *testing.T) {
@@ -36,7 +39,7 @@ func TestRunControlEndpoint_DenyQueuedRun(t *testing.T) {
 	conversationID := conversationPayload["id"].(string)
 
 	first := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
-		"raw_input":         "first",
+		"raw_input":       "first",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if first.Code != http.StatusCreated {
@@ -44,7 +47,7 @@ func TestRunControlEndpoint_DenyQueuedRun(t *testing.T) {
 	}
 
 	second := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
-		"raw_input":         "second",
+		"raw_input":       "second",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if second.Code != http.StatusCreated {
@@ -110,7 +113,7 @@ func TestRunControlEndpoint_StopTransitionsRun(t *testing.T) {
 	conversationID := conversationPayload["id"].(string)
 
 	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
-		"raw_input":         "stop this run",
+		"raw_input":       "stop this run",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
 	if messageRes.Code != http.StatusCreated {
@@ -130,5 +133,62 @@ func TestRunControlEndpoint_StopTransitionsRun(t *testing.T) {
 	mustDecodeJSON(t, controlRes.Body.Bytes(), &controlPayload)
 	if controlRes.Code == http.StatusOK && controlPayload["state"] != string(ExecutionStateCancelled) {
 		t.Fatalf("expected cancelled state on successful stop, got %#v", controlPayload["state"])
+	}
+}
+
+func TestRunControlEndpoint_DenyConfirmingRunResumesExecution(t *testing.T) {
+	state := NewAppState(nil)
+	handler := RunControlHandler(state)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	conversationID := "conv_confirming_" + randomHex(4)
+	executionID := "exec_confirming_" + randomHex(4)
+	activeExecutionID := executionID
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:                conversationID,
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_" + randomHex(4),
+		Name:              "Confirming Run",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       ConversationModeAgent,
+		ModelConfigID:     "rc_model_test",
+		ActiveExecutionID: &activeExecutionID,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	state.executions[executionID] = Execution{
+		ID:             executionID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_" + randomHex(4),
+		State:          ExecutionStateConfirming,
+		Mode:           ConversationModeAgent,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   ConversationModeAgent,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_" + randomHex(4),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	state.conversationExecutionOrder[conversationID] = []string{executionID}
+	state.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/runs/"+executionID+"/control", strings.NewReader(`{"action":"deny"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("run_id", executionID)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected run control deny for confirming run 200, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	if got := strings.TrimSpace(asString(payload["state"])); got != string(ExecutionStateExecuting) {
+		t.Fatalf("expected state executing after deny confirming run, got %q", got)
 	}
 }

@@ -76,6 +76,7 @@
             :pending-count="pendingCount"
             :executing-count="executingCount"
             :has-active-execution="activeCount > 0"
+            :has-confirming-execution="hasConfirmingExecution"
             :active-trace-count="activeTraceCount"
             :execution-traces="executionTraces"
             :running-actions="runningActions"
@@ -93,6 +94,8 @@
             @clear-suggestions="clearComposerSuggestions"
             @send="sendMessage"
             @stop="stopExecution"
+            @approve="approveExecution"
+            @deny="denyExecution"
             @rollback="rollbackMessage"
             @toggle-trace="toggleExecutionTrace"
           />
@@ -177,6 +180,7 @@ const {
   activeCount,
   activeProject,
   addConversationByPrompt,
+  approveExecution,
   authStore,
   changeInspectorTab,
   clearComposerSuggestions,
@@ -188,6 +192,7 @@ const {
   createWorkspace,
   deleteConversationById,
   deleteProjectById,
+  denyExecution,
   discardDiff,
   editingConversationName,
   executingCount,
@@ -207,6 +212,7 @@ const {
   paginateProjects,
   placeholder,
   pendingCount,
+  hasConfirmingExecution,
   projectStore,
   activeTraceCount,
   projectImportError,

@@ -306,7 +306,7 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 		conversation.ActiveExecutionID = nil
 		for _, id := range ordered {
 			exec := state.executions[id]
-			if exec.State == ExecutionStateExecuting || exec.State == ExecutionStatePending {
+			if exec.State == ExecutionStateExecuting || exec.State == ExecutionStatePending || exec.State == ExecutionStateConfirming {
 				conversation.ActiveExecutionID = &id
 				break
 			}

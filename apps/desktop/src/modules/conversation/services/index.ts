@@ -11,7 +11,9 @@ import type {
   ConversationStreamEvent,
   ConversationDetailResponse,
   DiffCapability,
-  DiffItem
+  DiffItem,
+  RunControlAction,
+  RunControlResponse
 } from "@/shared/types/api";
 
 type ConversationServiceOptions = {
@@ -66,6 +68,12 @@ export async function getConversationDetail(
 export async function cancelExecution(conversationId: string, executionId: string): Promise<void> {
   void executionId;
   await getControlClient().post<void>(`/v1/conversations/${conversationId}/stop`);
+}
+
+export async function controlExecutionRun(executionId: string, action: RunControlAction): Promise<RunControlResponse> {
+  return getControlClient().post<RunControlResponse>(`/v1/runs/${executionId}/control`, {
+    action
+  });
 }
 
 export async function rollbackExecution(conversationId: string, messageId: string): Promise<void> {

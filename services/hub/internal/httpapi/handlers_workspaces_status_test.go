@@ -63,6 +63,7 @@ func TestDeriveConversationStatusLockedMappings(t *testing.T) {
 		want   ConversationStatus
 	}{
 		{name: "running from executing", states: []ExecutionState{ExecutionStateExecuting}, want: ConversationStatusRunning},
+		{name: "running from confirming", states: []ExecutionState{ExecutionStateConfirming}, want: ConversationStatusRunning},
 		{name: "queued from pending", states: []ExecutionState{ExecutionStatePending}, want: ConversationStatusQueued},
 		{name: "done from completed", states: []ExecutionState{ExecutionStateCompleted}, want: ConversationStatusDone},
 		{name: "error from failed", states: []ExecutionState{ExecutionStateFailed}, want: ConversationStatusError},

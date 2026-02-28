@@ -112,6 +112,24 @@
         </div>
 
         <div class="right">
+          <button
+            v-if="hasConfirmingExecution"
+            class="action-btn approval approve"
+            type="button"
+            aria-label="批准工具调用"
+            @click="$emit('approve')"
+          >
+            批准
+          </button>
+          <button
+            v-if="hasConfirmingExecution"
+            class="action-btn approval deny"
+            type="button"
+            aria-label="拒绝工具调用"
+            @click="$emit('deny')"
+          >
+            拒绝
+          </button>
           <button class="action-btn" type="button" aria-label="停止执行" :disabled="!hasActiveExecution" @click="$emit('stop')">
             <AppIcon name="square" :size="12" />
           </button>
@@ -142,6 +160,7 @@ const props = withDefaults(
     pendingCount: number;
     executingCount: number;
     hasActiveExecution: boolean;
+    hasConfirmingExecution?: boolean;
     activeTraceCount: number;
     executionTraces: ExecutionTrace[];
     runningActions: RunningActionViewModel[];
@@ -156,7 +175,8 @@ const props = withDefaults(
   {
     modelOptions: () => [],
     composerSuggestions: () => [],
-    composerSuggesting: false
+    composerSuggesting: false,
+    hasConfirmingExecution: false
   }
 );
 
@@ -182,6 +202,9 @@ const assistantModelLabel = computed(() => {
 const executionHint = computed(() => {
   if (props.activeTraceCount > 0 || props.runningActions.length > 0) {
     return "";
+  }
+  if (props.hasConfirmingExecution) {
+    return "等待授权…";
   }
   if (props.pendingCount > 0 || props.executingCount > 0) {
     return "正在思考…";
@@ -233,6 +256,8 @@ const runningActionsByExecutionId = computed(() => {
 const emit = defineEmits<{
   (event: "send"): void;
   (event: "stop"): void;
+  (event: "approve"): void;
+  (event: "deny"): void;
   (event: "rollback", messageId: string): void;
   (event: "toggle-trace", executionId: string, expanded: boolean): void;
   (event: "update:draft", value: string): void;

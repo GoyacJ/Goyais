@@ -48,3 +48,24 @@ func TestMapExecutionStateToRunState_SupportsLegacyConfirming(t *testing.T) {
 		t.Fatalf("expected waiting_approval, got %q", runState)
 	}
 }
+
+func TestMapExecutionEventToRunEvent_MapsApprovalDeltaToRunApprovalNeeded(t *testing.T) {
+	event := ExecutionEvent{
+		EventID:        "evt_map_approval",
+		ExecutionID:    "exec_map_approval",
+		ConversationID: "conv_map_approval",
+		Sequence:       1,
+		QueueIndex:     0,
+		Type:           ExecutionEventTypeThinkingDelta,
+		Timestamp:      "2026-02-25T10:20:30Z",
+		Payload: map[string]any{
+			"stage":     "run_approval_needed",
+			"run_state": "waiting_approval",
+		},
+	}
+
+	runEvent := mapExecutionEventToRunEvent(event)
+	if runEvent.Type != "run_approval_needed" {
+		t.Fatalf("expected run_approval_needed, got %q", runEvent.Type)
+	}
+}

@@ -211,11 +211,13 @@ func TestProjectConfigHandlerPutPurgesProjectConversationHistory(t *testing.T) {
 
 	cancelled := make(chan struct{}, 1)
 	state.orchestrator.mu.Lock()
-	state.orchestrator.active[targetExecutionID] = func() {
-		select {
-		case cancelled <- struct{}{}:
-		default:
-		}
+	state.orchestrator.active[targetExecutionID] = &executionRuntimeHandle{
+		cancel: func() {
+			select {
+			case cancelled <- struct{}{}:
+			default:
+			}
+		},
 	}
 	state.orchestrator.mu.Unlock()
 

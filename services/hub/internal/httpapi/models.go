@@ -60,12 +60,13 @@ const (
 type ExecutionState string
 
 const (
-	ExecutionStateQueued    ExecutionState = "queued"
-	ExecutionStatePending   ExecutionState = "pending"
-	ExecutionStateExecuting ExecutionState = "executing"
-	ExecutionStateCompleted ExecutionState = "completed"
-	ExecutionStateFailed    ExecutionState = "failed"
-	ExecutionStateCancelled ExecutionState = "cancelled"
+	ExecutionStateQueued     ExecutionState = "queued"
+	ExecutionStatePending    ExecutionState = "pending"
+	ExecutionStateExecuting  ExecutionState = "executing"
+	ExecutionStateConfirming ExecutionState = "confirming"
+	ExecutionStateCompleted  ExecutionState = "completed"
+	ExecutionStateFailed     ExecutionState = "failed"
+	ExecutionStateCancelled  ExecutionState = "cancelled"
 )
 
 type ResourceType string

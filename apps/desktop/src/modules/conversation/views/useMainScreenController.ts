@@ -106,6 +106,9 @@ export function useMainScreenController() {
   const pendingCount = computed(() => executionStateCounts.value.pending);
   const executingCount = computed(() => executionStateCounts.value.executing);
   const activeCount = computed(() => pendingCount.value + executingCount.value);
+  const hasConfirmingExecution = computed(() =>
+    (runtime.value?.executions ?? []).some((execution) => execution.state === "confirming")
+  );
   const baseExecutionTraces = computed<ExecutionTraceViewModel[]>(() => {
     const currentRuntime = runtime.value;
     if (!currentRuntime) {
@@ -489,6 +492,7 @@ export function useMainScreenController() {
     ...actions,
     activeConversation,
     activeCount,
+    hasConfirmingExecution,
     activeModelId: modelState.activeModelId,
     activeModelLabel: modelState.activeModelLabel,
     activeProject,

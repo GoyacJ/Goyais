@@ -1,7 +1,9 @@
 import type { ComputedRef, Ref } from "vue";
 import type { Router } from "vue-router";
 import {
+  approveConversationExecution,
   commitLatestDiff,
+  denyConversationExecution,
   discardLatestDiff,
   getLatestFinishedExecution,
   rollbackConversationToMessage,
@@ -148,6 +150,18 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
       return;
     }
     await stopConversationExecution(input.activeConversation.value);
+  }
+  async function approveExecution(): Promise<void> {
+    if (!input.activeConversation.value) {
+      return;
+    }
+    await approveConversationExecution(input.activeConversation.value);
+  }
+  async function denyExecution(): Promise<void> {
+    if (!input.activeConversation.value) {
+      return;
+    }
+    await denyConversationExecution(input.activeConversation.value);
   }
   async function rollbackMessage(messageId: string): Promise<void> {
     if (!input.activeConversation.value) {
@@ -347,6 +361,8 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     saveConversationName,
     selectConversation,
     sendMessage,
+    approveExecution,
+    denyExecution,
     loginWorkspace,
     startEditConversationName,
     stopExecution,

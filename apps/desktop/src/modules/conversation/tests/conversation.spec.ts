@@ -4,8 +4,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
+  approveConversationExecution,
   applyIncomingExecutionEvent,
   conversationStore,
+  denyConversationExecution,
   ensureConversationRuntime,
   rollbackConversationToMessage,
   resetConversationStore,
@@ -76,6 +78,15 @@ describe("conversation store", () => {
 
       if (url.endsWith("/stop") && method === "POST") {
         return jsonResponse({ ok: true });
+      }
+
+      if (url.includes("/v1/runs/") && url.endsWith("/control") && method === "POST") {
+        return jsonResponse({
+          ok: true,
+          run_id: "exec_control",
+          state: "executing",
+          previous_state: "confirming"
+        });
       }
 
       if (url.includes("/rollback") && method === "POST") {
@@ -359,6 +370,74 @@ describe("conversation store", () => {
       return String(url).endsWith(`/v1/conversations/${mockConversation.id}/stop`) && (init?.method ?? "GET") === "POST";
     });
     expect(stopCalls.length).toBe(1);
+  });
+
+  it("stop works when execution is in confirming state", async () => {
+    const runtime = ensureConversationRuntime(mockConversation, true);
+    runtime.executions.push({
+      id: "exec_confirming",
+      workspace_id: "ws_local",
+      conversation_id: mockConversation.id,
+      message_id: "msg_confirming",
+      state: "confirming",
+      mode: "agent",
+      model_id: "gpt-5.3",
+      mode_snapshot: "agent",
+      model_snapshot: {
+        model_id: "gpt-5.3"
+      },
+      project_revision_snapshot: 0,
+      queue_index: 0,
+      trace_id: "tr_confirming",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+
+    await stopConversationExecution(mockConversation);
+
+    const stopCalls = fetchMock.mock.calls.filter(([url, init]) => {
+      return String(url).endsWith(`/v1/conversations/${mockConversation.id}/stop`) && (init?.method ?? "GET") === "POST";
+    });
+    expect(stopCalls.length).toBe(1);
+  });
+
+  it("approve/deny call run control endpoint for confirming execution", async () => {
+    const runtime = ensureConversationRuntime(mockConversation, true);
+    runtime.executions.push({
+      id: "exec_confirming_control",
+      workspace_id: "ws_local",
+      conversation_id: mockConversation.id,
+      message_id: "msg_confirming_control",
+      state: "confirming",
+      mode: "agent",
+      model_id: "gpt-5.3",
+      mode_snapshot: "agent",
+      model_snapshot: {
+        model_id: "gpt-5.3"
+      },
+      project_revision_snapshot: 0,
+      queue_index: 0,
+      trace_id: "tr_confirming_control",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+
+    await approveConversationExecution(mockConversation);
+    await denyConversationExecution(mockConversation);
+
+    const controlCalls = fetchMock.mock.calls.filter(([url, init]) => {
+      return String(url).endsWith("/v1/runs/exec_confirming_control/control") && (init?.method ?? "GET") === "POST";
+    });
+    expect(controlCalls.length).toBe(2);
+    const requestBodies = controlCalls
+      .map(([, init]) => {
+        if (!init?.body) {
+          return null;
+        }
+        return JSON.parse(String(init.body)) as { action?: string };
+      })
+      .filter((item): item is { action?: string } => Boolean(item));
+    expect(requestBodies.map((item) => item.action)).toEqual(["approve", "deny"]);
   });
 
   it("rollback restores execution states from snapshot point", async () => {

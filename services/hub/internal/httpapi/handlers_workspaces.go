@@ -298,7 +298,7 @@ func deriveConversationStatusLocked(state *AppState, conversationID string) Conv
 	for i := range executions {
 		execution := executions[i]
 		switch execution.State {
-		case ExecutionStateExecuting:
+		case ExecutionStateExecuting, ExecutionStateConfirming:
 			hasRunning = true
 		case ExecutionStateQueued, ExecutionStatePending:
 			hasQueued = true
