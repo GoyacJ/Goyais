@@ -1,5 +1,5 @@
 import { getConversationDetail, streamConversationEvents } from "@/modules/conversation/services";
-import { applyIncomingExecutionEvent } from "@/modules/conversation/store/executionActions";
+import { applyIncomingExecutionEvent, refreshConversationChangeSet } from "@/modules/conversation/store/executionActions";
 import {
   appendRuntimeEvent,
   conversationStore,
@@ -41,11 +41,12 @@ export function attachConversationStream(conversation: Conversation, token?: str
             if (!current) {
               return;
             }
-            const isGitProject = current.diffCapability.can_commit;
+            const isGitProject = current.projectKind === "git";
             hydrateConversationRuntime(conversation, isGitProject, detail);
             if (latestEventID !== "") {
               current.lastEventId = latestEventID;
             }
+            void refreshConversationChangeSet(conversation.id);
           })
           .catch((error) => {
             conversationStore.error = toError(error).message;

@@ -30,13 +30,11 @@
           </div>
         </template>
         <template #right>
-          <div v-if="runtimeStatusMode" class="chips">
-            <StatusBadge :tone="conversationStatusTone" :label="`conversation: ${runtimeConversationStatus}`" />
-          </div>
-          <div v-else class="chips">
-            <StatusBadge tone="running" label="scope: current_workspace" />
-            <StatusBadge tone="connected" label="Remote" />
-          </div>
+          <ConfigTopStatusChips
+            :runtime-mode="runtimeStatusMode"
+            :conversation-status="runtimeConversationStatus"
+            scope-mode="remote"
+          />
         </template>
       </Topbar>
 
@@ -55,13 +53,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { ref } from "vue";
 
 import type { MenuEntry } from "@/shared/navigation/pageMenus";
 import RemoteConfigSidebar from "@/shared/layouts/RemoteConfigSidebar.vue";
 import type { ConnectionStatus, ConversationStatus } from "@/shared/types/api";
+import ConfigTopStatusChips from "@/shared/ui/ConfigTopStatusChips.vue";
 import HubStatusBar from "@/shared/ui/HubStatusBar.vue";
-import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import Topbar from "@/shared/ui/Topbar.vue";
 
 const props = withDefaults(
@@ -79,27 +77,9 @@ const props = withDefaults(
   }>(),
   {
     runtimeStatusMode: false,
-    runtimeConversationStatus: "stopped",
-    runtimeConnectionStatus: "disconnected",
-    runtimeUserDisplayName: "",
-    runtimeHubUrl: ""
+    runtimeConversationStatus: "stopped"
   }
 );
-
-const conversationStatusTone = computed(() => {
-  switch (props.runtimeConversationStatus) {
-    case "running":
-      return "running";
-    case "queued":
-      return "queued";
-    case "done":
-      return "success";
-    case "error":
-      return "failed";
-    default:
-      return "cancelled";
-  }
-});
 
 const sidebarOpen = ref(false);
 
@@ -151,11 +131,6 @@ function onSidebarClick(event: MouseEvent): void {
 .header-left span {
   color: var(--semantic-text-subtle);
   font-size: var(--global-font-size-12);
-}
-
-.chips {
-  display: inline-flex;
-  gap: var(--global-space-8);
 }
 
 .main {

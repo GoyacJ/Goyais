@@ -4,7 +4,7 @@
   >
     <span class="inline-flex items-center gap-[var(--global-space-8)]">
       <AppIcon name="plug-zap" :size="12" />
-      Hub: {{ hubLabel }}
+      {{ t("statusPanel.hubLabel") }}: {{ hubLabel }}
     </span>
     <span class="inline-flex items-center gap-[var(--global-space-8)]">
       <span>{{ identityLabel }}</span>
@@ -17,6 +17,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { t } from "@/shared/i18n";
 import { authStore } from "@/shared/stores/authStore";
 import { getCurrentWorkspace, workspaceStore, type ConnectionState } from "@/shared/stores/workspaceStore";
 import type { ConnectionStatus } from "@/shared/types/api";
@@ -38,7 +39,7 @@ const props = withDefaults(
 
 const resolvedConnectionState = computed(() => props.connectionState ?? workspaceStore.connectionState);
 
-const connectionLabel = computed<ConnectionStatus>(() => {
+const resolvedConnectionStatus = computed<ConnectionStatus>(() => {
   if (props.connectionStatus === "connected" || props.connectionStatus === "reconnecting" || props.connectionStatus === "disconnected") {
     return props.connectionStatus;
   }
@@ -52,30 +53,48 @@ const connectionLabel = computed<ConnectionStatus>(() => {
   return "disconnected";
 });
 
+const connectionLabel = computed(() => {
+  if (resolvedConnectionStatus.value === "connected") {
+    return t("statusPanel.connectionStatus.connected");
+  }
+  if (resolvedConnectionStatus.value === "reconnecting") {
+    return t("statusPanel.connectionStatus.reconnecting");
+  }
+  return t("statusPanel.connectionStatus.disconnected");
+});
+
 const connectionClass = computed(() => {
-  if (connectionLabel.value === "connected") {
+  if (resolvedConnectionStatus.value === "connected") {
     return "text-[var(--semantic-success)]";
   }
-  if (connectionLabel.value === "reconnecting") {
+  if (resolvedConnectionStatus.value === "reconnecting") {
     return "text-[var(--semantic-warning)]";
   }
   return "text-[var(--semantic-danger)]";
 });
 
 const hubLabel = computed(() => {
-  return props.hubLabel ?? getCurrentWorkspace()?.hub_url ?? "local://workspace";
+  return firstNonEmpty(
+    normalizeText(props.hubLabel),
+    normalizeText(getCurrentWorkspace()?.hub_url),
+    "local://workspace"
+  );
 });
 
 const identityLabel = computed(() => {
   if (props.runtimeMode) {
     return firstNonEmpty(
-      (props.userLabel ?? "").trim(),
-      (authStore.me?.display_name ?? "").trim(),
-      (authStore.me?.user_id ?? "").trim(),
-      "local-user"
+      normalizeText(props.userLabel),
+      normalizeText(authStore.me?.display_name),
+      normalizeText(authStore.me?.user_id),
+      t("statusPanel.user.local")
     );
   }
-  return props.roleLabel ?? authStore.me?.role ?? "Owner";
+  return firstNonEmpty(
+    normalizeText(props.roleLabel),
+    normalizeText(authStore.me?.role),
+    "Owner"
+  );
 });
 
 function firstNonEmpty(...values: string[]): string {
@@ -85,6 +104,10 @@ function firstNonEmpty(...values: string[]): string {
     }
   }
   return "";
+}
+
+function normalizeText(value: string | undefined | null): string {
+  return (value ?? "").trim();
 }
 </script>
 

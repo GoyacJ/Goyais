@@ -1,10 +1,6 @@
 package httpapi
 
 import (
-	"archive/zip"
-	"bytes"
-	"encoding/base64"
-	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -290,6 +286,18 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 			rollbackExecutionIDs = append(rollbackExecutionIDs, id)
 			rollbackDiffItems = mergeDiffItems(rollbackDiffItems, state.executionDiffs[id])
 		}
+		rollbackExecutionIDSet := make(map[string]struct{}, len(rollbackExecutionIDs))
+		for _, rollbackExecutionID := range rollbackExecutionIDs {
+			rollbackExecutionIDSet[rollbackExecutionID] = struct{}{}
+		}
+		rollbackEntries := make([]ChangeEntry, 0)
+		if ledger := state.conversationChangeLedgers[conversationID]; ledger != nil {
+			for _, entry := range ledger.Entries {
+				if _, exists := rollbackExecutionIDSet[strings.TrimSpace(entry.ExecutionID)]; exists {
+					rollbackEntries = append(rollbackEntries, entry)
+				}
+			}
+		}
 		if projectSupportsGitRestore && strings.TrimSpace(project.RepoPath) != "" && len(rollbackDiffItems) == 0 {
 			fallbackDiffItems, fallbackErr := collectGitChangedDiffItems(project.RepoPath)
 			if fallbackErr == nil && len(fallbackDiffItems) > 0 {
@@ -300,6 +308,16 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 			if err := restoreGitWorkingTreePaths(project.RepoPath, rollbackDiffItems); err != nil {
 				state.mu.Unlock()
 				WriteStandardError(w, r, http.StatusInternalServerError, "ROLLBACK_RESTORE_FAILED", "Failed to restore project files during rollback", map[string]any{
+					"conversation_id": conversationID,
+					"error":           err.Error(),
+				})
+				return
+			}
+		}
+		if !projectSupportsGitRestore && strings.TrimSpace(project.RepoPath) != "" && len(rollbackEntries) > 0 {
+			if err := restoreNonGitWorkingTreePaths(project.RepoPath, rollbackEntries); err != nil {
+				state.mu.Unlock()
+				WriteStandardError(w, r, http.StatusInternalServerError, "ROLLBACK_RESTORE_FAILED", "Failed to restore non-git files during rollback", map[string]any{
 					"conversation_id": conversationID,
 					"error":           err.Error(),
 				})
@@ -368,6 +386,18 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 				"message_id": input.MessageID,
 			},
 		})
+		appendExecutionEventLocked(state, ExecutionEvent{
+			ExecutionID:    "",
+			ConversationID: conversationID,
+			TraceID:        TraceIDFromContext(r.Context()),
+			QueueIndex:     0,
+			Type:           ExecutionEventTypeChangeSetRolledBack,
+			Timestamp:      now,
+			Payload: map[string]any{
+				"rolled_back_message_id": input.MessageID,
+			},
+		})
+		rebuildConversationChangeLedgerFromStateLocked(state, conversationID)
 		state.mu.Unlock()
 		syncExecutionDomainBestEffort(state)
 
@@ -431,299 +461,6 @@ func ConversationExportHandler(state *AppState) http.HandlerFunc {
 	}
 }
 
-func ExecutionDiffHandler(state *AppState) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
-				"method": r.Method, "path": r.URL.Path,
-			})
-			return
-		}
-		executionID := strings.TrimSpace(r.PathValue("execution_id"))
-		state.mu.RLock()
-		execution, exists := state.executions[executionID]
-		diff := collectConversationDiffItemsLocked(state, execution.ConversationID)
-		projectPath, projectIsGit, _ := lookupProjectExecutionContextLocked(state, execution)
-		state.mu.RUnlock()
-		if !exists {
-			WriteStandardError(w, r, http.StatusNotFound, "EXECUTION_NOT_FOUND", "Execution does not exist", map[string]any{"execution_id": executionID})
-			return
-		}
-		_, authErr := authorizeAction(
-			state,
-			r,
-			execution.WorkspaceID,
-			"conversation.read",
-			authorizationResource{WorkspaceID: execution.WorkspaceID},
-			authorizationContext{OperationType: "read"},
-		)
-		if authErr != nil {
-			authErr.write(w, r)
-			return
-		}
-		if projectIsGit && strings.TrimSpace(projectPath) != "" && len(diff) == 0 {
-			fallbackDiff, fallbackErr := collectGitChangedDiffItems(projectPath)
-			if fallbackErr == nil && len(fallbackDiff) > 0 {
-				diff = fallbackDiff
-			}
-		}
-		writeJSON(w, http.StatusOK, diff)
-	}
-}
-
-func ExecutionPatchHandler(state *AppState) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
-				"method": r.Method, "path": r.URL.Path,
-			})
-			return
-		}
-		executionID := strings.TrimSpace(r.PathValue("execution_id"))
-		state.mu.RLock()
-		execution, exists := state.executions[executionID]
-		diff := collectConversationDiffItemsLocked(state, execution.ConversationID)
-		projectPath, projectIsGit, _ := lookupProjectExecutionContextLocked(state, execution)
-		state.mu.RUnlock()
-		if !exists {
-			WriteStandardError(w, r, http.StatusNotFound, "EXECUTION_NOT_FOUND", "Execution does not exist", map[string]any{"execution_id": executionID})
-			return
-		}
-		_, authErr := authorizeAction(
-			state,
-			r,
-			execution.WorkspaceID,
-			"conversation.read",
-			authorizationResource{WorkspaceID: execution.WorkspaceID},
-			authorizationContext{OperationType: "read"},
-		)
-		if authErr != nil {
-			authErr.write(w, r)
-			return
-		}
-
-		patchContent, err := renderExecutionPatchContent(projectPath, projectIsGit, executionID, diff)
-		if err != nil {
-			WriteStandardError(w, r, http.StatusInternalServerError, "PATCH_EXPORT_FAILED", "Failed to export patch", map[string]any{
-				"execution_id": executionID,
-				"error":        err.Error(),
-			})
-			return
-		}
-
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.patch\"", executionID))
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(patchContent))
-	}
-}
-
-func ExecutionFilesHandler(state *AppState) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
-				"method": r.Method, "path": r.URL.Path,
-			})
-			return
-		}
-		executionID := strings.TrimSpace(r.PathValue("execution_id"))
-		state.mu.RLock()
-		execution, exists := state.executions[executionID]
-		diff := collectConversationDiffItemsLocked(state, execution.ConversationID)
-		projectPath, _, _ := lookupProjectExecutionContextLocked(state, execution)
-		state.mu.RUnlock()
-		if !exists {
-			WriteStandardError(w, r, http.StatusNotFound, "EXECUTION_NOT_FOUND", "Execution does not exist", map[string]any{"execution_id": executionID})
-			return
-		}
-		_, authErr := authorizeAction(
-			state,
-			r,
-			execution.WorkspaceID,
-			"conversation.read",
-			authorizationResource{WorkspaceID: execution.WorkspaceID},
-			authorizationContext{OperationType: "read"},
-		)
-		if authErr != nil {
-			authErr.write(w, r)
-			return
-		}
-		if strings.TrimSpace(projectPath) == "" {
-			WriteStandardError(w, r, http.StatusConflict, "PROJECT_PATH_REQUIRED", "File export requires a project path", map[string]any{
-				"execution_id": executionID,
-			})
-			return
-		}
-		if len(diff) == 0 {
-			fallbackDiff, fallbackErr := collectGitChangedDiffItems(projectPath)
-			if fallbackErr == nil && len(fallbackDiff) > 0 {
-				diff = fallbackDiff
-			}
-		}
-		archiveBase64, err := renderExecutionFilesArchiveBase64(projectPath, diff)
-		if err != nil {
-			WriteStandardError(w, r, http.StatusInternalServerError, "FILES_EXPORT_FAILED", "Failed to export files", map[string]any{
-				"execution_id": executionID,
-				"error":        err.Error(),
-			})
-			return
-		}
-		writeJSON(w, http.StatusOK, ExecutionFilesExportResponse{
-			FileName:      fmt.Sprintf("%s-files.zip", executionID),
-			ArchiveBase64: archiveBase64,
-		})
-	}
-}
-
-func ExecutionActionHandler(state *AppState) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
-				"method": r.Method, "path": r.URL.Path,
-			})
-			return
-		}
-		executionID := strings.TrimSpace(r.PathValue("execution_id"))
-		action := strings.TrimSpace(r.PathValue("action"))
-		state.mu.RLock()
-		executionSeed, exists := state.executions[executionID]
-		state.mu.RUnlock()
-		if !exists {
-			WriteStandardError(w, r, http.StatusNotFound, "EXECUTION_NOT_FOUND", "Execution does not exist", map[string]any{"execution_id": executionID})
-			return
-		}
-		_, authErr := authorizeAction(
-			state,
-			r,
-			executionSeed.WorkspaceID,
-			"execution.control",
-			authorizationResource{WorkspaceID: executionSeed.WorkspaceID},
-			authorizationContext{OperationType: "write", ABACRequired: true},
-		)
-		if authErr != nil {
-			authErr.write(w, r)
-			return
-		}
-		now := time.Now().UTC().Format(time.RFC3339)
-		var projectToPersist *Project
-		state.mu.Lock()
-		execution, exists := state.executions[executionID]
-		if !exists {
-			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusNotFound, "EXECUTION_NOT_FOUND", "Execution does not exist", map[string]any{"execution_id": executionID})
-			return
-		}
-		conversation, conversationExists := state.conversations[execution.ConversationID]
-		if !conversationExists {
-			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
-				"conversation_id": execution.ConversationID,
-			})
-			return
-		}
-		project, projectExists := state.projects[conversation.ProjectID]
-		if !projectExists {
-			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{
-				"project_id": conversation.ProjectID,
-			})
-			return
-		}
-		projectSupportsGitRestore := project.IsGit && isGitRepositoryPath(project.RepoPath)
-		diff := append([]DiffItem{}, state.executionDiffs[executionID]...)
-		affectedExecutionIDs := collectConversationDiffExecutionIDsLocked(state, conversation.ID)
-		if len(affectedExecutionIDs) == 0 {
-			affectedExecutionIDs = []string{executionID}
-		}
-		diff = make([]DiffItem, 0)
-		for _, diffExecutionID := range affectedExecutionIDs {
-			diff = mergeDiffItems(diff, state.executionDiffs[diffExecutionID])
-		}
-		if projectSupportsGitRestore && strings.TrimSpace(project.RepoPath) != "" && len(diff) == 0 {
-			fallbackDiffItems, fallbackErr := collectGitChangedDiffItems(project.RepoPath)
-			if fallbackErr == nil && len(fallbackDiffItems) > 0 {
-				diff = fallbackDiffItems
-			}
-		}
-		switch action {
-		case "commit":
-			if !projectSupportsGitRestore {
-				state.mu.Unlock()
-				WriteStandardError(w, r, http.StatusConflict, "NON_GIT_COMMIT_DISABLED", "Commit is disabled for non-git project", map[string]any{
-					"project_id": project.ID,
-				})
-				return
-			}
-			for _, diffExecutionID := range affectedExecutionIDs {
-				diffExecution := state.executions[diffExecutionID]
-				diffExecution.State = ExecutionStateCompleted
-				diffExecution.UpdatedAt = now
-				state.executions[diffExecutionID] = diffExecution
-			}
-			project.CurrentRevision++
-			project.UpdatedAt = now
-			state.projects[project.ID] = project
-			projectCopy := project
-			projectToPersist = &projectCopy
-			conversation.BaseRevision = project.CurrentRevision
-			conversation.UpdatedAt = now
-			state.conversations[conversation.ID] = conversation
-		case "discard":
-			if projectSupportsGitRestore && strings.TrimSpace(project.RepoPath) != "" && len(diff) > 0 {
-				if err := restoreGitWorkingTreePaths(project.RepoPath, diff); err != nil {
-					state.mu.Unlock()
-					WriteStandardError(w, r, http.StatusInternalServerError, "DISCARD_RESTORE_FAILED", "Failed to restore project files during discard", map[string]any{
-						"execution_id": executionID,
-						"error":        err.Error(),
-					})
-					return
-				}
-			}
-			for _, diffExecutionID := range affectedExecutionIDs {
-				diffExecution := state.executions[diffExecutionID]
-				diffExecution.State = ExecutionStateCancelled
-				diffExecution.UpdatedAt = now
-				state.executions[diffExecutionID] = diffExecution
-			}
-			conversation.UpdatedAt = now
-			state.conversations[conversation.ID] = conversation
-		default:
-			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusNotFound, "ROUTE_NOT_FOUND", "Route does not exist", map[string]any{"action": action})
-			return
-		}
-		for _, diffExecutionID := range affectedExecutionIDs {
-			delete(state.executionDiffs, diffExecutionID)
-		}
-		state.mu.Unlock()
-		syncExecutionDomainBestEffort(state)
-		if projectToPersist != nil {
-			_, _ = saveProjectToStore(state, *projectToPersist)
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-	}
-}
-
-func renderExecutionPatchContent(projectPath string, isGitProject bool, executionID string, diffItems []DiffItem) (string, error) {
-	if isGitProject && strings.TrimSpace(projectPath) != "" {
-		args := []string{"-C", projectPath, "diff", "--binary"}
-		paths := diffPathsForGitPatch(diffItems)
-		if len(paths) > 0 {
-			args = append(args, "--")
-			args = append(args, paths...)
-		}
-		cmd := exec.Command("git", args...)
-		output, err := cmd.CombinedOutput()
-		if err == nil {
-			patch := string(output)
-			if strings.TrimSpace(patch) != "" {
-				return patch, nil
-			}
-		}
-	}
-	return renderFallbackPatch(executionID, diffItems), nil
-}
-
 func diffPathsForGitPatch(diffItems []DiffItem) []string {
 	if len(diffItems) == 0 {
 		return nil
@@ -743,14 +480,6 @@ func diffPathsForGitPatch(diffItems []DiffItem) []string {
 	}
 	sort.Strings(paths)
 	return paths
-}
-
-func collectConversationDiffItemsLocked(state *AppState, conversationID string) []DiffItem {
-	diff := make([]DiffItem, 0)
-	for _, executionID := range collectConversationDiffExecutionIDsLocked(state, conversationID) {
-		diff = mergeDiffItems(diff, state.executionDiffs[executionID])
-	}
-	return diff
 }
 
 func collectConversationDiffExecutionIDsLocked(state *AppState, conversationID string) []string {
@@ -848,103 +577,12 @@ func collectGitChangedDiffItems(projectPath string) ([]DiffItem, error) {
 	return result, nil
 }
 
-func renderFallbackPatch(executionID string, diffItems []DiffItem) string {
-	buffer := bytes.NewBufferString("")
-	buffer.WriteString("# Goyais Patch Export\n")
-	buffer.WriteString(fmt.Sprintf("# execution_id: %s\n\n", executionID))
-	if len(diffItems) == 0 {
-		buffer.WriteString("# No diff entries were captured for this execution.\n")
-		return buffer.String()
-	}
-
-	for _, item := range diffItems {
-		buffer.WriteString("--- ")
-		buffer.WriteString(item.Path)
-		buffer.WriteString("\n")
-		buffer.WriteString("+++ ")
-		buffer.WriteString(item.Path)
-		buffer.WriteString("\n")
-		buffer.WriteString("@@ ")
-		buffer.WriteString(item.ChangeType)
-		buffer.WriteString(" @@\n")
-		buffer.WriteString(item.Summary)
-		buffer.WriteString("\n\n")
-	}
-	return buffer.String()
-}
-
 func normalizeDiffPath(raw string) string {
 	trimmed := strings.TrimSpace(strings.ReplaceAll(raw, "\\", "/"))
 	if trimmed == "" {
 		return ""
 	}
 	return strings.TrimPrefix(filepath.ToSlash(filepath.Clean(trimmed)), "./")
-}
-
-func renderExecutionFilesArchiveBase64(projectPath string, diffItems []DiffItem) (string, error) {
-	if strings.TrimSpace(projectPath) == "" {
-		return "", errors.New("project path is empty")
-	}
-	buffer := bytes.NewBuffer(nil)
-	writer := zip.NewWriter(buffer)
-	manifestLines := make([]string, 0)
-	paths := diffPathsForGitPatch(diffItems)
-	if len(paths) == 0 {
-		manifestLines = append(manifestLines, "No diff entries were captured for this execution.")
-	}
-	for _, path := range paths {
-		targetPath, err := resolveProjectRelativePath(projectPath, path)
-		if err != nil {
-			manifestLines = append(manifestLines, fmt.Sprintf("Skip %s: invalid path", path))
-			continue
-		}
-		info, err := os.Stat(targetPath)
-		if err != nil {
-			manifestLines = append(manifestLines, fmt.Sprintf("Missing %s: %v", path, err))
-			continue
-		}
-		if info.IsDir() {
-			manifestLines = append(manifestLines, fmt.Sprintf("Skip %s: directory is not exported", path))
-			continue
-		}
-		content, err := os.ReadFile(targetPath)
-		if err != nil {
-			manifestLines = append(manifestLines, fmt.Sprintf("Read failed %s: %v", path, err))
-			continue
-		}
-		header, err := zip.FileInfoHeader(info)
-		if err != nil {
-			manifestLines = append(manifestLines, fmt.Sprintf("Header failed %s: %v", path, err))
-			continue
-		}
-		header.Method = zip.Deflate
-		header.Name = normalizeDiffPath(path)
-		entryWriter, err := writer.CreateHeader(header)
-		if err != nil {
-			manifestLines = append(manifestLines, fmt.Sprintf("Zip failed %s: %v", path, err))
-			continue
-		}
-		if _, err := entryWriter.Write(content); err != nil {
-			manifestLines = append(manifestLines, fmt.Sprintf("Write failed %s: %v", path, err))
-			continue
-		}
-	}
-	if len(manifestLines) > 0 {
-		manifestWriter, err := writer.Create("_goyais_export_manifest.txt")
-		if err != nil {
-			_ = writer.Close()
-			return "", err
-		}
-		manifestContent := strings.Join(manifestLines, "\n") + "\n"
-		if _, err := manifestWriter.Write([]byte(manifestContent)); err != nil {
-			_ = writer.Close()
-			return "", err
-		}
-	}
-	if err := writer.Close(); err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(buffer.Bytes()), nil
 }
 
 func resolveProjectRelativePath(projectPath string, relativePath string) (string, error) {

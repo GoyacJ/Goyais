@@ -8,9 +8,9 @@ import type { Conversation, ConversationMessage, Execution, Project } from "@/sh
 
 const conversationStoreMocks = vi.hoisted(() => ({
   approveConversationExecution: vi.fn(),
-  commitLatestDiff: vi.fn(),
+  commitConversationChangeset: vi.fn(),
   denyConversationExecution: vi.fn(),
-  discardLatestDiff: vi.fn(),
+  discardConversationChangeset: vi.fn(),
   getLatestFinishedExecution: vi.fn(),
   removeQueuedConversationExecution: vi.fn(),
   rollbackConversationToMessage: vi.fn(),
@@ -47,7 +47,7 @@ const projectStoreMocks = vi.hoisted(() => ({
 }));
 
 const conversationServiceMocks = vi.hoisted(() => ({
-  exportExecutionFiles: vi.fn()
+  exportConversationChangeSet: vi.fn()
 }));
 
 const workspaceServiceMocks = vi.hoisted(() => ({
@@ -208,9 +208,9 @@ describe("main screen actions - auto conversation naming", () => {
     expect(conversationStoreMocks.removeQueuedConversationExecution).toHaveBeenCalledWith(conversation, "exec_queued_1");
   });
 
-  it("exports files using runtime diffExecutionId target", async () => {
-    conversationServiceMocks.exportExecutionFiles.mockResolvedValue({
-      file_name: "exec_target-files.zip",
+  it("exports files using active conversation changeset export", async () => {
+    conversationServiceMocks.exportConversationChangeSet.mockResolvedValue({
+      file_name: "conv_1-changeset.zip",
       archive_base64: "QQ=="
     });
     const originalCreateObjectURL = (URL as typeof URL & { createObjectURL?: (obj: Blob | MediaSource) => string }).createObjectURL;
@@ -238,16 +238,12 @@ describe("main screen actions - auto conversation naming", () => {
     const { actions } = createActionsContext({
       conversationName: "已有名称",
       draft: "",
-      runtimeExecutions: [
-        createExecution("exec_target", "completed"),
-        createExecution("exec_latest", "completed")
-      ],
-      diffExecutionId: "exec_target"
+      runtimeExecutions: [createExecution("exec_target", "completed"), createExecution("exec_latest", "completed")]
     });
 
     await actions.exportPatch();
 
-    expect(conversationServiceMocks.exportExecutionFiles).toHaveBeenCalledWith("exec_target");
+    expect(conversationServiceMocks.exportConversationChangeSet).toHaveBeenCalledWith("conv_1");
     expect(clickSpy).toHaveBeenCalledTimes(1);
     expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
     expect(revokeObjectURLSpy).toHaveBeenCalledTimes(1);
@@ -271,9 +267,9 @@ describe("main screen actions - auto conversation naming", () => {
     }
   });
 
-  it("exports files using diffExecutionId even when runtime executions list is stale", async () => {
-    conversationServiceMocks.exportExecutionFiles.mockResolvedValue({
-      file_name: "exec_stale_target-files.zip",
+  it("exports files even when runtime execution list is stale", async () => {
+    conversationServiceMocks.exportConversationChangeSet.mockResolvedValue({
+      file_name: "conv_1-changeset.zip",
       archive_base64: "QQ=="
     });
     const originalCreateObjectURL = (URL as typeof URL & { createObjectURL?: (obj: Blob | MediaSource) => string }).createObjectURL;
@@ -302,13 +298,12 @@ describe("main screen actions - auto conversation naming", () => {
     const { actions } = createActionsContext({
       conversationName: "已有名称",
       draft: "",
-      runtimeExecutions: [createExecution("exec_latest_only", "completed")],
-      diffExecutionId: "exec_stale_target"
+      runtimeExecutions: [createExecution("exec_latest_only", "completed")]
     });
 
     await actions.exportPatch();
 
-    expect(conversationServiceMocks.exportExecutionFiles).toHaveBeenCalledWith("exec_stale_target");
+    expect(conversationServiceMocks.exportConversationChangeSet).toHaveBeenCalledWith("conv_1");
     expect(clickSpy).toHaveBeenCalledTimes(1);
     expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
     expect(revokeObjectURLSpy).toHaveBeenCalledTimes(1);
@@ -339,15 +334,13 @@ function createActionsContext(input: {
   draft: string;
   runtimeMessages?: ConversationMessage[];
   runtimeExecutions?: Execution[];
-  diffExecutionId?: string;
 }) {
   const conversation = createConversation(input.conversationName);
   const project = createProject();
   const runtimeValue = createRuntime({
     draft: input.draft,
     messages: input.runtimeMessages ?? [],
-    executions: input.runtimeExecutions ?? [],
-    diffExecutionId: input.diffExecutionId ?? ""
+    executions: input.runtimeExecutions ?? []
   });
 
   const activeConversationRef = ref<Conversation | undefined>(conversation);
@@ -456,12 +449,14 @@ function createRuntime(overrides: Partial<ConversationRuntime> = {}): Conversati
     mcpIds: [],
     status: "connected",
     diff: [],
-    diffExecutionId: "",
+    projectKind: "git",
     diffCapability: {
       can_commit: true,
       can_discard: true,
+      can_export: true,
       can_export_patch: true
     },
+    changeSet: null,
     inspectorTab: "diff",
     worktreeRef: null,
     hydrated: false,

@@ -5,7 +5,7 @@ import {
   conversationStore,
   ensureConversationRuntime,
   getExecutionStateCounts,
-  refreshExecutionDiff
+  refreshConversationChangeSet
 } from "@/modules/conversation/store";
 import {
   useAutoModelSyncWatcher
@@ -40,7 +40,7 @@ import { useI18n } from "@/shared/i18n";
 import { authStore } from "@/shared/stores/authStore";
 import { useWorkspaceStatusSync } from "@/shared/stores/workspaceStatusStore";
 import { setConversationError } from "@/modules/conversation/store";
-import type { ComposerCatalog, ComposerSuggestion, DiffCapability, ExecutionEvent, InspectorTabKey } from "@/shared/types/api";
+import type { ChangeSetCapability, ComposerCatalog, ComposerSuggestion, ExecutionEvent, InspectorTabKey } from "@/shared/types/api";
 
 type PendingQuestionOptionViewModel = {
   id: string;
@@ -88,11 +88,12 @@ export function useMainScreenController() {
 
   const inspectorTabs: Array<{ key: InspectorTabKey; label: string }> = [...MAIN_INSPECTOR_TABS];
 
-  const nonGitCapability: DiffCapability = {
+  const nonGitCapability: ChangeSetCapability = {
     can_commit: false,
     can_discard: false,
+    can_export: true,
     can_export_patch: true,
-    reason: "Non-Git project: commit and discard are disabled"
+    reason: "No conversation changeset loaded yet"
   };
 
   const activeProject = computed(() => projectStore.projects.find((item) => item.id === projectStore.activeProjectId));
@@ -527,12 +528,8 @@ export function useMainScreenController() {
       }
       ensureConversationRuntime(context.conversation, context.isGitProject);
       void streamCoordinator.hydrateConversationDetail(context, true);
+      void refreshConversationChangeSet(nextId);
       void refreshComposerCatalogForActiveConversation();
-      const currentRuntime = conversationStore.byConversationId[nextId];
-      const latestExecution = currentRuntime?.executions[currentRuntime.executions.length - 1];
-      if (latestExecution) {
-        void refreshExecutionDiff(nextId, latestExecution.id);
-      }
       streamCoordinator.syncConversationStreams();
     }
   );
@@ -570,18 +567,14 @@ export function useMainScreenController() {
   watch(
     () => ({
       conversationId: activeConversation.value?.id ?? "",
-      executionIds: (runtime.value?.executions ?? []).map((execution) => execution.id).join("|"),
-      diffCount: runtime.value?.diff.length ?? 0
+      hydrated: runtime.value?.hydrated ?? false,
+      changeSetID: runtime.value?.changeSet?.change_set_id ?? ""
     }),
-    ({ conversationId, diffCount }) => {
-      if (conversationId === "" || diffCount > 0) {
+    ({ conversationId, hydrated, changeSetID }) => {
+      if (conversationId === "" || !hydrated || changeSetID !== "") {
         return;
       }
-      const latestExecution = runtime.value?.executions[runtime.value.executions.length - 1];
-      if (!latestExecution) {
-        return;
-      }
-      void refreshExecutionDiff(conversationId, latestExecution.id);
+      void refreshConversationChangeSet(conversationId);
     },
     { immediate: true }
   );

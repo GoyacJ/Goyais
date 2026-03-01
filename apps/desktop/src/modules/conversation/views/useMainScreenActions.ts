@@ -3,9 +3,9 @@ import type { Router } from "vue-router";
 import {
   answerConversationExecutionQuestion,
   approveConversationExecution,
-  commitLatestDiff,
+  commitConversationChangeset,
   denyConversationExecution,
-  discardLatestDiff,
+  discardConversationChangeset,
   removeQueuedConversationExecution,
   rollbackConversationToMessage,
   setConversationDraft,
@@ -16,7 +16,7 @@ import {
   stopConversationExecution,
   submitConversationMessage
 } from "@/modules/conversation/store";
-import { exportExecutionFiles } from "@/modules/conversation/services";
+import { exportConversationChangeSet } from "@/modules/conversation/services";
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
 import { buildNameFromFirstMessage, isDefaultConversationName } from "@/modules/conversation/views/conversationNamePolicy";
 import {
@@ -327,51 +327,37 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     }
     await renameConversationById(input.activeProject.value.id, input.activeConversation.value.id, name);
   }
-  async function commitDiff(): Promise<void> {
+  async function commitDiff(message = ""): Promise<void> {
     if (!input.activeConversation.value) {
       return;
     }
-    await commitLatestDiff(input.activeConversation.value.id);
+    await commitConversationChangeset(input.activeConversation.value.id, message);
   }
   async function discardDiff(): Promise<void> {
     if (!input.activeConversation.value) {
       return;
     }
-    await discardLatestDiff(input.activeConversation.value.id);
+    await discardConversationChangeset(input.activeConversation.value.id);
   }
   async function exportPatch(): Promise<void> {
-    const executionId = resolveDiffTargetExecutionId();
-    if (!executionId) {
-      setConversationError("DIFF_NOT_FOUND: no execution found for current diff list");
+    const conversationId = input.activeConversation.value?.id?.trim() ?? "";
+    if (conversationId === "") {
+      setConversationError("CONVERSATION_NOT_FOUND: no active conversation");
+      return;
+    }
+    const canExport = input.runtime.value?.changeSet?.capability.can_export ?? true;
+    if (!canExport) {
+      setConversationError(input.runtime.value?.changeSet?.capability.reason ?? "CHANGESET_EXPORT_DISABLED");
       return;
     }
     try {
-      const filesArchive = await exportExecutionFiles(executionId);
+      const filesArchive = await exportConversationChangeSet(conversationId);
       const bytesBuffer = decodeBase64(filesArchive.archive_base64);
       const blob = new Blob([bytesBuffer], { type: "application/zip" });
-      triggerBlobDownload(blob, filesArchive.file_name.trim() || `${executionId}-files.zip`);
+      triggerBlobDownload(blob, filesArchive.file_name.trim() || `${conversationId}-changeset.zip`);
     } catch (error) {
       setConversationError(toDisplayError(error));
     }
-  }
-
-  function resolveDiffTargetExecutionId(): string | undefined {
-    const runtime = input.runtime.value;
-    if (!runtime) {
-      return undefined;
-    }
-    const diffExecutionID = runtime.diffExecutionId?.trim() ?? "";
-    if (diffExecutionID !== "") {
-      return diffExecutionID;
-    }
-    const latestTerminalExecution = [...runtime.executions]
-      .reverse()
-      .find((item) => item.state === "completed" || item.state === "failed" || item.state === "cancelled");
-    if (latestTerminalExecution) {
-      return latestTerminalExecution.id;
-    }
-    // Fall back to latest execution when terminal one is not available yet.
-    return runtime.executions[runtime.executions.length - 1]?.id;
   }
 
   function decodeBase64(inputBase64: string): ArrayBuffer {

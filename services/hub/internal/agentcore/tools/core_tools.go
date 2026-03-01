@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -574,6 +575,8 @@ func NewEditTool() Tool {
 			"path":        fullPath,
 			"replaced":    true,
 			"replace_all": replaceAll,
+			"before_blob": base64.StdEncoding.EncodeToString(content),
+			"after_blob":  base64.StdEncoding.EncodeToString([]byte(after)),
 		}
 		maybeAttachDiffLineCounts(output, content, []byte(after))
 		return ToolResult{Output: output}, nil
@@ -649,6 +652,8 @@ func NewWriteTool() Tool {
 			"append":         appendMode,
 			"existed_before": existedBefore,
 			"success":        true,
+			"before_blob":    base64.StdEncoding.EncodeToString(beforeContent),
+			"after_blob":     base64.StdEncoding.EncodeToString(afterContent),
 		}
 		maybeAttachDiffLineCounts(output, beforeContent, afterContent)
 		return ToolResult{Output: output}, nil
@@ -718,9 +723,11 @@ func NewNotebookEditTool() Tool {
 			return ToolResult{}, err
 		}
 		output := map[string]any{
-			"path":       fullPath,
-			"cell_index": cellIndex,
-			"success":    true,
+			"path":        fullPath,
+			"cell_index":  cellIndex,
+			"success":     true,
+			"before_blob": base64.StdEncoding.EncodeToString(raw),
+			"after_blob":  base64.StdEncoding.EncodeToString(nextRaw),
 		}
 		maybeAttachDiffLineCounts(output, raw, nextRaw)
 		return ToolResult{Output: output}, nil

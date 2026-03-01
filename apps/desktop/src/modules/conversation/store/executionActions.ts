@@ -1,11 +1,11 @@
 import {
   cancelExecution,
-  commitExecution,
+  commitConversationChangeSet,
   controlExecutionRun,
-  discardExecution,
+  discardConversationChangeSet,
   getComposerCatalog,
+  getConversationChangeSet,
   getConversationDetail,
-  loadExecutionDiff,
   rollbackExecution,
   submitComposerInput
 } from "@/modules/conversation/services";
@@ -23,12 +23,12 @@ import {
   ensureConversationRuntime,
   findSnapshotForMessage,
   hydrateConversationRuntime,
-  pushConversationSnapshot
+  pushConversationSnapshot,
+  setConversationChangeSet
 } from "@/modules/conversation/store/state";
 import {
   applyDiffUpdate,
   appendTerminalMessageFromEvent,
-  type ExecutionTransition,
   updateExecutionTransition
 } from "@/modules/conversation/store/executionEventHandlers";
 import { toDisplayError } from "@/shared/services/errorMapper";
@@ -305,11 +305,11 @@ export async function rollbackConversationToMessage(conversationId: string, mess
     const detail = await getConversationDetail(conversationId);
     hydrateConversationRuntime(
       detail.conversation,
-      runtime.diffCapability.can_commit || runtime.diffCapability.can_discard,
+      runtime.projectKind === "git",
       detail
     );
-    runtime.diff = [];
-    runtime.diffExecutionId = "";
+    setConversationChangeSet(conversationId, null);
+    void refreshConversationChangeSet(conversationId);
     return;
   } catch {
     // Fall back to local snapshot recovery if detail refresh fails.
@@ -326,8 +326,7 @@ export async function rollbackConversationToMessage(conversationId: string, mess
   runtime.snapshots = runtime.snapshots.filter((item) => item.created_at <= snapshot.created_at);
   runtime.worktreeRef = snapshot.worktree_ref;
   runtime.inspectorTab = snapshot.inspector_state.tab;
-  runtime.diff = [];
-  runtime.diffExecutionId = "";
+  setConversationChangeSet(conversationId, null);
 
   appendRuntimeEvent(
     runtime,
@@ -344,73 +343,87 @@ export async function rollbackConversationToMessage(conversationId: string, mess
       message_id: messageId
     })
   );
+
+  void refreshConversationChangeSet(conversationId);
 }
 
-export async function commitLatestDiff(conversationId: string): Promise<void> {
-  const executionId = resolveDiffTargetExecutionId(conversationId);
-  if (!executionId) {
-    conversationStore.error = "DIFF_NOT_FOUND: no execution found for current diff list";
+export async function commitConversationChangeset(conversationId: string, message = ""): Promise<void> {
+  const runtime = conversationStore.byConversationId[conversationId];
+  if (!runtime) {
+    return;
+  }
+  const current = runtime.changeSet;
+  if (!current) {
+    conversationStore.error = "CHANGESET_NOT_FOUND: no changeset found for current conversation";
+    return;
+  }
+  if (!current.capability.can_commit) {
+    conversationStore.error = current.capability.reason || "CHANGESET_COMMIT_DISABLED: changeset cannot be committed currently";
+    return;
+  }
+  const changeSetID = current.change_set_id.trim();
+  if (changeSetID === "") {
+    conversationStore.error = "CHANGESET_ID_MISSING: changeset id is required";
+    return;
+  }
+  const finalMessage = message.trim() || current.suggested_message.message.trim();
+  if (finalMessage === "") {
+    conversationStore.error = "CHANGESET_MESSAGE_REQUIRED: commit message is required";
     return;
   }
 
   try {
-    await commitExecution(executionId);
-    const runtime = conversationStore.byConversationId[conversationId];
-    if (runtime) {
-      runtime.diff = [];
-      runtime.diffExecutionId = "";
-    }
+    await commitConversationChangeSet(conversationId, {
+      message: finalMessage,
+      expected_change_set_id: changeSetID
+    });
+    await refreshConversationChangeSet(conversationId);
   } catch (error) {
     conversationStore.error = toDisplayError(error);
   }
 }
 
-export async function discardLatestDiff(conversationId: string): Promise<void> {
-  const executionId = resolveDiffTargetExecutionId(conversationId);
-  if (!executionId) {
-    conversationStore.error = "DIFF_NOT_FOUND: no execution found for current diff list";
+export async function discardConversationChangeset(conversationId: string): Promise<void> {
+  const runtime = conversationStore.byConversationId[conversationId];
+  if (!runtime) {
+    return;
+  }
+  const current = runtime.changeSet;
+  if (!current) {
+    conversationStore.error = "CHANGESET_NOT_FOUND: no changeset found for current conversation";
+    return;
+  }
+  if (!current.capability.can_discard) {
+    conversationStore.error = current.capability.reason || "CHANGESET_DISCARD_DISABLED: changeset cannot be discarded currently";
+    return;
+  }
+  const changeSetID = current.change_set_id.trim();
+  if (changeSetID === "") {
+    conversationStore.error = "CHANGESET_ID_MISSING: changeset id is required";
     return;
   }
 
   try {
-    await discardExecution(executionId);
-    const runtime = conversationStore.byConversationId[conversationId];
-    if (runtime) {
-      runtime.diff = [];
-      runtime.diffExecutionId = "";
-    }
+    await discardConversationChangeSet(conversationId, {
+      expected_change_set_id: changeSetID
+    });
+    await refreshConversationChangeSet(conversationId);
   } catch (error) {
     conversationStore.error = toDisplayError(error);
   }
 }
 
-export async function refreshExecutionDiff(conversationId: string, executionId: string): Promise<void> {
+export async function refreshConversationChangeSet(conversationId: string): Promise<void> {
   const runtime = conversationStore.byConversationId[conversationId];
   if (!runtime) {
     return;
   }
   try {
-    runtime.diff = await loadExecutionDiff(executionId);
-    runtime.diffExecutionId = executionId;
+    const changeSet = await getConversationChangeSet(conversationId);
+    setConversationChangeSet(conversationId, changeSet);
   } catch (error) {
     conversationStore.error = toDisplayError(error);
   }
-}
-
-function resolveDiffTargetExecutionId(conversationId: string): string | undefined {
-  const runtime = conversationStore.byConversationId[conversationId];
-  if (!runtime) {
-    return undefined;
-  }
-  const targetExecutionId = runtime.diffExecutionId.trim();
-  if (targetExecutionId !== "") {
-    return targetExecutionId;
-  }
-  const latestTerminalExecution = [...runtime.executions]
-    .reverse()
-    .find((execution) => execution.state === "completed" || execution.state === "failed" || execution.state === "cancelled")
-    ?? runtime.executions[runtime.executions.length - 1];
-  return latestTerminalExecution?.id;
 }
 
 export function applyIncomingExecutionEvent(conversationId: string, event: ExecutionEvent): void {
@@ -430,13 +443,13 @@ export function applyIncomingExecutionEvent(conversationId: string, event: Execu
   const transition = updateExecutionTransition(runtime, conversationId, event);
   applyDiffUpdate(runtime, event);
   if (
-    event.execution_id.trim() !== "" &&
-    (event.type === "diff_generated" ||
-      event.type === "execution_done" ||
-      event.type === "execution_error" ||
-      event.type === "execution_stopped")
+    event.type === "diff_generated" ||
+    event.type === "change_set_updated" ||
+    event.type === "change_set_committed" ||
+    event.type === "change_set_discarded" ||
+    event.type === "change_set_rolled_back"
   ) {
-    void refreshExecutionDiff(conversationId, event.execution_id);
+    void refreshConversationChangeSet(conversationId);
   }
   appendTerminalMessageFromEvent(runtime, conversationId, event, transition);
 }

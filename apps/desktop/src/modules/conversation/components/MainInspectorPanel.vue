@@ -23,12 +23,12 @@
     <section v-if="activeTab === 'diff'" class="card">
       <div class="card-head">
         <strong>{{ t("conversation.inspector.tab.diff") }}</strong>
-        <span>{{ tf("conversation.inspector.diff.filesCount", { count: diff.length }) }}</span>
+        <span>{{ tf("conversation.inspector.diff.filesCount", { count: diffEntries.length }) }}</span>
       </div>
 
-      <p v-if="diff.length === 0" class="normal">{{ t("conversation.inspector.diff.empty") }}</p>
+      <p v-if="diffEntries.length === 0" class="normal">{{ t("conversation.inspector.diff.empty") }}</p>
       <div v-else class="diff-list">
-        <div v-for="item in diff" :key="item.id" class="diff-row">
+        <div v-for="item in diffEntries" :key="item.entry_id" class="diff-row">
           <span class="path">{{ item.path }}</span>
           <span v-if="isDiffLineCountUnknown(item)" class="stat stat-unknown">--</span>
           <span v-else class="stat">
@@ -40,13 +40,13 @@
       </div>
 
       <div class="actions">
-        <button class="action" type="button" :disabled="!capability.can_commit" @click="$emit('commit')">
+        <button class="action" type="button" :disabled="!capability.can_commit || diffEntries.length === 0" @click="$emit('commit')">
           {{ t("conversation.inspector.action.commit") }}
         </button>
-        <button class="action" type="button" :disabled="!capability.can_discard" @click="$emit('discard')">
+        <button class="action" type="button" :disabled="!capability.can_discard || diffEntries.length === 0" @click="$emit('discard')">
           {{ t("conversation.inspector.action.discard") }}
         </button>
-        <button class="action" type="button" :disabled="!capability.can_export_patch" @click="$emit('exportPatch')">
+        <button class="action" type="button" :disabled="!canExport" @click="$emit('exportPatch')">
           {{ t("conversation.inspector.action.exportPatch") }}
         </button>
       </div>
@@ -152,7 +152,23 @@ import { computed, toRefs } from "vue";
 import type { ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
 import { useI18n } from "@/shared/i18n";
 import AppIcon from "@/shared/ui/AppIcon.vue";
-import type { ConversationMessage, DiffCapability, DiffItem, Execution, ExecutionEvent, InspectorTabKey } from "@/shared/types/api";
+import type {
+  ChangeEntry,
+  ConversationChangeSet,
+  ConversationMessage,
+  DiffItem,
+  Execution,
+  ExecutionEvent,
+  InspectorTabKey
+} from "@/shared/types/api";
+
+type InspectorCapability = {
+  can_commit: boolean;
+  can_discard: boolean;
+  can_export?: boolean;
+  can_export_patch?: boolean;
+  reason?: string;
+};
 
 defineEmits<{
   (event: "commit"): void;
@@ -165,8 +181,9 @@ defineEmits<{
 }>();
 
 const props = withDefaults(defineProps<{
-  diff: DiffItem[];
-  capability: DiffCapability;
+  changeSet?: ConversationChangeSet | null;
+  diff?: DiffItem[];
+  capability: InspectorCapability;
   queuedCount: number;
   pendingCount: number;
   executingCount: number;
@@ -179,6 +196,8 @@ const props = withDefaults(defineProps<{
   selectedTraceExecutionId?: string;
   activeTab: InspectorTabKey;
 }>(), {
+  changeSet: null,
+  diff: () => [],
   messages: () => [],
   executionTraces: () => [],
   selectedTraceMessageId: "",
@@ -188,6 +207,7 @@ const props = withDefaults(defineProps<{
 const {
   activeTab,
   capability,
+  changeSet,
   diff,
   events,
   executions,
@@ -208,6 +228,23 @@ const tabs = computed<Array<{ key: InspectorTabKey; label: string }>>(() => [
   { key: "trace", label: t("conversation.inspector.tab.trace") },
   { key: "risk", label: t("conversation.inspector.tab.risk") }
 ]);
+const canExport = computed(() => capability.value.can_export ?? capability.value.can_export_patch ?? true);
+const diffEntries = computed<ChangeEntry[]>(() => {
+  if (changeSet.value?.entries && changeSet.value.entries.length > 0) {
+    return changeSet.value.entries;
+  }
+  return (diff.value ?? []).map((item) => ({
+    entry_id: item.id,
+    message_id: "",
+    execution_id: "",
+    path: item.path,
+    change_type: item.change_type,
+    summary: item.summary,
+    added_lines: item.added_lines,
+    deleted_lines: item.deleted_lines,
+    created_at: ""
+  }));
+});
 
 const runHint = computed(() => {
   if (pendingCount.value > 0 || executingCount.value > 0) {
@@ -376,7 +413,7 @@ const riskSummary = computed(() => {
   return tf("conversation.inspector.risk.summary.total", { total });
 });
 
-function isDiffLineCountUnknown(item: DiffItem): boolean {
+function isDiffLineCountUnknown(item: ChangeEntry): boolean {
   const added = toOptionalNonNegativeInteger(item.added_lines);
   const deleted = toOptionalNonNegativeInteger(item.deleted_lines);
   return added === null && deleted === null;

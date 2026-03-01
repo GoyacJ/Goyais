@@ -1514,7 +1514,7 @@ func (o *ExecutionOrchestrator) appendDiffGeneratedEventFromToolResult(
 		return
 	}
 	merged := mergeDiffItems(o.state.executionDiffs[executionID], diffItems)
-	appendExecutionEventLocked(o.state, ExecutionEvent{
+	diffEvent := appendExecutionEventLocked(o.state, ExecutionEvent{
 		ExecutionID:    execution.ID,
 		ConversationID: execution.ConversationID,
 		TraceID:        execution.TraceID,
@@ -1524,6 +1524,19 @@ func (o *ExecutionOrchestrator) appendDiffGeneratedEventFromToolResult(
 		Payload: map[string]any{
 			"diff":   diffItemsToPayload(merged),
 			"source": "hub_orchestrator",
+		},
+	})
+	ledger := ensureConversationChangeLedgerLocked(o.state, execution.ConversationID)
+	appendExecutionEventLocked(o.state, ExecutionEvent{
+		ExecutionID:    execution.ID,
+		ConversationID: execution.ConversationID,
+		TraceID:        execution.TraceID,
+		QueueIndex:     execution.QueueIndex,
+		Type:           ExecutionEventTypeChangeSetUpdated,
+		Timestamp:      diffEvent.Timestamp,
+		Payload: map[string]any{
+			"change_set_id": ledger.PendingChangeSetID,
+			"file_count":    len(ledger.Entries),
 		},
 	})
 	o.state.mu.Unlock()
@@ -1539,6 +1552,8 @@ func buildToolResultDiffItems(workingDir string, toolName string, output map[str
 	}
 	addedLines := optionalDiffLineCountFromOutput(output["added_lines"])
 	deletedLines := optionalDiffLineCountFromOutput(output["deleted_lines"])
+	beforeBlob := asStringValue(output["before_blob"])
+	afterBlob := asStringValue(output["after_blob"])
 	switch strings.TrimSpace(toolName) {
 	case "Edit":
 		return []DiffItem{{
@@ -1547,6 +1562,8 @@ func buildToolResultDiffItems(workingDir string, toolName string, output map[str
 			Summary:      "Edited file",
 			AddedLines:   addedLines,
 			DeletedLines: deletedLines,
+			BeforeBlob:   beforeBlob,
+			AfterBlob:    afterBlob,
 		}}
 	case "NotebookEdit":
 		return []DiffItem{{
@@ -1555,6 +1572,8 @@ func buildToolResultDiffItems(workingDir string, toolName string, output map[str
 			Summary:      "Edited notebook cell",
 			AddedLines:   addedLines,
 			DeletedLines: deletedLines,
+			BeforeBlob:   beforeBlob,
+			AfterBlob:    afterBlob,
 		}}
 	case "Write":
 		changeType := "added"
@@ -1571,6 +1590,8 @@ func buildToolResultDiffItems(workingDir string, toolName string, output map[str
 			Summary:      summary,
 			AddedLines:   addedLines,
 			DeletedLines: deletedLines,
+			BeforeBlob:   beforeBlob,
+			AfterBlob:    afterBlob,
 		}}
 	default:
 		return nil

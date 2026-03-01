@@ -5,6 +5,11 @@
     :title="title"
     :subtitle="accountSubtitle"
     :scope-hint="scopeHint"
+    :runtime-status-mode="runtimeStatus.runtimeStatusMode.value"
+    :runtime-conversation-status="runtimeStatus.conversationStatus.value"
+    :runtime-connection-status="runtimeStatus.connectionStatus.value"
+    :runtime-user-display-name="runtimeStatus.userDisplayName.value"
+    :runtime-hub-url="runtimeStatus.hubUrl.value"
   >
     <slot />
   </AccountShell>
@@ -14,6 +19,11 @@
     :active-key="activeKey"
     :title="title"
     :subtitle="settingsSubtitle"
+    :runtime-status-mode="runtimeStatus.runtimeStatusMode.value"
+    :runtime-conversation-status="runtimeStatus.conversationStatus.value"
+    :runtime-connection-status="runtimeStatus.connectionStatus.value"
+    :runtime-user-display-name="runtimeStatus.userDisplayName.value"
+    :runtime-hub-url="runtimeStatus.hubUrl.value"
   >
     <slot />
   </SettingsShell>
@@ -22,6 +32,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { useConfigRuntimeStatus } from "@/shared/layouts/useConfigRuntimeStatus";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
 import AccountShell from "@/shared/shells/AccountShell.vue";
 import SettingsShell from "@/shared/shells/SettingsShell.vue";
@@ -41,4 +52,5 @@ const props = withDefaults(
 );
 
 const shellKind = computed(() => resolveWorkspaceSharedShell(workspaceStore.mode));
+const runtimeStatus = useConfigRuntimeStatus();
 </script>

@@ -7,17 +7,19 @@ import {
 import { normalizeExecutionList } from "@/modules/conversation/store/executionMerge";
 import { pinia } from "@/shared/stores/pinia";
 import type {
+  ChangeSetCapability,
   ConversationDetailResponse,
+  ConversationChangeSet,
   ConnectionStatus,
   Conversation,
   ConversationMessage,
   ConversationMode,
   ConversationSnapshot,
-  DiffCapability,
   DiffItem,
   Execution,
   ExecutionEvent,
-  InspectorTabKey
+  InspectorTabKey,
+  ProjectKind
 } from "@/shared/types/api";
 
 export type StreamHandle = {
@@ -38,8 +40,9 @@ export type ConversationRuntime = {
   mcpIds: string[];
   status: ConnectionStatus;
   diff: DiffItem[];
-  diffExecutionId: string;
-  diffCapability: DiffCapability;
+  projectKind: ProjectKind;
+  diffCapability: ChangeSetCapability;
+  changeSet: ConversationChangeSet | null;
   inspectorTab: InspectorTabKey;
   worktreeRef: string | null;
   hydrated: boolean;
@@ -114,8 +117,9 @@ export function ensureConversationRuntime(
     mcpIds: [...(conversation.mcp_ids ?? [])],
     status: "connected",
     diff: [],
-    diffExecutionId: "",
+    projectKind: isGitProject ? "git" : "non_git",
     diffCapability: resolveDiffCapability(isGitProject),
+    changeSet: null,
     inspectorTab: "diff",
     worktreeRef: null,
     hydrated: false,
@@ -141,6 +145,7 @@ export function hydrateConversationRuntime(
   runtime.ruleIds = [...(detail.conversation.rule_ids ?? [])];
   runtime.skillIds = [...(detail.conversation.skill_ids ?? [])];
   runtime.mcpIds = [...(detail.conversation.mcp_ids ?? [])];
+  runtime.projectKind = isGitProject ? "git" : "non_git";
   runtime.messages = detail.messages.map((message) => ({ ...message }));
   runtime.executions = detail.executions.map((execution) => ({
     ...execution,
@@ -162,9 +167,41 @@ export function hydrateConversationRuntime(
   runtime.worktreeRef = latestSnapshot?.worktree_ref ?? null;
   runtime.inspectorTab = latestSnapshot?.inspector_state.tab ?? "diff";
   runtime.diff = [];
-  runtime.diffExecutionId = "";
+  runtime.changeSet = null;
+  runtime.diffCapability = resolveDiffCapability(isGitProject);
   runtime.hydrated = true;
   return runtime;
+}
+
+export function setConversationChangeSet(conversationId: string, changeSet: ConversationChangeSet | null): void {
+  const runtime = conversationStore.byConversationId[conversationId];
+  if (!runtime) {
+    return;
+  }
+
+  runtime.changeSet = changeSet;
+  if (!changeSet) {
+    runtime.diff = [];
+    runtime.diffCapability = resolveDiffCapability(runtime.projectKind === "git");
+    return;
+  }
+
+  runtime.projectKind = changeSet.project_kind;
+  runtime.diff = changeSet.entries.map((entry) => ({
+    id: entry.entry_id,
+    path: entry.path,
+    change_type: entry.change_type,
+    summary: entry.summary,
+    added_lines: entry.added_lines,
+    deleted_lines: entry.deleted_lines
+  }));
+  runtime.diffCapability = {
+    can_commit: changeSet.capability.can_commit,
+    can_discard: changeSet.capability.can_discard,
+    can_export: changeSet.capability.can_export,
+    can_export_patch: changeSet.capability.can_export_patch ?? changeSet.capability.can_export,
+    reason: changeSet.capability.reason
+  };
 }
 
 export function getConversationRuntime(conversationId: string): ConversationRuntime | undefined {

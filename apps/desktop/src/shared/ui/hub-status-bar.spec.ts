@@ -1,6 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { setLocale } from "@/shared/i18n";
 import { authStore, resetAuthStore } from "@/shared/stores/authStore";
 import { resetWorkspaceStore, setCurrentWorkspace, setWorkspaces } from "@/shared/stores/workspaceStore";
 import HubStatusBar from "@/shared/ui/HubStatusBar.vue";
@@ -32,6 +33,7 @@ describe("hub status bar", () => {
       }
     ]);
     setCurrentWorkspace("ws_remote");
+    setLocale("en-US");
     authStore.me = {
       user_id: "u_remote",
       display_name: "Remote Admin",
@@ -71,5 +73,37 @@ describe("hub status bar", () => {
 
     expect(wrapper.text()).toContain("owner");
     expect(wrapper.text()).toContain("reconnecting");
+  });
+
+  it("ignores empty runtime labels and falls back to workspace/auth state", () => {
+    const wrapper = mount(HubStatusBar, {
+      props: {
+        runtimeMode: true,
+        hubLabel: "   ",
+        userLabel: " ",
+        connectionStatus: undefined
+      }
+    });
+
+    expect(wrapper.text()).toContain("Hub: https://hub.example.com");
+    expect(wrapper.text()).toContain("Remote Admin");
+    expect(wrapper.text()).toContain("disconnected");
+  });
+
+  it("localizes runtime labels by current locale", () => {
+    setLocale("zh-CN");
+
+    const wrapper = mount(HubStatusBar, {
+      props: {
+        runtimeMode: true,
+        hubLabel: "local://workspace",
+        userLabel: "本地测试用户",
+        connectionStatus: "connected"
+      }
+    });
+
+    expect(wrapper.text()).toContain("Hub: local://workspace");
+    expect(wrapper.text()).toContain("本地测试用户");
+    expect(wrapper.text()).toContain("已连接");
   });
 });

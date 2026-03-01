@@ -170,7 +170,7 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 		t.Fatalf("expected stop 200, got %d (%s)", stopRes.Code, stopRes.Body.String())
 	}
 
-	rollbackRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/rollback", map[string]any{
+	rollbackRes := performJSONRequest(t, router, http.MethodPost, "/v2/conversations/"+conversationID+"/rollback", map[string]any{
 		"message_id": messageID,
 	}, authHeaders)
 	if rollbackRes.Code != http.StatusOK {
@@ -995,9 +995,9 @@ func TestConversationStartsWithoutWelcomeMessage(t *testing.T) {
 	}
 }
 
-func TestExecutionPatchEndpointFallbackForNonGitProject(t *testing.T) {
+func TestConversationChangeSetEndpointForNonGitProject(t *testing.T) {
 	router := NewRouter()
-	workspaceID := createRemoteWorkspace(t, router, "Remote Patch NonGit", "http://127.0.0.1:9017", false)
+	workspaceID := createRemoteWorkspace(t, router, "Remote ChangeSet NonGit", "http://127.0.0.1:9017", false)
 	token := loginRemoteWorkspace(t, router, workspaceID, "patch_non_git_user", "pw", RoleDeveloper, true)
 	authHeaders := map[string]string{"Authorization": "Bearer " + token}
 
@@ -1031,167 +1031,26 @@ func TestExecutionPatchEndpointFallbackForNonGitProject(t *testing.T) {
 	if createExecutionRes.Code != http.StatusCreated {
 		t.Fatalf("expected create execution 201, got %d (%s)", createExecutionRes.Code, createExecutionRes.Body.String())
 	}
-	createExecutionPayload := map[string]any{}
-	mustDecodeJSON(t, createExecutionRes.Body.Bytes(), &createExecutionPayload)
-	executionID := createExecutionPayload["execution"].(map[string]any)["id"].(string)
-
-	patchRes := performJSONRequest(t, router, http.MethodGet, "/v1/executions/"+executionID+"/patch", nil, authHeaders)
-	if patchRes.Code != http.StatusOK {
-		t.Fatalf("expected patch export 200, got %d (%s)", patchRes.Code, patchRes.Body.String())
+	changeSetRes := performJSONRequest(t, router, http.MethodGet, "/v2/conversations/"+conversationID+"/changeset", nil, authHeaders)
+	if changeSetRes.Code != http.StatusOK {
+		t.Fatalf("expected changeset 200, got %d (%s)", changeSetRes.Code, changeSetRes.Body.String())
 	}
-	if !strings.Contains(patchRes.Body.String(), "No diff entries were captured") {
-		t.Fatalf("expected fallback patch without diff entries, got %s", patchRes.Body.String())
+	changeSetPayload := map[string]any{}
+	mustDecodeJSON(t, changeSetRes.Body.Bytes(), &changeSetPayload)
+	if got := strings.TrimSpace(asString(changeSetPayload["project_kind"])); got != "non_git" {
+		t.Fatalf("expected non_git project kind, got %q", got)
 	}
-}
-
-func TestExecutionPatchEndpointUsesGitDiffWhenProjectIsGit(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git is required for git patch endpoint test")
+	if got := int(changeSetPayload["file_count"].(float64)); got != 0 {
+		t.Fatalf("expected file_count 0 for untouched conversation, got %d", got)
 	}
-	repoDir := t.TempDir()
-	mustRunGitCommand(t, repoDir, "init")
-	mustRunGitCommand(t, repoDir, "config", "user.email", "dev@goyais.local")
-	mustRunGitCommand(t, repoDir, "config", "user.name", "goyais")
-
-	readmePath := filepath.Join(repoDir, "README.md")
-	if err := os.WriteFile(readmePath, []byte("hello\n"), 0o644); err != nil {
-		t.Fatalf("write README failed: %v", err)
-	}
-	mustRunGitCommand(t, repoDir, "add", "README.md")
-	mustRunGitCommand(t, repoDir, "commit", "-m", "init")
-	if err := os.WriteFile(readmePath, []byte("hello world\n"), 0o644); err != nil {
-		t.Fatalf("update README failed: %v", err)
-	}
-
-	router := NewRouter()
-	workspaceID := createRemoteWorkspace(t, router, "Remote Patch Git", "http://127.0.0.1:9018", false)
-	token := loginRemoteWorkspace(t, router, workspaceID, "patch_git_user", "pw", RoleDeveloper, true)
-	authHeaders := map[string]string{"Authorization": "Bearer " + token}
-
-	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
-		"workspace_id":   workspaceID,
-		"directory_path": repoDir,
-	}, authHeaders)
-	if projectRes.Code != http.StatusCreated {
-		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
-	}
-	projectPayload := map[string]any{}
-	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
-	projectID := projectPayload["id"].(string)
-	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
-	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
-
-	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
-		"workspace_id": workspaceID,
-		"name":         "PatchGit",
-	}, authHeaders)
-	if convRes.Code != http.StatusCreated {
-		t.Fatalf("expected create conversation 201, got %d (%s)", convRes.Code, convRes.Body.String())
-	}
-	conversationPayload := map[string]any{}
-	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
-	conversationID := conversationPayload["id"].(string)
-
-	createExecutionRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
-		"raw_input": "show git patch",
-	}, authHeaders)
-	if createExecutionRes.Code != http.StatusCreated {
-		t.Fatalf("expected create execution 201, got %d (%s)", createExecutionRes.Code, createExecutionRes.Body.String())
-	}
-	createExecutionPayload := map[string]any{}
-	mustDecodeJSON(t, createExecutionRes.Body.Bytes(), &createExecutionPayload)
-	executionID := createExecutionPayload["execution"].(map[string]any)["id"].(string)
-
-	patchRes := performJSONRequest(t, router, http.MethodGet, "/v1/executions/"+executionID+"/patch", nil, authHeaders)
-	if patchRes.Code != http.StatusOK {
-		t.Fatalf("expected patch export 200, got %d (%s)", patchRes.Code, patchRes.Body.String())
-	}
-	if !strings.Contains(patchRes.Body.String(), "diff --git a/README.md b/README.md") {
-		t.Fatalf("expected git patch output, got %s", patchRes.Body.String())
+	if strings.TrimSpace(asString(changeSetPayload["change_set_id"])) == "" {
+		t.Fatalf("expected non-empty change_set_id")
 	}
 }
 
-func TestExecutionPatchEndpointScopesGitDiffToExecutionFiles(t *testing.T) {
+func TestConversationChangeSetCommitRejectsEmptySet(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git is required for scoped git patch endpoint test")
-	}
-	repoDir := t.TempDir()
-	mustRunGitCommand(t, repoDir, "init")
-	mustRunGitCommand(t, repoDir, "config", "user.email", "dev@goyais.local")
-	mustRunGitCommand(t, repoDir, "config", "user.name", "goyais")
-
-	readmePath := filepath.Join(repoDir, "README.md")
-	notesPath := filepath.Join(repoDir, "NOTES.md")
-	if err := os.WriteFile(readmePath, []byte("hello\n"), 0o644); err != nil {
-		t.Fatalf("write README failed: %v", err)
-	}
-	if err := os.WriteFile(notesPath, []byte("notes\n"), 0o644); err != nil {
-		t.Fatalf("write NOTES failed: %v", err)
-	}
-	mustRunGitCommand(t, repoDir, "add", "README.md", "NOTES.md")
-	mustRunGitCommand(t, repoDir, "commit", "-m", "init")
-	if err := os.WriteFile(readmePath, []byte("hello scoped\n"), 0o644); err != nil {
-		t.Fatalf("update README failed: %v", err)
-	}
-	if err := os.WriteFile(notesPath, []byte("notes changed\n"), 0o644); err != nil {
-		t.Fatalf("update NOTES failed: %v", err)
-	}
-
-	router := NewRouter()
-	workspaceID := createRemoteWorkspace(t, router, "Remote Patch Scoped", "http://127.0.0.1:9019", false)
-	token := loginRemoteWorkspace(t, router, workspaceID, "patch_scope_user", "pw", RoleDeveloper, true)
-	authHeaders := map[string]string{"Authorization": "Bearer " + token}
-
-	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
-		"workspace_id":   workspaceID,
-		"directory_path": repoDir,
-	}, authHeaders)
-	if projectRes.Code != http.StatusCreated {
-		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
-	}
-	projectPayload := map[string]any{}
-	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
-	projectID := projectPayload["id"].(string)
-	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
-	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
-
-	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
-		"workspace_id": workspaceID,
-		"name":         "PatchScoped",
-	}, authHeaders)
-	if convRes.Code != http.StatusCreated {
-		t.Fatalf("expected create conversation 201, got %d (%s)", convRes.Code, convRes.Body.String())
-	}
-	conversationPayload := map[string]any{}
-	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
-	conversationID := conversationPayload["id"].(string)
-
-	createExecutionRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
-		"raw_input": "show scoped git patch",
-	}, authHeaders)
-	if createExecutionRes.Code != http.StatusCreated {
-		t.Fatalf("expected create execution 201, got %d (%s)", createExecutionRes.Code, createExecutionRes.Body.String())
-	}
-	createExecutionPayload := map[string]any{}
-	mustDecodeJSON(t, createExecutionRes.Body.Bytes(), &createExecutionPayload)
-	executionID := createExecutionPayload["execution"].(map[string]any)["id"].(string)
-
-	patchRes := performJSONRequest(t, router, http.MethodGet, "/v1/executions/"+executionID+"/patch", nil, authHeaders)
-	if patchRes.Code != http.StatusOK {
-		t.Fatalf("expected patch export 200, got %d (%s)", patchRes.Code, patchRes.Body.String())
-	}
-	patchBody := patchRes.Body.String()
-	if !strings.Contains(patchBody, "diff --git a/README.md b/README.md") {
-		t.Fatalf("expected patch to include README.md diff, got %s", patchBody)
-	}
-	if !strings.Contains(patchBody, "diff --git a/NOTES.md b/NOTES.md") {
-		t.Fatalf("expected patch to include NOTES.md diff without scoped event filtering, got %s", patchBody)
-	}
-}
-
-func TestExecutionFilesEndpointExportsZipForGitProject(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git is required for files export endpoint test")
+		t.Skip("git is required for changeset commit test")
 	}
 	repoDir := t.TempDir()
 	mustRunGitCommand(t, repoDir, "init")
@@ -1217,7 +1076,7 @@ func TestExecutionFilesEndpointExportsZipForGitProject(t *testing.T) {
 	}
 
 	router := NewRouter()
-	workspaceID := createRemoteWorkspace(t, router, "Remote Files Export", "http://127.0.0.1:9020", false)
+	workspaceID := createRemoteWorkspace(t, router, "Remote ChangeSet Commit", "http://127.0.0.1:9020", false)
 	token := loginRemoteWorkspace(t, router, workspaceID, "files_export_user", "pw", RoleDeveloper, true)
 	authHeaders := map[string]string{"Authorization": "Bearer " + token}
 
@@ -1251,11 +1110,118 @@ func TestExecutionFilesEndpointExportsZipForGitProject(t *testing.T) {
 	if createExecutionRes.Code != http.StatusCreated {
 		t.Fatalf("expected create execution 201, got %d (%s)", createExecutionRes.Code, createExecutionRes.Body.String())
 	}
-	createExecutionPayload := map[string]any{}
-	mustDecodeJSON(t, createExecutionRes.Body.Bytes(), &createExecutionPayload)
-	executionID := createExecutionPayload["execution"].(map[string]any)["id"].(string)
+	stopRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/stop", map[string]any{}, authHeaders)
+	if stopRes.Code != http.StatusOK {
+		t.Fatalf("expected stop conversation 200, got %d (%s)", stopRes.Code, stopRes.Body.String())
+	}
+	changeSetRes := performJSONRequest(t, router, http.MethodGet, "/v2/conversations/"+conversationID+"/changeset", nil, authHeaders)
+	if changeSetRes.Code != http.StatusOK {
+		t.Fatalf("expected changeset 200, got %d (%s)", changeSetRes.Code, changeSetRes.Body.String())
+	}
+	changeSetPayload := map[string]any{}
+	mustDecodeJSON(t, changeSetRes.Body.Bytes(), &changeSetPayload)
+	changeSetID := strings.TrimSpace(asString(changeSetPayload["change_set_id"]))
+	if changeSetID == "" {
+		t.Fatalf("expected non-empty change_set_id")
+	}
+	commitRes := performJSONRequest(t, router, http.MethodPost, "/v2/conversations/"+conversationID+"/changeset/commit", map[string]any{
+		"message":                "chore: empty changeset",
+		"expected_change_set_id": changeSetID,
+	}, authHeaders)
+	if commitRes.Code != http.StatusConflict {
+		t.Fatalf("expected empty changeset commit 409, got %d (%s)", commitRes.Code, commitRes.Body.String())
+	}
+	commitError := map[string]any{}
+	mustDecodeJSON(t, commitRes.Body.Bytes(), &commitError)
+	if got := strings.TrimSpace(asString(commitError["code"])); got != "CHANGESET_EMPTY" {
+		t.Fatalf("expected CHANGESET_EMPTY, got %q", got)
+	}
+}
 
-	filesRes := performJSONRequest(t, router, http.MethodGet, "/v1/executions/"+executionID+"/files", nil, authHeaders)
+func TestConversationChangeSetDiscardEndpointSupportsEmptySet(t *testing.T) {
+	router := NewRouter()
+	workspaceID := createRemoteWorkspace(t, router, "Remote ChangeSet Discard", "http://127.0.0.1:9019", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "changeset_discard_user", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
+		"workspace_id":   workspaceID,
+		"directory_path": "/tmp/changeset-discard-alpha",
+	}, authHeaders)
+	if projectRes.Code != http.StatusCreated {
+		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
+	}
+	projectPayload := map[string]any{}
+	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
+	projectID := projectPayload["id"].(string)
+	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
+	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
+
+	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+		"workspace_id": workspaceID,
+		"name":         "ChangeSetDiscard",
+	}, authHeaders)
+	if convRes.Code != http.StatusCreated {
+		t.Fatalf("expected create conversation 201, got %d (%s)", convRes.Code, convRes.Body.String())
+	}
+	conversationPayload := map[string]any{}
+	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
+	conversationID := conversationPayload["id"].(string)
+
+	changeSetRes := performJSONRequest(t, router, http.MethodGet, "/v2/conversations/"+conversationID+"/changeset", nil, authHeaders)
+	if changeSetRes.Code != http.StatusOK {
+		t.Fatalf("expected changeset 200, got %d (%s)", changeSetRes.Code, changeSetRes.Body.String())
+	}
+	changeSetPayload := map[string]any{}
+	mustDecodeJSON(t, changeSetRes.Body.Bytes(), &changeSetPayload)
+	changeSetID := strings.TrimSpace(asString(changeSetPayload["change_set_id"]))
+	if changeSetID == "" {
+		t.Fatalf("expected non-empty change_set_id")
+	}
+	discardRes := performJSONRequest(t, router, http.MethodPost, "/v2/conversations/"+conversationID+"/changeset/discard", map[string]any{
+		"expected_change_set_id": changeSetID,
+	}, authHeaders)
+	if discardRes.Code != http.StatusOK {
+		t.Fatalf("expected discard 200, got %d (%s)", discardRes.Code, discardRes.Body.String())
+	}
+	discardPayload := map[string]any{}
+	mustDecodeJSON(t, discardRes.Body.Bytes(), &discardPayload)
+	if ok, _ := discardPayload["ok"].(bool); !ok {
+		t.Fatalf("expected discard ok=true, got %#v", discardPayload)
+	}
+}
+
+func TestConversationChangeSetExportEndpointReturnsZipManifest(t *testing.T) {
+	router := NewRouter()
+	workspaceID := createRemoteWorkspace(t, router, "Remote ChangeSet Export", "http://127.0.0.1:9021", false)
+	token := loginRemoteWorkspace(t, router, workspaceID, "changeset_export_user", "pw", RoleDeveloper, true)
+	authHeaders := map[string]string{"Authorization": "Bearer " + token}
+
+	projectRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/import", map[string]any{
+		"workspace_id":   workspaceID,
+		"directory_path": "/tmp/changeset-export-alpha",
+	}, authHeaders)
+	if projectRes.Code != http.StatusCreated {
+		t.Fatalf("expected import project 201, got %d (%s)", projectRes.Code, projectRes.Body.String())
+	}
+	projectPayload := map[string]any{}
+	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
+	projectID := projectPayload["id"].(string)
+	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
+	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
+
+	convRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+		"workspace_id": workspaceID,
+		"name":         "ChangeSetExport",
+	}, authHeaders)
+	if convRes.Code != http.StatusCreated {
+		t.Fatalf("expected create conversation 201, got %d (%s)", convRes.Code, convRes.Body.String())
+	}
+	conversationPayload := map[string]any{}
+	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
+	conversationID := conversationPayload["id"].(string)
+
+	filesRes := performJSONRequest(t, router, http.MethodPost, "/v2/conversations/"+conversationID+"/changeset/export", map[string]any{}, authHeaders)
 	if filesRes.Code != http.StatusOK {
 		t.Fatalf("expected files export 200, got %d (%s)", filesRes.Code, filesRes.Body.String())
 	}
@@ -1263,8 +1229,8 @@ func TestExecutionFilesEndpointExportsZipForGitProject(t *testing.T) {
 	mustDecodeJSON(t, filesRes.Body.Bytes(), &exportPayload)
 
 	fileName := strings.TrimSpace(asString(exportPayload["file_name"]))
-	if fileName == "" || !strings.HasSuffix(fileName, "-files.zip") {
-		t.Fatalf("expected files export name with -files.zip suffix, got %q", fileName)
+	if fileName == "" || !strings.HasSuffix(fileName, ".zip") {
+		t.Fatalf("expected files export name with .zip suffix, got %q", fileName)
 	}
 
 	encodedArchive := strings.TrimSpace(asString(exportPayload["archive_base64"]))
@@ -1294,11 +1260,8 @@ func TestExecutionFilesEndpointExportsZipForGitProject(t *testing.T) {
 		zipContents[file.Name] = string(body)
 	}
 
-	if !strings.Contains(zipContents["README.md"], "hello exported") {
-		t.Fatalf("expected README.md updated content in archive, got %#v", zipContents["README.md"])
-	}
-	if !strings.Contains(zipContents["_goyais_export_manifest.txt"], "REMOVED.md") {
-		t.Fatalf("expected missing files manifest to include REMOVED.md, got %#v", zipContents["_goyais_export_manifest.txt"])
+	if !strings.Contains(zipContents["_goyais_export_manifest.txt"], "No pending changes in current conversation.") {
+		t.Fatalf("expected empty changeset manifest, got %#v", zipContents["_goyais_export_manifest.txt"])
 	}
 }
 

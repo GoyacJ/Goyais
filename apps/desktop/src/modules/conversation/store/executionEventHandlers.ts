@@ -37,8 +37,16 @@ export function applyDiffUpdate(runtime: ConversationRuntime, event: ExecutionEv
     const incoming = parseDiff(event.payload);
     if (incoming.length > 0) {
       runtime.diff = mergeDiffByPath(runtime.diff, incoming);
-      runtime.diffExecutionId = event.execution_id.trim();
     }
+    return;
+  }
+
+  if (
+    event.type === "change_set_committed" ||
+    event.type === "change_set_discarded" ||
+    event.type === "change_set_rolled_back"
+  ) {
+    runtime.diff = [];
   }
 }
 

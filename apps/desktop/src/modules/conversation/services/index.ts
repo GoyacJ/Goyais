@@ -2,6 +2,11 @@ import { getControlClient } from "@/shared/services/clients";
 import { getControlHubBaseUrl } from "@/shared/runtime";
 import { connectConversationEvents } from "@/shared/services/sseClient";
 import type {
+  ChangeSetCommitRequest,
+  ChangeSetCommitResponse,
+  ChangeSetDiscardRequest,
+  ChangeSetCapability,
+  ConversationChangeSet,
   ComposerCatalog,
   ComposerSubmitRequest,
   ComposerSubmitResponse,
@@ -10,8 +15,6 @@ import type {
   Conversation,
   ConversationStreamEvent,
   ConversationDetailResponse,
-  DiffCapability,
-  DiffItem,
   ExecutionFilesExportResponse,
   RunControlAction,
   RunControlResponse
@@ -87,45 +90,39 @@ export async function controlExecutionRun(
 }
 
 export async function rollbackExecution(conversationId: string, messageId: string): Promise<void> {
-  await getControlClient().post<void>(`/v1/conversations/${conversationId}/rollback`, {
+  await getControlClient().post<void>(`/v2/conversations/${conversationId}/rollback`, {
     message_id: messageId
   });
 }
 
-export async function commitExecution(executionId: string): Promise<void> {
-  await getControlClient().post<void>(`/v1/executions/${executionId}/commit`);
+export async function getConversationChangeSet(conversationId: string): Promise<ConversationChangeSet> {
+  return getControlClient().get<ConversationChangeSet>(`/v2/conversations/${conversationId}/changeset`);
 }
 
-export async function discardExecution(executionId: string): Promise<void> {
-  await getControlClient().post<void>(`/v1/executions/${executionId}/discard`);
+export async function commitConversationChangeSet(
+  conversationId: string,
+  input: ChangeSetCommitRequest
+): Promise<ChangeSetCommitResponse> {
+  return getControlClient().post<ChangeSetCommitResponse>(`/v2/conversations/${conversationId}/changeset/commit`, input);
 }
 
-export async function loadExecutionDiff(executionId: string): Promise<DiffItem[]> {
-  return getControlClient().get<DiffItem[]>(`/v1/executions/${executionId}/diff`);
+export async function discardConversationChangeSet(
+  conversationId: string,
+  input: ChangeSetDiscardRequest
+): Promise<void> {
+  await getControlClient().post<void>(`/v2/conversations/${conversationId}/changeset/discard`, input);
 }
 
-export async function exportExecutionPatch(executionId: string): Promise<string> {
-  return getControlClient().get<string>(`/v1/executions/${executionId}/patch`);
+export async function exportConversationChangeSet(conversationId: string): Promise<ExecutionFilesExportResponse> {
+  return getControlClient().post<ExecutionFilesExportResponse>(`/v2/conversations/${conversationId}/changeset/export`, {});
 }
 
-export async function exportExecutionFiles(executionId: string): Promise<ExecutionFilesExportResponse> {
-  return getControlClient().get<ExecutionFilesExportResponse>(`/v1/executions/${executionId}/files`);
-}
-
-export function resolveDiffCapability(isGitProject: boolean): DiffCapability {
-  if (isGitProject) {
-    return {
-      can_commit: true,
-      can_discard: true,
-      can_export_patch: true
-    };
-  }
-
+export function resolveDiffCapability(_isGitProject: boolean): ChangeSetCapability {
   return {
-    can_commit: false,
-    can_discard: false,
-    can_export_patch: true,
-    reason: "Non-Git project: commit and discard are disabled"
+    can_commit: true,
+    can_discard: true,
+    can_export: true,
+    can_export_patch: true
   };
 }
 

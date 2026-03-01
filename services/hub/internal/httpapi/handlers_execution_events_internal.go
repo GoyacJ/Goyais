@@ -92,6 +92,8 @@ func parseDiffItemRecord(record map[string]any) (DiffItem, bool) {
 		Summary:      asStringValue(record["summary"]),
 		AddedLines:   addedLines,
 		DeletedLines: deletedLines,
+		BeforeBlob:   asStringValue(record["before_blob"]),
+		AfterBlob:    asStringValue(record["after_blob"]),
 	})
 }
 
@@ -115,6 +117,8 @@ func normalizeDiffItem(item DiffItem) (DiffItem, bool) {
 		Summary:      summary,
 		AddedLines:   normalizeOptionalDiffLineCount(item.AddedLines),
 		DeletedLines: normalizeOptionalDiffLineCount(item.DeletedLines),
+		BeforeBlob:   strings.TrimSpace(item.BeforeBlob),
+		AfterBlob:    strings.TrimSpace(item.AfterBlob),
 	}, true
 }
 
@@ -146,6 +150,12 @@ func mergeDiffItems(existing []DiffItem, incoming []DiffItem) []DiffItem {
 			}
 			result[index].AddedLines = normalized.AddedLines
 			result[index].DeletedLines = normalized.DeletedLines
+			if normalized.BeforeBlob != "" {
+				result[index].BeforeBlob = normalized.BeforeBlob
+			}
+			if normalized.AfterBlob != "" {
+				result[index].AfterBlob = normalized.AfterBlob
+			}
 			return
 		}
 		indexByPath[normalized.Path] = len(result)
@@ -178,6 +188,8 @@ func diffItemsToPayload(items []DiffItem) []map[string]any {
 			"summary":       normalized.Summary,
 			"added_lines":   normalized.AddedLines,
 			"deleted_lines": normalized.DeletedLines,
+			"before_blob":   normalized.BeforeBlob,
+			"after_blob":    normalized.AfterBlob,
 		})
 	}
 	return payload

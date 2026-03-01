@@ -40,10 +40,7 @@ const props = withDefaults(
     scopeHint: "Remote 视图：显示成员与角色、权限与审计，并按 RBAC+ABAC 控制",
     menuEntries: undefined,
     runtimeStatusMode: false,
-    runtimeConversationStatus: "stopped",
-    runtimeConnectionStatus: "disconnected",
-    runtimeUserDisplayName: "",
-    runtimeHubUrl: ""
+    runtimeConversationStatus: "stopped"
   }
 );
 

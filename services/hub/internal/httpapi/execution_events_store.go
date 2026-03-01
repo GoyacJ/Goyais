@@ -36,6 +36,7 @@ func appendExecutionEventLocked(state *AppState, event ExecutionEvent) Execution
 			}
 		}
 	}
+	applyExecutionEventToChangeLedgerLocked(state, normalized)
 	state.conversationEventSeq[normalized.ConversationID] = normalized.Sequence
 	state.executionEvents[normalized.ConversationID] = append(
 		state.executionEvents[normalized.ConversationID],

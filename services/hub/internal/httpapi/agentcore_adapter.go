@@ -14,6 +14,9 @@ func mapExecutionEventToRunEvent(event ExecutionEvent) protocol.RunEvent {
 	for key, value := range event.Payload {
 		payload[key] = value
 	}
+	if _, exists := payload["event_type"]; !exists {
+		payload["event_type"] = string(event.Type)
+	}
 	if _, exists := payload["queue_index"]; !exists {
 		payload["queue_index"] = event.QueueIndex
 	}

@@ -112,12 +112,14 @@ function createRuntime(overrides: Partial<ConversationRuntime>): ConversationRun
     mcpIds: [],
     status: "connected",
     diff: [],
-    diffExecutionId: "",
+    projectKind: "git",
     diffCapability: {
       can_commit: true,
       can_discard: true,
+      can_export: true,
       can_export_patch: true
     },
+    changeSet: null,
     inspectorTab: "diff",
     worktreeRef: null,
     hydrated: true,

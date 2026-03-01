@@ -90,6 +90,15 @@ function mapRunEventToExecutionEvent(
 }
 
 function resolveExecutionTypeForRunOutputDelta(payload: Record<string, unknown>): ExecutionEventType {
+  const explicitEventType = asString(payload.event_type);
+  if (
+    explicitEventType === "change_set_updated" ||
+    explicitEventType === "change_set_committed" ||
+    explicitEventType === "change_set_discarded" ||
+    explicitEventType === "change_set_rolled_back"
+  ) {
+    return explicitEventType;
+  }
   if (Array.isArray(payload.diff)) {
     return "diff_generated";
   }

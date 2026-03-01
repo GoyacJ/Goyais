@@ -540,29 +540,6 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/rollback:
-    post:
-      summary: Rollback conversation to snapshot point
-      parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RollbackRequest'
-      responses:
-        '200':
-          description: Rollback applied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-        '400':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '404':
-          $ref: '#/components/responses/StandardErrorResponse'
-
   /v1/conversations/{conversation_id}/export:
     get:
       summary: Export conversation as markdown
@@ -629,43 +606,76 @@ paths:
         '409':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/executions/{execution_id}/diff:
+  /v2/conversations/{conversation_id}/changeset:
     get:
-      summary: Get execution diff summary
+      summary: Get conversation-level pending change set
       parameters:
-        - $ref: '#/components/parameters/ExecutionIdParam'
+        - $ref: '#/components/parameters/ConversationIdParam'
       responses:
         '200':
-          description: Diff list
+          description: Pending conversation changes
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/DiffItem'
+                $ref: '#/components/schemas/ConversationChangeSet'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/executions/{execution_id}/patch:
-    get:
-      summary: Export execution patch
+  /v2/conversations/{conversation_id}/changeset/commit:
+    post:
+      summary: Commit conversation-level pending change set
       parameters:
-        - $ref: '#/components/parameters/ExecutionIdParam'
+        - $ref: '#/components/parameters/ConversationIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeSetCommitRequest'
       responses:
         '200':
-          description: Patch content
+          description: Change set committed
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
+                $ref: '#/components/schemas/ChangeSetCommitResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
+        '409':
+          $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/executions/{execution_id}/files:
-    get:
-      summary: Export execution files as zip archive
+  /v2/conversations/{conversation_id}/changeset/discard:
+    post:
+      summary: Discard conversation-level pending change set
       parameters:
-        - $ref: '#/components/parameters/ExecutionIdParam'
+        - $ref: '#/components/parameters/ConversationIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeSetDiscardRequest'
+      responses:
+        '200':
+          description: Change set discarded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '409':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v2/conversations/{conversation_id}/changeset/export:
+    post:
+      summary: Export conversation-level pending changed files as zip archive
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdParam'
       responses:
         '200':
           description: Files archive payload
@@ -676,24 +686,26 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/executions/{execution_id}/{action}:
+  /v2/conversations/{conversation_id}/rollback:
     post:
-      summary: Commit or discard execution result
+      summary: Rollback conversation to user message anchor
       parameters:
-        - $ref: '#/components/parameters/ExecutionIdParam'
-        - in: path
-          name: action
-          required: true
-          schema:
-            type: string
-            enum: [commit, discard]
+        - $ref: '#/components/parameters/ConversationIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RollbackRequest'
       responses:
         '200':
-          description: Action applied
+          description: Rollback applied
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
@@ -2556,6 +2568,144 @@ components:
         deleted_lines:
           type: integer
           minimum: 0
+        before_blob:
+          type: string
+        after_blob:
+          type: string
+
+    ChangeEntry:
+      type: object
+      required: [entry_id, message_id, execution_id, path, change_type, summary, created_at]
+      properties:
+        entry_id:
+          type: string
+        message_id:
+          type: string
+        execution_id:
+          type: string
+        path:
+          type: string
+        change_type:
+          type: string
+          enum: [added, modified, deleted]
+        summary:
+          type: string
+        added_lines:
+          type: integer
+          minimum: 0
+        deleted_lines:
+          type: integer
+          minimum: 0
+        before_blob:
+          type: string
+        after_blob:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ChangeSetCapability:
+      type: object
+      required: [can_commit, can_discard, can_export]
+      properties:
+        can_commit:
+          type: boolean
+        can_discard:
+          type: boolean
+        can_export:
+          type: boolean
+        can_export_patch:
+          type: boolean
+        reason:
+          type: string
+
+    CommitSuggestion:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    CheckpointSummary:
+      type: object
+      required: [checkpoint_id, message, created_at]
+      properties:
+        checkpoint_id:
+          type: string
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        git_commit_id:
+          type: string
+        entries_digest:
+          type: string
+
+    ConversationChangeSet:
+      type: object
+      required:
+        - change_set_id
+        - conversation_id
+        - project_kind
+        - entries
+        - file_count
+        - added_lines
+        - deleted_lines
+        - capability
+        - suggested_message
+      properties:
+        change_set_id:
+          type: string
+        conversation_id:
+          type: string
+        project_kind:
+          type: string
+          enum: [git, non_git]
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChangeEntry'
+        file_count:
+          type: integer
+          minimum: 0
+        added_lines:
+          type: integer
+          minimum: 0
+        deleted_lines:
+          type: integer
+          minimum: 0
+        capability:
+          $ref: '#/components/schemas/ChangeSetCapability'
+        suggested_message:
+          $ref: '#/components/schemas/CommitSuggestion'
+        last_committed_checkpoint:
+          $ref: '#/components/schemas/CheckpointSummary'
+
+    ChangeSetCommitRequest:
+      type: object
+      required: [message, expected_change_set_id]
+      properties:
+        message:
+          type: string
+        expected_change_set_id:
+          type: string
+
+    ChangeSetDiscardRequest:
+      type: object
+      required: [expected_change_set_id]
+      properties:
+        expected_change_set_id:
+          type: string
+
+    ChangeSetCommitResponse:
+      type: object
+      required: [ok, checkpoint]
+      properties:
+        ok:
+          type: boolean
+        checkpoint:
+          $ref: '#/components/schemas/CheckpointSummary'
 
     ExecutionFilesExportResponse:
       type: object

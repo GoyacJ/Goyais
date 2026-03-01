@@ -52,16 +52,18 @@ func newRouterWithDBPath(dbPath string) http.Handler {
 	mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
 	mux.HandleFunc("/v1/conversations/{conversation_id}/events", ConversationEventsHandler(state))
 	mux.HandleFunc("/v1/conversations/{conversation_id}/stop", ConversationStopHandler(state))
-	mux.HandleFunc("/v1/conversations/{conversation_id}/rollback", ConversationRollbackHandler(state))
 	mux.HandleFunc("/v1/conversations/{conversation_id}/export", ConversationExportHandler(state))
 
 	// Executions
 	mux.HandleFunc("/v1/executions", ExecutionsHandler(state))
 	mux.HandleFunc("/v1/runs/{run_id}/control", RunControlHandler(state))
-	mux.HandleFunc("/v1/executions/{execution_id}/diff", ExecutionDiffHandler(state))
-	mux.HandleFunc("/v1/executions/{execution_id}/patch", ExecutionPatchHandler(state))
-	mux.HandleFunc("/v1/executions/{execution_id}/files", ExecutionFilesHandler(state))
-	mux.HandleFunc("/v1/executions/{execution_id}/{action}", ExecutionActionHandler(state))
+
+	// Conversation changeset v2
+	mux.HandleFunc("/v2/conversations/{conversation_id}/changeset", ConversationChangeSetHandler(state))
+	mux.HandleFunc("/v2/conversations/{conversation_id}/changeset/commit", ConversationChangeSetCommitHandler(state))
+	mux.HandleFunc("/v2/conversations/{conversation_id}/changeset/discard", ConversationChangeSetDiscardHandler(state))
+	mux.HandleFunc("/v2/conversations/{conversation_id}/changeset/export", ConversationChangeSetExportHandler(state))
+	mux.HandleFunc("/v2/conversations/{conversation_id}/rollback", ConversationRollbackHandler(state))
 
 	// Resources and sharing
 	mux.HandleFunc("/v1/resources", ResourcesHandler(state))

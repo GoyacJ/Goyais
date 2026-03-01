@@ -69,6 +69,27 @@ describe("run event adapter", () => {
     expect(result?.type).toBe("tool_result");
   });
 
+  it("maps run_output_delta payload with explicit event_type to change_set event", () => {
+    const result = toExecutionEventFromStreamPayload(
+      {
+        type: "run_output_delta",
+        session_id: "conv_adapter_4",
+        run_id: "run_adapter_4",
+        sequence: 5,
+        timestamp: "2026-02-25T12:01:40Z",
+        payload: {
+          event_type: "change_set_updated",
+          change_set_id: "cs_123"
+        }
+      },
+      "conv_fallback"
+    );
+
+    expect(result).toBeTruthy();
+    expect(result?.type).toBe("change_set_updated");
+    expect(result?.payload.change_set_id).toBe("cs_123");
+  });
+
   it("returns null for legacy execution event payloads", () => {
     const result = toExecutionEventFromStreamPayload(
       {

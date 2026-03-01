@@ -487,11 +487,73 @@ type DiffItem struct {
 	Summary      string `json:"summary"`
 	AddedLines   *int   `json:"added_lines,omitempty"`
 	DeletedLines *int   `json:"deleted_lines,omitempty"`
+	BeforeBlob   string `json:"before_blob,omitempty"`
+	AfterBlob    string `json:"after_blob,omitempty"`
 }
 
 type ExecutionFilesExportResponse struct {
 	FileName      string `json:"file_name"`
 	ArchiveBase64 string `json:"archive_base64"`
+}
+
+type ChangeEntry struct {
+	EntryID      string `json:"entry_id"`
+	MessageID    string `json:"message_id"`
+	ExecutionID  string `json:"execution_id"`
+	Path         string `json:"path"`
+	ChangeType   string `json:"change_type"`
+	Summary      string `json:"summary"`
+	AddedLines   *int   `json:"added_lines,omitempty"`
+	DeletedLines *int   `json:"deleted_lines,omitempty"`
+	BeforeBlob   string `json:"before_blob,omitempty"`
+	AfterBlob    string `json:"after_blob,omitempty"`
+	CreatedAt    string `json:"created_at"`
+}
+
+type ChangeSetCapability struct {
+	CanCommit  bool   `json:"can_commit"`
+	CanDiscard bool   `json:"can_discard"`
+	CanExport  bool   `json:"can_export"`
+	Reason     string `json:"reason,omitempty"`
+}
+
+type CommitSuggestion struct {
+	Message string `json:"message"`
+}
+
+type CheckpointSummary struct {
+	CheckpointID  string `json:"checkpoint_id"`
+	Message       string `json:"message"`
+	CreatedAt     string `json:"created_at"`
+	GitCommitID   string `json:"git_commit_id,omitempty"`
+	EntriesDigest string `json:"entries_digest,omitempty"`
+}
+
+type ConversationChangeSet struct {
+	ChangeSetID             string              `json:"change_set_id"`
+	ConversationID          string              `json:"conversation_id"`
+	ProjectKind             string              `json:"project_kind"`
+	Entries                 []ChangeEntry       `json:"entries"`
+	FileCount               int                 `json:"file_count"`
+	AddedLines              int                 `json:"added_lines"`
+	DeletedLines            int                 `json:"deleted_lines"`
+	Capability              ChangeSetCapability `json:"capability"`
+	SuggestedMessage        CommitSuggestion    `json:"suggested_message"`
+	LastCommittedCheckpoint *CheckpointSummary  `json:"last_committed_checkpoint,omitempty"`
+}
+
+type ChangeSetCommitRequest struct {
+	Message             string `json:"message"`
+	ExpectedChangeSetID string `json:"expected_change_set_id"`
+}
+
+type ChangeSetDiscardRequest struct {
+	ExpectedChangeSetID string `json:"expected_change_set_id"`
+}
+
+type ChangeSetCommitResponse struct {
+	OK         bool              `json:"ok"`
+	Checkpoint CheckpointSummary `json:"checkpoint"`
 }
 
 type ProjectFileEntry struct {
@@ -509,15 +571,19 @@ type ProjectFileContentResponse struct {
 type ExecutionEventType string
 
 const (
-	ExecutionEventTypeMessageReceived  ExecutionEventType = "message_received"
-	ExecutionEventTypeExecutionStarted ExecutionEventType = "execution_started"
-	ExecutionEventTypeThinkingDelta    ExecutionEventType = "thinking_delta"
-	ExecutionEventTypeToolCall         ExecutionEventType = "tool_call"
-	ExecutionEventTypeToolResult       ExecutionEventType = "tool_result"
-	ExecutionEventTypeDiffGenerated    ExecutionEventType = "diff_generated"
-	ExecutionEventTypeExecutionStopped ExecutionEventType = "execution_stopped"
-	ExecutionEventTypeExecutionDone    ExecutionEventType = "execution_done"
-	ExecutionEventTypeExecutionError   ExecutionEventType = "execution_error"
+	ExecutionEventTypeMessageReceived     ExecutionEventType = "message_received"
+	ExecutionEventTypeExecutionStarted    ExecutionEventType = "execution_started"
+	ExecutionEventTypeThinkingDelta       ExecutionEventType = "thinking_delta"
+	ExecutionEventTypeToolCall            ExecutionEventType = "tool_call"
+	ExecutionEventTypeToolResult          ExecutionEventType = "tool_result"
+	ExecutionEventTypeDiffGenerated       ExecutionEventType = "diff_generated"
+	ExecutionEventTypeChangeSetUpdated    ExecutionEventType = "change_set_updated"
+	ExecutionEventTypeChangeSetCommitted  ExecutionEventType = "change_set_committed"
+	ExecutionEventTypeChangeSetDiscarded  ExecutionEventType = "change_set_discarded"
+	ExecutionEventTypeChangeSetRolledBack ExecutionEventType = "change_set_rolled_back"
+	ExecutionEventTypeExecutionStopped    ExecutionEventType = "execution_stopped"
+	ExecutionEventTypeExecutionDone       ExecutionEventType = "execution_done"
+	ExecutionEventTypeExecutionError      ExecutionEventType = "execution_error"
 )
 
 type ExecutionEvent struct {

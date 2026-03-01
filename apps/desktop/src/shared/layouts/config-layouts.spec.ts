@@ -13,6 +13,10 @@ const sharedStubs = {
   LocalSettingsSidebar: { template: '<aside class="stub-local-sidebar">local</aside>' },
   RemoteConfigSidebar: { template: '<aside class="stub-remote-sidebar">remote</aside>' },
   Topbar: { template: '<header class="stub-topbar"><slot name="left" /><slot name="right" /></header>' },
+  ConfigTopStatusChips: {
+    props: ["runtimeMode", "conversationStatus", "scopeMode"],
+    template: '<span class="stub-top-status">{{ runtimeMode }}|{{ conversationStatus }}|{{ scopeMode }}</span>'
+  },
   HubStatusBar: { template: '<footer class="stub-status"></footer>' },
   StatusBadge: { template: '<span class="stub-badge"></span>' }
 };
@@ -55,6 +59,24 @@ describe("config layouts", () => {
     });
 
     expect(wrapper.find(".sidebar-slot-fill").exists()).toBe(true);
+  });
+
+  it("passes runtime status props to top status chips", () => {
+    const wrapper = mount(LocalSettingsLayout, {
+      props: {
+        title: "local",
+        subtitle: "settings",
+        activeKey: "settings_theme",
+        menuEntries,
+        runtimeStatusMode: true,
+        runtimeConversationStatus: "running"
+      },
+      global: {
+        stubs: sharedStubs
+      }
+    });
+
+    expect(wrapper.find(".stub-top-status").text()).toContain("true|running|local");
   });
 
   it("local settings layout keeps fixed viewport height so content panel can scroll", () => {

@@ -24,6 +24,7 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 	s.executions = map[string]Execution{}
 	s.executionEvents = map[string][]ExecutionEvent{}
 	s.executionDiffs = map[string][]DiffItem{}
+	s.conversationChangeLedgers = map[string]*ConversationChangeLedger{}
 	s.conversationEventSeq = map[string]int{}
 
 	for _, conversation := range snapshot.Conversations {
@@ -71,6 +72,7 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 				parseDiffItemsFromPayload(event.Payload),
 			)
 		}
+		applyExecutionEventToChangeLedgerLocked(s, event)
 	}
 	s.mu.Unlock()
 }

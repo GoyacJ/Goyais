@@ -26,11 +26,13 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/conversations/{conversation_id}/input/submit:",
 		"/v1/conversations/{conversation_id}/events:",
 		"/v1/conversations/{conversation_id}/stop:",
-		"/v1/conversations/{conversation_id}/rollback:",
 		"/v1/conversations/{conversation_id}/export:",
 		"/v1/runs/{run_id}/control:",
-		"/v1/executions/{execution_id}/patch:",
-		"/v1/executions/{execution_id}/files:",
+		"/v2/conversations/{conversation_id}/changeset:",
+		"/v2/conversations/{conversation_id}/changeset/commit:",
+		"/v2/conversations/{conversation_id}/changeset/discard:",
+		"/v2/conversations/{conversation_id}/changeset/export:",
+		"/v2/conversations/{conversation_id}/rollback:",
 		"/v1/workspaces/{workspace_id}/model-catalog:",
 		"/v1/workspaces/{workspace_id}/catalog-root:",
 		"/v1/workspaces/{workspace_id}/resource-configs:",
@@ -62,6 +64,21 @@ func TestOpenAPIDoesNotContainRemovedConfirmRoute(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	if strings.Contains(spec, "/v1/executions/{execution_id}/confirm:") {
 		t.Fatalf("openapi still contains removed confirm route")
+	}
+}
+
+func TestOpenAPIDoesNotContainLegacyExecutionDiffRoutes(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	disallowedMarkers := []string{
+		"/v1/executions/{execution_id}/diff:",
+		"/v1/executions/{execution_id}/patch:",
+		"/v1/executions/{execution_id}/files:",
+		"/v1/executions/{execution_id}/{action}:",
+	}
+	for _, marker := range disallowedMarkers {
+		if strings.Contains(spec, marker) {
+			t.Fatalf("openapi still contains legacy execution diff route: %s", marker)
+		}
 	}
 }
 
@@ -111,20 +128,25 @@ func TestOpenAPIConversationDetailResponseShape(t *testing.T) {
 	}
 }
 
-func TestOpenAPIExecutionDiffAndFilesSchemaShape(t *testing.T) {
+func TestOpenAPIConversationChangeSetSchemaShape(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	requiredMarkers := []string{
-		"DiffItem:",
-		"added_lines:",
-		"deleted_lines:",
+		"ChangeEntry:",
+		"ConversationChangeSet:",
+		"ChangeSetCapability:",
+		"CommitSuggestion:",
+		"CheckpointSummary:",
+		"ChangeSetCommitRequest:",
+		"ChangeSetDiscardRequest:",
+		"ChangeSetCommitResponse:",
 		"ExecutionFilesExportResponse:",
 		"file_name:",
 		"archive_base64:",
-		"/v1/executions/{execution_id}/files:",
+		"/v2/conversations/{conversation_id}/changeset/export:",
 	}
 	for _, marker := range requiredMarkers {
 		if !strings.Contains(spec, marker) {
-			t.Fatalf("openapi missing execution diff/files marker: %s", marker)
+			t.Fatalf("openapi missing conversation changeset marker: %s", marker)
 		}
 	}
 }

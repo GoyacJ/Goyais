@@ -112,8 +112,8 @@
           <div class="inspector-slot" :class="{ collapsed: inspectorCollapsed, 'mobile-open': !inspectorCollapsed }">
             <MainInspectorPanel
               v-if="!inspectorCollapsed"
-              :diff="runtime?.diff ?? []"
-              :capability="runtime?.diffCapability ?? nonGitCapability"
+              :change-set="runtime?.changeSet ?? null"
+              :capability="runtime?.changeSet?.capability ?? runtime?.diffCapability ?? nonGitCapability"
               :queued-count="queuedCount"
               :pending-count="pendingCount"
               :executing-count="executingCount"
@@ -128,7 +128,7 @@
               @change-tab="changeInspectorTab"
               @select-trace-message="selectTraceMessage"
               @select-trace-execution="selectTraceExecution"
-              @commit="commitDiff"
+              @commit="openCommitDialog"
               @discard="discardDiff"
               @export-patch="exportPatch"
               @toggle-collapse="inspectorCollapsed = true"
@@ -175,12 +175,20 @@
       />
     </template>
 
+    <CommitDialog
+      :visible="commitDialogVisible"
+      :default-message="runtime?.changeSet?.suggested_message.message ?? ''"
+      :pending="commitDialogPending"
+      @close="closeCommitDialog"
+      @confirm="confirmCommitDialog"
+    />
   </MainShell>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onMounted, ref } from "vue";
 
+import CommitDialog from "@/modules/conversation/components/CommitDialog.vue";
 import MainConversationPanel from "@/modules/conversation/components/MainConversationPanel.vue";
 import MainInspectorPanel from "@/modules/conversation/components/MainInspectorPanel.vue";
 import MainSidebarPanel from "@/modules/conversation/components/MainSidebarPanel.vue";
@@ -282,8 +290,36 @@ onMounted(() => {
   }
 });
 
+const commitDialogVisible = ref(false);
+const commitDialogPending = ref(false);
+
 function openInspectorMobile(): void {
   inspectorCollapsed.value = !inspectorCollapsed.value;
+}
+
+function openCommitDialog(): void {
+  const canCommit = runtime.value?.changeSet?.capability.can_commit ?? false;
+  if (!canCommit) {
+    return;
+  }
+  commitDialogVisible.value = true;
+}
+
+function closeCommitDialog(): void {
+  if (commitDialogPending.value) {
+    return;
+  }
+  commitDialogVisible.value = false;
+}
+
+async function confirmCommitDialog(message: string): Promise<void> {
+  commitDialogPending.value = true;
+  try {
+    await commitDiff(message);
+    commitDialogVisible.value = false;
+  } finally {
+    commitDialogPending.value = false;
+  }
 }
 
 </script>

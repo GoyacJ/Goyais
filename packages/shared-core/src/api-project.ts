@@ -1,10 +1,11 @@
 import type {
-  DiffCapability,
+  ChangeSetCapability,
   DiffChangeType,
   ExecutionState,
   InspectorTabKey,
   MessageRole,
   PermissionMode,
+  ProjectKind,
   QueueState,
   RunControlAction,
   TraceDetailLevel
@@ -146,6 +147,10 @@ export type ExecutionEventType =
   | "tool_call"
   | "tool_result"
   | "diff_generated"
+  | "change_set_updated"
+  | "change_set_committed"
+  | "change_set_discarded"
+  | "change_set_rolled_back"
   | "execution_stopped"
   | "execution_done"
   | "execution_error";
@@ -206,6 +211,59 @@ export type DiffItem = {
   summary: string;
   added_lines?: number;
   deleted_lines?: number;
+};
+
+export type ChangeEntry = {
+  entry_id: string;
+  message_id: string;
+  execution_id: string;
+  path: string;
+  change_type: DiffChangeType;
+  summary: string;
+  added_lines?: number;
+  deleted_lines?: number;
+  before_blob?: string;
+  after_blob?: string;
+  created_at: string;
+};
+
+export type CommitSuggestion = {
+  message: string;
+};
+
+export type CheckpointSummary = {
+  checkpoint_id: string;
+  message: string;
+  created_at: string;
+  git_commit_id?: string;
+  entries_digest?: string;
+};
+
+export type ConversationChangeSet = {
+  change_set_id: string;
+  conversation_id: string;
+  project_kind: ProjectKind;
+  entries: ChangeEntry[];
+  file_count: number;
+  added_lines: number;
+  deleted_lines: number;
+  capability: ChangeSetCapability;
+  suggested_message: CommitSuggestion;
+  last_committed_checkpoint?: CheckpointSummary;
+};
+
+export type ChangeSetCommitRequest = {
+  message: string;
+  expected_change_set_id: string;
+};
+
+export type ChangeSetDiscardRequest = {
+  expected_change_set_id: string;
+};
+
+export type ChangeSetCommitResponse = {
+  ok: true;
+  checkpoint: CheckpointSummary;
 };
 
 export type ExecutionFilesExportResponse = {
@@ -288,10 +346,12 @@ export type ConversationRuntime = {
   ruleIds: string[];
   skillIds: string[];
   mcpIds: string[];
+  projectKind: ProjectKind;
   draft: string;
   messages: ConversationMessage[];
   executions: Execution[];
   diff: DiffItem[];
+  changeSet?: ConversationChangeSet | null;
   inspectorTab: InspectorTabKey;
-  diffCapability: DiffCapability;
+  diffCapability: ChangeSetCapability;
 };

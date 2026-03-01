@@ -34,6 +34,7 @@ export type ModelVendorName = "OpenAI" | "DeepSeek" | "Google" | "Qwen" | "Douba
 export type InspectorTabKey = "diff" | "run" | "trace" | "risk";
 export type MessageRole = "user" | "assistant" | "system";
 export type DiffChangeType = "added" | "modified" | "deleted";
+export type ProjectKind = "git" | "non_git";
 export type TraceDetailLevel = "basic" | "verbose";
 
 export type MenuKey =
@@ -74,6 +75,14 @@ export type DiffCapability = {
   can_commit: boolean;
   can_discard: boolean;
   can_export_patch: boolean;
+  reason?: string;
+};
+
+export type ChangeSetCapability = {
+  can_commit: boolean;
+  can_discard: boolean;
+  can_export: boolean;
+  can_export_patch?: boolean;
   reason?: string;
 };
 
