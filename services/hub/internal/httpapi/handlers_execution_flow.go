@@ -257,9 +257,13 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 
 		snapshot, found := findSnapshotByMessageID(state.conversationSnapshots[conversationID], input.MessageID)
 		if !found {
-			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusNotFound, "SNAPSHOT_NOT_FOUND", "Rollback snapshot does not exist", map[string]any{"message_id": input.MessageID})
-			return
+			fallbackSnapshot, fallbackFound := buildRollbackSnapshotFromMessagesLocked(state, conversationID, input.MessageID)
+			if !fallbackFound {
+				state.mu.Unlock()
+				WriteStandardError(w, r, http.StatusNotFound, "SNAPSHOT_NOT_FOUND", "Rollback snapshot does not exist", map[string]any{"message_id": input.MessageID})
+				return
+			}
+			snapshot = fallbackSnapshot
 		}
 		project, projectExists := state.projects[conversation.ProjectID]
 		if !projectExists {
@@ -269,6 +273,7 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 			})
 			return
 		}
+		projectSupportsGitRestore := project.IsGit && isGitRepositoryPath(project.RepoPath)
 		keptExecutions := map[string]bool{}
 		for _, id := range snapshot.ExecutionIDs {
 			keptExecutions[id] = true
@@ -285,13 +290,13 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 			rollbackExecutionIDs = append(rollbackExecutionIDs, id)
 			rollbackDiffItems = mergeDiffItems(rollbackDiffItems, state.executionDiffs[id])
 		}
-		if project.IsGit && strings.TrimSpace(project.RepoPath) != "" && len(rollbackDiffItems) == 0 {
+		if projectSupportsGitRestore && strings.TrimSpace(project.RepoPath) != "" && len(rollbackDiffItems) == 0 {
 			fallbackDiffItems, fallbackErr := collectGitChangedDiffItems(project.RepoPath)
 			if fallbackErr == nil && len(fallbackDiffItems) > 0 {
 				rollbackDiffItems = fallbackDiffItems
 			}
 		}
-		if project.IsGit && strings.TrimSpace(project.RepoPath) != "" && len(rollbackDiffItems) > 0 {
+		if projectSupportsGitRestore && strings.TrimSpace(project.RepoPath) != "" && len(rollbackDiffItems) > 0 {
 			if err := restoreGitWorkingTreePaths(project.RepoPath, rollbackDiffItems); err != nil {
 				state.mu.Unlock()
 				WriteStandardError(w, r, http.StatusInternalServerError, "ROLLBACK_RESTORE_FAILED", "Failed to restore project files during rollback", map[string]any{
@@ -462,9 +467,6 @@ func ExecutionDiffHandler(state *AppState) http.HandlerFunc {
 				diff = fallbackDiff
 			}
 		}
-		if projectIsGit && strings.TrimSpace(projectPath) != "" && len(diff) > 0 {
-			diff = enrichDiffItemsWithGitNumstat(projectPath, diff)
-		}
 		writeJSON(w, http.StatusOK, diff)
 	}
 }
@@ -527,8 +529,8 @@ func ExecutionFilesHandler(state *AppState) http.HandlerFunc {
 		executionID := strings.TrimSpace(r.PathValue("execution_id"))
 		state.mu.RLock()
 		execution, exists := state.executions[executionID]
-		diff := append([]DiffItem{}, state.executionDiffs[executionID]...)
-		projectPath, projectIsGit, _ := lookupProjectExecutionContextLocked(state, execution)
+		diff := collectConversationDiffItemsLocked(state, execution.ConversationID)
+		projectPath, _, _ := lookupProjectExecutionContextLocked(state, execution)
 		state.mu.RUnlock()
 		if !exists {
 			WriteStandardError(w, r, http.StatusNotFound, "EXECUTION_NOT_FOUND", "Execution does not exist", map[string]any{"execution_id": executionID})
@@ -546,8 +548,8 @@ func ExecutionFilesHandler(state *AppState) http.HandlerFunc {
 			authErr.write(w, r)
 			return
 		}
-		if !projectIsGit || strings.TrimSpace(projectPath) == "" {
-			WriteStandardError(w, r, http.StatusConflict, "NON_GIT_FILE_EXPORT_DISABLED", "File export is disabled for non-git project", map[string]any{
+		if strings.TrimSpace(projectPath) == "" {
+			WriteStandardError(w, r, http.StatusConflict, "PROJECT_PATH_REQUIRED", "File export requires a project path", map[string]any{
 				"execution_id": executionID,
 			})
 			return
@@ -558,7 +560,6 @@ func ExecutionFilesHandler(state *AppState) http.HandlerFunc {
 				diff = fallbackDiff
 			}
 		}
-		diff = enrichDiffItemsWithGitNumstat(projectPath, diff)
 		archiveBase64, err := renderExecutionFilesArchiveBase64(projectPath, diff)
 		if err != nil {
 			WriteStandardError(w, r, http.StatusInternalServerError, "FILES_EXPORT_FAILED", "Failed to export files", map[string]any{
@@ -628,6 +629,7 @@ func ExecutionActionHandler(state *AppState) http.HandlerFunc {
 			})
 			return
 		}
+		projectSupportsGitRestore := project.IsGit && isGitRepositoryPath(project.RepoPath)
 		diff := append([]DiffItem{}, state.executionDiffs[executionID]...)
 		affectedExecutionIDs := collectConversationDiffExecutionIDsLocked(state, conversation.ID)
 		if len(affectedExecutionIDs) == 0 {
@@ -637,7 +639,7 @@ func ExecutionActionHandler(state *AppState) http.HandlerFunc {
 		for _, diffExecutionID := range affectedExecutionIDs {
 			diff = mergeDiffItems(diff, state.executionDiffs[diffExecutionID])
 		}
-		if project.IsGit && strings.TrimSpace(project.RepoPath) != "" && len(diff) == 0 {
+		if projectSupportsGitRestore && strings.TrimSpace(project.RepoPath) != "" && len(diff) == 0 {
 			fallbackDiffItems, fallbackErr := collectGitChangedDiffItems(project.RepoPath)
 			if fallbackErr == nil && len(fallbackDiffItems) > 0 {
 				diff = fallbackDiffItems
@@ -645,7 +647,7 @@ func ExecutionActionHandler(state *AppState) http.HandlerFunc {
 		}
 		switch action {
 		case "commit":
-			if !project.IsGit {
+			if !projectSupportsGitRestore {
 				state.mu.Unlock()
 				WriteStandardError(w, r, http.StatusConflict, "NON_GIT_COMMIT_DISABLED", "Commit is disabled for non-git project", map[string]any{
 					"project_id": project.ID,
@@ -667,7 +669,7 @@ func ExecutionActionHandler(state *AppState) http.HandlerFunc {
 			conversation.UpdatedAt = now
 			state.conversations[conversation.ID] = conversation
 		case "discard":
-			if project.IsGit && strings.TrimSpace(project.RepoPath) != "" && len(diff) > 0 {
+			if projectSupportsGitRestore && strings.TrimSpace(project.RepoPath) != "" && len(diff) > 0 {
 				if err := restoreGitWorkingTreePaths(project.RepoPath, diff); err != nil {
 					state.mu.Unlock()
 					WriteStandardError(w, r, http.StatusInternalServerError, "DISCARD_RESTORE_FAILED", "Failed to restore project files during discard", map[string]any{
@@ -871,127 +873,6 @@ func renderFallbackPatch(executionID string, diffItems []DiffItem) string {
 	return buffer.String()
 }
 
-type diffLineCount struct {
-	added   int
-	deleted int
-}
-
-func enrichDiffItemsWithGitNumstat(projectPath string, diffItems []DiffItem) []DiffItem {
-	if strings.TrimSpace(projectPath) == "" || len(diffItems) == 0 {
-		return diffItems
-	}
-	paths := diffPathsForGitPatch(diffItems)
-	if len(paths) == 0 {
-		return diffItems
-	}
-	countByPath, err := collectGitNumstatCounts(projectPath, paths)
-	if err != nil || len(countByPath) == 0 {
-		return diffItems
-	}
-	updated := make([]DiffItem, 0, len(diffItems))
-	for _, item := range diffItems {
-		next := item
-		normalizedPath := normalizeDiffPath(item.Path)
-		if count, exists := countByPath[normalizedPath]; exists {
-			added := count.added
-			deleted := count.deleted
-			next.AddedLines = &added
-			next.DeletedLines = &deleted
-		}
-		updated = append(updated, next)
-	}
-	return updated
-}
-
-func collectGitNumstatCounts(projectPath string, paths []string) (map[string]diffLineCount, error) {
-	if strings.TrimSpace(projectPath) == "" || len(paths) == 0 {
-		return map[string]diffLineCount{}, nil
-	}
-	args := []string{"-C", projectPath, "diff", "--numstat", "--"}
-	args = append(args, paths...)
-	output, err := exec.Command("git", args...).CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("read git numstat: %w (%s)", err, strings.TrimSpace(string(output)))
-	}
-	countByPath := make(map[string]diffLineCount)
-	lines := strings.Split(string(output), "\n")
-	for _, rawLine := range lines {
-		line := strings.TrimSpace(rawLine)
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, "\t", 3)
-		if len(parts) < 3 {
-			continue
-		}
-		added, addedOK := parseGitNumstatValue(parts[0])
-		deleted, deletedOK := parseGitNumstatValue(parts[1])
-		if !addedOK || !deletedOK {
-			continue
-		}
-		normalizedPath := normalizeGitNumstatPath(parts[2])
-		if normalizedPath == "" {
-			continue
-		}
-		countByPath[normalizedPath] = diffLineCount{
-			added:   added,
-			deleted: deleted,
-		}
-	}
-	return countByPath, nil
-}
-
-func parseGitNumstatValue(raw string) (int, bool) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" || trimmed == "-" {
-		return 0, false
-	}
-	value, err := parseStrictInt(trimmed)
-	if err != nil {
-		return 0, false
-	}
-	if value < 0 {
-		value = 0
-	}
-	return value, true
-}
-
-func parseStrictInt(raw string) (int, error) {
-	value := 0
-	for _, char := range raw {
-		if char < '0' || char > '9' {
-			return 0, errors.New("not numeric")
-		}
-		value = value*10 + int(char-'0')
-	}
-	return value, nil
-}
-
-func normalizeGitNumstatPath(raw string) string {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return ""
-	}
-	normalized := strings.ReplaceAll(trimmed, "\\", "/")
-	if strings.Contains(normalized, "{") && strings.Contains(normalized, "=>") && strings.Contains(normalized, "}") {
-		leftBrace := strings.Index(normalized, "{")
-		rightBrace := strings.LastIndex(normalized, "}")
-		if leftBrace >= 0 && rightBrace > leftBrace {
-			prefix := normalized[:leftBrace]
-			body := normalized[leftBrace+1 : rightBrace]
-			suffix := normalized[rightBrace+1:]
-			bodyParts := strings.SplitN(body, "=>", 2)
-			if len(bodyParts) == 2 {
-				normalized = prefix + strings.TrimSpace(bodyParts[1]) + suffix
-			}
-		}
-	} else if strings.Contains(normalized, "=>") {
-		parts := strings.Split(normalized, "=>")
-		normalized = strings.TrimSpace(parts[len(parts)-1])
-	}
-	return normalizeDiffPath(normalized)
-}
-
 func normalizeDiffPath(raw string) string {
 	trimmed := strings.TrimSpace(strings.ReplaceAll(raw, "\\", "/"))
 	if trimmed == "" {
@@ -1171,6 +1052,70 @@ func findSnapshotByMessageID(items []ConversationSnapshot, messageID string) (Co
 		}
 	}
 	return ConversationSnapshot{}, false
+}
+
+func buildRollbackSnapshotFromMessagesLocked(state *AppState, conversationID string, messageID string) (ConversationSnapshot, bool) {
+	if strings.TrimSpace(conversationID) == "" || strings.TrimSpace(messageID) == "" {
+		return ConversationSnapshot{}, false
+	}
+	messages := state.conversationMessages[conversationID]
+	if len(messages) == 0 {
+		return ConversationSnapshot{}, false
+	}
+	targetIndex := -1
+	targetQueueIndex := -1
+	for index, message := range messages {
+		if message.ID != messageID {
+			continue
+		}
+		if message.Role != MessageRoleUser {
+			return ConversationSnapshot{}, false
+		}
+		targetIndex = index
+		if message.QueueIndex != nil {
+			targetQueueIndex = *message.QueueIndex
+		}
+		break
+	}
+	if targetIndex < 0 {
+		return ConversationSnapshot{}, false
+	}
+	keptMessages := cloneMessages(messages[:targetIndex+1])
+	if targetQueueIndex < 0 {
+		targetQueueIndex = maxQueueIndexOfMessages(keptMessages)
+	}
+	keptExecutionIDs := make([]string, 0)
+	for _, executionID := range state.conversationExecutionOrder[conversationID] {
+		execution, exists := state.executions[executionID]
+		if !exists {
+			continue
+		}
+		if targetQueueIndex >= 0 && execution.QueueIndex > targetQueueIndex {
+			continue
+		}
+		keptExecutionIDs = append(keptExecutionIDs, executionID)
+	}
+	return ConversationSnapshot{
+		ID:                     "snap_fallback_" + randomHex(6),
+		ConversationID:         conversationID,
+		RollbackPointMessageID: messageID,
+		QueueState:             QueueStateIdle,
+		WorktreeRef:            nil,
+		InspectorState:         ConversationInspector{Tab: "diff"},
+		Messages:               keptMessages,
+		ExecutionIDs:           keptExecutionIDs,
+		CreatedAt:              time.Now().UTC().Format(time.RFC3339),
+	}, true
+}
+
+func maxQueueIndexOfMessages(messages []ConversationMessage) int {
+	maxValue := -1
+	for _, message := range messages {
+		if message.QueueIndex != nil && *message.QueueIndex > maxValue {
+			maxValue = *message.QueueIndex
+		}
+	}
+	return maxValue
 }
 
 func keepSnapshotsUntil(items []ConversationSnapshot, inclusiveCreatedAt string) []ConversationSnapshot {

@@ -180,12 +180,13 @@ func ProjectsImportHandler(state *AppState) http.HandlerFunc {
 		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
+		repoPath := strings.TrimSpace(input.DirectoryPath)
 		project := Project{
 			ID:                   "proj_" + randomHex(6),
 			WorkspaceID:          strings.TrimSpace(input.WorkspaceID),
 			Name:                 deriveProjectName(input.DirectoryPath),
-			RepoPath:             strings.TrimSpace(input.DirectoryPath),
-			IsGit:                true,
+			RepoPath:             repoPath,
+			IsGit:                isGitRepositoryPath(repoPath),
 			DefaultModelConfigID: "",
 			DefaultMode:          PermissionModeDefault,
 			CurrentRevision:      0,

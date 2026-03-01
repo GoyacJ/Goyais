@@ -570,11 +570,13 @@ func NewEditTool() Tool {
 		if err := os.WriteFile(fullPath, []byte(after), 0o644); err != nil {
 			return ToolResult{}, err
 		}
-		return ToolResult{Output: map[string]any{
+		output := map[string]any{
 			"path":        fullPath,
 			"replaced":    true,
 			"replace_all": replaceAll,
-		}}, nil
+		}
+		maybeAttachDiffLineCounts(output, content, []byte(after))
+		return ToolResult{Output: output}, nil
 	})
 }
 
@@ -610,6 +612,13 @@ func NewWriteTool() Tool {
 		if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
 			return ToolResult{}, statErr
 		}
+		beforeContent := []byte{}
+		if existedBefore {
+			beforeContent, err = os.ReadFile(fullPath)
+			if err != nil {
+				return ToolResult{}, err
+			}
+		}
 		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 			return ToolResult{}, err
 		}
@@ -627,13 +636,22 @@ func NewWriteTool() Tool {
 				return ToolResult{}, err
 			}
 		}
-		return ToolResult{Output: map[string]any{
+		afterContent := []byte(content)
+		if appendMode {
+			afterContent, err = os.ReadFile(fullPath)
+			if err != nil {
+				return ToolResult{}, err
+			}
+		}
+		output := map[string]any{
 			"path":           fullPath,
 			"bytes":          len(content),
 			"append":         appendMode,
 			"existed_before": existedBefore,
 			"success":        true,
-		}}, nil
+		}
+		maybeAttachDiffLineCounts(output, beforeContent, afterContent)
+		return ToolResult{Output: output}, nil
 	})
 }
 
@@ -699,11 +717,13 @@ func NewNotebookEditTool() Tool {
 		if err := os.WriteFile(fullPath, nextRaw, 0o644); err != nil {
 			return ToolResult{}, err
 		}
-		return ToolResult{Output: map[string]any{
+		output := map[string]any{
 			"path":       fullPath,
 			"cell_index": cellIndex,
 			"success":    true,
-		}}, nil
+		}
+		maybeAttachDiffLineCounts(output, raw, nextRaw)
+		return ToolResult{Output: output}, nil
 	})
 }
 
@@ -1657,6 +1677,86 @@ func toInt(value any) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+const maxLineDiffCompareCells = 250000
+
+func maybeAttachDiffLineCounts(output map[string]any, before []byte, after []byte) {
+	addedLines, deletedLines, ok := computeTextLineDiffCounts(before, after)
+	if !ok {
+		return
+	}
+	output["added_lines"] = addedLines
+	output["deleted_lines"] = deletedLines
+}
+
+func computeTextLineDiffCounts(before []byte, after []byte) (int, int, bool) {
+	beforeLines, ok := splitTextLines(before)
+	if !ok {
+		return 0, 0, false
+	}
+	afterLines, ok := splitTextLines(after)
+	if !ok {
+		return 0, 0, false
+	}
+	if len(beforeLines) == 0 && len(afterLines) == 0 {
+		return 0, 0, true
+	}
+	if len(beforeLines) > 0 && len(afterLines) > maxLineDiffCompareCells/len(beforeLines) {
+		return 0, 0, false
+	}
+	lcs := lineLCSLength(beforeLines, afterLines)
+	addedLines := len(afterLines) - lcs
+	deletedLines := len(beforeLines) - lcs
+	if addedLines < 0 {
+		addedLines = 0
+	}
+	if deletedLines < 0 {
+		deletedLines = 0
+	}
+	return addedLines, deletedLines, true
+}
+
+func splitTextLines(content []byte) ([]string, bool) {
+	if bytes.IndexByte(content, 0) >= 0 {
+		return nil, false
+	}
+	if len(content) == 0 {
+		return []string{}, true
+	}
+	normalized := strings.ReplaceAll(strings.ReplaceAll(string(content), "\r\n", "\n"), "\r", "\n")
+	lines := strings.Split(normalized, "\n")
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines, true
+}
+
+func lineLCSLength(left []string, right []string) int {
+	if len(left) == 0 || len(right) == 0 {
+		return 0
+	}
+	if len(left) < len(right) {
+		return lineLCSLengthSwapped(left, right)
+	}
+	return lineLCSLengthSwapped(right, left)
+}
+
+func lineLCSLengthSwapped(shorter []string, longer []string) int {
+	dp := make([]int, len(shorter)+1)
+	for longIndex := 1; longIndex <= len(longer); longIndex++ {
+		prevDiagonal := 0
+		for shortIndex := 1; shortIndex <= len(shorter); shortIndex++ {
+			current := dp[shortIndex]
+			if longer[longIndex-1] == shorter[shortIndex-1] {
+				dp[shortIndex] = prevDiagonal + 1
+			} else if dp[shortIndex-1] > dp[shortIndex] {
+				dp[shortIndex] = dp[shortIndex-1]
+			}
+			prevDiagonal = current
+		}
+	}
+	return dp[len(shorter)]
 }
 
 func durationFromMillis(value any, defaultMillis int) time.Duration {

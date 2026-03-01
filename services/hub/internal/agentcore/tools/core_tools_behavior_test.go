@@ -89,14 +89,25 @@ func TestCoreToolsKeyBehavior(t *testing.T) {
 		"old_string": "needle",
 		"new_string": "needle-updated",
 	})
+	editWithCounts := mustExecuteTool(t, registry, ctx, "Edit", map[string]any{
+		"path":       "grep.txt",
+		"old_string": "needle-updated",
+		"new_string": "needle",
+	})
+	if toIntFromAny(editWithCounts.Output["added_lines"]) != 1 || toIntFromAny(editWithCounts.Output["deleted_lines"]) != 1 {
+		t.Fatalf("Edit should report added/deleted lines: %+v", editWithCounts.Output)
+	}
 	readAfterEdit := mustExecuteTool(t, registry, ctx, "Read", map[string]any{"path": "grep.txt"})
-	if !strings.Contains(toString(readAfterEdit.Output["content"]), "needle-updated") {
+	if !strings.Contains(toString(readAfterEdit.Output["content"]), "needle") {
 		t.Fatalf("Edit did not modify file: %+v", readAfterEdit.Output)
 	}
 
 	firstWrite := mustExecuteTool(t, registry, ctx, "Write", map[string]any{"path": "new.txt", "content": "new content"})
 	if existedBefore, ok := firstWrite.Output["existed_before"].(bool); !ok || existedBefore {
 		t.Fatalf("Write should report existed_before=false on first write: %+v", firstWrite.Output)
+	}
+	if toIntFromAny(firstWrite.Output["added_lines"]) != 1 || toIntFromAny(firstWrite.Output["deleted_lines"]) != 0 {
+		t.Fatalf("Write should report added/deleted lines for create: %+v", firstWrite.Output)
 	}
 	if _, err := os.Stat(filepath.Join(workdir, "new.txt")); err != nil {
 		t.Fatalf("Write did not create file: %v", err)
@@ -105,12 +116,18 @@ func TestCoreToolsKeyBehavior(t *testing.T) {
 	if existedBefore, ok := secondWrite.Output["existed_before"].(bool); !ok || !existedBefore {
 		t.Fatalf("Write should report existed_before=true on overwrite: %+v", secondWrite.Output)
 	}
+	if toIntFromAny(secondWrite.Output["added_lines"]) != 1 || toIntFromAny(secondWrite.Output["deleted_lines"]) != 1 {
+		t.Fatalf("Write should report added/deleted lines for overwrite: %+v", secondWrite.Output)
+	}
 
-	mustExecuteTool(t, registry, ctx, "NotebookEdit", map[string]any{
+	notebookEdit := mustExecuteTool(t, registry, ctx, "NotebookEdit", map[string]any{
 		"path":       "notebook.ipynb",
 		"cell_index": 0,
 		"new_source": "print('updated')",
 	})
+	if toIntFromAny(notebookEdit.Output["added_lines"]) <= 0 || toIntFromAny(notebookEdit.Output["deleted_lines"]) <= 0 {
+		t.Fatalf("NotebookEdit should report added/deleted lines: %+v", notebookEdit.Output)
+	}
 	nbRaw, err := os.ReadFile(filepath.Join(workdir, "notebook.ipynb"))
 	if err != nil {
 		t.Fatalf("read notebook: %v", err)

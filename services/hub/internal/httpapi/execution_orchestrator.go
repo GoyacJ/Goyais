@@ -1505,7 +1505,6 @@ func (o *ExecutionOrchestrator) appendDiffGeneratedEventFromToolResult(
 	if len(diffItems) == 0 {
 		return
 	}
-	diffItems = enrichDiffItemsWithGitNumstat(workingDir, diffItems)
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	o.state.mu.Lock()
@@ -1538,18 +1537,24 @@ func buildToolResultDiffItems(workingDir string, toolName string, output map[str
 	if path == "" {
 		return nil
 	}
+	addedLines := optionalDiffLineCountFromOutput(output["added_lines"])
+	deletedLines := optionalDiffLineCountFromOutput(output["deleted_lines"])
 	switch strings.TrimSpace(toolName) {
 	case "Edit":
 		return []DiffItem{{
-			Path:       path,
-			ChangeType: "modified",
-			Summary:    "Edited file",
+			Path:         path,
+			ChangeType:   "modified",
+			Summary:      "Edited file",
+			AddedLines:   addedLines,
+			DeletedLines: deletedLines,
 		}}
 	case "NotebookEdit":
 		return []DiffItem{{
-			Path:       path,
-			ChangeType: "modified",
-			Summary:    "Edited notebook cell",
+			Path:         path,
+			ChangeType:   "modified",
+			Summary:      "Edited notebook cell",
+			AddedLines:   addedLines,
+			DeletedLines: deletedLines,
 		}}
 	case "Write":
 		changeType := "added"
@@ -1561,13 +1566,27 @@ func buildToolResultDiffItems(workingDir string, toolName string, output map[str
 			summary = "Appended file content"
 		}
 		return []DiffItem{{
-			Path:       path,
-			ChangeType: changeType,
-			Summary:    summary,
+			Path:         path,
+			ChangeType:   changeType,
+			Summary:      summary,
+			AddedLines:   addedLines,
+			DeletedLines: deletedLines,
 		}}
 	default:
 		return nil
 	}
+}
+
+func optionalDiffLineCountFromOutput(value any) *int {
+	parsed, ok := parseTokenInt(value)
+	if !ok {
+		return nil
+	}
+	if parsed < 0 {
+		parsed = 0
+	}
+	result := parsed
+	return &result
 }
 
 func normalizeToolDiffPath(workingDir string, rawPath string) string {

@@ -93,20 +93,24 @@
 }
 
 .stat {
-  font-size: var(--global-font-size-12);
+  font-size: var(--global-font-size-11);
   font-weight: var(--global-font-weight-700);
   font-variant-numeric: tabular-nums;
 }
 
-.stat.added {
+.stat-added {
   color: var(--semantic-success);
 }
 
-.stat.deleted {
+.stat-deleted {
   color: var(--semantic-danger);
 }
 
-.stat.modified {
+.stat-separator {
+  color: var(--semantic-text-subtle);
+}
+
+.stat-unknown {
   color: var(--semantic-warning);
 }
 

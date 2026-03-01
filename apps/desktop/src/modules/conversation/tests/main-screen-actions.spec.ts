@@ -270,6 +270,68 @@ describe("main screen actions - auto conversation naming", () => {
       Reflect.deleteProperty(URL, "revokeObjectURL");
     }
   });
+
+  it("exports files using diffExecutionId even when runtime executions list is stale", async () => {
+    conversationServiceMocks.exportExecutionFiles.mockResolvedValue({
+      file_name: "exec_stale_target-files.zip",
+      archive_base64: "QQ=="
+    });
+    const originalCreateObjectURL = (URL as typeof URL & { createObjectURL?: (obj: Blob | MediaSource) => string }).createObjectURL;
+    const originalRevokeObjectURL = (URL as typeof URL & { revokeObjectURL?: (url: string) => void }).revokeObjectURL;
+    const createObjectURLSpy = vi.fn(() => "blob:files");
+    const revokeObjectURLSpy = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURLSpy
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURLSpy
+    });
+
+    const originalCreateElement = document.createElement.bind(document);
+    const clickSpy = vi.fn();
+    const createElementSpy = vi.spyOn(document, "createElement").mockImplementation(((tagName: string) => {
+      const element = originalCreateElement(tagName);
+      if (tagName.toLowerCase() === "a") {
+        (element as HTMLAnchorElement).click = clickSpy;
+      }
+      return element;
+    }) as typeof document.createElement);
+
+    const { actions } = createActionsContext({
+      conversationName: "已有名称",
+      draft: "",
+      runtimeExecutions: [createExecution("exec_latest_only", "completed")],
+      diffExecutionId: "exec_stale_target"
+    });
+
+    await actions.exportPatch();
+
+    expect(conversationServiceMocks.exportExecutionFiles).toHaveBeenCalledWith("exec_stale_target");
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURLSpy).toHaveBeenCalledTimes(1);
+    expect(createElementSpy).toHaveBeenCalledWith("a");
+
+    createElementSpy.mockRestore();
+    if (originalCreateObjectURL) {
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        value: originalCreateObjectURL
+      });
+    } else {
+      Reflect.deleteProperty(URL, "createObjectURL");
+    }
+    if (originalRevokeObjectURL) {
+      Object.defineProperty(URL, "revokeObjectURL", {
+        configurable: true,
+        value: originalRevokeObjectURL
+      });
+    } else {
+      Reflect.deleteProperty(URL, "revokeObjectURL");
+    }
+  });
 });
 
 function createActionsContext(input: {

@@ -30,7 +30,12 @@
       <div v-else class="diff-list">
         <div v-for="item in diff" :key="item.id" class="diff-row">
           <span class="path">{{ item.path }}</span>
-          <span class="stat" :class="item.change_type">{{ formatDiffLineCount(item) }}</span>
+          <span v-if="isDiffLineCountUnknown(item)" class="stat stat-unknown">--</span>
+          <span v-else class="stat">
+            <span class="stat-added">+{{ displayDiffLineCount(item.added_lines) }}</span>
+            <span class="stat-separator"> / </span>
+            <span class="stat-deleted">-{{ displayDiffLineCount(item.deleted_lines) }}</span>
+          </span>
         </div>
       </div>
 
@@ -371,13 +376,14 @@ const riskSummary = computed(() => {
   return tf("conversation.inspector.risk.summary.total", { total });
 });
 
-function formatDiffLineCount(item: DiffItem): string {
+function isDiffLineCountUnknown(item: DiffItem): boolean {
   const added = toOptionalNonNegativeInteger(item.added_lines);
   const deleted = toOptionalNonNegativeInteger(item.deleted_lines);
-  if (added === null || deleted === null) {
-    return "--";
-  }
-  return `+${added} / -${deleted}`;
+  return added === null && deleted === null;
+}
+
+function displayDiffLineCount(value: unknown): number {
+  return toOptionalNonNegativeInteger(value) ?? 0;
 }
 
 function buildTraceMessagePreview(content: string): string {

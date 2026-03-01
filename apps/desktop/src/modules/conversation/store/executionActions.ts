@@ -34,7 +34,7 @@ import {
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { ApiError } from "@/shared/services/http";
 import { createMockId } from "@/shared/utils/id";
-import type { ComposerResourceSelection, Conversation, ConversationMessage, Execution, ExecutionEvent } from "@/shared/types/api";
+import type { ComposerResourceSelection, Conversation, ConversationMessage, ExecutionEvent } from "@/shared/types/api";
 
 export async function submitConversationMessage(
   conversation: Conversation,
@@ -281,13 +281,14 @@ export async function rollbackConversationToMessage(conversationId: string, mess
   }
 
   const targetMessage = runtime.messages.find((message) => message.id === messageId);
-  if (!targetMessage || targetMessage.role !== "user") {
+  if (targetMessage && targetMessage.role !== "user") {
     return;
   }
+  const targetQueueIndex = targetMessage?.queue_index ?? 0;
 
   appendRuntimeEvent(
     runtime,
-    createExecutionEvent(conversationId, "", targetMessage.queue_index ?? 0, "thinking_delta", {
+    createExecutionEvent(conversationId, "", targetQueueIndex, "thinking_delta", {
       stage: "rollback_requested",
       message_id: messageId
     })
@@ -330,7 +331,7 @@ export async function rollbackConversationToMessage(conversationId: string, mess
 
   appendRuntimeEvent(
     runtime,
-    createExecutionEvent(conversationId, "", targetMessage.queue_index ?? 0, "thinking_delta", {
+    createExecutionEvent(conversationId, "", targetQueueIndex, "thinking_delta", {
       stage: "snapshot_applied",
       message_id: messageId
     })
@@ -338,7 +339,7 @@ export async function rollbackConversationToMessage(conversationId: string, mess
 
   appendRuntimeEvent(
     runtime,
-    createExecutionEvent(conversationId, "", targetMessage.queue_index ?? 0, "thinking_delta", {
+    createExecutionEvent(conversationId, "", targetQueueIndex, "thinking_delta", {
       stage: "rollback_completed",
       message_id: messageId
     })
@@ -346,14 +347,14 @@ export async function rollbackConversationToMessage(conversationId: string, mess
 }
 
 export async function commitLatestDiff(conversationId: string): Promise<void> {
-  const execution = resolveDiffTargetExecution(conversationId);
-  if (!execution) {
+  const executionId = resolveDiffTargetExecutionId(conversationId);
+  if (!executionId) {
     conversationStore.error = "DIFF_NOT_FOUND: no execution found for current diff list";
     return;
   }
 
   try {
-    await commitExecution(execution.id);
+    await commitExecution(executionId);
     const runtime = conversationStore.byConversationId[conversationId];
     if (runtime) {
       runtime.diff = [];
@@ -365,14 +366,14 @@ export async function commitLatestDiff(conversationId: string): Promise<void> {
 }
 
 export async function discardLatestDiff(conversationId: string): Promise<void> {
-  const execution = resolveDiffTargetExecution(conversationId);
-  if (!execution) {
+  const executionId = resolveDiffTargetExecutionId(conversationId);
+  if (!executionId) {
     conversationStore.error = "DIFF_NOT_FOUND: no execution found for current diff list";
     return;
   }
 
   try {
-    await discardExecution(execution.id);
+    await discardExecution(executionId);
     const runtime = conversationStore.byConversationId[conversationId];
     if (runtime) {
       runtime.diff = [];
@@ -396,22 +397,20 @@ export async function refreshExecutionDiff(conversationId: string, executionId: 
   }
 }
 
-function resolveDiffTargetExecution(conversationId: string): Execution | undefined {
+function resolveDiffTargetExecutionId(conversationId: string): string | undefined {
   const runtime = conversationStore.byConversationId[conversationId];
   if (!runtime) {
     return undefined;
   }
   const targetExecutionId = runtime.diffExecutionId.trim();
   if (targetExecutionId !== "") {
-    const matched = runtime.executions.find((execution) => execution.id === targetExecutionId);
-    if (matched) {
-      return matched;
-    }
+    return targetExecutionId;
   }
-  return [...runtime.executions]
+  const latestTerminalExecution = [...runtime.executions]
     .reverse()
     .find((execution) => execution.state === "completed" || execution.state === "failed" || execution.state === "cancelled")
     ?? runtime.executions[runtime.executions.length - 1];
+  return latestTerminalExecution?.id;
 }
 
 export function applyIncomingExecutionEvent(conversationId: string, event: ExecutionEvent): void {

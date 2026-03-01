@@ -1690,6 +1690,65 @@ describe("conversation store", () => {
     expect(wrapper.text()).not.toContain("暂无文件变更");
   });
 
+  it("renders partial diff line counts with zero fallback and keeps unknown as --", () => {
+    const wrapper = mount(MainInspectorPanel, {
+      props: {
+        diff: [
+          { id: "diff_partial_add", path: "src/partial-add.ts", change_type: "modified", summary: "partial add", added_lines: 6 },
+          { id: "diff_partial_del", path: "src/partial-del.ts", change_type: "modified", summary: "partial del", deleted_lines: 2 },
+          { id: "diff_unknown", path: "src/unknown.ts", change_type: "modified", summary: "unknown" }
+        ],
+        capability: {
+          can_commit: true,
+          can_discard: true,
+          can_export_patch: true
+        },
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        modelLabel: "MiniMax Primary",
+        executions: [],
+        events: [],
+        activeTab: "diff"
+      }
+    });
+
+    expect(wrapper.text()).toContain("src/partial-add.ts");
+    expect(wrapper.text()).toContain("src/partial-del.ts");
+    expect(wrapper.text()).toContain("src/unknown.ts");
+    expect(wrapper.text()).toContain("+6 / -0");
+    expect(wrapper.text()).toContain("+0 / -2");
+    expect(wrapper.text()).toContain("--");
+  });
+
+  it("renders added and deleted segments with dedicated stat classes", () => {
+    const wrapper = mount(MainInspectorPanel, {
+      props: {
+        diff: [
+          { id: "diff_segmented", path: "src/segment.ts", change_type: "modified", summary: "segmented", added_lines: 7, deleted_lines: 2 }
+        ],
+        capability: {
+          can_commit: true,
+          can_discard: true,
+          can_export_patch: true
+        },
+        queuedCount: 0,
+        pendingCount: 0,
+        executingCount: 0,
+        modelLabel: "MiniMax Primary",
+        executions: [],
+        events: [],
+        activeTab: "diff"
+      }
+    });
+
+    const row = wrapper.find(".diff-row");
+    expect(row.find(".stat-added").text()).toBe("+7");
+    expect(row.find(".stat-deleted").text()).toBe("-2");
+    expect(row.find(".stat-separator").text()).toBe("/");
+    expect(row.find(".stat-unknown").exists()).toBe(false);
+  });
+
   it("renders inspector trace details for selected execution", () => {
     const wrapper = mount(MainInspectorPanel, {
       props: {

@@ -18,6 +18,8 @@ func TestExecuteSingleOpenAIToolCallEmitsDiffGeneratedForFileTools(t *testing.T)
 		setup          func(t *testing.T, workdir string)
 		expectedPath   string
 		expectedChange string
+		expectAdded    *int
+		expectDeleted  *int
 	}{
 		{
 			name:     "write",
@@ -28,6 +30,8 @@ func TestExecuteSingleOpenAIToolCallEmitsDiffGeneratedForFileTools(t *testing.T)
 			},
 			expectedPath:   "notes/write.txt",
 			expectedChange: "added",
+			expectAdded:    diffIntPtr(1),
+			expectDeleted:  diffIntPtr(0),
 		},
 		{
 			name:     "edit",
@@ -49,6 +53,8 @@ func TestExecuteSingleOpenAIToolCallEmitsDiffGeneratedForFileTools(t *testing.T)
 			},
 			expectedPath:   "notes/edit.txt",
 			expectedChange: "modified",
+			expectAdded:    diffIntPtr(1),
+			expectDeleted:  diffIntPtr(1),
 		},
 		{
 			name:     "notebook-edit",
@@ -119,11 +125,31 @@ func TestExecuteSingleOpenAIToolCallEmitsDiffGeneratedForFileTools(t *testing.T)
 			if eventDiff[0].Path != testCase.expectedPath || eventDiff[0].ChangeType != testCase.expectedChange {
 				t.Fatalf("unexpected event diff item: %#v", eventDiff[0])
 			}
+			if testCase.expectAdded != nil {
+				if eventDiff[0].AddedLines == nil || *eventDiff[0].AddedLines != *testCase.expectAdded {
+					t.Fatalf("unexpected event added_lines, got %#v", eventDiff[0].AddedLines)
+				}
+			} else if eventDiff[0].AddedLines == nil {
+				t.Fatalf("expected event added_lines to be present, got %#v", eventDiff[0].AddedLines)
+			}
+			if testCase.expectDeleted != nil {
+				if eventDiff[0].DeletedLines == nil || *eventDiff[0].DeletedLines != *testCase.expectDeleted {
+					t.Fatalf("unexpected event deleted_lines, got %#v", eventDiff[0].DeletedLines)
+				}
+			} else if eventDiff[0].DeletedLines == nil {
+				t.Fatalf("expected event deleted_lines to be present, got %#v", eventDiff[0].DeletedLines)
+			}
 			if len(diffState) != 1 {
 				t.Fatalf("expected one accumulated diff item in state, got %#v", diffState)
 			}
 			if diffState[0].Path != testCase.expectedPath || diffState[0].ChangeType != testCase.expectedChange {
 				t.Fatalf("unexpected accumulated diff item: %#v", diffState[0])
+			}
+			if eventDiff[0].AddedLines == nil || diffState[0].AddedLines == nil || *eventDiff[0].AddedLines != *diffState[0].AddedLines {
+				t.Fatalf("expected accumulated added_lines to match event, event=%#v state=%#v", eventDiff[0].AddedLines, diffState[0].AddedLines)
+			}
+			if eventDiff[0].DeletedLines == nil || diffState[0].DeletedLines == nil || *eventDiff[0].DeletedLines != *diffState[0].DeletedLines {
+				t.Fatalf("expected accumulated deleted_lines to match event, event=%#v state=%#v", eventDiff[0].DeletedLines, diffState[0].DeletedLines)
 			}
 		})
 	}
@@ -195,6 +221,9 @@ func TestExecuteSingleOpenAIToolCallWriteUpdatesChangeTypeToModifiedOnOverwrite(
 	if len(diffState) != 1 || diffState[0].ChangeType != "modified" {
 		t.Fatalf("expected accumulated state diff to keep modified status, got %#v", diffState)
 	}
+	if secondDiff[0].AddedLines == nil || secondDiff[0].DeletedLines == nil || *secondDiff[0].AddedLines != 1 || *secondDiff[0].DeletedLines != 1 {
+		t.Fatalf("expected second write to include internal line counts, got %#v", secondDiff[0])
+	}
 }
 
 func prepareExecutionToolLoopTestContext(
@@ -255,4 +284,9 @@ func prepareExecutionToolLoopTestContext(
 		Env:        map[string]string{},
 	}
 	return state, orchestrator, execution, executor, specs, toolCtx
+}
+
+func diffIntPtr(value int) *int {
+	result := value
+	return &result
 }

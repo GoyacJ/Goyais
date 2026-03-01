@@ -43,7 +43,7 @@ import { createRemoteConnection, loginWorkspace as loginWorkspaceRequest } from 
 import { refreshMeForCurrentWorkspace, setWorkspaceToken } from "@/shared/stores/authStore";
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
-import type { Conversation, Execution, InspectorTabKey, PermissionMode, Project } from "@/shared/types/api";
+import type { Conversation, InspectorTabKey, PermissionMode, Project } from "@/shared/types/api";
 import { setWorkspaceConnection, switchWorkspaceContext, upsertWorkspace } from "@/modules/workspace/store";
 type MainScreenActionsInput = {
   router: Router;
@@ -238,12 +238,7 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
       return;
     }
     const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${conversationId}.md`;
-    link.click();
-    URL.revokeObjectURL(url);
+    triggerBlobDownload(blob, `${conversationId}.md`);
   }
   async function createWorkspace(payload: { hub_url: string; username: string; password: string }): Promise<void> {
     const result = await createRemoteConnection(payload);
@@ -345,46 +340,38 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     await discardLatestDiff(input.activeConversation.value.id);
   }
   async function exportPatch(): Promise<void> {
-    const execution = resolveDiffTargetExecution();
-    if (!execution) {
+    const executionId = resolveDiffTargetExecutionId();
+    if (!executionId) {
       setConversationError("DIFF_NOT_FOUND: no execution found for current diff list");
       return;
     }
     try {
-      const filesArchive = await exportExecutionFiles(execution.id);
+      const filesArchive = await exportExecutionFiles(executionId);
       const bytesBuffer = decodeBase64(filesArchive.archive_base64);
       const blob = new Blob([bytesBuffer], { type: "application/zip" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filesArchive.file_name.trim() || `${execution.id}-files.zip`;
-      link.click();
-      URL.revokeObjectURL(url);
+      triggerBlobDownload(blob, filesArchive.file_name.trim() || `${executionId}-files.zip`);
     } catch (error) {
       setConversationError(toDisplayError(error));
     }
   }
 
-  function resolveDiffTargetExecution(): Execution | undefined {
+  function resolveDiffTargetExecutionId(): string | undefined {
     const runtime = input.runtime.value;
     if (!runtime) {
       return undefined;
     }
     const diffExecutionID = runtime.diffExecutionId?.trim() ?? "";
     if (diffExecutionID !== "") {
-      const matched = runtime.executions.find((item) => item.id === diffExecutionID);
-      if (matched) {
-        return matched;
-      }
+      return diffExecutionID;
     }
     const latestTerminalExecution = [...runtime.executions]
       .reverse()
       .find((item) => item.state === "completed" || item.state === "failed" || item.state === "cancelled");
     if (latestTerminalExecution) {
-      return latestTerminalExecution;
+      return latestTerminalExecution.id;
     }
     // Fall back to latest execution when terminal one is not available yet.
-    return runtime.executions[runtime.executions.length - 1];
+    return runtime.executions[runtime.executions.length - 1]?.id;
   }
 
   function decodeBase64(inputBase64: string): ArrayBuffer {
@@ -400,6 +387,17 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     const buffer = new ArrayBuffer(bytes.length);
     new Uint8Array(buffer).set(bytes);
     return buffer;
+  }
+  function triggerBlobDownload(blob: Blob, fileName: string): void {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.style.display = "none";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   }
   return {
     addConversationByPrompt,
