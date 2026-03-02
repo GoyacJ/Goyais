@@ -186,3 +186,30 @@ func TestAppendExecutionEventLockedMergesDiffItemsByPath(t *testing.T) {
 		t.Fatalf("expected latest change_type and summary preserved, got %#v", diff[0])
 	}
 }
+
+func TestAppendExecutionEventLockedNormalizesMissingMetadata(t *testing.T) {
+	state := NewAppState(nil)
+	state.mu.Lock()
+	event := appendExecutionEventLocked(state, ExecutionEvent{
+		ConversationID: "conv_1",
+		ExecutionID:    "exec_1",
+		Type:           ExecutionEventTypeThinkingDelta,
+	})
+	state.mu.Unlock()
+
+	if event.EventID == "" {
+		t.Fatalf("expected generated event_id")
+	}
+	if event.TraceID == "" {
+		t.Fatalf("expected generated trace_id")
+	}
+	if event.Timestamp == "" {
+		t.Fatalf("expected generated timestamp")
+	}
+	if event.Sequence != 1 {
+		t.Fatalf("expected default sequence 1, got %d", event.Sequence)
+	}
+	if event.Payload == nil {
+		t.Fatalf("expected payload to be initialized")
+	}
+}

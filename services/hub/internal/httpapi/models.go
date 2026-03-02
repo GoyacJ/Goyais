@@ -76,6 +76,112 @@ const (
 	ExecutionStateCancelled     ExecutionState = "cancelled"
 )
 
+type TaskState string
+
+const (
+	TaskStateQueued    TaskState = "queued"
+	TaskStateBlocked   TaskState = "blocked"
+	TaskStateRunning   TaskState = "running"
+	TaskStateRetrying  TaskState = "retrying"
+	TaskStateCompleted TaskState = "completed"
+	TaskStateFailed    TaskState = "failed"
+	TaskStateCancelled TaskState = "cancelled"
+)
+
+type HookScope string
+
+const (
+	HookScopeGlobal  HookScope = "global"
+	HookScopeProject HookScope = "project"
+	HookScopeLocal   HookScope = "local"
+	HookScopePlugin  HookScope = "plugin"
+)
+
+type HookEventType string
+
+const (
+	HookEventTypeSessionStart       HookEventType = "session_start"
+	HookEventTypeUserPromptSubmit   HookEventType = "user_prompt_submit"
+	HookEventTypePreToolUse         HookEventType = "pre_tool_use"
+	HookEventTypePermissionRequest  HookEventType = "permission_request"
+	HookEventTypePostToolUse        HookEventType = "post_tool_use"
+	HookEventTypePostToolUseFailure HookEventType = "post_tool_use_failure"
+	HookEventTypeStop               HookEventType = "stop"
+	HookEventTypeSubagentStop       HookEventType = "subagent_stop"
+	HookEventTypeNotification       HookEventType = "notification"
+	HookEventTypeConfigChange       HookEventType = "config_change"
+)
+
+type HookHandlerType string
+
+const (
+	HookHandlerTypeCommand HookHandlerType = "command"
+	HookHandlerTypeHTTP    HookHandlerType = "http"
+	HookHandlerTypePlugin  HookHandlerType = "plugin"
+)
+
+type HookDecisionAction string
+
+const (
+	HookDecisionActionAllow HookDecisionAction = "allow"
+	HookDecisionActionDeny  HookDecisionAction = "deny"
+	HookDecisionActionAsk   HookDecisionAction = "ask"
+)
+
+type HookDecision struct {
+	Action            HookDecisionAction `json:"action"`
+	Reason            string             `json:"reason,omitempty"`
+	UpdatedInput      map[string]any     `json:"updated_input,omitempty"`
+	AdditionalContext map[string]any     `json:"additional_context,omitempty"`
+}
+
+type HookPolicy struct {
+	ID             string          `json:"id"`
+	Scope          HookScope       `json:"scope"`
+	Event          HookEventType   `json:"event"`
+	HandlerType    HookHandlerType `json:"handler_type"`
+	ToolName       string          `json:"tool_name,omitempty"`
+	WorkspaceID    string          `json:"workspace_id,omitempty"`
+	ProjectID      string          `json:"project_id,omitempty"`
+	ConversationID string          `json:"conversation_id,omitempty"`
+	Enabled        bool            `json:"enabled"`
+	Decision       HookDecision    `json:"decision"`
+	UpdatedAt      string          `json:"updated_at"`
+}
+
+type HookPolicyUpsertRequest struct {
+	ID             string          `json:"id"`
+	Scope          HookScope       `json:"scope"`
+	Event          HookEventType   `json:"event"`
+	HandlerType    HookHandlerType `json:"handler_type"`
+	ToolName       string          `json:"tool_name,omitempty"`
+	WorkspaceID    string          `json:"workspace_id,omitempty"`
+	ProjectID      string          `json:"project_id,omitempty"`
+	ConversationID string          `json:"conversation_id,omitempty"`
+	Enabled        *bool           `json:"enabled,omitempty"`
+	Decision       HookDecision    `json:"decision"`
+}
+
+type HookPolicyListResponse struct {
+	Items []HookPolicy `json:"items"`
+}
+
+type HookExecutionRecord struct {
+	ID             string        `json:"id"`
+	RunID          string        `json:"run_id"`
+	TaskID         string        `json:"task_id,omitempty"`
+	ConversationID string        `json:"conversation_id"`
+	Event          HookEventType `json:"event"`
+	ToolName       string        `json:"tool_name,omitempty"`
+	PolicyID       string        `json:"policy_id,omitempty"`
+	Decision       HookDecision  `json:"decision"`
+	Timestamp      string        `json:"timestamp"`
+}
+
+type HookExecutionListResponse struct {
+	Items []HookExecutionRecord `json:"items"`
+}
+
 type ResourceType string
 
 const (
@@ -376,6 +482,61 @@ type Execution struct {
 	UpdatedAt               string                        `json:"updated_at"`
 }
 
+type TaskArtifact struct {
+	TaskID   string         `json:"task_id"`
+	Kind     string         `json:"kind"`
+	URI      string         `json:"uri,omitempty"`
+	Summary  string         `json:"summary,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
+}
+
+type TaskNode struct {
+	TaskID      string        `json:"task_id"`
+	RunID       string        `json:"run_id"`
+	Title       string        `json:"title"`
+	Description string        `json:"description,omitempty"`
+	State       TaskState     `json:"state"`
+	AgentID     string        `json:"agent_id,omitempty"`
+	DependsOn   []string      `json:"depends_on"`
+	Children    []string      `json:"children"`
+	RetryCount  int           `json:"retry_count"`
+	MaxRetries  int           `json:"max_retries"`
+	Artifact    *TaskArtifact `json:"artifact,omitempty"`
+	LastError   *string       `json:"last_error"`
+	CreatedAt   string        `json:"created_at"`
+	UpdatedAt   string        `json:"updated_at"`
+}
+
+type RunGraphEdge struct {
+	FromTaskID string `json:"from_task_id"`
+	ToTaskID   string `json:"to_task_id"`
+}
+
+type AgentGraph struct {
+	RunID          string         `json:"run_id"`
+	MaxParallelism int            `json:"max_parallelism"`
+	Tasks          []TaskNode     `json:"tasks"`
+	Edges          []RunGraphEdge `json:"edges"`
+}
+
+type RunTaskListResponse struct {
+	Items      []TaskNode `json:"items"`
+	NextCursor *string    `json:"next_cursor"`
+}
+
+type TaskControlRequest struct {
+	Action string `json:"action"`
+	Reason string `json:"reason,omitempty"`
+}
+
+type TaskControlResponse struct {
+	OK            bool   `json:"ok"`
+	RunID         string `json:"run_id"`
+	TaskID        string `json:"task_id"`
+	State         string `json:"state"`
+	PreviousState string `json:"previous_state"`
+}
+
 type ExecutionAgentConfigSnapshot struct {
 	MaxModelTurns    int                                  `json:"max_model_turns"`
 	ShowProcessTrace bool                                 `json:"show_process_trace"`
@@ -571,19 +732,32 @@ type ProjectFileContentResponse struct {
 type ExecutionEventType string
 
 const (
-	ExecutionEventTypeMessageReceived     ExecutionEventType = "message_received"
-	ExecutionEventTypeExecutionStarted    ExecutionEventType = "execution_started"
-	ExecutionEventTypeThinkingDelta       ExecutionEventType = "thinking_delta"
-	ExecutionEventTypeToolCall            ExecutionEventType = "tool_call"
-	ExecutionEventTypeToolResult          ExecutionEventType = "tool_result"
-	ExecutionEventTypeDiffGenerated       ExecutionEventType = "diff_generated"
-	ExecutionEventTypeChangeSetUpdated    ExecutionEventType = "change_set_updated"
-	ExecutionEventTypeChangeSetCommitted  ExecutionEventType = "change_set_committed"
-	ExecutionEventTypeChangeSetDiscarded  ExecutionEventType = "change_set_discarded"
-	ExecutionEventTypeChangeSetRolledBack ExecutionEventType = "change_set_rolled_back"
-	ExecutionEventTypeExecutionStopped    ExecutionEventType = "execution_stopped"
-	ExecutionEventTypeExecutionDone       ExecutionEventType = "execution_done"
-	ExecutionEventTypeExecutionError      ExecutionEventType = "execution_error"
+	ExecutionEventTypeMessageReceived         ExecutionEventType = "message_received"
+	ExecutionEventTypeUserPromptSubmit        ExecutionEventType = "user_prompt_submit"
+	ExecutionEventTypeExecutionStarted        ExecutionEventType = "execution_started"
+	ExecutionEventTypeThinkingDelta           ExecutionEventType = "thinking_delta"
+	ExecutionEventTypePreToolUse              ExecutionEventType = "pre_tool_use"
+	ExecutionEventTypePermissionRequest       ExecutionEventType = "permission_request"
+	ExecutionEventTypeToolCall                ExecutionEventType = "tool_call"
+	ExecutionEventTypeToolResult              ExecutionEventType = "tool_result"
+	ExecutionEventTypePostToolUse             ExecutionEventType = "post_tool_use"
+	ExecutionEventTypePostToolUseFailure      ExecutionEventType = "post_tool_use_failure"
+	ExecutionEventTypeDiffGenerated           ExecutionEventType = "diff_generated"
+	ExecutionEventTypeChangeSetUpdated        ExecutionEventType = "change_set_updated"
+	ExecutionEventTypeChangeSetCommitted      ExecutionEventType = "change_set_committed"
+	ExecutionEventTypeChangeSetDiscarded      ExecutionEventType = "change_set_discarded"
+	ExecutionEventTypeChangeSetRolledBack     ExecutionEventType = "change_set_rolled_back"
+	ExecutionEventTypeExecutionStopped        ExecutionEventType = "execution_stopped"
+	ExecutionEventTypeExecutionDone           ExecutionEventType = "execution_done"
+	ExecutionEventTypeExecutionError          ExecutionEventType = "execution_error"
+	ExecutionEventTypeTaskGraphConfigured     ExecutionEventType = "task_graph_configured"
+	ExecutionEventTypeTaskDependenciesUpdated ExecutionEventType = "task_dependencies_updated"
+	ExecutionEventTypeTaskRetryPolicyUpdated  ExecutionEventType = "task_retry_policy_updated"
+	ExecutionEventTypeTaskArtifactEmitted     ExecutionEventType = "task_artifact_emitted"
+	ExecutionEventTypeTaskFailed              ExecutionEventType = "task_failed"
+	ExecutionEventTypeTaskStarted             ExecutionEventType = "task_started"
+	ExecutionEventTypeTaskCompleted           ExecutionEventType = "task_completed"
+	ExecutionEventTypeTaskCancelled           ExecutionEventType = "task_cancelled"
 )
 
 type ExecutionEvent struct {

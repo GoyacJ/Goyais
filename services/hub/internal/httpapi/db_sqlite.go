@@ -293,6 +293,32 @@ func (s *authzStore) migrate() error {
 			payload_json TEXT NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_execution_events_conversation_sequence ON execution_events(conversation_id, sequence)`,
+		`CREATE TABLE IF NOT EXISTS hook_policies (
+			id TEXT PRIMARY KEY,
+			scope TEXT NOT NULL,
+			event TEXT NOT NULL,
+			handler_type TEXT NOT NULL,
+			tool_name TEXT NOT NULL,
+			workspace_id TEXT,
+			project_id TEXT,
+			conversation_id TEXT,
+			enabled INTEGER NOT NULL DEFAULT 1,
+			decision_json TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS hook_execution_records (
+			id TEXT PRIMARY KEY,
+			run_id TEXT NOT NULL,
+			task_id TEXT,
+			conversation_id TEXT NOT NULL,
+			event TEXT NOT NULL,
+			tool_name TEXT,
+			policy_id TEXT,
+			decision_json TEXT NOT NULL,
+			timestamp TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_hook_execution_records_run_timestamp ON hook_execution_records(run_id, timestamp)`,
+		`CREATE INDEX IF NOT EXISTS idx_hook_execution_records_conversation_timestamp ON hook_execution_records(conversation_id, timestamp)`,
 		`CREATE TABLE IF NOT EXISTS resource_configs (
 				id TEXT PRIMARY KEY,
 				workspace_id TEXT NOT NULL,
@@ -469,6 +495,8 @@ func (s *authzStore) rebuildSchema(statements []string) error {
 		`DROP TABLE IF EXISTS projects`,
 		`DROP TABLE IF EXISTS conversation_snapshots`,
 		`DROP TABLE IF EXISTS conversation_messages`,
+		`DROP TABLE IF EXISTS hook_execution_records`,
+		`DROP TABLE IF EXISTS hook_policies`,
 		`DROP TABLE IF EXISTS execution_events`,
 		`DROP TABLE IF EXISTS executions`,
 		`DROP TABLE IF EXISTS conversations`,
@@ -511,6 +539,11 @@ func (s *authzStore) validateStrictSchema() error {
 		{table: "conversations", column: "rule_ids_json"},
 		{table: "conversations", column: "skill_ids_json"},
 		{table: "conversations", column: "mcp_ids_json"},
+		{table: "hook_policies", column: "decision_json"},
+		{table: "hook_policies", column: "workspace_id"},
+		{table: "hook_policies", column: "project_id"},
+		{table: "hook_policies", column: "conversation_id"},
+		{table: "hook_execution_records", column: "decision_json"},
 	}
 	for _, field := range requiredColumns {
 		ok, err := tableHasColumn(s.db, field.table, field.column)

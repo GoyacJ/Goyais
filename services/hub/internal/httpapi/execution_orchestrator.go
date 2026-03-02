@@ -16,6 +16,8 @@ import (
 	"goyais/services/hub/internal/agentcore/safety"
 	corestate "goyais/services/hub/internal/agentcore/state"
 	coretools "goyais/services/hub/internal/agentcore/tools"
+	controlplanepolicy "goyais/services/hub/internal/controlplane/policy"
+	runtimehooks "goyais/services/hub/internal/runtime/hooks"
 )
 
 type ExecutionOrchestrator struct {
@@ -195,10 +197,9 @@ func (o *ExecutionOrchestrator) beginExecution(executionID string) (Execution, s
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	o.state.mu.Lock()
-	defer o.state.mu.Unlock()
-
 	execution, exists := o.state.executions[executionID]
 	if !exists || execution.State != ExecutionStatePending {
+		o.state.mu.Unlock()
 		return Execution{}, "", false
 	}
 
@@ -206,8 +207,36 @@ func (o *ExecutionOrchestrator) beginExecution(executionID string) (Execution, s
 	execution.UpdatedAt = now
 	o.state.executions[execution.ID] = execution
 	delete(o.state.pendingUserQuestions, execution.ID)
+	appendExecutionEventLocked(o.state, ExecutionEvent{
+		ExecutionID:    execution.ID,
+		ConversationID: execution.ConversationID,
+		TraceID:        execution.TraceID,
+		QueueIndex:     execution.QueueIndex,
+		Type:           ExecutionEventTypeTaskStarted,
+		Timestamp:      now,
+		Payload: map[string]any{
+			"task_id": execution.ID,
+			"source":  "hub_orchestrator",
+		},
+	})
 
-	return execution, lookupExecutionContentLocked(o.state, execution), true
+	input := lookupExecutionContentLocked(o.state, execution)
+	o.state.mu.Unlock()
+
+	decision, matchedPolicyID := o.evaluateHookDecision(execution, HookEventTypeSessionStart, "")
+	o.appendHookExecutionRecordAndEvent(
+		execution,
+		execution.ID,
+		HookEventTypeSessionStart,
+		"",
+		matchedPolicyID,
+		decision,
+		map[string]any{
+			"source": "hub_orchestrator",
+		},
+	)
+
+	return execution, input, true
 }
 
 func (o *ExecutionOrchestrator) transitionExecutionToCompleted(executionID string, output string, usage map[string]any) string {
@@ -248,6 +277,18 @@ func (o *ExecutionOrchestrator) transitionExecutionToCompleted(executionID strin
 			"source":  "hub_orchestrator",
 		},
 	})
+	appendExecutionEventLocked(o.state, ExecutionEvent{
+		ExecutionID:    execution.ID,
+		ConversationID: execution.ConversationID,
+		TraceID:        execution.TraceID,
+		QueueIndex:     execution.QueueIndex,
+		Type:           ExecutionEventTypeTaskCompleted,
+		Timestamp:      now,
+		Payload: map[string]any{
+			"task_id": execution.ID,
+			"source":  "hub_orchestrator",
+		},
+	})
 
 	conversation, exists := o.state.conversations[execution.ConversationID]
 	if !exists {
@@ -274,13 +315,13 @@ func (o *ExecutionOrchestrator) transitionExecutionToFailed(executionID string, 
 	nextExecutionID := ""
 
 	o.state.mu.Lock()
-	defer o.state.mu.Unlock()
-
 	execution, exists := o.state.executions[executionID]
 	if !exists {
+		o.state.mu.Unlock()
 		return ""
 	}
 	if execution.State == ExecutionStateCancelled {
+		o.state.mu.Unlock()
 		return ""
 	}
 
@@ -303,9 +344,23 @@ func (o *ExecutionOrchestrator) transitionExecutionToFailed(executionID string, 
 			"source":  "hub_orchestrator",
 		},
 	})
+	appendExecutionEventLocked(o.state, ExecutionEvent{
+		ExecutionID:    execution.ID,
+		ConversationID: execution.ConversationID,
+		TraceID:        execution.TraceID,
+		QueueIndex:     execution.QueueIndex,
+		Type:           ExecutionEventTypeTaskFailed,
+		Timestamp:      now,
+		Payload: map[string]any{
+			"task_id":       execution.ID,
+			"error_message": message,
+			"source":        "hub_orchestrator",
+		},
+	})
 
 	conversation, exists := o.state.conversations[execution.ConversationID]
 	if !exists {
+		o.state.mu.Unlock()
 		return ""
 	}
 	if conversation.ActiveExecutionID != nil && *conversation.ActiveExecutionID == execution.ID {
@@ -321,6 +376,22 @@ func (o *ExecutionOrchestrator) transitionExecutionToFailed(executionID string, 
 	}
 	conversation.UpdatedAt = now
 	o.state.conversations[conversation.ID] = conversation
+	executionForHook := execution
+	o.state.mu.Unlock()
+
+	decision, matchedPolicyID := o.evaluateHookDecision(executionForHook, HookEventTypeSubagentStop, "")
+	o.appendHookExecutionRecordAndEvent(
+		executionForHook,
+		executionForHook.ID,
+		HookEventTypeSubagentStop,
+		"",
+		matchedPolicyID,
+		decision,
+		map[string]any{
+			"reason": message,
+			"source": "hub_orchestrator",
+		},
+	)
 	return nextExecutionID
 }
 
@@ -329,13 +400,13 @@ func (o *ExecutionOrchestrator) transitionExecutionToCancelled(executionID strin
 	nextExecutionID := ""
 
 	o.state.mu.Lock()
-	defer o.state.mu.Unlock()
-
 	execution, exists := o.state.executions[executionID]
 	if !exists {
+		o.state.mu.Unlock()
 		return ""
 	}
 	if execution.State == ExecutionStateCancelled {
+		o.state.mu.Unlock()
 		return ""
 	}
 
@@ -355,9 +426,23 @@ func (o *ExecutionOrchestrator) transitionExecutionToCancelled(executionID strin
 			"source": "hub_orchestrator",
 		},
 	})
+	appendExecutionEventLocked(o.state, ExecutionEvent{
+		ExecutionID:    execution.ID,
+		ConversationID: execution.ConversationID,
+		TraceID:        execution.TraceID,
+		QueueIndex:     execution.QueueIndex,
+		Type:           ExecutionEventTypeTaskCancelled,
+		Timestamp:      now,
+		Payload: map[string]any{
+			"task_id": execution.ID,
+			"reason":  reason,
+			"source":  "hub_orchestrator",
+		},
+	})
 
 	conversation, exists := o.state.conversations[execution.ConversationID]
 	if !exists {
+		o.state.mu.Unlock()
 		return ""
 	}
 	if conversation.ActiveExecutionID != nil && *conversation.ActiveExecutionID == execution.ID {
@@ -373,6 +458,22 @@ func (o *ExecutionOrchestrator) transitionExecutionToCancelled(executionID strin
 	}
 	conversation.UpdatedAt = now
 	o.state.conversations[conversation.ID] = conversation
+	executionForHook := execution
+	o.state.mu.Unlock()
+
+	decision, matchedPolicyID := o.evaluateHookDecision(executionForHook, HookEventTypeSubagentStop, "")
+	o.appendHookExecutionRecordAndEvent(
+		executionForHook,
+		executionForHook.ID,
+		HookEventTypeSubagentStop,
+		"",
+		matchedPolicyID,
+		decision,
+		map[string]any{
+			"reason": reason,
+			"source": "hub_orchestrator",
+		},
+	)
 	return nextExecutionID
 }
 
@@ -1105,6 +1206,66 @@ func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 		return openAIToolResultForNextTurn{CallID: callID, Text: errText}, nil
 	}
 
+	preDecision, matchedPolicyID := o.evaluateHookDecision(execution, HookEventTypePreToolUse, toolName)
+	o.appendHookExecutionRecordAndEvent(execution, callID, HookEventTypePreToolUse, toolName, matchedPolicyID, preDecision, map[string]any{
+		"input": cloneMapAny(call.Input),
+	})
+	if len(preDecision.UpdatedInput) > 0 {
+		call.Input = cloneMapAny(preDecision.UpdatedInput)
+	}
+	switch preDecision.Action {
+	case HookDecisionActionDeny:
+		o.appendHookExecutionRecordAndEvent(execution, callID, HookEventTypePermissionRequest, toolName, matchedPolicyID, preDecision, nil)
+		errText := firstNonEmpty(strings.TrimSpace(preDecision.Reason), "tool call denied by hook policy")
+		o.appendToolResultEvent(execution.ID, map[string]any{
+			"name":    toolName,
+			"call_id": callID,
+			"ok":      false,
+			"error":   errText,
+			"source":  "hub_orchestrator",
+		})
+		o.appendHookExecutionRecordAndEvent(execution, callID, HookEventTypePostToolUseFailure, toolName, matchedPolicyID, HookDecision{
+			Action: HookDecisionActionDeny,
+			Reason: errText,
+		}, map[string]any{
+			"error": errText,
+		})
+		return openAIToolResultForNextTurn{CallID: callID, Text: errText}, nil
+	case HookDecisionActionAsk:
+		o.appendHookExecutionRecordAndEvent(execution, callID, HookEventTypePermissionRequest, toolName, matchedPolicyID, preDecision, nil)
+		o.transitionExecutionToConfirming(execution.ID, toolName, callID, firstNonEmpty(strings.TrimSpace(preDecision.Reason), "hook policy requires approval"))
+		action, waitErr := o.waitForApprovalAction(ctx, execution.ID)
+		if waitErr != nil {
+			return openAIToolResultForNextTurn{}, waitErr
+		}
+		switch action {
+		case corestate.ControlActionStop:
+			return openAIToolResultForNextTurn{}, context.Canceled
+		case corestate.ControlActionDeny:
+			o.transitionExecutionToExecuting(execution.ID, "hook_permission_denied", string(action))
+			errText := firstNonEmpty(strings.TrimSpace(preDecision.Reason), "tool call denied by user")
+			o.appendToolResultEvent(execution.ID, map[string]any{
+				"name":    toolName,
+				"call_id": callID,
+				"ok":      false,
+				"error":   errText,
+				"source":  "hub_orchestrator",
+			})
+			o.appendHookExecutionRecordAndEvent(execution, callID, HookEventTypePostToolUseFailure, toolName, matchedPolicyID, HookDecision{
+				Action: HookDecisionActionDeny,
+				Reason: errText,
+			}, map[string]any{
+				"error": errText,
+			})
+			return openAIToolResultForNextTurn{CallID: callID, Text: errText}, nil
+		case corestate.ControlActionApprove, corestate.ControlActionResume:
+			o.transitionExecutionToExecuting(execution.ID, "hook_permission_granted", string(action))
+			preDecision.Action = HookDecisionActionAllow
+		default:
+			return openAIToolResultForNextTurn{}, context.Canceled
+		}
+	}
+
 	o.appendToolCallEvent(execution.ID, map[string]any{
 		"name":       toolName,
 		"call_id":    callID,
@@ -1162,6 +1323,11 @@ func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 					"question_id": question.QuestionID,
 					"source":      "hub_orchestrator",
 				})
+				o.appendHookExecutionRecordAndEvent(execution, callID, HookEventTypePostToolUse, toolName, matchedPolicyID, HookDecision{
+					Action: HookDecisionActionAllow,
+				}, map[string]any{
+					"output": output,
+				})
 				return openAIToolResultForNextTurn{CallID: callID, Text: output}, nil
 			}
 
@@ -1174,6 +1340,11 @@ func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 				"source":  "hub_orchestrator",
 			})
 			o.appendDiffGeneratedEventFromToolResult(execution.ID, toolCtx.WorkingDir, toolName, result.Output)
+			o.appendHookExecutionRecordAndEvent(execution, callID, HookEventTypePostToolUse, toolName, matchedPolicyID, HookDecision{
+				Action: HookDecisionActionAllow,
+			}, map[string]any{
+				"output": output,
+			})
 			return openAIToolResultForNextTurn{CallID: callID, Text: output}, nil
 		}
 
@@ -1197,6 +1368,12 @@ func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 					"error":   errText,
 					"source":  "hub_orchestrator",
 				})
+				o.appendHookExecutionRecordAndEvent(execution, callID, HookEventTypePostToolUseFailure, toolName, matchedPolicyID, HookDecision{
+					Action: HookDecisionActionDeny,
+					Reason: errText,
+				}, map[string]any{
+					"error": errText,
+				})
 				return openAIToolResultForNextTurn{CallID: callID, Text: errText}, nil
 			case corestate.ControlActionApprove, corestate.ControlActionResume:
 				o.transitionExecutionToExecuting(execution.ID, "approval_granted", string(action))
@@ -1217,6 +1394,12 @@ func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 			"ok":      false,
 			"error":   errText,
 			"source":  "hub_orchestrator",
+		})
+		o.appendHookExecutionRecordAndEvent(execution, callID, HookEventTypePostToolUseFailure, toolName, matchedPolicyID, HookDecision{
+			Action: HookDecisionActionDeny,
+			Reason: errText,
+		}, map[string]any{
+			"error": errText,
 		})
 		return openAIToolResultForNextTurn{CallID: callID, Text: errText}, nil
 	}
@@ -1439,6 +1622,8 @@ func normalizePendingUserQuestion(output map[string]any, fallbackCallID string, 
 
 func (o *ExecutionOrchestrator) transitionExecutionToAwaitingInput(executionID string, question pendingUserQuestion) {
 	now := time.Now().UTC().Format(time.RFC3339)
+	notificationExecution := Execution{}
+	shouldEmitNotificationHook := false
 	o.state.mu.Lock()
 	execution, exists := o.state.executions[executionID]
 	if !exists {
@@ -1478,8 +1663,32 @@ func (o *ExecutionOrchestrator) transitionExecutionToAwaitingInput(executionID s
 				"source":                "hub_orchestrator",
 			},
 		})
+		notificationExecution = execution
+		shouldEmitNotificationHook = true
 	}
 	o.state.mu.Unlock()
+	if shouldEmitNotificationHook {
+		decision, matchedPolicyID := o.evaluateHookDecision(notificationExecution, HookEventTypeNotification, question.ToolName)
+		callID := strings.TrimSpace(question.CallID)
+		if callID == "" {
+			callID = notificationExecution.ID
+		}
+		o.appendHookExecutionRecordAndEvent(
+			notificationExecution,
+			callID,
+			HookEventTypeNotification,
+			question.ToolName,
+			matchedPolicyID,
+			decision,
+			map[string]any{
+				"stage":       "run_user_question_needed",
+				"run_state":   "waiting_user_input",
+				"question_id": question.QuestionID,
+				"question":    question.Question,
+				"source":      "hub_orchestrator",
+			},
+		)
+	}
 	syncExecutionDomainBestEffort(o.state)
 }
 
@@ -1523,6 +1732,24 @@ func (o *ExecutionOrchestrator) appendDiffGeneratedEventFromToolResult(
 		Timestamp:      now,
 		Payload: map[string]any{
 			"diff":   diffItemsToPayload(merged),
+			"source": "hub_orchestrator",
+		},
+	})
+	appendExecutionEventLocked(o.state, ExecutionEvent{
+		ExecutionID:    execution.ID,
+		ConversationID: execution.ConversationID,
+		TraceID:        execution.TraceID,
+		QueueIndex:     execution.QueueIndex,
+		Type:           ExecutionEventTypeTaskArtifactEmitted,
+		Timestamp:      diffEvent.Timestamp,
+		Payload: map[string]any{
+			"task_id": execution.ID,
+			"artifact": map[string]any{
+				"task_id":  execution.ID,
+				"kind":     "diff",
+				"summary":  "diff generated from tool result",
+				"metadata": map[string]any{"diff_count": len(merged)},
+			},
 			"source": "hub_orchestrator",
 		},
 	})
@@ -1652,6 +1879,169 @@ func (o *ExecutionOrchestrator) appendExecutionAuxEvent(executionID string, even
 		Payload:        cloneMapAny(payload),
 	})
 	o.state.mu.Unlock()
+}
+
+func (o *ExecutionOrchestrator) evaluateHookDecision(execution Execution, eventType HookEventType, toolName string) (HookDecision, string) {
+	if o == nil || o.state == nil {
+		return HookDecision{Action: HookDecisionActionAllow}, ""
+	}
+
+	scopeContext := controlplanepolicy.HookScopeContext{
+		WorkspaceID:      execution.WorkspaceID,
+		ConversationID:   execution.ConversationID,
+		ToolName:         strings.TrimSpace(toolName),
+		IsLocalWorkspace: strings.TrimSpace(execution.WorkspaceID) == localWorkspaceID,
+	}
+	o.state.mu.RLock()
+	policies := listHookPoliciesLocked(o.state)
+	if conversation, ok := o.state.conversations[execution.ConversationID]; ok {
+		scopeContext.ProjectID = conversation.ProjectID
+	}
+	o.state.mu.RUnlock()
+	if len(policies) == 0 {
+		return HookDecision{
+			Action:            HookDecisionActionAllow,
+			UpdatedInput:      map[string]any{},
+			AdditionalContext: map[string]any{},
+		}, ""
+	}
+	scopedPolicies := controlplanepolicy.ResolveHookPolicies(toControlPlaneHookPolicies(policies), scopeContext)
+	if len(scopedPolicies) == 0 {
+		return HookDecision{
+			Action:            HookDecisionActionAllow,
+			UpdatedInput:      map[string]any{},
+			AdditionalContext: map[string]any{},
+		}, ""
+	}
+	hookPolicies := make([]runtimehooks.Policy, 0, len(scopedPolicies))
+	for _, item := range scopedPolicies {
+		hookPolicies = append(hookPolicies, runtimehooks.Policy{
+			ID:                item.ID,
+			Scope:             runtimehooks.Scope(item.Scope),
+			EventType:         runtimehooks.EventType(item.EventType),
+			ToolName:          item.ToolName,
+			Action:            runtimehooks.Action(item.Action),
+			Reason:            item.Reason,
+			Enabled:           item.Enabled,
+			UpdatedInput:      cloneMapAny(item.UpdatedInput),
+			AdditionalContext: cloneMapAny(item.AdditionalContext),
+		})
+	}
+	decision := runtimehooks.Evaluate(hookPolicies, runtimehooks.EventInput{
+		EventType: runtimehooks.EventType(eventType),
+		ToolName:  toolName,
+	})
+	return HookDecision{
+		Action:            HookDecisionAction(decision.Action),
+		Reason:            strings.TrimSpace(decision.Reason),
+		UpdatedInput:      cloneMapAny(decision.UpdatedInput),
+		AdditionalContext: cloneMapAny(decision.AdditionalContext),
+	}, strings.TrimSpace(decision.PolicyID)
+}
+
+func toControlPlaneHookPolicies(policies []HookPolicy) []controlplanepolicy.HookPolicy {
+	result := make([]controlplanepolicy.HookPolicy, 0, len(policies))
+	for _, item := range policies {
+		result = append(result, controlplanepolicy.HookPolicy{
+			ID:                item.ID,
+			Scope:             controlplanepolicy.HookScope(item.Scope),
+			EventType:         string(item.Event),
+			ToolName:          item.ToolName,
+			WorkspaceID:       item.WorkspaceID,
+			ProjectID:         item.ProjectID,
+			ConversationID:    item.ConversationID,
+			Action:            string(item.Decision.Action),
+			Reason:            item.Decision.Reason,
+			Enabled:           item.Enabled,
+			UpdatedInput:      cloneMapAny(item.Decision.UpdatedInput),
+			AdditionalContext: cloneMapAny(item.Decision.AdditionalContext),
+		})
+	}
+	return result
+}
+
+func (o *ExecutionOrchestrator) appendHookExecutionRecordAndEvent(
+	execution Execution,
+	callID string,
+	eventType HookEventType,
+	toolName string,
+	policyID string,
+	decision HookDecision,
+	extraPayload map[string]any,
+) {
+	if o == nil || o.state == nil {
+		return
+	}
+	eventName, hasMappedExecutionEvent := mapHookEventTypeToExecutionEventType(eventType)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	payload := map[string]any{
+		"task_id":   execution.ID,
+		"call_id":   strings.TrimSpace(callID),
+		"name":      strings.TrimSpace(toolName),
+		"event":     string(eventType),
+		"policy_id": strings.TrimSpace(policyID),
+		"decision": map[string]any{
+			"action": string(decision.Action),
+			"reason": strings.TrimSpace(decision.Reason),
+		},
+		"source": "hook_policy",
+	}
+	if len(decision.UpdatedInput) > 0 {
+		payload["updated_input"] = cloneMapAny(decision.UpdatedInput)
+	}
+	if len(decision.AdditionalContext) > 0 {
+		payload["additional_context"] = cloneMapAny(decision.AdditionalContext)
+	}
+	for key, value := range extraPayload {
+		payload[key] = value
+	}
+
+	o.state.mu.Lock()
+	appendHookExecutionRecordLocked(o.state, HookExecutionRecord{
+		RunID:          execution.ID,
+		TaskID:         execution.ID,
+		ConversationID: execution.ConversationID,
+		Event:          eventType,
+		ToolName:       strings.TrimSpace(toolName),
+		PolicyID:       strings.TrimSpace(policyID),
+		Decision: HookDecision{
+			Action:            decision.Action,
+			Reason:            strings.TrimSpace(decision.Reason),
+			UpdatedInput:      cloneMapAny(decision.UpdatedInput),
+			AdditionalContext: cloneMapAny(decision.AdditionalContext),
+		},
+		Timestamp: now,
+	})
+	if hasMappedExecutionEvent {
+		appendExecutionEventLocked(o.state, ExecutionEvent{
+			ExecutionID:    execution.ID,
+			ConversationID: execution.ConversationID,
+			TraceID:        execution.TraceID,
+			QueueIndex:     execution.QueueIndex,
+			Type:           eventName,
+			Timestamp:      now,
+			Payload:        payload,
+		})
+	}
+	o.state.mu.Unlock()
+}
+
+func mapHookEventTypeToExecutionEventType(eventType HookEventType) (ExecutionEventType, bool) {
+	switch eventType {
+	case HookEventTypeUserPromptSubmit:
+		return ExecutionEventTypeUserPromptSubmit, true
+	case HookEventTypePreToolUse:
+		return ExecutionEventTypePreToolUse, true
+	case HookEventTypePermissionRequest:
+		return ExecutionEventTypePermissionRequest, true
+	case HookEventTypePostToolUse:
+		return ExecutionEventTypePostToolUse, true
+	case HookEventTypePostToolUseFailure:
+		return ExecutionEventTypePostToolUseFailure, true
+	default:
+		return "", false
+	}
 }
 
 func renderToolOutputForModel(output map[string]any) string {

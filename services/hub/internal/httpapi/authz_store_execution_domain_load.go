@@ -1,8 +1,10 @@
 package httpapi
 
 import (
-	"database/sql"
 	"encoding/json"
+	"fmt"
+	runtimeapplication "goyais/services/hub/internal/runtime/application"
+	runtimeinfra "goyais/services/hub/internal/runtime/infra/sqlite"
 	"strings"
 )
 
@@ -12,6 +14,8 @@ type executionDomainSnapshot struct {
 	ConversationSnapshots []ConversationSnapshot
 	Executions            []Execution
 	ExecutionEvents       []ExecutionEvent
+	HookPolicies          []HookPolicy
+	HookExecutionRecords  []HookExecutionRecord
 }
 
 func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, error) {
@@ -21,322 +25,377 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 		ConversationSnapshots: []ConversationSnapshot{},
 		Executions:            []Execution{},
 		ExecutionEvents:       []ExecutionEvent{},
+		HookPolicies:          []HookPolicy{},
+		HookExecutionRecords:  []HookExecutionRecord{},
 	}
 
-	conversationRows, err := s.db.Query(
-		`SELECT id, workspace_id, project_id, name, queue_state, default_mode, model_config_id, rule_ids_json, skill_ids_json, mcp_ids_json, base_revision, active_execution_id, created_at, updated_at
-		 FROM conversations
-		 ORDER BY created_at ASC, id ASC`,
-	)
+	conversationRows, err := runtimeinfra.NewConversationStore(s.db).LoadAll()
 	if err != nil {
 		return snapshot, err
 	}
-	for conversationRows.Next() {
-		item := Conversation{}
-		var (
-			queueStateRaw      string
-			defaultModeRaw     string
-			ruleIDsJSON        string
-			skillIDsJSON       string
-			mcpIDsJSON         string
-			activeExecutionRaw sql.NullString
-		)
-		if err := conversationRows.Scan(
-			&item.ID,
-			&item.WorkspaceID,
-			&item.ProjectID,
-			&item.Name,
-			&queueStateRaw,
-			&defaultModeRaw,
-			&item.ModelConfigID,
-			&ruleIDsJSON,
-			&skillIDsJSON,
-			&mcpIDsJSON,
-			&item.BaseRevision,
-			&activeExecutionRaw,
-			&item.CreatedAt,
-			&item.UpdatedAt,
-		); err != nil {
-			_ = conversationRows.Close()
-			return snapshot, err
-		}
-		item.QueueState = QueueState(strings.TrimSpace(queueStateRaw))
-		item.DefaultMode = NormalizePermissionMode(defaultModeRaw)
-		if strings.TrimSpace(ruleIDsJSON) != "" {
-			if err := json.Unmarshal([]byte(ruleIDsJSON), &item.RuleIDs); err != nil {
-				_ = conversationRows.Close()
-				return snapshot, err
-			}
-		}
-		if item.RuleIDs == nil {
-			item.RuleIDs = []string{}
-		}
-		if strings.TrimSpace(skillIDsJSON) != "" {
-			if err := json.Unmarshal([]byte(skillIDsJSON), &item.SkillIDs); err != nil {
-				_ = conversationRows.Close()
-				return snapshot, err
-			}
-		}
-		if item.SkillIDs == nil {
-			item.SkillIDs = []string{}
-		}
-		if strings.TrimSpace(mcpIDsJSON) != "" {
-			if err := json.Unmarshal([]byte(mcpIDsJSON), &item.MCPIDs); err != nil {
-				_ = conversationRows.Close()
-				return snapshot, err
-			}
-		}
-		if item.MCPIDs == nil {
-			item.MCPIDs = []string{}
-		}
-		if activeExecutionRaw.Valid && strings.TrimSpace(activeExecutionRaw.String) != "" {
-			value := strings.TrimSpace(activeExecutionRaw.String)
-			item.ActiveExecutionID = &value
-		}
-		snapshot.Conversations = append(snapshot.Conversations, item)
+	conversationInputs := make([]runtimeapplication.ConversationRecordInput, 0, len(conversationRows))
+	for _, row := range conversationRows {
+		conversationInputs = append(conversationInputs, runtimeapplication.ConversationRecordInput{
+			ID:                row.ID,
+			WorkspaceID:       row.WorkspaceID,
+			ProjectID:         row.ProjectID,
+			Name:              row.Name,
+			QueueState:        row.QueueState,
+			DefaultMode:       row.DefaultMode,
+			ModelConfigID:     row.ModelConfigID,
+			RuleIDsJSON:       row.RuleIDsJSON,
+			SkillIDsJSON:      row.SkillIDsJSON,
+			MCPIDsJSON:        row.MCPIDsJSON,
+			BaseRevision:      row.BaseRevision,
+			ActiveExecutionID: row.ActiveExecutionID,
+			CreatedAt:         row.CreatedAt,
+			UpdatedAt:         row.UpdatedAt,
+		})
 	}
-	if err := conversationRows.Err(); err != nil {
-		_ = conversationRows.Close()
-		return snapshot, err
-	}
-	_ = conversationRows.Close()
-
-	messageRows, err := s.db.Query(
-		`SELECT id, conversation_id, role, content, queue_index, can_rollback, created_at
-		 FROM conversation_messages
-		 ORDER BY created_at ASC, id ASC`,
-	)
+	conversationRecords, err := runtimeapplication.ParseConversationRecords(conversationInputs)
 	if err != nil {
 		return snapshot, err
 	}
-	for messageRows.Next() {
-		item := ConversationMessage{}
-		var (
-			roleRaw        string
-			queueIndexRaw  sql.NullInt64
-			canRollbackRaw sql.NullInt64
-		)
-		if err := messageRows.Scan(
-			&item.ID,
-			&item.ConversationID,
-			&roleRaw,
-			&item.Content,
-			&queueIndexRaw,
-			&canRollbackRaw,
-			&item.CreatedAt,
-		); err != nil {
-			_ = messageRows.Close()
-			return snapshot, err
-		}
-		item.Role = MessageRole(strings.TrimSpace(roleRaw))
-		if queueIndexRaw.Valid {
-			value := int(queueIndexRaw.Int64)
-			item.QueueIndex = &value
-		}
-		if canRollbackRaw.Valid {
-			value := canRollbackRaw.Int64 != 0
-			item.CanRollback = &value
-		}
-		snapshot.ConversationMessages = append(snapshot.ConversationMessages, item)
+	for _, record := range conversationRecords {
+		snapshot.Conversations = append(snapshot.Conversations, Conversation{
+			ID:                record.ID,
+			WorkspaceID:       record.WorkspaceID,
+			ProjectID:         record.ProjectID,
+			Name:              record.Name,
+			QueueState:        QueueState(record.QueueState),
+			DefaultMode:       NormalizePermissionMode(record.DefaultMode),
+			ModelConfigID:     record.ModelConfigID,
+			RuleIDs:           append([]string{}, record.RuleIDs...),
+			SkillIDs:          append([]string{}, record.SkillIDs...),
+			MCPIDs:            append([]string{}, record.MCPIDs...),
+			BaseRevision:      record.BaseRevision,
+			ActiveExecutionID: record.ActiveExecutionID,
+			CreatedAt:         record.CreatedAt,
+			UpdatedAt:         record.UpdatedAt,
+		})
 	}
-	if err := messageRows.Err(); err != nil {
-		_ = messageRows.Close()
-		return snapshot, err
-	}
-	_ = messageRows.Close()
 
-	snapshotRows, err := s.db.Query(
-		`SELECT id, conversation_id, rollback_point_message_id, queue_state, worktree_ref, inspector_state_json, messages_json, execution_ids_json, created_at
-		 FROM conversation_snapshots
-		 ORDER BY created_at ASC, id ASC`,
-	)
+	messageRows, err := runtimeinfra.NewConversationMessageStore(s.db).LoadAll()
 	if err != nil {
 		return snapshot, err
 	}
-	for snapshotRows.Next() {
-		item := ConversationSnapshot{}
-		var (
-			queueStateRaw    string
-			worktreeRefRaw   sql.NullString
-			inspectorJSON    string
-			messagesJSON     string
-			executionIDsJSON string
-		)
-		if err := snapshotRows.Scan(
-			&item.ID,
-			&item.ConversationID,
-			&item.RollbackPointMessageID,
-			&queueStateRaw,
-			&worktreeRefRaw,
-			&inspectorJSON,
-			&messagesJSON,
-			&executionIDsJSON,
-			&item.CreatedAt,
-		); err != nil {
-			_ = snapshotRows.Close()
-			return snapshot, err
-		}
-		item.QueueState = QueueState(strings.TrimSpace(queueStateRaw))
-		if worktreeRefRaw.Valid && strings.TrimSpace(worktreeRefRaw.String) != "" {
-			value := strings.TrimSpace(worktreeRefRaw.String)
-			item.WorktreeRef = &value
-		}
-		if strings.TrimSpace(inspectorJSON) != "" {
-			if err := json.Unmarshal([]byte(inspectorJSON), &item.InspectorState); err != nil {
-				_ = snapshotRows.Close()
-				return snapshot, err
-			}
-		}
-		if strings.TrimSpace(messagesJSON) != "" {
-			if err := json.Unmarshal([]byte(messagesJSON), &item.Messages); err != nil {
-				_ = snapshotRows.Close()
-				return snapshot, err
-			}
-		}
-		if strings.TrimSpace(executionIDsJSON) != "" {
-			if err := json.Unmarshal([]byte(executionIDsJSON), &item.ExecutionIDs); err != nil {
-				_ = snapshotRows.Close()
-				return snapshot, err
-			}
-		}
-		snapshot.ConversationSnapshots = append(snapshot.ConversationSnapshots, item)
+	messageInputs := make([]runtimeapplication.ConversationMessageRecordInput, 0, len(messageRows))
+	for _, row := range messageRows {
+		messageInputs = append(messageInputs, runtimeapplication.ConversationMessageRecordInput{
+			ID:             row.ID,
+			ConversationID: row.ConversationID,
+			Role:           row.Role,
+			Content:        row.Content,
+			QueueIndex:     row.QueueIndex,
+			CanRollback:    row.CanRollback,
+			CreatedAt:      row.CreatedAt,
+		})
 	}
-	if err := snapshotRows.Err(); err != nil {
-		_ = snapshotRows.Close()
-		return snapshot, err
-	}
-	_ = snapshotRows.Close()
-
-	executionRows, err := s.db.Query(
-		`SELECT id, workspace_id, conversation_id, message_id, state, mode, model_id, mode_snapshot, model_snapshot_json, resource_profile_snapshot_json, agent_config_snapshot_json, tokens_in, tokens_out, project_revision_snapshot, queue_index, trace_id, created_at, updated_at
-		 FROM executions
-		 ORDER BY created_at ASC, id ASC`,
-	)
+	messageRecords, err := runtimeapplication.ParseConversationMessageRecords(messageInputs)
 	if err != nil {
 		return snapshot, err
 	}
-	for executionRows.Next() {
-		item := Execution{}
-		var (
-			stateRaw          string
-			modeRaw           string
-			modeSnapshotRaw   string
-			modelSnapshotJSON string
-			resourceJSON      sql.NullString
-			agentConfigJSON   sql.NullString
-		)
-		if err := executionRows.Scan(
-			&item.ID,
-			&item.WorkspaceID,
-			&item.ConversationID,
-			&item.MessageID,
-			&stateRaw,
-			&modeRaw,
-			&item.ModelID,
-			&modeSnapshotRaw,
-			&modelSnapshotJSON,
-			&resourceJSON,
-			&agentConfigJSON,
-			&item.TokensIn,
-			&item.TokensOut,
-			&item.ProjectRevisionSnapshot,
-			&item.QueueIndex,
-			&item.TraceID,
-			&item.CreatedAt,
-			&item.UpdatedAt,
-		); err != nil {
-			_ = executionRows.Close()
-			return snapshot, err
-		}
-		item.State = ExecutionState(strings.TrimSpace(stateRaw))
-		item.Mode = NormalizePermissionMode(modeRaw)
-		item.ModeSnapshot = NormalizePermissionMode(modeSnapshotRaw)
-		if strings.TrimSpace(modelSnapshotJSON) != "" {
-			if err := json.Unmarshal([]byte(modelSnapshotJSON), &item.ModelSnapshot); err != nil {
-				_ = executionRows.Close()
-				return snapshot, err
-			}
-			legacyModelSnapshot := struct {
-				TimeoutMS *int `json:"timeout_ms"`
-			}{}
-			if err := json.Unmarshal([]byte(modelSnapshotJSON), &legacyModelSnapshot); err != nil {
-				_ = executionRows.Close()
-				return snapshot, err
-			}
-			if (item.ModelSnapshot.Runtime == nil || item.ModelSnapshot.Runtime.RequestTimeoutMS == nil) && legacyModelSnapshot.TimeoutMS != nil {
-				value := *legacyModelSnapshot.TimeoutMS
-				item.ModelSnapshot.Runtime = &ModelRuntimeSpec{RequestTimeoutMS: &value}
-			}
-		}
-		if resourceJSON.Valid && strings.TrimSpace(resourceJSON.String) != "" {
-			resourceSnapshot := ExecutionResourceProfile{}
-			if err := json.Unmarshal([]byte(resourceJSON.String), &resourceSnapshot); err != nil {
-				_ = executionRows.Close()
-				return snapshot, err
-			}
-			item.ResourceProfileSnapshot = &resourceSnapshot
-		}
-		if agentConfigJSON.Valid && strings.TrimSpace(agentConfigJSON.String) != "" {
-			configSnapshot := ExecutionAgentConfigSnapshot{}
-			if err := json.Unmarshal([]byte(agentConfigJSON.String), &configSnapshot); err != nil {
-				_ = executionRows.Close()
-				return snapshot, err
-			}
-			item.AgentConfigSnapshot = &configSnapshot
-		}
-		snapshot.Executions = append(snapshot.Executions, item)
+	for _, record := range messageRecords {
+		snapshot.ConversationMessages = append(snapshot.ConversationMessages, ConversationMessage{
+			ID:             record.ID,
+			ConversationID: record.ConversationID,
+			Role:           MessageRole(record.Role),
+			Content:        record.Content,
+			CreatedAt:      record.CreatedAt,
+			QueueIndex:     cloneOptionalInt(record.QueueIndex),
+			CanRollback:    cloneOptionalBool(record.CanRollback),
+		})
 	}
-	if err := executionRows.Err(); err != nil {
-		_ = executionRows.Close()
-		return snapshot, err
-	}
-	_ = executionRows.Close()
 
-	eventRows, err := s.db.Query(
-		`SELECT event_id, execution_id, conversation_id, trace_id, sequence, queue_index, type, timestamp, payload_json
-		 FROM execution_events
-		 ORDER BY conversation_id ASC, sequence ASC, event_id ASC`,
-	)
+	snapshotRows, err := runtimeinfra.NewConversationSnapshotStore(s.db).LoadAll()
 	if err != nil {
 		return snapshot, err
 	}
-	for eventRows.Next() {
-		item := ExecutionEvent{}
-		var (
-			eventTypeRaw string
-			payloadJSON  string
-		)
-		if err := eventRows.Scan(
-			&item.EventID,
-			&item.ExecutionID,
-			&item.ConversationID,
-			&item.TraceID,
-			&item.Sequence,
-			&item.QueueIndex,
-			&eventTypeRaw,
-			&item.Timestamp,
-			&payloadJSON,
-		); err != nil {
-			_ = eventRows.Close()
-			return snapshot, err
-		}
-		item.Type = ExecutionEventType(strings.TrimSpace(eventTypeRaw))
-		if strings.TrimSpace(payloadJSON) != "" {
-			if err := json.Unmarshal([]byte(payloadJSON), &item.Payload); err != nil {
-				_ = eventRows.Close()
-				return snapshot, err
-			}
-		}
-		if item.Payload == nil {
-			item.Payload = map[string]any{}
-		}
-		snapshot.ExecutionEvents = append(snapshot.ExecutionEvents, item)
+	snapshotInputs := make([]runtimeapplication.ConversationSnapshotRecordInput, 0, len(snapshotRows))
+	for _, row := range snapshotRows {
+		snapshotInputs = append(snapshotInputs, runtimeapplication.ConversationSnapshotRecordInput{
+			ID:                     row.ID,
+			ConversationID:         row.ConversationID,
+			RollbackPointMessageID: row.RollbackPointMessageID,
+			QueueState:             row.QueueState,
+			WorktreeRef:            row.WorktreeRef,
+			InspectorStateJSON:     row.InspectorStateJSON,
+			MessagesJSON:           row.MessagesJSON,
+			ExecutionIDsJSON:       row.ExecutionIDsJSON,
+			CreatedAt:              row.CreatedAt,
+		})
 	}
-	if err := eventRows.Err(); err != nil {
-		_ = eventRows.Close()
+	snapshotRecords, err := runtimeapplication.ParseConversationSnapshotRecords(snapshotInputs)
+	if err != nil {
 		return snapshot, err
 	}
-	_ = eventRows.Close()
+	for _, record := range snapshotRecords {
+		snapshot.ConversationSnapshots = append(snapshot.ConversationSnapshots, ConversationSnapshot{
+			ID:                     record.ID,
+			ConversationID:         record.ConversationID,
+			RollbackPointMessageID: record.RollbackPointMessageID,
+			QueueState:             QueueState(record.QueueState),
+			WorktreeRef:            record.WorktreeRef,
+			InspectorState:         toHTTPAPIConversationInspector(record.InspectorState),
+			Messages:               toHTTPAPIConversationSnapshotMessages(record.Messages),
+			ExecutionIDs:           append([]string{}, record.ExecutionIDs...),
+			CreatedAt:              record.CreatedAt,
+		})
+	}
+
+	executionRows, err := runtimeinfra.NewExecutionStore(s.db).LoadAll()
+	if err != nil {
+		return snapshot, err
+	}
+	executionInputs := make([]runtimeapplication.ExecutionRecordInput, 0, len(executionRows))
+	for _, row := range executionRows {
+		executionInputs = append(executionInputs, runtimeapplication.ExecutionRecordInput{
+			ID:                          row.ID,
+			WorkspaceID:                 row.WorkspaceID,
+			ConversationID:              row.ConversationID,
+			MessageID:                   row.MessageID,
+			State:                       row.State,
+			Mode:                        row.Mode,
+			ModelID:                     row.ModelID,
+			ModeSnapshot:                row.ModeSnapshot,
+			ModelSnapshotJSON:           row.ModelSnapshotJSON,
+			ResourceProfileSnapshotJSON: row.ResourceProfileSnapshotJSON,
+			AgentConfigSnapshotJSON:     row.AgentConfigSnapshotJSON,
+			TokensIn:                    row.TokensIn,
+			TokensOut:                   row.TokensOut,
+			ProjectRevisionSnapshot:     row.ProjectRevisionSnapshot,
+			QueueIndex:                  row.QueueIndex,
+			TraceID:                     row.TraceID,
+			CreatedAt:                   row.CreatedAt,
+			UpdatedAt:                   row.UpdatedAt,
+		})
+	}
+	executionRecords, err := runtimeapplication.ParseExecutionRecords(executionInputs)
+	if err != nil {
+		return snapshot, err
+	}
+	for _, record := range executionRecords {
+		snapshot.Executions = append(snapshot.Executions, Execution{
+			ID:                      record.ID,
+			WorkspaceID:             record.WorkspaceID,
+			ConversationID:          record.ConversationID,
+			MessageID:               record.MessageID,
+			State:                   ExecutionState(record.State),
+			Mode:                    NormalizePermissionMode(record.Mode),
+			ModelID:                 record.ModelID,
+			ModeSnapshot:            NormalizePermissionMode(record.ModeSnapshot),
+			ModelSnapshot:           toHTTPAPIModelSnapshot(record.ModelSnapshot),
+			ResourceProfileSnapshot: toHTTPAPIExecutionResourceProfile(record.ResourceProfileSnapshot),
+			AgentConfigSnapshot:     toHTTPAPIExecutionAgentConfigSnapshot(record.AgentConfigSnapshot),
+			TokensIn:                record.TokensIn,
+			TokensOut:               record.TokensOut,
+			ProjectRevisionSnapshot: record.ProjectRevisionSnapshot,
+			QueueIndex:              record.QueueIndex,
+			TraceID:                 record.TraceID,
+			CreatedAt:               record.CreatedAt,
+			UpdatedAt:               record.UpdatedAt,
+		})
+	}
+
+	events, err := runtimeinfra.NewExecutionEventStore(s.db).LoadAll()
+	if err != nil {
+		return snapshot, err
+	}
+	for _, event := range events {
+		snapshot.ExecutionEvents = append(snapshot.ExecutionEvents, toHTTPAPIExecutionEvent(event))
+	}
+
+	policyRows, err := runtimeinfra.NewHookPolicyStore(s.db).LoadAll()
+	if err != nil {
+		return snapshot, err
+	}
+	for _, row := range policyRows {
+		policy, decodeErr := toHTTPAPIHookPolicy(row)
+		if decodeErr != nil {
+			return snapshot, decodeErr
+		}
+		snapshot.HookPolicies = append(snapshot.HookPolicies, policy)
+	}
+
+	recordRows, err := runtimeinfra.NewHookExecutionRecordStore(s.db).LoadAll()
+	if err != nil {
+		return snapshot, err
+	}
+	for _, row := range recordRows {
+		record, decodeErr := toHTTPAPIHookExecutionRecord(row)
+		if decodeErr != nil {
+			return snapshot, decodeErr
+		}
+		snapshot.HookExecutionRecords = append(snapshot.HookExecutionRecords, record)
+	}
 
 	return snapshot, nil
+}
+
+func toHTTPAPIModelSnapshot(input runtimeapplication.ExecutionModelSnapshot) ModelSnapshot {
+	return ModelSnapshot{
+		ConfigID:   input.ConfigID,
+		Vendor:     input.Vendor,
+		ModelID:    input.ModelID,
+		BaseURL:    input.BaseURL,
+		BaseURLKey: input.BaseURLKey,
+		Runtime:    toHTTPAPIModelRuntimeSpec(input.Runtime),
+		Params:     input.Params,
+	}
+}
+
+func toHTTPAPIModelRuntimeSpec(input *runtimeapplication.ExecutionModelRuntime) *ModelRuntimeSpec {
+	if input == nil {
+		return nil
+	}
+	result := &ModelRuntimeSpec{}
+	if input.RequestTimeoutMS != nil {
+		value := *input.RequestTimeoutMS
+		result.RequestTimeoutMS = &value
+	}
+	return result
+}
+
+func toHTTPAPIExecutionResourceProfile(input *runtimeapplication.ExecutionResourceProfileSnapshot) *ExecutionResourceProfile {
+	if input == nil {
+		return nil
+	}
+	return &ExecutionResourceProfile{
+		ModelConfigID:    input.ModelConfigID,
+		ModelID:          input.ModelID,
+		RuleIDs:          append([]string{}, input.RuleIDs...),
+		SkillIDs:         append([]string{}, input.SkillIDs...),
+		MCPIDs:           append([]string{}, input.MCPIDs...),
+		ProjectFilePaths: append([]string{}, input.ProjectFilePaths...),
+	}
+}
+
+func toHTTPAPIExecutionAgentConfigSnapshot(input *runtimeapplication.ExecutionAgentConfigSnapshot) *ExecutionAgentConfigSnapshot {
+	if input == nil {
+		return nil
+	}
+	return &ExecutionAgentConfigSnapshot{
+		MaxModelTurns:    input.MaxModelTurns,
+		ShowProcessTrace: input.ShowProcessTrace,
+		TraceDetailLevel: WorkspaceAgentConfigTraceDetailLevel(input.TraceDetailLevel),
+	}
+}
+
+func toHTTPAPIConversationInspector(input runtimeapplication.ConversationSnapshotInspector) ConversationInspector {
+	return ConversationInspector{Tab: input.Tab}
+}
+
+func toHTTPAPIConversationSnapshotMessages(input []runtimeapplication.ConversationSnapshotMessage) []ConversationMessage {
+	if len(input) == 0 {
+		return nil
+	}
+	result := make([]ConversationMessage, 0, len(input))
+	for _, item := range input {
+		result = append(result, ConversationMessage{
+			ID:             item.ID,
+			ConversationID: item.ConversationID,
+			Role:           MessageRole(item.Role),
+			Content:        item.Content,
+			CreatedAt:      item.CreatedAt,
+			QueueIndex:     cloneOptionalInt(item.QueueIndex),
+			CanRollback:    cloneOptionalBool(item.CanRollback),
+		})
+	}
+	return result
+}
+
+func cloneOptionalInt(input *int) *int {
+	if input == nil {
+		return nil
+	}
+	value := *input
+	return &value
+}
+
+func cloneOptionalBool(input *bool) *bool {
+	if input == nil {
+		return nil
+	}
+	value := *input
+	return &value
+}
+
+func toHTTPAPIHookPolicy(row runtimeinfra.HookPolicyRow) (HookPolicy, error) {
+	scope, ok := normalizeHookScope(HookScope(row.Scope))
+	if !ok {
+		return HookPolicy{}, fmt.Errorf("invalid hook policy scope: %s", row.Scope)
+	}
+	eventType, ok := normalizeHookEventType(HookEventType(row.Event))
+	if !ok {
+		return HookPolicy{}, fmt.Errorf("invalid hook policy event: %s", row.Event)
+	}
+	handlerType, ok := normalizeHookHandlerType(HookHandlerType(row.HandlerType))
+	if !ok {
+		return HookPolicy{}, fmt.Errorf("invalid hook policy handler_type: %s", row.HandlerType)
+	}
+	decision, err := decodeHookDecisionJSON(row.DecisionJSON)
+	if err != nil {
+		return HookPolicy{}, fmt.Errorf("decode hook policy decision: %w", err)
+	}
+	return HookPolicy{
+		ID:             row.ID,
+		Scope:          scope,
+		Event:          eventType,
+		HandlerType:    handlerType,
+		ToolName:       row.ToolName,
+		WorkspaceID:    derefString(row.WorkspaceID),
+		ProjectID:      derefString(row.ProjectID),
+		ConversationID: derefString(row.ConversationID),
+		Enabled:        row.Enabled,
+		Decision:       decision,
+		UpdatedAt:      row.UpdatedAt,
+	}, nil
+}
+
+func toHTTPAPIHookExecutionRecord(row runtimeinfra.HookExecutionRecordRow) (HookExecutionRecord, error) {
+	eventType, ok := normalizeHookEventType(HookEventType(row.Event))
+	if !ok {
+		return HookExecutionRecord{}, fmt.Errorf("invalid hook execution event: %s", row.Event)
+	}
+	decision, err := decodeHookDecisionJSON(row.DecisionJSON)
+	if err != nil {
+		return HookExecutionRecord{}, fmt.Errorf("decode hook execution decision: %w", err)
+	}
+	record := HookExecutionRecord{
+		ID:             row.ID,
+		RunID:          row.RunID,
+		ConversationID: row.ConversationID,
+		Event:          eventType,
+		Decision:       decision,
+		Timestamp:      row.Timestamp,
+	}
+	if row.TaskID != nil {
+		record.TaskID = *row.TaskID
+	}
+	if row.ToolName != nil {
+		record.ToolName = *row.ToolName
+	}
+	if row.PolicyID != nil {
+		record.PolicyID = *row.PolicyID
+	}
+	return record, nil
+}
+
+func decodeHookDecisionJSON(input string) (HookDecision, error) {
+	if input == "" {
+		return HookDecision{Action: HookDecisionActionAllow}, nil
+	}
+	decision := HookDecision{}
+	if err := json.Unmarshal([]byte(input), &decision); err != nil {
+		return HookDecision{}, err
+	}
+	action, ok := normalizeHookDecisionAction(decision.Action)
+	if !ok {
+		return HookDecision{}, fmt.Errorf("invalid action: %s", decision.Action)
+	}
+	decision.Action = action
+	decision.Reason = strings.TrimSpace(decision.Reason)
+	decision.UpdatedInput = cloneMapAny(decision.UpdatedInput)
+	decision.AdditionalContext = cloneMapAny(decision.AdditionalContext)
+	return decision, nil
 }

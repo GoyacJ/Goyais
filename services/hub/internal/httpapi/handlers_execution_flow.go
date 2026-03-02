@@ -148,6 +148,8 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
 		cancelExecutionID := ""
+		canceledExecution := Execution{}
+		hasCanceledExecution := false
 		nextExecutionToSubmit := ""
 		state.mu.Lock()
 		conversation, exists := state.conversations[conversationID]
@@ -163,6 +165,8 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 			execution.UpdatedAt = now
 			state.executions[execution.ID] = execution
 			cancelExecutionID = execution.ID
+			canceledExecution = execution
+			hasCanceledExecution = true
 			appendExecutionEventLocked(state, ExecutionEvent{
 				ExecutionID:    execution.ID,
 				ConversationID: conversationID,
@@ -188,6 +192,21 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 		conversation.UpdatedAt = now
 		state.conversations[conversationID] = conversation
 		state.mu.Unlock()
+		if hasCanceledExecution && state.orchestrator != nil {
+			decision, matchedPolicyID := state.orchestrator.evaluateHookDecision(canceledExecution, HookEventTypeStop, "")
+			state.orchestrator.appendHookExecutionRecordAndEvent(
+				canceledExecution,
+				canceledExecution.ID,
+				HookEventTypeStop,
+				"",
+				matchedPolicyID,
+				decision,
+				map[string]any{
+					"reason": "user_stop",
+					"source": "conversation_stop",
+				},
+			)
+		}
 		syncExecutionDomainBestEffort(state)
 		if cancelExecutionID != "" && state.orchestrator != nil {
 			state.orchestrator.Cancel(cancelExecutionID)

@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"goyais/services/hub/internal/agentcore/safety"
@@ -110,13 +112,20 @@ func TestExecuteSingleOpenAIToolCallEmitsDiffGeneratedForFileTools(t *testing.T)
 			state.mu.RUnlock()
 
 			diffEvents := make([]ExecutionEvent, 0, len(events))
+			taskArtifactEvents := make([]ExecutionEvent, 0, len(events))
 			for _, event := range events {
 				if event.Type == ExecutionEventTypeDiffGenerated {
 					diffEvents = append(diffEvents, event)
 				}
+				if event.Type == ExecutionEventTypeTaskArtifactEmitted {
+					taskArtifactEvents = append(taskArtifactEvents, event)
+				}
 			}
 			if len(diffEvents) != 1 {
 				t.Fatalf("expected one diff_generated event, got %#v", events)
+			}
+			if len(taskArtifactEvents) != 1 {
+				t.Fatalf("expected one task_artifact_emitted event, got %#v", events)
 			}
 			eventDiff := parseDiffItemsFromPayload(diffEvents[0].Payload)
 			if len(eventDiff) != 1 {
@@ -150,6 +159,13 @@ func TestExecuteSingleOpenAIToolCallEmitsDiffGeneratedForFileTools(t *testing.T)
 			}
 			if eventDiff[0].DeletedLines == nil || diffState[0].DeletedLines == nil || *eventDiff[0].DeletedLines != *diffState[0].DeletedLines {
 				t.Fatalf("expected accumulated deleted_lines to match event, event=%#v state=%#v", eventDiff[0].DeletedLines, diffState[0].DeletedLines)
+			}
+			artifactPayload, ok := taskArtifactEvents[0].Payload["artifact"].(map[string]any)
+			if !ok {
+				t.Fatalf("expected artifact payload map, got %#v", taskArtifactEvents[0].Payload)
+			}
+			if gotKind := asStringValue(artifactPayload["kind"]); gotKind != "diff" {
+				t.Fatalf("expected artifact kind diff, got %q", gotKind)
 			}
 		})
 	}
@@ -289,4 +305,556 @@ func prepareExecutionToolLoopTestContext(
 func diffIntPtr(value int) *int {
 	result := value
 	return &result
+}
+
+func TestTransitionExecutionToFailedEmitsTaskFailedEvent(t *testing.T) {
+	state := NewAppState(nil)
+	orchestrator := NewExecutionOrchestrator(state)
+	now := "2026-03-02T00:00:00Z"
+
+	conversation := Conversation{
+		ID:                "conv_failed_task",
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_failed_task",
+		Name:              "Failed Task",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     "rc_model_1",
+		ActiveExecutionID: ptrString("exec_failed_task"),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	execution := Execution{
+		ID:             "exec_failed_task",
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversation.ID,
+		MessageID:      "msg_failed_task",
+		State:          ExecutionStateExecuting,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_failed_task",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	state.mu.Lock()
+	state.conversations[conversation.ID] = conversation
+	state.executions[execution.ID] = execution
+	state.conversationExecutionOrder[conversation.ID] = []string{execution.ID}
+	state.mu.Unlock()
+
+	_ = orchestrator.transitionExecutionToFailed(execution.ID, errors.New("runner crashed"))
+
+	state.mu.RLock()
+	events := append([]ExecutionEvent{}, state.executionEvents[conversation.ID]...)
+	state.mu.RUnlock()
+
+	foundTaskFailed := false
+	for _, event := range events {
+		if event.Type != ExecutionEventTypeTaskFailed {
+			continue
+		}
+		if gotTaskID := strings.TrimSpace(asStringValue(event.Payload["task_id"])); gotTaskID != execution.ID {
+			continue
+		}
+		if gotMessage := strings.TrimSpace(asStringValue(event.Payload["error_message"])); gotMessage != "runner crashed" {
+			t.Fatalf("expected error_message runner crashed, got %#v", event.Payload)
+		}
+		foundTaskFailed = true
+	}
+	if !foundTaskFailed {
+		t.Fatalf("expected task_failed event, got %#v", events)
+	}
+}
+
+func TestTransitionExecutionToFailedEmitsSubagentStopHookRecord(t *testing.T) {
+	state := NewAppState(nil)
+	orchestrator := NewExecutionOrchestrator(state)
+	now := "2026-03-02T00:00:00Z"
+
+	conversation := Conversation{
+		ID:                "conv_failed_subagent_hook",
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_failed_subagent",
+		Name:              "Failed SubagentStop Hook",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     "rc_model_1",
+		ActiveExecutionID: ptrString("exec_failed_subagent_hook"),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	execution := Execution{
+		ID:             "exec_failed_subagent_hook",
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversation.ID,
+		MessageID:      "msg_failed_subagent_hook",
+		State:          ExecutionStateExecuting,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_failed_subagent_hook",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	state.mu.Lock()
+	state.conversations[conversation.ID] = conversation
+	state.executions[execution.ID] = execution
+	state.conversationExecutionOrder[conversation.ID] = []string{execution.ID}
+	state.hookPolicies["policy_subagent_stop_failed"] = HookPolicy{
+		ID:          "policy_subagent_stop_failed",
+		Scope:       HookScopeGlobal,
+		Event:       HookEventTypeSubagentStop,
+		HandlerType: HookHandlerTypePlugin,
+		Enabled:     true,
+		Decision: HookDecision{
+			Action: HookDecisionActionAllow,
+			Reason: "subagent failed stop logged",
+		},
+		UpdatedAt: now,
+	}
+	state.mu.Unlock()
+
+	_ = orchestrator.transitionExecutionToFailed(execution.ID, errors.New("runner crashed"))
+
+	state.mu.RLock()
+	records := append([]HookExecutionRecord{}, state.hookExecutionRecords[conversation.ID]...)
+	state.mu.RUnlock()
+
+	foundSubagentStopRecord := false
+	for _, record := range records {
+		if record.RunID != execution.ID || record.Event != HookEventTypeSubagentStop {
+			continue
+		}
+		if record.PolicyID != "policy_subagent_stop_failed" {
+			t.Fatalf("unexpected subagent_stop hook record policy: %#v", record)
+		}
+		foundSubagentStopRecord = true
+	}
+	if !foundSubagentStopRecord {
+		t.Fatalf("expected subagent_stop hook record for failed run %s, got %#v", execution.ID, records)
+	}
+}
+
+func TestBeginExecutionEmitsTaskStartedEvent(t *testing.T) {
+	state := NewAppState(nil)
+	orchestrator := NewExecutionOrchestrator(state)
+	now := "2026-03-02T00:00:00Z"
+
+	conversation := Conversation{
+		ID:            "conv_started_task",
+		WorkspaceID:   localWorkspaceID,
+		ProjectID:     "proj_started_task",
+		Name:          "Started Task",
+		QueueState:    QueueStateQueued,
+		DefaultMode:   PermissionModeDefault,
+		ModelConfigID: "rc_model_1",
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	execution := Execution{
+		ID:             "exec_started_task",
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversation.ID,
+		MessageID:      "msg_started_task",
+		State:          ExecutionStatePending,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_started_task",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	state.mu.Lock()
+	state.conversations[conversation.ID] = conversation
+	state.executions[execution.ID] = execution
+	state.mu.Unlock()
+
+	_, _, ok := orchestrator.beginExecution(execution.ID)
+	if !ok {
+		t.Fatalf("expected beginExecution to succeed")
+	}
+
+	state.mu.RLock()
+	events := append([]ExecutionEvent{}, state.executionEvents[conversation.ID]...)
+	state.mu.RUnlock()
+
+	foundTaskStarted := false
+	for _, event := range events {
+		if event.Type != ExecutionEventTypeTaskStarted {
+			continue
+		}
+		if gotTaskID := strings.TrimSpace(asStringValue(event.Payload["task_id"])); gotTaskID != execution.ID {
+			continue
+		}
+		foundTaskStarted = true
+	}
+	if !foundTaskStarted {
+		t.Fatalf("expected task_started event, got %#v", events)
+	}
+}
+
+func TestBeginExecutionEmitsSessionStartHookRecord(t *testing.T) {
+	state := NewAppState(nil)
+	orchestrator := NewExecutionOrchestrator(state)
+	now := "2026-03-02T00:00:00Z"
+
+	conversation := Conversation{
+		ID:            "conv_session_start",
+		WorkspaceID:   localWorkspaceID,
+		ProjectID:     "proj_session_start",
+		Name:          "Session Start",
+		QueueState:    QueueStateQueued,
+		DefaultMode:   PermissionModeDefault,
+		ModelConfigID: "rc_model_1",
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	execution := Execution{
+		ID:             "exec_session_start",
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversation.ID,
+		MessageID:      "msg_session_start",
+		State:          ExecutionStatePending,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_session_start",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	state.mu.Lock()
+	state.conversations[conversation.ID] = conversation
+	state.executions[execution.ID] = execution
+	state.hookPolicies["policy_session_start_deny"] = HookPolicy{
+		ID:          "policy_session_start_deny",
+		Scope:       HookScopeGlobal,
+		Event:       HookEventTypeSessionStart,
+		HandlerType: HookHandlerTypePlugin,
+		Enabled:     true,
+		Decision: HookDecision{
+			Action: HookDecisionActionDeny,
+			Reason: "test session start hook deny",
+		},
+		UpdatedAt: now,
+	}
+	state.mu.Unlock()
+
+	_, _, ok := orchestrator.beginExecution(execution.ID)
+	if !ok {
+		t.Fatalf("expected beginExecution to succeed")
+	}
+
+	state.mu.RLock()
+	records := append([]HookExecutionRecord{}, state.hookExecutionRecords[conversation.ID]...)
+	state.mu.RUnlock()
+
+	foundSessionStartRecord := false
+	for _, record := range records {
+		if record.RunID != execution.ID || record.Event != HookEventTypeSessionStart {
+			continue
+		}
+		if record.PolicyID != "policy_session_start_deny" || record.Decision.Action != HookDecisionActionDeny {
+			t.Fatalf("unexpected session_start hook record: %#v", record)
+		}
+		foundSessionStartRecord = true
+	}
+	if !foundSessionStartRecord {
+		t.Fatalf("expected session_start hook record for run %s, got %#v", execution.ID, records)
+	}
+}
+
+func TestTransitionExecutionToCompletedEmitsTaskCompletedEvent(t *testing.T) {
+	state := NewAppState(nil)
+	orchestrator := NewExecutionOrchestrator(state)
+	now := "2026-03-02T00:00:00Z"
+
+	conversation := Conversation{
+		ID:                "conv_completed_task",
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_completed_task",
+		Name:              "Completed Task",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     "rc_model_1",
+		ActiveExecutionID: ptrString("exec_completed_task"),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	execution := Execution{
+		ID:             "exec_completed_task",
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversation.ID,
+		MessageID:      "msg_completed_task",
+		State:          ExecutionStateExecuting,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_completed_task",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	state.mu.Lock()
+	state.conversations[conversation.ID] = conversation
+	state.executions[execution.ID] = execution
+	state.conversationExecutionOrder[conversation.ID] = []string{execution.ID}
+	state.mu.Unlock()
+
+	_ = orchestrator.transitionExecutionToCompleted(execution.ID, "ok", map[string]any{})
+
+	state.mu.RLock()
+	events := append([]ExecutionEvent{}, state.executionEvents[conversation.ID]...)
+	state.mu.RUnlock()
+
+	foundTaskCompleted := false
+	for _, event := range events {
+		if event.Type != ExecutionEventTypeTaskCompleted {
+			continue
+		}
+		if gotTaskID := strings.TrimSpace(asStringValue(event.Payload["task_id"])); gotTaskID != execution.ID {
+			continue
+		}
+		foundTaskCompleted = true
+	}
+	if !foundTaskCompleted {
+		t.Fatalf("expected task_completed event, got %#v", events)
+	}
+}
+
+func TestTransitionExecutionToCancelledEmitsTaskCancelledEvent(t *testing.T) {
+	state := NewAppState(nil)
+	orchestrator := NewExecutionOrchestrator(state)
+	now := "2026-03-02T00:00:00Z"
+
+	conversation := Conversation{
+		ID:                "conv_cancelled_task",
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_cancelled_task",
+		Name:              "Cancelled Task",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     "rc_model_1",
+		ActiveExecutionID: ptrString("exec_cancelled_task"),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	execution := Execution{
+		ID:             "exec_cancelled_task",
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversation.ID,
+		MessageID:      "msg_cancelled_task",
+		State:          ExecutionStateExecuting,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_cancelled_task",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	state.mu.Lock()
+	state.conversations[conversation.ID] = conversation
+	state.executions[execution.ID] = execution
+	state.conversationExecutionOrder[conversation.ID] = []string{execution.ID}
+	state.mu.Unlock()
+
+	_ = orchestrator.transitionExecutionToCancelled(execution.ID, "run_cancelled")
+
+	state.mu.RLock()
+	events := append([]ExecutionEvent{}, state.executionEvents[conversation.ID]...)
+	state.mu.RUnlock()
+
+	foundTaskCancelled := false
+	for _, event := range events {
+		if event.Type != ExecutionEventTypeTaskCancelled {
+			continue
+		}
+		if gotTaskID := strings.TrimSpace(asStringValue(event.Payload["task_id"])); gotTaskID != execution.ID {
+			continue
+		}
+		if gotReason := strings.TrimSpace(asStringValue(event.Payload["reason"])); gotReason != "run_cancelled" {
+			t.Fatalf("expected reason run_cancelled, got %#v", event.Payload)
+		}
+		foundTaskCancelled = true
+	}
+	if !foundTaskCancelled {
+		t.Fatalf("expected task_cancelled event, got %#v", events)
+	}
+}
+
+func TestTransitionExecutionToCancelledEmitsSubagentStopHookRecord(t *testing.T) {
+	state := NewAppState(nil)
+	orchestrator := NewExecutionOrchestrator(state)
+	now := "2026-03-02T00:00:00Z"
+
+	conversation := Conversation{
+		ID:                "conv_subagent_stop_hook",
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_subagent_stop",
+		Name:              "SubagentStop Hook",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     "rc_model_1",
+		ActiveExecutionID: ptrString("exec_subagent_stop_hook"),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	execution := Execution{
+		ID:             "exec_subagent_stop_hook",
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversation.ID,
+		MessageID:      "msg_subagent_stop_hook",
+		State:          ExecutionStateExecuting,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_subagent_stop_hook",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	state.mu.Lock()
+	state.conversations[conversation.ID] = conversation
+	state.executions[execution.ID] = execution
+	state.conversationExecutionOrder[conversation.ID] = []string{execution.ID}
+	state.hookPolicies["policy_subagent_stop"] = HookPolicy{
+		ID:          "policy_subagent_stop",
+		Scope:       HookScopeGlobal,
+		Event:       HookEventTypeSubagentStop,
+		HandlerType: HookHandlerTypePlugin,
+		Enabled:     true,
+		Decision: HookDecision{
+			Action: HookDecisionActionAllow,
+			Reason: "subagent stop logged",
+		},
+		UpdatedAt: now,
+	}
+	state.mu.Unlock()
+
+	_ = orchestrator.transitionExecutionToCancelled(execution.ID, "run_cancelled")
+
+	state.mu.RLock()
+	records := append([]HookExecutionRecord{}, state.hookExecutionRecords[conversation.ID]...)
+	state.mu.RUnlock()
+
+	foundSubagentStopRecord := false
+	for _, record := range records {
+		if record.RunID != execution.ID || record.Event != HookEventTypeSubagentStop {
+			continue
+		}
+		if record.PolicyID != "policy_subagent_stop" {
+			t.Fatalf("unexpected subagent_stop hook record policy: %#v", record)
+		}
+		foundSubagentStopRecord = true
+	}
+	if !foundSubagentStopRecord {
+		t.Fatalf("expected subagent_stop hook record for run %s, got %#v", execution.ID, records)
+	}
+}
+
+func TestTransitionExecutionToAwaitingInputEmitsNotificationHookRecord(t *testing.T) {
+	state := NewAppState(nil)
+	orchestrator := NewExecutionOrchestrator(state)
+	now := "2026-03-02T00:00:00Z"
+
+	conversation := Conversation{
+		ID:                "conv_notification_hook",
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_notification_hook",
+		Name:              "Notification Hook",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     "rc_model_1",
+		ActiveExecutionID: ptrString("exec_notification_hook"),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	execution := Execution{
+		ID:             "exec_notification_hook",
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversation.ID,
+		MessageID:      "msg_notification_hook",
+		State:          ExecutionStateExecuting,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_notification_hook",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	state.mu.Lock()
+	state.conversations[conversation.ID] = conversation
+	state.executions[execution.ID] = execution
+	state.hookPolicies["policy_notification_deny"] = HookPolicy{
+		ID:          "policy_notification_deny",
+		Scope:       HookScopeGlobal,
+		Event:       HookEventTypeNotification,
+		HandlerType: HookHandlerTypePlugin,
+		Enabled:     true,
+		Decision: HookDecision{
+			Action: HookDecisionActionDeny,
+			Reason: "test notification hook deny",
+		},
+		UpdatedAt: now,
+	}
+	state.mu.Unlock()
+
+	orchestrator.transitionExecutionToAwaitingInput(execution.ID, pendingUserQuestion{
+		QuestionID:          "q_notification_1",
+		Question:            "Need your confirmation",
+		Options:             []map[string]any{{"id": "yes", "label": "Yes"}},
+		RecommendedOptionID: "yes",
+		AllowText:           false,
+		Required:            true,
+		CallID:              "call_notification_1",
+		ToolName:            "Edit",
+	})
+
+	state.mu.RLock()
+	records := append([]HookExecutionRecord{}, state.hookExecutionRecords[conversation.ID]...)
+	state.mu.RUnlock()
+
+	foundNotificationRecord := false
+	for _, record := range records {
+		if record.RunID != execution.ID || record.Event != HookEventTypeNotification {
+			continue
+		}
+		if record.ToolName != "Edit" {
+			t.Fatalf("expected notification hook tool name Edit, got %#v", record)
+		}
+		if record.PolicyID != "policy_notification_deny" || record.Decision.Action != HookDecisionActionDeny {
+			t.Fatalf("unexpected notification hook record: %#v", record)
+		}
+		foundNotificationRecord = true
+	}
+	if !foundNotificationRecord {
+		t.Fatalf("expected notification hook record for run %s, got %#v", execution.ID, records)
+	}
+}
+
+func ptrString(value string) *string {
+	v := value
+	return &v
 }

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestConversationInputSubmit_AppliesExplicitRuleSelectionPerMessage(t *testing.T) {
@@ -158,6 +159,130 @@ func TestConversationInputSubmit_DynamicPromptCommandEnqueuesExecution(t *testin
 	lastMessage := state.conversationMessages[conversationID][len(state.conversationMessages[conversationID])-1]
 	if !strings.Contains(lastMessage.Content, "Draft plan for telemetry pipeline") {
 		t.Fatalf("expected expanded prompt content, got %q", lastMessage.Content)
+	}
+}
+
+func TestConversationInputSubmit_EmitsStructuredTaskEvents(t *testing.T) {
+	state, conversationID := seedConversationMessageValidationState(t)
+	router := composerInputTestMux(state)
+
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input": "run structured task event check",
+	}, nil)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("expected submit 201, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	execution, ok := payload["execution"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected execution payload, got %#v", payload["execution"])
+	}
+	executionID := strings.TrimSpace(asString(execution["id"]))
+	if executionID == "" {
+		t.Fatalf("expected execution id, got %#v", execution)
+	}
+
+	state.mu.RLock()
+	events := append([]ExecutionEvent{}, state.executionEvents[conversationID]...)
+	state.mu.RUnlock()
+
+	foundGraphConfigured := false
+	foundDependenciesUpdated := false
+	foundRetryPolicyUpdated := false
+	for _, event := range events {
+		switch event.Type {
+		case ExecutionEventTypeTaskGraphConfigured:
+			foundGraphConfigured = true
+		case ExecutionEventTypeTaskDependenciesUpdated:
+			if gotTaskID := strings.TrimSpace(asString(event.Payload["task_id"])); gotTaskID == executionID {
+				foundDependenciesUpdated = true
+			}
+		case ExecutionEventTypeTaskRetryPolicyUpdated:
+			if gotTaskID := strings.TrimSpace(asString(event.Payload["task_id"])); gotTaskID == executionID {
+				foundRetryPolicyUpdated = true
+			}
+		}
+	}
+	if !foundGraphConfigured {
+		t.Fatalf("expected task_graph_configured event, got %#v", events)
+	}
+	if !foundDependenciesUpdated {
+		t.Fatalf("expected task_dependencies_updated event for execution %s, got %#v", executionID, events)
+	}
+	if !foundRetryPolicyUpdated {
+		t.Fatalf("expected task_retry_policy_updated event for execution %s, got %#v", executionID, events)
+	}
+}
+
+func TestConversationInputSubmit_EmitsUserPromptSubmitHookRecord(t *testing.T) {
+	state, conversationID := seedConversationMessageValidationState(t)
+	state.mu.Lock()
+	state.hookPolicies["policy_user_prompt_submit_deny"] = HookPolicy{
+		ID:          "policy_user_prompt_submit_deny",
+		Scope:       HookScopeGlobal,
+		Event:       HookEventTypeUserPromptSubmit,
+		HandlerType: HookHandlerTypePlugin,
+		Enabled:     true,
+		Decision: HookDecision{
+			Action: HookDecisionActionDeny,
+			Reason: "test submit hook deny",
+		},
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	state.mu.Unlock()
+
+	router := composerInputTestMux(state)
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+		"raw_input": "run submit hook event check",
+	}, nil)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("expected submit 201, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	execution, ok := payload["execution"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected execution payload, got %#v", payload["execution"])
+	}
+	executionID := strings.TrimSpace(asString(execution["id"]))
+	if executionID == "" {
+		t.Fatalf("expected execution id, got %#v", execution)
+	}
+
+	state.mu.RLock()
+	records := append([]HookExecutionRecord{}, state.hookExecutionRecords[conversationID]...)
+	events := append([]ExecutionEvent{}, state.executionEvents[conversationID]...)
+	state.mu.RUnlock()
+
+	foundHookRecord := false
+	for _, record := range records {
+		if record.RunID != executionID || record.Event != HookEventTypeUserPromptSubmit {
+			continue
+		}
+		if record.PolicyID != "policy_user_prompt_submit_deny" || record.Decision.Action != HookDecisionActionDeny {
+			t.Fatalf("unexpected submit hook record: %#v", record)
+		}
+		foundHookRecord = true
+	}
+	if !foundHookRecord {
+		t.Fatalf("expected user_prompt_submit hook record for run %s, got %#v", executionID, records)
+	}
+
+	foundHookExecutionEvent := false
+	for _, event := range events {
+		if event.ExecutionID != executionID || event.Type != ExecutionEventTypeUserPromptSubmit {
+			continue
+		}
+		if strings.TrimSpace(asString(event.Payload["policy_id"])) != "policy_user_prompt_submit_deny" {
+			t.Fatalf("expected hook execution event payload policy_id=policy_user_prompt_submit_deny, got %#v", event.Payload)
+		}
+		foundHookExecutionEvent = true
+	}
+	if !foundHookExecutionEvent {
+		t.Fatalf("expected user_prompt_submit execution event for run %s, got %#v", executionID, events)
 	}
 }
 

@@ -1,12 +1,16 @@
 import {
   cancelExecution,
   commitConversationChangeSet,
+  controlRunTask,
   controlExecutionRun,
   discardConversationChangeSet,
   getComposerCatalog,
   getConversationChangeSet,
   getConversationDetail,
+  getRunTaskById,
+  getRunTaskGraph,
   rollbackExecution,
+  listRunTasks,
   submitComposerInput
 } from "@/modules/conversation/services";
 import { createExecutionEvent } from "@/modules/conversation/store/events";
@@ -35,6 +39,14 @@ import { toDisplayError } from "@/shared/services/errorMapper";
 import { ApiError } from "@/shared/services/http";
 import { createMockId } from "@/shared/utils/id";
 import type { ComposerResourceSelection, Conversation, ConversationMessage, ExecutionEvent } from "@/shared/types/api";
+import type {
+  ConversationRunTaskControlAction,
+  ConversationRunTaskControlResponse,
+  ConversationRunTaskGraph,
+  ConversationRunTaskListResponse,
+  ConversationRunTaskNode,
+  ConversationRunTaskState
+} from "@/modules/conversation/services";
 
 export async function submitConversationMessage(
   conversation: Conversation,
@@ -426,6 +438,94 @@ export async function refreshConversationChangeSet(conversationId: string): Prom
   }
 }
 
+export async function loadConversationRunTaskGraph(conversationId: string): Promise<ConversationRunTaskGraph | null> {
+  const runtime = conversationStore.byConversationId[conversationId];
+  if (!runtime) {
+    return null;
+  }
+  const runID = resolveRunContextExecutionID(runtime);
+  if (runID === "") {
+    return null;
+  }
+  try {
+    return await getRunTaskGraph(runID);
+  } catch (error) {
+    conversationStore.error = toDisplayError(error);
+    return null;
+  }
+}
+
+export async function loadConversationRunTasks(
+  conversationId: string,
+  options: {
+    state?: ConversationRunTaskState;
+    cursor?: string;
+    limit?: number;
+  } = {}
+): Promise<ConversationRunTaskListResponse | null> {
+  const runtime = conversationStore.byConversationId[conversationId];
+  if (!runtime) {
+    return null;
+  }
+  const runID = resolveRunContextExecutionID(runtime);
+  if (runID === "") {
+    return null;
+  }
+  try {
+    return await listRunTasks(runID, options);
+  } catch (error) {
+    conversationStore.error = toDisplayError(error);
+    return null;
+  }
+}
+
+export async function loadConversationRunTaskById(conversationId: string, taskId: string): Promise<ConversationRunTaskNode | null> {
+  const runtime = conversationStore.byConversationId[conversationId];
+  if (!runtime) {
+    return null;
+  }
+  const normalizedTaskID = taskId.trim();
+  if (normalizedTaskID === "") {
+    return null;
+  }
+  const runID = resolveRunContextExecutionID(runtime);
+  if (runID === "") {
+    return null;
+  }
+  try {
+    return await getRunTaskById(runID, normalizedTaskID);
+  } catch (error) {
+    conversationStore.error = toDisplayError(error);
+    return null;
+  }
+}
+
+export async function controlConversationRunTask(
+  conversation: Conversation,
+  taskId: string,
+  action: ConversationRunTaskControlAction,
+  reason?: string
+): Promise<ConversationRunTaskControlResponse | null> {
+  const runtime = conversationStore.byConversationId[conversation.id];
+  if (!runtime) {
+    return null;
+  }
+  const normalizedTaskID = taskId.trim();
+  if (normalizedTaskID === "") {
+    return null;
+  }
+  const runID = resolveRunContextExecutionID(runtime);
+  if (runID === "") {
+    return null;
+  }
+  try {
+    return await controlRunTask(runID, normalizedTaskID, action, reason);
+  } catch (error) {
+    conversationStore.error = toDisplayError(error);
+    return null;
+  }
+}
+
 export function applyIncomingExecutionEvent(conversationId: string, event: ExecutionEvent): void {
   const runtime = conversationStore.byConversationId[conversationId];
   if (!runtime) {
@@ -456,4 +556,28 @@ export function applyIncomingExecutionEvent(conversationId: string, event: Execu
 
 function isCatalogStaleError(error: unknown): boolean {
   return error instanceof ApiError && error.code === "CATALOG_STALE";
+}
+
+function resolveRunContextExecutionID(runtime: { executions: Array<{ id: string; state: string; queue_index: number; created_at: string }> }): string {
+  const active = runtime.executions.find((execution) =>
+    execution.state === "executing" ||
+    execution.state === "pending" ||
+    execution.state === "confirming" ||
+    execution.state === "awaiting_input"
+  );
+  if (active?.id.trim()) {
+    return active.id.trim();
+  }
+
+  const ordered = [...runtime.executions].sort((left, right) => {
+    if (left.queue_index !== right.queue_index) {
+      return left.queue_index - right.queue_index;
+    }
+    if (left.created_at !== right.created_at) {
+      return left.created_at.localeCompare(right.created_at);
+    }
+    return left.id.localeCompare(right.id);
+  });
+  const seed = ordered[0];
+  return seed?.id.trim() ?? "";
 }

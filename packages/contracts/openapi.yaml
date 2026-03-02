@@ -606,7 +606,128 @@ paths:
         '409':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v2/conversations/{conversation_id}/changeset:
+  /v1/runs/{run_id}/graph:
+    get:
+      summary: Get run task dependency graph
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+      responses:
+        '200':
+          description: Run task graph
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentGraph'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/runs/{run_id}/tasks:
+    get:
+      summary: List run tasks
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+        - in: query
+          name: state
+          schema:
+            $ref: '#/components/schemas/TaskState'
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Run task list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunTaskListResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/runs/{run_id}/tasks/{task_id}:
+    get:
+      summary: Get run task detail
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+        - $ref: '#/components/parameters/TaskIdParam'
+      responses:
+        '200':
+          description: Run task detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskNode'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/runs/{run_id}/tasks/{task_id}/control:
+    post:
+      summary: Control task execution in run
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+        - $ref: '#/components/parameters/TaskIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskControlRequest'
+      responses:
+        '200':
+          description: Task control applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskControlResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '409':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/hooks/policies:
+    get:
+      summary: List hook policies
+      responses:
+        '200':
+          description: Hook policy list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HookPolicyListResponse'
+    post:
+      summary: Create or update hook policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HookPolicyUpsertRequest'
+      responses:
+        '200':
+          description: Upserted hook policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HookPolicy'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/hooks/executions/{run_id}:
+    get:
+      summary: List hook execution records for run
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+      responses:
+        '200':
+          description: Hook execution list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HookExecutionListResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/conversations/{conversation_id}/changeset:
     get:
       summary: Get conversation-level pending change set
       parameters:
@@ -621,7 +742,7 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v2/conversations/{conversation_id}/changeset/commit:
+  /v1/conversations/{conversation_id}/changeset/commit:
     post:
       summary: Commit conversation-level pending change set
       parameters:
@@ -646,7 +767,7 @@ paths:
         '409':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v2/conversations/{conversation_id}/changeset/discard:
+  /v1/conversations/{conversation_id}/changeset/discard:
     post:
       summary: Discard conversation-level pending change set
       parameters:
@@ -671,7 +792,7 @@ paths:
         '409':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v2/conversations/{conversation_id}/changeset/export:
+  /v1/conversations/{conversation_id}/changeset/export:
     post:
       summary: Export conversation-level pending changed files as zip archive
       parameters:
@@ -686,7 +807,7 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v2/conversations/{conversation_id}/rollback:
+  /v1/conversations/{conversation_id}/rollback:
     post:
       summary: Rollback conversation to user message anchor
       parameters:
@@ -1625,6 +1746,12 @@ components:
     RunIdParam:
       in: path
       name: run_id
+      required: true
+      schema:
+        type: string
+    TaskIdParam:
+      in: path
+      name: task_id
       required: true
       schema:
         type: string
@@ -3370,3 +3497,282 @@ components:
           type: string
         previous_state:
           type: string
+
+    TaskState:
+      type: string
+      enum: [queued, blocked, running, retrying, completed, failed, cancelled]
+
+    TaskArtifact:
+      type: object
+      required: [task_id, kind]
+      properties:
+        task_id:
+          type: string
+        kind:
+          type: string
+          enum: [patch, summary, report, json]
+        uri:
+          type: string
+        summary:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    TaskNode:
+      type: object
+      required: [task_id, run_id, title, state, depends_on, retry_count, max_retries, created_at, updated_at]
+      properties:
+        task_id:
+          type: string
+        run_id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        state:
+          $ref: '#/components/schemas/TaskState'
+        agent_id:
+          type: string
+        depends_on:
+          type: array
+          items:
+            type: string
+        children:
+          type: array
+          items:
+            type: string
+        retry_count:
+          type: integer
+          minimum: 0
+        max_retries:
+          type: integer
+          minimum: 0
+        artifact:
+          $ref: '#/components/schemas/TaskArtifact'
+        last_error:
+          type: [string, 'null']
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RunGraphEdge:
+      type: object
+      required: [from_task_id, to_task_id]
+      properties:
+        from_task_id:
+          type: string
+        to_task_id:
+          type: string
+
+    AgentGraph:
+      type: object
+      required: [run_id, max_parallelism, tasks, edges]
+      properties:
+        run_id:
+          type: string
+        max_parallelism:
+          type: integer
+          minimum: 1
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/RunGraphEdge'
+
+    RunTaskListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskNode'
+        next_cursor:
+          type: [string, 'null']
+
+    TaskControlRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [cancel, retry, pause, resume]
+        reason:
+          type: string
+
+    TaskControlResponse:
+      type: object
+      required: [ok, run_id, task_id, state, previous_state]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        run_id:
+          type: string
+        task_id:
+          type: string
+        state:
+          type: string
+        previous_state:
+          type: string
+
+    HookScope:
+      type: string
+      enum: [global, project, local, plugin]
+
+    HookEventType:
+      type: string
+      enum: [session_start, user_prompt_submit, pre_tool_use, permission_request, post_tool_use, post_tool_use_failure, stop, subagent_stop, notification, config_change]
+
+    HookHandlerType:
+      type: string
+      enum: [command, http, plugin]
+
+    HookDecisionAction:
+      type: string
+      enum: [allow, deny, ask]
+
+    HookDecision:
+      type: object
+      required: [action]
+      properties:
+        action:
+          $ref: '#/components/schemas/HookDecisionAction'
+        reason:
+          type: string
+        updated_input:
+          type: object
+          additionalProperties: true
+        additional_context:
+          type: object
+          additionalProperties: true
+
+    HookPolicy:
+      type: object
+      required: [id, scope, event, handler_type, enabled, decision, updated_at]
+      properties:
+        id:
+          type: string
+        scope:
+          $ref: '#/components/schemas/HookScope'
+        event:
+          $ref: '#/components/schemas/HookEventType'
+        handler_type:
+          $ref: '#/components/schemas/HookHandlerType'
+        tool_name:
+          type: string
+        workspace_id:
+          type: string
+        project_id:
+          type: string
+        conversation_id:
+          type: string
+        enabled:
+          type: boolean
+        decision:
+          $ref: '#/components/schemas/HookDecision'
+        updated_at:
+          type: string
+          format: date-time
+
+    HookPolicyUpsertRequest:
+      type: object
+      required: [id, scope, event, handler_type, decision]
+      properties:
+        id:
+          type: string
+        scope:
+          $ref: '#/components/schemas/HookScope'
+        event:
+          $ref: '#/components/schemas/HookEventType'
+        handler_type:
+          $ref: '#/components/schemas/HookHandlerType'
+        tool_name:
+          type: string
+        workspace_id:
+          type: string
+        project_id:
+          type: string
+        conversation_id:
+          type: string
+        enabled:
+          type: boolean
+        decision:
+          $ref: '#/components/schemas/HookDecision'
+      oneOf:
+        - properties:
+            scope:
+              const: global
+          not:
+            anyOf:
+              - required: [project_id]
+              - required: [conversation_id]
+        - properties:
+            scope:
+              const: project
+          required: [project_id]
+          not:
+            required: [conversation_id]
+        - properties:
+            scope:
+              const: local
+          required: [conversation_id]
+          not:
+            required: [project_id]
+        - properties:
+            scope:
+              const: plugin
+          not:
+            anyOf:
+              - required: [project_id]
+              - required: [conversation_id]
+
+    HookPolicyListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HookPolicy'
+
+    HookExecutionRecord:
+      type: object
+      required: [id, run_id, conversation_id, event, decision, timestamp]
+      properties:
+        id:
+          type: string
+        run_id:
+          type: string
+        task_id:
+          type: string
+        conversation_id:
+          type: string
+        event:
+          $ref: '#/components/schemas/HookEventType'
+        tool_name:
+          type: string
+        policy_id:
+          type: string
+        decision:
+          $ref: '#/components/schemas/HookDecision'
+        timestamp:
+          type: string
+          format: date-time
+
+    HookExecutionListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HookExecutionRecord'

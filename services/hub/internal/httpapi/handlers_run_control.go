@@ -225,6 +225,20 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 						"source": "run_control",
 					},
 				})
+				appendExecutionEventLocked(state, ExecutionEvent{
+					ExecutionID:    execution.ID,
+					ConversationID: execution.ConversationID,
+					TraceID:        TraceIDFromContext(r.Context()),
+					QueueIndex:     execution.QueueIndex,
+					Type:           ExecutionEventTypeTaskCancelled,
+					Timestamp:      now,
+					Payload: map[string]any{
+						"task_id": execution.ID,
+						"action":  string(action),
+						"reason":  string(action),
+						"source":  "run_control",
+					},
+				})
 
 				if conversation.ActiveExecutionID != nil && *conversation.ActiveExecutionID == execution.ID {
 					conversation.ActiveExecutionID = nil
@@ -252,6 +266,20 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 				Payload: map[string]any{
 					"action": string(action),
 					"source": "run_control",
+				},
+			})
+			appendExecutionEventLocked(state, ExecutionEvent{
+				ExecutionID:    execution.ID,
+				ConversationID: execution.ConversationID,
+				TraceID:        TraceIDFromContext(r.Context()),
+				QueueIndex:     execution.QueueIndex,
+				Type:           ExecutionEventTypeTaskCancelled,
+				Timestamp:      now,
+				Payload: map[string]any{
+					"task_id": execution.ID,
+					"action":  string(action),
+					"reason":  string(action),
+					"source":  "run_control",
 				},
 			})
 
@@ -343,6 +371,21 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		conversation.UpdatedAt = now
 		state.conversations[conversation.ID] = conversation
 		state.mu.Unlock()
+		if state.orchestrator != nil && (action == corestate.ControlActionStop || (action == corestate.ControlActionDeny && previousState != ExecutionStateConfirming)) {
+			decision, matchedPolicyID := state.orchestrator.evaluateHookDecision(execution, HookEventTypeStop, "")
+			state.orchestrator.appendHookExecutionRecordAndEvent(
+				execution,
+				execution.ID,
+				HookEventTypeStop,
+				"",
+				matchedPolicyID,
+				decision,
+				map[string]any{
+					"action": string(action),
+					"source": "run_control",
+				},
+			)
+		}
 		syncExecutionDomainBestEffort(state)
 		if controlSignalAction != nil && state.orchestrator != nil {
 			state.orchestrator.Control(execution.ID, executionControlSignal{

@@ -1,9 +1,13 @@
 package httpapi
 
 import (
+	controlplaneroutes "goyais/services/hub/internal/controlplane/routes"
+	integrationroutes "goyais/services/hub/internal/integration/routes"
 	"log"
 	"net/http"
 	"strings"
+
+	runtimeroutes "goyais/services/hub/internal/runtime/routes"
 )
 
 func NewRouter() http.Handler {
@@ -27,73 +31,76 @@ func newRouterWithDBPath(dbPath string) http.Handler {
 
 	mux.HandleFunc("GET /health", HealthHandler)
 
-	// Workspace and auth
-	mux.HandleFunc("/v1/workspaces", WorkspacesHandler(state))
-	mux.HandleFunc("/v1/workspaces/remote-connections", WorkspacesRemoteConnectionsHandler(state))
-	mux.HandleFunc("/v1/workspaces/{workspace_id}/status", WorkspaceStatusHandler(state))
-	mux.HandleFunc("/v1/auth/login", AuthLoginHandler(state))
-	mux.HandleFunc("/v1/auth/refresh", AuthRefreshHandler(state))
-	mux.HandleFunc("/v1/auth/logout", AuthLogoutHandler(state))
-	mux.HandleFunc("/v1/me", MeHandler(state))
-	mux.HandleFunc("/v1/me/permissions", MePermissionsHandler(state))
+	controlplaneroutes.Register(mux, controlplaneroutes.Handlers{
+		Workspaces:                  WorkspacesHandler(state),
+		WorkspacesRemoteConnections: WorkspacesRemoteConnectionsHandler(state),
+		WorkspaceStatus:             WorkspaceStatusHandler(state),
+		AuthLogin:                   AuthLoginHandler(state),
+		AuthRefresh:                 AuthRefreshHandler(state),
+		AuthLogout:                  AuthLogoutHandler(state),
+		Me:                          MeHandler(state),
+		MePermissions:               MePermissionsHandler(state),
+		AdminPing:                   AdminPingHandler(state),
+		AdminUsers:                  AdminUsersHandler(state),
+		AdminUserByID:               AdminUserByIDHandler(state),
+		AdminRoles:                  AdminRolesHandler(state),
+		AdminRoleByKey:              AdminRoleByKeyHandler(state),
+		AdminPermissions:            AdminPermissionsHandler(state),
+		AdminPermissionByKey:        AdminPermissionByKeyHandler(state),
+		AdminMenus:                  AdminMenusHandler(state),
+		AdminMenuByKey:              AdminMenuByKeyHandler(state),
+		AdminMenuVisibilityByRole:   AdminMenuVisibilityByRoleHandler(state),
+		AdminABACPolicies:           AdminABACPoliciesHandler(state),
+		AdminABACPolicyByID:         AdminABACPolicyByIDHandler(state),
+		AdminAudit:                  AdminAuditHandler(state),
+		HooksPolicies:               HooksPoliciesHandler(state),
+		HookExecutions:              HookExecutionsHandler(state),
+	})
 
-	// Projects and conversations
-	mux.HandleFunc("/v1/projects", ProjectsHandler(state))
-	mux.HandleFunc("/v1/projects/import", ProjectsImportHandler(state))
-	mux.HandleFunc("/v1/projects/{project_id}", ProjectByIDHandler(state))
-	mux.HandleFunc("/v1/projects/{project_id}/conversations", ProjectConversationsHandler(state))
-	mux.HandleFunc("/v1/projects/{project_id}/config", ProjectConfigHandler(state))
-	mux.HandleFunc("/v1/projects/{project_id}/files", ProjectFilesHandler(state))
-	mux.HandleFunc("/v1/projects/{project_id}/files/content", ProjectFileContentHandler(state))
-	mux.HandleFunc("/v1/conversations", ConversationsHandler(state))
-	mux.HandleFunc("/v1/conversations/{conversation_id}", ConversationByIDHandler(state))
-	mux.HandleFunc("/v1/conversations/{conversation_id}/input/catalog", ConversationInputCatalogHandler(state))
-	mux.HandleFunc("/v1/conversations/{conversation_id}/input/suggest", ConversationInputSuggestHandler(state))
-	mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
-	mux.HandleFunc("/v1/conversations/{conversation_id}/events", ConversationEventsHandler(state))
-	mux.HandleFunc("/v1/conversations/{conversation_id}/stop", ConversationStopHandler(state))
-	mux.HandleFunc("/v1/conversations/{conversation_id}/export", ConversationExportHandler(state))
+	runtimeroutes.Register(mux, runtimeroutes.Handlers{
+		Projects:                     ProjectsHandler(state),
+		ProjectsImport:               ProjectsImportHandler(state),
+		ProjectByID:                  ProjectByIDHandler(state),
+		ProjectConversations:         ProjectConversationsHandler(state),
+		ProjectConfig:                ProjectConfigHandler(state),
+		ProjectFiles:                 ProjectFilesHandler(state),
+		ProjectFileContent:           ProjectFileContentHandler(state),
+		Conversations:                ConversationsHandler(state),
+		ConversationByID:             ConversationByIDHandler(state),
+		ConversationInputCatalog:     ConversationInputCatalogHandler(state),
+		ConversationInputSuggest:     ConversationInputSuggestHandler(state),
+		ConversationInputSubmit:      ConversationInputSubmitHandler(state),
+		ConversationEvents:           ConversationEventsHandler(state),
+		ConversationStop:             ConversationStopHandler(state),
+		ConversationExport:           ConversationExportHandler(state),
+		ConversationChangeSet:        ConversationChangeSetHandler(state),
+		ConversationChangeSetCommit:  ConversationChangeSetCommitHandler(state),
+		ConversationChangeSetDiscard: ConversationChangeSetDiscardHandler(state),
+		ConversationChangeSetExport:  ConversationChangeSetExportHandler(state),
+		ConversationRollback:         ConversationRollbackHandler(state),
+		Executions:                   ExecutionsHandler(state),
+		RunControl:                   RunControlHandler(state),
+		RunGraph:                     RunGraphHandler(state),
+		RunTasks:                     RunTasksHandler(state),
+		RunTaskByID:                  RunTaskByIDHandler(state),
+		RunTaskControl:               RunTaskControlHandler(state),
+	})
 
-	// Executions
-	mux.HandleFunc("/v1/executions", ExecutionsHandler(state))
-	mux.HandleFunc("/v1/runs/{run_id}/control", RunControlHandler(state))
-
-	// Conversation changeset v2
-	mux.HandleFunc("/v2/conversations/{conversation_id}/changeset", ConversationChangeSetHandler(state))
-	mux.HandleFunc("/v2/conversations/{conversation_id}/changeset/commit", ConversationChangeSetCommitHandler(state))
-	mux.HandleFunc("/v2/conversations/{conversation_id}/changeset/discard", ConversationChangeSetDiscardHandler(state))
-	mux.HandleFunc("/v2/conversations/{conversation_id}/changeset/export", ConversationChangeSetExportHandler(state))
-	mux.HandleFunc("/v2/conversations/{conversation_id}/rollback", ConversationRollbackHandler(state))
-
-	// Resources and sharing
-	mux.HandleFunc("/v1/resources", ResourcesHandler(state))
-	mux.HandleFunc("/v1/workspaces/{workspace_id}/resource-imports", ResourceImportsHandler(state))
-	mux.HandleFunc("/v1/workspaces/{workspace_id}/share-requests", ShareRequestsHandler(state))
-	mux.HandleFunc("/v1/share-requests/{request_id}/{action}", ShareRequestActionHandler(state))
-	mux.HandleFunc("/v1/workspaces/{workspace_id}/model-catalog", ModelCatalogHandler(state))
-	mux.HandleFunc("/v1/workspaces/{workspace_id}/catalog-root", CatalogRootHandler(state))
-	mux.HandleFunc("/v1/workspaces/{workspace_id}/resource-configs", ResourceConfigsHandler(state))
-	mux.HandleFunc("/v1/workspaces/{workspace_id}/resource-configs/{config_id}", ResourceConfigByIDHandler(state))
-	mux.HandleFunc("/v1/workspaces/{workspace_id}/resource-configs/{config_id}/test", ResourceConfigTestHandler(state))
-	mux.HandleFunc("/v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect", ResourceConfigConnectHandler(state))
-	mux.HandleFunc("/v1/workspaces/{workspace_id}/mcps/export", MCPExportHandler(state))
-	mux.HandleFunc("/v1/workspaces/{workspace_id}/project-configs", WorkspaceProjectConfigsHandler(state))
-	mux.HandleFunc("/v1/workspaces/{workspace_id}/agent-config", WorkspaceAgentConfigHandler(state))
-
-	// Admin
-	mux.HandleFunc("/v1/admin/ping", AdminPingHandler(state))
-	mux.HandleFunc("/v1/admin/users", AdminUsersHandler(state))
-	mux.HandleFunc("/v1/admin/users/{user_id}", AdminUserByIDHandler(state))
-	mux.HandleFunc("/v1/admin/roles", AdminRolesHandler(state))
-	mux.HandleFunc("/v1/admin/roles/{role_key}", AdminRoleByKeyHandler(state))
-	mux.HandleFunc("/v1/admin/permissions", AdminPermissionsHandler(state))
-	mux.HandleFunc("/v1/admin/permissions/{permission_key}", AdminPermissionByKeyHandler(state))
-	mux.HandleFunc("/v1/admin/menus", AdminMenusHandler(state))
-	mux.HandleFunc("/v1/admin/menus/{menu_key}", AdminMenuByKeyHandler(state))
-	mux.HandleFunc("/v1/admin/menu-visibility/{role_key}", AdminMenuVisibilityByRoleHandler(state))
-	mux.HandleFunc("/v1/admin/abac-policies", AdminABACPoliciesHandler(state))
-	mux.HandleFunc("/v1/admin/abac-policies/{policy_id}", AdminABACPolicyByIDHandler(state))
-	mux.HandleFunc("/v1/admin/audit", AdminAuditHandler(state))
+	integrationroutes.Register(mux, integrationroutes.Handlers{
+		Resources:               ResourcesHandler(state),
+		ResourceImports:         ResourceImportsHandler(state),
+		ShareRequests:           ShareRequestsHandler(state),
+		ShareRequestAction:      ShareRequestActionHandler(state),
+		ModelCatalog:            ModelCatalogHandler(state),
+		CatalogRoot:             CatalogRootHandler(state),
+		ResourceConfigs:         ResourceConfigsHandler(state),
+		ResourceConfigByID:      ResourceConfigByIDHandler(state),
+		ResourceConfigTest:      ResourceConfigTestHandler(state),
+		ResourceConfigConnect:   ResourceConfigConnectHandler(state),
+		MCPExport:               MCPExportHandler(state),
+		WorkspaceProjectConfigs: WorkspaceProjectConfigsHandler(state),
+		WorkspaceAgentConfig:    WorkspaceAgentConfigHandler(state),
+	})
 
 	return WithTrace(WithCORS(mux))
 }

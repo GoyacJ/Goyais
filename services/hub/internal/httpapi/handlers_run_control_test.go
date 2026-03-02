@@ -414,3 +414,235 @@ func TestRunControlEndpoint_AnswerRejectsInvalidOptionAndDuplicateAnswer(t *test
 		t.Fatalf("expected duplicate answer 409, got %d (%s)", duplicateRes.Code, duplicateRes.Body.String())
 	}
 }
+
+func TestRunControlEndpoint_StopQueuedRunEmitsTaskCancelledEvent(t *testing.T) {
+	state := NewAppState(nil)
+	handler := RunControlHandler(state)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	conversationID := "conv_stop_queued_" + randomHex(4)
+	executionID := "exec_stop_queued_" + randomHex(4)
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:            conversationID,
+		WorkspaceID:   localWorkspaceID,
+		ProjectID:     "proj_" + randomHex(4),
+		Name:          "Stop Queued Run",
+		QueueState:    QueueStateQueued,
+		DefaultMode:   PermissionModeDefault,
+		ModelConfigID: "rc_model_test",
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	state.executions[executionID] = Execution{
+		ID:             executionID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_" + randomHex(4),
+		State:          ExecutionStateQueued,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_" + randomHex(4),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	state.conversationExecutionOrder[conversationID] = []string{executionID}
+	state.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/runs/"+executionID+"/control", strings.NewReader(`{"action":"stop"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("run_id", executionID)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected stop queued run 200, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	state.mu.RLock()
+	execution := state.executions[executionID]
+	events := append([]ExecutionEvent{}, state.executionEvents[conversationID]...)
+	state.mu.RUnlock()
+	if execution.State != ExecutionStateCancelled {
+		t.Fatalf("expected execution cancelled, got %s", execution.State)
+	}
+
+	foundTaskCancelled := false
+	for _, event := range events {
+		if event.Type != ExecutionEventTypeTaskCancelled {
+			continue
+		}
+		if strings.TrimSpace(asString(event.Payload["task_id"])) != executionID {
+			continue
+		}
+		if strings.TrimSpace(asString(event.Payload["source"])) != "run_control" {
+			t.Fatalf("expected task_cancelled source run_control, got %#v", event.Payload)
+		}
+		foundTaskCancelled = true
+	}
+	if !foundTaskCancelled {
+		t.Fatalf("expected task_cancelled event, got %#v", events)
+	}
+}
+
+func TestRunControlEndpoint_DenyQueuedRunEmitsTaskCancelledEvent(t *testing.T) {
+	state := NewAppState(nil)
+	handler := RunControlHandler(state)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	conversationID := "conv_deny_queued_" + randomHex(4)
+	executionID := "exec_deny_queued_" + randomHex(4)
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:            conversationID,
+		WorkspaceID:   localWorkspaceID,
+		ProjectID:     "proj_" + randomHex(4),
+		Name:          "Deny Queued Run",
+		QueueState:    QueueStateQueued,
+		DefaultMode:   PermissionModeDefault,
+		ModelConfigID: "rc_model_test",
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	state.executions[executionID] = Execution{
+		ID:             executionID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_" + randomHex(4),
+		State:          ExecutionStateQueued,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_" + randomHex(4),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	state.conversationExecutionOrder[conversationID] = []string{executionID}
+	state.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/runs/"+executionID+"/control", strings.NewReader(`{"action":"deny"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("run_id", executionID)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected deny queued run 200, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	state.mu.RLock()
+	execution := state.executions[executionID]
+	events := append([]ExecutionEvent{}, state.executionEvents[conversationID]...)
+	state.mu.RUnlock()
+	if execution.State != ExecutionStateCancelled {
+		t.Fatalf("expected execution cancelled, got %s", execution.State)
+	}
+
+	foundTaskCancelled := false
+	for _, event := range events {
+		if event.Type != ExecutionEventTypeTaskCancelled {
+			continue
+		}
+		if strings.TrimSpace(asString(event.Payload["task_id"])) != executionID {
+			continue
+		}
+		if strings.TrimSpace(asString(event.Payload["source"])) != "run_control" {
+			t.Fatalf("expected task_cancelled source run_control, got %#v", event.Payload)
+		}
+		if strings.TrimSpace(asString(event.Payload["action"])) != "deny" {
+			t.Fatalf("expected task_cancelled action deny, got %#v", event.Payload)
+		}
+		foundTaskCancelled = true
+	}
+	if !foundTaskCancelled {
+		t.Fatalf("expected task_cancelled event, got %#v", events)
+	}
+}
+
+func TestRunControlEndpoint_StopEmitsHookStopRecord(t *testing.T) {
+	state := NewAppState(nil)
+	handler := RunControlHandler(state)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	conversationID := "conv_stop_hook_" + randomHex(4)
+	executionID := "exec_stop_hook_" + randomHex(4)
+	activeExecutionID := executionID
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:                conversationID,
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_" + randomHex(4),
+		Name:              "Stop Hook Run",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     "rc_model_test",
+		ActiveExecutionID: &activeExecutionID,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	state.executions[executionID] = Execution{
+		ID:             executionID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_" + randomHex(4),
+		State:          ExecutionStateExecuting,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_" + randomHex(4),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	state.conversationExecutionOrder[conversationID] = []string{executionID}
+	state.hookPolicies["policy_stop_deny"] = HookPolicy{
+		ID:          "policy_stop_deny",
+		Scope:       HookScopeGlobal,
+		Event:       HookEventTypeStop,
+		HandlerType: HookHandlerTypePlugin,
+		Enabled:     true,
+		Decision: HookDecision{
+			Action: HookDecisionActionDeny,
+			Reason: "test stop hook deny",
+		},
+		UpdatedAt: now,
+	}
+	state.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/runs/"+executionID+"/control", strings.NewReader(`{"action":"stop"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("run_id", executionID)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected run control stop 200, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	state.mu.RLock()
+	records := append([]HookExecutionRecord{}, state.hookExecutionRecords[conversationID]...)
+	state.mu.RUnlock()
+
+	foundHookRecord := false
+	for _, record := range records {
+		if record.RunID != executionID || record.Event != HookEventTypeStop {
+			continue
+		}
+		if record.PolicyID != "policy_stop_deny" || record.Decision.Action != HookDecisionActionDeny {
+			t.Fatalf("unexpected stop hook record: %#v", record)
+		}
+		foundHookRecord = true
+	}
+	if !foundHookRecord {
+		t.Fatalf("expected stop hook record for run %s, got %#v", executionID, records)
+	}
+}

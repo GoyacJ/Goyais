@@ -24,7 +24,7 @@ import (
 const (
 	defaultRPCTimeout   = 8 * time.Second
 	maxFrameBytes       = 1 << 20
-	defaultProtocolHint = "2024-11-05"
+	defaultProtocolHint = "2025-03-26"
 )
 
 type ServerStore struct {

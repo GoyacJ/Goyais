@@ -91,6 +91,18 @@ func TestRemovedAliasRoutesReturn404(t *testing.T) {
 	if legacyCatalogSync.Code != http.StatusNotFound {
 		t.Fatalf("expected legacy model catalog alias route to return 404, got %d", legacyCatalogSync.Code)
 	}
+
+	legacyConversationChangeSet := performJSONRequest(t, router, http.MethodGet, "/v2/conversations/conv_legacy/changeset", nil, nil)
+	if legacyConversationChangeSet.Code != http.StatusNotFound {
+		t.Fatalf("expected legacy conversation changeset route to return 404, got %d", legacyConversationChangeSet.Code)
+	}
+
+	legacyConversationRollback := performJSONRequest(t, router, http.MethodPost, "/v2/conversations/conv_legacy/rollback", map[string]any{
+		"message_id": "msg_legacy",
+	}, nil)
+	if legacyConversationRollback.Code != http.StatusNotFound {
+		t.Fatalf("expected legacy conversation rollback route to return 404, got %d", legacyConversationRollback.Code)
+	}
 }
 
 func TestPlaceholderListEndpoints(t *testing.T) {

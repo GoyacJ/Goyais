@@ -19,6 +19,8 @@
     "test:mobile": "turbo run test --filter=@goyais/mobile",
     "test:strict": "turbo run test:strict --filter=@goyais/desktop",
     "e2e:smoke": "turbo run e2e:smoke --filter=@goyais/desktop",
+    "contracts:generate": "pnpm --filter @goyais/shared-core contracts:generate",
+    "contracts:check": "pnpm --filter @goyais/shared-core contracts:check",
     "check:tokens": "turbo run check:tokens --filter=@goyais/desktop",
     "quality:gate": "turbo run quality:gate --filter=@goyais/desktop",
     "coverage:gate": "turbo run coverage:gate --filter=@goyais/desktop",

@@ -173,6 +173,104 @@ func TestConversationByIDHandlerGetAndPatchIncludeTokenUsage(t *testing.T) {
 	}
 }
 
+func TestConversationByIDHandlerPatchEmitsConfigChangeHookRecordForActiveExecution(t *testing.T) {
+	state := NewAppState(nil)
+	now := time.Now().UTC().Format(time.RFC3339)
+	projectID := "proj_cfg_change_1"
+	conversationID := "conv_cfg_change_1"
+	executionID := "exec_cfg_change_1"
+
+	state.projects[projectID] = Project{
+		ID:          projectID,
+		WorkspaceID: localWorkspaceID,
+		Name:        "Config Change",
+		RepoPath:    "/tmp/config-change",
+		IsGit:       true,
+		DefaultMode: PermissionModeDefault,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	state.projectConfigs[projectID] = ProjectConfig{
+		ProjectID:      projectID,
+		ModelConfigIDs: []string{},
+		RuleIDs:        []string{},
+		SkillIDs:       []string{},
+		MCPIDs:         []string{},
+		UpdatedAt:      now,
+	}
+	state.conversations[conversationID] = Conversation{
+		ID:                conversationID,
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         projectID,
+		Name:              "Config Conversation",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     "rc_model_1",
+		RuleIDs:           []string{},
+		SkillIDs:          []string{},
+		MCPIDs:            []string{},
+		BaseRevision:      0,
+		ActiveExecutionID: ptrString(executionID),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	state.executions[executionID] = Execution{
+		ID:             executionID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_cfg_change_1",
+		State:          ExecutionStateExecuting,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5"},
+		QueueIndex:     0,
+		TraceID:        "tr_cfg_change_1",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	state.hookPolicies["policy_config_change_deny"] = HookPolicy{
+		ID:          "policy_config_change_deny",
+		Scope:       HookScopeGlobal,
+		Event:       HookEventTypeConfigChange,
+		HandlerType: HookHandlerTypePlugin,
+		Enabled:     true,
+		Decision: HookDecision{
+			Action: HookDecisionActionDeny,
+			Reason: "test config change hook deny",
+		},
+		UpdatedAt: now,
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/conversations/{conversation_id}", ConversationByIDHandler(state))
+
+	patchRes := performJSONRequest(t, mux, http.MethodPatch, "/v1/conversations/"+conversationID, map[string]any{
+		"mode": "plan",
+	}, nil)
+	if patchRes.Code != http.StatusOK {
+		t.Fatalf("expected conversation patch 200, got %d (%s)", patchRes.Code, patchRes.Body.String())
+	}
+
+	state.mu.RLock()
+	records := append([]HookExecutionRecord{}, state.hookExecutionRecords[conversationID]...)
+	state.mu.RUnlock()
+
+	foundConfigChangeRecord := false
+	for _, record := range records {
+		if record.RunID != executionID || record.Event != HookEventTypeConfigChange {
+			continue
+		}
+		if record.PolicyID != "policy_config_change_deny" || record.Decision.Action != HookDecisionActionDeny {
+			t.Fatalf("unexpected config_change hook record: %#v", record)
+		}
+		foundConfigChangeRecord = true
+	}
+	if !foundConfigChangeRecord {
+		t.Fatalf("expected config_change hook record for run %s, got %#v", executionID, records)
+	}
+}
+
 func newUsageExecution(conversationID string, executionID string, tokensIn int, tokensOut int, now string) Execution {
 	return Execution{
 		ID:             executionID,

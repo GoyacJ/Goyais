@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"encoding/json"
+	runtimeapplication "goyais/services/hub/internal/runtime/application"
+	runtimedomain "goyais/services/hub/internal/runtime/domain"
 	"log"
 	"sort"
 )
@@ -24,6 +26,8 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 	s.executions = map[string]Execution{}
 	s.executionEvents = map[string][]ExecutionEvent{}
 	s.executionDiffs = map[string][]DiffItem{}
+	s.hookPolicies = map[string]HookPolicy{}
+	s.hookExecutionRecords = map[string][]HookExecutionRecord{}
 	s.conversationChangeLedgers = map[string]*ConversationChangeLedger{}
 	s.conversationEventSeq = map[string]int{}
 
@@ -60,19 +64,40 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 		})
 		s.conversationExecutionOrder[conversationID] = ids
 	}
+	events := make([]runtimedomain.Event, 0, len(snapshot.ExecutionEvents))
 	for _, event := range snapshot.ExecutionEvents {
-		conversationID := event.ConversationID
-		s.executionEvents[conversationID] = append(s.executionEvents[conversationID], event)
-		if event.Sequence > s.conversationEventSeq[conversationID] {
-			s.conversationEventSeq[conversationID] = event.Sequence
-		}
-		if event.Type == ExecutionEventTypeDiffGenerated && event.ExecutionID != "" {
-			s.executionDiffs[event.ExecutionID] = mergeDiffItems(
-				s.executionDiffs[event.ExecutionID],
-				parseDiffItemsFromPayload(event.Payload),
-			)
-		}
-		applyExecutionEventToChangeLedgerLocked(s, event)
+		events = append(events, toRuntimeDomainEvent(event))
+	}
+	readModel := runtimeapplication.BuildExecutionEventReadModel(events, runtimeapplication.ReplayOptions{
+		ParseDiff: func(payload map[string]any) []runtimedomain.DiffItem {
+			return toRuntimeDomainDiffItems(parseDiffItemsFromPayload(payload))
+		},
+		MergeDiff: func(existing []runtimedomain.DiffItem, incoming []runtimedomain.DiffItem) []runtimedomain.DiffItem {
+			return toRuntimeDomainDiffItems(mergeDiffItems(
+				toHTTPAPIDiffItems(existing),
+				toHTTPAPIDiffItems(incoming),
+			))
+		},
+	})
+	for _, event := range readModel.OrderedEvents {
+		httpEvent := toHTTPAPIExecutionEvent(event)
+		conversationID := httpEvent.ConversationID
+		s.executionEvents[conversationID] = append(s.executionEvents[conversationID], httpEvent)
+		applyExecutionEventToChangeLedgerLocked(s, httpEvent)
+	}
+	s.conversationEventSeq = readModel.LastSequenceByConversation
+	s.executionDiffs = map[string][]DiffItem{}
+	for executionID, items := range readModel.DiffsByExecution {
+		s.executionDiffs[executionID] = toHTTPAPIDiffItems(items)
+	}
+	for _, policy := range snapshot.HookPolicies {
+		copyPolicy := policy
+		copyPolicy.Decision.UpdatedInput = cloneMapAny(policy.Decision.UpdatedInput)
+		copyPolicy.Decision.AdditionalContext = cloneMapAny(policy.Decision.AdditionalContext)
+		s.hookPolicies[copyPolicy.ID] = copyPolicy
+	}
+	for _, record := range snapshot.HookExecutionRecords {
+		appendHookExecutionRecordLocked(s, record)
 	}
 	s.mu.Unlock()
 }
@@ -97,6 +122,8 @@ func captureExecutionDomainSnapshot(state *AppState) executionDomainSnapshot {
 		ConversationSnapshots: []ConversationSnapshot{},
 		Executions:            []Execution{},
 		ExecutionEvents:       []ExecutionEvent{},
+		HookPolicies:          []HookPolicy{},
+		HookExecutionRecords:  []HookExecutionRecord{},
 	}
 
 	state.mu.RLock()
@@ -128,6 +155,20 @@ func captureExecutionDomainSnapshot(state *AppState) executionDomainSnapshot {
 			copyEvent := event
 			copyEvent.Payload = cloneMapAny(event.Payload)
 			snapshot.ExecutionEvents = append(snapshot.ExecutionEvents, copyEvent)
+		}
+	}
+	for _, policy := range state.hookPolicies {
+		copyPolicy := policy
+		copyPolicy.Decision.UpdatedInput = cloneMapAny(policy.Decision.UpdatedInput)
+		copyPolicy.Decision.AdditionalContext = cloneMapAny(policy.Decision.AdditionalContext)
+		snapshot.HookPolicies = append(snapshot.HookPolicies, copyPolicy)
+	}
+	for _, records := range state.hookExecutionRecords {
+		for _, record := range records {
+			copyRecord := record
+			copyRecord.Decision.UpdatedInput = cloneMapAny(record.Decision.UpdatedInput)
+			copyRecord.Decision.AdditionalContext = cloneMapAny(record.Decision.AdditionalContext)
+			snapshot.HookExecutionRecords = append(snapshot.HookExecutionRecords, copyRecord)
 		}
 	}
 	state.mu.RUnlock()
@@ -173,4 +214,72 @@ func cloneMapAny(input map[string]any) map[string]any {
 		}
 	}
 	return output
+}
+
+func toRuntimeDomainEvent(event ExecutionEvent) runtimedomain.Event {
+	return runtimedomain.Event{
+		ID:             event.EventID,
+		ConversationID: event.ConversationID,
+		ExecutionID:    event.ExecutionID,
+		TraceID:        event.TraceID,
+		Sequence:       event.Sequence,
+		QueueIndex:     event.QueueIndex,
+		Type:           runtimedomain.EventType(event.Type),
+		Timestamp:      event.Timestamp,
+		Payload:        cloneMapAny(event.Payload),
+	}
+}
+
+func toHTTPAPIExecutionEvent(event runtimedomain.Event) ExecutionEvent {
+	return ExecutionEvent{
+		EventID:        event.ID,
+		ExecutionID:    event.ExecutionID,
+		ConversationID: event.ConversationID,
+		TraceID:        event.TraceID,
+		Sequence:       event.Sequence,
+		QueueIndex:     event.QueueIndex,
+		Type:           ExecutionEventType(event.Type),
+		Timestamp:      event.Timestamp,
+		Payload:        cloneMapAny(event.Payload),
+	}
+}
+
+func toRuntimeDomainDiffItems(items []DiffItem) []runtimedomain.DiffItem {
+	if len(items) == 0 {
+		return []runtimedomain.DiffItem{}
+	}
+	result := make([]runtimedomain.DiffItem, 0, len(items))
+	for _, item := range items {
+		result = append(result, runtimedomain.DiffItem{
+			ID:           item.ID,
+			Path:         item.Path,
+			ChangeType:   item.ChangeType,
+			Summary:      item.Summary,
+			AddedLines:   normalizeOptionalDiffLineCount(item.AddedLines),
+			DeletedLines: normalizeOptionalDiffLineCount(item.DeletedLines),
+			BeforeBlob:   item.BeforeBlob,
+			AfterBlob:    item.AfterBlob,
+		})
+	}
+	return result
+}
+
+func toHTTPAPIDiffItems(items []runtimedomain.DiffItem) []DiffItem {
+	if len(items) == 0 {
+		return []DiffItem{}
+	}
+	result := make([]DiffItem, 0, len(items))
+	for _, item := range items {
+		result = append(result, DiffItem{
+			ID:           item.ID,
+			Path:         item.Path,
+			ChangeType:   item.ChangeType,
+			Summary:      item.Summary,
+			AddedLines:   normalizeOptionalDiffLineCount(item.AddedLines),
+			DeletedLines: normalizeOptionalDiffLineCount(item.DeletedLines),
+			BeforeBlob:   item.BeforeBlob,
+			AfterBlob:    item.AfterBlob,
+		})
+	}
+	return result
 }

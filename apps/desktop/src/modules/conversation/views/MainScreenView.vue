@@ -117,6 +117,14 @@
               :queued-count="queuedCount"
               :pending-count="pendingCount"
               :executing-count="executingCount"
+              :run-task-graph="runTaskGraph"
+              :run-task-graph-loading="runTaskGraphLoading"
+              :run-task-items="runTaskListItems"
+              :run-task-list-loading="runTaskListLoading"
+              :run-task-list-next-cursor="runTaskListNextCursor"
+              :run-task-state-filter="runTaskStateFilter"
+              :selected-run-task="selectedRunTask"
+              :run-task-detail-loading="runTaskDetailLoading"
               :model-label="activeModelLabel"
               :messages="visibleMessages"
               :executions="runtime?.executions ?? []"
@@ -131,6 +139,11 @@
               @commit="openCommitDialog"
               @discard="discardDiff"
               @export-patch="exportPatch"
+              @refresh-run-tasks="refreshRunTaskGraph"
+              @change-run-task-state-filter="changeRunTaskStateFilter"
+              @select-run-task="selectRunTask"
+              @load-more-run-tasks="loadMoreRunTasks"
+              @control-run-task="controlRunTask"
               @toggle-collapse="inspectorCollapsed = true"
             />
 
@@ -211,6 +224,8 @@ const {
   commitDiff,
   composerSuggestions,
   composerSuggesting,
+  changeRunTaskStateFilter,
+  controlRunTask,
   conversationNameDraft,
   conversationTokenUsageById,
   conversationPageByProjectId,
@@ -251,6 +266,11 @@ const {
   rollbackMessage,
   renameConversation,
   removeQueuedMessage,
+  runTaskDetailLoading,
+  runTaskListItems,
+  runTaskListLoading,
+  runTaskListNextCursor,
+  runTaskStateFilter,
   runningState,
   runningStateClass,
   runningActions,
@@ -258,12 +278,18 @@ const {
   runtimeHubLabel,
   runtimeUserDisplayName,
   requestComposerSuggestions,
+  refreshRunTaskGraph,
   selectTraceInInspector,
   selectTraceMessage,
   selectTraceExecution,
   selectedTraceMessageId,
   selectedTraceExecutionId,
+  selectedRunTask,
+  runTaskGraph,
+  runTaskGraphLoading,
   runtime,
+  loadMoreRunTasks,
+  selectRunTask,
   visibleMessages,
   saveConversationName,
   selectConversation,

@@ -431,7 +431,70 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 				"model_id":        resolvedModelID,
 			},
 		})
+		appendExecutionEventLocked(state, ExecutionEvent{
+			ExecutionID:    execution.ID,
+			ConversationID: conversationID,
+			TraceID:        execution.TraceID,
+			QueueIndex:     execution.QueueIndex,
+			Type:           ExecutionEventTypeTaskGraphConfigured,
+			Timestamp:      now,
+			Payload: map[string]any{
+				"task_id":         execution.ID,
+				"max_parallelism": 1,
+				"source":          "composer_input",
+			},
+		})
+		dependsOn := []string{}
+		if order := state.conversationExecutionOrder[conversationID]; len(order) >= 2 {
+			previousID := strings.TrimSpace(order[len(order)-2])
+			if previousID != "" && previousID != execution.ID {
+				dependsOn = append(dependsOn, previousID)
+			}
+		}
+		appendExecutionEventLocked(state, ExecutionEvent{
+			ExecutionID:    execution.ID,
+			ConversationID: conversationID,
+			TraceID:        execution.TraceID,
+			QueueIndex:     execution.QueueIndex,
+			Type:           ExecutionEventTypeTaskDependenciesUpdated,
+			Timestamp:      now,
+			Payload: map[string]any{
+				"task_id":    execution.ID,
+				"depends_on": dependsOn,
+				"source":     "composer_input",
+			},
+		})
+		appendExecutionEventLocked(state, ExecutionEvent{
+			ExecutionID:    execution.ID,
+			ConversationID: conversationID,
+			TraceID:        execution.TraceID,
+			QueueIndex:     execution.QueueIndex,
+			Type:           ExecutionEventTypeTaskRetryPolicyUpdated,
+			Timestamp:      now,
+			Payload: map[string]any{
+				"task_id":     execution.ID,
+				"retry_count": 0,
+				"max_retries": 0,
+				"source":      "composer_input",
+			},
+		})
 		state.mu.Unlock()
+
+		if state.orchestrator != nil {
+			decision, matchedPolicyID := state.orchestrator.evaluateHookDecision(createdExecution, HookEventTypeUserPromptSubmit, "")
+			state.orchestrator.appendHookExecutionRecordAndEvent(
+				createdExecution,
+				createdExecution.ID,
+				HookEventTypeUserPromptSubmit,
+				"",
+				matchedPolicyID,
+				decision,
+				map[string]any{
+					"message_id": createdExecution.MessageID,
+					"source":     "composer_input",
+				},
+			)
+		}
 
 		syncExecutionDomainBestEffort(state)
 		if nextExecutionToSubmit != "" && state.orchestrator != nil {

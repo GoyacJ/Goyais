@@ -26,6 +26,8 @@ type AppState struct {
 	pendingUserQuestions       map[string]pendingUserQuestion
 	executionEvents            map[string][]ExecutionEvent
 	executionDiffs             map[string][]DiffItem
+	hookPolicies               map[string]HookPolicy
+	hookExecutionRecords       map[string][]HookExecutionRecord
 	conversationChangeLedgers  map[string]*ConversationChangeLedger
 	conversationEventSeq       map[string]int
 	conversationEventSubs      map[string]map[string]chan ExecutionEvent
@@ -59,6 +61,8 @@ func NewAppState(store *authzStore) *AppState {
 		pendingUserQuestions:       map[string]pendingUserQuestion{},
 		executionEvents:            map[string][]ExecutionEvent{},
 		executionDiffs:             map[string][]DiffItem{},
+		hookPolicies:               map[string]HookPolicy{},
+		hookExecutionRecords:       map[string][]HookExecutionRecord{},
 		conversationChangeLedgers:  map[string]*ConversationChangeLedger{},
 		conversationEventSeq:       map[string]int{},
 		conversationEventSubs:      map[string]map[string]chan ExecutionEvent{},

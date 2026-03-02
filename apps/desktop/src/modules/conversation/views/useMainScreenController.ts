@@ -2,9 +2,13 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 import {
+  controlConversationRunTask,
   conversationStore,
   ensureConversationRuntime,
   getExecutionStateCounts,
+  loadConversationRunTaskById,
+  loadConversationRunTaskGraph,
+  loadConversationRunTasks,
   refreshConversationChangeSet
 } from "@/modules/conversation/store";
 import {
@@ -40,7 +44,14 @@ import { useI18n } from "@/shared/i18n";
 import { authStore } from "@/shared/stores/authStore";
 import { useWorkspaceStatusSync } from "@/shared/stores/workspaceStatusStore";
 import { setConversationError } from "@/modules/conversation/store";
-import type { ChangeSetCapability, ComposerCatalog, ComposerSuggestion, ExecutionEvent, InspectorTabKey } from "@/shared/types/api";
+import type {
+  ChangeSetCapability,
+  ComposerCatalog,
+  ComposerSuggestion,
+  ExecutionEvent,
+  InspectorTabKey,
+  OpenAPIContractComponents
+} from "@/shared/types/api";
 
 type PendingQuestionOptionViewModel = {
   id: string;
@@ -59,6 +70,24 @@ type PendingExecutionQuestionViewModel = {
   allowText: boolean;
   required: boolean;
 };
+
+type RunTaskNode = OpenAPIContractComponents["schemas"]["TaskNode"];
+type RunTaskState = OpenAPIContractComponents["schemas"]["TaskState"];
+
+export function isSameConversationResponseTarget(expectedConversationId: string, activeConversationId: string): boolean {
+  return expectedConversationId.trim() !== "" && expectedConversationId.trim() === activeConversationId.trim();
+}
+
+export function shouldApplyRunTaskDetailResponse(
+  expectedConversationId: string,
+  activeConversationId: string,
+  expectedTaskId: string,
+  selectedTaskId: string
+): boolean {
+  return isSameConversationResponseTarget(expectedConversationId, activeConversationId) &&
+    expectedTaskId.trim() !== "" &&
+    expectedTaskId.trim() === selectedTaskId.trim();
+}
 
 export const MAIN_INSPECTOR_TABS: Array<{ key: InspectorTabKey; label: string }> = [
   { key: "diff", label: "D" },
@@ -82,6 +111,16 @@ export function useMainScreenController() {
     commands: [],
     resources: []
   });
+  const runTaskGraph = ref<OpenAPIContractComponents["schemas"]["AgentGraph"] | null>(null);
+  const runTaskGraphLoading = ref(false);
+  const runTaskListItems = ref<RunTaskNode[]>([]);
+  const runTaskListLoading = ref(false);
+  const runTaskListNextCursor = ref<string | null>(null);
+  const runTaskStateFilter = ref<RunTaskState | "">("");
+  const runTaskConversationId = ref("");
+  const runTaskDetail = ref<OpenAPIContractComponents["schemas"]["TaskNode"] | null>(null);
+  const runTaskDetailLoading = ref(false);
+  const selectedRunTaskId = ref("");
   const composerSuggestions = ref<ComposerSuggestion[]>([]);
   const composerSuggesting = ref(false);
   let composerSuggestSequence = 0;
@@ -282,6 +321,178 @@ export function useMainScreenController() {
 
   function selectTraceExecution(executionId: string): void {
     selectExecutionTrace(executionId);
+  }
+
+  async function refreshRunTaskGraphForActiveConversation(): Promise<void> {
+    const conversationId = activeConversation.value?.id?.trim() ?? "";
+    if (conversationId === "") {
+      runTaskGraph.value = null;
+      runTaskGraphLoading.value = false;
+      return;
+    }
+    runTaskGraphLoading.value = true;
+    try {
+      const graph = await loadConversationRunTaskGraph(conversationId);
+      if (!isSameConversationResponseTarget(conversationId, activeConversation.value?.id ?? "")) {
+        return;
+      }
+      runTaskGraph.value = graph;
+    } finally {
+      if (isSameConversationResponseTarget(conversationId, activeConversation.value?.id ?? "")) {
+        runTaskGraphLoading.value = false;
+      }
+    }
+  }
+
+  async function refreshRunTaskListForActiveConversation(): Promise<void> {
+    const conversationId = activeConversation.value?.id?.trim() ?? "";
+    if (conversationId === "") {
+      clearRunTaskState();
+      return;
+    }
+    runTaskListLoading.value = true;
+    try {
+      const response = await loadConversationRunTasks(conversationId, {
+        state: runTaskStateFilter.value === "" ? undefined : runTaskStateFilter.value,
+        limit: 20
+      });
+      if (!isSameConversationResponseTarget(conversationId, activeConversation.value?.id ?? "")) {
+        return;
+      }
+      if (!response) {
+        return;
+      }
+      runTaskListItems.value = response?.items ?? [];
+      runTaskListNextCursor.value = response?.next_cursor ?? null;
+      const selectedTaskStillExists = runTaskListItems.value.some((task) => task.task_id === selectedRunTaskId.value);
+      if (!selectedTaskStillExists) {
+        selectedRunTaskId.value = runTaskListItems.value[0]?.task_id ?? "";
+      }
+      await refreshRunTaskDetailForActiveConversation();
+    } finally {
+      if (isSameConversationResponseTarget(conversationId, activeConversation.value?.id ?? "")) {
+        runTaskListLoading.value = false;
+      }
+    }
+  }
+
+  async function loadMoreRunTasksForActiveConversation(): Promise<void> {
+    const conversationId = activeConversation.value?.id?.trim() ?? "";
+    const cursor = runTaskListNextCursor.value?.trim() ?? "";
+    if (conversationId === "" || cursor === "") {
+      return;
+    }
+    runTaskListLoading.value = true;
+    try {
+      const response = await loadConversationRunTasks(conversationId, {
+        state: runTaskStateFilter.value === "" ? undefined : runTaskStateFilter.value,
+        cursor,
+        limit: 20
+      });
+      if (!isSameConversationResponseTarget(conversationId, activeConversation.value?.id ?? "")) {
+        return;
+      }
+      if (!response) {
+        return;
+      }
+      const merged = new Map<string, RunTaskNode>();
+      for (const item of runTaskListItems.value) {
+        merged.set(item.task_id, item);
+      }
+      for (const item of response.items) {
+        merged.set(item.task_id, item);
+      }
+      runTaskListItems.value = [...merged.values()];
+      runTaskListNextCursor.value = response.next_cursor ?? null;
+    } finally {
+      if (isSameConversationResponseTarget(conversationId, activeConversation.value?.id ?? "")) {
+        runTaskListLoading.value = false;
+      }
+    }
+  }
+
+  async function refreshRunTasksForActiveConversation(): Promise<void> {
+    await Promise.all([
+      refreshRunTaskGraphForActiveConversation(),
+      refreshRunTaskListForActiveConversation()
+    ]);
+  }
+
+  async function changeRunTaskStateFilterForActiveConversation(state: RunTaskState | ""): Promise<void> {
+    runTaskStateFilter.value = state;
+    runTaskListItems.value = [];
+    runTaskListNextCursor.value = null;
+    await refreshRunTaskListForActiveConversation();
+  }
+
+  async function refreshRunTaskDetailForActiveConversation(): Promise<void> {
+    const conversationId = activeConversation.value?.id?.trim() ?? "";
+    const taskId = selectedRunTaskId.value.trim();
+    if (conversationId === "" || taskId === "") {
+      runTaskDetail.value = null;
+      runTaskDetailLoading.value = false;
+      return;
+    }
+    runTaskDetailLoading.value = true;
+    try {
+      const detail = await loadConversationRunTaskById(conversationId, taskId);
+      if (!shouldApplyRunTaskDetailResponse(
+        conversationId,
+        activeConversation.value?.id ?? "",
+        taskId,
+        selectedRunTaskId.value
+      )) {
+        return;
+      }
+      runTaskDetail.value = detail;
+    } finally {
+      if (shouldApplyRunTaskDetailResponse(
+        conversationId,
+        activeConversation.value?.id ?? "",
+        taskId,
+        selectedRunTaskId.value
+      )) {
+        runTaskDetailLoading.value = false;
+      }
+    }
+  }
+
+  async function selectRunTaskForActiveConversation(taskId: string): Promise<void> {
+    const normalizedTaskId = taskId.trim();
+    if (normalizedTaskId === "") {
+      return;
+    }
+    selectedRunTaskId.value = normalizedTaskId;
+    await refreshRunTaskDetailForActiveConversation();
+  }
+
+  async function controlRunTaskForActiveConversation(input: {
+    taskId: string;
+    action: OpenAPIContractComponents["schemas"]["TaskControlRequest"]["action"];
+  }): Promise<void> {
+    const conversation = activeConversation.value;
+    if (!conversation) {
+      return;
+    }
+    const taskId = input.taskId.trim();
+    if (taskId === "") {
+      return;
+    }
+    await controlConversationRunTask(conversation, taskId, input.action, `inspector_${input.action}`);
+    await refreshRunTasksForActiveConversation();
+  }
+
+  function clearRunTaskState(): void {
+    runTaskGraph.value = null;
+    runTaskGraphLoading.value = false;
+    runTaskListItems.value = [];
+    runTaskListLoading.value = false;
+    runTaskListNextCursor.value = null;
+    runTaskStateFilter.value = "";
+    runTaskDetail.value = null;
+    runTaskDetailLoading.value = false;
+    selectedRunTaskId.value = "";
+    runTaskConversationId.value = "";
   }
 
   async function refreshComposerCatalogForActiveConversation(): Promise<void> {
@@ -586,10 +797,40 @@ export function useMainScreenController() {
       projectImportInProgress.value = false;
       projectImportFeedback.value = "";
       projectImportError.value = "";
+      clearRunTaskState();
       void refreshResourceConfigsByType("model");
       void refreshComposerCatalogForActiveConversation();
       streamCoordinator.syncConversationStreams();
     }
+  );
+  watch(
+    () => ({
+      conversationId: activeConversation.value?.id ?? "",
+      inspectorTab: runtime.value?.inspectorTab ?? "diff",
+      executionFingerprint: (runtime.value?.executions ?? [])
+        .map((item) => `${item.id}:${item.state}:${item.updated_at}`)
+        .join("|")
+    }),
+    ({ conversationId, inspectorTab }) => {
+      if (conversationId === "") {
+        clearRunTaskState();
+        return;
+      }
+      if (runTaskConversationId.value !== conversationId) {
+        runTaskConversationId.value = conversationId;
+        runTaskListItems.value = [];
+        runTaskListNextCursor.value = null;
+        runTaskStateFilter.value = "";
+        runTaskDetail.value = null;
+        runTaskDetailLoading.value = false;
+        selectedRunTaskId.value = "";
+      }
+      if (inspectorTab !== "run") {
+        return;
+      }
+      void refreshRunTasksForActiveConversation();
+    },
+    { immediate: true }
   );
   useAutoModelSyncWatcher({
     activeConversation,
@@ -629,8 +870,21 @@ export function useMainScreenController() {
     composerSuggesting,
     composerSuggestions,
     requestComposerSuggestions,
+    refreshRunTaskGraph: refreshRunTasksForActiveConversation,
+    changeRunTaskStateFilter: changeRunTaskStateFilterForActiveConversation,
+    selectRunTask: selectRunTaskForActiveConversation,
+    loadMoreRunTasks: loadMoreRunTasksForActiveConversation,
+    controlRunTask: controlRunTaskForActiveConversation,
     clearComposerSuggestions,
     executionTraces,
+    runTaskGraph,
+    runTaskGraphLoading,
+    runTaskListItems,
+    runTaskListLoading,
+    runTaskListNextCursor,
+    runTaskStateFilter,
+    selectedRunTask: runTaskDetail,
+    runTaskDetailLoading,
     selectedExecutionTrace,
     selectedTraceExecutionId,
     projectImportError,

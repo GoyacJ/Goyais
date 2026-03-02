@@ -28,11 +28,17 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/conversations/{conversation_id}/stop:",
 		"/v1/conversations/{conversation_id}/export:",
 		"/v1/runs/{run_id}/control:",
-		"/v2/conversations/{conversation_id}/changeset:",
-		"/v2/conversations/{conversation_id}/changeset/commit:",
-		"/v2/conversations/{conversation_id}/changeset/discard:",
-		"/v2/conversations/{conversation_id}/changeset/export:",
-		"/v2/conversations/{conversation_id}/rollback:",
+		"/v1/runs/{run_id}/graph:",
+		"/v1/runs/{run_id}/tasks:",
+		"/v1/runs/{run_id}/tasks/{task_id}:",
+		"/v1/runs/{run_id}/tasks/{task_id}/control:",
+		"/v1/hooks/policies:",
+		"/v1/hooks/executions/{run_id}:",
+		"/v1/conversations/{conversation_id}/changeset:",
+		"/v1/conversations/{conversation_id}/changeset/commit:",
+		"/v1/conversations/{conversation_id}/changeset/discard:",
+		"/v1/conversations/{conversation_id}/changeset/export:",
+		"/v1/conversations/{conversation_id}/rollback:",
 		"/v1/workspaces/{workspace_id}/model-catalog:",
 		"/v1/workspaces/{workspace_id}/catalog-root:",
 		"/v1/workspaces/{workspace_id}/resource-configs:",
@@ -90,6 +96,19 @@ func TestOpenAPIDoesNotContainRemovedAliasRoutes(t *testing.T) {
 	if strings.Contains(spec, "/v1/workspaces/{workspace_id}/model-catalog/sync:") {
 		t.Fatalf("openapi still contains removed route alias /v1/workspaces/{workspace_id}/model-catalog/sync")
 	}
+
+	removedConversationAliases := []string{
+		"/v2/conversations/{conversation_id}/changeset:",
+		"/v2/conversations/{conversation_id}/changeset/commit:",
+		"/v2/conversations/{conversation_id}/changeset/discard:",
+		"/v2/conversations/{conversation_id}/changeset/export:",
+		"/v2/conversations/{conversation_id}/rollback:",
+	}
+	for _, marker := range removedConversationAliases {
+		if strings.Contains(spec, marker) {
+			t.Fatalf("openapi still contains removed v2 conversation route: %s", marker)
+		}
+	}
 }
 
 func TestOpenAPIDoesNotContainInternalWorkerRoutes(t *testing.T) {
@@ -142,11 +161,51 @@ func TestOpenAPIConversationChangeSetSchemaShape(t *testing.T) {
 		"ExecutionFilesExportResponse:",
 		"file_name:",
 		"archive_base64:",
-		"/v2/conversations/{conversation_id}/changeset/export:",
+		"/v1/conversations/{conversation_id}/changeset/export:",
 	}
 	for _, marker := range requiredMarkers {
 		if !strings.Contains(spec, marker) {
 			t.Fatalf("openapi missing conversation changeset marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPIRunTaskGraphSchemaShape(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"AgentGraph:",
+		"TaskNode:",
+		"TaskArtifact:",
+		"TaskControlRequest:",
+		"TaskControlResponse:",
+		"RunTaskListResponse:",
+		"/v1/runs/{run_id}/graph:",
+		"/v1/runs/{run_id}/tasks:",
+		"/v1/runs/{run_id}/tasks/{task_id}:",
+		"/v1/runs/{run_id}/tasks/{task_id}/control:",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing run/task graph marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPIHookSchemaShape(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"/v1/hooks/policies:",
+		"/v1/hooks/executions/{run_id}:",
+		"HookPolicy:",
+		"HookPolicyListResponse:",
+		"HookPolicyUpsertRequest:",
+		"HookDecision:",
+		"HookExecutionRecord:",
+		"HookExecutionListResponse:",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing hook marker: %s", marker)
 		}
 	}
 }

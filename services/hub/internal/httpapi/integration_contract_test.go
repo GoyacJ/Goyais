@@ -170,7 +170,7 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 		t.Fatalf("expected stop 200, got %d (%s)", stopRes.Code, stopRes.Body.String())
 	}
 
-	rollbackRes := performJSONRequest(t, router, http.MethodPost, "/v2/conversations/"+conversationID+"/rollback", map[string]any{
+	rollbackRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/rollback", map[string]any{
 		"message_id": messageID,
 	}, authHeaders)
 	if rollbackRes.Code != http.StatusOK {
@@ -1031,7 +1031,7 @@ func TestConversationChangeSetEndpointForNonGitProject(t *testing.T) {
 	if createExecutionRes.Code != http.StatusCreated {
 		t.Fatalf("expected create execution 201, got %d (%s)", createExecutionRes.Code, createExecutionRes.Body.String())
 	}
-	changeSetRes := performJSONRequest(t, router, http.MethodGet, "/v2/conversations/"+conversationID+"/changeset", nil, authHeaders)
+	changeSetRes := performJSONRequest(t, router, http.MethodGet, "/v1/conversations/"+conversationID+"/changeset", nil, authHeaders)
 	if changeSetRes.Code != http.StatusOK {
 		t.Fatalf("expected changeset 200, got %d (%s)", changeSetRes.Code, changeSetRes.Body.String())
 	}
@@ -1114,7 +1114,7 @@ func TestConversationChangeSetCommitRejectsEmptySet(t *testing.T) {
 	if stopRes.Code != http.StatusOK {
 		t.Fatalf("expected stop conversation 200, got %d (%s)", stopRes.Code, stopRes.Body.String())
 	}
-	changeSetRes := performJSONRequest(t, router, http.MethodGet, "/v2/conversations/"+conversationID+"/changeset", nil, authHeaders)
+	changeSetRes := performJSONRequest(t, router, http.MethodGet, "/v1/conversations/"+conversationID+"/changeset", nil, authHeaders)
 	if changeSetRes.Code != http.StatusOK {
 		t.Fatalf("expected changeset 200, got %d (%s)", changeSetRes.Code, changeSetRes.Body.String())
 	}
@@ -1124,7 +1124,7 @@ func TestConversationChangeSetCommitRejectsEmptySet(t *testing.T) {
 	if changeSetID == "" {
 		t.Fatalf("expected non-empty change_set_id")
 	}
-	commitRes := performJSONRequest(t, router, http.MethodPost, "/v2/conversations/"+conversationID+"/changeset/commit", map[string]any{
+	commitRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/changeset/commit", map[string]any{
 		"message":                "chore: empty changeset",
 		"expected_change_set_id": changeSetID,
 	}, authHeaders)
@@ -1168,7 +1168,7 @@ func TestConversationChangeSetDiscardEndpointSupportsEmptySet(t *testing.T) {
 	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	changeSetRes := performJSONRequest(t, router, http.MethodGet, "/v2/conversations/"+conversationID+"/changeset", nil, authHeaders)
+	changeSetRes := performJSONRequest(t, router, http.MethodGet, "/v1/conversations/"+conversationID+"/changeset", nil, authHeaders)
 	if changeSetRes.Code != http.StatusOK {
 		t.Fatalf("expected changeset 200, got %d (%s)", changeSetRes.Code, changeSetRes.Body.String())
 	}
@@ -1178,7 +1178,7 @@ func TestConversationChangeSetDiscardEndpointSupportsEmptySet(t *testing.T) {
 	if changeSetID == "" {
 		t.Fatalf("expected non-empty change_set_id")
 	}
-	discardRes := performJSONRequest(t, router, http.MethodPost, "/v2/conversations/"+conversationID+"/changeset/discard", map[string]any{
+	discardRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/changeset/discard", map[string]any{
 		"expected_change_set_id": changeSetID,
 	}, authHeaders)
 	if discardRes.Code != http.StatusOK {
@@ -1221,7 +1221,7 @@ func TestConversationChangeSetExportEndpointReturnsZipManifest(t *testing.T) {
 	mustDecodeJSON(t, convRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	filesRes := performJSONRequest(t, router, http.MethodPost, "/v2/conversations/"+conversationID+"/changeset/export", map[string]any{}, authHeaders)
+	filesRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/changeset/export", map[string]any{}, authHeaders)
 	if filesRes.Code != http.StatusOK {
 		t.Fatalf("expected files export 200, got %d (%s)", filesRes.Code, filesRes.Body.String())
 	}

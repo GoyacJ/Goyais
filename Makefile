@@ -1,7 +1,7 @@
 HUB_PORT ?= 8787
 DESKTOP_PORT ?= 5173
 
-.PHONY: dev dev-hub dev-desktop dev-web health health-app test lint test-hub test-desktop lint-hub lint-desktop
+.PHONY: dev dev-hub dev-desktop dev-web health health-app contracts-check test lint test-hub test-desktop lint-hub lint-desktop
 
 dev:
 	@scripts/dev/print_commands.sh $(HUB_PORT) $(DESKTOP_PORT)
@@ -16,7 +16,11 @@ dev-web:
 	@cd apps/desktop && DESKTOP_PORT=$(DESKTOP_PORT) pnpm dev --port $(DESKTOP_PORT)
 
 health:
+	@$(MAKE) contracts-check
 	@HUB_PORT=$(HUB_PORT) DESKTOP_PORT=$(DESKTOP_PORT) scripts/smoke/health_check.sh
+
+contracts-check:
+	@pnpm contracts:check
 
 health-app:
 	@DESKTOP_PORT=$(DESKTOP_PORT) scripts/smoke/health_app_check.sh

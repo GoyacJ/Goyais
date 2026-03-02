@@ -146,6 +146,8 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				return
 			}
 			changed := false
+			configChanged := false
+			configChangedFields := make([]string, 0, 5)
 			if input.Name != nil {
 				name := strings.TrimSpace(*input.Name)
 				if name == "" {
@@ -165,6 +167,8 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				}
 				conversation.DefaultMode = mode
 				changed = true
+				configChanged = true
+				configChangedFields = append(configChangedFields, "mode")
 			}
 			if input.ModelConfigID != nil {
 				modelConfigID := strings.TrimSpace(*input.ModelConfigID)
@@ -175,18 +179,26 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				}
 				conversation.ModelConfigID = modelConfigID
 				changed = true
+				configChanged = true
+				configChangedFields = append(configChangedFields, "model_config_id")
 			}
 			if input.RuleIDs != nil {
 				conversation.RuleIDs = sanitizeIDList(input.RuleIDs)
 				changed = true
+				configChanged = true
+				configChangedFields = append(configChangedFields, "rule_ids")
 			}
 			if input.SkillIDs != nil {
 				conversation.SkillIDs = sanitizeIDList(input.SkillIDs)
 				changed = true
+				configChanged = true
+				configChangedFields = append(configChangedFields, "skill_ids")
 			}
 			if input.MCPIDs != nil {
 				conversation.MCPIDs = sanitizeIDList(input.MCPIDs)
 				changed = true
+				configChanged = true
+				configChangedFields = append(configChangedFields, "mcp_ids")
 			}
 			if !changed {
 				state.mu.Unlock()
@@ -195,7 +207,34 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			}
 			conversation.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 			state.conversations[conversationID] = conversation
+			configChangeExecution := Execution{}
+			hasConfigChangeExecution := false
+			if configChanged && conversation.ActiveExecutionID != nil {
+				activeExecutionID := strings.TrimSpace(*conversation.ActiveExecutionID)
+				if activeExecutionID != "" {
+					if activeExecution, ok := state.executions[activeExecutionID]; ok {
+						configChangeExecution = activeExecution
+						hasConfigChangeExecution = true
+					}
+				}
+			}
 			state.mu.Unlock()
+			if configChanged && hasConfigChangeExecution && state.orchestrator != nil {
+				decision, matchedPolicyID := state.orchestrator.evaluateHookDecision(configChangeExecution, HookEventTypeConfigChange, "")
+				state.orchestrator.appendHookExecutionRecordAndEvent(
+					configChangeExecution,
+					configChangeExecution.ID,
+					HookEventTypeConfigChange,
+					"",
+					matchedPolicyID,
+					decision,
+					map[string]any{
+						"conversation_id": conversationID,
+						"changed_fields":  append([]string{}, configChangedFields...),
+						"source":          "conversation_patch",
+					},
+				)
+			}
 			syncExecutionDomainBestEffort(state)
 			state.mu.RLock()
 			responseConversation := decorateConversationUsageLocked(state, conversation)
