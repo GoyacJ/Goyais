@@ -18,6 +18,7 @@ import (
 
 	promptctx "goyais/services/hub/internal/agent/context/prompt"
 	"goyais/services/hub/internal/agent/core"
+	"goyais/services/hub/internal/agent/transport/subscribers"
 )
 
 // ExecuteRequest is the normalized request passed from the runtime loop to the
@@ -46,6 +47,7 @@ type Engine struct {
 
 	executor       Executor
 	contextBuilder core.ContextBuilder
+	subscriberCfg  subscribers.Config
 
 	nextSessionID uint64
 	nextRunID     uint64
@@ -63,8 +65,7 @@ type sessionRuntime struct {
 	nextSequence int64
 	events       []core.EventEnvelope
 
-	subscribers map[int]chan core.EventEnvelope
-	nextSubID   int
+	subscriberManager *subscribers.Manager
 
 	queue  []core.RunID
 	active core.RunID
@@ -107,6 +108,7 @@ type defaultExecutor struct{}
 type Dependencies struct {
 	Executor       Executor
 	ContextBuilder core.ContextBuilder
+	SubscriberCfg  subscribers.Config
 }
 
 func (defaultExecutor) Execute(ctx context.Context, req ExecuteRequest) (ExecuteResult, error) {
@@ -136,9 +138,17 @@ func NewEngineWithDeps(deps Dependencies) *Engine {
 	if deps.ContextBuilder == nil {
 		deps.ContextBuilder = promptctx.NewBuilder(promptctx.BuilderOptions{})
 	}
+	subscriberCfg := deps.SubscriberCfg
+	if subscriberCfg.BufferSize <= 0 {
+		subscriberCfg.BufferSize = 128
+	}
+	if subscriberCfg.BackpressurePolicy == "" {
+		subscriberCfg.BackpressurePolicy = subscribers.BackpressureDropNewest
+	}
 	return &Engine{
 		executor:       deps.Executor,
 		contextBuilder: deps.ContextBuilder,
+		subscriberCfg:  subscriberCfg,
 		sessions:       map[core.SessionID]*sessionRuntime{},
 		runs:           map[core.RunID]*runRuntime{},
 	}
@@ -162,7 +172,7 @@ func (e *Engine) StartSession(_ context.Context, req core.StartSessionRequest) (
 		workingDir:            strings.TrimSpace(req.WorkingDir),
 		additionalDirectories: sanitizeDirectories(req.AdditionalDirectories),
 		events:                make([]core.EventEnvelope, 0, 16),
-		subscribers:           map[int]chan core.EventEnvelope{},
+		subscriberManager:     subscribers.NewManager(e.subscriberCfg),
 		queue:                 make([]core.RunID, 0, 8),
 	}
 
@@ -285,11 +295,7 @@ func (e *Engine) Subscribe(_ context.Context, sessionID string, cursor string) (
 		e.mu.Unlock()
 		return nil, core.ErrSessionNotFound
 	}
-
-	channel := make(chan core.EventEnvelope, 128)
-	subID := session.nextSubID
-	session.nextSubID++
-	session.subscribers[subID] = channel
+	live := session.subscriberManager.Subscribe()
 
 	replay := make([]core.EventEnvelope, 0, len(session.events))
 	for _, event := range session.events {
@@ -297,22 +303,52 @@ func (e *Engine) Subscribe(_ context.Context, sessionID string, cursor string) (
 			replay = append(replay, event)
 		}
 	}
+	bufferSize := e.subscriberCfg.BufferSize
+	if bufferSize <= 0 {
+		bufferSize = 128
+	}
 	e.mu.Unlock()
 
-	go func(items []core.EventEnvelope, out chan core.EventEnvelope) {
+	out := make(chan core.EventEnvelope, bufferSize)
+	done := make(chan struct{})
+	var closeOnce sync.Once
+
+	go func(items []core.EventEnvelope) {
+		defer close(out)
+		defer func() {
+			_ = live.Unsubscribe()
+		}()
 		for _, event := range items {
-			out <- event
+			select {
+			case <-done:
+				return
+			case out <- event:
+			}
 		}
-	}(replay, channel)
+		for {
+			select {
+			case <-done:
+				return
+			case event, ok := <-live.Events:
+				if !ok {
+					return
+				}
+				select {
+				case <-done:
+					return
+				case out <- event:
+				}
+			}
+		}
+	}(replay)
 
 	return &eventSubscription{
-		ch: channel,
+		ch: out,
 		closeFn: func() error {
-			e.mu.Lock()
-			defer e.mu.Unlock()
-			if current, ok := e.sessions[normalizedSessionID]; ok {
-				delete(current.subscribers, subID)
-			}
+			closeOnce.Do(func() {
+				close(done)
+				_ = live.Unsubscribe()
+			})
 			return nil
 		},
 	}, nil
@@ -458,11 +494,30 @@ func (e *Engine) emitEventLocked(session *sessionRuntime, runID core.RunID, even
 	}
 	session.events = append(session.events, event)
 
-	for _, subscriber := range session.subscribers {
-		select {
-		case subscriber <- event:
-		default:
+	if session.subscriberManager != nil {
+		_ = session.subscriberManager.Publish(context.Background(), event)
+	}
+}
+
+func (e *Engine) subscriptionStats(sessionID core.SessionID) subscribers.Stats {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	session, exists := e.sessions[sessionID]
+	if !exists || session.subscriberManager == nil {
+		return subscribers.Stats{}
+	}
+	session.subscriberManager.PruneIdle(time.Now().UTC())
+	return session.subscriberManager.Stats()
+}
+
+func (e *Engine) pruneAllSubscribers(now time.Time) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, session := range e.sessions {
+		if session == nil || session.subscriberManager == nil {
+			continue
 		}
+		session.subscriberManager.PruneIdle(now)
 	}
 }
 

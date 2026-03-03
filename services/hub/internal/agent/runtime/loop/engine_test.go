@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"goyais/services/hub/internal/agent/core"
+	"goyais/services/hub/internal/agent/transport/subscribers"
 )
 
 type executorFunc func(ctx context.Context, req ExecuteRequest) (ExecuteResult, error)
@@ -287,6 +288,93 @@ func TestEngineContextBuildFailureEmitsRunFailed(t *testing.T) {
 		return
 	}
 	t.Fatal("executor should not be called when context build fails")
+}
+
+func TestEnginePruneIdleSubscribers(t *testing.T) {
+	engine := NewEngineWithDeps(Dependencies{
+		Executor: executorFunc(func(_ context.Context, _ ExecuteRequest) (ExecuteResult, error) {
+			return ExecuteResult{Output: "ok"}, nil
+		}),
+		SubscriberCfg: subscribers.Config{
+			BufferSize:         2,
+			BackpressurePolicy: subscribers.BackpressureDropNewest,
+			IdleTTL:            20 * time.Millisecond,
+		},
+	})
+
+	session, err := engine.StartSession(context.Background(), core.StartSessionRequest{
+		WorkingDir: "/tmp/project",
+	})
+	if err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+
+	sub, err := engine.Subscribe(context.Background(), string(session.SessionID), "")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+
+	time.Sleep(30 * time.Millisecond)
+	engine.pruneAllSubscribers(time.Now().UTC())
+
+	stats := engine.subscriptionStats(session.SessionID)
+	if stats.SubscriberCount != 0 {
+		t.Fatalf("expected no subscribers after prune, got %d", stats.SubscriberCount)
+	}
+
+	select {
+	case _, ok := <-sub.Events():
+		if ok {
+			t.Fatal("expected subscription channel closed after prune")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for closed subscription channel")
+	}
+}
+
+func TestEngineSubscriberDropNewestStats(t *testing.T) {
+	engine := NewEngineWithDeps(Dependencies{
+		Executor: executorFunc(func(_ context.Context, _ ExecuteRequest) (ExecuteResult, error) {
+			return ExecuteResult{Output: "hello"}, nil
+		}),
+		SubscriberCfg: subscribers.Config{
+			BufferSize:         1,
+			BackpressurePolicy: subscribers.BackpressureDropNewest,
+		},
+	})
+
+	session, err := engine.StartSession(context.Background(), core.StartSessionRequest{
+		WorkingDir: "/tmp/project",
+	})
+	if err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+
+	sub, err := engine.Subscribe(context.Background(), string(session.SessionID), "")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+
+	if _, err := engine.Submit(context.Background(), string(session.SessionID), core.UserInput{Text: "one"}); err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+	if _, err := engine.Submit(context.Background(), string(session.SessionID), core.UserInput{Text: "two"}); err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+	if _, err := engine.Submit(context.Background(), string(session.SessionID), core.UserInput{Text: "three"}); err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		stats := engine.subscriptionStats(session.SessionID)
+		if stats.DroppedNewest > 0 {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("expected dropped-newest counter to be > 0")
 }
 
 func waitRunEventsUntilTerminal(t *testing.T, stream <-chan core.EventEnvelope, runID string, timeout time.Duration) []core.EventEnvelope {
