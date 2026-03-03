@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"goyais/services/hub/internal/agent/core"
+	"goyais/services/hub/internal/agent/policy/approval"
 	transportevents "goyais/services/hub/internal/agent/transport/events"
 	"goyais/services/hub/internal/agent/transport/subscribers"
 )
@@ -424,6 +425,56 @@ func TestEngineWritesAndReplaysFromInjectedEventStore(t *testing.T) {
 	if len(replayed) == 0 {
 		t.Fatal("expected replayed events from store")
 	}
+}
+
+func TestEngineControlRoutesApprovalSignal(t *testing.T) {
+	release := make(chan struct{})
+	approvalRouter := approval.NewRouter(2)
+	engine := NewEngineWithDeps(Dependencies{
+		Executor: executorFunc(func(ctx context.Context, _ ExecuteRequest) (ExecuteResult, error) {
+			select {
+			case <-ctx.Done():
+				return ExecuteResult{}, ctx.Err()
+			case <-release:
+				return ExecuteResult{Output: "ok"}, nil
+			}
+		}),
+		ApprovalRouter: approvalRouter,
+	})
+
+	session, err := engine.StartSession(context.Background(), core.StartSessionRequest{
+		WorkingDir: "/tmp/approval-project",
+	})
+	if err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+
+	runID, err := engine.Submit(context.Background(), string(session.SessionID), core.UserInput{Text: "hello"})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+
+	approvalAction := make(chan core.ControlAction, 1)
+	go func() {
+		action, waitErr := approvalRouter.WaitForApproval(context.Background(), core.RunID(runID))
+		if waitErr == nil {
+			approvalAction <- action
+		}
+	}()
+
+	if err := engine.Control(context.Background(), runID, core.ControlActionApprove); err != nil {
+		t.Fatalf("control approve failed: %v", err)
+	}
+
+	select {
+	case action := <-approvalAction:
+		if action != core.ControlActionApprove {
+			t.Fatalf("unexpected approval action %q", action)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for routed approval signal")
+	}
+	close(release)
 }
 
 func waitRunEventsUntilTerminal(t *testing.T, stream <-chan core.EventEnvelope, runID string, timeout time.Duration) []core.EventEnvelope {

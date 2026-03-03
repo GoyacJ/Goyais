@@ -18,6 +18,7 @@ import (
 
 	promptctx "goyais/services/hub/internal/agent/context/prompt"
 	"goyais/services/hub/internal/agent/core"
+	"goyais/services/hub/internal/agent/policy/approval"
 	transportevents "goyais/services/hub/internal/agent/transport/events"
 	"goyais/services/hub/internal/agent/transport/subscribers"
 )
@@ -49,6 +50,7 @@ type Engine struct {
 	executor       Executor
 	contextBuilder core.ContextBuilder
 	eventStore     *transportevents.Store
+	approvalRouter *approval.Router
 	subscriberCfg  subscribers.Config
 
 	nextSessionID uint64
@@ -110,6 +112,7 @@ type Dependencies struct {
 	Executor       Executor
 	ContextBuilder core.ContextBuilder
 	EventStore     *transportevents.Store
+	ApprovalRouter *approval.Router
 	SubscriberCfg  subscribers.Config
 }
 
@@ -146,6 +149,9 @@ func NewEngineWithDeps(deps Dependencies) *Engine {
 	if deps.EventStore == nil {
 		deps.EventStore = transportevents.NewStore()
 	}
+	if deps.ApprovalRouter == nil {
+		deps.ApprovalRouter = approval.NewRouter(16)
+	}
 	subscriberCfg := deps.SubscriberCfg
 	if subscriberCfg.BufferSize <= 0 {
 		subscriberCfg.BufferSize = 128
@@ -157,6 +163,7 @@ func NewEngineWithDeps(deps Dependencies) *Engine {
 		executor:       deps.Executor,
 		contextBuilder: deps.ContextBuilder,
 		eventStore:     deps.EventStore,
+		approvalRouter: deps.ApprovalRouter,
 		subscriberCfg:  subscriberCfg,
 		sessions:       map[core.SessionID]*sessionRuntime{},
 		runs:           map[core.RunID]*runRuntime{},
@@ -226,6 +233,9 @@ func (e *Engine) Submit(_ context.Context, sessionID string, input core.UserInpu
 	}
 
 	e.runs[newRunID] = run
+	if e.approvalRouter != nil {
+		e.approvalRouter.Register(newRunID)
+	}
 	session.queue = append(session.queue, newRunID)
 	e.emitEventLocked(session, newRunID, core.RunEventTypeRunQueued, core.RunQueuedPayload{
 		QueuePosition: len(session.queue),
@@ -253,6 +263,9 @@ func (e *Engine) Control(_ context.Context, runID string, action core.ControlAct
 	if !sessionExists {
 		return core.ErrSessionNotFound
 	}
+	if e.approvalRouter != nil {
+		_ = e.approvalRouter.Send(normalizedRunID, approval.ControlSignal{Action: action})
+	}
 
 	switch action {
 	case core.ControlActionStop, core.ControlActionDeny:
@@ -273,6 +286,9 @@ func (e *Engine) Control(_ context.Context, runID string, action core.ControlAct
 		e.emitEventLocked(session, run.id, core.RunEventTypeRunCancelled, core.RunCancelledPayload{
 			Reason: "control_" + string(action),
 		})
+		if e.approvalRouter != nil {
+			e.approvalRouter.Unregister(run.id)
+		}
 		return nil
 	case core.ControlActionApprove, core.ControlActionResume, core.ControlActionAnswer:
 		return run.machine.ApplyControl(action)
@@ -443,6 +459,9 @@ func (e *Engine) executeRun(ctx context.Context, run *runRuntime) {
 	if session.active == run.id {
 		session.active = ""
 	}
+	if e.approvalRouter != nil {
+		e.approvalRouter.Unregister(run.id)
+	}
 	e.startNextIfIdleLocked(session)
 }
 
@@ -462,6 +481,9 @@ func (e *Engine) finishRunAsFailed(run *runRuntime, code string, cause error) {
 	if session.active == run.id {
 		session.active = ""
 	}
+	if e.approvalRouter != nil {
+		e.approvalRouter.Unregister(run.id)
+	}
 	e.startNextIfIdleLocked(session)
 }
 
@@ -479,6 +501,9 @@ func (e *Engine) finishRunAsCancelled(run *runRuntime, reason string) {
 	})
 	if session.active == run.id {
 		session.active = ""
+	}
+	if e.approvalRouter != nil {
+		e.approvalRouter.Unregister(run.id)
 	}
 	e.startNextIfIdleLocked(session)
 }
