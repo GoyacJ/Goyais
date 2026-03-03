@@ -12,7 +12,9 @@ import (
 	"sync"
 
 	"goyais/services/hub/cmd/goyais-cli/adapters"
-	inputproc "goyais/services/hub/internal/agentcore/input"
+	clipboardadapter "goyais/services/hub/internal/agent/adapters/cli/clipboard"
+	pasteadapter "goyais/services/hub/internal/agent/adapters/cli/paste"
+	"goyais/services/hub/internal/agent/context/mentions"
 )
 
 type PromptRunner interface {
@@ -93,8 +95,8 @@ func (s Shell) Run(ctx context.Context, req RunRequest) error {
 	scanner := bufio.NewScanner(in)
 	var multilineBuffer strings.Builder
 	pendingMultiline := false
-	pasteStore := inputproc.NewPastePlaceholderStore(inputproc.PastePlaceholderOptions{})
-	imageStore := inputproc.NewClipboardImageStore()
+	pasteStore := pasteadapter.NewStore(pasteadapter.Options{})
+	imageStore := clipboardadapter.NewImageStore()
 
 	for {
 		select {
@@ -179,7 +181,7 @@ func (s Shell) Run(ctx context.Context, req RunRequest) error {
 		if line == "" {
 			continue
 		}
-		if converted, changed := inputproc.ConvertMultiPathPasteToMentions(line, req.CWD); changed {
+		if converted, changed := mentions.ConvertMultiPathPasteToMentions(line, req.CWD); changed {
 			line = strings.TrimSpace(converted)
 		}
 		placeholderPrompt, _ := pasteStore.ReplaceIfNeeded(line)
@@ -306,7 +308,7 @@ func isImagePasteShortcut(line string) bool {
 }
 
 func imagePasteErrorMessage(err error) string {
-	if errors.Is(err, inputproc.ErrImagePasteUnsupportedPlatform) {
+	if errors.Is(err, clipboardadapter.ErrImagePasteUnsupportedPlatform) {
 		return "image paste unavailable: platform not supported"
 	}
 	return "image paste unavailable: clipboard has no image"
