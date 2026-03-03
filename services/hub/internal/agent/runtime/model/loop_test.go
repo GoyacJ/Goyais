@@ -27,6 +27,9 @@ func (f toolInvokerFunc) Execute(ctx context.Context, calls []codec.ToolCall) ([
 func TestRunLoop_SingleTurnWithoutTools(t *testing.T) {
 	result, err := RunLoop(context.Background(), LoopRequest{
 		Provider: providerFunc(func(_ context.Context, req TurnRequest) (codec.TurnResult, error) {
+			if req.UserInput != "hello user" {
+				t.Fatalf("unexpected user input %q", req.UserInput)
+			}
 			if len(req.PriorToolCalls) != 0 || len(req.PriorToolResults) != 0 {
 				t.Fatalf("unexpected prior tool payload in first turn: %#v", req)
 			}
@@ -35,6 +38,7 @@ func TestRunLoop_SingleTurnWithoutTools(t *testing.T) {
 				Usage:         map[string]any{"input_tokens": 2, "output_tokens": 3},
 			}, nil
 		}),
+		UserInput:     "hello user",
 		MaxModelTurns: 3,
 	})
 	if err != nil {

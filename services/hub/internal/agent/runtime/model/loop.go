@@ -35,6 +35,7 @@ type ToolInvoker interface {
 // TurnRequest is the provider turn input envelope.
 type TurnRequest struct {
 	SystemPrompt     string
+	UserInput        string
 	PriorToolCalls   []codec.ToolCall
 	PriorToolResults []codec.ToolResultForNextTurn
 }
@@ -44,6 +45,7 @@ type LoopRequest struct {
 	Provider      Provider
 	ToolInvoker   ToolInvoker
 	SystemPrompt  string
+	UserInput     string
 	MaxModelTurns int
 }
 
@@ -78,6 +80,7 @@ func RunLoop(ctx context.Context, req LoopRequest) (LoopResult, error) {
 		}
 		turnResult, err := req.Provider.Turn(ctx, TurnRequest{
 			SystemPrompt:     strings.TrimSpace(req.SystemPrompt),
+			UserInput:        strings.TrimSpace(req.UserInput),
 			PriorToolCalls:   cloneToolCalls(priorCalls),
 			PriorToolResults: cloneToolResults(priorResults),
 		})

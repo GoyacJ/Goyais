@@ -117,6 +117,9 @@ func (defaultExecutor) Execute(ctx context.Context, req ExecuteRequest) (Execute
 		return ExecuteResult{}, ctx.Err()
 	default:
 	}
+	if result, configured, err := executeWithConfiguredModel(ctx, req); configured {
+		return result, err
+	}
 	return ExecuteResult{
 		Output:      "Processed: " + strings.TrimSpace(req.Input.Text),
 		UsageTokens: 0,
