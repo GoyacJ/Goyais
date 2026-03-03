@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"goyais/services/hub/internal/agent/core"
+	transportevents "goyais/services/hub/internal/agent/transport/events"
 	"goyais/services/hub/internal/agent/transport/subscribers"
 )
 
@@ -375,6 +376,54 @@ func TestEngineSubscriberDropNewestStats(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("expected dropped-newest counter to be > 0")
+}
+
+func TestEngineWritesAndReplaysFromInjectedEventStore(t *testing.T) {
+	store := transportevents.NewStore()
+	engine := NewEngineWithDeps(Dependencies{
+		Executor: executorFunc(func(_ context.Context, _ ExecuteRequest) (ExecuteResult, error) {
+			return ExecuteResult{Output: "ok", UsageTokens: 3}, nil
+		}),
+		EventStore: store,
+	})
+
+	session, err := engine.StartSession(context.Background(), core.StartSessionRequest{
+		WorkingDir: "/tmp/store-project",
+	})
+	if err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+
+	firstSub, err := engine.Subscribe(context.Background(), string(session.SessionID), "")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer firstSub.Close()
+
+	runID, err := engine.Submit(context.Background(), string(session.SessionID), core.UserInput{Text: "hello"})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+
+	events := waitRunEventsUntilTerminal(t, firstSub.Events(), runID, 2*time.Second)
+	if len(events) == 0 {
+		t.Fatal("expected terminal events")
+	}
+	if count := store.Count(session.SessionID); count == 0 {
+		t.Fatal("expected event store to contain persisted events")
+	}
+
+	replaySub, err := engine.Subscribe(context.Background(), string(session.SessionID), "0")
+	if err != nil {
+		t.Fatalf("replay subscribe: %v", err)
+	}
+	defer replaySub.Close()
+	replayed := waitEventsUntil(t, replaySub.Events(), func(event core.EventEnvelope) bool {
+		return event.Type == core.RunEventTypeRunCompleted && string(event.RunID) == runID
+	}, 2*time.Second)
+	if len(replayed) == 0 {
+		t.Fatal("expected replayed events from store")
+	}
 }
 
 func waitRunEventsUntilTerminal(t *testing.T, stream <-chan core.EventEnvelope, runID string, timeout time.Duration) []core.EventEnvelope {

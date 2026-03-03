@@ -18,6 +18,7 @@ import (
 
 	promptctx "goyais/services/hub/internal/agent/context/prompt"
 	"goyais/services/hub/internal/agent/core"
+	transportevents "goyais/services/hub/internal/agent/transport/events"
 	"goyais/services/hub/internal/agent/transport/subscribers"
 )
 
@@ -47,6 +48,7 @@ type Engine struct {
 
 	executor       Executor
 	contextBuilder core.ContextBuilder
+	eventStore     *transportevents.Store
 	subscriberCfg  subscribers.Config
 
 	nextSessionID uint64
@@ -63,7 +65,6 @@ type sessionRuntime struct {
 	additionalDirectories []string
 
 	nextSequence int64
-	events       []core.EventEnvelope
 
 	subscriberManager *subscribers.Manager
 
@@ -108,6 +109,7 @@ type defaultExecutor struct{}
 type Dependencies struct {
 	Executor       Executor
 	ContextBuilder core.ContextBuilder
+	EventStore     *transportevents.Store
 	SubscriberCfg  subscribers.Config
 }
 
@@ -141,6 +143,9 @@ func NewEngineWithDeps(deps Dependencies) *Engine {
 	if deps.ContextBuilder == nil {
 		deps.ContextBuilder = promptctx.NewBuilder(promptctx.BuilderOptions{})
 	}
+	if deps.EventStore == nil {
+		deps.EventStore = transportevents.NewStore()
+	}
 	subscriberCfg := deps.SubscriberCfg
 	if subscriberCfg.BufferSize <= 0 {
 		subscriberCfg.BufferSize = 128
@@ -151,6 +156,7 @@ func NewEngineWithDeps(deps Dependencies) *Engine {
 	return &Engine{
 		executor:       deps.Executor,
 		contextBuilder: deps.ContextBuilder,
+		eventStore:     deps.EventStore,
 		subscriberCfg:  subscriberCfg,
 		sessions:       map[core.SessionID]*sessionRuntime{},
 		runs:           map[core.RunID]*runRuntime{},
@@ -174,7 +180,6 @@ func (e *Engine) StartSession(_ context.Context, req core.StartSessionRequest) (
 		createdAt:             createdAt,
 		workingDir:            strings.TrimSpace(req.WorkingDir),
 		additionalDirectories: sanitizeDirectories(req.AdditionalDirectories),
-		events:                make([]core.EventEnvelope, 0, 16),
 		subscriberManager:     subscribers.NewManager(e.subscriberCfg),
 		queue:                 make([]core.RunID, 0, 8),
 	}
@@ -299,13 +304,7 @@ func (e *Engine) Subscribe(_ context.Context, sessionID string, cursor string) (
 		return nil, core.ErrSessionNotFound
 	}
 	live := session.subscriberManager.Subscribe()
-
-	replay := make([]core.EventEnvelope, 0, len(session.events))
-	for _, event := range session.events {
-		if event.Sequence > minSequence {
-			replay = append(replay, event)
-		}
-	}
+	replay := e.eventStore.Replay(normalizedSessionID, minSequence, 0)
 	bufferSize := e.subscriberCfg.BufferSize
 	if bufferSize <= 0 {
 		bufferSize = 128
@@ -495,7 +494,9 @@ func (e *Engine) emitEventLocked(session *sessionRuntime, runID core.RunID, even
 		Timestamp: time.Now().UTC(),
 		Payload:   payload,
 	}
-	session.events = append(session.events, event)
+	if e.eventStore != nil {
+		_ = e.eventStore.Append(event)
+	}
 
 	if session.subscriberManager != nil {
 		_ = session.subscriberManager.Publish(context.Background(), event)
