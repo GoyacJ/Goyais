@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"goyais/services/hub/internal/agentcore/prompting"
 )
 
 func TestBuildExecutionSystemPromptIncludesProjectContextAndInstructions(t *testing.T) {
@@ -24,7 +22,7 @@ func TestBuildExecutionSystemPromptIncludesProjectContextAndInstructions(t *test
 		state,
 		localWorkspaceID,
 		&ExecutionResourceProfile{},
-		&prompting.ProjectContext{
+		&executionProjectPromptContext{
 			Name:  "Prompt Project",
 			Path:  root,
 			IsGit: &isGit,

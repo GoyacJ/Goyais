@@ -7,13 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	promptctx "goyais/services/hub/internal/agent/context/prompt"
 	agentcore "goyais/services/hub/internal/agent/core"
-	"goyais/services/hub/internal/agentcore/prompting"
 	"goyais/services/hub/internal/agentcore/safety"
 	coretools "goyais/services/hub/internal/agentcore/tools"
 	controlplanepolicy "goyais/services/hub/internal/controlplane/policy"
@@ -36,6 +37,12 @@ type ExecutionUserAnswer struct {
 	QuestionID       string
 	SelectedOptionID string
 	Text             string
+}
+
+type executionProjectPromptContext struct {
+	Name  string
+	Path  string
+	IsGit *bool
 }
 
 type executionControlSignal struct {
@@ -570,7 +577,7 @@ func buildExecutionSystemPrompt(
 	state *AppState,
 	workspaceID string,
 	profile *ExecutionResourceProfile,
-	projectContext *prompting.ProjectContext,
+	projectContext *executionProjectPromptContext,
 	projectContextCWD string,
 ) string {
 	ruleIDs := []string{}
@@ -634,12 +641,22 @@ func buildExecutionSystemPrompt(
 	if len(mcpSegments) > 0 {
 		segments = append(segments, "MCP Servers:\n"+strings.Join(mcpSegments, "\n"))
 	}
-	return prompting.BuildSystemPrompt(prompting.SystemPromptInput{
-		BasePrompt: strings.TrimSpace(strings.Join(segments, "\n\n")),
-		CWD:        strings.TrimSpace(projectContextCWD),
-		Env:        map[string]string{},
-		Project:    projectContext,
-	})
+
+	normalizedProject := normalizeExecutionProjectPromptContext(projectContext, projectContextCWD)
+	if contextSummary := renderExecutionProjectContext(normalizedProject); contextSummary != "" {
+		segments = append(segments, contextSummary)
+	}
+	instructionCWD := resolveExecutionPromptInstructionCWD(normalizedProject, projectContextCWD)
+	if instructionCWD != "" {
+		instructions, _, err := promptctx.LoadProjectInstructionsForCWD(instructionCWD, map[string]string{}, nil)
+		if err == nil {
+			instructions = strings.TrimSpace(instructions)
+			if instructions != "" {
+				segments = append(segments, instructions)
+			}
+		}
+	}
+	return strings.TrimSpace(strings.Join(segments, "\n\n"))
 }
 
 func buildExecutionPromptBaseline() string {
@@ -663,7 +680,7 @@ Output policy:
 `)
 }
 
-func lookupExecutionProjectPromptContext(state *AppState, execution Execution) (*prompting.ProjectContext, string) {
+func lookupExecutionProjectPromptContext(state *AppState, execution Execution) (*executionProjectPromptContext, string) {
 	state.mu.RLock()
 	projectPath, isGitProject, projectName := lookupProjectExecutionContextLocked(state, execution)
 	state.mu.RUnlock()
@@ -675,11 +692,99 @@ func lookupExecutionProjectPromptContext(state *AppState, execution Execution) (
 	}
 
 	isGit := isGitProject
-	return &prompting.ProjectContext{
+	return &executionProjectPromptContext{
 		Name:  projectName,
 		Path:  projectPath,
 		IsGit: &isGit,
 	}, projectPath
+}
+
+func resolveExecutionPromptInstructionCWD(projectContext *executionProjectPromptContext, cwd string) string {
+	if projectContext != nil {
+		if projectPath := strings.TrimSpace(projectContext.Path); projectPath != "" {
+			return projectPath
+		}
+	}
+	return strings.TrimSpace(cwd)
+}
+
+func normalizeExecutionProjectPromptContext(projectContext *executionProjectPromptContext, cwd string) *executionProjectPromptContext {
+	if projectContext == nil {
+		return nil
+	}
+	normalized := &executionProjectPromptContext{
+		Name: strings.TrimSpace(projectContext.Name),
+		Path: strings.TrimSpace(projectContext.Path),
+		IsGit: func() *bool {
+			if projectContext.IsGit == nil {
+				return nil
+			}
+			value := *projectContext.IsGit
+			return &value
+		}(),
+	}
+	if normalized.Path == "" {
+		normalized.Path = strings.TrimSpace(cwd)
+	}
+	if normalized.Path != "" {
+		if absPath, err := filepath.Abs(normalized.Path); err == nil {
+			normalized.Path = absPath
+		}
+	}
+	if normalized.Name == "" && normalized.Path != "" {
+		normalized.Name = filepath.Base(normalized.Path)
+	}
+	if normalized.IsGit == nil && normalized.Path != "" {
+		isGit := hasGitRoot(normalized.Path)
+		normalized.IsGit = &isGit
+	}
+	if normalized.Name == "" && normalized.Path == "" && normalized.IsGit == nil {
+		return nil
+	}
+	return normalized
+}
+
+func renderExecutionProjectContext(projectContext *executionProjectPromptContext) string {
+	if projectContext == nil {
+		return ""
+	}
+	lines := []string{"# Project Context"}
+	if name := strings.TrimSpace(projectContext.Name); name != "" {
+		lines = append(lines, "- Name: "+name)
+	}
+	if path := strings.TrimSpace(projectContext.Path); path != "" {
+		lines = append(lines, "- Root Path: "+path)
+	}
+	if projectContext.IsGit != nil {
+		isGitText := "false"
+		if *projectContext.IsGit {
+			isGitText = "true"
+		}
+		lines = append(lines, "- Git Repository: "+isGitText)
+	}
+	lines = append(lines, "- Scope: Treat this project as the default context for this execution unless the user explicitly requests another scope.")
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func hasGitRoot(startPath string) bool {
+	current := strings.TrimSpace(startPath)
+	if current == "" {
+		return false
+	}
+	absoluteCurrent, err := filepath.Abs(current)
+	if err != nil {
+		return false
+	}
+	for {
+		if _, statErr := os.Stat(filepath.Join(absoluteCurrent, ".git")); statErr == nil {
+			return true
+		}
+		parent := filepath.Dir(absoluteCurrent)
+		if parent == absoluteCurrent {
+			return false
+		}
+		absoluteCurrent = parent
+	}
 }
 
 func lookupExecutionWorkingDir(state *AppState, execution Execution) string {
