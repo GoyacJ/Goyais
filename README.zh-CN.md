@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
+  <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-green.svg"></a>
   <a href="https://github.com/GoyacJ/Goyais/releases"><img alt="Version" src="https://img.shields.io/badge/version-0.4.0-0A7EA4"></a>
   <a href="https://github.com/GoyacJ/Goyais/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/GoyacJ/Goyais/actions/workflows/ci.yml/badge.svg"></a>
 </p>
@@ -232,4 +232,4 @@ scripts/release/build-hub-sidecar.sh "$TARGET_TRIPLE"
 
 ## 许可证
 
-本项目采用 Apache License 2.0，详见 [`LICENSE`](./LICENSE)。
+本项目采用 MIT License，详见 [`LICENSE`](./LICENSE)。

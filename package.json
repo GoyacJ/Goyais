@@ -2,6 +2,7 @@
   "name": "goyais",
   "private": true,
   "version": "0.4.0",
+  "license": "MIT",
   "packageManager": "pnpm@10.11.0",
   "scripts": {
     "dev": "turbo run dev --filter=@goyais/desktop",
