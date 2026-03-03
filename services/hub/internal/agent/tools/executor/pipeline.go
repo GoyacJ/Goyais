@@ -86,6 +86,7 @@ type UserAnswerWaiter interface {
 type Dependencies struct {
 	Runner           Runner
 	Specs            spec.Resolver
+	HookDispatcher   core.HookDispatcher
 	PermissionGate   core.PermissionGate
 	ApprovalWaiter   ApprovalWaiter
 	UserAnswerWaiter UserAnswerWaiter
@@ -95,6 +96,7 @@ type Dependencies struct {
 type Pipeline struct {
 	runner           Runner
 	specs            spec.Resolver
+	hookDispatcher   core.HookDispatcher
 	permissionGate   core.PermissionGate
 	approvalWaiter   ApprovalWaiter
 	userAnswerWaiter UserAnswerWaiter
@@ -107,6 +109,7 @@ func NewPipeline(deps Dependencies) *Pipeline {
 	return &Pipeline{
 		runner:           deps.Runner,
 		specs:            deps.Specs,
+		hookDispatcher:   deps.HookDispatcher,
 		permissionGate:   deps.PermissionGate,
 		approvalWaiter:   deps.ApprovalWaiter,
 		userAnswerWaiter: deps.UserAnswerWaiter,
@@ -286,6 +289,42 @@ func (p *Pipeline) ExecuteSingle(ctx context.Context, req ExecuteSingleRequest) 
 	}
 
 	approved := false
+	if p.hookDispatcher != nil {
+		hookDecision, hookErr := p.hookDispatcher.Dispatch(ctx, core.HookEvent{
+			Type: "PreToolUse",
+			Payload: map[string]any{
+				"tool_name": call.Name,
+				"call_id":   call.CallID,
+				"input":     cloneMapAny(call.Input),
+			},
+		})
+		if hookErr != nil {
+			return ExecuteSingleResult{}, hookErr
+		}
+		if updatedInput, ok := extractHookUpdatedInput(hookDecision.Metadata); ok {
+			call.Input = updatedInput
+		}
+		switch normalizeHookDecision(hookDecision.Decision) {
+		case core.PermissionDecisionDeny:
+			reason := extractHookReason(hookDecision.Metadata, "tool call denied by hook policy")
+			return ExecuteSingleResult{
+				CallID:    call.CallID,
+				ToolName:  call.Name,
+				ErrorText: reason,
+			}, nil
+		case core.PermissionDecisionAsk:
+			reason := extractHookReason(hookDecision.Metadata, "hook policy requires approval")
+			userApproved, denied, waitErr := p.waitForApproval(ctx, call, reason)
+			if waitErr != nil {
+				return ExecuteSingleResult{}, waitErr
+			}
+			if denied != nil {
+				return *denied, nil
+			}
+			approved = userApproved
+		}
+	}
+
 	if p.permissionGate != nil {
 		decision, decisionErr := p.permissionGate.Evaluate(ctx, core.PermissionRequest{
 			Mode:       normalizePermissionMode(req.SessionMode),
@@ -485,6 +524,39 @@ func normalizePermissionMode(raw string) core.PermissionMode {
 	default:
 		return core.PermissionMode(trimmed)
 	}
+}
+
+func normalizeHookDecision(raw string) core.PermissionDecisionKind {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case string(core.PermissionDecisionDeny):
+		return core.PermissionDecisionDeny
+	case string(core.PermissionDecisionAsk):
+		return core.PermissionDecisionAsk
+	default:
+		return core.PermissionDecisionAllow
+	}
+}
+
+func extractHookReason(metadata map[string]any, fallback string) string {
+	if len(metadata) == 0 {
+		return strings.TrimSpace(fallback)
+	}
+	reason := strings.TrimSpace(fmt.Sprint(metadata["reason"]))
+	if reason == "" {
+		return strings.TrimSpace(fallback)
+	}
+	return reason
+}
+
+func extractHookUpdatedInput(metadata map[string]any) (map[string]any, bool) {
+	if len(metadata) == 0 {
+		return nil, false
+	}
+	updated, ok := metadata["updated_input"].(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	return cloneMapAny(updated), true
 }
 
 func randomHex(bytesLen int) string {

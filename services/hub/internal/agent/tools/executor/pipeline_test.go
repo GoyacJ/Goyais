@@ -99,6 +99,25 @@ func (s *stubPermissionGate) Evaluate(_ context.Context, req core.PermissionRequ
 	return s.decision, nil
 }
 
+type stubHookDispatcher struct {
+	decision core.HookDecision
+	err      error
+	events   []core.HookEvent
+}
+
+func (s *stubHookDispatcher) Dispatch(_ context.Context, event core.HookEvent) (core.HookDecision, error) {
+	s.events = append(s.events, core.HookEvent{
+		Type:      event.Type,
+		SessionID: event.SessionID,
+		RunID:     event.RunID,
+		Payload:   cloneMapAny(event.Payload),
+	})
+	if s.err != nil {
+		return core.HookDecision{}, s.err
+	}
+	return s.decision, nil
+}
+
 func TestExecuteSingle_RetryAfterApproval(t *testing.T) {
 	var attempts int
 	runner := &stubRunner{
@@ -516,5 +535,119 @@ func TestExecuteSingle_PermissionGateReceivesModeAndArguments(t *testing.T) {
 	}
 	if request.Arguments == "" {
 		t.Fatal("expected serialized arguments passed to gate")
+	}
+}
+
+func TestExecuteSingle_HookDenySkipsRunner(t *testing.T) {
+	runner := &stubRunner{}
+	hooks := &stubHookDispatcher{
+		decision: core.HookDecision{
+			Decision: "deny",
+			Metadata: map[string]any{"reason": "blocked by pre_tool_use hook"},
+		},
+	}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         runner,
+		HookDispatcher: hooks,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_hook_deny",
+			Name:   "write_file",
+			Input:  map[string]any{"path": "./a.txt"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single should not fail on hook deny, got %v", err)
+	}
+	if result.ErrorText != "blocked by pre_tool_use hook" {
+		t.Fatalf("unexpected error text %q", result.ErrorText)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("runner should not execute on hook deny, got %d calls", len(runner.calls))
+	}
+	if len(hooks.events) != 1 {
+		t.Fatalf("expected one pre-tool hook event, got %d", len(hooks.events))
+	}
+	if hooks.events[0].Type != "PreToolUse" {
+		t.Fatalf("unexpected hook event type %q", hooks.events[0].Type)
+	}
+}
+
+func TestExecuteSingle_HookAskWaitsForApproval(t *testing.T) {
+	runner := &stubRunner{}
+	hooks := &stubHookDispatcher{
+		decision: core.HookDecision{
+			Decision: "ask",
+			Metadata: map[string]any{"reason": "needs approval by hook"},
+		},
+	}
+	waiter := &stubApprovalWaiter{action: ApprovalActionApprove}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         runner,
+		HookDispatcher: hooks,
+		ApprovalWaiter: waiter,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_hook_ask",
+			Name:   "write_file",
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single failed: %v", err)
+	}
+	if result.ErrorText != "" {
+		t.Fatalf("expected successful result, got error %q", result.ErrorText)
+	}
+	if len(waiter.request) != 1 {
+		t.Fatalf("expected one approval request from hook ask, got %d", len(waiter.request))
+	}
+	if len(runner.calls) != 1 || !runner.calls[0].Approved {
+		t.Fatalf("runner should execute once with approved=true, calls=%#v", runner.calls)
+	}
+}
+
+func TestExecuteSingle_HookUpdatedInputOverridesCallInput(t *testing.T) {
+	runner := &stubRunner{}
+	hooks := &stubHookDispatcher{
+		decision: core.HookDecision{
+			Decision: "allow",
+			Metadata: map[string]any{
+				"updated_input": map[string]any{
+					"path":    "./rewritten.txt",
+					"content": "from hook",
+				},
+			},
+		},
+	}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         runner,
+		HookDispatcher: hooks,
+	})
+
+	_, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_hook_update",
+			Name:   "write_file",
+			Input: map[string]any{
+				"path":    "./original.txt",
+				"content": "from user",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single failed: %v", err)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("expected one runner call, got %d", len(runner.calls))
+	}
+	if runner.calls[0].Call.Input["path"] != "./rewritten.txt" {
+		t.Fatalf("expected hook-updated input path, got %#v", runner.calls[0].Call.Input)
+	}
+	if runner.calls[0].Call.Input["content"] != "from hook" {
+		t.Fatalf("expected hook-updated input content, got %#v", runner.calls[0].Call.Input)
 	}
 }
