@@ -15,9 +15,8 @@ import (
 
 	promptctx "goyais/services/hub/internal/agent/context/prompt"
 	agentcore "goyais/services/hub/internal/agent/core"
-	"goyais/services/hub/internal/agentcore/safety"
-	coretools "goyais/services/hub/internal/agentcore/tools"
 	controlplanepolicy "goyais/services/hub/internal/controlplane/policy"
+	agentcoretools "goyais/services/hub/internal/legacybridge/agentcoretools"
 	runtimehooks "goyais/services/hub/internal/runtime/hooks"
 )
 
@@ -859,19 +858,19 @@ func (o *ExecutionOrchestrator) invokeOpenAIModelLoop(
 	workingDir string,
 	history []conversationRoleMessage,
 ) (string, map[string]any, error) {
-	registry := coretools.NewRegistry()
-	if err := coretools.RegisterCoreTools(registry); err != nil {
+	registry := agentcoretools.NewRegistry()
+	if err := agentcoretools.RegisterCoreTools(registry); err != nil {
 		return "", nil, err
 	}
 	toolList := registry.ListOrdered()
-	toolSpecs := map[string]coretools.ToolSpec{}
+	toolSpecs := map[string]agentcoretools.ToolSpec{}
 	for _, tool := range toolList {
 		spec := tool.Spec()
 		toolSpecs[strings.TrimSpace(spec.Name)] = spec
 	}
 	toolSchemas := buildOpenAIToolSchemas(toolList)
-	executor := coretools.NewExecutor(registry, safety.NewGate(safety.DefaultPolicy()))
-	toolCtx := coretools.ToolContext{
+	executor := agentcoretools.NewExecutor(registry)
+	toolCtx := agentcoretools.ToolContext{
 		Context:    ctx,
 		WorkingDir: strings.TrimSpace(workingDir),
 		Env:        map[string]string{},
@@ -968,19 +967,19 @@ func (o *ExecutionOrchestrator) invokeGoogleModelLoop(
 	systemPrompt string,
 	history []conversationRoleMessage,
 ) (string, map[string]any, error) {
-	registry := coretools.NewRegistry()
-	if err := coretools.RegisterCoreTools(registry); err != nil {
+	registry := agentcoretools.NewRegistry()
+	if err := agentcoretools.RegisterCoreTools(registry); err != nil {
 		return "", nil, err
 	}
 	toolList := registry.ListOrdered()
-	toolSpecs := map[string]coretools.ToolSpec{}
+	toolSpecs := map[string]agentcoretools.ToolSpec{}
 	for _, tool := range toolList {
 		spec := tool.Spec()
 		toolSpecs[strings.TrimSpace(spec.Name)] = spec
 	}
 	googleToolDeclarations := buildGoogleToolDeclarations(toolList)
-	executor := coretools.NewExecutor(registry, safety.NewGate(safety.DefaultPolicy()))
-	toolCtx := coretools.ToolContext{
+	executor := agentcoretools.NewExecutor(registry)
+	toolCtx := agentcoretools.ToolContext{
 		Context:    ctx,
 		WorkingDir: strings.TrimSpace(lookupExecutionWorkingDir(o.state, execution)),
 		Env:        map[string]string{},
@@ -1078,7 +1077,7 @@ func buildOpenAIRequestMessages(systemPrompt string, history []conversationRoleM
 	return messages
 }
 
-func buildOpenAIToolSchemas(tools []coretools.Tool) []map[string]any {
+func buildOpenAIToolSchemas(tools []agentcoretools.Tool) []map[string]any {
 	if len(tools) == 0 {
 		return nil
 	}
@@ -1108,7 +1107,7 @@ func buildOpenAIToolSchemas(tools []coretools.Tool) []map[string]any {
 	return result
 }
 
-func buildGoogleToolDeclarations(tools []coretools.Tool) []map[string]any {
+func buildGoogleToolDeclarations(tools []agentcoretools.Tool) []map[string]any {
 	if len(tools) == 0 {
 		return nil
 	}
@@ -1232,9 +1231,9 @@ func buildOpenAIToolCallsForRequest(calls []openAIToolCall) []map[string]any {
 func (o *ExecutionOrchestrator) executeOpenAIToolCalls(
 	ctx context.Context,
 	execution Execution,
-	executor *coretools.Executor,
-	toolSpecs map[string]coretools.ToolSpec,
-	toolCtx coretools.ToolContext,
+	executor *agentcoretools.Executor,
+	toolSpecs map[string]agentcoretools.ToolSpec,
+	toolCtx agentcoretools.ToolContext,
 	calls []openAIToolCall,
 ) ([]openAIToolResultForNextTurn, error) {
 	results := make([]openAIToolResultForNextTurn, len(calls))
@@ -1289,10 +1288,10 @@ func (o *ExecutionOrchestrator) executeOpenAIToolCalls(
 func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 	ctx context.Context,
 	execution Execution,
-	executor *coretools.Executor,
-	spec coretools.ToolSpec,
+	executor *agentcoretools.Executor,
+	spec agentcoretools.ToolSpec,
 	call openAIToolCall,
-	toolCtx coretools.ToolContext,
+	toolCtx agentcoretools.ToolContext,
 ) (openAIToolResultForNextTurn, error) {
 	callID := strings.TrimSpace(call.CallID)
 	if callID == "" {
@@ -1393,12 +1392,12 @@ func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 
 	approved := false
 	for {
-		result, execErr := executor.Execute(ctx, coretools.ExecutionRequest{
+		result, execErr := executor.Execute(ctx, agentcoretools.ExecutionRequest{
 			SessionMode: string(execution.Mode),
 			SafeMode:    false,
 			Approved:    approved,
 			ToolContext: toolCtx,
-			ToolCall: coretools.ToolCall{
+			ToolCall: agentcoretools.ToolCall{
 				Name:  toolName,
 				Input: call.Input,
 			},
@@ -1453,7 +1452,7 @@ func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 			return openAIToolResultForNextTurn{CallID: callID, Text: output}, nil
 		}
 
-		var approvalErr *coretools.ApprovalRequiredError
+		var approvalErr *agentcoretools.ApprovalRequiredError
 		if errors.As(execErr, &approvalErr) {
 			o.transitionExecutionToConfirming(execution.ID, toolName, callID, strings.TrimSpace(approvalErr.Reason))
 			action, waitErr := o.waitForApprovalAction(ctx, execution.ID)

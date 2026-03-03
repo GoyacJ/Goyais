@@ -18,7 +18,7 @@ import (
 	"time"
 
 	composerctx "goyais/services/hub/internal/agent/context/composer"
-	slashcmd "goyais/services/hub/internal/agentcore/commands"
+	composercommands "goyais/services/hub/internal/legacybridge/composercommands"
 )
 
 const composerMaxCatalogFiles = 2000
@@ -186,7 +186,7 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 
 		if parsed.IsCommand {
 			composerEnv := envFromSystem()
-			commandRegistry, registryErr := newComposerCommandRegistry(context.Background(), project.RepoPath, composerEnv)
+			commandRegistry, registryErr := composercommands.NewComposerCommandRegistry(context.Background(), project.RepoPath, composerEnv)
 			if registryErr != nil {
 				WriteStandardError(w, r, http.StatusBadRequest, "COMMAND_DISPATCH_FAILED", registryErr.Error(), map[string]any{})
 				return
@@ -628,7 +628,7 @@ func appendCommandResultMessages(state *AppState, conversationID string, command
 }
 
 func buildComposerCatalog(state *AppState, workspaceID string, projectConfig ProjectConfig, projectRepoPath string) (ComposerCatalogResponse, error) {
-	commandRegistry, err := newComposerCommandRegistry(context.Background(), projectRepoPath, envFromSystem())
+	commandRegistry, err := composercommands.NewComposerCommandRegistry(context.Background(), projectRepoPath, envFromSystem())
 	if err != nil {
 		return ComposerCatalogResponse{}, err
 	}
@@ -1010,79 +1010,6 @@ func validateComposerProjectFileSelections(projectRoot string, selected []string
 	}
 	sort.Strings(normalized)
 	return normalized, nil
-}
-
-type composerSlashRegistryAdapter struct {
-	registry *slashcmd.Registry
-}
-
-func newComposerCommandRegistry(ctx context.Context, workingDir string, env map[string]string) (composerctx.CommandRegistry, error) {
-	registry := slashcmd.NewDefaultRegistry()
-	if err := slashcmd.RegisterDynamicCommands(ctx, registry, slashcmd.DispatchRequest{
-		WorkingDir:           strings.TrimSpace(workingDir),
-		Env:                  cloneComposerEnv(env),
-		DisableSlashCommands: false,
-	}); err != nil {
-		return nil, err
-	}
-	return composerSlashRegistryAdapter{registry: registry}, nil
-}
-
-func (a composerSlashRegistryAdapter) PrimaryNames() []string {
-	if a.registry == nil {
-		return nil
-	}
-	return a.registry.PrimaryNames()
-}
-
-func (a composerSlashRegistryAdapter) Get(name string) (composerctx.Command, bool) {
-	if a.registry == nil {
-		return composerctx.Command{}, false
-	}
-	legacyCommand, exists := a.registry.Get(name)
-	if !exists {
-		return composerctx.Command{}, false
-	}
-	return adaptSlashCommandForComposer(legacyCommand), true
-}
-
-func adaptSlashCommandForComposer(command slashcmd.Command) composerctx.Command {
-	adapted := composerctx.Command{
-		Name:        command.Name,
-		Description: strings.TrimSpace(command.Description),
-	}
-	if command.Handler != nil {
-		handler := command.Handler
-		adapted.Handler = func(ctx context.Context, req composerctx.DispatchRequest, args []string) (string, error) {
-			return handler(ctx, newSlashDispatchRequest(req), args)
-		}
-	}
-	if command.PromptResolver != nil {
-		resolver := command.PromptResolver
-		adapted.PromptResolver = func(ctx context.Context, req composerctx.DispatchRequest, args []string) ([]string, error) {
-			return resolver(ctx, newSlashDispatchRequest(req), args)
-		}
-	}
-	return adapted
-}
-
-func newSlashDispatchRequest(req composerctx.DispatchRequest) slashcmd.DispatchRequest {
-	return slashcmd.DispatchRequest{
-		WorkingDir:           strings.TrimSpace(req.WorkingDir),
-		Env:                  cloneComposerEnv(req.Env),
-		DisableSlashCommands: false,
-	}
-}
-
-func cloneComposerEnv(input map[string]string) map[string]string {
-	if len(input) == 0 {
-		return map[string]string{}
-	}
-	out := make(map[string]string, len(input))
-	for key, value := range input {
-		out[key] = value
-	}
-	return out
 }
 
 func envFromSystem() map[string]string {

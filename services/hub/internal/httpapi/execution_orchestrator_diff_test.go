@@ -8,8 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"goyais/services/hub/internal/agentcore/safety"
-	coretools "goyais/services/hub/internal/agentcore/tools"
+	agentcoretools "goyais/services/hub/internal/legacybridge/agentcoretools"
 )
 
 func TestExecuteSingleOpenAIToolCallEmitsDiffGeneratedForFileTools(t *testing.T) {
@@ -245,7 +244,7 @@ func TestExecuteSingleOpenAIToolCallWriteUpdatesChangeTypeToModifiedOnOverwrite(
 func prepareExecutionToolLoopTestContext(
 	t *testing.T,
 	workdir string,
-) (*AppState, *ExecutionOrchestrator, Execution, *coretools.Executor, map[string]coretools.ToolSpec, coretools.ToolContext) {
+) (*AppState, *ExecutionOrchestrator, Execution, *agentcoretools.Executor, map[string]agentcoretools.ToolSpec, agentcoretools.ToolContext) {
 	t.Helper()
 
 	state := NewAppState(nil)
@@ -283,18 +282,18 @@ func prepareExecutionToolLoopTestContext(
 	state.executions[execution.ID] = execution
 	state.mu.Unlock()
 
-	registry := coretools.NewRegistry()
-	if err := coretools.RegisterCoreTools(registry); err != nil {
+	registry := agentcoretools.NewRegistry()
+	if err := agentcoretools.RegisterCoreTools(registry); err != nil {
 		t.Fatalf("register core tools failed: %v", err)
 	}
-	specs := map[string]coretools.ToolSpec{}
+	specs := map[string]agentcoretools.ToolSpec{}
 	for _, tool := range registry.ListOrdered() {
 		spec := tool.Spec()
 		specs[spec.Name] = spec
 	}
-	executor := coretools.NewExecutor(registry, safety.NewGate(safety.DefaultPolicy()))
+	executor := agentcoretools.NewExecutor(registry)
 	orchestrator := NewExecutionOrchestrator(state)
-	toolCtx := coretools.ToolContext{
+	toolCtx := agentcoretools.ToolContext{
 		Context:    context.Background(),
 		WorkingDir: workdir,
 		Env:        map[string]string{},
