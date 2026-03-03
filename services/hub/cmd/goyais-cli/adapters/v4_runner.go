@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	cliadapter "goyais/services/hub/internal/agent/adapters/cli"
@@ -43,6 +44,12 @@ func (r *V4Runner) RunPrompt(ctx context.Context, req RunRequest) error {
 	if r == nil || r.engine == nil {
 		return core.ErrEngineNotConfigured
 	}
+	workingDir := strings.TrimSpace(req.CWD)
+	if workingDir == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			workingDir = cwd
+		}
+	}
 
 	writer := r.writerForFormat(req.OutputFormat)
 	runner := cliadapter.Runner{
@@ -50,7 +57,7 @@ func (r *V4Runner) RunPrompt(ctx context.Context, req RunRequest) error {
 		Writer: writer,
 	}
 	_, err := runner.RunPrompt(ctx, cliadapter.RunRequest{
-		WorkingDir: strings.TrimSpace(req.CWD),
+		WorkingDir: workingDir,
 		Prompt:     strings.TrimSpace(req.Prompt),
 	})
 	return err
