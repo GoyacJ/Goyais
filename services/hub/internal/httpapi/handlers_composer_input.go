@@ -17,7 +17,8 @@ import (
 	"strings"
 	"time"
 
-	composercore "goyais/services/hub/internal/agentcore/input/composer"
+	composerctx "goyais/services/hub/internal/agent/context/composer"
+	slashcmd "goyais/services/hub/internal/agentcore/commands"
 )
 
 const composerMaxCatalogFiles = 2000
@@ -76,31 +77,31 @@ func ConversationInputSuggestHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		resources := make([]composercore.ResourceCatalogItem, 0, len(catalog.Resources))
+		resources := make([]composerctx.ResourceCatalogItem, 0, len(catalog.Resources))
 		for _, item := range catalog.Resources {
-			resourceType, ok := composercore.ParseResourceType(string(item.Type))
+			resourceType, ok := composerctx.ParseResourceType(string(item.Type))
 			if !ok {
 				continue
 			}
-			resources = append(resources, composercore.ResourceCatalogItem{
+			resources = append(resources, composerctx.ResourceCatalogItem{
 				Type: resourceType,
 				ID:   item.ID,
 				Name: item.Name,
 			})
 		}
-		commands := make([]composercore.CommandMeta, 0, len(catalog.Commands))
+		commands := make([]composerctx.CommandMeta, 0, len(catalog.Commands))
 		for _, item := range catalog.Commands {
-			kind := composercore.CommandKindControl
-			if strings.TrimSpace(item.Kind) == string(composercore.CommandKindPrompt) {
-				kind = composercore.CommandKindPrompt
+			kind := composerctx.CommandKindControl
+			if strings.TrimSpace(item.Kind) == string(composerctx.CommandKindPrompt) {
+				kind = composerctx.CommandKindPrompt
 			}
-			commands = append(commands, composercore.CommandMeta{
+			commands = append(commands, composerctx.CommandMeta{
 				Name:        item.Name,
 				Description: item.Description,
 				Kind:        kind,
 			})
 		}
-		suggestions := composercore.Suggest(composercore.SuggestRequest{
+		suggestions := composerctx.Suggest(composerctx.SuggestRequest{
 			Draft:     input.Draft,
 			Cursor:    input.Cursor,
 			Limit:     input.Limit,
@@ -171,7 +172,7 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		parsed := composercore.Parse(rawInput)
+		parsed := composerctx.Parse(rawInput)
 		selectionByType, err := validateSelectedResourcesAgainstMentions(parsed.MentionedRefs, input.SelectedResources)
 		if err != nil {
 			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
@@ -184,14 +185,23 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 		}
 
 		if parsed.IsCommand {
-			dispatch, dispatchErr := composercore.DispatchCommand(
+			composerEnv := envFromSystem()
+			commandRegistry, registryErr := newComposerCommandRegistry(context.Background(), project.RepoPath, composerEnv)
+			if registryErr != nil {
+				WriteStandardError(w, r, http.StatusBadRequest, "COMMAND_DISPATCH_FAILED", registryErr.Error(), map[string]any{})
+				return
+			}
+			dispatch, dispatchErr := composerctx.DispatchCommand(
 				context.Background(),
 				parsed.CommandText,
-				project.RepoPath,
-				envFromSystem(),
+				commandRegistry,
+				composerctx.DispatchRequest{
+					WorkingDir: project.RepoPath,
+					Env:        composerEnv,
+				},
 			)
 			if dispatchErr != nil {
-				if errors.Is(dispatchErr, composercore.ErrUnknownCommand) {
+				if errors.Is(dispatchErr, composerctx.ErrUnknownCommand) {
 					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", dispatchErr.Error(), map[string]any{})
 					return
 				}
@@ -199,7 +209,7 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 				return
 			}
 
-			if dispatch.Kind == composercore.CommandKindControl {
+			if dispatch.Kind == composerctx.CommandKindControl {
 				if err := appendCommandResultMessages(state, conversationID, rawInput, dispatch.Output); err != nil {
 					WriteStandardError(w, r, http.StatusInternalServerError, "COMMAND_RESULT_PERSIST_FAILED", "Failed to persist command result", map[string]any{})
 					return
@@ -217,7 +227,7 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 				return
 			}
 
-			parsed = composercore.ParsePrompt(dispatch.ExpandedPrompt)
+			parsed = composerctx.ParsePrompt(dispatch.ExpandedPrompt)
 			selectionByType, err = validateSelectedResourcesAgainstMentions(parsed.MentionedRefs, input.SelectedResources)
 			if err != nil {
 				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
@@ -618,10 +628,11 @@ func appendCommandResultMessages(state *AppState, conversationID string, command
 }
 
 func buildComposerCatalog(state *AppState, workspaceID string, projectConfig ProjectConfig, projectRepoPath string) (ComposerCatalogResponse, error) {
-	commandCatalog, err := composercore.ListCommands(context.Background(), projectRepoPath, envFromSystem())
+	commandRegistry, err := newComposerCommandRegistry(context.Background(), projectRepoPath, envFromSystem())
 	if err != nil {
 		return ComposerCatalogResponse{}, err
 	}
+	commandCatalog := composerctx.ListCommands(commandRegistry)
 	commands := make([]ComposerCommandCatalogItem, 0, len(commandCatalog))
 	for _, item := range commandCatalog {
 		commands = append(commands, ComposerCommandCatalogItem{
@@ -713,7 +724,7 @@ func appendComposerCatalogResourcesByIDs(
 }
 
 func validateSelectedResourcesAgainstMentions(
-	mentions []composercore.ResourceRef,
+	mentions []composerctx.ResourceRef,
 	selected []ComposerSelectedResource,
 ) (map[ComposerResourceType][]string, error) {
 	mentionByType := map[ComposerResourceType][]string{}
@@ -842,17 +853,17 @@ func toComposerResourceType(resourceType ResourceType) (ComposerResourceType, bo
 	}
 }
 
-func composerResourceTypeFromCore(resourceType composercore.ResourceType) (ComposerResourceType, bool) {
+func composerResourceTypeFromCore(resourceType composerctx.ResourceType) (ComposerResourceType, bool) {
 	switch resourceType {
-	case composercore.ResourceTypeModel:
+	case composerctx.ResourceTypeModel:
 		return ComposerResourceTypeModel, true
-	case composercore.ResourceTypeRule:
+	case composerctx.ResourceTypeRule:
 		return ComposerResourceTypeRule, true
-	case composercore.ResourceTypeSkill:
+	case composerctx.ResourceTypeSkill:
 		return ComposerResourceTypeSkill, true
-	case composercore.ResourceTypeMCP:
+	case composerctx.ResourceTypeMCP:
 		return ComposerResourceTypeMCP, true
-	case composercore.ResourceTypeFile:
+	case composerctx.ResourceTypeFile:
 		return ComposerResourceTypeFile, true
 	default:
 		return "", false
@@ -999,6 +1010,79 @@ func validateComposerProjectFileSelections(projectRoot string, selected []string
 	}
 	sort.Strings(normalized)
 	return normalized, nil
+}
+
+type composerSlashRegistryAdapter struct {
+	registry *slashcmd.Registry
+}
+
+func newComposerCommandRegistry(ctx context.Context, workingDir string, env map[string]string) (composerctx.CommandRegistry, error) {
+	registry := slashcmd.NewDefaultRegistry()
+	if err := slashcmd.RegisterDynamicCommands(ctx, registry, slashcmd.DispatchRequest{
+		WorkingDir:           strings.TrimSpace(workingDir),
+		Env:                  cloneComposerEnv(env),
+		DisableSlashCommands: false,
+	}); err != nil {
+		return nil, err
+	}
+	return composerSlashRegistryAdapter{registry: registry}, nil
+}
+
+func (a composerSlashRegistryAdapter) PrimaryNames() []string {
+	if a.registry == nil {
+		return nil
+	}
+	return a.registry.PrimaryNames()
+}
+
+func (a composerSlashRegistryAdapter) Get(name string) (composerctx.Command, bool) {
+	if a.registry == nil {
+		return composerctx.Command{}, false
+	}
+	legacyCommand, exists := a.registry.Get(name)
+	if !exists {
+		return composerctx.Command{}, false
+	}
+	return adaptSlashCommandForComposer(legacyCommand), true
+}
+
+func adaptSlashCommandForComposer(command slashcmd.Command) composerctx.Command {
+	adapted := composerctx.Command{
+		Name:        command.Name,
+		Description: strings.TrimSpace(command.Description),
+	}
+	if command.Handler != nil {
+		handler := command.Handler
+		adapted.Handler = func(ctx context.Context, req composerctx.DispatchRequest, args []string) (string, error) {
+			return handler(ctx, newSlashDispatchRequest(req), args)
+		}
+	}
+	if command.PromptResolver != nil {
+		resolver := command.PromptResolver
+		adapted.PromptResolver = func(ctx context.Context, req composerctx.DispatchRequest, args []string) ([]string, error) {
+			return resolver(ctx, newSlashDispatchRequest(req), args)
+		}
+	}
+	return adapted
+}
+
+func newSlashDispatchRequest(req composerctx.DispatchRequest) slashcmd.DispatchRequest {
+	return slashcmd.DispatchRequest{
+		WorkingDir:           strings.TrimSpace(req.WorkingDir),
+		Env:                  cloneComposerEnv(req.Env),
+		DisableSlashCommands: false,
+	}
+}
+
+func cloneComposerEnv(input map[string]string) map[string]string {
+	if len(input) == 0 {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
 }
 
 func envFromSystem() map[string]string {
