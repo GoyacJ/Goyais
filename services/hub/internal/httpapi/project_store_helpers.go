@@ -112,6 +112,7 @@ func purgeProjectConversations(state *AppState, projectID string) projectConvers
 
 	for _, executionID := range executionIDsToCancel {
 		state.cancelExecutionBestEffort(context.Background(), executionID)
+		state.clearExecutionRuntimeMapping(executionID)
 	}
 	return result
 }

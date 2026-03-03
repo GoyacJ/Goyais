@@ -285,6 +285,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			state.mu.Unlock()
 			for _, executionID := range executionIDsToCancel {
 				state.cancelExecutionBestEffort(r.Context(), executionID)
+				state.clearExecutionRuntimeMapping(executionID)
 			}
 			syncExecutionDomainBestEffort(state)
 			writeJSON(w, http.StatusNoContent, map[string]any{})

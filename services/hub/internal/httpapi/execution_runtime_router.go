@@ -173,7 +173,10 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 		}
 		return
 	}
-	_ = router.Submit(ctx, s.resolveExecutionRuntimeID(normalizedExecutionID))
+	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
+	if err := router.Submit(ctx, resolvedRuntimeID); err != nil && resolvedRuntimeID != normalizedExecutionID && router.legacy != nil {
+		router.legacy.Submit(normalizedExecutionID)
+	}
 }
 
 func (s *AppState) cancelExecutionBestEffort(ctx context.Context, executionID string) {
@@ -191,7 +194,10 @@ func (s *AppState) cancelExecutionBestEffort(ctx context.Context, executionID st
 		}
 		return
 	}
-	_ = router.Cancel(ctx, s.resolveExecutionRuntimeID(normalizedExecutionID))
+	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
+	if err := router.Cancel(ctx, resolvedRuntimeID); err != nil && resolvedRuntimeID != normalizedExecutionID && router.legacy != nil {
+		router.legacy.Cancel(normalizedExecutionID)
+	}
 }
 
 func (s *AppState) controlExecutionBestEffort(ctx context.Context, executionID string, signal executionControlSignal) {
@@ -209,5 +215,8 @@ func (s *AppState) controlExecutionBestEffort(ctx context.Context, executionID s
 		}
 		return
 	}
-	_ = router.Control(ctx, s.resolveExecutionRuntimeID(normalizedExecutionID), signal)
+	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
+	if err := router.Control(ctx, resolvedRuntimeID, signal); err != nil && resolvedRuntimeID != normalizedExecutionID && router.legacy != nil {
+		router.legacy.Control(normalizedExecutionID, signal)
+	}
 }

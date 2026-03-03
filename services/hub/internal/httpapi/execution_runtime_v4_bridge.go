@@ -43,6 +43,19 @@ func (s *AppState) resolveExecutionRuntimeID(executionID string) string {
 	return normalizedExecutionID
 }
 
+func (s *AppState) clearExecutionRuntimeMapping(executionID string) {
+	if s == nil {
+		return
+	}
+	normalizedExecutionID := strings.TrimSpace(executionID)
+	if normalizedExecutionID == "" {
+		return
+	}
+	s.mu.Lock()
+	delete(s.executionRuntimeRunIDs, normalizedExecutionID)
+	s.mu.Unlock()
+}
+
 func (s *AppState) submitExecutionViaV4(ctx context.Context, executionID string) error {
 	if s == nil || s.v4Service == nil {
 		return errV4ExecutionBackendNotConfigured

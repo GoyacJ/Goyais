@@ -271,3 +271,42 @@ func TestSubmitExecutionBestEffort_FallsBackToLegacyWhenV4SubmitFails(t *testing
 		t.Fatalf("expected legacy fallback submit for exec_missing, got %#v", legacy.submits)
 	}
 }
+
+func TestControlExecutionBestEffort_FallsBackToLegacyWhenMappedV4ControlFails(t *testing.T) {
+	legacy := &legacyBackendStub{}
+	v4 := &v4BackendStub{}
+	state := &AppState{
+		orchestrator:                  (*ExecutionOrchestrator)(nil),
+		executionRuntimeRunIDs:        map[string]string{"exec_1": "run_1"},
+		conversationRuntimeSessionIDs: map[string]string{},
+	}
+	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
+		Mode:   "hybrid",
+		Legacy: legacy,
+		V4:     v4,
+	})
+	// Force v4 control to fail through unsupported answer payload path.
+	state.controlExecutionBestEffort(context.Background(), "exec_1", executionControlSignal{
+		Action: agentcore.ControlActionAnswer,
+		Answer: &ExecutionUserAnswer{
+			QuestionID: "q_1",
+			Text:       "answer",
+		},
+	})
+
+	if len(legacy.controlIDs) != 1 || legacy.controlIDs[0] != "exec_1" {
+		t.Fatalf("expected fallback control routed to legacy for exec_1, got %#v", legacy.controlIDs)
+	}
+}
+
+func TestClearExecutionRuntimeMapping_RemovesMapping(t *testing.T) {
+	state := &AppState{
+		executionRuntimeRunIDs: map[string]string{
+			"exec_1": "run_1",
+		},
+	}
+	state.clearExecutionRuntimeMapping("exec_1")
+	if got := state.resolveExecutionRuntimeID("exec_1"); got != "exec_1" {
+		t.Fatalf("expected mapping cleared to original execution id, got %q", got)
+	}
+}
