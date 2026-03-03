@@ -210,6 +210,83 @@ func TestBuildOpenAIToolCallsForRequest(t *testing.T) {
 	}
 }
 
+func TestBuildOpenAIRequestMessages(t *testing.T) {
+	items := BuildOpenAIRequestMessages("system", []HistoryMessage{
+		{Role: "user", Content: "hello"},
+		{Role: "assistant", Content: "world"},
+		{Role: "", Content: "skip"},
+		{Role: "user", Content: "   "},
+	})
+	if len(items) != 3 {
+		t.Fatalf("unexpected message count %#v", items)
+	}
+	if asString(items[0]["role"]) != "system" {
+		t.Fatalf("unexpected first role %#v", items[0])
+	}
+	if asString(items[1]["role"]) != "user" || asString(items[2]["role"]) != "assistant" {
+		t.Fatalf("unexpected history roles %#v", items)
+	}
+}
+
+func TestBuildOpenAIToolSchemas(t *testing.T) {
+	items := BuildOpenAIToolSchemas([]ToolSpec{
+		{
+			Name:        "Read",
+			Description: "Read file",
+			InputSchema: map[string]any{"type": "object"},
+		},
+		{
+			Name: "Write",
+		},
+		{
+			Name: "",
+		},
+	})
+	if len(items) != 2 {
+		t.Fatalf("expected two schemas, got %#v", items)
+	}
+	writeFunction, _ := items[1]["function"].(map[string]any)
+	parameters, _ := writeFunction["parameters"].(map[string]any)
+	if asString(parameters["type"]) != "object" {
+		t.Fatalf("expected default object schema, got %#v", parameters)
+	}
+}
+
+func TestBuildGoogleToolDeclarations(t *testing.T) {
+	items := BuildGoogleToolDeclarations([]ToolSpec{
+		{Name: "Read"},
+		{Name: ""},
+	})
+	if len(items) != 1 {
+		t.Fatalf("expected one declaration wrapper, got %#v", items)
+	}
+	declarations, _ := items[0]["functionDeclarations"].([]map[string]any)
+	if len(declarations) != 1 || asString(declarations[0]["name"]) != "Read" {
+		t.Fatalf("unexpected declarations %#v", declarations)
+	}
+}
+
+func TestBuildGoogleRequestContents(t *testing.T) {
+	items := BuildGoogleRequestContents([]HistoryMessage{
+		{Role: "user", Content: "u"},
+		{Role: "assistant", Content: "a"},
+		{Role: "system", Content: "s"},
+		{Role: "other", Content: "x"},
+	})
+	if len(items) != 3 {
+		t.Fatalf("unexpected contents %#v", items)
+	}
+	if asString(items[0]["role"]) != "user" {
+		t.Fatalf("unexpected first role %#v", items[0])
+	}
+	if asString(items[1]["role"]) != "model" {
+		t.Fatalf("assistant should map to model, got %#v", items[1])
+	}
+	if asString(items[2]["role"]) != "user" {
+		t.Fatalf("non assistant/system should map to user, got %#v", items[2])
+	}
+}
+
 func TestMergeUsage(t *testing.T) {
 	usage := MergeUsage(
 		map[string]any{"input_tokens": 3, "output_tokens": "4"},

@@ -29,6 +29,19 @@ type ToolResultForNextTurn struct {
 	Text   string
 }
 
+// ToolSpec is the minimal tool capability schema used for provider requests.
+type ToolSpec struct {
+	Name        string
+	Description string
+	InputSchema map[string]any
+}
+
+// HistoryMessage is one role/content message item used for request builders.
+type HistoryMessage struct {
+	Role    string
+	Content string
+}
+
 // TurnResult is the normalized model turn parse output.
 type TurnResult struct {
 	AssistantText string
@@ -259,6 +272,122 @@ func BuildOpenAIToolCallsForRequest(calls []ToolCall) []map[string]any {
 		})
 	}
 	return items
+}
+
+// BuildOpenAIRequestMessages builds OpenAI wire messages with optional system
+// prompt and validated role/content history.
+func BuildOpenAIRequestMessages(systemPrompt string, history []HistoryMessage) []map[string]any {
+	messages := make([]map[string]any, 0, len(history)+1)
+	if strings.TrimSpace(systemPrompt) != "" {
+		messages = append(messages, map[string]any{
+			"role":    "system",
+			"content": strings.TrimSpace(systemPrompt),
+		})
+	}
+	for _, item := range history {
+		role := strings.TrimSpace(item.Role)
+		content := strings.TrimSpace(item.Content)
+		if role == "" || content == "" {
+			continue
+		}
+		messages = append(messages, map[string]any{
+			"role":    role,
+			"content": content,
+		})
+	}
+	return messages
+}
+
+// BuildOpenAIToolSchemas converts tool specs into OpenAI function tools schema.
+func BuildOpenAIToolSchemas(tools []ToolSpec) []map[string]any {
+	if len(tools) == 0 {
+		return nil
+	}
+	result := make([]map[string]any, 0, len(tools))
+	for _, item := range tools {
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			continue
+		}
+		parameters := item.InputSchema
+		if parameters == nil {
+			parameters = map[string]any{
+				"type":       "object",
+				"properties": map[string]any{},
+			}
+		}
+		result = append(result, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        name,
+				"description": strings.TrimSpace(item.Description),
+				"parameters":  parameters,
+			},
+		})
+	}
+	return result
+}
+
+// BuildGoogleToolDeclarations converts tool specs into Google declarations.
+func BuildGoogleToolDeclarations(tools []ToolSpec) []map[string]any {
+	if len(tools) == 0 {
+		return nil
+	}
+	declarations := make([]map[string]any, 0, len(tools))
+	for _, item := range tools {
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			continue
+		}
+		parameters := item.InputSchema
+		if parameters == nil {
+			parameters = map[string]any{
+				"type":       "object",
+				"properties": map[string]any{},
+			}
+		}
+		declarations = append(declarations, map[string]any{
+			"name":        name,
+			"description": strings.TrimSpace(item.Description),
+			"parameters":  parameters,
+		})
+	}
+	if len(declarations) == 0 {
+		return nil
+	}
+	return []map[string]any{
+		{
+			"functionDeclarations": declarations,
+		},
+	}
+}
+
+// BuildGoogleRequestContents converts role history into Google content envelopes.
+func BuildGoogleRequestContents(history []HistoryMessage) []map[string]any {
+	contents := make([]map[string]any, 0, len(history))
+	for _, item := range history {
+		role := strings.TrimSpace(item.Role)
+		content := strings.TrimSpace(item.Content)
+		if role == "" || content == "" {
+			continue
+		}
+		switch role {
+		case "assistant":
+			role = "model"
+		case "system":
+			// Keep system prompt in systemInstruction.
+			continue
+		default:
+			role = "user"
+		}
+		contents = append(contents, map[string]any{
+			"role": role,
+			"parts": []map[string]any{
+				{"text": content},
+			},
+		})
+	}
+	return contents
 }
 
 // MergeUsage accumulates provider token usage maps.
