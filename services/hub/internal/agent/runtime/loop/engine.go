@@ -19,6 +19,7 @@ import (
 	promptctx "goyais/services/hub/internal/agent/context/prompt"
 	"goyais/services/hub/internal/agent/core"
 	"goyais/services/hub/internal/agent/policy/approval"
+	"goyais/services/hub/internal/agent/runtime/compaction"
 	transportevents "goyais/services/hub/internal/agent/transport/events"
 	"goyais/services/hub/internal/agent/transport/subscribers"
 )
@@ -52,6 +53,7 @@ type Engine struct {
 	eventStore     *transportevents.Store
 	approvalRouter *approval.Router
 	subscriberCfg  subscribers.Config
+	compactor      *compaction.Manager
 
 	nextSessionID uint64
 	nextRunID     uint64
@@ -114,6 +116,7 @@ type Dependencies struct {
 	EventStore     *transportevents.Store
 	ApprovalRouter *approval.Router
 	SubscriberCfg  subscribers.Config
+	Compactor      *compaction.Manager
 }
 
 func (defaultExecutor) Execute(ctx context.Context, req ExecuteRequest) (ExecuteResult, error) {
@@ -165,6 +168,7 @@ func NewEngineWithDeps(deps Dependencies) *Engine {
 		eventStore:     deps.EventStore,
 		approvalRouter: deps.ApprovalRouter,
 		subscriberCfg:  subscriberCfg,
+		compactor:      deps.Compactor,
 		sessions:       map[core.SessionID]*sessionRuntime{},
 		runs:           map[core.RunID]*runRuntime{},
 	}
@@ -233,6 +237,9 @@ func (e *Engine) Submit(_ context.Context, sessionID string, input core.UserInpu
 	}
 
 	e.runs[newRunID] = run
+	if e.compactor != nil {
+		e.compactor.AppendMessage(normalizedSessionID, "user", input.Text, 0)
+	}
 	if e.approvalRouter != nil {
 		e.approvalRouter.Register(newRunID)
 	}
@@ -399,6 +406,11 @@ func (e *Engine) startNextIfIdleLocked(session *sessionRuntime) {
 }
 
 func (e *Engine) executeRun(ctx context.Context, run *runRuntime) {
+	if strings.EqualFold(strings.TrimSpace(run.input.Text), "/compact") {
+		e.executeManualCompact(ctx, run)
+		return
+	}
+
 	if e.contextBuilder != nil {
 		builtContext, buildErr := e.contextBuilder.Build(ctx, core.BuildContextRequest{
 			SessionID:             run.sessionID,
@@ -414,6 +426,15 @@ func (e *Engine) executeRun(ctx context.Context, run *runRuntime) {
 			e.finishRunAsFailed(run, "context_build_failed", buildErr)
 			return
 		}
+		if e.compactor != nil {
+			if snippet := e.compactor.SummarySnippet(run.sessionID); snippet != "" {
+				builtContext.SystemPrompt = strings.TrimSpace(builtContext.SystemPrompt + "\n\n" + snippet)
+				builtContext.Sections = append(builtContext.Sections, core.PromptSection{
+					Source:  "compaction_summary",
+					Content: snippet,
+				})
+			}
+		}
 		run.promptContext = builtContext
 	}
 
@@ -423,6 +444,10 @@ func (e *Engine) executeRun(ctx context.Context, run *runRuntime) {
 		Input:         run.input,
 		PromptContext: run.promptContext,
 	})
+	if runErr == nil && e.compactor != nil {
+		e.compactor.AppendMessage(run.sessionID, "assistant", result.Output, result.UsageTokens)
+		_, _, _ = e.compactor.MaybeCompact(ctx, run.sessionID)
+	}
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -454,6 +479,59 @@ func (e *Engine) executeRun(ctx context.Context, run *runRuntime) {
 		e.emitEventLocked(session, run.id, core.RunEventTypeRunCompleted, core.RunCompletedPayload{
 			UsageTokens: result.UsageTokens,
 		})
+	}
+
+	if session.active == run.id {
+		session.active = ""
+	}
+	if e.approvalRouter != nil {
+		e.approvalRouter.Unregister(run.id)
+	}
+	e.startNextIfIdleLocked(session)
+}
+
+func (e *Engine) executeManualCompact(ctx context.Context, run *runRuntime) {
+	result := compaction.Result{}
+	var compactErr error
+	if e.compactor == nil {
+		compactErr = errors.New("compaction is not configured")
+	} else {
+		result, compactErr = e.compactor.Compact(ctx, compaction.Request{
+			SessionID: run.sessionID,
+			Trigger:   compaction.TriggerManual,
+		})
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	session := e.sessions[run.sessionID]
+	if session == nil {
+		return
+	}
+
+	switch {
+	case ctx.Err() != nil:
+		_ = run.machine.Transition(core.RunStateCancelled)
+		e.emitEventLocked(session, run.id, core.RunEventTypeRunCancelled, core.RunCancelledPayload{
+			Reason: "control_stop",
+		})
+	case compactErr != nil:
+		_ = run.machine.Transition(core.RunStateFailed)
+		e.emitEventLocked(session, run.id, core.RunEventTypeRunFailed, core.RunFailedPayload{
+			Code:    "compact_failed",
+			Message: compactErr.Error(),
+		})
+	default:
+		output := "Context compacted."
+		if result.CompactedCount == 0 {
+			output = "Context compacted: no eligible history segments."
+		}
+		e.emitEventLocked(session, run.id, core.RunEventTypeRunOutputDelta, core.OutputDeltaPayload{
+			Delta: output,
+		})
+		_ = run.machine.Transition(core.RunStateCompleted)
+		e.emitEventLocked(session, run.id, core.RunEventTypeRunCompleted, core.RunCompletedPayload{})
 	}
 
 	if session.active == run.id {

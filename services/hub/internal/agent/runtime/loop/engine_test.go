@@ -7,12 +7,14 @@ package loop
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"goyais/services/hub/internal/agent/core"
 	"goyais/services/hub/internal/agent/policy/approval"
+	"goyais/services/hub/internal/agent/runtime/compaction"
 	transportevents "goyais/services/hub/internal/agent/transport/events"
 	"goyais/services/hub/internal/agent/transport/subscribers"
 )
@@ -475,6 +477,147 @@ func TestEngineControlRoutesApprovalSignal(t *testing.T) {
 		t.Fatal("timed out waiting for routed approval signal")
 	}
 	close(release)
+}
+
+func TestEngineManualCompactBypassesExecutor(t *testing.T) {
+	executeCalls := 0
+	compactor := compaction.NewManager(compaction.Config{
+		KeepRecentMessages: 1,
+	}, compaction.Dependencies{
+		Summarizer: summarizerFunc(func(_ context.Context, _ []compaction.Message) (string, error) {
+			return "manual compact summary", nil
+		}),
+	})
+
+	engine := NewEngineWithDeps(Dependencies{
+		Executor: executorFunc(func(_ context.Context, _ ExecuteRequest) (ExecuteResult, error) {
+			executeCalls++
+			return ExecuteResult{Output: "model-output", UsageTokens: 10}, nil
+		}),
+		Compactor: compactor,
+	})
+
+	session, err := engine.StartSession(context.Background(), core.StartSessionRequest{WorkingDir: "/tmp/manual-compact"})
+	if err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+
+	sub, err := engine.Subscribe(context.Background(), string(session.SessionID), "")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+
+	run1, err := engine.Submit(context.Background(), string(session.SessionID), core.UserInput{Text: "first"})
+	if err != nil {
+		t.Fatalf("submit first run: %v", err)
+	}
+	_ = waitRunEventsUntilTerminal(t, sub.Events(), run1, 2*time.Second)
+
+	run2, err := engine.Submit(context.Background(), string(session.SessionID), core.UserInput{Text: "/compact"})
+	if err != nil {
+		t.Fatalf("submit compact run: %v", err)
+	}
+	events := waitRunEventsUntilTerminal(t, sub.Events(), run2, 2*time.Second)
+
+	if executeCalls != 1 {
+		t.Fatalf("executor calls = %d, want 1", executeCalls)
+	}
+	foundDelta := false
+	for _, event := range events {
+		if event.Type != core.RunEventTypeRunOutputDelta {
+			continue
+		}
+		payload, ok := event.Payload.(core.OutputDeltaPayload)
+		if !ok {
+			continue
+		}
+		if strings.Contains(payload.Delta, "Context compacted") {
+			foundDelta = true
+		}
+	}
+	if !foundDelta {
+		t.Fatal("expected /compact run to emit compaction output delta")
+	}
+
+	if got := compactor.SummarySnippet(session.SessionID); got == "" {
+		t.Fatal("expected compactor summary after /compact")
+	}
+}
+
+func TestEngineAutoCompactionInjectsSummaryIntoPrompt(t *testing.T) {
+	var mu sync.Mutex
+	executedPrompts := make([]string, 0, 2)
+	compactor := compaction.NewManager(compaction.Config{
+		WindowTokens:       100,
+		AutoCompactPercent: 80,
+		KeepRecentMessages: 1,
+	}, compaction.Dependencies{
+		Summarizer: summarizerFunc(func(_ context.Context, _ []compaction.Message) (string, error) {
+			return "auto compact summary", nil
+		}),
+	})
+
+	engine := NewEngineWithDeps(Dependencies{
+		Executor: executorFunc(func(_ context.Context, req ExecuteRequest) (ExecuteResult, error) {
+			mu.Lock()
+			executedPrompts = append(executedPrompts, req.PromptContext.SystemPrompt)
+			mu.Unlock()
+			return ExecuteResult{
+				Output:      "assistant-output",
+				UsageTokens: 60,
+			}, nil
+		}),
+		ContextBuilder: contextBuilderFunc(func(_ context.Context, _ core.BuildContextRequest) (core.PromptContext, error) {
+			return core.PromptContext{SystemPrompt: "base-system"}, nil
+		}),
+		Compactor: compactor,
+	})
+
+	session, err := engine.StartSession(context.Background(), core.StartSessionRequest{WorkingDir: "/tmp/auto-compact"})
+	if err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+
+	sub, err := engine.Subscribe(context.Background(), string(session.SessionID), "")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+
+	run1, err := engine.Submit(context.Background(), string(session.SessionID), core.UserInput{Text: strings.Repeat("a", 200)})
+	if err != nil {
+		t.Fatalf("submit first run: %v", err)
+	}
+	_ = waitRunEventsUntilTerminal(t, sub.Events(), run1, 2*time.Second)
+
+	if snippet := compactor.SummarySnippet(session.SessionID); snippet == "" {
+		t.Fatal("expected auto compaction to generate summary snippet")
+	}
+
+	run2, err := engine.Submit(context.Background(), string(session.SessionID), core.UserInput{Text: "next"})
+	if err != nil {
+		t.Fatalf("submit second run: %v", err)
+	}
+	_ = waitRunEventsUntilTerminal(t, sub.Events(), run2, 2*time.Second)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(executedPrompts) < 2 {
+		t.Fatalf("captured prompts = %d, want >= 2", len(executedPrompts))
+	}
+	if strings.Contains(executedPrompts[0], "[Compacted Context Summary]") {
+		t.Fatal("first run prompt should not contain compaction summary")
+	}
+	if !strings.Contains(executedPrompts[1], "[Compacted Context Summary]") {
+		t.Fatalf("second run prompt missing compaction summary: %q", executedPrompts[1])
+	}
+}
+
+type summarizerFunc func(ctx context.Context, messages []compaction.Message) (string, error)
+
+func (f summarizerFunc) Summarize(ctx context.Context, messages []compaction.Message) (string, error) {
+	return f(ctx, messages)
 }
 
 func waitRunEventsUntilTerminal(t *testing.T, stream <-chan core.EventEnvelope, runID string, timeout time.Duration) []core.EventEnvelope {
