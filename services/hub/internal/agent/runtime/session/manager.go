@@ -72,6 +72,42 @@ type ClearRequest struct {
 	Reason    string
 }
 
+// HandoffTarget identifies the destination client surface for session transfer.
+type HandoffTarget string
+
+const (
+	// HandoffTargetDesktop transfers session control to desktop clients.
+	HandoffTargetDesktop HandoffTarget = "desktop"
+	// HandoffTargetMobile transfers session control to mobile clients.
+	HandoffTargetMobile HandoffTarget = "mobile"
+)
+
+// HandoffRequest requests one cross-surface session transfer snapshot.
+type HandoffRequest struct {
+	SessionID          core.SessionID
+	Target             HandoffTarget
+	PendingTaskSummary string
+}
+
+// HandoffSnapshot is the stable payload sent to the destination surface.
+//
+// Temporary permissions are intentionally excluded: handoff keeps identity,
+// permission mode, and unfinished-task context, but does not propagate
+// ephemeral grants across surfaces.
+type HandoffSnapshot struct {
+	SessionID             core.SessionID
+	Target                HandoffTarget
+	WorkingDir            string
+	AdditionalDirectories []string
+	PermissionMode        core.PermissionMode
+	HistoryEntries        int
+	Summary               string
+	PendingTaskSummary    string
+	LastCheckpointID      core.CheckpointID
+	NextCursor            int64
+	IssuedAt              time.Time
+}
+
 // State is the copy-safe session lifecycle snapshot returned by Manager APIs.
 type State struct {
 	SessionID             core.SessionID
@@ -87,6 +123,8 @@ type State struct {
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 	LastClearedReason     string
+	LastHandoffTarget     HandoffTarget
+	LastHandoffAt         time.Time
 }
 
 // Manager owns runtime-agnostic session lifecycle state.
@@ -297,6 +335,51 @@ func (m *Manager) Clear(_ context.Context, req ClearRequest) (State, error) {
 	return cloneState(state), nil
 }
 
+// Handoff builds a cross-surface snapshot for desktop/mobile transfer.
+func (m *Manager) Handoff(_ context.Context, req HandoffRequest) (HandoffSnapshot, error) {
+	if m == nil {
+		return HandoffSnapshot{}, errors.New("session manager is nil")
+	}
+	sessionID := normalizeSessionID(req.SessionID)
+	if sessionID == "" {
+		return HandoffSnapshot{}, core.ErrSessionNotFound
+	}
+	target, ok := normalizeHandoffTarget(req.Target)
+	if !ok {
+		return HandoffSnapshot{}, errors.New("handoff target must be desktop or mobile")
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	state := m.sessions[sessionID]
+	if state == nil {
+		return HandoffSnapshot{}, core.ErrSessionNotFound
+	}
+
+	pendingTask := strings.TrimSpace(req.PendingTaskSummary)
+	if pendingTask == "" {
+		pendingTask = state.Summary
+	}
+	now := time.Now().UTC()
+	state.LastHandoffTarget = target
+	state.LastHandoffAt = now
+	state.UpdatedAt = now
+
+	return HandoffSnapshot{
+		SessionID:             state.SessionID,
+		Target:                target,
+		WorkingDir:            state.WorkingDir,
+		AdditionalDirectories: sanitizeDirectories(state.AdditionalDirectories),
+		PermissionMode:        state.PermissionMode,
+		HistoryEntries:        state.HistoryEntries,
+		Summary:               state.Summary,
+		PendingTaskSummary:    pendingTask,
+		LastCheckpointID:      state.LastCheckpointID,
+		NextCursor:            state.NextCursor,
+		IssuedAt:              now,
+	}, nil
+}
+
 func normalizeSessionID(input core.SessionID) core.SessionID {
 	return core.SessionID(strings.TrimSpace(string(input)))
 }
@@ -315,6 +398,17 @@ func normalizePermissionMode(mode core.PermissionMode) core.PermissionMode {
 		return mode
 	default:
 		return core.PermissionModeDefault
+	}
+}
+
+func normalizeHandoffTarget(target HandoffTarget) (HandoffTarget, bool) {
+	switch HandoffTarget(strings.ToLower(strings.TrimSpace(string(target)))) {
+	case HandoffTargetDesktop:
+		return HandoffTargetDesktop, true
+	case HandoffTargetMobile:
+		return HandoffTargetMobile, true
+	default:
+		return "", false
 	}
 }
 
@@ -382,5 +476,7 @@ func cloneState(input *State) State {
 		CreatedAt:             input.CreatedAt,
 		UpdatedAt:             input.UpdatedAt,
 		LastClearedReason:     input.LastClearedReason,
+		LastHandoffTarget:     input.LastHandoffTarget,
+		LastHandoffAt:         input.LastHandoffAt,
 	}
 }

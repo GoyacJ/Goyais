@@ -206,3 +206,109 @@ func TestManagerClearResetsHistoryAndCursor(t *testing.T) {
 		t.Fatalf("temporary permissions should be cleared, got %#v", state.TemporaryPermissions)
 	}
 }
+
+func TestManagerHandoffPreservesSessionIdentityAndPermissionMode(t *testing.T) {
+	manager := NewManager(Dependencies{})
+	_, err := manager.Register(RegisterRequest{
+		Handle:                core.SessionHandle{SessionID: core.SessionID("sess_handoff"), CreatedAt: time.Now().UTC()},
+		WorkingDir:            "/tmp/project",
+		AdditionalDirectories: []string{"/tmp/one", "/tmp/two"},
+		PermissionMode:        core.PermissionModePlan,
+		HistoryEntries:        7,
+		Summary:               "continue final migration pass",
+		NextCursor:            31,
+		LastCheckpointID:      core.CheckpointID("cp_handoff"),
+		TemporaryPermissions:  []string{"Bash(rm -rf *)"},
+	})
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+
+	snapshot, err := manager.Handoff(context.Background(), HandoffRequest{
+		SessionID:          core.SessionID("sess_handoff"),
+		Target:             HandoffTargetDesktop,
+		PendingTaskSummary: "finish adapter cleanup",
+	})
+	if err != nil {
+		t.Fatalf("handoff failed: %v", err)
+	}
+	if snapshot.SessionID != core.SessionID("sess_handoff") {
+		t.Fatalf("session id = %q, want sess_handoff", snapshot.SessionID)
+	}
+	if snapshot.Target != HandoffTargetDesktop {
+		t.Fatalf("target = %q, want desktop", snapshot.Target)
+	}
+	if snapshot.PermissionMode != core.PermissionModePlan {
+		t.Fatalf("permission mode = %q, want plan", snapshot.PermissionMode)
+	}
+	if snapshot.PendingTaskSummary != "finish adapter cleanup" {
+		t.Fatalf("pending task summary = %q", snapshot.PendingTaskSummary)
+	}
+	if snapshot.HistoryEntries != 7 || snapshot.NextCursor != 31 {
+		t.Fatalf("unexpected handoff cursor/history snapshot: entries=%d cursor=%d", snapshot.HistoryEntries, snapshot.NextCursor)
+	}
+	if snapshot.LastCheckpointID != core.CheckpointID("cp_handoff") {
+		t.Fatalf("last checkpoint = %q, want cp_handoff", snapshot.LastCheckpointID)
+	}
+
+	resumed, err := manager.Resume(context.Background(), ResumeRequest{SessionID: core.SessionID("sess_handoff")})
+	if err != nil {
+		t.Fatalf("resume after handoff failed: %v", err)
+	}
+	if resumed.LastHandoffTarget != HandoffTargetDesktop {
+		t.Fatalf("last handoff target = %q, want desktop", resumed.LastHandoffTarget)
+	}
+	if resumed.LastHandoffAt.IsZero() {
+		t.Fatalf("last handoff timestamp should be recorded")
+	}
+}
+
+func TestManagerHandoffUsesSessionSummaryWhenPendingTaskOmitted(t *testing.T) {
+	manager := NewManager(Dependencies{})
+	_, err := manager.Register(RegisterRequest{
+		Handle:           core.SessionHandle{SessionID: core.SessionID("sess_handoff_summary"), CreatedAt: time.Now().UTC()},
+		WorkingDir:       "/tmp/project",
+		PermissionMode:   core.PermissionModeDefault,
+		HistoryEntries:   3,
+		Summary:          "pending verify and ship",
+		NextCursor:       9,
+		LastCheckpointID: core.CheckpointID("cp_summary"),
+	})
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+
+	snapshot, err := manager.Handoff(context.Background(), HandoffRequest{
+		SessionID: core.SessionID("sess_handoff_summary"),
+		Target:    HandoffTargetMobile,
+	})
+	if err != nil {
+		t.Fatalf("handoff failed: %v", err)
+	}
+	if snapshot.Target != HandoffTargetMobile {
+		t.Fatalf("target = %q, want mobile", snapshot.Target)
+	}
+	if snapshot.PendingTaskSummary != "pending verify and ship" {
+		t.Fatalf("pending task summary = %q, want session summary fallback", snapshot.PendingTaskSummary)
+	}
+}
+
+func TestManagerHandoffRejectsInvalidTarget(t *testing.T) {
+	manager := NewManager(Dependencies{})
+	_, err := manager.Register(RegisterRequest{
+		Handle:         core.SessionHandle{SessionID: core.SessionID("sess_invalid_target"), CreatedAt: time.Now().UTC()},
+		WorkingDir:     "/tmp/project",
+		PermissionMode: core.PermissionModeDefault,
+	})
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+
+	_, err = manager.Handoff(context.Background(), HandoffRequest{
+		SessionID: core.SessionID("sess_invalid_target"),
+		Target:    HandoffTarget("tablet"),
+	})
+	if err == nil {
+		t.Fatalf("expected invalid target to fail")
+	}
+}
