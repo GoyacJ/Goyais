@@ -70,6 +70,13 @@ func (g *Gate) Evaluate(_ context.Context, req core.PermissionRequest) (core.Per
 				MatchedRule: firstMatchedRuleRaw(matched, rulesdsl.EffectDeny),
 			}, nil
 		case rulesdsl.EffectAsk:
+			if mode == core.PermissionModeDontAsk {
+				return core.PermissionDecision{
+					Kind:        core.PermissionDecisionDeny,
+					Reason:      "dont_ask mode rejects ask-rule operations",
+					MatchedRule: firstMatchedRuleRaw(matched, rulesdsl.EffectAsk),
+				}, nil
+			}
 			return core.PermissionDecision{
 				Kind:        core.PermissionDecisionAsk,
 				Reason:      "requires approval by policy rule",
@@ -97,15 +104,18 @@ func evaluateModeMatrix(mode core.PermissionMode, risk toolRiskLevel) (core.Perm
 	case core.PermissionModeBypassPermissions:
 		return core.PermissionDecisionAllow, "bypass_permissions mode allows all tools"
 	case core.PermissionModeDontAsk:
-		return core.PermissionDecisionAllow, "dont_ask mode allows all tools"
+		switch risk {
+		case riskLow:
+			return core.PermissionDecisionAllow, "dont_ask mode allows low-risk tools"
+		default:
+			return core.PermissionDecisionDeny, "dont_ask mode denies non-preapproved risky tools"
+		}
 	case core.PermissionModePlan:
 		switch risk {
 		case riskLow:
 			return core.PermissionDecisionAllow, "plan mode allows low-risk tools"
-		case riskMedium:
-			return core.PermissionDecisionAsk, "plan mode requires approval for medium-risk tools"
 		default:
-			return core.PermissionDecisionDeny, "plan mode denies high-risk tools"
+			return core.PermissionDecisionDeny, "plan mode denies non-low-risk tools"
 		}
 	case core.PermissionModeAcceptEdits:
 		switch risk {
@@ -139,6 +149,9 @@ func classifyToolRisk(toolName string, arguments string) toolRiskLevel {
 		if containsShellOperator(normalizedArgs) {
 			return riskCritical
 		}
+		return riskHigh
+	}
+	if strings.HasPrefix(normalizedTool, "mcp__") || strings.Contains(normalizedTool, "mcp") {
 		return riskHigh
 	}
 	if strings.Contains(normalizedTool, "write") || strings.Contains(normalizedTool, "edit") || strings.Contains(normalizedTool, "notebook") {

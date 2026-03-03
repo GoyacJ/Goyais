@@ -29,13 +29,18 @@ func TestGate_Evaluate_ModeRiskMatrix(t *testing.T) {
 		{name: "accept_edits high", mode: core.PermissionModeAcceptEdits, tool: "bash", args: "npm run lint", want: core.PermissionDecisionAsk},
 		{name: "accept_edits critical", mode: core.PermissionModeAcceptEdits, tool: "delete_file", args: "./a.txt", want: core.PermissionDecisionDeny},
 		{name: "plan low", mode: core.PermissionModePlan, tool: "read_file", args: "./a.txt", want: core.PermissionDecisionAllow},
-		{name: "plan medium", mode: core.PermissionModePlan, tool: "write_file", args: "./a.txt", want: core.PermissionDecisionAsk},
+		{name: "plan medium", mode: core.PermissionModePlan, tool: "write_file", args: "./a.txt", want: core.PermissionDecisionDeny},
 		{name: "plan high", mode: core.PermissionModePlan, tool: "bash", args: "npm run lint", want: core.PermissionDecisionDeny},
 		{name: "plan critical", mode: core.PermissionModePlan, tool: "delete_file", args: "./a.txt", want: core.PermissionDecisionDeny},
 		{name: "dont_ask low", mode: core.PermissionModeDontAsk, tool: "read_file", args: "./a.txt", want: core.PermissionDecisionAllow},
-		{name: "dont_ask medium", mode: core.PermissionModeDontAsk, tool: "write_file", args: "./a.txt", want: core.PermissionDecisionAllow},
-		{name: "dont_ask high", mode: core.PermissionModeDontAsk, tool: "bash", args: "npm run lint", want: core.PermissionDecisionAllow},
-		{name: "dont_ask critical", mode: core.PermissionModeDontAsk, tool: "delete_file", args: "./a.txt", want: core.PermissionDecisionAllow},
+		{name: "dont_ask medium", mode: core.PermissionModeDontAsk, tool: "write_file", args: "./a.txt", want: core.PermissionDecisionDeny},
+		{name: "dont_ask high", mode: core.PermissionModeDontAsk, tool: "bash", args: "npm run lint", want: core.PermissionDecisionDeny},
+		{name: "dont_ask critical", mode: core.PermissionModeDontAsk, tool: "delete_file", args: "./a.txt", want: core.PermissionDecisionDeny},
+		{name: "default mcp", mode: core.PermissionModeDefault, tool: "mcp__browser__navigate", args: `{"url":"https://example.com"}`, want: core.PermissionDecisionAsk},
+		{name: "accept_edits mcp", mode: core.PermissionModeAcceptEdits, tool: "mcp__browser__navigate", args: `{"url":"https://example.com"}`, want: core.PermissionDecisionAsk},
+		{name: "plan mcp", mode: core.PermissionModePlan, tool: "mcp__browser__navigate", args: `{"url":"https://example.com"}`, want: core.PermissionDecisionDeny},
+		{name: "dont_ask mcp", mode: core.PermissionModeDontAsk, tool: "mcp__browser__navigate", args: `{"url":"https://example.com"}`, want: core.PermissionDecisionDeny},
+		{name: "bypass mcp", mode: core.PermissionModeBypassPermissions, tool: "mcp__browser__navigate", args: `{"url":"https://example.com"}`, want: core.PermissionDecisionAllow},
 		{name: "bypass low", mode: core.PermissionModeBypassPermissions, tool: "read_file", args: "./a.txt", want: core.PermissionDecisionAllow},
 		{name: "bypass medium", mode: core.PermissionModeBypassPermissions, tool: "write_file", args: "./a.txt", want: core.PermissionDecisionAllow},
 		{name: "bypass high", mode: core.PermissionModeBypassPermissions, tool: "bash", args: "npm run lint", want: core.PermissionDecisionAllow},
@@ -57,6 +62,30 @@ func TestGate_Evaluate_ModeRiskMatrix(t *testing.T) {
 				t.Fatalf("unexpected decision kind %q want %q", decision.Kind, tc.want)
 			}
 		})
+	}
+}
+
+func TestGate_Evaluate_DontAskConvertsAskRuleToDeny(t *testing.T) {
+	gate, err := NewGateFromLines([]string{
+		`ask Bash(git *)`,
+	})
+	if err != nil {
+		t.Fatalf("new gate from lines failed: %v", err)
+	}
+
+	decision, evalErr := gate.Evaluate(context.Background(), core.PermissionRequest{
+		Mode:      core.PermissionModeDontAsk,
+		ToolName:  "Bash",
+		Arguments: "git status",
+	})
+	if evalErr != nil {
+		t.Fatalf("evaluate failed: %v", evalErr)
+	}
+	if decision.Kind != core.PermissionDecisionDeny {
+		t.Fatalf("expected deny in dont_ask mode when ask-rule matches, got %q", decision.Kind)
+	}
+	if decision.MatchedRule != "ask Bash(git *)" {
+		t.Fatalf("unexpected matched rule %q", decision.MatchedRule)
 	}
 }
 
