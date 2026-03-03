@@ -59,6 +59,14 @@ type CommandMeta struct {
 	Kind        CommandKind
 }
 
+// CommandDispatchResult is the normalized output of slash command dispatch.
+type CommandDispatchResult struct {
+	Name           string
+	Kind           CommandKind
+	Output         string
+	ExpandedPrompt string
+}
+
 // SuggestionKind distinguishes suggestions by semantic origin.
 type SuggestionKind string
 
