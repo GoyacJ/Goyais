@@ -108,6 +108,45 @@ func TestBuilderBuild_HonorsInstructionExcludes(t *testing.T) {
 	}
 }
 
+func TestBuilderBuild_LoadsUserAndLocalInstructionByPriority(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+	mustMkdirBuilder(t, filepath.Join(root, ".git"))
+	mustMkdirBuilder(t, filepath.Join(home, ".claude"))
+
+	mustWriteBuilderFile(t, filepath.Join(home, ".claude", "CLAUDE.md"), "user claude")
+	mustWriteBuilderFile(t, filepath.Join(home, ".claude", "AGENTS.md"), "user agents")
+	mustWriteBuilderFile(t, filepath.Join(home, ".claude", "AGENTS.override.md"), "user override")
+
+	mustWriteBuilderFile(t, filepath.Join(root, "CLAUDE.local.md"), "local claude")
+	mustWriteBuilderFile(t, filepath.Join(root, "AGENTS.local.md"), "local agents")
+
+	builder := NewBuilder(BuilderOptions{
+		HomeDir: home,
+	})
+	promptContext, err := builder.Build(context.Background(), core.BuildContextRequest{
+		SessionID:  "sess_3",
+		WorkingDir: root,
+		UserInput:  "",
+	})
+	if err != nil {
+		t.Fatalf("build prompt: %v", err)
+	}
+
+	if !strings.Contains(promptContext.SystemPrompt, "user override") {
+		t.Fatalf("expected user override priority in %q", promptContext.SystemPrompt)
+	}
+	if strings.Contains(promptContext.SystemPrompt, "user agents") {
+		t.Fatalf("did not expect lower-priority user AGENTS when override exists in %q", promptContext.SystemPrompt)
+	}
+	if !strings.Contains(promptContext.SystemPrompt, "local agents") {
+		t.Fatalf("expected local AGENTS priority in %q", promptContext.SystemPrompt)
+	}
+	if strings.Contains(promptContext.SystemPrompt, "local claude") {
+		t.Fatalf("did not expect lower-priority local CLAUDE when AGENTS.local exists in %q", promptContext.SystemPrompt)
+	}
+}
+
 func mustMkdirBuilder(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(path, 0o755); err != nil {

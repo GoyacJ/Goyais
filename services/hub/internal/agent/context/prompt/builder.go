@@ -6,6 +6,8 @@ package prompt
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"goyais/services/hub/internal/agent/core"
@@ -25,6 +27,7 @@ type BuilderOptions struct {
 	InstructionDocExcludes []string
 	Env                    map[string]string
 	RuleTargetPath         string
+	HomeDir                string
 }
 
 // Builder implements core.ContextBuilder using context/prompt primitives.
@@ -48,6 +51,7 @@ func NewBuilder(options BuilderOptions) *Builder {
 			InstructionDocExcludes: cloneStringSlice(options.InstructionDocExcludes),
 			Env:                    cloneStringMap(options.Env),
 			RuleTargetPath:         strings.TrimSpace(options.RuleTargetPath),
+			HomeDir:                strings.TrimSpace(options.HomeDir),
 		},
 	}
 }
@@ -76,13 +80,25 @@ func (b *Builder) Build(ctx context.Context, req core.BuildContextRequest) (core
 	}
 
 	skillsSection, _ := BuildSkillsSection(b.options.Skills, b.options.SkillsBudgetChars)
+	userInstruction := b.options.UserInstruction
+	if userInstruction == "" {
+		userInstruction = b.loadDefaultUserInstruction()
+	}
+	localInstruction := b.options.LocalInstruction
+	if localInstruction == "" {
+		localInstruction = loadSingleInstructionByCandidates(
+			workingDir,
+			[]string{"AGENTS.local.md", "CLAUDE.local.md"},
+		)
+	}
+
 	systemPrompt := BuildSystemPrompt(SystemPromptInput{
 		ManagedInstruction: b.options.ManagedInstruction,
-		UserInstruction:    b.options.UserInstruction,
+		UserInstruction:    userInstruction,
 		UserRules:          b.options.UserRules,
 		ProjectInstruction: projectInstruction,
 		ProjectRules:       projectRules,
-		LocalInstruction:   b.options.LocalInstruction,
+		LocalInstruction:   localInstruction,
 		MemorySnippet:      b.options.MemorySnippet,
 		SkillsSection:      skillsSection,
 		MCPSection:         b.options.MCPSection,
@@ -118,7 +134,7 @@ func (b *Builder) Build(ctx context.Context, req core.BuildContextRequest) (core
 	appendLinesSection("user_rules", b.options.UserRules)
 	appendSection("project_instruction", projectInstruction)
 	appendLinesSection("project_rules", projectRules)
-	appendSection("local_instruction", b.options.LocalInstruction)
+	appendSection("local_instruction", localInstruction)
 	appendSection("memory", b.options.MemorySnippet)
 	appendSection("skills", skillsSection)
 	appendSection("mcp", b.options.MCPSection)
@@ -128,6 +144,54 @@ func (b *Builder) Build(ctx context.Context, req core.BuildContextRequest) (core
 		SystemPrompt: strings.TrimSpace(systemPrompt),
 		Sections:     sections,
 	}, nil
+}
+
+func (b *Builder) loadDefaultUserInstruction() string {
+	homeDir := strings.TrimSpace(b.options.HomeDir)
+	if homeDir == "" {
+		resolvedHomeDir, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		homeDir = strings.TrimSpace(resolvedHomeDir)
+	}
+	if homeDir == "" {
+		return ""
+	}
+	return loadSingleInstructionByCandidates(
+		filepath.Join(homeDir, ".claude"),
+		[]string{
+			string(FilenameAgentsOverride),
+			string(FilenameAgents),
+			string(FilenameClaude),
+		},
+	)
+}
+
+func loadSingleInstructionByCandidates(dir string, candidates []string) string {
+	normalizedDir := strings.TrimSpace(dir)
+	if normalizedDir == "" {
+		return ""
+	}
+	for _, name := range candidates {
+		normalizedName := strings.TrimSpace(name)
+		if normalizedName == "" {
+			continue
+		}
+		absolutePath := filepath.Join(normalizedDir, normalizedName)
+		if !isRegularFile(absolutePath) {
+			continue
+		}
+		raw, err := os.ReadFile(absolutePath)
+		if err != nil {
+			continue
+		}
+		content := strings.TrimSpace(string(raw))
+		if content != "" {
+			return content
+		}
+	}
+	return ""
 }
 
 func cloneStringSlice(input []string) []string {
