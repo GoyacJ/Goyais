@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
+	agentcore "goyais/services/hub/internal/agent/core"
 	"goyais/services/hub/internal/agentcore/prompting"
 	"goyais/services/hub/internal/agentcore/safety"
-	corestate "goyais/services/hub/internal/agentcore/state"
 	coretools "goyais/services/hub/internal/agentcore/tools"
 	controlplanepolicy "goyais/services/hub/internal/controlplane/policy"
 	runtimehooks "goyais/services/hub/internal/runtime/hooks"
@@ -39,7 +39,7 @@ type ExecutionUserAnswer struct {
 }
 
 type executionControlSignal struct {
-	Action corestate.ControlAction
+	Action agentcore.ControlAction
 	Answer *ExecutionUserAnswer
 }
 
@@ -121,7 +121,7 @@ func (o *ExecutionOrchestrator) Control(executionID string, signal executionCont
 		return false
 	}
 
-	if signal.Action == corestate.ControlActionStop {
+	if signal.Action == agentcore.ControlActionStop {
 		handle.cancel()
 		return true
 	}
@@ -1239,9 +1239,9 @@ func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 			return openAIToolResultForNextTurn{}, waitErr
 		}
 		switch action {
-		case corestate.ControlActionStop:
+		case agentcore.ControlActionStop:
 			return openAIToolResultForNextTurn{}, context.Canceled
-		case corestate.ControlActionDeny:
+		case agentcore.ControlActionDeny:
 			o.transitionExecutionToExecuting(execution.ID, "hook_permission_denied", string(action))
 			errText := firstNonEmpty(strings.TrimSpace(preDecision.Reason), "tool call denied by user")
 			o.appendToolResultEvent(execution.ID, map[string]any{
@@ -1258,7 +1258,7 @@ func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 				"error": errText,
 			})
 			return openAIToolResultForNextTurn{CallID: callID, Text: errText}, nil
-		case corestate.ControlActionApprove, corestate.ControlActionResume:
+		case agentcore.ControlActionApprove, agentcore.ControlActionResume:
 			o.transitionExecutionToExecuting(execution.ID, "hook_permission_granted", string(action))
 			preDecision.Action = HookDecisionActionAllow
 		default:
@@ -1356,9 +1356,9 @@ func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 				return openAIToolResultForNextTurn{}, waitErr
 			}
 			switch action {
-			case corestate.ControlActionStop:
+			case agentcore.ControlActionStop:
 				return openAIToolResultForNextTurn{}, context.Canceled
-			case corestate.ControlActionDeny:
+			case agentcore.ControlActionDeny:
 				o.transitionExecutionToExecuting(execution.ID, "approval_denied", string(action))
 				errText := firstNonEmpty(strings.TrimSpace(approvalErr.Reason), "tool call denied by user")
 				o.appendToolResultEvent(execution.ID, map[string]any{
@@ -1375,7 +1375,7 @@ func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 					"error": errText,
 				})
 				return openAIToolResultForNextTurn{CallID: callID, Text: errText}, nil
-			case corestate.ControlActionApprove, corestate.ControlActionResume:
+			case agentcore.ControlActionApprove, agentcore.ControlActionResume:
 				o.transitionExecutionToExecuting(execution.ID, "approval_granted", string(action))
 				approved = true
 				continue
@@ -1405,7 +1405,7 @@ func (o *ExecutionOrchestrator) executeSingleOpenAIToolCall(
 	}
 }
 
-func (o *ExecutionOrchestrator) waitForApprovalAction(ctx context.Context, executionID string) (corestate.ControlAction, error) {
+func (o *ExecutionOrchestrator) waitForApprovalAction(ctx context.Context, executionID string) (agentcore.ControlAction, error) {
 	control, exists := o.getControlChannel(executionID)
 	if !exists || control == nil {
 		return "", errors.New("execution control channel is unavailable")
@@ -1416,7 +1416,7 @@ func (o *ExecutionOrchestrator) waitForApprovalAction(ctx context.Context, execu
 			return "", ctx.Err()
 		case signal := <-control:
 			switch signal.Action {
-			case corestate.ControlActionApprove, corestate.ControlActionResume, corestate.ControlActionDeny, corestate.ControlActionStop:
+			case agentcore.ControlActionApprove, agentcore.ControlActionResume, agentcore.ControlActionDeny, agentcore.ControlActionStop:
 				return signal.Action, nil
 			default:
 				continue
@@ -1437,9 +1437,9 @@ func (o *ExecutionOrchestrator) waitForUserAnswer(ctx context.Context, execution
 			return ExecutionUserAnswer{}, ctx.Err()
 		case signal := <-control:
 			switch signal.Action {
-			case corestate.ControlActionStop, corestate.ControlActionDeny:
+			case agentcore.ControlActionStop, agentcore.ControlActionDeny:
 				return ExecutionUserAnswer{}, context.Canceled
-			case corestate.ControlActionAnswer:
+			case agentcore.ControlActionAnswer:
 				if signal.Answer == nil {
 					continue
 				}

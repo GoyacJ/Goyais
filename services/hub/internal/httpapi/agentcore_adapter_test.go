@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	corestate "goyais/services/hub/internal/agentcore/state"
+	agentcore "goyais/services/hub/internal/agent/core"
 )
 
 func TestMapExecutionEventToRunEvent_MessageReceivedMapsToRunQueued(t *testing.T) {
@@ -44,7 +44,7 @@ func TestMapExecutionStateToRunState_SupportsLegacyConfirming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected confirming to be supported, got %v", err)
 	}
-	if runState != corestate.RunStateWaitingApproval {
+	if runState != agentcore.RunStateWaitingApproval {
 		t.Fatalf("expected waiting_approval, got %q", runState)
 	}
 }

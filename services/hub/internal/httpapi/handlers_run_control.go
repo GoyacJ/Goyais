@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	corestate "goyais/services/hub/internal/agentcore/state"
+	agentcore "goyais/services/hub/internal/agent/core"
 )
 
 type runControlRequest struct {
@@ -48,7 +48,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 		var answerPayload *ExecutionUserAnswer
-		if action == corestate.ControlActionAnswer {
+		if action == agentcore.ControlActionAnswer {
 			if input.Answer == nil {
 				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "answer payload is required for action=answer", map[string]any{})
 				return
@@ -95,7 +95,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		now := time.Now().UTC().Format(time.RFC3339)
 		cancelExecutionID := ""
 		nextExecutionToSubmit := ""
-		var controlSignalAction *corestate.ControlAction
+		var controlSignalAction *agentcore.ControlAction
 		var controlSignalAnswer *ExecutionUserAnswer
 		state.mu.Lock()
 		execution, exists := state.executions[runID]
@@ -122,7 +122,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			})
 			return
 		}
-		machine, machineErr := corestate.NewMachine(runState)
+		machine, machineErr := agentcore.NewMachine(runState)
 		if machineErr != nil {
 			state.mu.Unlock()
 			WriteStandardError(w, r, http.StatusConflict, "RUN_STATE_INVALID", "Run state is invalid", map[string]any{
@@ -145,7 +145,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		desiredState := mapRunStateToExecutionState(machine.State(), execution.State)
 
 		switch action {
-		case corestate.ControlActionApprove, corestate.ControlActionResume:
+		case agentcore.ControlActionApprove, agentcore.ControlActionResume:
 			if conversation.ActiveExecutionID != nil && *conversation.ActiveExecutionID != execution.ID {
 				state.mu.Unlock()
 				WriteStandardError(w, r, http.StatusConflict, "RUN_ALREADY_ACTIVE", "Another run is currently active", map[string]any{
@@ -190,7 +190,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 					"source": "run_control",
 				},
 			})
-		case corestate.ControlActionDeny:
+		case agentcore.ControlActionDeny:
 			if execution.State == ExecutionStateConfirming {
 				desiredState = ExecutionStateExecuting
 				actionCopy := action
@@ -254,7 +254,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 					conversation.QueueState = deriveQueueStateLocked(state, conversation.ID, conversation.ActiveExecutionID)
 				}
 			}
-		case corestate.ControlActionStop:
+		case agentcore.ControlActionStop:
 			cancelExecutionID = execution.ID
 			appendExecutionEventLocked(state, ExecutionEvent{
 				ExecutionID:    execution.ID,
@@ -296,7 +296,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			} else {
 				conversation.QueueState = deriveQueueStateLocked(state, conversation.ID, conversation.ActiveExecutionID)
 			}
-		case corestate.ControlActionAnswer:
+		case agentcore.ControlActionAnswer:
 			if conversation.ActiveExecutionID != nil && *conversation.ActiveExecutionID != execution.ID {
 				state.mu.Unlock()
 				WriteStandardError(w, r, http.StatusConflict, "RUN_ALREADY_ACTIVE", "Another run is currently active", map[string]any{
@@ -371,7 +371,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		conversation.UpdatedAt = now
 		state.conversations[conversation.ID] = conversation
 		state.mu.Unlock()
-		if state.orchestrator != nil && (action == corestate.ControlActionStop || (action == corestate.ControlActionDeny && previousState != ExecutionStateConfirming)) {
+		if state.orchestrator != nil && (action == agentcore.ControlActionStop || (action == agentcore.ControlActionDeny && previousState != ExecutionStateConfirming)) {
 			decision, matchedPolicyID := state.orchestrator.evaluateHookDecision(execution, HookEventTypeStop, "")
 			state.orchestrator.appendHookExecutionRecordAndEvent(
 				execution,

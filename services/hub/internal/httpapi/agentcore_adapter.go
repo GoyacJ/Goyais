@@ -5,11 +5,19 @@ import (
 	"strings"
 	"time"
 
-	"goyais/services/hub/internal/agentcore/protocol"
-	corestate "goyais/services/hub/internal/agentcore/state"
+	agentcore "goyais/services/hub/internal/agent/core"
 )
 
-func mapExecutionEventToRunEvent(event ExecutionEvent) protocol.RunEvent {
+type mappedRunEvent struct {
+	Type      agentcore.RunEventType `json:"type"`
+	SessionID string                 `json:"session_id"`
+	RunID     string                 `json:"run_id"`
+	Sequence  int64                  `json:"sequence"`
+	Timestamp time.Time              `json:"timestamp"`
+	Payload   map[string]any         `json:"payload,omitempty"`
+}
+
+func mapExecutionEventToRunEvent(event ExecutionEvent) mappedRunEvent {
 	payload := map[string]any{}
 	for key, value := range event.Payload {
 		payload[key] = value
@@ -31,7 +39,7 @@ func mapExecutionEventToRunEvent(event ExecutionEvent) protocol.RunEvent {
 		sequence = 0
 	}
 
-	return protocol.RunEvent{
+	return mappedRunEvent{
 		Type:      mapExecutionEventToRunEventType(event),
 		SessionID: resolveSessionIDFromExecutionEvent(event),
 		RunID:     resolveRunIDFromExecutionEvent(event),
@@ -41,92 +49,92 @@ func mapExecutionEventToRunEvent(event ExecutionEvent) protocol.RunEvent {
 	}
 }
 
-func mapExecutionEventToRunEventType(event ExecutionEvent) protocol.RunEventType {
+func mapExecutionEventToRunEventType(event ExecutionEvent) agentcore.RunEventType {
 	eventType := event.Type
 	switch eventType {
 	case ExecutionEventTypeMessageReceived:
-		return protocol.RunEventTypeRunQueued
+		return agentcore.RunEventTypeRunQueued
 	case ExecutionEventTypeExecutionStarted:
-		return protocol.RunEventTypeRunStarted
+		return agentcore.RunEventTypeRunStarted
 	case ExecutionEventTypeExecutionDone:
-		return protocol.RunEventTypeRunCompleted
+		return agentcore.RunEventTypeRunCompleted
 	case ExecutionEventTypeExecutionError:
-		return protocol.RunEventTypeRunFailed
+		return agentcore.RunEventTypeRunFailed
 	case ExecutionEventTypeExecutionStopped:
-		return protocol.RunEventTypeRunCancelled
+		return agentcore.RunEventTypeRunCancelled
 	case ExecutionEventTypeThinkingDelta:
 		if stage := strings.TrimSpace(asStringValue(event.Payload["stage"])); stage == "run_approval_needed" {
-			return protocol.RunEventTypeRunApprovalNeeded
+			return agentcore.RunEventTypeRunApprovalNeeded
 		}
-		return protocol.RunEventTypeRunOutputDelta
+		return agentcore.RunEventTypeRunOutputDelta
 	case ExecutionEventTypeToolCall,
 		ExecutionEventTypeToolResult,
 		ExecutionEventTypeDiffGenerated:
-		return protocol.RunEventTypeRunOutputDelta
+		return agentcore.RunEventTypeRunOutputDelta
 	default:
-		return protocol.RunEventTypeRunOutputDelta
+		return agentcore.RunEventTypeRunOutputDelta
 	}
 }
 
-func mapExecutionStateToRunState(executionState ExecutionState) (corestate.RunState, error) {
+func mapExecutionStateToRunState(executionState ExecutionState) (agentcore.RunState, error) {
 	switch strings.TrimSpace(string(executionState)) {
 	case string(ExecutionStateQueued):
-		return corestate.RunStateQueued, nil
+		return agentcore.RunStateQueued, nil
 	case string(ExecutionStatePending):
-		return corestate.RunStateQueued, nil
+		return agentcore.RunStateQueued, nil
 	case string(ExecutionStateExecuting):
-		return corestate.RunStateRunning, nil
-	case string(ExecutionStateConfirming), string(corestate.RunStateWaitingApproval):
-		return corestate.RunStateWaitingApproval, nil
-	case string(ExecutionStateAwaitingInput), string(corestate.RunStateWaitingUserInput):
-		return corestate.RunStateWaitingUserInput, nil
+		return agentcore.RunStateRunning, nil
+	case string(ExecutionStateConfirming), string(agentcore.RunStateWaitingApproval):
+		return agentcore.RunStateWaitingApproval, nil
+	case string(ExecutionStateAwaitingInput), string(agentcore.RunStateWaitingUserInput):
+		return agentcore.RunStateWaitingUserInput, nil
 	case string(ExecutionStateCompleted):
-		return corestate.RunStateCompleted, nil
+		return agentcore.RunStateCompleted, nil
 	case string(ExecutionStateFailed):
-		return corestate.RunStateFailed, nil
+		return agentcore.RunStateFailed, nil
 	case string(ExecutionStateCancelled):
-		return corestate.RunStateCancelled, nil
+		return agentcore.RunStateCancelled, nil
 	default:
 		return "", fmt.Errorf("unsupported execution state %q", executionState)
 	}
 }
 
-func mapRunStateToExecutionState(runState corestate.RunState, current ExecutionState) ExecutionState {
+func mapRunStateToExecutionState(runState agentcore.RunState, current ExecutionState) ExecutionState {
 	switch runState {
-	case corestate.RunStateQueued:
+	case agentcore.RunStateQueued:
 		return ExecutionStateQueued
-	case corestate.RunStateRunning:
+	case agentcore.RunStateRunning:
 		if current == ExecutionStateExecuting || current == ExecutionStateConfirming {
 			return ExecutionStateExecuting
 		}
 		return ExecutionStatePending
-	case corestate.RunStateWaitingApproval:
+	case agentcore.RunStateWaitingApproval:
 		return ExecutionStateConfirming
-	case corestate.RunStateWaitingUserInput:
+	case agentcore.RunStateWaitingUserInput:
 		return ExecutionStateAwaitingInput
-	case corestate.RunStateCompleted:
+	case agentcore.RunStateCompleted:
 		return ExecutionStateCompleted
-	case corestate.RunStateFailed:
+	case agentcore.RunStateFailed:
 		return ExecutionStateFailed
-	case corestate.RunStateCancelled:
+	case agentcore.RunStateCancelled:
 		return ExecutionStateCancelled
 	default:
 		return current
 	}
 }
 
-func mapRunControlAction(raw string) (corestate.ControlAction, error) {
+func mapRunControlAction(raw string) (agentcore.ControlAction, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case string(corestate.ControlActionStop):
-		return corestate.ControlActionStop, nil
-	case string(corestate.ControlActionApprove):
-		return corestate.ControlActionApprove, nil
-	case string(corestate.ControlActionDeny):
-		return corestate.ControlActionDeny, nil
-	case string(corestate.ControlActionResume):
-		return corestate.ControlActionResume, nil
-	case string(corestate.ControlActionAnswer):
-		return corestate.ControlActionAnswer, nil
+	case string(agentcore.ControlActionStop):
+		return agentcore.ControlActionStop, nil
+	case string(agentcore.ControlActionApprove):
+		return agentcore.ControlActionApprove, nil
+	case string(agentcore.ControlActionDeny):
+		return agentcore.ControlActionDeny, nil
+	case string(agentcore.ControlActionResume):
+		return agentcore.ControlActionResume, nil
+	case string(agentcore.ControlActionAnswer):
+		return agentcore.ControlActionAnswer, nil
 	default:
 		return "", fmt.Errorf("unsupported control action %q", raw)
 	}
