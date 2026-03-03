@@ -6,11 +6,13 @@ package loop
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"strconv"
 	"strings"
 
 	"goyais/services/hub/internal/agent/runtime/model"
+	"goyais/services/hub/internal/agent/runtime/model/codec"
 	"goyais/services/hub/internal/agent/runtime/model/providers"
 )
 
@@ -43,6 +45,7 @@ func executeWithConfiguredModel(ctx context.Context, req ExecuteRequest) (Execut
 
 	loopResult, err := model.RunLoop(ctx, model.LoopRequest{
 		Provider:      provider,
+		ToolInvoker:   defaultModelToolInvoker{},
 		SystemPrompt:  req.PromptContext.SystemPrompt,
 		UserInput:     req.Input.Text,
 		MaxModelTurns: readEnvInt("GOYAIS_AGENT_MAX_MODEL_TURNS", 8),
@@ -100,4 +103,27 @@ func parseInt(value any) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+type defaultModelToolInvoker struct{}
+
+func (defaultModelToolInvoker) Execute(_ context.Context, calls []codec.ToolCall) ([]codec.ToolResultForNextTurn, error) {
+	if len(calls) == 0 {
+		return nil, nil
+	}
+	results := make([]codec.ToolResultForNextTurn, 0, len(calls))
+	for _, call := range calls {
+		payload := map[string]any{
+			"ok":      false,
+			"error":   "tool execution is not configured in default model executor",
+			"tool":    strings.TrimSpace(call.Name),
+			"call_id": strings.TrimSpace(call.CallID),
+		}
+		textBytes, _ := json.Marshal(payload)
+		results = append(results, codec.ToolResultForNextTurn{
+			CallID: strings.TrimSpace(call.CallID),
+			Text:   string(textBytes),
+		})
+	}
+	return results, nil
 }
