@@ -1,3 +1,0 @@
-# CLAUDE
-
-Initialized by /init.

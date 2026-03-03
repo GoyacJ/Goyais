@@ -1,4 +1,4 @@
-# AGENTS.md
+# CLAUDE.md
 
 ## 目的与非目标
 

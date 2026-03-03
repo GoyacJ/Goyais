@@ -35,6 +35,8 @@ services/hub/data/
 codex/
 AGENTS.md
 !/AGENTS.md
+CLAUDE.md
+!/CLAUDE.md
 openai.yaml
 docs/reviews/
 apps/desktop/test-results/
