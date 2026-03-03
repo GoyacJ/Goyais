@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"sort"
@@ -109,10 +110,8 @@ func purgeProjectConversations(state *AppState, projectID string) projectConvers
 	result, executionIDsToCancel := purgeProjectConversationsLocked(state, normalizedProjectID)
 	state.mu.Unlock()
 
-	if state.orchestrator != nil {
-		for _, executionID := range executionIDsToCancel {
-			state.orchestrator.Cancel(executionID)
-		}
+	for _, executionID := range executionIDsToCancel {
+		state.cancelExecutionBestEffort(context.Background(), executionID)
 	}
 	return result
 }

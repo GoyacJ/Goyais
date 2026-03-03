@@ -209,11 +209,11 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 			)
 		}
 		syncExecutionDomainBestEffort(state)
-		if cancelExecutionID != "" && state.orchestrator != nil {
-			state.orchestrator.Cancel(cancelExecutionID)
+		if cancelExecutionID != "" {
+			state.cancelExecutionBestEffort(r.Context(), cancelExecutionID)
 		}
-		if nextExecutionToSubmit != "" && state.orchestrator != nil {
-			state.orchestrator.Submit(nextExecutionToSubmit)
+		if nextExecutionToSubmit != "" {
+			state.submitExecutionBestEffort(r.Context(), nextExecutionToSubmit)
 		}
 		if state.authz != nil {
 			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "execution.control", "conversation", conversationID, "success", map[string]any{"operation": "stop"}, TraceIDFromContext(r.Context()))

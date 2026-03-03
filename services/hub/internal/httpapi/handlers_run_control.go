@@ -388,17 +388,17 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			)
 		}
 		syncExecutionDomainBestEffort(state)
-		if controlSignalAction != nil && state.orchestrator != nil {
-			state.orchestrator.Control(execution.ID, executionControlSignal{
+		if controlSignalAction != nil {
+			state.controlExecutionBestEffort(r.Context(), execution.ID, executionControlSignal{
 				Action: *controlSignalAction,
 				Answer: controlSignalAnswer,
 			})
 		}
-		if cancelExecutionID != "" && state.orchestrator != nil {
-			state.orchestrator.Cancel(cancelExecutionID)
+		if cancelExecutionID != "" {
+			state.cancelExecutionBestEffort(r.Context(), cancelExecutionID)
 		}
-		if nextExecutionToSubmit != "" && state.orchestrator != nil {
-			state.orchestrator.Submit(nextExecutionToSubmit)
+		if nextExecutionToSubmit != "" {
+			state.submitExecutionBestEffort(r.Context(), nextExecutionToSubmit)
 		}
 
 		if state.authz != nil {

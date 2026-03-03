@@ -506,8 +506,8 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 		)
 
 		syncExecutionDomainBestEffort(state)
-		if nextExecutionToSubmit != "" && state.orchestrator != nil {
-			state.orchestrator.Submit(nextExecutionToSubmit)
+		if nextExecutionToSubmit != "" {
+			state.submitExecutionBestEffort(r.Context(), nextExecutionToSubmit)
 		}
 		if state.authz != nil {
 			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "conversation.write", "conversation", conversationID, "success", map[string]any{"operation": "submit_prompt"}, TraceIDFromContext(r.Context()))

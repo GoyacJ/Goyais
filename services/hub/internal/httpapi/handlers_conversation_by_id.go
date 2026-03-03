@@ -254,6 +254,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				authErr.write(w, r)
 				return
 			}
+			executionIDsToCancel := make([]string, 0, 8)
 			state.mu.Lock()
 			if _, exists := state.conversations[conversationID]; !exists {
 				state.mu.Unlock()
@@ -268,9 +269,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				}
 				delete(state.executions, executionID)
 				delete(state.executionDiffs, executionID)
-				if state.orchestrator != nil {
-					state.orchestrator.Cancel(executionID)
-				}
+				executionIDsToCancel = append(executionIDsToCancel, executionID)
 			}
 			delete(state.conversations, conversationID)
 			delete(state.conversationMessages, conversationID)
@@ -284,6 +283,9 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				}
 			}
 			state.mu.Unlock()
+			for _, executionID := range executionIDsToCancel {
+				state.cancelExecutionBestEffort(r.Context(), executionID)
+			}
 			syncExecutionDomainBestEffort(state)
 			writeJSON(w, http.StatusNoContent, map[string]any{})
 		default:
