@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	cliadapter "goyais/services/hub/internal/agent/adapters/cli"
 	"goyais/services/hub/internal/agent/core"
 )
 
@@ -93,6 +94,20 @@ func (s *commandBusStub) Execute(_ context.Context, _ string, _ core.SlashComman
 	return s.resp, nil
 }
 
+type bridgeProjectorCall struct {
+	event core.EventEnvelope
+	opts  cliadapter.ProjectionOptions
+}
+
+type bridgeProjectorStub struct {
+	calls []bridgeProjectorCall
+}
+
+func (s *bridgeProjectorStub) ProjectRunEvent(_ context.Context, event core.EventEnvelope, opts cliadapter.ProjectionOptions) error {
+	s.calls = append(s.calls, bridgeProjectorCall{event: event, opts: opts})
+	return nil
+}
+
 func TestBridgeNewSessionDelegatesToEngine(t *testing.T) {
 	engine := &engineStub{handle: core.SessionHandle{SessionID: core.SessionID("sess_new"), CreatedAt: time.Date(2026, 3, 3, 9, 0, 0, 0, time.UTC)}}
 	bridge := NewBridge(engine, nil)
@@ -148,5 +163,33 @@ func TestBridgePromptSlashUsesCommandBus(t *testing.T) {
 	}
 	if engine.submitCalls != 0 {
 		t.Fatalf("engine submit should not be called for slash command")
+	}
+}
+
+func TestBridgePromptProjectsEventsWhenProjectorConfigured(t *testing.T) {
+	engine := &engineStub{sub: newEventSubStub(4)}
+	projector := &bridgeProjectorStub{}
+	bridge := NewBridgeWithOptions(engine, nil, BridgeOptions{Projector: projector})
+
+	resp, err := bridge.Prompt(context.Background(), PromptRequest{SessionID: "sess_project", Prompt: "hello"})
+	if err != nil {
+		t.Fatalf("prompt failed: %v", err)
+	}
+	if resp.RunID == "" {
+		t.Fatalf("expected run id")
+	}
+	if len(projector.calls) != 2 {
+		t.Fatalf("expected 2 projected events, got %d", len(projector.calls))
+	}
+	for index, call := range projector.calls {
+		if call.opts.ConversationID != "sess_project" {
+			t.Fatalf("call %d conversation id = %q", index, call.opts.ConversationID)
+		}
+		if call.opts.QueueIndex != index {
+			t.Fatalf("call %d queue index = %d, want %d", index, call.opts.QueueIndex, index)
+		}
+		if string(call.event.RunID) == "" {
+			t.Fatalf("call %d run id should not be empty", index)
+		}
 	}
 }

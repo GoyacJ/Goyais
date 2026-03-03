@@ -219,9 +219,10 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				}
 			}
 			state.mu.Unlock()
-			if configChanged && hasConfigChangeExecution && state.orchestrator != nil {
-				decision, matchedPolicyID := state.orchestrator.evaluateHookDecision(configChangeExecution, HookEventTypeConfigChange, "")
-				state.orchestrator.appendHookExecutionRecordAndEvent(
+			if configChanged && hasConfigChangeExecution {
+				decision, matchedPolicyID := evaluateHookDecisionWithState(state, configChangeExecution, HookEventTypeConfigChange, "")
+				appendHookExecutionRecordAndEventWithState(
+					state,
 					configChangeExecution,
 					configChangeExecution.ID,
 					HookEventTypeConfigChange,

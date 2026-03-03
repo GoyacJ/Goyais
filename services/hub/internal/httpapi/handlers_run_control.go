@@ -371,9 +371,10 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		conversation.UpdatedAt = now
 		state.conversations[conversation.ID] = conversation
 		state.mu.Unlock()
-		if state.orchestrator != nil && (action == agentcore.ControlActionStop || (action == agentcore.ControlActionDeny && previousState != ExecutionStateConfirming)) {
-			decision, matchedPolicyID := state.orchestrator.evaluateHookDecision(execution, HookEventTypeStop, "")
-			state.orchestrator.appendHookExecutionRecordAndEvent(
+		if action == agentcore.ControlActionStop || (action == agentcore.ControlActionDeny && previousState != ExecutionStateConfirming) {
+			decision, matchedPolicyID := evaluateHookDecisionWithState(state, execution, HookEventTypeStop, "")
+			appendHookExecutionRecordAndEventWithState(
+				state,
 				execution,
 				execution.ID,
 				HookEventTypeStop,

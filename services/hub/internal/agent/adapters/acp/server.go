@@ -11,8 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"goyais/services/hub/internal/agent/core"
+	runtimesession "goyais/services/hub/internal/agent/runtime/session"
 )
 
 const (
@@ -22,13 +24,24 @@ const (
 
 // ServerOptions configures ACP server dependencies.
 type ServerOptions struct {
-	Bridge *Bridge
+	Bridge    *Bridge
+	Lifecycle SessionLifecycle
+}
+
+// SessionLifecycle defines optional session resume delegation for ACP load.
+type SessionLifecycle interface {
+	Resume(ctx context.Context, req runtimesession.ResumeRequest) (runtimesession.State, error)
+	Fork(ctx context.Context, req runtimesession.ForkRequest) (runtimesession.State, error)
+	Rewind(ctx context.Context, req runtimesession.RewindRequest) (runtimesession.State, error)
+	Clear(ctx context.Context, req runtimesession.ClearRequest) (runtimesession.State, error)
+	Handoff(ctx context.Context, req runtimesession.HandoffRequest) (runtimesession.HandoffSnapshot, error)
 }
 
 // Server exposes ACP JSON-RPC methods and maps them to Bridge operations.
 type Server struct {
 	peer   *Peer
 	bridge *Bridge
+	life   SessionLifecycle
 
 	mu       sync.Mutex
 	sessions map[string]*sessionState
@@ -47,6 +60,7 @@ func NewServer(peer *Peer, opts ServerOptions) *Server {
 	server := &Server{
 		peer:     peer,
 		bridge:   opts.Bridge,
+		life:     opts.Lifecycle,
 		sessions: map[string]*sessionState{},
 	}
 	if server.bridge == nil {
@@ -64,6 +78,10 @@ func (s *Server) registerMethods() {
 	s.peer.RegisterMethod("authenticate", s.handleAuthenticate)
 	s.peer.RegisterMethod("session/new", s.handleSessionNew)
 	s.peer.RegisterMethod("session/load", s.handleSessionLoad)
+	s.peer.RegisterMethod("session/fork", s.handleSessionFork)
+	s.peer.RegisterMethod("session/rewind", s.handleSessionRewind)
+	s.peer.RegisterMethod("session/clear", s.handleSessionClear)
+	s.peer.RegisterMethod("session/handoff", s.handleSessionHandoff)
 	s.peer.RegisterMethod("session/prompt", s.handleSessionPrompt)
 	s.peer.RegisterMethod("session/set_mode", s.handleSessionSetMode)
 	s.peer.RegisterMethod("session/cancel", s.handleSessionCancel)
@@ -152,13 +170,242 @@ func (s *Server) handleSessionLoad(params any) (any, error) {
 	state, ok := s.sessions[sessionID]
 	s.mu.Unlock()
 	if !ok {
-		return nil, JsonRPCError{Code: -32602, Message: fmt.Sprintf("session not found: %s", sessionID)}
+		if resumed, err := s.resumeSessionState(context.Background(), sessionID, cwd); err == nil {
+			state = resumed
+		} else {
+			return nil, JsonRPCError{Code: -32602, Message: fmt.Sprintf("session not found: %s", sessionID)}
+		}
+	}
+	if state != nil {
+		s.mu.Lock()
+		state.CWD = cwd
+		s.sessions[sessionID] = state
+		s.mu.Unlock()
 	}
 
 	s.sendAvailableCommands(state.SessionID)
 	s.sendCurrentMode(state)
 	return map[string]any{
 		"modes": modeState(state.CurrentMode),
+	}, nil
+}
+
+func (s *Server) handleSessionFork(params any) (any, error) {
+	p := asMap(params)
+	sessionID := strings.TrimSpace(asString(p["sessionId"]))
+	if sessionID == "" {
+		return nil, JsonRPCError{Code: -32602, Message: "missing required param: sessionId"}
+	}
+	if s == nil || s.life == nil {
+		return nil, JsonRPCError{Code: -32000, Message: "session lifecycle is not configured"}
+	}
+
+	cwd := strings.TrimSpace(asString(p["cwd"]))
+	if cwd != "" && !filepath.IsAbs(cwd) {
+		return nil, JsonRPCError{Code: -32602, Message: fmt.Sprintf("cwd must be an absolute path: %s", cwd)}
+	}
+	additionalDirectories := asStringSlice(p["additionalDirectories"])
+	for _, item := range additionalDirectories {
+		if !filepath.IsAbs(item) {
+			return nil, JsonRPCError{Code: -32602, Message: fmt.Sprintf("additional directory must be an absolute path: %s", item)}
+		}
+	}
+
+	forked, err := s.life.Fork(context.Background(), runtimesession.ForkRequest{
+		SessionID:             core.SessionID(sessionID),
+		WorkingDir:            cwd,
+		AdditionalDirectories: additionalDirectories,
+	})
+	if err != nil {
+		return nil, toRPCError(err)
+	}
+
+	state := &sessionState{
+		SessionID:   strings.TrimSpace(string(forked.SessionID)),
+		CWD:         strings.TrimSpace(forked.WorkingDir),
+		CurrentMode: permissionModeToACPMode(forked.PermissionMode),
+	}
+	if state.CWD == "" {
+		state.CWD = cwd
+	}
+	if state.CurrentMode == "" {
+		state.CurrentMode = "default"
+	}
+	s.mu.Lock()
+	s.sessions[state.SessionID] = state
+	s.mu.Unlock()
+
+	s.sendAvailableCommands(state.SessionID)
+	s.sendCurrentMode(state)
+	return map[string]any{
+		"sessionId": state.SessionID,
+		"modes":     modeState(state.CurrentMode),
+	}, nil
+}
+
+func (s *Server) handleSessionClear(params any) (any, error) {
+	p := asMap(params)
+	sessionID := strings.TrimSpace(asString(p["sessionId"]))
+	if sessionID == "" {
+		return nil, JsonRPCError{Code: -32602, Message: "missing required param: sessionId"}
+	}
+	if s == nil || s.life == nil {
+		return nil, JsonRPCError{Code: -32000, Message: "session lifecycle is not configured"}
+	}
+
+	reason := strings.TrimSpace(asString(p["reason"]))
+	cleared, err := s.life.Clear(context.Background(), runtimesession.ClearRequest{
+		SessionID: core.SessionID(sessionID),
+		Reason:    reason,
+	})
+	if err != nil {
+		return nil, toRPCError(err)
+	}
+
+	s.mu.Lock()
+	state, exists := s.sessions[sessionID]
+	if !exists {
+		state = &sessionState{SessionID: sessionID}
+	}
+	state.CurrentMode = permissionModeToACPMode(cleared.PermissionMode)
+	if state.CurrentMode == "" {
+		state.CurrentMode = "default"
+	}
+	if strings.TrimSpace(cleared.WorkingDir) != "" {
+		state.CWD = strings.TrimSpace(cleared.WorkingDir)
+	}
+	s.sessions[sessionID] = state
+	s.mu.Unlock()
+
+	s.sendCurrentMode(state)
+	return map[string]any{}, nil
+}
+
+func (s *Server) handleSessionRewind(params any) (any, error) {
+	p := asMap(params)
+	sessionID := strings.TrimSpace(asString(p["sessionId"]))
+	if sessionID == "" {
+		return nil, JsonRPCError{Code: -32602, Message: "missing required param: sessionId"}
+	}
+	if s == nil || s.life == nil {
+		return nil, JsonRPCError{Code: -32000, Message: "session lifecycle is not configured"}
+	}
+
+	checkpointID := strings.TrimSpace(asString(p["checkpointId"]))
+	if checkpointID == "" {
+		return nil, JsonRPCError{Code: -32602, Message: "missing required param: checkpointId"}
+	}
+
+	targetCursor, err := asInt64Param(p["targetCursor"], "targetCursor")
+	if err != nil {
+		return nil, err
+	}
+	if targetCursor < 0 {
+		return nil, JsonRPCError{Code: -32602, Message: "targetCursor must be >= 0"}
+	}
+	clearTempPermissions := asBool(p["clearTempPermissions"])
+
+	rewound, rewindErr := s.life.Rewind(context.Background(), runtimesession.RewindRequest{
+		SessionID:     core.SessionID(sessionID),
+		CheckpointID:  core.CheckpointID(checkpointID),
+		TargetCursor:  targetCursor,
+		ClearTempPerm: clearTempPermissions,
+	})
+	if rewindErr != nil {
+		return nil, toRPCError(rewindErr)
+	}
+
+	s.mu.Lock()
+	state, exists := s.sessions[sessionID]
+	if !exists {
+		state = &sessionState{SessionID: sessionID}
+	}
+	state.CurrentMode = permissionModeToACPMode(rewound.PermissionMode)
+	if state.CurrentMode == "" {
+		state.CurrentMode = "default"
+	}
+	if strings.TrimSpace(rewound.WorkingDir) != "" {
+		state.CWD = strings.TrimSpace(rewound.WorkingDir)
+	}
+	s.sessions[sessionID] = state
+	s.mu.Unlock()
+
+	s.sendCurrentMode(state)
+	return map[string]any{
+		"sessionId":        sessionID,
+		"checkpointId":     checkpointID,
+		"targetCursor":     targetCursor,
+		"clearTempPerm":    clearTempPermissions,
+		"temporaryPerms":   []any{},
+		"historyEntries":   rewound.HistoryEntries,
+		"lastCheckpointId": strings.TrimSpace(string(rewound.LastCheckpointID)),
+	}, nil
+}
+
+func (s *Server) handleSessionHandoff(params any) (any, error) {
+	p := asMap(params)
+	sessionID := strings.TrimSpace(asString(p["sessionId"]))
+	if sessionID == "" {
+		return nil, JsonRPCError{Code: -32602, Message: "missing required param: sessionId"}
+	}
+	if s == nil || s.life == nil {
+		return nil, JsonRPCError{Code: -32000, Message: "session lifecycle is not configured"}
+	}
+
+	target := strings.ToLower(strings.TrimSpace(asString(p["target"])))
+	if target == "" {
+		return nil, JsonRPCError{Code: -32602, Message: "missing required param: target"}
+	}
+	pendingTaskSummary := strings.TrimSpace(asString(p["pendingTaskSummary"]))
+
+	snapshot, handoffErr := s.life.Handoff(context.Background(), runtimesession.HandoffRequest{
+		SessionID:          core.SessionID(sessionID),
+		Target:             runtimesession.HandoffTarget(target),
+		PendingTaskSummary: pendingTaskSummary,
+	})
+	if handoffErr != nil {
+		return nil, toRPCError(handoffErr)
+	}
+
+	return map[string]any{
+		"sessionId":             strings.TrimSpace(string(snapshot.SessionID)),
+		"target":                strings.TrimSpace(string(snapshot.Target)),
+		"workingDir":            strings.TrimSpace(snapshot.WorkingDir),
+		"additionalDirectories": asAnyStringSlice(snapshot.AdditionalDirectories),
+		"permissionMode":        string(snapshot.PermissionMode),
+		"historyEntries":        snapshot.HistoryEntries,
+		"summary":               strings.TrimSpace(snapshot.Summary),
+		"pendingTaskSummary":    strings.TrimSpace(snapshot.PendingTaskSummary),
+		"lastCheckpointId":      strings.TrimSpace(string(snapshot.LastCheckpointID)),
+		"nextCursor":            snapshot.NextCursor,
+		"issuedAt":              formatRFC3339(snapshot.IssuedAt),
+	}, nil
+}
+
+func (s *Server) resumeSessionState(ctx context.Context, sessionID string, cwd string) (*sessionState, error) {
+	if s == nil || s.life == nil {
+		return nil, errors.New("session lifecycle is not configured")
+	}
+	resumed, err := s.life.Resume(ctx, runtimesession.ResumeRequest{
+		SessionID: core.SessionID(strings.TrimSpace(sessionID)),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	currentMode := permissionModeToACPMode(resumed.PermissionMode)
+	if currentMode == "" {
+		currentMode = "default"
+	}
+
+	session := strings.TrimSpace(string(resumed.SessionID))
+	if session == "" {
+		session = strings.TrimSpace(sessionID)
+	}
+	return &sessionState{
+		SessionID:   session,
+		CWD:         strings.TrimSpace(cwd),
+		CurrentMode: currentMode,
 	}, nil
 }
 
@@ -385,6 +632,23 @@ func modeState(currentModeID string) map[string]any {
 	}
 }
 
+func permissionModeToACPMode(mode core.PermissionMode) string {
+	switch mode {
+	case core.PermissionModeAcceptEdits:
+		return "acceptEdits"
+	case core.PermissionModePlan:
+		return "plan"
+	case core.PermissionModeDontAsk:
+		return "dontAsk"
+	case core.PermissionModeBypassPermissions:
+		return "bypassPermissions"
+	case core.PermissionModeDefault:
+		return "default"
+	default:
+		return "default"
+	}
+}
+
 func blocksToText(raw any) string {
 	switch typed := raw.(type) {
 	case string:
@@ -417,6 +681,84 @@ func firstText(payload map[string]any, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func asStringSlice(raw any) []string {
+	items, ok := raw.([]any)
+	if !ok || len(items) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		value := strings.TrimSpace(asString(item))
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func asAnyStringSlice(items []string) []any {
+	if len(items) == 0 {
+		return []any{}
+	}
+	out := make([]any, 0, len(items))
+	for _, item := range items {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	return out
+}
+
+func asBool(raw any) bool {
+	switch typed := raw.(type) {
+	case bool:
+		return typed
+	case string:
+		return strings.EqualFold(strings.TrimSpace(typed), "true")
+	default:
+		return false
+	}
+}
+
+func asInt64Param(raw any, name string) (int64, error) {
+	switch typed := raw.(type) {
+	case nil:
+		return 0, nil
+	case int:
+		return int64(typed), nil
+	case int64:
+		return typed, nil
+	case float64:
+		return int64(typed), nil
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		if trimmed == "" {
+			return 0, nil
+		}
+		return 0, JsonRPCError{Code: -32602, Message: fmt.Sprintf("%s must be numeric", name)}
+	default:
+		return 0, JsonRPCError{Code: -32602, Message: fmt.Sprintf("%s must be numeric", name)}
+	}
+}
+
+func formatRFC3339(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339)
 }
 
 func toRPCError(err error) error {

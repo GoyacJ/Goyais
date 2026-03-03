@@ -16,11 +16,16 @@ import (
 	"time"
 
 	"goyais/services/hub/internal/agent/core"
+	runtimesession "goyais/services/hub/internal/agent/runtime/session"
 )
+
+// ErrSessionLifecycleNotConfigured indicates lifecycle delegation dependency is missing.
+var ErrSessionLifecycleNotConfigured = errors.New("session lifecycle is not configured")
 
 // Service is a thin adapter around core.Engine.
 type Service struct {
-	engine core.Engine
+	engine    core.Engine
+	lifecycle SessionLifecycle
 }
 
 // StartSessionRequest is the transport-facing start-session input.
@@ -34,6 +39,82 @@ type StartSessionRequest struct {
 type StartSessionResponse struct {
 	SessionID string
 	CreatedAt string
+}
+
+// SessionLifecycle defines session-level operations delegated by HTTP handlers.
+type SessionLifecycle interface {
+	Resume(ctx context.Context, req runtimesession.ResumeRequest) (runtimesession.State, error)
+	Fork(ctx context.Context, req runtimesession.ForkRequest) (runtimesession.State, error)
+	Rewind(ctx context.Context, req runtimesession.RewindRequest) (runtimesession.State, error)
+	Clear(ctx context.Context, req runtimesession.ClearRequest) (runtimesession.State, error)
+	Handoff(ctx context.Context, req runtimesession.HandoffRequest) (runtimesession.HandoffSnapshot, error)
+}
+
+// ResumeSessionRequest is the transport-facing resume request.
+type ResumeSessionRequest struct {
+	SessionID string
+}
+
+// ForkSessionRequest is the transport-facing fork request.
+type ForkSessionRequest struct {
+	SessionID             string
+	WorkingDir            string
+	AdditionalDirectories []string
+}
+
+// RewindSessionRequest is the transport-facing rewind request.
+type RewindSessionRequest struct {
+	SessionID            string
+	CheckpointID         string
+	TargetCursor         int64
+	ClearTempPermissions bool
+}
+
+// ClearSessionRequest is the transport-facing clear request.
+type ClearSessionRequest struct {
+	SessionID string
+	Reason    string
+}
+
+// HandoffSessionRequest is the transport-facing handoff request.
+type HandoffSessionRequest struct {
+	SessionID          string
+	Target             string
+	PendingTaskSummary string
+}
+
+// SessionStateResponse is the transport-facing encoded session state snapshot.
+type SessionStateResponse struct {
+	SessionID             string
+	ParentSessionID       string
+	WorkingDir            string
+	AdditionalDirectories []string
+	PermissionMode        string
+	TemporaryPermissions  []string
+	HistoryEntries        int
+	Summary               string
+	LastCheckpointID      string
+	NextCursor            int64
+	CreatedAt             string
+	UpdatedAt             string
+	LastClearedReason     string
+	LastHandoffTarget     string
+	LastHandoffAt         string
+}
+
+// HandoffSessionResponse is the transport-facing handoff snapshot.
+type HandoffSessionResponse struct {
+	SessionID             string
+	Target                string
+	WorkingDir            string
+	AdditionalDirectories []string
+	PermissionMode        string
+	HistoryEntries        int
+	Summary               string
+	PendingTaskSummary    string
+	LastCheckpointID      string
+	NextCursor            int64
+	IssuedAt              string
 }
 
 // SubmitRequest is the transport-facing submit input.
@@ -74,6 +155,15 @@ type EventFrame struct {
 // NewService creates a thin HTTP adapter service.
 func NewService(engine core.Engine) *Service {
 	return &Service{engine: engine}
+}
+
+// NewServiceWithLifecycle creates a thin HTTP adapter with session lifecycle
+// delegation enabled.
+func NewServiceWithLifecycle(engine core.Engine, lifecycle SessionLifecycle) *Service {
+	return &Service{
+		engine:    engine,
+		lifecycle: lifecycle,
+	}
 }
 
 // StartSession delegates to core.Engine.StartSession.
@@ -157,6 +247,142 @@ func (s *Service) SubscribeSnapshot(ctx context.Context, req SubscribeRequest) (
 		}
 	}
 	return frames, nil
+}
+
+// ResumeSession delegates to runtime/session lifecycle manager.
+func (s *Service) ResumeSession(ctx context.Context, req ResumeSessionRequest) (SessionStateResponse, error) {
+	lifecycle, err := s.requireLifecycle()
+	if err != nil {
+		return SessionStateResponse{}, err
+	}
+	state, err := lifecycle.Resume(ctx, runtimesession.ResumeRequest{
+		SessionID: core.SessionID(strings.TrimSpace(req.SessionID)),
+	})
+	if err != nil {
+		return SessionStateResponse{}, err
+	}
+	return encodeSessionState(state), nil
+}
+
+// ForkSession delegates to runtime/session lifecycle manager.
+func (s *Service) ForkSession(ctx context.Context, req ForkSessionRequest) (SessionStateResponse, error) {
+	lifecycle, err := s.requireLifecycle()
+	if err != nil {
+		return SessionStateResponse{}, err
+	}
+	state, err := lifecycle.Fork(ctx, runtimesession.ForkRequest{
+		SessionID:             core.SessionID(strings.TrimSpace(req.SessionID)),
+		WorkingDir:            strings.TrimSpace(req.WorkingDir),
+		AdditionalDirectories: sanitizeDirectories(req.AdditionalDirectories),
+	})
+	if err != nil {
+		return SessionStateResponse{}, err
+	}
+	return encodeSessionState(state), nil
+}
+
+// RewindSession delegates to runtime/session lifecycle manager.
+func (s *Service) RewindSession(ctx context.Context, req RewindSessionRequest) (SessionStateResponse, error) {
+	lifecycle, err := s.requireLifecycle()
+	if err != nil {
+		return SessionStateResponse{}, err
+	}
+	state, err := lifecycle.Rewind(ctx, runtimesession.RewindRequest{
+		SessionID:     core.SessionID(strings.TrimSpace(req.SessionID)),
+		CheckpointID:  core.CheckpointID(strings.TrimSpace(req.CheckpointID)),
+		TargetCursor:  req.TargetCursor,
+		ClearTempPerm: req.ClearTempPermissions,
+	})
+	if err != nil {
+		return SessionStateResponse{}, err
+	}
+	return encodeSessionState(state), nil
+}
+
+// ClearSession delegates to runtime/session lifecycle manager.
+func (s *Service) ClearSession(ctx context.Context, req ClearSessionRequest) (SessionStateResponse, error) {
+	lifecycle, err := s.requireLifecycle()
+	if err != nil {
+		return SessionStateResponse{}, err
+	}
+	state, err := lifecycle.Clear(ctx, runtimesession.ClearRequest{
+		SessionID: core.SessionID(strings.TrimSpace(req.SessionID)),
+		Reason:    strings.TrimSpace(req.Reason),
+	})
+	if err != nil {
+		return SessionStateResponse{}, err
+	}
+	return encodeSessionState(state), nil
+}
+
+// HandoffSession delegates to runtime/session lifecycle manager.
+func (s *Service) HandoffSession(ctx context.Context, req HandoffSessionRequest) (HandoffSessionResponse, error) {
+	lifecycle, err := s.requireLifecycle()
+	if err != nil {
+		return HandoffSessionResponse{}, err
+	}
+	snapshot, err := lifecycle.Handoff(ctx, runtimesession.HandoffRequest{
+		SessionID:          core.SessionID(strings.TrimSpace(req.SessionID)),
+		Target:             runtimesession.HandoffTarget(strings.ToLower(strings.TrimSpace(req.Target))),
+		PendingTaskSummary: strings.TrimSpace(req.PendingTaskSummary),
+	})
+	if err != nil {
+		return HandoffSessionResponse{}, err
+	}
+	return encodeHandoffSnapshot(snapshot), nil
+}
+
+func (s *Service) requireLifecycle() (SessionLifecycle, error) {
+	if s == nil {
+		return nil, ErrSessionLifecycleNotConfigured
+	}
+	if s.lifecycle == nil {
+		return nil, ErrSessionLifecycleNotConfigured
+	}
+	return s.lifecycle, nil
+}
+
+func encodeSessionState(state runtimesession.State) SessionStateResponse {
+	return SessionStateResponse{
+		SessionID:             string(state.SessionID),
+		ParentSessionID:       string(state.ParentSessionID),
+		WorkingDir:            strings.TrimSpace(state.WorkingDir),
+		AdditionalDirectories: sanitizeDirectories(state.AdditionalDirectories),
+		PermissionMode:        string(state.PermissionMode),
+		TemporaryPermissions:  sanitizeDirectories(state.TemporaryPermissions),
+		HistoryEntries:        state.HistoryEntries,
+		Summary:               strings.TrimSpace(state.Summary),
+		LastCheckpointID:      string(state.LastCheckpointID),
+		NextCursor:            state.NextCursor,
+		CreatedAt:             formatTime(state.CreatedAt),
+		UpdatedAt:             formatTime(state.UpdatedAt),
+		LastClearedReason:     strings.TrimSpace(state.LastClearedReason),
+		LastHandoffTarget:     string(state.LastHandoffTarget),
+		LastHandoffAt:         formatTime(state.LastHandoffAt),
+	}
+}
+
+func encodeHandoffSnapshot(snapshot runtimesession.HandoffSnapshot) HandoffSessionResponse {
+	return HandoffSessionResponse{
+		SessionID:             string(snapshot.SessionID),
+		Target:                string(snapshot.Target),
+		WorkingDir:            strings.TrimSpace(snapshot.WorkingDir),
+		AdditionalDirectories: sanitizeDirectories(snapshot.AdditionalDirectories),
+		PermissionMode:        string(snapshot.PermissionMode),
+		HistoryEntries:        snapshot.HistoryEntries,
+		Summary:               strings.TrimSpace(snapshot.Summary),
+		PendingTaskSummary:    strings.TrimSpace(snapshot.PendingTaskSummary),
+		LastCheckpointID:      string(snapshot.LastCheckpointID),
+		NextCursor:            snapshot.NextCursor,
+		IssuedAt:              formatTime(snapshot.IssuedAt),
+	}
+}
+
+func formatTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339)
 }
 
 func parseControlAction(raw string) (core.ControlAction, error) {

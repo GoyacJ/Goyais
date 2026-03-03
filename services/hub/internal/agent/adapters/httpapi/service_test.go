@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"goyais/services/hub/internal/agent/core"
+	runtimesession "goyais/services/hub/internal/agent/runtime/session"
 )
 
 type engineStub struct {
@@ -93,6 +94,63 @@ func (s *subscriptionStub) Close() error {
 		close(s.events)
 	})
 	return nil
+}
+
+type lifecycleStub struct {
+	resumeReq  runtimesession.ResumeRequest
+	forkReq    runtimesession.ForkRequest
+	rewindReq  runtimesession.RewindRequest
+	clearReq   runtimesession.ClearRequest
+	handoffReq runtimesession.HandoffRequest
+
+	state    runtimesession.State
+	snapshot runtimesession.HandoffSnapshot
+
+	resumeErr  error
+	forkErr    error
+	rewindErr  error
+	clearErr   error
+	handoffErr error
+}
+
+func (s *lifecycleStub) Resume(_ context.Context, req runtimesession.ResumeRequest) (runtimesession.State, error) {
+	s.resumeReq = req
+	if s.resumeErr != nil {
+		return runtimesession.State{}, s.resumeErr
+	}
+	return s.state, nil
+}
+
+func (s *lifecycleStub) Fork(_ context.Context, req runtimesession.ForkRequest) (runtimesession.State, error) {
+	s.forkReq = req
+	if s.forkErr != nil {
+		return runtimesession.State{}, s.forkErr
+	}
+	return s.state, nil
+}
+
+func (s *lifecycleStub) Rewind(_ context.Context, req runtimesession.RewindRequest) (runtimesession.State, error) {
+	s.rewindReq = req
+	if s.rewindErr != nil {
+		return runtimesession.State{}, s.rewindErr
+	}
+	return s.state, nil
+}
+
+func (s *lifecycleStub) Clear(_ context.Context, req runtimesession.ClearRequest) (runtimesession.State, error) {
+	s.clearReq = req
+	if s.clearErr != nil {
+		return runtimesession.State{}, s.clearErr
+	}
+	return s.state, nil
+}
+
+func (s *lifecycleStub) Handoff(_ context.Context, req runtimesession.HandoffRequest) (runtimesession.HandoffSnapshot, error) {
+	s.handoffReq = req
+	if s.handoffErr != nil {
+		return runtimesession.HandoffSnapshot{}, s.handoffErr
+	}
+	return s.snapshot, nil
 }
 
 func TestServiceStartSessionDelegatesToEngine(t *testing.T) {
@@ -192,5 +250,139 @@ func TestServicePropagatesEngineErrors(t *testing.T) {
 	_, err := svc.StartSession(context.Background(), StartSessionRequest{WorkingDir: "/tmp"})
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestServiceSessionLifecycleRequiresDependency(t *testing.T) {
+	svc := NewService(&engineStub{})
+	_, err := svc.ResumeSession(context.Background(), ResumeSessionRequest{SessionID: "sess_missing"})
+	if !errors.Is(err, ErrSessionLifecycleNotConfigured) {
+		t.Fatalf("expected lifecycle missing error, got %v", err)
+	}
+}
+
+func TestServiceResumeSessionDelegatesLifecycle(t *testing.T) {
+	lifecycle := &lifecycleStub{
+		state: runtimesession.State{
+			SessionID:            core.SessionID("sess_resume"),
+			PermissionMode:       core.PermissionModeDefault,
+			TemporaryPermissions: []string{"Read(file.md)"},
+			HistoryEntries:       7,
+			Summary:              "resume summary",
+			CreatedAt:            time.Date(2026, 3, 3, 9, 0, 0, 0, time.UTC),
+			UpdatedAt:            time.Date(2026, 3, 3, 9, 1, 0, 0, time.UTC),
+		},
+	}
+	svc := NewServiceWithLifecycle(&engineStub{}, lifecycle)
+	resp, err := svc.ResumeSession(context.Background(), ResumeSessionRequest{SessionID: "sess_resume"})
+	if err != nil {
+		t.Fatalf("resume session failed: %v", err)
+	}
+	if lifecycle.resumeReq.SessionID != core.SessionID("sess_resume") {
+		t.Fatalf("unexpected resume request %#v", lifecycle.resumeReq)
+	}
+	if resp.SessionID != "sess_resume" || resp.HistoryEntries != 7 {
+		t.Fatalf("unexpected response %#v", resp)
+	}
+	if resp.CreatedAt != "2026-03-03T09:00:00Z" || resp.UpdatedAt != "2026-03-03T09:01:00Z" {
+		t.Fatalf("unexpected response timestamps %#v", resp)
+	}
+}
+
+func TestServiceForkRewindClearAndHandoffDelegateLifecycle(t *testing.T) {
+	lifecycle := &lifecycleStub{
+		state: runtimesession.State{
+			SessionID:             core.SessionID("sess_child"),
+			ParentSessionID:       core.SessionID("sess_parent"),
+			WorkingDir:            "/tmp/child",
+			AdditionalDirectories: []string{"/tmp/shared"},
+			PermissionMode:        core.PermissionModePlan,
+			LastCheckpointID:      core.CheckpointID("cp_2"),
+			NextCursor:            5,
+			LastClearedReason:     "user_clear",
+			CreatedAt:             time.Date(2026, 3, 3, 10, 0, 0, 0, time.UTC),
+			UpdatedAt:             time.Date(2026, 3, 3, 10, 2, 0, 0, time.UTC),
+		},
+		snapshot: runtimesession.HandoffSnapshot{
+			SessionID:             core.SessionID("sess_child"),
+			Target:                runtimesession.HandoffTargetMobile,
+			WorkingDir:            "/tmp/child",
+			AdditionalDirectories: []string{"/tmp/shared"},
+			PermissionMode:        core.PermissionModePlan,
+			HistoryEntries:        9,
+			Summary:               "ongoing",
+			PendingTaskSummary:    "finish adapter",
+			LastCheckpointID:      core.CheckpointID("cp_2"),
+			NextCursor:            5,
+			IssuedAt:              time.Date(2026, 3, 3, 10, 3, 0, 0, time.UTC),
+		},
+	}
+
+	svc := NewServiceWithLifecycle(&engineStub{}, lifecycle)
+
+	forked, err := svc.ForkSession(context.Background(), ForkSessionRequest{
+		SessionID:             "sess_parent",
+		WorkingDir:            "/tmp/child",
+		AdditionalDirectories: []string{"/tmp/shared", "/tmp/shared"},
+	})
+	if err != nil {
+		t.Fatalf("fork session failed: %v", err)
+	}
+	if lifecycle.forkReq.SessionID != core.SessionID("sess_parent") {
+		t.Fatalf("unexpected fork request %#v", lifecycle.forkReq)
+	}
+	if len(lifecycle.forkReq.AdditionalDirectories) != 1 {
+		t.Fatalf("expected deduplicated additional directories, got %#v", lifecycle.forkReq.AdditionalDirectories)
+	}
+	if forked.ParentSessionID != "sess_parent" {
+		t.Fatalf("unexpected fork response %#v", forked)
+	}
+
+	rewound, err := svc.RewindSession(context.Background(), RewindSessionRequest{
+		SessionID:            "sess_child",
+		CheckpointID:         "cp_2",
+		TargetCursor:         5,
+		ClearTempPermissions: true,
+	})
+	if err != nil {
+		t.Fatalf("rewind session failed: %v", err)
+	}
+	if lifecycle.rewindReq.CheckpointID != core.CheckpointID("cp_2") || !lifecycle.rewindReq.ClearTempPerm {
+		t.Fatalf("unexpected rewind request %#v", lifecycle.rewindReq)
+	}
+	if rewound.LastCheckpointID != "cp_2" || rewound.NextCursor != 5 {
+		t.Fatalf("unexpected rewind response %#v", rewound)
+	}
+
+	cleared, err := svc.ClearSession(context.Background(), ClearSessionRequest{
+		SessionID: "sess_child",
+		Reason:    " user_clear ",
+	})
+	if err != nil {
+		t.Fatalf("clear session failed: %v", err)
+	}
+	if lifecycle.clearReq.Reason != "user_clear" {
+		t.Fatalf("unexpected clear request %#v", lifecycle.clearReq)
+	}
+	if cleared.LastClearedReason != "user_clear" {
+		t.Fatalf("unexpected clear response %#v", cleared)
+	}
+
+	handoff, err := svc.HandoffSession(context.Background(), HandoffSessionRequest{
+		SessionID:          "sess_child",
+		Target:             "MOBILE",
+		PendingTaskSummary: " finish adapter ",
+	})
+	if err != nil {
+		t.Fatalf("handoff session failed: %v", err)
+	}
+	if lifecycle.handoffReq.Target != runtimesession.HandoffTargetMobile {
+		t.Fatalf("unexpected handoff target %#v", lifecycle.handoffReq.Target)
+	}
+	if handoff.Target != "mobile" || handoff.PendingTaskSummary != "finish adapter" {
+		t.Fatalf("unexpected handoff response %#v", handoff)
+	}
+	if handoff.IssuedAt != "2026-03-03T10:03:00Z" {
+		t.Fatalf("unexpected handoff issued at %#v", handoff)
 	}
 }

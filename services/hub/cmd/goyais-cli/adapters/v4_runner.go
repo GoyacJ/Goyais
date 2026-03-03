@@ -13,15 +13,17 @@ import (
 	"strings"
 
 	cliadapter "goyais/services/hub/internal/agent/adapters/cli"
+	runtimebridge "goyais/services/hub/internal/agent/adapters/runtimebridge"
 	"goyais/services/hub/internal/agent/core"
 	"goyais/services/hub/internal/agent/runtime/loop"
 )
 
 // V4Runner adapts cmd-level run requests to internal Agent v4 CLI adapter.
 type V4Runner struct {
-	engine core.Engine
-	stdout io.Writer
-	stderr io.Writer
+	engine    core.Engine
+	stdout    io.Writer
+	stderr    io.Writer
+	eventSink cliadapter.RunEventProjector
 }
 
 // NewV4Runner creates a prompt runner backed by Agent v4 unified engine.
@@ -33,9 +35,10 @@ func NewV4Runner(stdout io.Writer, stderr io.Writer) *V4Runner {
 		stderr = io.Discard
 	}
 	return &V4Runner{
-		engine: loop.NewEngine(nil),
-		stdout: stdout,
-		stderr: stderr,
+		engine:    loop.NewEngine(nil),
+		stdout:    stdout,
+		stderr:    stderr,
+		eventSink: defaultRunEventProjector(),
 	}
 }
 
@@ -53,8 +56,9 @@ func (r *V4Runner) RunPrompt(ctx context.Context, req RunRequest) error {
 
 	writer := r.writerForFormat(req.OutputFormat)
 	runner := cliadapter.Runner{
-		Engine: r.engine,
-		Writer: writer,
+		Engine:    r.engine,
+		Writer:    writer,
+		Projector: r.eventSink,
 	}
 	_, err := runner.RunPrompt(ctx, cliadapter.RunRequest{
 		WorkingDir: workingDir,
@@ -145,5 +149,14 @@ func stringValue(value any) string {
 		return typed.String()
 	default:
 		return fmt.Sprintf("%v", value)
+	}
+}
+
+func defaultRunEventProjector() cliadapter.RunEventProjector {
+	store := runtimebridge.NewMemoryEventStore()
+	return runtimebridge.CLIProjector{
+		Projector: runtimebridge.NewProjector(runtimebridge.ProjectorOptions{
+			Store: store,
+		}),
 	}
 }

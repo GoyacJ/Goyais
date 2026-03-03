@@ -55,15 +55,30 @@ type ControlRequest struct {
 	Action core.ControlAction
 }
 
+// BridgeOptions configures optional ACP bridge integrations.
+type BridgeOptions struct {
+	Projector cliadapter.RunEventProjector
+}
+
 // Bridge delegates ACP operations to core.Engine via CLI adapter runner.
 type Bridge struct {
 	engine     core.Engine
 	commandBus core.CommandBus
+	projector  cliadapter.RunEventProjector
 }
 
 // NewBridge creates ACP bridge for one shared engine instance.
 func NewBridge(engine core.Engine, commandBus core.CommandBus) *Bridge {
-	return &Bridge{engine: engine, commandBus: commandBus}
+	return NewBridgeWithOptions(engine, commandBus, BridgeOptions{})
+}
+
+// NewBridgeWithOptions creates ACP bridge with optional runtime projections.
+func NewBridgeWithOptions(engine core.Engine, commandBus core.CommandBus, options BridgeOptions) *Bridge {
+	return &Bridge{
+		engine:     engine,
+		commandBus: commandBus,
+		projector:  options.Projector,
+	}
 }
 
 // NewSession starts a new runtime session.
@@ -91,6 +106,7 @@ func (b *Bridge) Prompt(ctx context.Context, req PromptRequest) (PromptResponse,
 		Engine:     b.engine,
 		CommandBus: b.commandBus,
 		Writer:     collector,
+		Projector:  b.projector,
 	}
 	result, err := runner.RunPrompt(ctx, cliadapter.RunRequest{
 		SessionID: strings.TrimSpace(req.SessionID),

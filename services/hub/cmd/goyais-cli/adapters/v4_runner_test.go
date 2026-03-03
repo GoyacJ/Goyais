@@ -7,10 +7,12 @@ package adapters
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	cliadapter "goyais/services/hub/internal/agent/adapters/cli"
 	"goyais/services/hub/internal/agent/core"
 )
 
@@ -72,6 +74,25 @@ func (s *v4EngineStub) Subscribe(_ context.Context, _ string, _ string) (core.Ev
 	return s.sub, nil
 }
 
+type runnerProjectorCall struct {
+	event core.EventEnvelope
+	opts  cliadapter.ProjectionOptions
+}
+
+type runnerProjectorStub struct {
+	calls      []runnerProjectorCall
+	failOnCall int
+	err        error
+}
+
+func (s *runnerProjectorStub) ProjectRunEvent(_ context.Context, event core.EventEnvelope, opts cliadapter.ProjectionOptions) error {
+	s.calls = append(s.calls, runnerProjectorCall{event: event, opts: opts})
+	if s.err != nil && s.failOnCall > 0 && len(s.calls) == s.failOnCall {
+		return s.err
+	}
+	return nil
+}
+
 func TestV4RunnerRunPromptText(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -121,5 +142,57 @@ func TestV4RunnerRunPromptStreamJSON(t *testing.T) {
 	}
 	if !strings.Contains(output, `"type":"run_completed"`) {
 		t.Fatalf("expected run completed json frame, got %q", output)
+	}
+}
+
+func TestV4RunnerRunPromptProjectsRunEvents(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	engine := &v4EngineStub{sub: &v4SubscriptionStub{events: make(chan core.EventEnvelope, 4)}}
+	projector := &runnerProjectorStub{}
+	runner := &V4Runner{
+		engine:     engine,
+		stdout:     stdout,
+		stderr:     stderr,
+		eventSink:  projector,
+	}
+
+	err := runner.RunPrompt(context.Background(), RunRequest{
+		Prompt: "hello",
+		CWD:    t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("run prompt failed: %v", err)
+	}
+	if len(projector.calls) != 2 {
+		t.Fatalf("expected 2 projected events, got %d", len(projector.calls))
+	}
+	if projector.calls[0].opts.ConversationID != "sess_v4" {
+		t.Fatalf("unexpected conversation id %#v", projector.calls[0].opts)
+	}
+}
+
+func TestV4RunnerRunPromptReturnsProjectorError(t *testing.T) {
+	engine := &v4EngineStub{sub: &v4SubscriptionStub{events: make(chan core.EventEnvelope, 4)}}
+	projector := &runnerProjectorStub{
+		failOnCall: 1,
+		err:        errors.New("projection failed"),
+	}
+	runner := &V4Runner{
+		engine:    engine,
+		stdout:    &bytes.Buffer{},
+		stderr:    &bytes.Buffer{},
+		eventSink: projector,
+	}
+
+	err := runner.RunPrompt(context.Background(), RunRequest{
+		Prompt: "hello",
+		CWD:    t.TempDir(),
+	})
+	if err == nil {
+		t.Fatalf("expected projector error")
+	}
+	if !strings.Contains(err.Error(), "projection failed") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

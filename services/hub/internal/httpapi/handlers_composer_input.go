@@ -490,21 +490,20 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 		})
 		state.mu.Unlock()
 
-		if state.orchestrator != nil {
-			decision, matchedPolicyID := state.orchestrator.evaluateHookDecision(createdExecution, HookEventTypeUserPromptSubmit, "")
-			state.orchestrator.appendHookExecutionRecordAndEvent(
-				createdExecution,
-				createdExecution.ID,
-				HookEventTypeUserPromptSubmit,
-				"",
-				matchedPolicyID,
-				decision,
-				map[string]any{
-					"message_id": createdExecution.MessageID,
-					"source":     "composer_input",
-				},
-			)
-		}
+		decision, matchedPolicyID := evaluateHookDecisionWithState(state, createdExecution, HookEventTypeUserPromptSubmit, "")
+		appendHookExecutionRecordAndEventWithState(
+			state,
+			createdExecution,
+			createdExecution.ID,
+			HookEventTypeUserPromptSubmit,
+			"",
+			matchedPolicyID,
+			decision,
+			map[string]any{
+				"message_id": createdExecution.MessageID,
+				"source":     "composer_input",
+			},
+		)
 
 		syncExecutionDomainBestEffort(state)
 		if nextExecutionToSubmit != "" && state.orchestrator != nil {

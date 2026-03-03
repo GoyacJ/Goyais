@@ -1,10 +1,14 @@
+// Copyright (c) 2026 Ysmjjsy
+// Author: Goya
+// SPDX-License-Identifier: MIT
+
 package httpapi
 
 import (
 	"testing"
 	"time"
 
-	agentcore "goyais/services/hub/internal/agent/core"
+	runtimecore "goyais/services/hub/internal/agent/core"
 )
 
 func TestMapExecutionEventToRunEvent_MessageReceivedMapsToRunQueued(t *testing.T) {
@@ -44,7 +48,7 @@ func TestMapExecutionStateToRunState_SupportsLegacyConfirming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected confirming to be supported, got %v", err)
 	}
-	if runState != agentcore.RunStateWaitingApproval {
+	if runState != runtimecore.RunStateWaitingApproval {
 		t.Fatalf("expected waiting_approval, got %q", runState)
 	}
 }
@@ -69,3 +73,4 @@ func TestMapExecutionEventToRunEvent_MapsApprovalDeltaToRunApprovalNeeded(t *tes
 		t.Fatalf("expected run_approval_needed, got %q", runEvent.Type)
 	}
 }
+

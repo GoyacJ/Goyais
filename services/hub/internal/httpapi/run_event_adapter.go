@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ysmjjsy
+// Author: Goya
+// SPDX-License-Identifier: MIT
+
 package httpapi
 
 import (
@@ -5,16 +9,20 @@ import (
 	"strings"
 	"time"
 
-	agentcore "goyais/services/hub/internal/agent/core"
+	runtimecore "goyais/services/hub/internal/agent/core"
 )
 
+// mappedRunEvent is the HTTP SSE wire shape consumed by existing clients.
+//
+// It remains intentionally map-backed at the payload edge, while upstream
+// runtime code uses strongly typed payload structs.
 type mappedRunEvent struct {
-	Type      agentcore.RunEventType `json:"type"`
-	SessionID string                 `json:"session_id"`
-	RunID     string                 `json:"run_id"`
-	Sequence  int64                  `json:"sequence"`
-	Timestamp time.Time              `json:"timestamp"`
-	Payload   map[string]any         `json:"payload,omitempty"`
+	Type      runtimecore.RunEventType `json:"type"`
+	SessionID string                   `json:"session_id"`
+	RunID     string                   `json:"run_id"`
+	Sequence  int64                    `json:"sequence"`
+	Timestamp time.Time                `json:"timestamp"`
+	Payload   map[string]any           `json:"payload,omitempty"`
 }
 
 func mapExecutionEventToRunEvent(event ExecutionEvent) mappedRunEvent {
@@ -49,92 +57,92 @@ func mapExecutionEventToRunEvent(event ExecutionEvent) mappedRunEvent {
 	}
 }
 
-func mapExecutionEventToRunEventType(event ExecutionEvent) agentcore.RunEventType {
+func mapExecutionEventToRunEventType(event ExecutionEvent) runtimecore.RunEventType {
 	eventType := event.Type
 	switch eventType {
 	case ExecutionEventTypeMessageReceived:
-		return agentcore.RunEventTypeRunQueued
+		return runtimecore.RunEventTypeRunQueued
 	case ExecutionEventTypeExecutionStarted:
-		return agentcore.RunEventTypeRunStarted
+		return runtimecore.RunEventTypeRunStarted
 	case ExecutionEventTypeExecutionDone:
-		return agentcore.RunEventTypeRunCompleted
+		return runtimecore.RunEventTypeRunCompleted
 	case ExecutionEventTypeExecutionError:
-		return agentcore.RunEventTypeRunFailed
+		return runtimecore.RunEventTypeRunFailed
 	case ExecutionEventTypeExecutionStopped:
-		return agentcore.RunEventTypeRunCancelled
+		return runtimecore.RunEventTypeRunCancelled
 	case ExecutionEventTypeThinkingDelta:
 		if stage := strings.TrimSpace(asStringValue(event.Payload["stage"])); stage == "run_approval_needed" {
-			return agentcore.RunEventTypeRunApprovalNeeded
+			return runtimecore.RunEventTypeRunApprovalNeeded
 		}
-		return agentcore.RunEventTypeRunOutputDelta
+		return runtimecore.RunEventTypeRunOutputDelta
 	case ExecutionEventTypeToolCall,
 		ExecutionEventTypeToolResult,
 		ExecutionEventTypeDiffGenerated:
-		return agentcore.RunEventTypeRunOutputDelta
+		return runtimecore.RunEventTypeRunOutputDelta
 	default:
-		return agentcore.RunEventTypeRunOutputDelta
+		return runtimecore.RunEventTypeRunOutputDelta
 	}
 }
 
-func mapExecutionStateToRunState(executionState ExecutionState) (agentcore.RunState, error) {
+func mapExecutionStateToRunState(executionState ExecutionState) (runtimecore.RunState, error) {
 	switch strings.TrimSpace(string(executionState)) {
 	case string(ExecutionStateQueued):
-		return agentcore.RunStateQueued, nil
+		return runtimecore.RunStateQueued, nil
 	case string(ExecutionStatePending):
-		return agentcore.RunStateQueued, nil
+		return runtimecore.RunStateQueued, nil
 	case string(ExecutionStateExecuting):
-		return agentcore.RunStateRunning, nil
-	case string(ExecutionStateConfirming), string(agentcore.RunStateWaitingApproval):
-		return agentcore.RunStateWaitingApproval, nil
-	case string(ExecutionStateAwaitingInput), string(agentcore.RunStateWaitingUserInput):
-		return agentcore.RunStateWaitingUserInput, nil
+		return runtimecore.RunStateRunning, nil
+	case string(ExecutionStateConfirming), string(runtimecore.RunStateWaitingApproval):
+		return runtimecore.RunStateWaitingApproval, nil
+	case string(ExecutionStateAwaitingInput), string(runtimecore.RunStateWaitingUserInput):
+		return runtimecore.RunStateWaitingUserInput, nil
 	case string(ExecutionStateCompleted):
-		return agentcore.RunStateCompleted, nil
+		return runtimecore.RunStateCompleted, nil
 	case string(ExecutionStateFailed):
-		return agentcore.RunStateFailed, nil
+		return runtimecore.RunStateFailed, nil
 	case string(ExecutionStateCancelled):
-		return agentcore.RunStateCancelled, nil
+		return runtimecore.RunStateCancelled, nil
 	default:
 		return "", fmt.Errorf("unsupported execution state %q", executionState)
 	}
 }
 
-func mapRunStateToExecutionState(runState agentcore.RunState, current ExecutionState) ExecutionState {
+func mapRunStateToExecutionState(runState runtimecore.RunState, current ExecutionState) ExecutionState {
 	switch runState {
-	case agentcore.RunStateQueued:
+	case runtimecore.RunStateQueued:
 		return ExecutionStateQueued
-	case agentcore.RunStateRunning:
+	case runtimecore.RunStateRunning:
 		if current == ExecutionStateExecuting || current == ExecutionStateConfirming {
 			return ExecutionStateExecuting
 		}
 		return ExecutionStatePending
-	case agentcore.RunStateWaitingApproval:
+	case runtimecore.RunStateWaitingApproval:
 		return ExecutionStateConfirming
-	case agentcore.RunStateWaitingUserInput:
+	case runtimecore.RunStateWaitingUserInput:
 		return ExecutionStateAwaitingInput
-	case agentcore.RunStateCompleted:
+	case runtimecore.RunStateCompleted:
 		return ExecutionStateCompleted
-	case agentcore.RunStateFailed:
+	case runtimecore.RunStateFailed:
 		return ExecutionStateFailed
-	case agentcore.RunStateCancelled:
+	case runtimecore.RunStateCancelled:
 		return ExecutionStateCancelled
 	default:
 		return current
 	}
 }
 
-func mapRunControlAction(raw string) (agentcore.ControlAction, error) {
+func mapRunControlAction(raw string) (runtimecore.ControlAction, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case string(agentcore.ControlActionStop):
-		return agentcore.ControlActionStop, nil
-	case string(agentcore.ControlActionApprove):
-		return agentcore.ControlActionApprove, nil
-	case string(agentcore.ControlActionDeny):
-		return agentcore.ControlActionDeny, nil
-	case string(agentcore.ControlActionResume):
-		return agentcore.ControlActionResume, nil
-	case string(agentcore.ControlActionAnswer):
-		return agentcore.ControlActionAnswer, nil
+	case string(runtimecore.ControlActionStop):
+		return runtimecore.ControlActionStop, nil
+	case string(runtimecore.ControlActionApprove):
+		return runtimecore.ControlActionApprove, nil
+	case string(runtimecore.ControlActionDeny):
+		return runtimecore.ControlActionDeny, nil
+	case string(runtimecore.ControlActionResume):
+		return runtimecore.ControlActionResume, nil
+	case string(runtimecore.ControlActionAnswer):
+		return runtimecore.ControlActionAnswer, nil
 	default:
 		return "", fmt.Errorf("unsupported control action %q", raw)
 	}
@@ -166,3 +174,4 @@ func parseExecutionEventTimestamp(raw string) time.Time {
 	}
 	return parsed.UTC()
 }
+

@@ -30,6 +30,18 @@ type EventWriter interface {
 	WriteEvent(frame EventFrame) error
 }
 
+// ProjectionOptions carries legacy projection metadata for one runtime event.
+type ProjectionOptions struct {
+	ConversationID string
+	QueueIndex     int
+}
+
+// RunEventProjector projects unified runtime events into optional legacy
+// storage/read-model bridges (for example runtimebridge.Projector).
+type RunEventProjector interface {
+	ProjectRunEvent(ctx context.Context, event core.EventEnvelope, options ProjectionOptions) error
+}
+
 // RunRequest is one CLI prompt execution request.
 type RunRequest struct {
 	SessionID             string
@@ -54,6 +66,7 @@ type Runner struct {
 	Engine     core.Engine
 	CommandBus core.CommandBus
 	Writer     EventWriter
+	Projector  RunEventProjector
 }
 
 // RunPrompt executes one prompt request against the unified engine runtime.
@@ -101,6 +114,7 @@ func (r Runner) RunPrompt(ctx context.Context, req RunRequest) (RunResult, error
 	}
 
 	outputChunks := make([]string, 0, 8)
+	projected := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -112,6 +126,13 @@ func (r Runner) RunPrompt(ctx context.Context, req RunRequest) (RunResult, error
 			if strings.TrimSpace(string(event.RunID)) != runID {
 				continue
 			}
+			if projectErr := r.projectEvent(ctx, event, ProjectionOptions{
+				ConversationID: sessionID,
+				QueueIndex:     projected,
+			}); projectErr != nil {
+				return RunResult{}, projectErr
+			}
+			projected++
 			frame, mapErr := eventToFrame(event)
 			if mapErr != nil {
 				return RunResult{}, mapErr
@@ -192,6 +213,13 @@ func (r Runner) writeFrame(frame EventFrame) error {
 		return nil
 	}
 	return r.Writer.WriteEvent(frame)
+}
+
+func (r Runner) projectEvent(ctx context.Context, event core.EventEnvelope, options ProjectionOptions) error {
+	if r.Projector == nil {
+		return nil
+	}
+	return r.Projector.ProjectRunEvent(ctx, event, options)
 }
 
 func isTerminal(eventType core.RunEventType) bool {

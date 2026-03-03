@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"goyais/services/hub/internal/agent/core"
+	runtimesession "goyais/services/hub/internal/agent/runtime/session"
 )
 
 type serverHarness struct {
@@ -24,7 +25,7 @@ type serverHarness struct {
 	outputs []map[string]any
 }
 
-func newServerHarness(t *testing.T, engine core.Engine) *serverHarness {
+func newServerHarness(t *testing.T, engine core.Engine, lifecycle SessionLifecycle) *serverHarness {
 	t.Helper()
 
 	peer := NewPeer()
@@ -43,7 +44,7 @@ func newServerHarness(t *testing.T, engine core.Engine) *serverHarness {
 		h.mu.Unlock()
 		return nil
 	})
-	_ = NewServer(peer, ServerOptions{Bridge: NewBridge(engine, nil)})
+	_ = NewServer(peer, ServerOptions{Bridge: NewBridge(engine, nil), Lifecycle: lifecycle})
 	return h
 }
 
@@ -78,6 +79,68 @@ type acpEngineStub struct {
 	controlAction core.ControlAction
 
 	sub chan core.EventEnvelope
+}
+
+type lifecycleStub struct {
+	resumeReq   runtimesession.ResumeRequest
+	resumeState runtimesession.State
+	resumeErr   error
+
+	forkReq   runtimesession.ForkRequest
+	forkState runtimesession.State
+	forkErr   error
+
+	rewindReq   runtimesession.RewindRequest
+	rewindState runtimesession.State
+	rewindErr   error
+
+	clearReq   runtimesession.ClearRequest
+	clearState runtimesession.State
+	clearErr   error
+
+	handoffReq      runtimesession.HandoffRequest
+	handoffSnapshot runtimesession.HandoffSnapshot
+	handoffErr      error
+}
+
+func (s *lifecycleStub) Resume(_ context.Context, req runtimesession.ResumeRequest) (runtimesession.State, error) {
+	s.resumeReq = req
+	if s.resumeErr != nil {
+		return runtimesession.State{}, s.resumeErr
+	}
+	return s.resumeState, nil
+}
+
+func (s *lifecycleStub) Fork(_ context.Context, req runtimesession.ForkRequest) (runtimesession.State, error) {
+	s.forkReq = req
+	if s.forkErr != nil {
+		return runtimesession.State{}, s.forkErr
+	}
+	return s.forkState, nil
+}
+
+func (s *lifecycleStub) Rewind(_ context.Context, req runtimesession.RewindRequest) (runtimesession.State, error) {
+	s.rewindReq = req
+	if s.rewindErr != nil {
+		return runtimesession.State{}, s.rewindErr
+	}
+	return s.rewindState, nil
+}
+
+func (s *lifecycleStub) Clear(_ context.Context, req runtimesession.ClearRequest) (runtimesession.State, error) {
+	s.clearReq = req
+	if s.clearErr != nil {
+		return runtimesession.State{}, s.clearErr
+	}
+	return s.clearState, nil
+}
+
+func (s *lifecycleStub) Handoff(_ context.Context, req runtimesession.HandoffRequest) (runtimesession.HandoffSnapshot, error) {
+	s.handoffReq = req
+	if s.handoffErr != nil {
+		return runtimesession.HandoffSnapshot{}, s.handoffErr
+	}
+	return s.handoffSnapshot, nil
 }
 
 func (s *acpEngineStub) StartSession(_ context.Context, _ core.StartSessionRequest) (core.SessionHandle, error) {
@@ -142,7 +205,7 @@ func (s *testSubscription) Close() error {
 func TestServerPromptLifecycle(t *testing.T) {
 	workspace := t.TempDir()
 	engine := &acpEngineStub{submitRunID: "run_1"}
-	harness := newServerHarness(t, engine)
+	harness := newServerHarness(t, engine, nil)
 
 	initResp, _ := harness.call(map[string]any{
 		"jsonrpc": "2.0",
@@ -210,7 +273,7 @@ func TestServerPromptLifecycle(t *testing.T) {
 func TestServerCancelDuringPrompt(t *testing.T) {
 	workspace := t.TempDir()
 	engine := &blockingEngineStub{promptStarted: make(chan struct{})}
-	harness := newServerHarness(t, engine)
+	harness := newServerHarness(t, engine, nil)
 
 	newResp, _ := harness.call(map[string]any{
 		"jsonrpc": "2.0",
@@ -325,7 +388,7 @@ func containsUpdateText(messages []map[string]any, text string) bool {
 
 func TestServerSessionNewRejectsRelativePath(t *testing.T) {
 	engine := &acpEngineStub{}
-	harness := newServerHarness(t, engine)
+	harness := newServerHarness(t, engine, nil)
 
 	resp, _ := harness.call(map[string]any{
 		"jsonrpc": "2.0",
@@ -335,6 +398,248 @@ func TestServerSessionNewRejectsRelativePath(t *testing.T) {
 	})
 	if resp["error"] == nil {
 		t.Fatalf("expected relative path to fail")
+	}
+}
+
+func TestServerSessionLoadUsesLifecycleResumeWhenNotInMemory(t *testing.T) {
+	workspace := t.TempDir()
+	engine := &acpEngineStub{}
+	lifecycle := &lifecycleStub{
+		resumeState: runtimesession.State{
+			SessionID:      core.SessionID("sess_loaded"),
+			PermissionMode: core.PermissionModePlan,
+		},
+	}
+	harness := newServerHarness(t, engine, lifecycle)
+
+	resp, msgs := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "session/load",
+		"params": map[string]any{
+			"sessionId": "sess_loaded",
+			"cwd":       workspace,
+		},
+	})
+	if resp["error"] != nil {
+		t.Fatalf("session/load error: %#v", resp["error"])
+	}
+	if lifecycle.resumeReq.SessionID != core.SessionID("sess_loaded") {
+		t.Fatalf("unexpected resume request %#v", lifecycle.resumeReq)
+	}
+	if !containsUpdate(msgs, "available_commands_update") {
+		t.Fatalf("expected available_commands_update notification")
+	}
+	if !containsUpdate(msgs, "current_mode_update") {
+		t.Fatalf("expected current_mode_update notification")
+	}
+	result := asMap(resp["result"])
+	modes := asMap(result["modes"])
+	if asString(modes["currentModeId"]) != "plan" {
+		t.Fatalf("expected resumed plan mode, got %#v", modes)
+	}
+}
+
+func TestServerSessionForkUsesLifecycle(t *testing.T) {
+	workspace := t.TempDir()
+	engine := &acpEngineStub{}
+	lifecycle := &lifecycleStub{
+		forkState: runtimesession.State{
+			SessionID:      core.SessionID("sess_forked"),
+			WorkingDir:     workspace,
+			PermissionMode: core.PermissionModeAcceptEdits,
+		},
+	}
+	harness := newServerHarness(t, engine, lifecycle)
+
+	resp, msgs := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "session/fork",
+		"params": map[string]any{
+			"sessionId":             "sess_parent",
+			"cwd":                   workspace,
+			"additionalDirectories": []any{workspace},
+		},
+	})
+	if resp["error"] != nil {
+		t.Fatalf("session/fork error: %#v", resp["error"])
+	}
+	if lifecycle.forkReq.SessionID != core.SessionID("sess_parent") {
+		t.Fatalf("unexpected fork request %#v", lifecycle.forkReq)
+	}
+	if len(lifecycle.forkReq.AdditionalDirectories) != 1 || lifecycle.forkReq.AdditionalDirectories[0] != workspace {
+		t.Fatalf("unexpected fork additional directories %#v", lifecycle.forkReq.AdditionalDirectories)
+	}
+	if !containsUpdate(msgs, "available_commands_update") || !containsUpdate(msgs, "current_mode_update") {
+		t.Fatalf("expected fork notifications, got %#v", msgs)
+	}
+
+	result := asMap(resp["result"])
+	if strings.TrimSpace(asString(result["sessionId"])) != "sess_forked" {
+		t.Fatalf("unexpected fork response %#v", result)
+	}
+	modes := asMap(result["modes"])
+	if asString(modes["currentModeId"]) != "acceptEdits" {
+		t.Fatalf("expected acceptEdits mode, got %#v", modes)
+	}
+}
+
+func TestServerSessionClearUsesLifecycle(t *testing.T) {
+	workspace := t.TempDir()
+	engine := &acpEngineStub{}
+	lifecycle := &lifecycleStub{
+		clearState: runtimesession.State{
+			SessionID:      core.SessionID("sess_clear"),
+			WorkingDir:     workspace,
+			PermissionMode: core.PermissionModePlan,
+		},
+	}
+	harness := newServerHarness(t, engine, lifecycle)
+
+	newResp, _ := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "session/new",
+		"params":  map[string]any{"cwd": workspace},
+	})
+	sessionID := strings.TrimSpace(asString(asMap(newResp["result"])["sessionId"]))
+	if sessionID == "" {
+		t.Fatalf("missing session id from session/new")
+	}
+
+	clearResp, clearMsgs := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "session/clear",
+		"params": map[string]any{
+			"sessionId": sessionID,
+			"reason":    "manual_clear",
+		},
+	})
+	if clearResp["error"] != nil {
+		t.Fatalf("session/clear error: %#v", clearResp["error"])
+	}
+	if lifecycle.clearReq.SessionID != core.SessionID(sessionID) || lifecycle.clearReq.Reason != "manual_clear" {
+		t.Fatalf("unexpected clear request %#v", lifecycle.clearReq)
+	}
+	if !containsUpdate(clearMsgs, "current_mode_update") {
+		t.Fatalf("expected current_mode_update notification after clear")
+	}
+}
+
+func TestServerSessionRewindUsesLifecycle(t *testing.T) {
+	workspace := t.TempDir()
+	engine := &acpEngineStub{}
+	lifecycle := &lifecycleStub{
+		rewindState: runtimesession.State{
+			SessionID:        core.SessionID("sess_rewind"),
+			WorkingDir:       workspace,
+			PermissionMode:   core.PermissionModePlan,
+			LastCheckpointID: core.CheckpointID("cp_rewind"),
+			HistoryEntries:   7,
+		},
+	}
+	harness := newServerHarness(t, engine, lifecycle)
+
+	newResp, _ := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "session/new",
+		"params":  map[string]any{"cwd": workspace},
+	})
+	sessionID := strings.TrimSpace(asString(asMap(newResp["result"])["sessionId"]))
+	if sessionID == "" {
+		t.Fatalf("missing session id from session/new")
+	}
+
+	rewindResp, rewindMsgs := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "session/rewind",
+		"params": map[string]any{
+			"sessionId":            sessionID,
+			"checkpointId":         "cp_rewind",
+			"targetCursor":         5,
+			"clearTempPermissions": true,
+		},
+	})
+	if rewindResp["error"] != nil {
+		t.Fatalf("session/rewind error: %#v", rewindResp["error"])
+	}
+	if lifecycle.rewindReq.SessionID != core.SessionID(sessionID) {
+		t.Fatalf("unexpected rewind session id %#v", lifecycle.rewindReq)
+	}
+	if lifecycle.rewindReq.CheckpointID != core.CheckpointID("cp_rewind") {
+		t.Fatalf("unexpected rewind checkpoint %#v", lifecycle.rewindReq)
+	}
+	if lifecycle.rewindReq.TargetCursor != 5 || !lifecycle.rewindReq.ClearTempPerm {
+		t.Fatalf("unexpected rewind request %#v", lifecycle.rewindReq)
+	}
+	if !containsUpdate(rewindMsgs, "current_mode_update") {
+		t.Fatalf("expected current_mode_update notification after rewind")
+	}
+
+	result := asMap(rewindResp["result"])
+	if asString(result["checkpointId"]) != "cp_rewind" {
+		t.Fatalf("unexpected rewind result %#v", result)
+	}
+	if asInt(result["targetCursor"], -1) != 5 {
+		t.Fatalf("unexpected rewind cursor %#v", result)
+	}
+}
+
+func TestServerSessionHandoffUsesLifecycle(t *testing.T) {
+	engine := &acpEngineStub{}
+	lifecycle := &lifecycleStub{
+		handoffSnapshot: runtimesession.HandoffSnapshot{
+			SessionID:             core.SessionID("sess_handoff"),
+			Target:                runtimesession.HandoffTargetMobile,
+			WorkingDir:            "/tmp/handoff",
+			AdditionalDirectories: []string{"/tmp/shared"},
+			PermissionMode:        core.PermissionModePlan,
+			HistoryEntries:        8,
+			Summary:               "continue migration",
+			PendingTaskSummary:    "finish runtime bridge wiring",
+			LastCheckpointID:      core.CheckpointID("cp_handoff"),
+			NextCursor:            6,
+			IssuedAt:              time.Date(2026, 3, 4, 2, 0, 0, 0, time.UTC),
+		},
+	}
+	harness := newServerHarness(t, engine, lifecycle)
+
+	resp, _ := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "session/handoff",
+		"params": map[string]any{
+			"sessionId":          "sess_handoff",
+			"target":             "MOBILE",
+			"pendingTaskSummary": " finish runtime bridge wiring ",
+		},
+	})
+	if resp["error"] != nil {
+		t.Fatalf("session/handoff error: %#v", resp["error"])
+	}
+	if lifecycle.handoffReq.SessionID != core.SessionID("sess_handoff") {
+		t.Fatalf("unexpected handoff request %#v", lifecycle.handoffReq)
+	}
+	if lifecycle.handoffReq.Target != runtimesession.HandoffTargetMobile {
+		t.Fatalf("unexpected handoff target %#v", lifecycle.handoffReq.Target)
+	}
+	if lifecycle.handoffReq.PendingTaskSummary != "finish runtime bridge wiring" {
+		t.Fatalf("unexpected handoff pending task summary %#v", lifecycle.handoffReq.PendingTaskSummary)
+	}
+
+	result := asMap(resp["result"])
+	if asString(result["target"]) != "mobile" {
+		t.Fatalf("unexpected handoff result target %#v", result)
+	}
+	if asString(result["issuedAt"]) != "2026-03-04T02:00:00Z" {
+		t.Fatalf("unexpected handoff issuedAt %#v", result)
+	}
+	if asString(result["pendingTaskSummary"]) != "finish runtime bridge wiring" {
+		t.Fatalf("unexpected handoff pendingTaskSummary %#v", result)
 	}
 }
 

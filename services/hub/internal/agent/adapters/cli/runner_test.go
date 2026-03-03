@@ -7,6 +7,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -141,6 +142,25 @@ func (s *writerStub) WriteEvent(frame EventFrame) error {
 	return nil
 }
 
+type projectorCall struct {
+	event core.EventEnvelope
+	opts  ProjectionOptions
+}
+
+type projectorStub struct {
+	calls      []projectorCall
+	failOnCall int
+	err        error
+}
+
+func (s *projectorStub) ProjectRunEvent(_ context.Context, event core.EventEnvelope, opts ProjectionOptions) error {
+	s.calls = append(s.calls, projectorCall{event: event, opts: opts})
+	if s.err != nil && s.failOnCall > 0 && len(s.calls) == s.failOnCall {
+		return s.err
+	}
+	return nil
+}
+
 func TestRunnerRunPromptStartsSessionAndStreamsEvents(t *testing.T) {
 	engine := &engineStub{handle: core.SessionHandle{SessionID: core.SessionID("sess_abc"), CreatedAt: time.Now().UTC()}, runID: "run_abc", sub: newEventSubStub(8)}
 	writer := &writerStub{}
@@ -222,5 +242,59 @@ func TestRunnerRunPromptWriterError(t *testing.T) {
 	_, err := runner.RunPrompt(context.Background(), RunRequest{SessionID: "sess_1", Prompt: "hello"})
 	if err == nil {
 		t.Fatal("expected writer error")
+	}
+}
+
+func TestRunnerRunPromptProjectsMatchedRunEvents(t *testing.T) {
+	engine := &engineStub{sub: newEventSubStub(8), runID: "run_proj"}
+	projector := &projectorStub{}
+	runner := Runner{Engine: engine, Projector: projector}
+
+	result, err := runner.RunPrompt(context.Background(), RunRequest{
+		SessionID: "sess_proj",
+		Prompt:    "hello",
+	})
+	if err != nil {
+		t.Fatalf("run prompt failed: %v", err)
+	}
+	if result.RunID != "run_proj" {
+		t.Fatalf("run id = %q, want run_proj", result.RunID)
+	}
+	if len(projector.calls) != 4 {
+		t.Fatalf("expected 4 projected events, got %d", len(projector.calls))
+	}
+	for index, call := range projector.calls {
+		if call.opts.ConversationID != "sess_proj" {
+			t.Fatalf("call %d conversation id = %q", index, call.opts.ConversationID)
+		}
+		if call.opts.QueueIndex != index {
+			t.Fatalf("call %d queue index = %d, want %d", index, call.opts.QueueIndex, index)
+		}
+		if string(call.event.RunID) != "run_proj" {
+			t.Fatalf("call %d projected unexpected run id %q", index, call.event.RunID)
+		}
+	}
+}
+
+func TestRunnerRunPromptProjectorError(t *testing.T) {
+	engine := &engineStub{sub: newEventSubStub(8), runID: "run_proj_error"}
+	projector := &projectorStub{
+		failOnCall: 2,
+		err:        errors.New("project failed"),
+	}
+	runner := Runner{Engine: engine, Projector: projector}
+
+	_, err := runner.RunPrompt(context.Background(), RunRequest{
+		SessionID: "sess_proj_error",
+		Prompt:    "hello",
+	})
+	if err == nil {
+		t.Fatal("expected projector error")
+	}
+	if !strings.Contains(err.Error(), "project failed") {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if len(projector.calls) != 2 {
+		t.Fatalf("expected projector to stop on second event, got %d calls", len(projector.calls))
 	}
 }

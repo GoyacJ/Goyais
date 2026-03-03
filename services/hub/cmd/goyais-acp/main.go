@@ -6,14 +6,22 @@ import (
 	"os"
 
 	acpadapter "goyais/services/hub/internal/agent/adapters/acp"
+	runtimebridge "goyais/services/hub/internal/agent/adapters/runtimebridge"
 	"goyais/services/hub/internal/agent/runtime/loop"
 )
 
 func main() {
 	engine := loop.NewEngine(nil)
+	eventSink := runtimebridge.CLIProjector{
+		Projector: runtimebridge.NewProjector(runtimebridge.ProjectorOptions{
+			Store: runtimebridge.NewMemoryEventStore(),
+		}),
+	}
 	peer := acpadapter.NewPeer()
 	_ = acpadapter.NewServer(peer, acpadapter.ServerOptions{
-		Bridge: acpadapter.NewBridge(engine, nil),
+		Bridge: acpadapter.NewBridgeWithOptions(engine, nil, acpadapter.BridgeOptions{
+			Projector: eventSink,
+		}),
 	})
 
 	transport := acpadapter.NewStdioTransport(peer, acpadapter.StdioTransportOptions{

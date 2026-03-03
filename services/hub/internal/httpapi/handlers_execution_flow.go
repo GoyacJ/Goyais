@@ -192,9 +192,10 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 		conversation.UpdatedAt = now
 		state.conversations[conversationID] = conversation
 		state.mu.Unlock()
-		if hasCanceledExecution && state.orchestrator != nil {
-			decision, matchedPolicyID := state.orchestrator.evaluateHookDecision(canceledExecution, HookEventTypeStop, "")
-			state.orchestrator.appendHookExecutionRecordAndEvent(
+		if hasCanceledExecution {
+			decision, matchedPolicyID := evaluateHookDecisionWithState(state, canceledExecution, HookEventTypeStop, "")
+			appendHookExecutionRecordAndEventWithState(
+				state,
 				canceledExecution,
 				canceledExecution.ID,
 				HookEventTypeStop,
