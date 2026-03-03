@@ -20,11 +20,12 @@ Goyais 是一个 AI Agent 平台。Hub（Go 后端）是执行中枢。
 ## 重构上下文（必读）
 - 架构方案：docs/refactor/2026-03-03-agent-v4-refactor-plan.md
 - 任务计划：docs/refactor/refactor-taks-plan-table.md
-- 当前阶段：Phase A / A1（进行中，截止 2026-03-03）
+- 当前阶段：Phase A / A2（进行中，截止 2026-03-03）
 - 阶段判定依据：
   - A0（前置盘点与决策）文档已齐备并已落库。
-  - A1 已启动：`internal/agent/` 目录与双轨指令文档已建立，`core/interfaces.go` 已作为合同锚点落地。
-  - 尚未满足 A→B 门禁：`Engine.Submit` 真实事件流与状态机 100% 测试尚未达成，旧主执行链仍在 `httpapi/execution_orchestrator.go`。
+  - A1（core 合同基线）已完成：`core/interfaces.go` 与核心类型/状态机/事件模型已可编译并具备基础测试。
+  - A2 已启动：`internal/agent/runtime/loop` 初版 Engine 已落地，具备会话 FIFO、运行生命周期事件、取消控制与订阅回放测试。
+  - 尚未满足 A→B 门禁：新 Engine 尚未替换 `httpapi/execution_orchestrator` 成为主执行入口，CLI/ACP/HTTP 未统一接线。
 
 ## 关键约束
 1. internal/agent/ 是所有新代码的根目录
@@ -88,7 +89,7 @@ cd services/hub && go test ./... && go vet ./...
 ## 任务：[任务编号] [任务名]
 
 ## 背景
-你正在执行 Agent v4 重构的 [Phase A / A1]。
+你正在执行 Agent v4 重构的 [Phase A / A2]。
 整体架构方案见 docs/refactor/2026-03-03-agent-v4-refactor-plan.md §[N]。
 
 ## 迁移来源（如适用）

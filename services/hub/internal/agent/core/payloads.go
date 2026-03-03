@@ -4,6 +4,18 @@
 
 package core
 
+// RunQueuedPayload captures metadata when a run enters the session queue.
+type RunQueuedPayload struct {
+	QueuePosition int
+}
+
+func (RunQueuedPayload) isEventPayload() {}
+
+// RunStartedPayload marks that a run has begun active execution.
+type RunStartedPayload struct{}
+
+func (RunStartedPayload) isEventPayload() {}
+
 // OutputDeltaPayload carries incremental model output chunks.
 type OutputDeltaPayload struct {
 	Delta     string
