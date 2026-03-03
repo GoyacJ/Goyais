@@ -86,6 +86,7 @@ type UserAnswerWaiter interface {
 type Dependencies struct {
 	Runner           Runner
 	Specs            spec.Resolver
+	PermissionGate   core.PermissionGate
 	ApprovalWaiter   ApprovalWaiter
 	UserAnswerWaiter UserAnswerWaiter
 }
@@ -94,6 +95,7 @@ type Dependencies struct {
 type Pipeline struct {
 	runner           Runner
 	specs            spec.Resolver
+	permissionGate   core.PermissionGate
 	approvalWaiter   ApprovalWaiter
 	userAnswerWaiter UserAnswerWaiter
 }
@@ -105,6 +107,7 @@ func NewPipeline(deps Dependencies) *Pipeline {
 	return &Pipeline{
 		runner:           deps.Runner,
 		specs:            deps.Specs,
+		permissionGate:   deps.PermissionGate,
 		approvalWaiter:   deps.ApprovalWaiter,
 		userAnswerWaiter: deps.UserAnswerWaiter,
 	}
@@ -283,6 +286,39 @@ func (p *Pipeline) ExecuteSingle(ctx context.Context, req ExecuteSingleRequest) 
 	}
 
 	approved := false
+	if p.permissionGate != nil {
+		decision, decisionErr := p.permissionGate.Evaluate(ctx, core.PermissionRequest{
+			Mode:       normalizePermissionMode(req.SessionMode),
+			ToolName:   call.Name,
+			Arguments:  renderOutput(call.Input),
+			WorkingDir: strings.TrimSpace(req.ToolContext.WorkingDir),
+		})
+		if decisionErr != nil {
+			return ExecuteSingleResult{}, decisionErr
+		}
+		switch decision.Kind {
+		case core.PermissionDecisionDeny:
+			errText := strings.TrimSpace(decision.Reason)
+			if errText == "" {
+				errText = "tool call denied by permission policy"
+			}
+			return ExecuteSingleResult{
+				CallID:    call.CallID,
+				ToolName:  call.Name,
+				ErrorText: errText,
+			}, nil
+		case core.PermissionDecisionAsk:
+			userApproved, denied, waitErr := p.waitForApproval(ctx, call, strings.TrimSpace(decision.Reason))
+			if waitErr != nil {
+				return ExecuteSingleResult{}, waitErr
+			}
+			if denied != nil {
+				return *denied, nil
+			}
+			approved = userApproved
+		}
+	}
+
 	for {
 		output, err := p.runner.Execute(ctx, RunRequest{
 			SessionMode: req.SessionMode,
@@ -297,36 +333,15 @@ func (p *Pipeline) ExecuteSingle(ctx context.Context, req ExecuteSingleRequest) 
 
 		var approvalErr *ApprovalRequiredError
 		if errors.As(err, &approvalErr) {
-			if p.approvalWaiter == nil {
-				return ExecuteSingleResult{}, err
-			}
-			action, waitErr := p.approvalWaiter.WaitForApproval(ctx, ApprovalRequest{
-				ToolName: call.Name,
-				CallID:   call.CallID,
-				Reason:   strings.TrimSpace(approvalErr.Reason),
-			})
+			userApproved, denied, waitErr := p.waitForApproval(ctx, call, strings.TrimSpace(approvalErr.Reason))
 			if waitErr != nil {
 				return ExecuteSingleResult{}, waitErr
 			}
-			switch action {
-			case ApprovalActionStop:
-				return ExecuteSingleResult{}, context.Canceled
-			case ApprovalActionDeny:
-				errText := strings.TrimSpace(approvalErr.Reason)
-				if errText == "" {
-					errText = "tool call denied by user"
-				}
-				return ExecuteSingleResult{
-					CallID:    call.CallID,
-					ToolName:  call.Name,
-					ErrorText: errText,
-				}, nil
-			case ApprovalActionApprove, ApprovalActionResume:
-				approved = true
-				continue
-			default:
-				continue
+			if denied != nil {
+				return *denied, nil
 			}
+			approved = userApproved
+			continue
 		}
 
 		errText := strings.TrimSpace(err.Error())
@@ -338,6 +353,44 @@ func (p *Pipeline) ExecuteSingle(ctx context.Context, req ExecuteSingleRequest) 
 			ToolName:  call.Name,
 			ErrorText: errText,
 		}, nil
+	}
+}
+
+func (p *Pipeline) waitForApproval(ctx context.Context, call ToolCall, reason string) (bool, *ExecuteSingleResult, error) {
+	if p.approvalWaiter == nil {
+		return false, nil, &ApprovalRequiredError{
+			ToolName: call.Name,
+			Reason:   reason,
+		}
+	}
+	for {
+		action, waitErr := p.approvalWaiter.WaitForApproval(ctx, ApprovalRequest{
+			ToolName: call.Name,
+			CallID:   call.CallID,
+			Reason:   reason,
+		})
+		if waitErr != nil {
+			return false, nil, waitErr
+		}
+		switch action {
+		case ApprovalActionStop:
+			return false, nil, context.Canceled
+		case ApprovalActionDeny:
+			errText := strings.TrimSpace(reason)
+			if errText == "" {
+				errText = "tool call denied by user"
+			}
+			denied := ExecuteSingleResult{
+				CallID:    call.CallID,
+				ToolName:  call.Name,
+				ErrorText: errText,
+			}
+			return false, &denied, nil
+		case ApprovalActionApprove, ApprovalActionResume:
+			return true, nil, nil
+		default:
+			continue
+		}
 	}
 }
 
@@ -414,6 +467,24 @@ func renderOutput(output map[string]any) string {
 		return fmt.Sprintf("%v", output)
 	}
 	return string(payload)
+}
+
+func normalizePermissionMode(raw string) core.PermissionMode {
+	trimmed := strings.TrimSpace(raw)
+	switch strings.ToLower(trimmed) {
+	case "", strings.ToLower(string(core.PermissionModeDefault)):
+		return core.PermissionModeDefault
+	case strings.ToLower(string(core.PermissionModeAcceptEdits)), "accept_edits", "accept-edits":
+		return core.PermissionModeAcceptEdits
+	case strings.ToLower(string(core.PermissionModePlan)):
+		return core.PermissionModePlan
+	case strings.ToLower(string(core.PermissionModeDontAsk)), "dont_ask", "dont-ask":
+		return core.PermissionModeDontAsk
+	case strings.ToLower(string(core.PermissionModeBypassPermissions)), "bypass_permissions", "bypass-permissions":
+		return core.PermissionModeBypassPermissions
+	default:
+		return core.PermissionMode(trimmed)
+	}
 }
 
 func randomHex(bytesLen int) string {

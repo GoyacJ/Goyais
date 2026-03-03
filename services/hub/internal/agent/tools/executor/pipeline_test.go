@@ -85,6 +85,20 @@ func (s *stubAnswerWaiter) WaitForAnswer(_ context.Context, _ interaction.Pendin
 	return s.answer, nil
 }
 
+type stubPermissionGate struct {
+	decision core.PermissionDecision
+	err      error
+	requests []core.PermissionRequest
+}
+
+func (s *stubPermissionGate) Evaluate(_ context.Context, req core.PermissionRequest) (core.PermissionDecision, error) {
+	s.requests = append(s.requests, req)
+	if s.err != nil {
+		return core.PermissionDecision{}, s.err
+	}
+	return s.decision, nil
+}
+
 func TestExecuteSingle_RetryAfterApproval(t *testing.T) {
 	var attempts int
 	runner := &stubRunner{
@@ -364,5 +378,143 @@ func TestExecute_MapsSingleErrorTextToCoreRunError(t *testing.T) {
 	}
 	if result.Error.Message != "io unavailable" {
 		t.Fatalf("unexpected error message %q", result.Error.Message)
+	}
+}
+
+func TestExecuteSingle_PermissionGateDenySkipsRunner(t *testing.T) {
+	runner := &stubRunner{}
+	gate := &stubPermissionGate{
+		decision: core.PermissionDecision{
+			Kind:   core.PermissionDecisionDeny,
+			Reason: "blocked by policy",
+		},
+	}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         runner,
+		PermissionGate: gate,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		SessionMode: "plan",
+		Call: ToolCall{
+			CallID: "call_deny",
+			Name:   "delete_file",
+			Input:  map[string]any{"path": "./danger.txt"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single should not fail on permission deny, got %v", err)
+	}
+	if result.ErrorText != "blocked by policy" {
+		t.Fatalf("unexpected deny error text %q", result.ErrorText)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("runner should not execute when gate denies, got %d calls", len(runner.calls))
+	}
+}
+
+func TestExecuteSingle_PermissionGateAskWaitsBeforeFirstExecution(t *testing.T) {
+	runner := &stubRunner{}
+	gate := &stubPermissionGate{
+		decision: core.PermissionDecision{
+			Kind:   core.PermissionDecisionAsk,
+			Reason: "needs approval",
+		},
+	}
+	waiter := &stubApprovalWaiter{action: ApprovalActionApprove}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         runner,
+		ApprovalWaiter: waiter,
+		PermissionGate: gate,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		SessionMode: "acceptEdits",
+		Call: ToolCall{
+			CallID: "call_ask",
+			Name:   "write_file",
+			Input:  map[string]any{"path": "./note.txt"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single failed: %v", err)
+	}
+	if result.ErrorText != "" {
+		t.Fatalf("expected success result, got error %q", result.ErrorText)
+	}
+	if len(waiter.request) != 1 {
+		t.Fatalf("expected one approval wait, got %d", len(waiter.request))
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("expected one runner call, got %d", len(runner.calls))
+	}
+	if !runner.calls[0].Approved {
+		t.Fatal("runner call should be marked approved after permission ask")
+	}
+}
+
+func TestExecuteSingle_PermissionGateAskWithoutWaiterReturnsApprovalError(t *testing.T) {
+	pipeline := NewPipeline(Dependencies{
+		Runner: &stubRunner{},
+		PermissionGate: &stubPermissionGate{
+			decision: core.PermissionDecision{
+				Kind:   core.PermissionDecisionAsk,
+				Reason: "requires explicit approval",
+			},
+		},
+	})
+
+	_, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_missing_waiter",
+			Name:   "write_file",
+		},
+	})
+	var approvalErr *ApprovalRequiredError
+	if !errors.As(err, &approvalErr) {
+		t.Fatalf("expected approval required error, got %v", err)
+	}
+}
+
+func TestExecuteSingle_PermissionGateReceivesModeAndArguments(t *testing.T) {
+	gate := &stubPermissionGate{
+		decision: core.PermissionDecision{Kind: core.PermissionDecisionAllow},
+	}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         &stubRunner{},
+		PermissionGate: gate,
+	})
+
+	_, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		SessionMode: "plan",
+		ToolContext: ToolContext{
+			WorkingDir: "/tmp/project",
+		},
+		Call: ToolCall{
+			CallID: "call_ctx",
+			Name:   "read_file",
+			Input: map[string]any{
+				"path": "./README.md",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single failed: %v", err)
+	}
+	if len(gate.requests) != 1 {
+		t.Fatalf("expected one gate request, got %d", len(gate.requests))
+	}
+	request := gate.requests[0]
+	if request.Mode != core.PermissionModePlan {
+		t.Fatalf("unexpected mode %q", request.Mode)
+	}
+	if request.ToolName != "read_file" {
+		t.Fatalf("unexpected tool name %q", request.ToolName)
+	}
+	if request.WorkingDir != "/tmp/project" {
+		t.Fatalf("unexpected working dir %q", request.WorkingDir)
+	}
+	if request.Arguments == "" {
+		t.Fatal("expected serialized arguments passed to gate")
 	}
 }
