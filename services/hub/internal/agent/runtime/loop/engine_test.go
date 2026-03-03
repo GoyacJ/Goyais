@@ -7,6 +7,7 @@ package loop
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +17,12 @@ import (
 type executorFunc func(ctx context.Context, req ExecuteRequest) (ExecuteResult, error)
 
 func (f executorFunc) Execute(ctx context.Context, req ExecuteRequest) (ExecuteResult, error) {
+	return f(ctx, req)
+}
+
+type contextBuilderFunc func(ctx context.Context, req core.BuildContextRequest) (core.PromptContext, error)
+
+func (f contextBuilderFunc) Build(ctx context.Context, req core.BuildContextRequest) (core.PromptContext, error) {
 	return f(ctx, req)
 }
 
@@ -164,6 +171,115 @@ func TestEngineSessionQueueMaintainsFIFO(t *testing.T) {
 	if secondStarted.Sequence <= firstCompleted.Sequence {
 		t.Fatalf("expected second run to start after first completed (seq second_started=%d, first_completed=%d)", secondStarted.Sequence, firstCompleted.Sequence)
 	}
+}
+
+func TestEngineBuildsPromptContextBeforeExecute(t *testing.T) {
+	var mu sync.Mutex
+	var capturedBuilderReq core.BuildContextRequest
+	var capturedExecuteReq ExecuteRequest
+
+	engine := NewEngineWithDeps(Dependencies{
+		Executor: executorFunc(func(_ context.Context, req ExecuteRequest) (ExecuteResult, error) {
+			mu.Lock()
+			capturedExecuteReq = req
+			mu.Unlock()
+			return ExecuteResult{Output: "ok"}, nil
+		}),
+		ContextBuilder: contextBuilderFunc(func(_ context.Context, req core.BuildContextRequest) (core.PromptContext, error) {
+			mu.Lock()
+			capturedBuilderReq = req
+			mu.Unlock()
+			return core.PromptContext{
+				SystemPrompt: "system prompt from builder",
+				Sections: []core.PromptSection{
+					{Source: "project_instructions", Content: "AGENTS.md"},
+				},
+			}, nil
+		}),
+	})
+
+	session, err := engine.StartSession(context.Background(), core.StartSessionRequest{
+		WorkingDir: "/tmp/prompt-project",
+	})
+	if err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+
+	sub, err := engine.Subscribe(context.Background(), string(session.SessionID), "")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+
+	runID, err := engine.Submit(context.Background(), string(session.SessionID), core.UserInput{Text: "hello prompt"})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	_ = waitRunEventsUntilTerminal(t, sub.Events(), runID, 2*time.Second)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if capturedBuilderReq.SessionID != session.SessionID {
+		t.Fatalf("builder session_id = %q, want %q", capturedBuilderReq.SessionID, session.SessionID)
+	}
+	if capturedBuilderReq.WorkingDir != "/tmp/prompt-project" {
+		t.Fatalf("builder working_dir = %q, want %q", capturedBuilderReq.WorkingDir, "/tmp/prompt-project")
+	}
+	if capturedBuilderReq.UserInput != "hello prompt" {
+		t.Fatalf("builder user_input = %q, want %q", capturedBuilderReq.UserInput, "hello prompt")
+	}
+
+	if capturedExecuteReq.PromptContext.SystemPrompt != "system prompt from builder" {
+		t.Fatalf("execute request system prompt = %q, want %q", capturedExecuteReq.PromptContext.SystemPrompt, "system prompt from builder")
+	}
+}
+
+func TestEngineContextBuildFailureEmitsRunFailed(t *testing.T) {
+	executorCalled := false
+	engine := NewEngineWithDeps(Dependencies{
+		Executor: executorFunc(func(_ context.Context, _ ExecuteRequest) (ExecuteResult, error) {
+			executorCalled = true
+			return ExecuteResult{Output: "should-not-run"}, nil
+		}),
+		ContextBuilder: contextBuilderFunc(func(_ context.Context, _ core.BuildContextRequest) (core.PromptContext, error) {
+			return core.PromptContext{}, errors.New("failed to build context")
+		}),
+	})
+
+	session, err := engine.StartSession(context.Background(), core.StartSessionRequest{
+		WorkingDir: "/tmp/context-fail",
+	})
+	if err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+
+	sub, err := engine.Subscribe(context.Background(), string(session.SessionID), "")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+
+	runID, err := engine.Submit(context.Background(), string(session.SessionID), core.UserInput{Text: "hello"})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+
+	events := waitRunEventsUntilTerminal(t, sub.Events(), runID, 2*time.Second)
+	last := events[len(events)-1]
+	if last.Type != core.RunEventTypeRunFailed {
+		t.Fatalf("last event type = %q, want %q", last.Type, core.RunEventTypeRunFailed)
+	}
+	payload, ok := last.Payload.(core.RunFailedPayload)
+	if !ok {
+		t.Fatalf("unexpected failed payload type %T", last.Payload)
+	}
+	if payload.Code != "context_build_failed" {
+		t.Fatalf("failed code = %q, want %q", payload.Code, "context_build_failed")
+	}
+	if !executorCalled {
+		return
+	}
+	t.Fatal("executor should not be called when context build fails")
 }
 
 func waitRunEventsUntilTerminal(t *testing.T, stream <-chan core.EventEnvelope, runID string, timeout time.Duration) []core.EventEnvelope {

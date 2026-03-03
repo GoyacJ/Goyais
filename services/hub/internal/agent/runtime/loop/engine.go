@@ -9,21 +9,24 @@ package loop
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	promptctx "goyais/services/hub/internal/agent/context/prompt"
 	"goyais/services/hub/internal/agent/core"
 )
 
 // ExecuteRequest is the normalized request passed from the runtime loop to the
 // execution layer (model/tools/policy pipeline).
 type ExecuteRequest struct {
-	SessionID core.SessionID
-	RunID     core.RunID
-	Input     core.UserInput
+	SessionID     core.SessionID
+	RunID         core.RunID
+	Input         core.UserInput
+	PromptContext core.PromptContext
 }
 
 // ExecuteResult is the normalized output returned from one run execution.
@@ -41,7 +44,8 @@ type Executor interface {
 type Engine struct {
 	mu sync.Mutex
 
-	executor Executor
+	executor       Executor
+	contextBuilder core.ContextBuilder
 
 	nextSessionID uint64
 	nextRunID     uint64
@@ -51,8 +55,9 @@ type Engine struct {
 }
 
 type sessionRuntime struct {
-	id        core.SessionID
-	createdAt time.Time
+	id         core.SessionID
+	createdAt  time.Time
+	workingDir string
 
 	nextSequence int64
 	events       []core.EventEnvelope
@@ -65,12 +70,14 @@ type sessionRuntime struct {
 }
 
 type runRuntime struct {
-	id        core.RunID
-	sessionID core.SessionID
-	input     core.UserInput
+	id         core.RunID
+	sessionID  core.SessionID
+	input      core.UserInput
+	workingDir string
 
-	machine *core.Machine
-	cancel  context.CancelFunc
+	machine       *core.Machine
+	cancel        context.CancelFunc
+	promptContext core.PromptContext
 }
 
 type eventSubscription struct {
@@ -94,6 +101,12 @@ func (s *eventSubscription) Close() error {
 
 type defaultExecutor struct{}
 
+// Dependencies declares runtime-loop dependencies for explicit injection.
+type Dependencies struct {
+	Executor       Executor
+	ContextBuilder core.ContextBuilder
+}
+
 func (defaultExecutor) Execute(ctx context.Context, req ExecuteRequest) (ExecuteResult, error) {
 	select {
 	case <-ctx.Done():
@@ -108,13 +121,24 @@ func (defaultExecutor) Execute(ctx context.Context, req ExecuteRequest) (Execute
 
 // NewEngine constructs a loop engine with explicit execution dependency.
 func NewEngine(executor Executor) *Engine {
-	if executor == nil {
-		executor = defaultExecutor{}
+	return NewEngineWithDeps(Dependencies{
+		Executor: executor,
+	})
+}
+
+// NewEngineWithDeps constructs a loop engine with explicit runtime dependencies.
+func NewEngineWithDeps(deps Dependencies) *Engine {
+	if deps.Executor == nil {
+		deps.Executor = defaultExecutor{}
+	}
+	if deps.ContextBuilder == nil {
+		deps.ContextBuilder = promptctx.NewBuilder(promptctx.BuilderOptions{})
 	}
 	return &Engine{
-		executor: executor,
-		sessions: map[core.SessionID]*sessionRuntime{},
-		runs:     map[core.RunID]*runRuntime{},
+		executor:       deps.Executor,
+		contextBuilder: deps.ContextBuilder,
+		sessions:       map[core.SessionID]*sessionRuntime{},
+		runs:           map[core.RunID]*runRuntime{},
 	}
 }
 
@@ -133,6 +157,7 @@ func (e *Engine) StartSession(_ context.Context, req core.StartSessionRequest) (
 	e.sessions[sessionID] = &sessionRuntime{
 		id:          sessionID,
 		createdAt:   createdAt,
+		workingDir:  strings.TrimSpace(req.WorkingDir),
 		events:      make([]core.EventEnvelope, 0, 16),
 		subscribers: map[int]chan core.EventEnvelope{},
 		queue:       make([]core.RunID, 0, 8),
@@ -171,10 +196,11 @@ func (e *Engine) Submit(_ context.Context, sessionID string, input core.UserInpu
 	}
 
 	run := &runRuntime{
-		id:        newRunID,
-		sessionID: normalizedSessionID,
-		input:     input,
-		machine:   machine,
+		id:         newRunID,
+		sessionID:  normalizedSessionID,
+		input:      input,
+		workingDir: session.workingDir,
+		machine:    machine,
 	}
 
 	e.runs[newRunID] = run
@@ -315,10 +341,28 @@ func (e *Engine) startNextIfIdleLocked(session *sessionRuntime) {
 }
 
 func (e *Engine) executeRun(ctx context.Context, run *runRuntime) {
+	if e.contextBuilder != nil {
+		builtContext, buildErr := e.contextBuilder.Build(ctx, core.BuildContextRequest{
+			SessionID:  run.sessionID,
+			WorkingDir: run.workingDir,
+			UserInput:  run.input.Text,
+		})
+		if buildErr != nil {
+			if errors.Is(buildErr, context.Canceled) || errors.Is(buildErr, context.DeadlineExceeded) || ctx.Err() != nil {
+				e.finishRunAsCancelled(run, "control_stop")
+				return
+			}
+			e.finishRunAsFailed(run, "context_build_failed", buildErr)
+			return
+		}
+		run.promptContext = builtContext
+	}
+
 	result, runErr := e.executor.Execute(ctx, ExecuteRequest{
-		SessionID: run.sessionID,
-		RunID:     run.id,
-		Input:     run.input,
+		SessionID:     run.sessionID,
+		RunID:         run.id,
+		Input:         run.input,
+		PromptContext: run.promptContext,
 	})
 
 	e.mu.Lock()
@@ -353,6 +397,43 @@ func (e *Engine) executeRun(ctx context.Context, run *runRuntime) {
 		})
 	}
 
+	if session.active == run.id {
+		session.active = ""
+	}
+	e.startNextIfIdleLocked(session)
+}
+
+func (e *Engine) finishRunAsFailed(run *runRuntime, code string, cause error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	session := e.sessions[run.sessionID]
+	if session == nil {
+		return
+	}
+	_ = run.machine.Transition(core.RunStateFailed)
+	e.emitEventLocked(session, run.id, core.RunEventTypeRunFailed, core.RunFailedPayload{
+		Code:    strings.TrimSpace(code),
+		Message: strings.TrimSpace(cause.Error()),
+	})
+	if session.active == run.id {
+		session.active = ""
+	}
+	e.startNextIfIdleLocked(session)
+}
+
+func (e *Engine) finishRunAsCancelled(run *runRuntime, reason string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	session := e.sessions[run.sessionID]
+	if session == nil {
+		return
+	}
+	_ = run.machine.Transition(core.RunStateCancelled)
+	e.emitEventLocked(session, run.id, core.RunEventTypeRunCancelled, core.RunCancelledPayload{
+		Reason: strings.TrimSpace(reason),
+	})
 	if session.active == run.id {
 		session.active = ""
 	}
