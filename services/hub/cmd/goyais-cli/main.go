@@ -8,26 +8,12 @@ import (
 	"goyais/services/hub/cmd/goyais-cli/adapters"
 	"goyais/services/hub/cmd/goyais-cli/cli"
 	"goyais/services/hub/cmd/goyais-cli/tui"
-	"goyais/services/hub/internal/agentcore/config"
-	"goyais/services/hub/internal/agentcore/runtime"
 )
 
 var version = "dev"
 
 func main() {
-	runner := &adapters.Runner{
-		ConfigProvider: config.StaticProvider{
-			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeDefault,
-				DefaultModel: "gpt-5",
-			},
-		},
-		Engine:      runtime.NewLocalEngine(),
-		Renderer:    tui.NewEventRenderer(os.Stdout, os.Stderr),
-		Input:       os.Stdin,
-		Output:      os.Stdout,
-		ErrorOutput: os.Stderr,
-	}
+	runner := adapters.NewV4Runner(os.Stdout, os.Stderr)
 
 	shell := tui.Shell{
 		In:     os.Stdin,

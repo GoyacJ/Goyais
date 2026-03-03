@@ -5,30 +5,22 @@ import (
 	"fmt"
 	"os"
 
-	"goyais/services/hub/internal/agentcore/acp"
-	"goyais/services/hub/internal/agentcore/config"
-	"goyais/services/hub/internal/agentcore/runtime"
+	acpadapter "goyais/services/hub/internal/agent/adapters/acp"
+	"goyais/services/hub/internal/agent/runtime/loop"
 )
 
 func main() {
-	guard := acp.InstallStdoutGuard()
-	defer guard.Restore()
-
-	peer := acp.NewPeer()
-	_ = acp.NewAgent(peer, acp.AgentOptions{
-		ConfigProvider: config.StaticProvider{
-			Config: config.ResolvedConfig{
-				SessionMode:  config.SessionModeDefault,
-				DefaultModel: "gpt-5",
-			},
-		},
-		Engine: runtime.NewLocalEngine(),
+	engine := loop.NewEngine(nil)
+	peer := acpadapter.NewPeer()
+	_ = acpadapter.NewServer(peer, acpadapter.ServerOptions{
+		Bridge: acpadapter.NewBridge(engine, nil),
 	})
 
-	transport := acp.NewStdioTransport(peer, acp.StdioTransportOptions{
+	transport := acpadapter.NewStdioTransport(peer, acpadapter.StdioTransportOptions{
 		Input: os.Stdin,
 		WriteLine: func(line string) error {
-			return guard.WriteLine(line)
+			_, err := fmt.Fprintln(os.Stdout, line)
+			return err
 		},
 	})
 
