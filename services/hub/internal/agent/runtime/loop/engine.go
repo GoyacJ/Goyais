@@ -55,9 +55,10 @@ type Engine struct {
 }
 
 type sessionRuntime struct {
-	id         core.SessionID
-	createdAt  time.Time
-	workingDir string
+	id                    core.SessionID
+	createdAt             time.Time
+	workingDir            string
+	additionalDirectories []string
 
 	nextSequence int64
 	events       []core.EventEnvelope
@@ -70,10 +71,11 @@ type sessionRuntime struct {
 }
 
 type runRuntime struct {
-	id         core.RunID
-	sessionID  core.SessionID
-	input      core.UserInput
-	workingDir string
+	id                    core.RunID
+	sessionID             core.SessionID
+	input                 core.UserInput
+	workingDir            string
+	additionalDirectories []string
 
 	machine       *core.Machine
 	cancel        context.CancelFunc
@@ -155,12 +157,13 @@ func (e *Engine) StartSession(_ context.Context, req core.StartSessionRequest) (
 	sessionID := core.SessionID(fmt.Sprintf("sess_%d", e.nextSessionID))
 	createdAt := time.Now().UTC()
 	e.sessions[sessionID] = &sessionRuntime{
-		id:          sessionID,
-		createdAt:   createdAt,
-		workingDir:  strings.TrimSpace(req.WorkingDir),
-		events:      make([]core.EventEnvelope, 0, 16),
-		subscribers: map[int]chan core.EventEnvelope{},
-		queue:       make([]core.RunID, 0, 8),
+		id:                    sessionID,
+		createdAt:             createdAt,
+		workingDir:            strings.TrimSpace(req.WorkingDir),
+		additionalDirectories: sanitizeDirectories(req.AdditionalDirectories),
+		events:                make([]core.EventEnvelope, 0, 16),
+		subscribers:           map[int]chan core.EventEnvelope{},
+		queue:                 make([]core.RunID, 0, 8),
 	}
 
 	return core.SessionHandle{
@@ -196,11 +199,12 @@ func (e *Engine) Submit(_ context.Context, sessionID string, input core.UserInpu
 	}
 
 	run := &runRuntime{
-		id:         newRunID,
-		sessionID:  normalizedSessionID,
-		input:      input,
-		workingDir: session.workingDir,
-		machine:    machine,
+		id:                    newRunID,
+		sessionID:             normalizedSessionID,
+		input:                 input,
+		workingDir:            session.workingDir,
+		additionalDirectories: append([]string(nil), session.additionalDirectories...),
+		machine:               machine,
 	}
 
 	e.runs[newRunID] = run
@@ -343,9 +347,10 @@ func (e *Engine) startNextIfIdleLocked(session *sessionRuntime) {
 func (e *Engine) executeRun(ctx context.Context, run *runRuntime) {
 	if e.contextBuilder != nil {
 		builtContext, buildErr := e.contextBuilder.Build(ctx, core.BuildContextRequest{
-			SessionID:  run.sessionID,
-			WorkingDir: run.workingDir,
-			UserInput:  run.input.Text,
+			SessionID:             run.sessionID,
+			WorkingDir:            run.workingDir,
+			AdditionalDirectories: append([]string(nil), run.additionalDirectories...),
+			UserInput:             run.input.Text,
 		})
 		if buildErr != nil {
 			if errors.Is(buildErr, context.Canceled) || errors.Is(buildErr, context.DeadlineExceeded) || ctx.Err() != nil {
@@ -471,6 +476,29 @@ func removeRunFromQueue(queue []core.RunID, target core.RunID) []core.RunID {
 			continue
 		}
 		out = append(out, runID)
+	}
+	return out
+}
+
+func sanitizeDirectories(input []string) []string {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(input))
+	seen := make(map[string]struct{}, len(input))
+	for _, item := range input {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

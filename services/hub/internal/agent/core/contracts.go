@@ -140,9 +140,10 @@ type TeamMessage struct {
 
 // BuildContextRequest defines the minimum inputs for prompt assembly.
 type BuildContextRequest struct {
-	SessionID  SessionID
-	WorkingDir string
-	UserInput  string
+	SessionID             SessionID
+	WorkingDir            string
+	AdditionalDirectories []string
+	UserInput             string
 }
 
 // PromptSection is one attributable segment of the final prompt context.

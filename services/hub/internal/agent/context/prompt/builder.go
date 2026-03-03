@@ -69,6 +69,10 @@ func (b *Builder) Build(ctx context.Context, req core.BuildContextRequest) (core
 	if err != nil {
 		return core.PromptContext{}, err
 	}
+	additionalDirectorySections, err := b.loadAdditionalDirectoryInstructions(req.AdditionalDirectories)
+	if err != nil {
+		return core.PromptContext{}, err
+	}
 
 	ruleTargetPath := strings.TrimSpace(b.options.RuleTargetPath)
 	if ruleTargetPath == "" {
@@ -92,6 +96,15 @@ func (b *Builder) Build(ctx context.Context, req core.BuildContextRequest) (core
 		)
 	}
 
+	importedContent := b.options.ImportedContent
+	if len(additionalDirectorySections) > 0 {
+		if strings.TrimSpace(importedContent) == "" {
+			importedContent = strings.Join(additionalDirectorySections, "\n\n")
+		} else {
+			importedContent = strings.TrimSpace(importedContent) + "\n\n" + strings.Join(additionalDirectorySections, "\n\n")
+		}
+	}
+
 	systemPrompt := BuildSystemPrompt(SystemPromptInput{
 		ManagedInstruction: b.options.ManagedInstruction,
 		UserInstruction:    userInstruction,
@@ -102,7 +115,7 @@ func (b *Builder) Build(ctx context.Context, req core.BuildContextRequest) (core
 		MemorySnippet:      b.options.MemorySnippet,
 		SkillsSection:      skillsSection,
 		MCPSection:         b.options.MCPSection,
-		ImportedContent:    b.options.ImportedContent,
+		ImportedContent:    importedContent,
 	})
 
 	sections := make([]core.PromptSection, 0, 10)
@@ -139,11 +152,38 @@ func (b *Builder) Build(ctx context.Context, req core.BuildContextRequest) (core
 	appendSection("skills", skillsSection)
 	appendSection("mcp", b.options.MCPSection)
 	appendSection("imports", b.options.ImportedContent)
+	for _, section := range additionalDirectorySections {
+		appendSection("additional_directory_instruction", section)
+	}
 
 	return core.PromptContext{
 		SystemPrompt: strings.TrimSpace(systemPrompt),
 		Sections:     sections,
 	}, nil
+}
+
+func (b *Builder) loadAdditionalDirectoryInstructions(additionalDirectories []string) ([]string, error) {
+	dirs := sanitizeDirectories(additionalDirectories)
+	if len(dirs) == 0 {
+		return nil, nil
+	}
+
+	sections := make([]string, 0, len(dirs))
+	for _, dir := range dirs {
+		content, _, err := LoadProjectInstructionsForCWD(dir, b.options.Env, b.options.InstructionDocExcludes)
+		if err != nil {
+			return nil, err
+		}
+		content = strings.TrimSpace(content)
+		if content == "" {
+			continue
+		}
+		sections = append(sections, "## Additional Directory: "+dir+"\n\n"+content)
+	}
+	if len(sections) == 0 {
+		return nil, nil
+	}
+	return sections, nil
 }
 
 func (b *Builder) loadDefaultUserInstruction() string {
@@ -235,6 +275,29 @@ func cloneSkillDescriptors(input []SkillDescriptor) []SkillDescriptor {
 			Name:        name,
 			Description: strings.TrimSpace(item.Description),
 		})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func sanitizeDirectories(input []string) []string {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(input))
+	seen := make(map[string]struct{}, len(input))
+	for _, item := range input {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
 	}
 	if len(out) == 0 {
 		return nil

@@ -199,7 +199,8 @@ func TestEngineBuildsPromptContextBeforeExecute(t *testing.T) {
 	})
 
 	session, err := engine.StartSession(context.Background(), core.StartSessionRequest{
-		WorkingDir: "/tmp/prompt-project",
+		WorkingDir:            "/tmp/prompt-project",
+		AdditionalDirectories: []string{"/tmp/extra-a", "/tmp/extra-b", "/tmp/extra-a"},
 	})
 	if err != nil {
 		t.Fatalf("start session: %v", err)
@@ -227,6 +228,12 @@ func TestEngineBuildsPromptContextBeforeExecute(t *testing.T) {
 	}
 	if capturedBuilderReq.UserInput != "hello prompt" {
 		t.Fatalf("builder user_input = %q, want %q", capturedBuilderReq.UserInput, "hello prompt")
+	}
+	if len(capturedBuilderReq.AdditionalDirectories) != 2 {
+		t.Fatalf("builder additional dirs = %#v, want 2 unique dirs", capturedBuilderReq.AdditionalDirectories)
+	}
+	if capturedBuilderReq.AdditionalDirectories[0] != "/tmp/extra-a" || capturedBuilderReq.AdditionalDirectories[1] != "/tmp/extra-b" {
+		t.Fatalf("builder additional dirs order = %#v", capturedBuilderReq.AdditionalDirectories)
 	}
 
 	if capturedExecuteReq.PromptContext.SystemPrompt != "system prompt from builder" {

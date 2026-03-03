@@ -147,6 +147,41 @@ func TestBuilderBuild_LoadsUserAndLocalInstructionByPriority(t *testing.T) {
 	}
 }
 
+func TestBuilderBuild_LoadsAdditionalDirectoryInstructions(t *testing.T) {
+	root := t.TempDir()
+	extra := t.TempDir()
+	mustMkdirBuilder(t, filepath.Join(root, ".git"))
+	mustMkdirBuilder(t, filepath.Join(extra, ".git"))
+	mustWriteBuilderFile(t, filepath.Join(root, "AGENTS.md"), "root instruction")
+	mustWriteBuilderFile(t, filepath.Join(extra, "AGENTS.md"), "extra instruction")
+
+	builder := NewBuilder(BuilderOptions{})
+	promptContext, err := builder.Build(context.Background(), core.BuildContextRequest{
+		SessionID:             "sess_4",
+		WorkingDir:            root,
+		AdditionalDirectories: []string{extra, extra},
+	})
+	if err != nil {
+		t.Fatalf("build prompt: %v", err)
+	}
+	if !strings.Contains(promptContext.SystemPrompt, "root instruction") {
+		t.Fatalf("expected root instruction in %q", promptContext.SystemPrompt)
+	}
+	if !strings.Contains(promptContext.SystemPrompt, "extra instruction") {
+		t.Fatalf("expected additional-dir instruction in %q", promptContext.SystemPrompt)
+	}
+
+	count := 0
+	for _, section := range promptContext.Sections {
+		if section.Source == "additional_directory_instruction" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected one deduplicated additional-directory section, got %d", count)
+	}
+}
+
 func mustMkdirBuilder(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(path, 0o755); err != nil {
