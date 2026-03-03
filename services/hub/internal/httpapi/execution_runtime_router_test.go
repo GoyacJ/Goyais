@@ -190,7 +190,7 @@ func TestExecutionRuntimeRouter_V4ModeRejectsAnswerPayloadControl(t *testing.T) 
 	}
 }
 
-func TestSubmitExecutionBestEffort_HybridModeSubmitsViaV4AndStoresRunMapping(t *testing.T) {
+func TestSubmitExecutionBestEffort_HybridModeSubmitsViaV4AndStillRunsLegacy(t *testing.T) {
 	legacy := &legacyBackendStub{}
 	v4 := &v4BackendStub{
 		startSessionID: "sess_v4_bridge",
@@ -243,11 +243,14 @@ func TestSubmitExecutionBestEffort_HybridModeSubmitsViaV4AndStoresRunMapping(t *
 	if len(v4.submitRequests) != 1 {
 		t.Fatalf("expected one v4 submit request, got %d", len(v4.submitRequests))
 	}
-	if len(legacy.submits) != 0 {
-		t.Fatalf("expected no legacy submit when v4 submit succeeds, got %#v", legacy.submits)
+	if len(legacy.submits) != 1 || legacy.submits[0] != "exec_1" {
+		t.Fatalf("expected one legacy submit in hybrid shadow mode, got %#v", legacy.submits)
 	}
-	if got := state.resolveExecutionRuntimeID("exec_1"); got != "run_v4_bridge" {
-		t.Fatalf("expected runtime mapping to run_v4_bridge, got %q", got)
+	if got := state.resolveExecutionRuntimeID("exec_1"); got != "exec_1" {
+		t.Fatalf("expected hybrid mode to keep legacy runtime id, got %q", got)
+	}
+	if mapped := strings.TrimSpace(state.executionRuntimeRunIDs["exec_1"]); mapped != "run_v4_bridge" {
+		t.Fatalf("expected mapped run id to be stored for shadow comparison, got %q", mapped)
 	}
 }
 
@@ -276,12 +279,11 @@ func TestControlExecutionBestEffort_FallsBackToLegacyWhenMappedV4ControlFails(t 
 	legacy := &legacyBackendStub{}
 	v4 := &v4BackendStub{}
 	state := &AppState{
-		orchestrator:                  (*ExecutionOrchestrator)(nil),
 		executionRuntimeRunIDs:        map[string]string{"exec_1": "run_1"},
 		conversationRuntimeSessionIDs: map[string]string{},
 	}
 	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
-		Mode:   "hybrid",
+		Mode:   "v4",
 		Legacy: legacy,
 		V4:     v4,
 	})
@@ -304,6 +306,12 @@ func TestClearExecutionRuntimeMapping_RemovesMapping(t *testing.T) {
 		executionRuntimeRunIDs: map[string]string{
 			"exec_1": "run_1",
 		},
+	}
+	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
+		Mode: "v4",
+	})
+	if got := state.resolveExecutionRuntimeID("exec_1"); got != "run_1" {
+		t.Fatalf("expected mapped runtime id before clearing, got %q", got)
 	}
 	state.clearExecutionRuntimeMapping("exec_1")
 	if got := state.resolveExecutionRuntimeID("exec_1"); got != "exec_1" {

@@ -34,6 +34,12 @@ func (s *AppState) resolveExecutionRuntimeID(executionID string) string {
 	if normalizedExecutionID == "" || strings.HasPrefix(normalizedExecutionID, "run_") {
 		return normalizedExecutionID
 	}
+	router := s.executionRuntime
+	if router == nil || router.mode != executionRuntimeModeV4 {
+		// Hybrid mode remains legacy-authoritative for control/cancel; v4 IDs are
+		// tracked for shadow comparison only.
+		return normalizedExecutionID
+	}
 	s.mu.RLock()
 	mappedRunID := strings.TrimSpace(s.executionRuntimeRunIDs[normalizedExecutionID])
 	s.mu.RUnlock()

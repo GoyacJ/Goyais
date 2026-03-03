@@ -163,7 +163,9 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 	}
 	if s.shouldAttemptV4Submit() && !strings.HasPrefix(normalizedExecutionID, "run_") {
 		if err := s.submitExecutionViaV4(ctx, normalizedExecutionID); err == nil {
-			return
+			if s.executionRuntime != nil && s.executionRuntime.mode == executionRuntimeModeV4 {
+				return
+			}
 		}
 	}
 	router := s.executionRuntime
