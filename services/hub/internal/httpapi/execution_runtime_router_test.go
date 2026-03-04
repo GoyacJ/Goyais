@@ -92,7 +92,7 @@ func (s *v4BackendStub) SubscribeSnapshot(_ context.Context, req agenthttpapi.Su
 	return frames, nil
 }
 
-func TestNewAppState_DefaultRuntimeModeKeepsLegacyFallbackWired(t *testing.T) {
+func TestNewAppState_DefaultRuntimeModeSkipsLegacyOrchestratorWhenFallbackDisabled(t *testing.T) {
 	t.Setenv(executionRuntimeModeEnv, "")
 	state := NewAppState(nil)
 	if state.executionRuntime == nil {
@@ -101,11 +101,11 @@ func TestNewAppState_DefaultRuntimeModeKeepsLegacyFallbackWired(t *testing.T) {
 	if state.executionRuntime.mode != executionRuntimeModeHybrid {
 		t.Fatalf("expected default mode hybrid, got %q", state.executionRuntime.mode)
 	}
-	if state.orchestrator == nil {
-		t.Fatalf("expected legacy orchestrator wired in default mode")
+	if state.orchestrator != nil {
+		t.Fatalf("expected legacy orchestrator skipped in default hybrid mode")
 	}
-	if state.executionRuntime.legacy == nil {
-		t.Fatalf("expected legacy backend wired in default mode")
+	if state.executionRuntime.legacy != nil {
+		t.Fatalf("expected no legacy backend wired when fallback disabled")
 	}
 	if state.executionRuntime.shouldAllowLegacyFallback() {
 		t.Fatalf("expected legacy fallback disabled by default in hybrid mode")
@@ -138,6 +138,12 @@ func TestNewAppState_HybridModeCanEnableLegacyFallbackByEnv(t *testing.T) {
 	state := NewAppState(nil)
 	if !state.executionRuntime.shouldAllowLegacyFallback() {
 		t.Fatalf("expected legacy fallback enabled by env in hybrid mode")
+	}
+	if state.orchestrator == nil {
+		t.Fatalf("expected legacy orchestrator wired when fallback is enabled")
+	}
+	if state.executionRuntime.legacy == nil {
+		t.Fatalf("expected legacy backend wired when fallback is enabled")
 	}
 }
 

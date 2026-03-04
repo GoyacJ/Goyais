@@ -55,6 +55,7 @@ Agent v4 重构任务计划表
 │            │ `services/hub/internal/httpapi/execution_runtime_router.go`（`newExecutionRuntimeRouter` / `submitExecutionBestEffort`） │
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ 回退开关   │ 新增 `GOYAIS_HTTP_RUNTIME_LEGACY_FALLBACK` 受控回退开关（v4 模式强制禁回退；hybrid 默认禁回退，可按环境变量启用应急回退）。│
+│            │ hybrid 默认禁回退时不再常驻创建 `ExecutionOrchestrator`，仅 legacy 或显式启用回退时挂载。                               │
 │            │ 对应测试已覆盖 hybrid/v4 两种模式下的“禁回退”行为。                                                                     │
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ 映射收敛   │ hybrid/v4 均可解析 execution→run 映射 ID：                                                                                │

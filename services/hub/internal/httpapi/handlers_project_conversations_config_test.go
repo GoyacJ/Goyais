@@ -8,6 +8,7 @@ import (
 )
 
 func TestProjectConfigHandlerPutPurgesProjectConversationHistory(t *testing.T) {
+	t.Setenv(executionRuntimeLegacyFallbackEnv, "true")
 	state := NewAppState(nil)
 	now := time.Now().UTC().Format(time.RFC3339)
 

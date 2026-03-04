@@ -117,7 +117,7 @@ func NewAppState(store *authzStore) *AppState {
 	if runtimeMode == executionRuntimeModeLegacy {
 		allowLegacyFallback = true
 	}
-	if runtimeMode != executionRuntimeModeV4 {
+	if runtimeMode == executionRuntimeModeLegacy || allowLegacyFallback {
 		state.orchestrator = NewExecutionOrchestrator(state)
 	}
 	state.v4Service = agenthttpapi.NewService(loop.NewEngine(nil))
