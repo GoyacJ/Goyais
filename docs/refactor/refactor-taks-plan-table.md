@@ -34,9 +34,9 @@ Agent v4 重构任务计划表
 ├───────────┼──────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
 │ Phase E   │ 进行中   │ CLI/ACP 已统一走 v4 Engine；HTTP 默认切至 hybrid，且在 v4 成功后主链优先走 v4。                 │
 ├───────────┼──────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-│ E→F 门禁  │ 未达成   │ HTTP 仍保留 legacy fallback，`ExecutionOrchestrator` 与旧枚举尚未完全清理。                      │
+│ E→F 门禁  │ 已达成   │ CLI/ACP/HTTP 三端已统一到 Engine 主路径；HTTP 侧 legacy fallback 与 `ExecutionOrchestrator` 已清理。│
 ├───────────┼──────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Phase F   │ 未开始   │ 旧引用清零、枚举收敛、合约同步与全量回归尚未完成。                                                │
+│ Phase F   │ 进行中   │ 已完成 legacy orchestrator 收口；旧引用清零、枚举收敛、合约同步与全量回归仍在推进。                │
 └───────────┴──────────┴───────────────────────────────────────────────────────────────────────────────────────────────┘
 
 门禁证据栏（2026-03-04）
@@ -46,7 +46,10 @@ Agent v4 重构任务计划表
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ 命令回归   │ `cd services/hub && go test ./internal/httpapi/... ./internal/agent/core/...` 通过。                                     │
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ 门禁脚本   │ `scripts/refactor/gate-check.sh` 已落地并可执行（默认迁移窗口模式；`--strict` 可启用零引用强约束）。                     │
+│ 门禁脚本   │ `scripts/refactor/gate-check.sh` 已落地并可执行（默认迁移窗口模式；`--strict` 可启用零引用强约束；常态门禁覆盖 orchestrator 删除、legacy alias、AppState 去 legacy 挂载及 `buildSlashEvents`/`StdoutGuard` 防回流）。 │
+├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 合约同步   │ `packages/contracts/openapi.yaml` 已对齐 Permission/Execution/RunControl/Event 枚举；                                     │
+│            │ `pnpm contracts:generate` 与 `pnpm contracts:check` 通过（`shared-core/src/generated/openapi.ts` 已同步更新）。           │
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ 状态机门禁 │ `cd services/hub && go test ./internal/agent/core -coverprofile=/tmp/agent_core.cover` 通过；                            │
 │            │ `go tool cover -func=/tmp/agent_core.cover` 显示 `runstate.go` 关键函数 100%。                                           │
@@ -54,14 +57,16 @@ Agent v4 重构任务计划表
 │ HTTP 主链  │ 默认模式已切到 `hybrid`，并在 v4 submit 成功时不再常态提交 legacy：                                                      │
 │            │ `services/hub/internal/httpapi/execution_runtime_router.go`（`newExecutionRuntimeRouter` / `submitExecutionBestEffort`） │
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ 回退开关   │ 新增 `GOYAIS_HTTP_RUNTIME_LEGACY_FALLBACK` 受控回退开关（v4 模式强制禁回退；hybrid 默认禁回退，可按环境变量启用应急回退）。│
-│            │ hybrid 默认禁回退时不再常驻创建 `ExecutionOrchestrator`，仅 legacy 或显式启用回退时挂载。                               │
-│            │ 对应测试已覆盖 hybrid/v4 两种模式下的“禁回退”行为；门禁脚本已新增 `state.orchestrator` 生产引用为 0 的严格断言。          │
+│ 回退收敛   │ hybrid/v4 路径已移除 legacy fallback；v4 submit/control/cancel 失败时统一记录 `route_v4:error`，不再降级 legacy。         │
+│            │ `AppState` 初始化路径已不再挂载 `ExecutionOrchestrator`（legacy backend 需显式注入测试桩，生产默认不接旧编排器）。          │
+│            │ `GOYAIS_HTTP_RUNTIME_MODE=legacy` 当前仅作为兼容别名映射到 `hybrid`，不再提供独立 legacy 执行语义。                         │
+│            │ `internal/httpapi/execution_orchestrator.go` 及对应 legacy orchestrator 测试文件已删除；共享控制/提问类型迁移到独立类型文件。 │
+│            │ 对应测试已覆盖 hybrid/v4 的“无回退”语义；门禁脚本维持 `state.orchestrator` 生产引用为 0，并新增 orchestrator 文件删除、legacy 仅别名、AppState 不挂 legacy backend 及 `buildSlashEvents`/`StdoutGuard` 防回流的硬门禁。 │
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ 映射收敛   │ hybrid/v4 均可解析 execution→run 映射 ID：                                                                                │
 │            │ `services/hub/internal/httpapi/execution_runtime_v4_bridge.go`（`resolveExecutionRuntimeID`）                            │
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ 审计链路   │ 新增 runtime 路由审计事件（`route_v4` / `route_legacy` / `fallback_legacy`）并有测试断言。                               │
+│ 审计链路   │ runtime 路由审计事件（`route_v4` / `route_legacy`）已覆盖成功与失败分支，并有测试断言。                                    │
 └────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
   ---

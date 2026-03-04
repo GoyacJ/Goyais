@@ -1852,6 +1852,59 @@ components:
       type: string
       enum: [running, queued, stopped, done, error]
 
+    PermissionMode:
+      type: string
+      enum: [default, acceptEdits, plan, dontAsk, bypassPermissions]
+
+    ExecutionState:
+      type: string
+      enum: [queued, pending, executing, confirming, awaiting_input, completed, failed, cancelled]
+
+    RunControlAction:
+      type: string
+      enum: [stop, approve, deny, resume, answer]
+
+    ExecutionEventType:
+      type: string
+      enum:
+        - message_received
+        - user_prompt_submit
+        - execution_started
+        - thinking_delta
+        - pre_tool_use
+        - permission_request
+        - tool_call
+        - tool_result
+        - post_tool_use
+        - post_tool_use_failure
+        - diff_generated
+        - change_set_updated
+        - change_set_committed
+        - change_set_discarded
+        - change_set_rolled_back
+        - execution_stopped
+        - execution_done
+        - execution_error
+        - task_graph_configured
+        - task_dependencies_updated
+        - task_retry_policy_updated
+        - task_artifact_emitted
+        - task_failed
+        - task_started
+        - task_completed
+        - task_cancelled
+
+    ExecutionUserAnswer:
+      type: object
+      required: [question_id]
+      properties:
+        question_id:
+          type: string
+        selected_option_id:
+          type: string
+        text:
+          type: string
+
     RemoteConnectionResponse:
       type: object
       required: [workspace, connection]
@@ -2068,8 +2121,7 @@ components:
           type: integer
           minimum: 1
         default_mode:
-          type: string
-          enum: [agent, plan]
+          $ref: '#/components/schemas/PermissionMode'
         current_revision:
           type: integer
           format: int64
@@ -2247,8 +2299,7 @@ components:
           type: string
           enum: [idle, running, queued]
         default_mode:
-          type: string
-          enum: [agent, plan]
+          $ref: '#/components/schemas/PermissionMode'
         model_config_id:
           type: string
         rule_ids:
@@ -2384,8 +2435,7 @@ components:
         name:
           type: string
         mode:
-          type: string
-          enum: [agent, plan]
+          $ref: '#/components/schemas/PermissionMode'
         model_config_id:
           type: string
         rule_ids:
@@ -2487,16 +2537,13 @@ components:
         message_id:
           type: string
         state:
-          type: string
-          enum: [queued, pending, executing, completed, failed, cancelled]
+          $ref: '#/components/schemas/ExecutionState'
         mode:
-          type: string
-          enum: [agent, plan]
+          $ref: '#/components/schemas/PermissionMode'
         model_id:
           type: string
         mode_snapshot:
-          type: string
-          enum: [agent, plan]
+          $ref: '#/components/schemas/PermissionMode'
         model_snapshot:
           $ref: '#/components/schemas/ModelSnapshot'
         resource_profile_snapshot:
@@ -2625,8 +2672,7 @@ components:
         raw_input:
           type: string
         mode:
-          type: string
-          enum: [agent, plan]
+          $ref: '#/components/schemas/PermissionMode'
         model_config_id:
           type: string
         selected_resources:
@@ -3455,7 +3501,7 @@ components:
         trace_id:
           type: string
         type:
-          type: string
+          $ref: '#/components/schemas/ExecutionEventType'
         sequence:
           type: integer
         queue_index:
@@ -3481,8 +3527,9 @@ components:
       required: [action]
       properties:
         action:
-          type: string
-          enum: [stop, approve, deny, resume]
+          $ref: '#/components/schemas/RunControlAction'
+        answer:
+          $ref: '#/components/schemas/ExecutionUserAnswer'
 
     RunControlResponse:
       type: object
@@ -3494,9 +3541,9 @@ components:
         run_id:
           type: string
         state:
-          type: string
+          $ref: '#/components/schemas/ExecutionState'
         previous_state:
-          type: string
+          $ref: '#/components/schemas/ExecutionState'
 
     TaskState:
       type: string

@@ -24,7 +24,7 @@ import "context"
 // Engine is the unified execution runtime.
 // CLI, ACP, and HTTP all funnel through a single Engine instance.
 // Replaces the split between agentcore.Engine (stub) and
-// httpapi.ExecutionOrchestrator (real implementation).
+// legacy HTTP execution paths.
 type Engine interface {
 	// StartSession creates a new agent session and returns a handle.
 	StartSession(ctx context.Context, req StartSessionRequest) (SessionHandle, error)

@@ -41,7 +41,7 @@ func (s *AppState) resolveExecutionRuntimeID(executionID string) string {
 		return normalizedExecutionID
 	}
 	router := s.executionRuntime
-	if router == nil || router.mode == executionRuntimeModeLegacy {
+	if router == nil {
 		return normalizedExecutionID
 	}
 	s.mu.RLock()

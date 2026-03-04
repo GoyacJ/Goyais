@@ -3388,8 +3388,7 @@ export type components = {
         };
         ComposerSubmitRequest: {
             catalog_revision?: string;
-            /** @enum {string} */
-            mode?: "agent" | "plan";
+            mode?: components["schemas"]["PermissionMode"];
             model_config_id?: string;
             raw_input: string;
             selected_resources?: components["schemas"]["ComposerSelectedResource"][];
@@ -3431,8 +3430,7 @@ export type components = {
             base_revision: number;
             /** Format: date-time */
             created_at: string;
-            /** @enum {string} */
-            default_mode: "agent" | "plan";
+            default_mode: components["schemas"]["PermissionMode"];
             id: string;
             mcp_ids: string[];
             model_config_id: string;
@@ -3537,18 +3535,15 @@ export type components = {
             created_at: string;
             id: string;
             message_id: string;
-            /** @enum {string} */
-            mode: "agent" | "plan";
-            /** @enum {string} */
-            mode_snapshot: "agent" | "plan";
+            mode: components["schemas"]["PermissionMode"];
+            mode_snapshot: components["schemas"]["PermissionMode"];
             model_id: string;
             model_snapshot: components["schemas"]["ModelSnapshot"];
             /** Format: int64 */
             project_revision_snapshot: number;
             queue_index: number;
             resource_profile_snapshot?: components["schemas"]["ExecutionResourceProfile"];
-            /** @enum {string} */
-            state: "queued" | "pending" | "executing" | "completed" | "failed" | "cancelled";
+            state: components["schemas"]["ExecutionState"];
             tokens_in: number;
             tokens_out: number;
             trace_id: string;
@@ -3574,11 +3569,13 @@ export type components = {
             /** Format: date-time */
             timestamp?: string;
             trace_id?: string;
-            type: string;
+            type: components["schemas"]["ExecutionEventType"];
         };
         ExecutionEventBatchRequest: {
             events: components["schemas"]["ExecutionEvent"][];
         };
+        /** @enum {string} */
+        ExecutionEventType: "message_received" | "user_prompt_submit" | "execution_started" | "thinking_delta" | "pre_tool_use" | "permission_request" | "tool_call" | "tool_result" | "post_tool_use" | "post_tool_use_failure" | "diff_generated" | "change_set_updated" | "change_set_committed" | "change_set_discarded" | "change_set_rolled_back" | "execution_stopped" | "execution_done" | "execution_error" | "task_graph_configured" | "task_dependencies_updated" | "task_retry_policy_updated" | "task_artifact_emitted" | "task_failed" | "task_started" | "task_completed" | "task_cancelled";
         ExecutionFilesExportResponse: {
             archive_base64: string;
             file_name: string;
@@ -3590,6 +3587,13 @@ export type components = {
             project_file_paths?: string[];
             rule_ids?: string[];
             skill_ids?: string[];
+        };
+        /** @enum {string} */
+        ExecutionState: "queued" | "pending" | "executing" | "confirming" | "awaiting_input" | "completed" | "failed" | "cancelled";
+        ExecutionUserAnswer: {
+            question_id: string;
+            selected_option_id?: string;
+            text?: string;
         };
         HealthResponse: {
             ok: boolean;
@@ -3828,6 +3832,8 @@ export type components = {
             /** @constant */
             ok: true;
         };
+        /** @enum {string} */
+        PermissionMode: "default" | "acceptEdits" | "plan" | "dontAsk" | "bypassPermissions";
         PermissionSnapshot: {
             action_visibility: {
                 [key: string]: components["schemas"]["PermissionVisibility"];
@@ -3848,8 +3854,7 @@ export type components = {
             created_at: string;
             /** Format: int64 */
             current_revision: number;
-            /** @enum {string} */
-            default_mode?: "agent" | "plan";
+            default_mode?: components["schemas"]["PermissionMode"];
             default_model_config_id?: string;
             id: string;
             is_git: boolean;
@@ -3980,16 +3985,18 @@ export type components = {
         RuleSpec: {
             content: string;
         };
+        /** @enum {string} */
+        RunControlAction: "stop" | "approve" | "deny" | "resume" | "answer";
         RunControlRequest: {
-            /** @enum {string} */
-            action: "stop" | "approve" | "deny" | "resume";
+            action: components["schemas"]["RunControlAction"];
+            answer?: components["schemas"]["ExecutionUserAnswer"];
         };
         RunControlResponse: {
             /** @constant */
             ok: true;
-            previous_state: string;
+            previous_state: components["schemas"]["ExecutionState"];
             run_id: string;
-            state: string;
+            state: components["schemas"]["ExecutionState"];
         };
         RunGraphEdge: {
             from_task_id: string;
@@ -4071,8 +4078,7 @@ export type components = {
         TaskState: "queued" | "blocked" | "running" | "retrying" | "completed" | "failed" | "cancelled";
         UpdateConversationRequest: {
             mcp_ids?: string[];
-            /** @enum {string} */
-            mode?: "agent" | "plan";
+            mode?: components["schemas"]["PermissionMode"];
             model_config_id?: string;
             name?: string;
             rule_ids?: string[];

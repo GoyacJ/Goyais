@@ -14,20 +14,19 @@ import (
 )
 
 const (
-	executionRuntimeModeEnv           = "GOYAIS_HTTP_RUNTIME_MODE"
-	executionRuntimeLegacyFallbackEnv = "GOYAIS_HTTP_RUNTIME_LEGACY_FALLBACK"
+	executionRuntimeModeEnv = "GOYAIS_HTTP_RUNTIME_MODE"
 )
 
 type executionRuntimeMode string
 
 const (
-	executionRuntimeModeLegacy executionRuntimeMode = "legacy"
 	executionRuntimeModeHybrid executionRuntimeMode = "hybrid"
 	executionRuntimeModeV4     executionRuntimeMode = "v4"
 )
 
 var (
 	errV4ExecutionBackendNotConfigured = errors.New("v4 execution backend is not configured")
+	errLegacyExecutionBackendMissing   = errors.New("legacy execution backend is not configured")
 	errV4AnswerControlUnsupported      = errors.New("v4 execution backend does not support answer payload controls")
 	errV4ExecutionIDNotMapped          = errors.New("v4 execution runtime requires a run id mapping")
 )
@@ -50,17 +49,15 @@ type v4ExecutionService interface {
 }
 
 type executionRuntimeRouterOptions struct {
-	Mode                string
-	Legacy              legacyExecutionBackend
-	V4                  v4ExecutionBackend
-	AllowLegacyFallback *bool
+	Mode   string
+	Legacy legacyExecutionBackend
+	V4     v4ExecutionBackend
 }
 
 type executionRuntimeRouter struct {
-	mode                executionRuntimeMode
-	legacy              legacyExecutionBackend
-	v4                  v4ExecutionBackend
-	allowLegacyFallback bool
+	mode   executionRuntimeMode
+	legacy legacyExecutionBackend
+	v4     v4ExecutionBackend
 }
 
 func newExecutionRuntimeRouter(options executionRuntimeRouterOptions) *executionRuntimeRouter {
@@ -71,46 +68,17 @@ func newExecutionRuntimeRouter(options executionRuntimeRouterOptions) *execution
 	if mode == "" {
 		mode = executionRuntimeModeHybrid
 	}
-	allowLegacyFallback := defaultLegacyFallbackForMode(mode)
-	if options.AllowLegacyFallback != nil {
-		allowLegacyFallback = *options.AllowLegacyFallback
-	} else if raw, exists := os.LookupEnv(executionRuntimeLegacyFallbackEnv); exists {
-		allowLegacyFallback = parseLegacyFallback(raw, allowLegacyFallback)
-	}
-	if mode == executionRuntimeModeV4 {
-		allowLegacyFallback = false
-	}
 	return &executionRuntimeRouter{
-		mode:                mode,
-		legacy:              options.Legacy,
-		v4:                  options.V4,
-		allowLegacyFallback: allowLegacyFallback,
-	}
-}
-
-func defaultLegacyFallbackForMode(mode executionRuntimeMode) bool {
-	if mode == executionRuntimeModeV4 {
-		return false
-	}
-	return true
-}
-
-func parseLegacyFallback(raw string, fallback bool) bool {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "1", "true", "yes", "on":
-		return true
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return fallback
+		mode:   mode,
+		legacy: options.Legacy,
+		v4:     options.V4,
 	}
 }
 
 func parseExecutionRuntimeMode(raw string) executionRuntimeMode {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case string(executionRuntimeModeLegacy):
-		return executionRuntimeModeLegacy
-	case string(executionRuntimeModeHybrid):
+	case "legacy", string(executionRuntimeModeHybrid):
+		// Keep legacy as a compatibility alias while runtime semantics are hybrid/v4 only.
 		return executionRuntimeModeHybrid
 	case string(executionRuntimeModeV4):
 		return executionRuntimeModeV4
@@ -134,9 +102,10 @@ func (r *executionRuntimeRouter) Submit(_ context.Context, executionID string) e
 	if r.mode == executionRuntimeModeV4 {
 		return errV4ExecutionIDNotMapped
 	}
-	if r.legacy != nil {
-		r.legacy.Submit(normalizedExecutionID)
+	if r.legacy == nil {
+		return errLegacyExecutionBackendMissing
 	}
+	r.legacy.Submit(normalizedExecutionID)
 	return nil
 }
 
@@ -155,16 +124,15 @@ func (r *executionRuntimeRouter) Cancel(ctx context.Context, executionID string)
 				Action: "stop",
 			})
 		}
-		if r.mode == executionRuntimeModeV4 || !r.shouldAllowLegacyFallback() {
-			return errV4ExecutionBackendNotConfigured
-		}
+		return errV4ExecutionBackendNotConfigured
 	}
 	if r.mode == executionRuntimeModeV4 {
 		return errV4ExecutionIDNotMapped
 	}
-	if r.legacy != nil {
-		r.legacy.Cancel(normalizedExecutionID)
+	if r.legacy == nil {
+		return errLegacyExecutionBackendMissing
 	}
+	r.legacy.Cancel(normalizedExecutionID)
 	return nil
 }
 
@@ -186,34 +154,23 @@ func (r *executionRuntimeRouter) Control(ctx context.Context, executionID string
 				Action: string(signal.Action),
 			})
 		}
-		if r.mode == executionRuntimeModeV4 || !r.shouldAllowLegacyFallback() {
-			return errV4ExecutionBackendNotConfigured
-		}
+		return errV4ExecutionBackendNotConfigured
 	}
 	if r.mode == executionRuntimeModeV4 {
 		return errV4ExecutionIDNotMapped
 	}
-	if r.legacy != nil {
-		r.legacy.Control(normalizedExecutionID, signal)
+	if r.legacy == nil {
+		return errLegacyExecutionBackendMissing
 	}
+	r.legacy.Control(normalizedExecutionID, signal)
 	return nil
 }
 
 func (r *executionRuntimeRouter) shouldUseV4RunPath(executionID string) bool {
-	if r == nil || r.mode == executionRuntimeModeLegacy {
+	if r == nil {
 		return false
 	}
 	return strings.HasPrefix(strings.TrimSpace(executionID), "run_")
-}
-
-func (r *executionRuntimeRouter) shouldAllowLegacyFallback() bool {
-	if r == nil {
-		return true
-	}
-	if r.mode == executionRuntimeModeV4 {
-		return false
-	}
-	return r.allowLegacyFallback
 }
 
 func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID string) {
@@ -234,11 +191,8 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 			s.snapshotV4RunEventsBestEffort(normalizedExecutionID, submitResult.SessionID)
 			return
 		}
-		if !s.shouldAllowLegacyFallback() {
-			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "error")
-			return
-		}
-		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
+		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "error")
+		return
 	}
 	if s.shouldAttemptV4Submit() && !attemptedV4Submit {
 		mappedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
@@ -254,11 +208,6 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 	}
 	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
 	if err := router.Submit(ctx, resolvedRuntimeID); err != nil {
-		if resolvedRuntimeID != normalizedExecutionID && router.legacy != nil && s.shouldAllowLegacyFallback() {
-			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
-			router.legacy.Submit(normalizedExecutionID)
-			return
-		}
 		if strings.HasPrefix(strings.TrimSpace(resolvedRuntimeID), "run_") || s.executionRuntimeMode() == executionRuntimeModeV4 {
 			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "error")
 			return
@@ -285,10 +234,7 @@ func (s *AppState) cancelExecutionBestEffort(ctx context.Context, executionID st
 	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
 	cancelErr := router.Cancel(ctx, resolvedRuntimeID)
 	if cancelErr != nil {
-		if resolvedRuntimeID != normalizedExecutionID && router.legacy != nil && s.shouldAllowLegacyFallback() {
-			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
-			router.legacy.Cancel(normalizedExecutionID)
-		} else if strings.HasPrefix(strings.TrimSpace(resolvedRuntimeID), "run_") || s.executionRuntimeMode() == executionRuntimeModeV4 {
+		if strings.HasPrefix(strings.TrimSpace(resolvedRuntimeID), "run_") || s.executionRuntimeMode() == executionRuntimeModeV4 {
 			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "error")
 		} else {
 			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "error")
@@ -319,10 +265,7 @@ func (s *AppState) controlExecutionBestEffort(ctx context.Context, executionID s
 	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
 	controlErr := router.Control(ctx, resolvedRuntimeID, signal)
 	if controlErr != nil {
-		if resolvedRuntimeID != normalizedExecutionID && router.legacy != nil && s.shouldAllowLegacyFallback() {
-			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
-			router.legacy.Control(normalizedExecutionID, signal)
-		} else if strings.HasPrefix(strings.TrimSpace(resolvedRuntimeID), "run_") || s.executionRuntimeMode() == executionRuntimeModeV4 {
+		if strings.HasPrefix(strings.TrimSpace(resolvedRuntimeID), "run_") || s.executionRuntimeMode() == executionRuntimeModeV4 {
 			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "error")
 		} else {
 			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "error")
@@ -339,16 +282,9 @@ func (s *AppState) controlExecutionBestEffort(ctx context.Context, executionID s
 
 func (s *AppState) executionRuntimeMode() executionRuntimeMode {
 	if s == nil || s.executionRuntime == nil {
-		return executionRuntimeModeLegacy
+		return executionRuntimeModeHybrid
 	}
 	return s.executionRuntime.mode
-}
-
-func (s *AppState) shouldAllowLegacyFallback() bool {
-	if s == nil || s.executionRuntime == nil {
-		return true
-	}
-	return s.executionRuntime.shouldAllowLegacyFallback()
 }
 
 func (s *AppState) appendExecutionRuntimeAudit(executionID string, action string, result string) {

@@ -6,6 +6,10 @@ func intPtr(value int) *int {
 	return &value
 }
 
+func ptrString(value string) *string {
+	return &value
+}
+
 func TestSelectModelConfigForExecutionRequiresModelConfigID(t *testing.T) {
 	modelConfigID := "rc_model_minimax"
 	modelConfigs := []ResourceConfig{

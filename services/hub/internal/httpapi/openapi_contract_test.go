@@ -285,6 +285,54 @@ func TestOpenAPIComposerInputSchemaShape(t *testing.T) {
 	}
 }
 
+func TestOpenAPIExecutionAndPermissionEnumsAreSynced(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"PermissionMode:",
+		"enum: [default, acceptEdits, plan, dontAsk, bypassPermissions]",
+		"ExecutionState:",
+		"enum: [queued, pending, executing, confirming, awaiting_input, completed, failed, cancelled]",
+		"default_mode:",
+		"$ref: '#/components/schemas/PermissionMode'",
+		"mode_snapshot:",
+		"state:",
+		"$ref: '#/components/schemas/ExecutionState'",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing execution/permission enum marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPIRunControlAndExecutionEventEnumsAreSynced(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"RunControlAction:",
+		"enum: [stop, approve, deny, resume, answer]",
+		"ExecutionUserAnswer:",
+		"question_id:",
+		"RunControlRequest:",
+		"answer:",
+		"ExecutionEventType:",
+		"user_prompt_submit",
+		"task_graph_configured",
+		"task_dependencies_updated",
+		"task_retry_policy_updated",
+		"task_artifact_emitted",
+		"task_failed",
+		"task_started",
+		"task_completed",
+		"task_cancelled",
+		"$ref: '#/components/schemas/ExecutionEventType'",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing run-control/event enum marker: %s", marker)
+		}
+	}
+}
+
 func TestOpenAPIResourceConfigTypeEnumDoesNotIncludeFile(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	start := strings.Index(spec, "ResourceConfigCreateRequest:")

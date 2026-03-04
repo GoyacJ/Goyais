@@ -8,7 +8,6 @@ import (
 )
 
 func TestProjectConfigHandlerPutPurgesProjectConversationHistory(t *testing.T) {
-	t.Setenv(executionRuntimeLegacyFallbackEnv, "true")
 	state := NewAppState(nil)
 	now := time.Now().UTC().Format(time.RFC3339)
 
@@ -210,22 +209,6 @@ func TestProjectConfigHandlerPutPurgesProjectConversationHistory(t *testing.T) {
 	state.executionDiffs[targetExecutionID] = []DiffItem{{ID: "diff_target", Path: "a.txt", ChangeType: "modified"}}
 	state.executionDiffs[otherExecutionID] = []DiffItem{{ID: "diff_other", Path: "b.txt", ChangeType: "modified"}}
 
-	legacyOrchestrator, ok := state.executionRuntime.legacy.(*ExecutionOrchestrator)
-	if !ok || legacyOrchestrator == nil {
-		t.Fatalf("expected legacy orchestrator backend when fallback env is enabled")
-	}
-	cancelled := make(chan struct{}, 1)
-	legacyOrchestrator.mu.Lock()
-	legacyOrchestrator.active[targetExecutionID] = &executionRuntimeHandle{
-		cancel: func() {
-			select {
-			case cancelled <- struct{}{}:
-			default:
-			}
-		},
-	}
-	legacyOrchestrator.mu.Unlock()
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/projects/{project_id}/config", ProjectConfigHandler(state))
 
@@ -286,12 +269,6 @@ func TestProjectConfigHandlerPutPurgesProjectConversationHistory(t *testing.T) {
 	}
 	if _, exists := state.conversationEventSubs[otherConversationID]; !exists {
 		t.Fatalf("expected other project subscribers preserved")
-	}
-
-	select {
-	case <-cancelled:
-	case <-time.After(500 * time.Millisecond):
-		t.Fatalf("expected running execution cancellation")
 	}
 
 	select {

@@ -142,10 +142,15 @@ export type Execution = {
 
 export type ExecutionEventType =
   | "message_received"
+  | "user_prompt_submit"
   | "execution_started"
   | "thinking_delta"
+  | "pre_tool_use"
+  | "permission_request"
   | "tool_call"
   | "tool_result"
+  | "post_tool_use"
+  | "post_tool_use_failure"
   | "diff_generated"
   | "change_set_updated"
   | "change_set_committed"
@@ -153,7 +158,15 @@ export type ExecutionEventType =
   | "change_set_rolled_back"
   | "execution_stopped"
   | "execution_done"
-  | "execution_error";
+  | "execution_error"
+  | "task_graph_configured"
+  | "task_dependencies_updated"
+  | "task_retry_policy_updated"
+  | "task_artifact_emitted"
+  | "task_failed"
+  | "task_started"
+  | "task_completed"
+  | "task_cancelled";
 
 export type ExecutionEvent = {
   event_id: string;
