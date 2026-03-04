@@ -174,9 +174,6 @@ func (s *AppState) snapshotV4RunEventsBestEffort(executionID string, sessionID s
 		subscribeReq.Cursor = fmt.Sprintf("%d", afterSequence)
 	}
 	frames, err := s.v4Service.SubscribeSnapshot(pollCtx, subscribeReq)
-	if len(frames) == 0 {
-		return
-	}
 	highestSequence := afterSequence
 	for _, frame := range frames {
 		if frame.Sequence > highestSequence {

@@ -641,3 +641,40 @@ func TestSnapshotV4RunEventsBestEffort_UsesIncrementalShadowCursor(t *testing.T)
 		t.Fatalf("expected second cursor=5, got %q", second)
 	}
 }
+
+func TestSnapshotV4RunEventsBestEffort_AppendsPollErrorWhenNoFrames(t *testing.T) {
+	v4 := &v4BackendStub{
+		err: errors.New("subscribe temporarily unavailable"),
+	}
+	state := &AppState{
+		conversations: map[string]Conversation{
+			"conv_1": {
+				ID: "conv_1",
+			},
+		},
+		executions: map[string]Execution{
+			"exec_1": {
+				ID:             "exec_1",
+				ConversationID: "conv_1",
+			},
+		},
+		v4Service: v4,
+	}
+
+	state.snapshotV4RunEventsBestEffort("exec_1", "sess_v4_1")
+
+	events := state.executionEvents["conv_1"]
+	if len(events) != 1 {
+		t.Fatalf("expected one shadow poll error event, got %d", len(events))
+	}
+	last := events[len(events)-1]
+	if stage := strings.TrimSpace(asString(last.Payload["stage"])); stage != "v4_shadow_event" {
+		t.Fatalf("expected v4_shadow_event stage, got %q", stage)
+	}
+	if eventType := strings.TrimSpace(asString(last.Payload["event_type"])); eventType != "shadow_poll_error" {
+		t.Fatalf("expected shadow_poll_error event_type, got %q", eventType)
+	}
+	if eventErr := strings.TrimSpace(asString(last.Payload["event_error"])); eventErr == "" {
+		t.Fatalf("expected non-empty event_error payload")
+	}
+}
