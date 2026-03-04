@@ -44,9 +44,7 @@ func WorkspaceProjectConfigsHandler(state *AppState) http.HandlerFunc {
 			})
 			return
 		}
-		state.mu.RLock()
-		aggregate := computeTokenUsageAggregateLocked(state)
-		state.mu.RUnlock()
+		aggregate := computeTokenUsageAggregate(state, workspaceID)
 		for index := range items {
 			projectID := strings.TrimSpace(items[index].ProjectID)
 			projectTotals := aggregate.projectTotals[projectID]

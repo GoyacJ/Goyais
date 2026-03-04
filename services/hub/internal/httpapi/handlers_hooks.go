@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"log"
 	"net/http"
 	"strings"
 )
@@ -66,6 +67,19 @@ func HookExecutionsHandler(state *AppState) http.HandlerFunc {
 		if runID == "" {
 			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "run_id is required", map[string]any{})
 			return
+		}
+
+		if service, ok := newHookExecutionQueryService(state); ok {
+			items, exists, err := service.ListByRun(r.Context(), runID)
+			if err == nil {
+				if !exists {
+					WriteStandardError(w, r, http.StatusNotFound, "RUN_NOT_FOUND", "Run does not exist", map[string]any{"run_id": runID})
+					return
+				}
+				writeJSON(w, http.StatusOK, HookExecutionListResponse{Items: items})
+				return
+			}
+			log.Printf("runtime v1 hook execution query failed, fallback to in-memory map: %v", err)
 		}
 
 		state.mu.RLock()

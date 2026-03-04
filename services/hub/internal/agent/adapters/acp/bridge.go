@@ -11,6 +11,7 @@ import (
 
 	cliadapter "goyais/services/hub/internal/agent/adapters/cli"
 	"goyais/services/hub/internal/agent/core"
+	eventscore "goyais/services/hub/internal/agent/core/events"
 )
 
 // NewSessionRequest is ACP-facing session create request.
@@ -143,7 +144,7 @@ func (c *updateCollector) WriteEvent(frame cliadapter.EventFrame) error {
 	kind := "run_event"
 	if frame.Type == "command_response" {
 		kind = "command_result"
-	} else if frame.Type == string(core.RunEventTypeRunOutputDelta) {
+	} else if frame.Type == string(eventscore.RunEventTypeRunOutputDelta) {
 		kind = "assistant_message_chunk"
 	}
 	payload := cloneMapAny(frame.Payload)

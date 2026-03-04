@@ -646,3 +646,102 @@ func TestRunControlEndpoint_StopEmitsHookStopRecord(t *testing.T) {
 		t.Fatalf("expected stop hook record for run %s, got %#v", executionID, records)
 	}
 }
+
+func TestRunControlEndpoint_UsesRepositoryWhenExecutionMapMissing(t *testing.T) {
+	store, err := openAuthzStore(":memory:")
+	if err != nil {
+		t.Fatalf("open authz store failed: %v", err)
+	}
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+
+	state := NewAppState(store)
+	handler := RunControlHandler(state)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	conversationID := "conv_run_control_repo_" + randomHex(4)
+	executionID := "exec_run_control_repo_" + randomHex(4)
+	activeExecutionID := executionID
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:                conversationID,
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_" + randomHex(4),
+		Name:              "Run Control Repository",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     "rc_model_test",
+		ActiveExecutionID: &activeExecutionID,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	state.executions[executionID] = Execution{
+		ID:             executionID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_" + randomHex(4),
+		State:          RunStateExecuting,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot: ModelSnapshot{
+			ModelID:  "gpt-5.3",
+			ConfigID: "rc_model_test",
+		},
+		QueueIndex: 0,
+		TraceID:    "tr_" + randomHex(4),
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+	state.conversationExecutionOrder[conversationID] = []string{executionID}
+	state.mu.Unlock()
+
+	syncExecutionDomainBestEffort(state)
+
+	state.mu.Lock()
+	state.executions = map[string]Execution{}
+	state.conversations = map[string]Conversation{}
+	state.conversationExecutionOrder = map[string][]string{}
+	state.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/runs/"+executionID+"/control", strings.NewReader(`{"action":"stop"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("run_id", executionID)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected run control stop 200 with repository seed, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	if got := strings.TrimSpace(asString(payload["state"])); got != string(RunStateCancelled) {
+		t.Fatalf("expected state cancelled after stop, got %q", got)
+	}
+
+	state.mu.RLock()
+	execution, exists := state.executions[executionID]
+	conversation, conversationExists := state.conversations[conversationID]
+	events := append([]ExecutionEvent{}, state.executionEvents[conversationID]...)
+	state.mu.RUnlock()
+	if !exists {
+		t.Fatalf("expected execution %s to be hydrated into state", executionID)
+	}
+	if !conversationExists {
+		t.Fatalf("expected conversation %s to be hydrated into state", conversationID)
+	}
+	if conversation.ActiveExecutionID != nil {
+		t.Fatalf("expected conversation active run cleared after stop, got %#v", conversation.ActiveExecutionID)
+	}
+	if execution.State != RunStateCancelled {
+		t.Fatalf("expected execution state cancelled, got %s", execution.State)
+	}
+	if len(events) == 0 {
+		t.Fatalf("expected run control events to be emitted")
+	}
+}

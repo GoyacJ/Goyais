@@ -118,6 +118,24 @@ func (s *stubHookDispatcher) Dispatch(_ context.Context, event core.HookEvent) (
 	return s.decision, nil
 }
 
+type stubSandboxGate struct {
+	decision SandboxDecision
+	err      error
+	requests []SandboxRequest
+}
+
+func (s *stubSandboxGate) Evaluate(_ context.Context, req SandboxRequest) (SandboxDecision, error) {
+	s.requests = append(s.requests, SandboxRequest{
+		ToolName:   req.ToolName,
+		Input:      cloneMapAny(req.Input),
+		WorkingDir: req.WorkingDir,
+	})
+	if s.err != nil {
+		return SandboxDecision{}, s.err
+	}
+	return s.decision, nil
+}
+
 func TestExecuteSingle_RetryAfterApproval(t *testing.T) {
 	var attempts int
 	runner := &stubRunner{
@@ -429,6 +447,98 @@ func TestExecuteSingle_PermissionGateDenySkipsRunner(t *testing.T) {
 	}
 	if len(runner.calls) != 0 {
 		t.Fatalf("runner should not execute when gate denies, got %d calls", len(runner.calls))
+	}
+}
+
+func TestExecuteSingle_SandboxDenySkipsRunner(t *testing.T) {
+	runner := &stubRunner{}
+	sandboxGate := &stubSandboxGate{
+		decision: SandboxDecision{
+			Kind:   core.PermissionDecisionDeny,
+			Reason: "blocked by sandbox",
+		},
+	}
+	pipeline := NewPipeline(Dependencies{
+		Runner:      runner,
+		SandboxGate: sandboxGate,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_sandbox_deny",
+			Name:   "write_file",
+			Input: map[string]any{
+				"path": "../../etc/passwd",
+			},
+		},
+		ToolContext: ToolContext{WorkingDir: "/repo"},
+	})
+	if err != nil {
+		t.Fatalf("execute single failed: %v", err)
+	}
+	if result.ErrorText != "blocked by sandbox" {
+		t.Fatalf("unexpected error text %q", result.ErrorText)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("runner should be skipped when sandbox denies, got %d calls", len(runner.calls))
+	}
+	if len(sandboxGate.requests) != 1 {
+		t.Fatalf("expected one sandbox request, got %d", len(sandboxGate.requests))
+	}
+}
+
+func TestExecuteSingle_SandboxAskWaitsApprovalAndPropagatesAudit(t *testing.T) {
+	runner := &stubRunner{
+		run: func(req RunRequest) (map[string]any, error) {
+			return map[string]any{"ok": true}, nil
+		},
+	}
+	sandboxGate := &stubSandboxGate{
+		decision: SandboxDecision{
+			Kind:   core.PermissionDecisionAsk,
+			Reason: "sandbox requires approval",
+			Metadata: map[string]any{
+				"tool":         "write_file",
+				"path":         "/repo/file.txt",
+				"reason":       "sandbox requires approval",
+				"matched_rule": "sandbox-rule-1",
+			},
+		},
+	}
+	waiter := &stubApprovalWaiter{action: ApprovalActionApprove}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         runner,
+		SandboxGate:    sandboxGate,
+		ApprovalWaiter: waiter,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_sandbox_ask",
+			Name:   "write_file",
+			Input: map[string]any{
+				"path": "/repo/file.txt",
+			},
+		},
+		ToolContext: ToolContext{WorkingDir: "/repo"},
+	})
+	if err != nil {
+		t.Fatalf("execute single failed: %v", err)
+	}
+	if result.ErrorText != "" {
+		t.Fatalf("unexpected error text %q", result.ErrorText)
+	}
+	if len(waiter.request) != 1 {
+		t.Fatalf("expected one approval wait request, got %d", len(waiter.request))
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("expected runner to execute once, got %d", len(runner.calls))
+	}
+	if !runner.calls[0].Approved {
+		t.Fatal("runner call should be marked approved after sandbox ask")
+	}
+	if runner.calls[0].Audit["matched_rule"] != "sandbox-rule-1" {
+		t.Fatalf("expected sandbox audit to propagate, got %#v", runner.calls[0].Audit)
 	}
 }
 

@@ -1,6 +1,10 @@
 package httpapi
 
-import "strings"
+import (
+	"context"
+	"log"
+	"strings"
+)
 
 type tokenUsageTotals struct {
 	Input  int
@@ -12,6 +16,19 @@ type tokenUsageAggregate struct {
 	projectTotals        map[string]tokenUsageTotals
 	projectModelTotals   map[string]map[string]tokenUsageTotals
 	workspaceModelTotals map[string]map[string]tokenUsageTotals
+}
+
+func computeTokenUsageAggregate(state *AppState, workspaceIDs ...string) tokenUsageAggregate {
+	if service, ok := newExecutionQueryService(state); ok {
+		aggregate, err := service.ComputeTokenUsageAggregate(context.Background(), workspaceIDs)
+		if err == nil {
+			return aggregate
+		}
+		log.Printf("runtime v1 token usage aggregate query failed, fallback to in-memory map: %v", err)
+	}
+	state.mu.RLock()
+	defer state.mu.RUnlock()
+	return computeTokenUsageAggregateLocked(state)
 }
 
 func computeTokenUsageAggregateLocked(state *AppState) tokenUsageAggregate {

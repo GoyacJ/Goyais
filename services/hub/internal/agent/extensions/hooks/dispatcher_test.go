@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"goyais/services/hub/internal/agent/core"
+	"goyais/services/hub/internal/agent/policy/hookscope"
 )
 
 func TestDispatch_DefaultAllowWhenNoRuleMatches(t *testing.T) {
@@ -225,5 +226,97 @@ func TestDispatch_ReturnsReasonAndMetadata(t *testing.T) {
 	}
 	if decision.Metadata["scope"] != "enterprise" {
 		t.Fatalf("missing copied metadata: %#v", decision.Metadata)
+	}
+}
+
+func TestDispatch_RespectsScopeResolverBindings(t *testing.T) {
+	dispatcher := NewDispatcher([]Rule{
+		{
+			ID:           "workspace-allow",
+			Enabled:      true,
+			Scope:        hookscope.ScopeWorkspace,
+			WorkspaceID:  "ws_1",
+			EventPattern: EventPreToolUse,
+			EventMatch:   MatchExact,
+			ToolPattern:  "Write",
+			ToolMatch:    MatchExact,
+			Decision:     DecisionAllow,
+		},
+		{
+			ID:           "session-deny",
+			Enabled:      true,
+			Scope:        hookscope.ScopeSession,
+			SessionID:    "sess_2",
+			EventPattern: EventPreToolUse,
+			EventMatch:   MatchExact,
+			ToolPattern:  "Write",
+			ToolMatch:    MatchExact,
+			Decision:     DecisionDeny,
+		},
+	})
+
+	decision, err := dispatcher.Dispatch(context.Background(), core.HookEvent{
+		Type:      EventPreToolUse,
+		SessionID: core.SessionID("sess_1"),
+		Payload: map[string]any{
+			"tool_name":    "Write",
+			"workspace_id": "ws_1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("dispatch failed: %v", err)
+	}
+	if decision.Decision != DecisionAllow {
+		t.Fatalf("expected allow from workspace rule, got %q", decision.Decision)
+	}
+	if decision.MatchedPolicyID != "workspace-allow" {
+		t.Fatalf("unexpected matched policy %q", decision.MatchedPolicyID)
+	}
+	if decision.Metadata["scope"] != string(hookscope.ScopeWorkspace) {
+		t.Fatalf("unexpected scope metadata %#v", decision.Metadata["scope"])
+	}
+}
+
+func TestDispatch_ScopeTieBreakUsesScopeOrder(t *testing.T) {
+	dispatcher := NewDispatcher([]Rule{
+		{
+			ID:           "session-ask",
+			Enabled:      true,
+			Scope:        hookscope.ScopeSession,
+			SessionID:    "sess_1",
+			EventPattern: EventPreToolUse,
+			EventMatch:   MatchExact,
+			ToolPattern:  "Write",
+			ToolMatch:    MatchExact,
+			Decision:     DecisionAsk,
+		},
+		{
+			ID:           "project-ask",
+			Enabled:      true,
+			Scope:        hookscope.ScopeProject,
+			ProjectID:    "proj_1",
+			EventPattern: EventPreToolUse,
+			EventMatch:   MatchExact,
+			ToolPattern:  "Write",
+			ToolMatch:    MatchExact,
+			Decision:     DecisionAsk,
+		},
+	})
+
+	decision, err := dispatcher.Dispatch(context.Background(), core.HookEvent{
+		Type:      EventPreToolUse,
+		SessionID: core.SessionID("sess_1"),
+		Payload: map[string]any{
+			"tool_name":    "Write",
+			"project_id":   "proj_1",
+			"session_id":   "sess_1",
+			"workspace_id": "ws_1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("dispatch failed: %v", err)
+	}
+	if decision.MatchedPolicyID != "project-ask" {
+		t.Fatalf("expected project scope to win ask tie, got %q", decision.MatchedPolicyID)
 	}
 }

@@ -95,6 +95,75 @@ func TestConversationsHandlerGetIncludesTokenUsage(t *testing.T) {
 	}
 }
 
+func TestConversationsHandlerGetUsesRepositoryWhenConversationAndExecutionMapMissing(t *testing.T) {
+	store, err := openAuthzStore(":memory:")
+	if err != nil {
+		t.Fatalf("open authz store failed: %v", err)
+	}
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+
+	state := NewAppState(store)
+	now := time.Now().UTC().Format(time.RFC3339)
+	conversationID := "conv_usage_list_repo_" + randomHex(4)
+	executionID := "exec_usage_list_repo_" + randomHex(4)
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:            conversationID,
+		WorkspaceID:   localWorkspaceID,
+		ProjectID:     "proj_usage_list_repo_" + randomHex(4),
+		Name:          "List Usage Repository",
+		QueueState:    QueueStateIdle,
+		DefaultMode:   PermissionModeDefault,
+		ModelConfigID: "rc_model_repo",
+		BaseRevision:  0,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	state.conversationExecutionOrder[conversationID] = []string{executionID}
+	state.executions[executionID] = newUsageExecution(conversationID, executionID, 6, 7, now)
+	state.mu.Unlock()
+
+	syncExecutionDomainBestEffort(state)
+
+	state.mu.Lock()
+	state.conversations = map[string]Conversation{}
+	state.executions = map[string]Execution{}
+	state.conversationExecutionOrder = map[string][]string{}
+	state.mu.Unlock()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/conversations", ConversationsHandler(state))
+	res := performJSONRequest(t, mux, http.MethodGet, "/v1/conversations?workspace_id="+localWorkspaceID, nil, nil)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected conversations list 200, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	items, ok := payload["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("expected exactly one conversation item, got %#v", payload["items"])
+	}
+	item, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected conversation object, got %#v", items[0])
+	}
+	if got := int(item["tokens_in_total"].(float64)); got != 6 {
+		t.Fatalf("expected tokens_in_total 6, got %d", got)
+	}
+	if got := int(item["tokens_out_total"].(float64)); got != 7 {
+		t.Fatalf("expected tokens_out_total 7, got %d", got)
+	}
+	if got := int(item["tokens_total"].(float64)); got != 13 {
+		t.Fatalf("expected tokens_total 13, got %d", got)
+	}
+}
+
 func TestConversationByIDHandlerGetAndPatchIncludeTokenUsage(t *testing.T) {
 	state := NewAppState(nil)
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -268,6 +337,175 @@ func TestConversationByIDHandlerPatchEmitsConfigChangeHookRecordForActiveExecuti
 	}
 	if !foundConfigChangeRecord {
 		t.Fatalf("expected config_change hook record for run %s, got %#v", executionID, records)
+	}
+}
+
+func TestConversationByIDHandlerGetUsesRepositoryWhenExecutionMapMissing(t *testing.T) {
+	store, err := openAuthzStore(":memory:")
+	if err != nil {
+		t.Fatalf("open authz store failed: %v", err)
+	}
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+
+	state := NewAppState(store)
+	now := time.Now().UTC().Format(time.RFC3339)
+	conversationID := "conv_usage_repo_" + randomHex(4)
+	executionID := "exec_usage_repo_" + randomHex(4)
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:            conversationID,
+		WorkspaceID:   localWorkspaceID,
+		ProjectID:     "proj_usage_repo_" + randomHex(4),
+		Name:          "Repo Usage",
+		QueueState:    QueueStateIdle,
+		DefaultMode:   PermissionModeDefault,
+		ModelConfigID: "rc_model_repo",
+		BaseRevision:  0,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	state.conversationExecutionOrder[conversationID] = []string{executionID}
+	state.executions[executionID] = newUsageExecution(conversationID, executionID, 5, 8, now)
+	state.mu.Unlock()
+
+	syncExecutionDomainBestEffort(state)
+
+	state.mu.Lock()
+	state.conversations = map[string]Conversation{}
+	state.executions = map[string]Execution{}
+	state.conversationExecutionOrder = map[string][]string{}
+	state.mu.Unlock()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/conversations/{conversation_id}", ConversationByIDHandler(state))
+
+	res := performJSONRequest(t, mux, http.MethodGet, "/v1/conversations/"+conversationID, nil, nil)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected conversation detail 200, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+
+	conversationRaw, ok := payload["conversation"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected conversation object, got %#v", payload["conversation"])
+	}
+	if got := int(conversationRaw["tokens_in_total"].(float64)); got != 5 {
+		t.Fatalf("expected tokens_in_total 5, got %d", got)
+	}
+	if got := int(conversationRaw["tokens_out_total"].(float64)); got != 8 {
+		t.Fatalf("expected tokens_out_total 8, got %d", got)
+	}
+	if got := int(conversationRaw["tokens_total"].(float64)); got != 13 {
+		t.Fatalf("expected tokens_total 13, got %d", got)
+	}
+
+	executionsRaw, ok := payload["executions"].([]any)
+	if !ok || len(executionsRaw) != 1 {
+		t.Fatalf("expected one execution from repository, got %#v", payload["executions"])
+	}
+	executionRaw, ok := executionsRaw[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected execution object, got %#v", executionsRaw[0])
+	}
+	if got := executionRaw["id"]; got != executionID {
+		t.Fatalf("expected execution id %q, got %#v", executionID, got)
+	}
+}
+
+func TestConversationByIDHandlerPatchUsesRepositoryWhenConversationMapMissing(t *testing.T) {
+	store, err := openAuthzStore(":memory:")
+	if err != nil {
+		t.Fatalf("open authz store failed: %v", err)
+	}
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+
+	state := NewAppState(store)
+	now := time.Now().UTC().Format(time.RFC3339)
+	projectID := "proj_usage_patch_repo_" + randomHex(4)
+	conversationID := "conv_usage_patch_repo_" + randomHex(4)
+
+	project, saveErr := saveProjectToStore(state, Project{
+		ID:          projectID,
+		WorkspaceID: localWorkspaceID,
+		Name:        "Patch Repository Project",
+		RepoPath:    "/tmp/patch-repository-project",
+		IsGit:       false,
+		DefaultMode: PermissionModeDefault,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
+	if saveErr != nil {
+		t.Fatalf("save project failed: %v", saveErr)
+	}
+
+	_, configErr := saveProjectConfigToStore(state, localWorkspaceID, ProjectConfig{
+		ProjectID:      project.ID,
+		ModelConfigIDs: []string{},
+		RuleIDs:        []string{},
+		SkillIDs:       []string{},
+		MCPIDs:         []string{},
+		UpdatedAt:      now,
+	})
+	if configErr != nil {
+		t.Fatalf("save project config failed: %v", configErr)
+	}
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:            conversationID,
+		WorkspaceID:   localWorkspaceID,
+		ProjectID:     project.ID,
+		Name:          "Before Repository Patch",
+		QueueState:    QueueStateIdle,
+		DefaultMode:   PermissionModeDefault,
+		ModelConfigID: "rc_model_patch_repo",
+		BaseRevision:  0,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	state.mu.Unlock()
+
+	syncExecutionDomainBestEffort(state)
+
+	state.mu.Lock()
+	state.conversations = map[string]Conversation{}
+	state.mu.Unlock()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/conversations/{conversation_id}", ConversationByIDHandler(state))
+
+	res := performJSONRequest(t, mux, http.MethodPatch, "/v1/conversations/"+conversationID, map[string]any{
+		"name": "After Repository Patch",
+	}, nil)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected conversation patch 200 with repository seed, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	patched := Conversation{}
+	mustDecodeJSON(t, res.Body.Bytes(), &patched)
+	if patched.Name != "After Repository Patch" {
+		t.Fatalf("expected patched name After Repository Patch, got %q", patched.Name)
+	}
+
+	state.mu.RLock()
+	hydrated, exists := state.conversations[conversationID]
+	state.mu.RUnlock()
+	if !exists {
+		t.Fatalf("expected conversation seed to be hydrated into state map")
+	}
+	if hydrated.Name != "After Repository Patch" {
+		t.Fatalf("expected hydrated conversation name After Repository Patch, got %q", hydrated.Name)
 	}
 }
 

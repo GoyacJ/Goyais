@@ -17,6 +17,8 @@ jobs:
       - name: Hub tests
         working-directory: services/hub
         run: go test ./...
+      - name: Hub refactor gate (strict)
+        run: scripts/refactor/gate-check.sh --strict
 
   desktop-lint-test:
     runs-on: ubuntu-latest

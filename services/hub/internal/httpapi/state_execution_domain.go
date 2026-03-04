@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	runtimeapplication "goyais/services/hub/internal/runtime/application"
 	runtimedomain "goyais/services/hub/internal/runtime/domain"
@@ -103,6 +104,7 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 		appendHookExecutionRecordLocked(s, record)
 	}
 	s.mu.Unlock()
+	syncRuntimeV1SnapshotBestEffort(s, snapshot)
 }
 
 func syncExecutionDomainBestEffort(state *AppState) {
@@ -112,6 +114,105 @@ func syncExecutionDomainBestEffort(state *AppState) {
 	snapshot := captureExecutionDomainSnapshot(state)
 	if err := state.authz.replaceExecutionDomainSnapshot(snapshot); err != nil {
 		log.Printf("failed to persist execution domain snapshot: %v", err)
+	}
+	syncRuntimeV1SnapshotBestEffort(state, snapshot)
+}
+
+func syncRuntimeV1SnapshotBestEffort(state *AppState, snapshot executionDomainSnapshot) {
+	if state == nil || state.authz == nil || state.authz.db == nil {
+		return
+	}
+	repositories := NewSQLiteRuntimeV1RepositorySet(state.authz.db)
+	ctx := context.Background()
+
+	sessions := make([]RuntimeSessionRecord, 0, len(snapshot.Conversations))
+	for _, conversation := range snapshot.Conversations {
+		sessions = append(sessions, RuntimeSessionRecord{
+			ID:            conversation.ID,
+			WorkspaceID:   conversation.WorkspaceID,
+			ProjectID:     conversation.ProjectID,
+			Name:          conversation.Name,
+			DefaultMode:   string(conversation.DefaultMode),
+			ModelConfigID: conversation.ModelConfigID,
+			RuleIDs:       append([]string{}, conversation.RuleIDs...),
+			SkillIDs:      append([]string{}, conversation.SkillIDs...),
+			MCPIDs:        append([]string{}, conversation.MCPIDs...),
+			ActiveRunID:   cloneOptionalString(conversation.ActiveExecutionID),
+			CreatedAt:     conversation.CreatedAt,
+			UpdatedAt:     conversation.UpdatedAt,
+		})
+	}
+	if err := repositories.Sessions.ReplaceAll(ctx, sessions); err != nil {
+		log.Printf("failed to persist runtime v1 sessions snapshot: %v", err)
+		return
+	}
+
+	runs := make([]RuntimeRunRecord, 0, len(snapshot.Executions))
+	for _, execution := range snapshot.Executions {
+		runs = append(runs, RuntimeRunRecord{
+			ID:            execution.ID,
+			SessionID:     execution.ConversationID,
+			WorkspaceID:   execution.WorkspaceID,
+			MessageID:     execution.MessageID,
+			State:         string(execution.State),
+			Mode:          string(execution.Mode),
+			ModelID:       execution.ModelID,
+			ModelConfigID: resolveExecutionModelConfigID(execution),
+			TokensIn:      execution.TokensIn,
+			TokensOut:     execution.TokensOut,
+			TraceID:       execution.TraceID,
+			CreatedAt:     execution.CreatedAt,
+			UpdatedAt:     execution.UpdatedAt,
+		})
+	}
+	if err := repositories.Runs.ReplaceAll(ctx, runs); err != nil {
+		log.Printf("failed to persist runtime v1 runs snapshot: %v", err)
+		return
+	}
+
+	events := make([]RuntimeRunEventRecord, 0, len(snapshot.ExecutionEvents))
+	for _, event := range snapshot.ExecutionEvents {
+		events = append(events, RuntimeRunEventRecord{
+			EventID:    event.EventID,
+			RunID:      event.ExecutionID,
+			SessionID:  event.ConversationID,
+			Sequence:   int64(event.Sequence),
+			Type:       string(event.Type),
+			Timestamp:  event.Timestamp,
+			Payload:    cloneMapAny(event.Payload),
+			OccurredAt: event.Timestamp,
+		})
+	}
+	if err := repositories.RunEvents.ReplaceAll(ctx, events); err != nil {
+		log.Printf("failed to persist runtime v1 run events snapshot: %v", err)
+		return
+	}
+
+	if err := repositories.RunTasks.ReplaceAll(ctx, []RuntimeRunTaskRecord{}); err != nil {
+		log.Printf("failed to persist runtime v1 run tasks snapshot: %v", err)
+		return
+	}
+	if err := repositories.ChangeSets.ReplaceAll(ctx, []RuntimeChangeSetRecord{}); err != nil {
+		log.Printf("failed to persist runtime v1 change sets snapshot: %v", err)
+		return
+	}
+
+	hookRecords := make([]RuntimeHookRecord, 0, len(snapshot.HookExecutionRecords))
+	for _, record := range snapshot.HookExecutionRecords {
+		hookRecords = append(hookRecords, RuntimeHookRecord{
+			ID:        record.ID,
+			RunID:     record.RunID,
+			SessionID: record.ConversationID,
+			TaskID:    stringPtrOrNil(record.TaskID),
+			Event:     string(record.Event),
+			ToolName:  stringPtrOrNil(record.ToolName),
+			PolicyID:  stringPtrOrNil(record.PolicyID),
+			Decision:  record.Decision,
+			Timestamp: record.Timestamp,
+		})
+	}
+	if err := repositories.HookRecords.ReplaceAll(ctx, hookRecords); err != nil {
+		log.Printf("failed to persist runtime v1 hook records snapshot: %v", err)
 	}
 }
 

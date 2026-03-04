@@ -18,9 +18,7 @@ func ConversationEventsHandler(state *AppState) http.HandlerFunc {
 		}
 
 		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
-		state.mu.RLock()
-		conversation, exists := state.conversations[conversationID]
-		state.mu.RUnlock()
+		conversation, exists := loadConversationByIDSeed(r.Context(), state, conversationID)
 		if !exists {
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
 				"conversation_id": conversationID,

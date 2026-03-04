@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -38,18 +40,63 @@ func ConversationsHandler(state *AppState) http.HandlerFunc {
 		if workspaceID == "" {
 			workspaceID = session.WorkspaceID
 		}
-		state.mu.RLock()
+		queryService, hasQueryService := newExecutionQueryService(state)
 		items := make([]Conversation, 0)
-		for _, conv := range state.conversations {
-			if projectID != "" && conv.ProjectID != projectID {
-				continue
+		loadedFromRepository := false
+		if hasQueryService {
+			repositoryItems, err := listExecutionFlowConversationsFromRepository(r.Context(), queryService, workspaceID, projectID)
+			if err == nil {
+				items = repositoryItems
+				loadedFromRepository = true
+				state.mu.Lock()
+				for _, item := range repositoryItems {
+					state.conversations[item.ID] = item
+				}
+				state.mu.Unlock()
+			} else {
+				log.Printf("runtime v1 conversation list query failed, fallback to in-memory map: %v", err)
 			}
-			if workspaceID != "" && conv.WorkspaceID != workspaceID {
-				continue
-			}
-			items = append(items, decorateConversationUsageLocked(state, conv))
 		}
-		state.mu.RUnlock()
+		if !loadedFromRepository {
+			state.mu.RLock()
+			for _, conv := range state.conversations {
+				if projectID != "" && conv.ProjectID != projectID {
+					continue
+				}
+				if workspaceID != "" && conv.WorkspaceID != workspaceID {
+					continue
+				}
+				items = append(items, conv)
+			}
+			state.mu.RUnlock()
+		}
+		applyInMemoryConversationUsage := func() {
+			state.mu.RLock()
+			for index := range items {
+				items[index] = decorateConversationUsageLocked(state, items[index])
+			}
+			state.mu.RUnlock()
+		}
+		if hasQueryService {
+			conversationIDs := make([]string, 0, len(items))
+			for _, item := range items {
+				conversationIDs = append(conversationIDs, item.ID)
+			}
+			totalsByConversation, err := queryService.ComputeConversationTokenUsage(r.Context(), conversationIDs)
+			if err == nil {
+				for index := range items {
+					totals := totalsByConversation[items[index].ID]
+					items[index].TokensInTotal = totals.Input
+					items[index].TokensOutTotal = totals.Output
+					items[index].TokensTotal = totals.Total
+				}
+			} else {
+				log.Printf("runtime v1 conversation usage query failed, fallback to in-memory map: %v", err)
+				applyInMemoryConversationUsage()
+			}
+		} else {
+			applyInMemoryConversationUsage()
+		}
 		sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt < items[j].CreatedAt })
 		raw := make([]any, 0, len(items))
 		for _, item := range items {
@@ -73,11 +120,9 @@ func ExecutionsHandler(state *AppState) http.HandlerFunc {
 		conversationID := strings.TrimSpace(r.URL.Query().Get("conversation_id"))
 		workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
 		if conversationID != "" {
-			state.mu.RLock()
-			if conversation, exists := state.conversations[conversationID]; exists {
+			if conversation, exists := loadExecutionFlowConversationSeed(r.Context(), state, conversationID); exists {
 				workspaceID = firstNonEmpty(workspaceID, conversation.WorkspaceID)
 			}
-			state.mu.RUnlock()
 		}
 		session, authErr := authorizeAction(
 			state,
@@ -93,6 +138,24 @@ func ExecutionsHandler(state *AppState) http.HandlerFunc {
 		}
 		if workspaceID == "" {
 			workspaceID = session.WorkspaceID
+		}
+		start, limit := parseCursorLimit(r)
+		if service, ok := newExecutionQueryService(state); ok {
+			items, next, err := service.ListExecutions(r.Context(), executionQueryFilter{
+				WorkspaceID:    workspaceID,
+				ConversationID: conversationID,
+				Offset:         start,
+				Limit:          limit,
+			})
+			if err == nil {
+				raw := make([]any, 0, len(items))
+				for _, item := range items {
+					raw = append(raw, item)
+				}
+				writeJSON(w, http.StatusOK, ListEnvelope{Items: raw, NextCursor: next})
+				return
+			}
+			log.Printf("runtime v1 execution query failed, fallback to in-memory map: %v", err)
 		}
 		state.mu.RLock()
 		items := make([]Execution, 0)
@@ -111,7 +174,6 @@ func ExecutionsHandler(state *AppState) http.HandlerFunc {
 		for _, item := range items {
 			raw = append(raw, item)
 		}
-		start, limit := parseCursorLimit(r)
 		paged, next := paginateAny(raw, start, limit)
 		writeJSON(w, http.StatusOK, ListEnvelope{Items: paged, NextCursor: next})
 	}
@@ -127,9 +189,7 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 		}
 
 		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
-		state.mu.RLock()
-		conversationSeed, exists := state.conversations[conversationID]
-		state.mu.RUnlock()
+		conversationSeed, exists := loadExecutionFlowConversationSeed(r.Context(), state, conversationID)
 		if !exists {
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
 			return
@@ -154,30 +214,32 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 		state.mu.Lock()
 		conversation, exists := state.conversations[conversationID]
 		if !exists {
-			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
-			return
+			conversation = conversationSeed
+			state.conversations[conversationID] = conversation
 		}
 
 		if conversation.ActiveExecutionID != nil {
-			execution := state.executions[*conversation.ActiveExecutionID]
-			execution.State = RunStateCancelled
-			execution.UpdatedAt = now
-			state.executions[execution.ID] = execution
-			cancelExecutionID = execution.ID
-			canceledExecution = execution
-			hasCanceledExecution = true
-			appendExecutionEventLocked(state, ExecutionEvent{
-				ExecutionID:    execution.ID,
-				ConversationID: conversationID,
-				TraceID:        TraceIDFromContext(r.Context()),
-				QueueIndex:     execution.QueueIndex,
-				Type:           RunEventTypeExecutionStopped,
-				Timestamp:      now,
-				Payload: map[string]any{
-					"reason": "user_stop",
-				},
-			})
+			activeExecutionID := strings.TrimSpace(*conversation.ActiveExecutionID)
+			execution, executionExists := loadExecutionFlowExecutionSeedLocked(state, activeExecutionID)
+			if executionExists {
+				execution.State = RunStateCancelled
+				execution.UpdatedAt = now
+				state.executions[execution.ID] = execution
+				cancelExecutionID = execution.ID
+				canceledExecution = execution
+				hasCanceledExecution = true
+				appendExecutionEventLocked(state, ExecutionEvent{
+					ExecutionID:    execution.ID,
+					ConversationID: conversationID,
+					TraceID:        TraceIDFromContext(r.Context()),
+					QueueIndex:     execution.QueueIndex,
+					Type:           RunEventTypeExecutionStopped,
+					Timestamp:      now,
+					Payload: map[string]any{
+						"reason": "user_stop",
+					},
+				})
+			}
 			conversation.ActiveExecutionID = nil
 		}
 
@@ -242,9 +304,7 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "message_id is required", map[string]any{})
 			return
 		}
-		state.mu.RLock()
-		conversationSeed, exists := state.conversations[conversationID]
-		state.mu.RUnlock()
+		conversationSeed, exists := loadExecutionFlowConversationSeed(r.Context(), state, conversationID)
 		if !exists {
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
 			return
@@ -266,9 +326,8 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 		state.mu.Lock()
 		conversation, exists := state.conversations[conversationID]
 		if !exists {
-			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
-			return
+			conversation = conversationSeed
+			state.conversations[conversationID] = conversation
 		}
 
 		snapshot, found := findSnapshotByMessageID(state.conversationSnapshots[conversationID], input.MessageID)
@@ -456,6 +515,13 @@ func ConversationExportHandler(state *AppState) http.HandlerFunc {
 
 		state.mu.RLock()
 		conversation, exists := state.conversations[conversationID]
+		if !exists {
+			seed, seedExists := loadExecutionFlowConversationSeedLocked(state, conversationID)
+			if seedExists {
+				conversation = seed
+				exists = true
+			}
+		}
 		messages := append([]ConversationMessage{}, state.conversationMessages[conversationID]...)
 		state.mu.RUnlock()
 		if !exists {
@@ -479,6 +545,108 @@ func ConversationExportHandler(state *AppState) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(buildConversationMarkdown(conversation, messages)))
 	}
+}
+
+func loadExecutionFlowConversationSeed(ctx context.Context, state *AppState, conversationID string) (Conversation, bool) {
+	normalizedConversationID := strings.TrimSpace(conversationID)
+	if state == nil || normalizedConversationID == "" {
+		return Conversation{}, false
+	}
+
+	state.mu.RLock()
+	conversation, exists := state.conversations[normalizedConversationID]
+	state.mu.RUnlock()
+	if exists {
+		return conversation, true
+	}
+
+	service, ok := newExecutionQueryService(state)
+	if !ok {
+		return Conversation{}, false
+	}
+	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
+	if err != nil {
+		log.Printf("runtime v1 execution flow conversation lookup failed, fallback to in-memory map: %v", err)
+		return Conversation{}, false
+	}
+	if !exists {
+		return Conversation{}, false
+	}
+
+	seed := toConversationFromRuntimeSessionRecord(item)
+	state.mu.Lock()
+	state.conversations[seed.ID] = seed
+	state.mu.Unlock()
+	return seed, true
+}
+
+func listExecutionFlowConversationsFromRepository(ctx context.Context, service *executionQueryService, workspaceID string, projectID string) ([]Conversation, error) {
+	if service == nil {
+		return []Conversation{}, nil
+	}
+
+	normalizedWorkspaceID := strings.TrimSpace(workspaceID)
+	if normalizedWorkspaceID == "" {
+		return []Conversation{}, nil
+	}
+	normalizedProjectID := strings.TrimSpace(projectID)
+
+	sessions, err := service.listAllRuntimeSessionsByWorkspace(ctx, normalizedWorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]Conversation, 0, len(sessions))
+	for _, session := range sessions {
+		conversation := toConversationFromRuntimeSessionRecord(session)
+		if normalizedProjectID != "" && strings.TrimSpace(conversation.ProjectID) != normalizedProjectID {
+			continue
+		}
+		items = append(items, conversation)
+	}
+	return items, nil
+}
+
+func loadExecutionFlowConversationSeedLocked(state *AppState, conversationID string) (Conversation, bool) {
+	normalizedConversationID := strings.TrimSpace(conversationID)
+	if state == nil || normalizedConversationID == "" {
+		return Conversation{}, false
+	}
+	if conversation, exists := state.conversations[normalizedConversationID]; exists {
+		return conversation, true
+	}
+	service, ok := newExecutionQueryService(state)
+	if !ok {
+		return Conversation{}, false
+	}
+	item, exists, err := service.repositories.Sessions.GetByID(context.Background(), normalizedConversationID)
+	if err != nil || !exists {
+		return Conversation{}, false
+	}
+	seed := toConversationFromRuntimeSessionRecord(item)
+	state.conversations[seed.ID] = seed
+	return seed, true
+}
+
+func loadExecutionFlowExecutionSeedLocked(state *AppState, executionID string) (Execution, bool) {
+	normalizedExecutionID := strings.TrimSpace(executionID)
+	if state == nil || normalizedExecutionID == "" {
+		return Execution{}, false
+	}
+	if execution, exists := state.executions[normalizedExecutionID]; exists {
+		return execution, true
+	}
+	service, ok := newExecutionQueryService(state)
+	if !ok {
+		return Execution{}, false
+	}
+	item, exists, err := service.repositories.Runs.GetByID(context.Background(), normalizedExecutionID)
+	if err != nil || !exists {
+		return Execution{}, false
+	}
+	execution := toExecutionFromRuntimeRun(item)
+	assignQueueIndexFromConversationOrderLocked(state, &execution)
+	state.executions[normalizedExecutionID] = execution
+	return execution, true
 }
 
 func diffPathsForGitPatch(diffItems []DiffItem) []string {

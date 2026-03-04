@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"context"
+	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -10,16 +12,15 @@ import (
 func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
-		workspaceID := ""
-		state.mu.RLock()
-		if conversation, exists := state.conversations[conversationID]; exists {
-			workspaceID = conversation.WorkspaceID
-		}
-		state.mu.RUnlock()
+		conversationSeed, hasConversationSeed := loadConversationByIDSeed(r.Context(), state, conversationID)
 		switch r.Method {
 		case http.MethodGet:
 			state.mu.RLock()
 			conversation, exists := state.conversations[conversationID]
+			if !exists {
+				conversation = conversationSeed
+				exists = hasConversationSeed
+			}
 			if !exists {
 				state.mu.RUnlock()
 				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
@@ -30,7 +31,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			messages := append([]ConversationMessage{}, state.conversationMessages[conversationID]...)
 			snapshots := cloneConversationSnapshots(state.conversationSnapshots[conversationID])
 			executions := append([]Execution{}, listConversationExecutionsLocked(state, conversationID)...)
-			conversation = decorateConversationUsageLocked(state, conversation)
+			conversation = decorateConversationUsageFromExecutions(conversation, executions)
 			state.mu.RUnlock()
 
 			_, authErr := authorizeAction(
@@ -45,6 +46,15 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				authErr.write(w, r)
 				return
 			}
+			if service, ok := newExecutionQueryService(state); ok {
+				repositoryExecutions, err := service.ListAllByConversation(r.Context(), conversationID)
+				if err == nil {
+					executions = repositoryExecutions
+					conversation = decorateConversationUsageFromExecutions(conversation, executions)
+				} else {
+					log.Printf("runtime v1 conversation execution query failed, fallback to in-memory map: %v", err)
+				}
+			}
 
 			sortConversationMessages(messages)
 			sortConversationSnapshots(snapshots)
@@ -57,12 +67,18 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				Snapshots:    snapshots,
 			})
 		case http.MethodPatch:
+			if !hasConversationSeed {
+				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
+					"conversation_id": conversationID,
+				})
+				return
+			}
 			_, authErr := authorizeAction(
 				state,
 				r,
-				workspaceID,
+				conversationSeed.WorkspaceID,
 				"conversation.write",
-				authorizationResource{WorkspaceID: workspaceID},
+				authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
 				authorizationContext{OperationType: "write", ABACRequired: true},
 			)
 			if authErr != nil {
@@ -72,15 +88,6 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			input := UpdateConversationRequest{}
 			if err := decodeJSONBody(r, &input); err != nil {
 				err.write(w, r)
-				return
-			}
-			state.mu.RLock()
-			conversationSeed, exists := state.conversations[conversationID]
-			state.mu.RUnlock()
-			if !exists {
-				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
-					"conversation_id": conversationID,
-				})
 				return
 			}
 			project, projectExists, projectErr := getProjectFromStore(state, conversationSeed.ProjectID)
@@ -139,11 +146,8 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			state.mu.Lock()
 			conversation, exists := state.conversations[conversationID]
 			if !exists {
-				state.mu.Unlock()
-				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
-					"conversation_id": conversationID,
-				})
-				return
+				conversation = conversationSeed
+				state.conversations[conversationID] = conversation
 			}
 			changed := false
 			configChanged := false
@@ -242,12 +246,18 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			state.mu.RUnlock()
 			writeJSON(w, http.StatusOK, responseConversation)
 		case http.MethodDelete:
+			if !hasConversationSeed {
+				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
+					"conversation_id": conversationID,
+				})
+				return
+			}
 			_, authErr := authorizeAction(
 				state,
 				r,
-				workspaceID,
+				conversationSeed.WorkspaceID,
 				"conversation.write",
-				authorizationResource{WorkspaceID: workspaceID},
+				authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
 				authorizationContext{OperationType: "write", ABACRequired: true},
 			)
 			if authErr != nil {
@@ -257,11 +267,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			executionIDsToCancel := make([]string, 0, 8)
 			state.mu.Lock()
 			if _, exists := state.conversations[conversationID]; !exists {
-				state.mu.Unlock()
-				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
-					"conversation_id": conversationID,
-				})
-				return
+				state.conversations[conversationID] = conversationSeed
 			}
 			for executionID, execution := range state.executions {
 				if execution.ConversationID != conversationID {
@@ -298,6 +304,36 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			})
 		}
 	}
+}
+
+func loadConversationByIDSeed(ctx context.Context, state *AppState, conversationID string) (Conversation, bool) {
+	normalizedConversationID := strings.TrimSpace(conversationID)
+	if state == nil || normalizedConversationID == "" {
+		return Conversation{}, false
+	}
+	state.mu.RLock()
+	conversation, exists := state.conversations[normalizedConversationID]
+	state.mu.RUnlock()
+	if exists {
+		return conversation, true
+	}
+	service, ok := newExecutionQueryService(state)
+	if !ok {
+		return Conversation{}, false
+	}
+	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
+	if err != nil {
+		log.Printf("runtime v1 conversation detail lookup failed, fallback to in-memory map: %v", err)
+		return Conversation{}, false
+	}
+	if !exists {
+		return Conversation{}, false
+	}
+	seed := toConversationFromRuntimeSessionRecord(item)
+	state.mu.Lock()
+	state.conversations[seed.ID] = seed
+	state.mu.Unlock()
+	return seed, true
 }
 
 func cloneConversationSnapshots(items []ConversationSnapshot) []ConversationSnapshot {

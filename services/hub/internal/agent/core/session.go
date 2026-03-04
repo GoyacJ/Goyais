@@ -9,13 +9,15 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	eventscore "goyais/services/hub/internal/agent/core/events"
 )
 
 // SessionID identifies one logical conversation/runtime session.
-type SessionID string
+type SessionID = eventscore.SessionID
 
 // RunID identifies one execution run within a session.
-type RunID string
+type RunID = eventscore.RunID
 
 // StartSessionRequest describes the minimum context required to create a
 // runtime session.

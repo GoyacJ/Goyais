@@ -4,54 +4,25 @@
 
 package core
 
-// RunQueuedPayload captures metadata when a run enters the session queue.
-type RunQueuedPayload struct {
-	QueuePosition int
-}
+import eventscore "goyais/services/hub/internal/agent/core/events"
 
-func (RunQueuedPayload) isEventPayload() {}
+// RunQueuedPayload captures metadata when a run enters the session queue.
+type RunQueuedPayload = eventscore.RunQueuedPayload
 
 // RunStartedPayload marks that a run has begun active execution.
-type RunStartedPayload struct{}
-
-func (RunStartedPayload) isEventPayload() {}
+type RunStartedPayload = eventscore.RunStartedPayload
 
 // OutputDeltaPayload carries incremental model output chunks.
-type OutputDeltaPayload struct {
-	Delta     string
-	ToolUseID string
-}
-
-func (OutputDeltaPayload) isEventPayload() {}
+type OutputDeltaPayload = eventscore.OutputDeltaPayload
 
 // ApprovalNeededPayload describes a permission checkpoint before tool use.
-type ApprovalNeededPayload struct {
-	ToolName  string
-	Input     map[string]any
-	RiskLevel string
-}
-
-func (ApprovalNeededPayload) isEventPayload() {}
+type ApprovalNeededPayload = eventscore.ApprovalNeededPayload
 
 // RunFailedPayload describes a terminal failure with structured metadata.
-type RunFailedPayload struct {
-	Code     string
-	Message  string
-	Metadata map[string]any
-}
-
-func (RunFailedPayload) isEventPayload() {}
+type RunFailedPayload = eventscore.RunFailedPayload
 
 // RunCompletedPayload summarizes completion metadata for a successful run.
-type RunCompletedPayload struct {
-	UsageTokens int
-}
-
-func (RunCompletedPayload) isEventPayload() {}
+type RunCompletedPayload = eventscore.RunCompletedPayload
 
 // RunCancelledPayload captures who/what cancelled the run.
-type RunCancelledPayload struct {
-	Reason string
-}
-
-func (RunCancelledPayload) isEventPayload() {}
+type RunCancelledPayload = eventscore.RunCancelledPayload

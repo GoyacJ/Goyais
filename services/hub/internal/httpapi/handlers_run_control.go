@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -71,9 +73,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			}
 		}
 
-		state.mu.RLock()
-		executionSeed, exists := state.executions[runID]
-		state.mu.RUnlock()
+		executionSeed, exists := loadRunControlExecutionSeed(r.Context(), state, runID)
 		if !exists {
 			WriteStandardError(w, r, http.StatusNotFound, "RUN_NOT_FOUND", "Run does not exist", map[string]any{"run_id": runID})
 			return
@@ -91,6 +91,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			authErr.write(w, r)
 			return
 		}
+		conversationSeed, hasConversationSeed := loadRunControlConversationSeed(r.Context(), state, executionSeed.ConversationID)
 
 		now := time.Now().UTC().Format(time.RFC3339)
 		cancelExecutionID := ""
@@ -100,11 +101,17 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		state.mu.Lock()
 		execution, exists := state.executions[runID]
 		if !exists {
-			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusNotFound, "RUN_NOT_FOUND", "Run does not exist", map[string]any{"run_id": runID})
-			return
+			execution = executionSeed
+			assignQueueIndexFromConversationOrderLocked(state, &execution)
+			state.executions[runID] = execution
+			appendExecutionToConversationOrderLocked(state, execution.ConversationID, runID)
 		}
 		conversation, exists := state.conversations[execution.ConversationID]
+		if !exists && hasConversationSeed {
+			conversation = conversationSeed
+			state.conversations[execution.ConversationID] = conversation
+			exists = true
+		}
 		if !exists {
 			state.mu.Unlock()
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
@@ -423,6 +430,119 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			"state":          execution.State,
 			"previous_state": previousState,
 		})
+	}
+}
+
+func loadRunControlExecutionSeed(ctx context.Context, state *AppState, runID string) (Execution, bool) {
+	normalizedRunID := strings.TrimSpace(runID)
+	if state == nil || normalizedRunID == "" {
+		return Execution{}, false
+	}
+
+	state.mu.RLock()
+	execution, exists := state.executions[normalizedRunID]
+	state.mu.RUnlock()
+	if exists {
+		return execution, true
+	}
+
+	service, ok := newExecutionQueryService(state)
+	if !ok {
+		return Execution{}, false
+	}
+	item, exists, err := service.repositories.Runs.GetByID(ctx, normalizedRunID)
+	if err != nil {
+		log.Printf("runtime v1 run control lookup failed, fallback to in-memory map: %v", err)
+		return Execution{}, false
+	}
+	if !exists {
+		return Execution{}, false
+	}
+	return toExecutionFromRuntimeRun(item), true
+}
+
+func loadRunControlConversationSeed(ctx context.Context, state *AppState, conversationID string) (Conversation, bool) {
+	normalizedConversationID := strings.TrimSpace(conversationID)
+	if state == nil || normalizedConversationID == "" {
+		return Conversation{}, false
+	}
+
+	state.mu.RLock()
+	conversation, exists := state.conversations[normalizedConversationID]
+	state.mu.RUnlock()
+	if exists {
+		return conversation, true
+	}
+
+	service, ok := newExecutionQueryService(state)
+	if !ok {
+		return Conversation{}, false
+	}
+	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
+	if err != nil {
+		log.Printf("runtime v1 run control conversation lookup failed, fallback to in-memory map: %v", err)
+		return Conversation{}, false
+	}
+	if !exists {
+		return Conversation{}, false
+	}
+
+	defaultMode := NormalizePermissionMode(item.DefaultMode)
+	seed := Conversation{
+		ID:            item.ID,
+		WorkspaceID:   item.WorkspaceID,
+		ProjectID:     item.ProjectID,
+		Name:          item.Name,
+		QueueState:    QueueStateIdle,
+		DefaultMode:   defaultMode,
+		ModelConfigID: item.ModelConfigID,
+		RuleIDs:       append([]string{}, item.RuleIDs...),
+		SkillIDs:      append([]string{}, item.SkillIDs...),
+		MCPIDs:        append([]string{}, item.MCPIDs...),
+		CreatedAt:     item.CreatedAt,
+		UpdatedAt:     item.UpdatedAt,
+	}
+	if item.ActiveRunID != nil {
+		activeRunID := strings.TrimSpace(*item.ActiveRunID)
+		if activeRunID != "" {
+			seed.ActiveExecutionID = &activeRunID
+			seed.QueueState = QueueStateRunning
+		}
+	}
+	return seed, true
+}
+
+func appendExecutionToConversationOrderLocked(state *AppState, conversationID string, executionID string) {
+	normalizedConversationID := strings.TrimSpace(conversationID)
+	normalizedExecutionID := strings.TrimSpace(executionID)
+	if state == nil || normalizedConversationID == "" || normalizedExecutionID == "" {
+		return
+	}
+	items := state.conversationExecutionOrder[normalizedConversationID]
+	for _, item := range items {
+		if strings.TrimSpace(item) == normalizedExecutionID {
+			return
+		}
+	}
+	state.conversationExecutionOrder[normalizedConversationID] = append(items, normalizedExecutionID)
+}
+
+func assignQueueIndexFromConversationOrderLocked(state *AppState, execution *Execution) {
+	if state == nil || execution == nil {
+		return
+	}
+	conversationID := strings.TrimSpace(execution.ConversationID)
+	if conversationID == "" {
+		return
+	}
+	for index, item := range state.conversationExecutionOrder[conversationID] {
+		if strings.TrimSpace(item) == strings.TrimSpace(execution.ID) {
+			execution.QueueIndex = index
+			return
+		}
+	}
+	if execution.QueueIndex < 0 {
+		execution.QueueIndex = 0
 	}
 }
 

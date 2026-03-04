@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"goyais/services/hub/internal/agent/core"
+	eventscore "goyais/services/hub/internal/agent/core/events"
 )
 
 // EventFrame is the CLI-facing event wire shape.
@@ -36,8 +37,8 @@ type ProjectionOptions struct {
 	QueueIndex     int
 }
 
-// RunEventProjector projects unified runtime events into optional legacy
-// storage/read-model bridges (for example runtimebridge.Projector).
+// RunEventProjector projects unified runtime events into optional
+// storage/read-model projection adapters.
 type RunEventProjector interface {
 	ProjectRunEvent(ctx context.Context, event core.EventEnvelope, options ProjectionOptions) error
 }
@@ -224,7 +225,7 @@ func (r Runner) projectEvent(ctx context.Context, event core.EventEnvelope, opti
 
 func isTerminal(eventType core.RunEventType) bool {
 	switch eventType {
-	case core.RunEventTypeRunCompleted, core.RunEventTypeRunFailed, core.RunEventTypeRunCancelled:
+	case eventscore.RunEventTypeRunCompleted, eventscore.RunEventTypeRunFailed, eventscore.RunEventTypeRunCancelled:
 		return true
 	default:
 		return false
@@ -232,6 +233,9 @@ func isTerminal(eventType core.RunEventType) bool {
 }
 
 func eventToFrame(event core.EventEnvelope) (EventFrame, error) {
+	if err := eventscore.Validate(event); err != nil {
+		return EventFrame{}, err
+	}
 	payload, err := payloadToMap(event.Payload)
 	if err != nil {
 		return EventFrame{}, err

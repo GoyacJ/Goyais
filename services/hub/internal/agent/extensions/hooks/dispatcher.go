@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"goyais/services/hub/internal/agent/core"
+	"goyais/services/hub/internal/agent/policy/hookscope"
 )
 
 // Event names aligned with the v4 refactor plan.
@@ -94,6 +95,10 @@ const (
 type Rule struct {
 	ID           string
 	Enabled      bool
+	Scope        hookscope.Scope
+	WorkspaceID  string
+	ProjectID    string
+	SessionID    string
 	EventPattern string
 	EventMatch   MatchMode
 	ToolPattern  string
@@ -105,13 +110,21 @@ type Rule struct {
 
 // Dispatcher evaluates hook rules and returns one normalized decision.
 type Dispatcher struct {
-	rules []Rule
+	rules         []Rule
+	scopeResolver *hookscope.Resolver
 }
 
 // NewDispatcher creates a dispatcher from one immutable rule snapshot.
 func NewDispatcher(rules []Rule) *Dispatcher {
+	return NewDispatcherWithScopeResolver(rules, hookscope.NewResolver())
+}
+
+// NewDispatcherWithScopeResolver creates a dispatcher with explicit scope
+// resolution dependency.
+func NewDispatcherWithScopeResolver(rules []Rule, resolver *hookscope.Resolver) *Dispatcher {
 	return &Dispatcher{
-		rules: cloneRules(rules),
+		rules:         cloneRules(rules),
+		scopeResolver: resolver,
 	}
 }
 
@@ -123,10 +136,21 @@ func (d *Dispatcher) Dispatch(_ context.Context, event core.HookEvent) (core.Hoo
 
 	eventType := strings.TrimSpace(event.Type)
 	toolName := extractToolName(event.Payload)
+	scopeCtx := hookscope.Context{
+		WorkspaceID:      extractContextString(event.Payload, "workspace_id", "workspaceId"),
+		ProjectID:        extractContextString(event.Payload, "project_id", "projectId"),
+		SessionID:        firstNonEmpty(strings.TrimSpace(string(event.SessionID)), extractContextString(event.Payload, "session_id", "sessionId")),
+		ToolName:         toolName,
+		IsLocalWorkspace: extractContextBool(event.Payload, "is_local_workspace", "isLocalWorkspace"),
+	}
 
 	matched := make([]scoredRule, 0, len(d.rules))
 	for _, item := range d.rules {
 		if !item.Enabled {
+			continue
+		}
+		scopeMatch, scopeMatched := d.resolveScope(item, scopeCtx)
+		if !scopeMatched {
 			continue
 		}
 		eventMatched, eventScore, eventErr := match(item.EventPattern, item.EventMatch, eventType)
@@ -146,6 +170,9 @@ func (d *Dispatcher) Dispatch(_ context.Context, event core.HookEvent) (core.Hoo
 		matched = append(matched, scoredRule{
 			rule:            item,
 			decisionScore:   decisionPriority(item.Decision),
+			scope:           scopeMatch.Scope,
+			scopeRank:       scopeMatch.ScopeRank,
+			scopeTrace:      append([]string(nil), scopeMatch.Trace...),
 			specificityRank: eventScore + toolScore,
 		})
 	}
@@ -158,13 +185,17 @@ func (d *Dispatcher) Dispatch(_ context.Context, event core.HookEvent) (core.Hoo
 		if matched[i].decisionScore != matched[j].decisionScore {
 			return matched[i].decisionScore < matched[j].decisionScore
 		}
+		if matched[i].scopeRank != matched[j].scopeRank {
+			return matched[i].scopeRank < matched[j].scopeRank
+		}
 		if matched[i].specificityRank != matched[j].specificityRank {
 			return matched[i].specificityRank < matched[j].specificityRank
 		}
 		return strings.TrimSpace(matched[i].rule.ID) < strings.TrimSpace(matched[j].rule.ID)
 	})
 
-	selected := matched[0].rule
+	selectedEntry := matched[0]
+	selected := selectedEntry.rule
 	decision := normalizeDecision(selected.Decision)
 	if decision == "" {
 		decision = DecisionAllow
@@ -177,6 +208,12 @@ func (d *Dispatcher) Dispatch(_ context.Context, event core.HookEvent) (core.Hoo
 	if reason != "" {
 		metadata["reason"] = reason
 	}
+	if _, exists := metadata["scope"]; !exists {
+		metadata["scope"] = string(selectedEntry.scope)
+	}
+	if len(selectedEntry.scopeTrace) > 0 {
+		metadata["scope_trace"] = append([]string(nil), selectedEntry.scopeTrace...)
+	}
 	return core.HookDecision{
 		Decision:        decision,
 		MatchedPolicyID: strings.TrimSpace(selected.ID),
@@ -187,6 +224,9 @@ func (d *Dispatcher) Dispatch(_ context.Context, event core.HookEvent) (core.Hoo
 type scoredRule struct {
 	rule            Rule
 	decisionScore   int
+	scope           hookscope.Scope
+	scopeRank       int
+	scopeTrace      []string
 	specificityRank int
 }
 
@@ -286,6 +326,10 @@ func cloneRules(rules []Rule) []Rule {
 		out = append(out, Rule{
 			ID:           strings.TrimSpace(item.ID),
 			Enabled:      item.Enabled,
+			Scope:        normalizeScope(item.Scope),
+			WorkspaceID:  strings.TrimSpace(item.WorkspaceID),
+			ProjectID:    strings.TrimSpace(item.ProjectID),
+			SessionID:    strings.TrimSpace(item.SessionID),
 			EventPattern: strings.TrimSpace(item.EventPattern),
 			EventMatch:   item.EventMatch,
 			ToolPattern:  strings.TrimSpace(item.ToolPattern),
@@ -313,6 +357,86 @@ func canonicalToken(value string) string {
 	normalized := strings.ToLower(strings.TrimSpace(value))
 	replacer := strings.NewReplacer("_", "", "-", "", " ", "")
 	return replacer.Replace(normalized)
+}
+
+func (d *Dispatcher) resolveScope(rule Rule, ctx hookscope.Context) (hookscope.Match, bool) {
+	if d == nil || d.scopeResolver == nil {
+		scope := normalizeScope(rule.Scope)
+		if scope == "" {
+			scope = hookscope.ScopeGlobal
+		}
+		return hookscope.Match{
+			Scope:     scope,
+			ScopeRank: hookscope.ScopeOrder(scope),
+			Trace:     []string{"scope=default"},
+		}, true
+	}
+	return d.scopeResolver.Match(hookscope.Rule{
+		ID:          strings.TrimSpace(rule.ID),
+		Enabled:     rule.Enabled,
+		Scope:       normalizeScope(rule.Scope),
+		WorkspaceID: strings.TrimSpace(rule.WorkspaceID),
+		ProjectID:   strings.TrimSpace(rule.ProjectID),
+		SessionID:   strings.TrimSpace(rule.SessionID),
+	}, ctx)
+}
+
+func normalizeScope(scope hookscope.Scope) hookscope.Scope {
+	switch hookscope.Scope(strings.ToLower(strings.TrimSpace(string(scope)))) {
+	case hookscope.ScopeGlobal:
+		return hookscope.ScopeGlobal
+	case hookscope.ScopeWorkspace:
+		return hookscope.ScopeWorkspace
+	case hookscope.ScopeProject:
+		return hookscope.ScopeProject
+	case hookscope.ScopeSession:
+		return hookscope.ScopeSession
+	case hookscope.ScopePlugin:
+		return hookscope.ScopePlugin
+	default:
+		return ""
+	}
+}
+
+func extractContextString(payload map[string]any, keys ...string) string {
+	for _, key := range keys {
+		value, ok := payload[strings.TrimSpace(key)]
+		if !ok {
+			continue
+		}
+		trimmed := strings.TrimSpace(fmt.Sprint(value))
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func extractContextBool(payload map[string]any, keys ...string) bool {
+	for _, key := range keys {
+		value, ok := payload[strings.TrimSpace(key)]
+		if !ok {
+			continue
+		}
+		switch typed := value.(type) {
+		case bool:
+			return typed
+		case string:
+			normalized := strings.ToLower(strings.TrimSpace(typed))
+			return normalized == "1" || normalized == "true" || normalized == "yes"
+		}
+	}
+	return false
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 var _ core.HookDispatcher = (*Dispatcher)(nil)

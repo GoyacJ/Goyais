@@ -438,9 +438,14 @@ func decorateModelResourceConfigUsage(state *AppState, items []ResourceConfig) [
 	if len(items) == 0 {
 		return items
 	}
-	state.mu.RLock()
-	aggregate := computeTokenUsageAggregateLocked(state)
-	state.mu.RUnlock()
+	workspaceIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.Type != ResourceTypeModel {
+			continue
+		}
+		workspaceIDs = append(workspaceIDs, strings.TrimSpace(item.WorkspaceID))
+	}
+	aggregate := computeTokenUsageAggregate(state, workspaceIDs...)
 
 	decorated := make([]ResourceConfig, 0, len(items))
 	for _, item := range items {

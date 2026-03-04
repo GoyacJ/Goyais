@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -27,7 +28,7 @@ func RunGraphHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		graph, ok := buildRunTaskGraphFromState(state, runID)
+		graph, ok := buildRunTaskGraph(state, r, runID)
 		if !ok {
 			WriteStandardError(w, r, http.StatusNotFound, "RUN_NOT_FOUND", "Run does not exist", map[string]any{"run_id": runID})
 			return
@@ -49,7 +50,7 @@ func RunTasksHandler(state *AppState) http.HandlerFunc {
 			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "run_id is required", map[string]any{})
 			return
 		}
-		graph, ok := buildRunTaskGraphFromState(state, runID)
+		graph, ok := buildRunTaskGraph(state, r, runID)
 		if !ok {
 			WriteStandardError(w, r, http.StatusNotFound, "RUN_NOT_FOUND", "Run does not exist", map[string]any{"run_id": runID})
 			return
@@ -91,7 +92,7 @@ func RunTaskByIDHandler(state *AppState) http.HandlerFunc {
 			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "run_id and task_id are required", map[string]any{})
 			return
 		}
-		graph, ok := buildRunTaskGraphFromState(state, runID)
+		graph, ok := buildRunTaskGraph(state, r, runID)
 		if !ok {
 			WriteStandardError(w, r, http.StatusNotFound, "RUN_NOT_FOUND", "Run does not exist", map[string]any{"run_id": runID})
 			return
@@ -123,7 +124,7 @@ func RunTaskControlHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		graph, ok := buildRunTaskGraphFromState(state, runID)
+		graph, ok := buildRunTaskGraph(state, r, runID)
 		if !ok {
 			WriteStandardError(w, r, http.StatusNotFound, "RUN_NOT_FOUND", "Run does not exist", map[string]any{"run_id": runID})
 			return
@@ -190,6 +191,17 @@ func RunTaskControlHandler(state *AppState) http.HandlerFunc {
 			PreviousState: control.PreviousState,
 		})
 	}
+}
+
+func buildRunTaskGraph(state *AppState, request *http.Request, runID string) (runtimeapplication.RunTaskGraph, bool) {
+	if service, ok := newRunTaskQueryService(state); ok {
+		graph, exists, err := service.BuildRunTaskGraph(request.Context(), runID)
+		if err == nil {
+			return graph, exists
+		}
+		log.Printf("runtime v1 run task graph query failed, fallback to in-memory map: %v", err)
+	}
+	return buildRunTaskGraphFromState(state, runID)
 }
 
 type runTaskGraphMetadata struct {

@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"goyais/services/hub/internal/agent/core"
+	eventscore "goyais/services/hub/internal/agent/core/events"
+	"goyais/services/hub/internal/agent/core/statemachine"
 	runtimesession "goyais/services/hub/internal/agent/runtime/session"
 )
 
@@ -387,22 +389,25 @@ func formatTime(value time.Time) string {
 
 func parseControlAction(raw string) (core.ControlAction, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case string(core.ControlActionStop):
-		return core.ControlActionStop, nil
-	case string(core.ControlActionApprove):
-		return core.ControlActionApprove, nil
-	case string(core.ControlActionDeny):
-		return core.ControlActionDeny, nil
-	case string(core.ControlActionResume):
-		return core.ControlActionResume, nil
-	case string(core.ControlActionAnswer):
-		return core.ControlActionAnswer, nil
+	case string(statemachine.ControlActionStop):
+		return core.ControlAction(statemachine.ControlActionStop), nil
+	case string(statemachine.ControlActionApprove):
+		return core.ControlAction(statemachine.ControlActionApprove), nil
+	case string(statemachine.ControlActionDeny):
+		return core.ControlAction(statemachine.ControlActionDeny), nil
+	case string(statemachine.ControlActionResume):
+		return core.ControlAction(statemachine.ControlActionResume), nil
+	case string(statemachine.ControlActionAnswer):
+		return core.ControlAction(statemachine.ControlActionAnswer), nil
 	default:
 		return "", fmt.Errorf("unsupported control action %q", raw)
 	}
 }
 
 func encodeEvent(event core.EventEnvelope) (EventFrame, error) {
+	if err := eventscore.Validate(event); err != nil {
+		return EventFrame{}, err
+	}
 	payload, err := payloadToMap(event.Payload)
 	if err != nil {
 		return EventFrame{}, err

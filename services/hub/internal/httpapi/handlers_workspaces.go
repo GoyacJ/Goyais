@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"context"
+	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -205,7 +207,7 @@ func WorkspaceStatusHandler(state *AppState) http.HandlerFunc {
 		}
 
 		requestedConversationID := strings.TrimSpace(r.URL.Query().Get("conversation_id"))
-		conversationID, conversationStatus, conversationErr := resolveWorkspaceConversationStatus(state, workspaceID, requestedConversationID)
+		conversationID, conversationStatus, conversationErr := resolveWorkspaceConversationStatus(r.Context(), state, workspaceID, requestedConversationID)
 		if conversationErr != nil {
 			conversationErr.write(w, r)
 			return
@@ -230,12 +232,9 @@ func WorkspaceStatusHandler(state *AppState) http.HandlerFunc {
 	}
 }
 
-func resolveWorkspaceConversationStatus(state *AppState, workspaceID string, requestedConversationID string) (string, ConversationStatus, *apiError) {
-	state.mu.RLock()
-	defer state.mu.RUnlock()
-
+func resolveWorkspaceConversationStatus(ctx context.Context, state *AppState, workspaceID string, requestedConversationID string) (string, ConversationStatus, *apiError) {
 	if requestedConversationID != "" {
-		conversation, exists := state.conversations[requestedConversationID]
+		conversation, exists := loadWorkspaceStatusConversationSeed(ctx, state, requestedConversationID)
 		if !exists || strings.TrimSpace(conversation.WorkspaceID) != workspaceID {
 			return "", ConversationStatusStopped, &apiError{
 				status:  http.StatusNotFound,
@@ -247,14 +246,24 @@ func resolveWorkspaceConversationStatus(state *AppState, workspaceID string, req
 				},
 			}
 		}
-		return requestedConversationID, deriveConversationStatusLocked(state, requestedConversationID), nil
+		return requestedConversationID, deriveConversationStatus(ctx, state, requestedConversationID), nil
 	}
 
-	selectedID := selectWorkspaceConversationIDLocked(state, workspaceID)
+	selectedID := selectWorkspaceConversationID(ctx, state, workspaceID)
 	if selectedID == "" {
 		return "", ConversationStatusStopped, nil
 	}
-	return selectedID, deriveConversationStatusLocked(state, selectedID), nil
+	return selectedID, deriveConversationStatus(ctx, state, selectedID), nil
+}
+
+func selectWorkspaceConversationID(ctx context.Context, state *AppState, workspaceID string) string {
+	state.mu.RLock()
+	selectedID := selectWorkspaceConversationIDLocked(state, workspaceID)
+	state.mu.RUnlock()
+	if selectedID != "" {
+		return selectedID
+	}
+	return selectWorkspaceConversationIDFromRepository(ctx, state, workspaceID)
 }
 
 func selectWorkspaceConversationIDLocked(state *AppState, workspaceID string) string {
@@ -286,8 +295,106 @@ func selectWorkspaceConversationIDLocked(state *AppState, workspaceID string) st
 	return all[0].ID
 }
 
+func selectWorkspaceConversationIDFromRepository(ctx context.Context, state *AppState, workspaceID string) string {
+	normalizedWorkspaceID := strings.TrimSpace(workspaceID)
+	if state == nil || normalizedWorkspaceID == "" {
+		return ""
+	}
+	service, ok := newExecutionQueryService(state)
+	if !ok {
+		return ""
+	}
+
+	items := []RuntimeSessionRecord{}
+	offset := 0
+	for {
+		page, err := service.repositories.Sessions.ListByWorkspace(ctx, normalizedWorkspaceID, RepositoryPage{
+			Limit:  maxRepositoryPageLimit,
+			Offset: offset,
+		})
+		if err != nil {
+			log.Printf("runtime v1 workspace session list query failed, fallback to in-memory map: %v", err)
+			return ""
+		}
+		if len(page) == 0 {
+			break
+		}
+		items = append(items, page...)
+		if len(page) < maxRepositoryPageLimit {
+			break
+		}
+		offset += len(page)
+	}
+	if len(items) == 0 {
+		return ""
+	}
+
+	conversations := make([]Conversation, 0, len(items))
+	for _, item := range items {
+		conversations = append(conversations, toConversationFromRuntimeSessionRecord(item))
+	}
+	state.mu.Lock()
+	for _, conversation := range conversations {
+		state.conversations[conversation.ID] = conversation
+	}
+	selectedID := selectWorkspaceConversationIDLocked(state, normalizedWorkspaceID)
+	state.mu.Unlock()
+	return selectedID
+}
+
+func loadWorkspaceStatusConversationSeed(ctx context.Context, state *AppState, conversationID string) (Conversation, bool) {
+	normalizedConversationID := strings.TrimSpace(conversationID)
+	if state == nil || normalizedConversationID == "" {
+		return Conversation{}, false
+	}
+
+	state.mu.RLock()
+	conversation, exists := state.conversations[normalizedConversationID]
+	state.mu.RUnlock()
+	if exists {
+		return conversation, true
+	}
+
+	service, ok := newExecutionQueryService(state)
+	if !ok {
+		return Conversation{}, false
+	}
+	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
+	if err != nil {
+		log.Printf("runtime v1 workspace status conversation lookup failed, fallback to in-memory map: %v", err)
+		return Conversation{}, false
+	}
+	if !exists {
+		return Conversation{}, false
+	}
+
+	seed := toConversationFromRuntimeSessionRecord(item)
+	state.mu.Lock()
+	state.conversations[seed.ID] = seed
+	state.mu.Unlock()
+	return seed, true
+}
+
 func deriveConversationStatusLocked(state *AppState, conversationID string) ConversationStatus {
 	executions := listConversationExecutionsLocked(state, conversationID)
+	return deriveConversationStatusFromExecutions(executions)
+}
+
+func deriveConversationStatus(ctx context.Context, state *AppState, conversationID string) ConversationStatus {
+	if service, ok := newExecutionQueryService(state); ok {
+		executions, err := service.ListAllByConversation(ctx, conversationID)
+		if err == nil {
+			return deriveConversationStatusFromExecutions(executions)
+		}
+		log.Printf("runtime v1 workspace status query failed, fallback to in-memory map: %v", err)
+	}
+
+	state.mu.RLock()
+	defer state.mu.RUnlock()
+	return deriveConversationStatusLocked(state, conversationID)
+}
+
+func deriveConversationStatusFromExecutions(executions []Execution) ConversationStatus {
 	if len(executions) == 0 {
 		return ConversationStatusStopped
 	}

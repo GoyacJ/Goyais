@@ -40,6 +40,7 @@ type RunRequest struct {
 	SafeMode    bool
 	Approved    bool
 	ToolContext ToolContext
+	Audit       map[string]any
 	Call        ToolCall
 }
 
@@ -82,11 +83,32 @@ type UserAnswerWaiter interface {
 	WaitForAnswer(ctx context.Context, question interaction.PendingUserQuestion) (UserAnswer, error)
 }
 
+// SandboxRequest contains sandbox-evaluation inputs for one tool call.
+type SandboxRequest struct {
+	ToolName   string
+	Input      map[string]any
+	WorkingDir string
+}
+
+// SandboxDecision contains allow/ask/deny decision and audit metadata.
+type SandboxDecision struct {
+	Kind        core.PermissionDecisionKind
+	Reason      string
+	MatchedRule string
+	Metadata    map[string]any
+}
+
+// SandboxGate evaluates path/command/network restrictions before execution.
+type SandboxGate interface {
+	Evaluate(ctx context.Context, req SandboxRequest) (SandboxDecision, error)
+}
+
 // Dependencies declares explicit collaborators for the pipeline.
 type Dependencies struct {
 	Runner           Runner
 	Specs            spec.Resolver
 	HookDispatcher   core.HookDispatcher
+	SandboxGate      SandboxGate
 	PermissionGate   core.PermissionGate
 	ApprovalWaiter   ApprovalWaiter
 	UserAnswerWaiter UserAnswerWaiter
@@ -97,6 +119,7 @@ type Pipeline struct {
 	runner           Runner
 	specs            spec.Resolver
 	hookDispatcher   core.HookDispatcher
+	sandboxGate      SandboxGate
 	permissionGate   core.PermissionGate
 	approvalWaiter   ApprovalWaiter
 	userAnswerWaiter UserAnswerWaiter
@@ -110,6 +133,7 @@ func NewPipeline(deps Dependencies) *Pipeline {
 		runner:           deps.Runner,
 		specs:            deps.Specs,
 		hookDispatcher:   deps.HookDispatcher,
+		sandboxGate:      deps.SandboxGate,
 		permissionGate:   deps.PermissionGate,
 		approvalWaiter:   deps.ApprovalWaiter,
 		userAnswerWaiter: deps.UserAnswerWaiter,
@@ -289,6 +313,7 @@ func (p *Pipeline) ExecuteSingle(ctx context.Context, req ExecuteSingleRequest) 
 	}
 
 	approved := false
+	sandboxAudit := map[string]any{}
 	if p.hookDispatcher != nil {
 		hookDecision, hookErr := p.hookDispatcher.Dispatch(ctx, core.HookEvent{
 			Type: "PreToolUse",
@@ -315,6 +340,39 @@ func (p *Pipeline) ExecuteSingle(ctx context.Context, req ExecuteSingleRequest) 
 		case core.PermissionDecisionAsk:
 			reason := extractHookReason(hookDecision.Metadata, "hook policy requires approval")
 			userApproved, denied, waitErr := p.waitForApproval(ctx, call, reason)
+			if waitErr != nil {
+				return ExecuteSingleResult{}, waitErr
+			}
+			if denied != nil {
+				return *denied, nil
+			}
+			approved = userApproved
+		}
+	}
+
+	if p.sandboxGate != nil {
+		decision, decisionErr := p.sandboxGate.Evaluate(ctx, SandboxRequest{
+			ToolName:   call.Name,
+			Input:      cloneMapAny(call.Input),
+			WorkingDir: strings.TrimSpace(req.ToolContext.WorkingDir),
+		})
+		if decisionErr != nil {
+			return ExecuteSingleResult{}, decisionErr
+		}
+		sandboxAudit = cloneMapAny(decision.Metadata)
+		switch normalizeSandboxDecision(decision.Kind) {
+		case core.PermissionDecisionDeny:
+			errText := strings.TrimSpace(decision.Reason)
+			if errText == "" {
+				errText = "tool call denied by sandbox policy"
+			}
+			return ExecuteSingleResult{
+				CallID:    call.CallID,
+				ToolName:  call.Name,
+				ErrorText: errText,
+			}, nil
+		case core.PermissionDecisionAsk:
+			userApproved, denied, waitErr := p.waitForApproval(ctx, call, strings.TrimSpace(decision.Reason))
 			if waitErr != nil {
 				return ExecuteSingleResult{}, waitErr
 			}
@@ -364,6 +422,7 @@ func (p *Pipeline) ExecuteSingle(ctx context.Context, req ExecuteSingleRequest) 
 			SafeMode:    req.SafeMode,
 			Approved:    approved,
 			ToolContext: req.ToolContext,
+			Audit:       cloneMapAny(sandboxAudit),
 			Call:        call,
 		})
 		if err == nil {
@@ -528,6 +587,17 @@ func normalizePermissionMode(raw string) core.PermissionMode {
 
 func normalizeHookDecision(raw string) core.PermissionDecisionKind {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case string(core.PermissionDecisionDeny):
+		return core.PermissionDecisionDeny
+	case string(core.PermissionDecisionAsk):
+		return core.PermissionDecisionAsk
+	default:
+		return core.PermissionDecisionAllow
+	}
+}
+
+func normalizeSandboxDecision(raw core.PermissionDecisionKind) core.PermissionDecisionKind {
+	switch strings.ToLower(strings.TrimSpace(string(raw))) {
 	case string(core.PermissionDecisionDeny):
 		return core.PermissionDecisionDeny
 	case string(core.PermissionDecisionAsk):

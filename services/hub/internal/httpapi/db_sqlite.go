@@ -341,6 +341,90 @@ func (s *authzStore) migrate() error {
 			created_at TEXT NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_resource_test_logs_workspace_created ON resource_test_logs(workspace_id, created_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS hub_schema_versions (
+			component TEXT PRIMARY KEY,
+			version TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS runtime_sessions_v1 (
+			id TEXT PRIMARY KEY,
+			workspace_id TEXT NOT NULL,
+			project_id TEXT NOT NULL,
+			name TEXT NOT NULL,
+			default_mode TEXT NOT NULL,
+			model_config_id TEXT NOT NULL,
+			rule_ids_json TEXT NOT NULL,
+			skill_ids_json TEXT NOT NULL,
+			mcp_ids_json TEXT NOT NULL,
+			active_run_id TEXT,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_sessions_v1_workspace_created ON runtime_sessions_v1(workspace_id, created_at, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_sessions_v1_project_created ON runtime_sessions_v1(project_id, created_at, id)`,
+		`CREATE TABLE IF NOT EXISTS runtime_runs_v1 (
+			id TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			workspace_id TEXT NOT NULL,
+			message_id TEXT NOT NULL,
+			state TEXT NOT NULL,
+			mode TEXT NOT NULL,
+			model_id TEXT NOT NULL,
+			model_config_id TEXT NOT NULL DEFAULT '',
+			tokens_in INTEGER NOT NULL DEFAULT 0,
+			tokens_out INTEGER NOT NULL DEFAULT 0,
+			trace_id TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_runs_v1_session_created ON runtime_runs_v1(session_id, created_at, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_runs_v1_workspace_created ON runtime_runs_v1(workspace_id, created_at, id)`,
+		`CREATE TABLE IF NOT EXISTS runtime_run_events_v1 (
+			event_id TEXT PRIMARY KEY,
+			run_id TEXT NOT NULL,
+			session_id TEXT NOT NULL,
+			sequence INTEGER NOT NULL,
+			type TEXT NOT NULL,
+			timestamp TEXT NOT NULL,
+			payload_json TEXT NOT NULL,
+			occurred_at TEXT NOT NULL
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_runtime_run_events_v1_session_sequence ON runtime_run_events_v1(session_id, sequence)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_run_events_v1_run_sequence ON runtime_run_events_v1(run_id, sequence)`,
+		`CREATE TABLE IF NOT EXISTS runtime_run_tasks_v1 (
+			task_id TEXT PRIMARY KEY,
+			run_id TEXT NOT NULL,
+			parent_task_id TEXT,
+			title TEXT NOT NULL,
+			state TEXT NOT NULL,
+			metadata_json TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			finished_at TEXT
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_run_tasks_v1_run_created ON runtime_run_tasks_v1(run_id, created_at, task_id)`,
+		`CREATE TABLE IF NOT EXISTS runtime_change_sets_v1 (
+			change_set_id TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			run_id TEXT,
+			payload_json TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_change_sets_v1_session_created ON runtime_change_sets_v1(session_id, created_at, change_set_id)`,
+		`CREATE TABLE IF NOT EXISTS runtime_hook_records_v1 (
+			id TEXT PRIMARY KEY,
+			run_id TEXT NOT NULL,
+			session_id TEXT NOT NULL,
+			task_id TEXT,
+			event TEXT NOT NULL,
+			tool_name TEXT,
+			policy_id TEXT,
+			decision_json TEXT NOT NULL,
+			timestamp TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_hook_records_v1_run_timestamp ON runtime_hook_records_v1(run_id, timestamp, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_hook_records_v1_session_timestamp ON runtime_hook_records_v1(session_id, timestamp, id)`,
 	}
 
 	for _, statement := range statements {
@@ -353,6 +437,15 @@ func (s *authzStore) migrate() error {
 	}
 	if migrateErr := s.ensureProjectConfigTokenThresholdColumns(); migrateErr != nil {
 		return fmt.Errorf("ensure project config token threshold columns: %w", migrateErr)
+	}
+	if migrateErr := s.ensureRuntimeV1SchemaVersion(); migrateErr != nil {
+		return fmt.Errorf("ensure runtime v1 schema version: %w", migrateErr)
+	}
+	if migrateErr := s.ensureRuntimeV1HookTaskIDColumn(); migrateErr != nil {
+		return fmt.Errorf("ensure runtime v1 hook task_id column: %w", migrateErr)
+	}
+	if migrateErr := s.ensureRuntimeV1RunModelConfigIDColumn(); migrateErr != nil {
+		return fmt.Errorf("ensure runtime v1 run model_config_id column: %w", migrateErr)
 	}
 	if validationErr := s.validateStrictSchema(); validationErr != nil {
 		backupPath := ""
@@ -440,6 +533,52 @@ func (s *authzStore) ensureProjectConfigTokenThresholdColumns() error {
 	return err
 }
 
+func (s *authzStore) ensureRuntimeV1SchemaVersion() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := s.db.Exec(
+		`INSERT INTO hub_schema_versions(component, version, updated_at)
+		 VALUES(?,?,?)
+		 ON CONFLICT(component) DO UPDATE SET version=excluded.version, updated_at=excluded.updated_at`,
+		hubRuntimeV1SchemaComponent,
+		hubRuntimeV1SchemaVersion,
+		now,
+	)
+	return err
+}
+
+func (s *authzStore) ensureRuntimeV1HookTaskIDColumn() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	hasTaskID, err := tableHasColumn(s.db, "runtime_hook_records_v1", "task_id")
+	if err != nil {
+		return err
+	}
+	if hasTaskID {
+		return nil
+	}
+	_, err = s.db.Exec(`ALTER TABLE runtime_hook_records_v1 ADD COLUMN task_id TEXT`)
+	return err
+}
+
+func (s *authzStore) ensureRuntimeV1RunModelConfigIDColumn() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	hasModelConfigID, err := tableHasColumn(s.db, "runtime_runs_v1", "model_config_id")
+	if err != nil {
+		return err
+	}
+	if hasModelConfigID {
+		return nil
+	}
+	_, err = s.db.Exec(`ALTER TABLE runtime_runs_v1 ADD COLUMN model_config_id TEXT NOT NULL DEFAULT ''`)
+	return err
+}
+
 func shouldBackupLegacySchema(dbPath string, validationErr error) bool {
 	if validationErr == nil {
 		return false
@@ -503,6 +642,13 @@ func (s *authzStore) rebuildSchema(statements []string) error {
 		`DROP TABLE IF EXISTS execution_control_commands`,
 		`DROP TABLE IF EXISTS execution_leases`,
 		`DROP TABLE IF EXISTS workers`,
+		`DROP TABLE IF EXISTS runtime_hook_records_v1`,
+		`DROP TABLE IF EXISTS runtime_change_sets_v1`,
+		`DROP TABLE IF EXISTS runtime_run_tasks_v1`,
+		`DROP TABLE IF EXISTS runtime_run_events_v1`,
+		`DROP TABLE IF EXISTS runtime_runs_v1`,
+		`DROP TABLE IF EXISTS runtime_sessions_v1`,
+		`DROP TABLE IF EXISTS hub_schema_versions`,
 		`DROP TABLE IF EXISTS resource_test_logs`,
 		`DROP TABLE IF EXISTS resource_configs`,
 		`DROP TABLE IF EXISTS workspaces`,

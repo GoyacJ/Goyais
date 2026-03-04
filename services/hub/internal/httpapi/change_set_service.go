@@ -3,11 +3,13 @@ package httpapi
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -149,19 +151,28 @@ func ConversationChangeSetHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
-		state.mu.RLock()
-		conversation, exists := state.conversations[conversationID]
-		state.mu.RUnlock()
+		conversationSeed, exists := loadChangeSetConversationSeed(r.Context(), state, conversationID)
 		if !exists {
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
+			return
+		}
+		projectSeed, projectExists, projectErr := getProjectFromStore(state, conversationSeed.ProjectID)
+		if projectErr != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_READ_FAILED", "Failed to read project", map[string]any{
+				"project_id": conversationSeed.ProjectID,
+			})
+			return
+		}
+		if !projectExists {
+			WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{"project_id": conversationSeed.ProjectID})
 			return
 		}
 		_, authErr := authorizeAction(
 			state,
 			r,
-			conversation.WorkspaceID,
+			conversationSeed.WorkspaceID,
 			"conversation.read",
-			authorizationResource{WorkspaceID: conversation.WorkspaceID},
+			authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
 			authorizationContext{OperationType: "read"},
 		)
 		if authErr != nil {
@@ -169,7 +180,13 @@ func ConversationChangeSetHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 		state.mu.Lock()
-		changeSet, err := buildConversationChangeSetLocked(state, conversationID)
+		conversation, _, projectReady := ensureChangeSetContextSeedsLocked(state, conversationSeed, projectSeed)
+		if !projectReady {
+			state.mu.Unlock()
+			WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{"project_id": conversation.ProjectID})
+			return
+		}
+		changeSet, err := buildConversationChangeSetLocked(state, conversation.ID)
 		state.mu.Unlock()
 		if err != nil {
 			WriteStandardError(w, r, http.StatusInternalServerError, "CHANGESET_BUILD_FAILED", "Failed to build conversation changeset", map[string]any{
@@ -196,26 +213,28 @@ func ConversationChangeSetCommitHandler(state *AppState) http.HandlerFunc {
 			err.write(w, r)
 			return
 		}
-		state.mu.Lock()
-		conversation, exists := state.conversations[conversationID]
+		conversationSeed, exists := loadChangeSetConversationSeed(r.Context(), state, conversationID)
 		if !exists {
-			state.mu.Unlock()
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
 			return
 		}
-		project, projectExists := state.projects[conversation.ProjectID]
-		if !projectExists {
-			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{"project_id": conversation.ProjectID})
+		projectSeed, projectExists, projectErr := getProjectFromStore(state, conversationSeed.ProjectID)
+		if projectErr != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_READ_FAILED", "Failed to read project", map[string]any{
+				"project_id": conversationSeed.ProjectID,
+			})
 			return
 		}
-		state.mu.Unlock()
+		if !projectExists {
+			WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{"project_id": conversationSeed.ProjectID})
+			return
+		}
 		_, authErr := authorizeAction(
 			state,
 			r,
-			conversation.WorkspaceID,
+			conversationSeed.WorkspaceID,
 			"execution.control",
-			authorizationResource{WorkspaceID: conversation.WorkspaceID},
+			authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
 			authorizationContext{OperationType: "write", ABACRequired: true},
 		)
 		if authErr != nil {
@@ -224,6 +243,12 @@ func ConversationChangeSetCommitHandler(state *AppState) http.HandlerFunc {
 		}
 
 		state.mu.Lock()
+		conversation, project, projectReady := ensureChangeSetContextSeedsLocked(state, conversationSeed, projectSeed)
+		if !projectReady {
+			state.mu.Unlock()
+			WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{"project_id": conversation.ProjectID})
+			return
+		}
 		ledger := ensureConversationChangeLedgerLocked(state, conversationID)
 		if hasMutableExecutionsLocked(state, conversationID) {
 			state.mu.Unlock()
@@ -315,15 +340,25 @@ func ConversationChangeSetDiscardHandler(state *AppState) http.HandlerFunc {
 			err.write(w, r)
 			return
 		}
-		state.mu.Lock()
-		conversation, exists := state.conversations[conversationID]
+		conversationSeed, exists := loadChangeSetConversationSeed(r.Context(), state, conversationID)
 		if !exists {
-			state.mu.Unlock()
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
 			return
 		}
-		project, projectExists := state.projects[conversation.ProjectID]
+		projectSeed, projectExists, projectErr := getProjectFromStore(state, conversationSeed.ProjectID)
+		if projectErr != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_READ_FAILED", "Failed to read project", map[string]any{
+				"project_id": conversationSeed.ProjectID,
+			})
+			return
+		}
 		if !projectExists {
+			WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{"project_id": conversationSeed.ProjectID})
+			return
+		}
+		state.mu.Lock()
+		conversation, project, projectReady := ensureChangeSetContextSeedsLocked(state, conversationSeed, projectSeed)
+		if !projectReady {
 			state.mu.Unlock()
 			WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{"project_id": conversation.ProjectID})
 			return
@@ -386,15 +421,25 @@ func ConversationChangeSetExportHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
-		state.mu.Lock()
-		conversation, exists := state.conversations[conversationID]
+		conversationSeed, exists := loadChangeSetConversationSeed(r.Context(), state, conversationID)
 		if !exists {
-			state.mu.Unlock()
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
 			return
 		}
-		project, projectExists := state.projects[conversation.ProjectID]
+		projectSeed, projectExists, projectErr := getProjectFromStore(state, conversationSeed.ProjectID)
+		if projectErr != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_READ_FAILED", "Failed to read project", map[string]any{
+				"project_id": conversationSeed.ProjectID,
+			})
+			return
+		}
 		if !projectExists {
+			WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{"project_id": conversationSeed.ProjectID})
+			return
+		}
+		state.mu.Lock()
+		conversation, project, projectReady := ensureChangeSetContextSeedsLocked(state, conversationSeed, projectSeed)
+		if !projectReady {
 			state.mu.Unlock()
 			WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{"project_id": conversation.ProjectID})
 			return
@@ -448,8 +493,9 @@ func applyExecutionEventToChangeLedgerLocked(state *AppState, event ExecutionEve
 		if len(diffItems) == 0 {
 			return
 		}
+		execution, exists := loadChangeSetExecutionSeedLocked(state, strings.TrimSpace(event.ExecutionID))
 		messageID := ""
-		if execution, exists := state.executions[strings.TrimSpace(event.ExecutionID)]; exists {
+		if exists {
 			messageID = execution.MessageID
 		}
 		for _, item := range diffItems {
@@ -520,7 +566,10 @@ func rebuildConversationChangeLedgerFromStateLocked(state *AppState, conversatio
 		ledger.LastCommittedCheckpoint = previous.LastCommittedCheckpoint
 	}
 	for _, executionID := range collectConversationDiffExecutionIDsLocked(state, normalizedConversationID) {
-		execution := state.executions[executionID]
+		execution, exists := loadChangeSetExecutionSeedLocked(state, executionID)
+		if !exists {
+			continue
+		}
 		for _, item := range state.executionDiffs[executionID] {
 			event := ExecutionEvent{
 				ExecutionID:    executionID,
@@ -608,11 +657,11 @@ func checkpointFromPayload(payload map[string]any) (CheckpointSummary, bool) {
 }
 
 func buildConversationChangeSetLocked(state *AppState, conversationID string) (ConversationChangeSet, error) {
-	conversation, exists := state.conversations[conversationID]
+	conversation, exists := loadChangeSetConversationSeedLocked(state, conversationID)
 	if !exists {
 		return ConversationChangeSet{}, fmt.Errorf("conversation %s not found", conversationID)
 	}
-	project, exists := state.projects[conversation.ProjectID]
+	project, exists := loadChangeSetProjectSeedLocked(state, conversation.ProjectID)
 	if !exists {
 		return ConversationChangeSet{}, fmt.Errorf("project %s not found", conversation.ProjectID)
 	}
@@ -677,7 +726,7 @@ func cloneCheckpointSummary(input *CheckpointSummary) *CheckpointSummary {
 
 func hasMutableExecutionsLocked(state *AppState, conversationID string) bool {
 	for _, executionID := range state.conversationExecutionOrder[conversationID] {
-		execution, exists := state.executions[executionID]
+		execution, exists := loadChangeSetExecutionSeedLocked(state, executionID)
 		if !exists {
 			continue
 		}
@@ -686,15 +735,200 @@ func hasMutableExecutionsLocked(state *AppState, conversationID string) bool {
 			return true
 		}
 	}
+	for _, run := range listChangeSetRuntimeRunsByConversationLocked(state, conversationID) {
+		switch RunState(strings.TrimSpace(run.State)) {
+		case RunStateQueued, RunStatePending, RunStateExecuting, RunStateConfirming, RunStateAwaitingInput:
+			return true
+		}
+	}
 	return false
 }
 
-func resolveConversationProjectKindLocked(state *AppState, conversationID string) string {
+func loadChangeSetExecutionSeedLocked(state *AppState, executionID string) (Execution, bool) {
+	normalizedExecutionID := strings.TrimSpace(executionID)
+	if state == nil || normalizedExecutionID == "" {
+		return Execution{}, false
+	}
+	if execution, exists := state.executions[normalizedExecutionID]; exists {
+		return execution, true
+	}
+	service, ok := newExecutionQueryService(state)
+	if !ok {
+		return Execution{}, false
+	}
+	item, exists, err := service.repositories.Runs.GetByID(context.Background(), normalizedExecutionID)
+	if err != nil || !exists {
+		return Execution{}, false
+	}
+	execution := toExecutionFromRuntimeRun(item)
+	assignQueueIndexFromConversationOrderLocked(state, &execution)
+	state.executions[normalizedExecutionID] = execution
+	return execution, true
+}
+
+func loadChangeSetConversationSeed(ctx context.Context, state *AppState, conversationID string) (Conversation, bool) {
+	normalizedConversationID := strings.TrimSpace(conversationID)
+	if state == nil || normalizedConversationID == "" {
+		return Conversation{}, false
+	}
+
+	state.mu.RLock()
+	conversation, exists := state.conversations[normalizedConversationID]
+	state.mu.RUnlock()
+	if exists {
+		return conversation, true
+	}
+
+	service, ok := newExecutionQueryService(state)
+	if !ok {
+		return Conversation{}, false
+	}
+	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
+	if err != nil {
+		log.Printf("runtime v1 changeset conversation lookup failed, fallback to in-memory map: %v", err)
+		return Conversation{}, false
+	}
+	if !exists {
+		return Conversation{}, false
+	}
+	return toConversationFromRuntimeSessionRecord(item), true
+}
+
+func loadChangeSetConversationSeedLocked(state *AppState, conversationID string) (Conversation, bool) {
+	normalizedConversationID := strings.TrimSpace(conversationID)
+	if state == nil || normalizedConversationID == "" {
+		return Conversation{}, false
+	}
+	if conversation, exists := state.conversations[normalizedConversationID]; exists {
+		return conversation, true
+	}
+	service, ok := newExecutionQueryService(state)
+	if !ok {
+		return Conversation{}, false
+	}
+	item, exists, err := service.repositories.Sessions.GetByID(context.Background(), normalizedConversationID)
+	if err != nil || !exists {
+		return Conversation{}, false
+	}
+	seed := toConversationFromRuntimeSessionRecord(item)
+	state.conversations[normalizedConversationID] = seed
+	return seed, true
+}
+
+func loadChangeSetProjectSeedLocked(state *AppState, projectID string) (Project, bool) {
+	normalizedProjectID := strings.TrimSpace(projectID)
+	if state == nil || normalizedProjectID == "" {
+		return Project{}, false
+	}
+	if project, exists := state.projects[normalizedProjectID]; exists {
+		return project, true
+	}
+	if state.authz == nil {
+		return Project{}, false
+	}
+	item, exists, err := state.authz.getProject(normalizedProjectID)
+	if err != nil || !exists {
+		return Project{}, false
+	}
+	state.projects[normalizedProjectID] = item
+	return item, true
+}
+
+func toConversationFromRuntimeSessionRecord(item RuntimeSessionRecord) Conversation {
+	defaultMode := NormalizePermissionMode(item.DefaultMode)
+	seed := Conversation{
+		ID:            item.ID,
+		WorkspaceID:   item.WorkspaceID,
+		ProjectID:     item.ProjectID,
+		Name:          item.Name,
+		QueueState:    QueueStateIdle,
+		DefaultMode:   defaultMode,
+		ModelConfigID: item.ModelConfigID,
+		RuleIDs:       append([]string{}, item.RuleIDs...),
+		SkillIDs:      append([]string{}, item.SkillIDs...),
+		MCPIDs:        append([]string{}, item.MCPIDs...),
+		CreatedAt:     item.CreatedAt,
+		UpdatedAt:     item.UpdatedAt,
+	}
+	if item.ActiveRunID != nil {
+		activeRunID := strings.TrimSpace(*item.ActiveRunID)
+		if activeRunID != "" {
+			seed.ActiveExecutionID = &activeRunID
+			seed.QueueState = QueueStateRunning
+		}
+	}
+	return seed
+}
+
+func ensureChangeSetContextSeedsLocked(state *AppState, conversationSeed Conversation, projectSeed Project) (Conversation, Project, bool) {
+	if state == nil {
+		return Conversation{}, Project{}, false
+	}
+	conversationID := strings.TrimSpace(conversationSeed.ID)
+	if conversationID == "" {
+		return Conversation{}, Project{}, false
+	}
 	conversation, exists := state.conversations[conversationID]
+	if !exists {
+		conversation = conversationSeed
+		state.conversations[conversationID] = conversation
+	}
+	projectID := strings.TrimSpace(conversation.ProjectID)
+	if projectID == "" {
+		return conversation, Project{}, false
+	}
+	project, projectExists := state.projects[projectID]
+	if projectExists {
+		return conversation, project, true
+	}
+	if strings.TrimSpace(projectSeed.ID) == projectID {
+		state.projects[projectID] = projectSeed
+		return conversation, projectSeed, true
+	}
+	projectLoaded, loaded := loadChangeSetProjectSeedLocked(state, projectID)
+	if !loaded {
+		return conversation, Project{}, false
+	}
+	return conversation, projectLoaded, true
+}
+
+func listChangeSetRuntimeRunsByConversationLocked(state *AppState, conversationID string) []RuntimeRunRecord {
+	normalizedConversationID := strings.TrimSpace(conversationID)
+	if state == nil || normalizedConversationID == "" {
+		return []RuntimeRunRecord{}
+	}
+	service, ok := newExecutionQueryService(state)
+	if !ok {
+		return []RuntimeRunRecord{}
+	}
+	items := []RuntimeRunRecord{}
+	offset := 0
+	for {
+		page, err := service.repositories.Runs.ListBySession(context.Background(), normalizedConversationID, RepositoryPage{
+			Limit:  maxRepositoryPageLimit,
+			Offset: offset,
+		})
+		if err != nil {
+			return items
+		}
+		if len(page) == 0 {
+			break
+		}
+		items = append(items, page...)
+		if len(page) < maxRepositoryPageLimit {
+			break
+		}
+		offset += len(page)
+	}
+	return items
+}
+
+func resolveConversationProjectKindLocked(state *AppState, conversationID string) string {
+	conversation, exists := loadChangeSetConversationSeedLocked(state, conversationID)
 	if !exists {
 		return "non_git"
 	}
-	project, exists := state.projects[conversation.ProjectID]
+	project, exists := loadChangeSetProjectSeedLocked(state, conversation.ProjectID)
 	if !exists {
 		return "non_git"
 	}

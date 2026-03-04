@@ -49,6 +49,156 @@ func TestWorkspaceStatusHandlerRemoteRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestWorkspaceStatusHandlerUsesRepositoryWhenExecutionMapMissing(t *testing.T) {
+	store, err := openAuthzStore(":memory:")
+	if err != nil {
+		t.Fatalf("open authz store failed: %v", err)
+	}
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+
+	state := NewAppState(store)
+	handler := WorkspaceStatusHandler(state)
+	now := time.Now().UTC().Format(time.RFC3339)
+	conversationID := "conv_status_repo_" + randomHex(4)
+	runID := "run_status_repo_" + randomHex(4)
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:                conversationID,
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_status_repo_" + randomHex(4),
+		Name:              "Repository Status Conversation",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     "rc_model_status_repo",
+		ActiveExecutionID: ptrString(runID),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	state.conversationExecutionOrder[conversationID] = []string{runID}
+	state.executions[runID] = Execution{
+		ID:             runID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_status_repo_" + randomHex(4),
+		State:          RunStateExecuting,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_status_repo_" + randomHex(4),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	state.mu.Unlock()
+
+	syncExecutionDomainBestEffort(state)
+
+	state.mu.Lock()
+	state.conversations = map[string]Conversation{}
+	state.executions = map[string]Execution{}
+	state.conversationExecutionOrder = map[string][]string{}
+	state.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/workspaces/"+localWorkspaceID+"/status?conversation_id="+conversationID, nil)
+	req.SetPathValue("workspace_id", localWorkspaceID)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := WorkspaceStatusResponse{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	if payload.ConversationID != conversationID {
+		t.Fatalf("expected conversation_id %q, got %q", conversationID, payload.ConversationID)
+	}
+	if payload.ConversationStatus != ConversationStatusRunning {
+		t.Fatalf("expected running status from repository, got %s", payload.ConversationStatus)
+	}
+}
+
+func TestWorkspaceStatusHandlerSelectsConversationFromRepositoryWhenConversationMapMissing(t *testing.T) {
+	store, err := openAuthzStore(":memory:")
+	if err != nil {
+		t.Fatalf("open authz store failed: %v", err)
+	}
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+
+	state := NewAppState(store)
+	handler := WorkspaceStatusHandler(state)
+	now := time.Now().UTC().Format(time.RFC3339)
+	conversationID := "conv_status_select_repo_" + randomHex(4)
+	runID := "run_status_select_repo_" + randomHex(4)
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:                conversationID,
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_status_select_repo_" + randomHex(4),
+		Name:              "Repository Select Conversation",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     "rc_model_status_select_repo",
+		ActiveExecutionID: ptrString(runID),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	state.conversationExecutionOrder[conversationID] = []string{runID}
+	state.executions[runID] = Execution{
+		ID:             runID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_status_select_repo_" + randomHex(4),
+		State:          RunStateExecuting,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_status_select_repo_" + randomHex(4),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	state.mu.Unlock()
+
+	syncExecutionDomainBestEffort(state)
+
+	state.mu.Lock()
+	state.conversations = map[string]Conversation{}
+	state.executions = map[string]Execution{}
+	state.conversationExecutionOrder = map[string][]string{}
+	state.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/workspaces/"+localWorkspaceID+"/status", nil)
+	req.SetPathValue("workspace_id", localWorkspaceID)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := WorkspaceStatusResponse{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	if payload.ConversationID != conversationID {
+		t.Fatalf("expected conversation_id %q, got %q", conversationID, payload.ConversationID)
+	}
+	if payload.ConversationStatus != ConversationStatusRunning {
+		t.Fatalf("expected running status from repository-selected conversation, got %s", payload.ConversationStatus)
+	}
+}
+
 func TestDeriveConversationStatusLockedMappings(t *testing.T) {
 	state := NewAppState(nil)
 	workspace := state.CreateRemoteWorkspace(CreateWorkspaceRequest{

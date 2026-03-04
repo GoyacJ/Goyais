@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -42,14 +43,58 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
-			state.mu.RLock()
+			queryService, hasQueryService := newExecutionQueryService(state)
 			items := make([]Conversation, 0)
-			for _, conv := range state.conversations {
-				if conv.ProjectID == projectID {
-					items = append(items, decorateConversationUsageLocked(state, conv))
+			loadedFromRepository := false
+			if hasQueryService {
+				repositoryItems, err := listExecutionFlowConversationsFromRepository(r.Context(), queryService, workspaceID, projectID)
+				if err == nil {
+					items = repositoryItems
+					loadedFromRepository = true
+					state.mu.Lock()
+					for _, item := range repositoryItems {
+						state.conversations[item.ID] = item
+					}
+					state.mu.Unlock()
+				} else {
+					log.Printf("runtime v1 project conversation list query failed, fallback to in-memory map: %v", err)
 				}
 			}
-			state.mu.RUnlock()
+			applyInMemoryConversationUsage := func() {
+				state.mu.RLock()
+				for index := range items {
+					items[index] = decorateConversationUsageLocked(state, items[index])
+				}
+				state.mu.RUnlock()
+			}
+			if !loadedFromRepository {
+				state.mu.RLock()
+				for _, conv := range state.conversations {
+					if conv.ProjectID != projectID {
+						continue
+					}
+					items = append(items, conv)
+				}
+				state.mu.RUnlock()
+				applyInMemoryConversationUsage()
+			} else {
+				conversationIDs := make([]string, 0, len(items))
+				for _, item := range items {
+					conversationIDs = append(conversationIDs, item.ID)
+				}
+				totalsByConversation, err := queryService.ComputeConversationTokenUsage(r.Context(), conversationIDs)
+				if err == nil {
+					for index := range items {
+						totals := totalsByConversation[items[index].ID]
+						items[index].TokensInTotal = totals.Input
+						items[index].TokensOutTotal = totals.Output
+						items[index].TokensTotal = totals.Total
+					}
+				} else {
+					log.Printf("runtime v1 project conversation usage query failed, fallback to in-memory map: %v", err)
+					applyInMemoryConversationUsage()
+				}
+			}
 			sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt < items[j].CreatedAt })
 			raw := make([]any, 0, len(items))
 			for _, item := range items {

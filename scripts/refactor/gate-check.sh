@@ -19,14 +19,14 @@ echo "repo: $repo_root"
 echo "hub:  $hub_dir"
 echo
 
-echo "[1/6] targeted tests (httpapi + core)"
+echo "[1/7] targeted tests (httpapi + core)"
 (
   cd "$hub_dir"
   go test ./internal/httpapi/... ./internal/agent/core/...
 )
 echo
 
-echo "[2/6] runstate function coverage gate"
+echo "[2/7] runstate function coverage gate"
 (
   cd "$hub_dir"
   go test ./internal/agent/core -coverprofile="$cover_file" >/tmp/goyais_agent_core.cover.log
@@ -47,7 +47,7 @@ if [[ "$runstate_not_full" -gt 0 ]]; then
 fi
 echo
 
-echo "[3/6] runtime-mode default gate"
+echo "[3/7] runtime-mode default gate"
 default_mode_hits="$(
   cd "$hub_dir"
   rg -n 'mode = executionRuntimeModeHybrid' internal/httpapi/execution_runtime_router.go | wc -l | tr -d ' '
@@ -59,7 +59,7 @@ if [[ "$default_mode_hits" -eq 0 ]]; then
 fi
 echo
 
-echo "[4/6] runtime hardening regression gates"
+echo "[4/7] runtime hardening regression gates"
 legacy_orchestrator_file="$hub_dir/internal/httpapi/execution_orchestrator.go"
 legacy_agentcore_dir="$hub_dir/internal/agentcore"
 legacy_agentcoretools_dir="$hub_dir/internal/legacybridge/agentcoretools"
@@ -150,7 +150,7 @@ if [[ "$legacy_stdout_guard_refs" -ne 0 ]]; then
 fi
 echo
 
-echo "[5/6] legacy reference counters"
+echo "[5/7] legacy reference counters"
 agentcore_external_refs="$(
   cd "$hub_dir"
   (rg -n --glob '!**/*_test.go' 'internal/agentcore' internal cmd || true) \
@@ -199,7 +199,7 @@ if [[ "$strict" -eq 1 ]]; then
 fi
 echo
 
-echo "[6/6] three-surface anchor checks"
+echo "[6/7] three-surface anchor checks"
 loop_engine_hits="$(
   cd "$hub_dir"
   (rg -n 'loop.NewEngine' cmd/goyais-cli/main.go cmd/goyais-cli/adapters/v4_runner.go cmd/goyais-acp/main.go internal/httpapi/state.go || true) \
@@ -209,6 +209,118 @@ echo "loop.NewEngine anchor hits (cli main+adapter, acp, httpapi): $loop_engine_
 if [[ "$loop_engine_hits" -lt 3 ]]; then
   echo "FAIL: missing loop.NewEngine anchor in one or more surfaces"
   exit 1
+fi
+echo
+
+echo "[7/7] incremental legacy-token gate (new additions only)"
+diff_paths=(
+  services/hub
+  apps/desktop
+  packages/shared-core
+  .github/workflows
+  scripts/refactor
+)
+if ! changed_files="$(
+  cd "$repo_root"
+  changed_working="$(git diff --name-only -- "${diff_paths[@]}" || true)"
+  if [[ -n "$changed_working" ]]; then
+    printf "%s\n" "$changed_working"
+    exit 0
+  fi
+  if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+    git diff --name-only HEAD~1...HEAD -- "${diff_paths[@]}" || true
+    exit 0
+  fi
+  printf ""
+)"; then
+  changed_files=""
+fi
+
+forbidden_addition_patterns=(
+  'execution_runtime_'
+  'v4Service'
+  'V4Runner'
+  'runtimebridge'
+)
+if [[ -n "$changed_files" ]]; then
+  while IFS= read -r file; do
+    if [[ -z "$file" ]]; then
+      continue
+    fi
+    if [[ "$file" == *_test.go ]]; then
+      continue
+    fi
+    if [[ "$file" != services/hub/* && "$file" != apps/desktop/* && "$file" != packages/shared-core/* ]]; then
+      continue
+    fi
+    if ! file_added_lines="$(
+      cd "$repo_root"
+      file_working="$(git diff --unified=0 -- "$file" || true)"
+      if [[ -n "$file_working" ]]; then
+        printf "%s\n" "$file_working" | rg '^\+' | rg -v '^\+\+\+' || true
+        exit 0
+      fi
+      if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+        git diff --unified=0 HEAD~1...HEAD -- "$file" | rg '^\+' | rg -v '^\+\+\+' || true
+        exit 0
+      fi
+      printf ""
+    )"; then
+      file_added_lines=""
+    fi
+    for pattern in "${forbidden_addition_patterns[@]}"; do
+      if printf "%s\n" "$file_added_lines" | rg -n "$pattern" >/tmp/goyais_gate_forbidden_additions.log; then
+        echo "FAIL: detected forbidden addition pattern: $pattern in $file"
+        cat /tmp/goyais_gate_forbidden_additions.log
+        exit 1
+      fi
+    done
+  done <<<"$changed_files"
+fi
+
+runtime_surface_regex='^services/hub/internal/agent/(runtime/loop|adapters/httpapi|adapters/acp|adapters/cli)/.*\\.go$'
+if ! runtime_changed_files="$(
+  cd "$repo_root"
+  changed_working="$(git diff --name-only -- "${diff_paths[@]}" || true)"
+  if [[ -n "$changed_working" ]]; then
+    printf "%s\n" "$changed_working" | rg "$runtime_surface_regex" || true
+    exit 0
+  fi
+  if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+    git diff --name-only HEAD~1...HEAD -- "${diff_paths[@]}" | rg "$runtime_surface_regex" || true
+    exit 0
+  fi
+  printf ""
+)"; then
+  runtime_changed_files=""
+fi
+
+if [[ -n "$runtime_changed_files" ]]; then
+  while IFS= read -r file; do
+    if [[ -z "$file" ]]; then
+      continue
+    fi
+    if ! file_added_lines="$(
+      cd "$repo_root"
+      file_working="$(git diff --unified=0 -- "$file" || true)"
+      if [[ -n "$file_working" ]]; then
+        printf "%s\n" "$file_working" | rg '^\+' | rg -v '^\+\+\+' || true
+        exit 0
+      fi
+      if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+        git diff --unified=0 HEAD~1...HEAD -- "$file" | rg '^\+' | rg -v '^\+\+\+' || true
+        exit 0
+      fi
+      printf ""
+    )"; then
+      file_added_lines=""
+    fi
+    if printf "%s\n" "$file_added_lines" | rg -n '\\bConversation\\b|\\bExecution\\b' >/tmp/goyais_gate_runtime_terms.log; then
+      echo "FAIL: runtime surface added legacy Conversation/Execution term in $file"
+      cat /tmp/goyais_gate_runtime_terms.log
+      exit 1
+    fi
+  done <<<"$runtime_changed_files"
 fi
 echo
 

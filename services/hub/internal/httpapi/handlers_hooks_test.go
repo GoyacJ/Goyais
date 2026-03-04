@@ -112,6 +112,91 @@ func TestHookExecutionsHandlerListsRecordsForRunConversation(t *testing.T) {
 	}
 }
 
+func TestHookExecutionsHandlerUsesRepositoryWhenStateMapMissing(t *testing.T) {
+	store, err := openAuthzStore(":memory:")
+	if err != nil {
+		t.Fatalf("open authz store failed: %v", err)
+	}
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+
+	state := NewAppState(store)
+	now := time.Now().UTC().Format(time.RFC3339)
+	conversationID := "conv_hook_exec_repo"
+	runID := "exec_hook_repo_seed"
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:            conversationID,
+		WorkspaceID:   localWorkspaceID,
+		ProjectID:     "proj_hook_exec_repo",
+		Name:          "Hook Exec Repo",
+		QueueState:    QueueStateRunning,
+		DefaultMode:   PermissionModeDefault,
+		ModelConfigID: "rc_model_repo",
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	state.executions[runID] = Execution{
+		ID:             runID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_hook_exec_repo",
+		State:          RunStateExecuting,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5.3",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot:  ModelSnapshot{ModelID: "gpt-5.3"},
+		QueueIndex:     0,
+		TraceID:        "tr_hook_exec_repo",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	appendHookExecutionRecordLocked(state, HookExecutionRecord{
+		ID:             "hook_exec_repo_1",
+		RunID:          runID,
+		TaskID:         runID,
+		ConversationID: conversationID,
+		Event:          HookEventTypePreToolUse,
+		ToolName:       "Write",
+		PolicyID:       "policy_repo",
+		Decision: HookDecision{
+			Action: HookDecisionActionDeny,
+			Reason: "blocked by test",
+		},
+		Timestamp: now,
+	})
+	state.mu.Unlock()
+
+	syncExecutionDomainBestEffort(state)
+
+	state.mu.Lock()
+	state.executions = map[string]Execution{}
+	state.hookExecutionRecords = map[string][]HookExecutionRecord{}
+	state.mu.Unlock()
+
+	handler := HookExecutionsHandler(state)
+	req := httptest.NewRequest(http.MethodGet, "/v1/hooks/executions/"+runID, nil)
+	req.SetPathValue("run_id", runID)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200 from repository query path, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := HookExecutionListResponse{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	if len(payload.Items) != 1 {
+		t.Fatalf("expected one hook execution record, got %#v", payload)
+	}
+	if payload.Items[0].RunID != runID || payload.Items[0].ToolName != "Write" {
+		t.Fatalf("unexpected hook execution payload: %#v", payload.Items[0])
+	}
+}
+
 func TestHooksPoliciesHandlerPostPersistsToStore(t *testing.T) {
 	store, err := openAuthzStore(":memory:")
 	if err != nil {

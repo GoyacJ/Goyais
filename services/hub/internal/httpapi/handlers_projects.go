@@ -56,9 +56,7 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 				}
 				return items[i].CreatedAt > items[j].CreatedAt
 			})
-			state.mu.RLock()
-			aggregate := computeTokenUsageAggregateLocked(state)
-			state.mu.RUnlock()
+			aggregate := computeTokenUsageAggregate(state, workspaceID)
 			for index := range items {
 				projectID := strings.TrimSpace(items[index].ID)
 				if config, exists := projectConfigsByID[projectID]; exists {

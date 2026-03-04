@@ -427,3 +427,115 @@ func TestProjectConversationsHandlerGetIncludesTokenUsageTotals(t *testing.T) {
 		t.Fatalf("expected tokens_total 40, got %d", got)
 	}
 }
+
+func TestProjectConversationsHandlerGetUsesRepositoryWhenConversationMapMissing(t *testing.T) {
+	store, err := openAuthzStore(":memory:")
+	if err != nil {
+		t.Fatalf("open authz store failed: %v", err)
+	}
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+
+	state := NewAppState(store)
+	now := time.Now().UTC().Format(time.RFC3339)
+	projectID := "proj_usage_sidebar_repo_" + randomHex(4)
+	conversationID := "conv_usage_sidebar_repo_" + randomHex(4)
+	executionID := "exec_usage_sidebar_repo_" + randomHex(4)
+
+	project := Project{
+		ID:          projectID,
+		WorkspaceID: localWorkspaceID,
+		Name:        "Usage Sidebar Repository",
+		RepoPath:    "/tmp/usage-sidebar-repository",
+		DefaultMode: PermissionModeDefault,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if _, err := saveProjectToStore(state, project); err != nil {
+		t.Fatalf("save project failed: %v", err)
+	}
+	if _, err := saveProjectConfigToStore(state, localWorkspaceID, ProjectConfig{
+		ProjectID:      projectID,
+		ModelConfigIDs: []string{},
+		RuleIDs:        []string{},
+		SkillIDs:       []string{},
+		MCPIDs:         []string{},
+		UpdatedAt:      now,
+	}); err != nil {
+		t.Fatalf("save project config failed: %v", err)
+	}
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:            conversationID,
+		WorkspaceID:   localWorkspaceID,
+		ProjectID:     projectID,
+		Name:          "Conversation Usage Repository",
+		QueueState:    QueueStateIdle,
+		DefaultMode:   PermissionModeDefault,
+		ModelConfigID: "rc_model_repo",
+		BaseRevision:  0,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	state.conversationExecutionOrder[conversationID] = []string{executionID}
+	state.executions[executionID] = Execution{
+		ID:             executionID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_usage_sidebar_repo_" + randomHex(4),
+		State:          RunStateCompleted,
+		Mode:           PermissionModeDefault,
+		ModelID:        "gpt-5",
+		ModeSnapshot:   PermissionModeDefault,
+		ModelSnapshot: ModelSnapshot{
+			ModelID: "gpt-5",
+		},
+		TokensIn:                4,
+		TokensOut:               6,
+		ProjectRevisionSnapshot: 0,
+		QueueIndex:              1,
+		TraceID:                 "tr_usage_sidebar_repo_" + randomHex(4),
+		CreatedAt:               now,
+		UpdatedAt:               now,
+	}
+	state.mu.Unlock()
+
+	syncExecutionDomainBestEffort(state)
+
+	state.mu.Lock()
+	state.conversations = map[string]Conversation{}
+	state.executions = map[string]Execution{}
+	state.conversationExecutionOrder = map[string][]string{}
+	state.mu.Unlock()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/projects/{project_id}/conversations", ProjectConversationsHandler(state))
+	res := performJSONRequest(t, mux, http.MethodGet, "/v1/projects/"+projectID+"/conversations", nil, nil)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected list conversations 200 from repository, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	items, ok := payload["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("expected exactly one conversation item, got %#v", payload["items"])
+	}
+	conversation, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected conversation object, got %#v", items[0])
+	}
+	if got := int(conversation["tokens_in_total"].(float64)); got != 4 {
+		t.Fatalf("expected tokens_in_total 4, got %d", got)
+	}
+	if got := int(conversation["tokens_out_total"].(float64)); got != 6 {
+		t.Fatalf("expected tokens_out_total 6, got %d", got)
+	}
+	if got := int(conversation["tokens_total"].(float64)); got != 10 {
+		t.Fatalf("expected tokens_total 10, got %d", got)
+	}
+}
