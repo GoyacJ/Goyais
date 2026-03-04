@@ -32,6 +32,7 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 	s.conversationEventSeq = map[string]int{}
 	s.executionRuntimeRunIDs = map[string]string{}
 	s.conversationRuntimeSessionIDs = map[string]string{}
+	s.executionRuntimeShadowCursor = map[string]int64{}
 
 	for _, conversation := range snapshot.Conversations {
 		s.conversations[conversation.ID] = conversation

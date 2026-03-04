@@ -201,7 +201,7 @@ func TestExecutionRuntimeRouter_V4ModeRejectsAnswerPayloadControl(t *testing.T) 
 	}
 }
 
-func TestSubmitExecutionBestEffort_HybridModeSubmitsViaV4AndStillRunsLegacy(t *testing.T) {
+func TestSubmitExecutionBestEffort_HybridModeSubmitsViaV4AndSkipsLegacyOnSuccess(t *testing.T) {
 	legacy := &legacyBackendStub{}
 	v4 := &v4BackendStub{
 		startSessionID: "sess_v4_bridge",
@@ -260,11 +260,11 @@ func TestSubmitExecutionBestEffort_HybridModeSubmitsViaV4AndStillRunsLegacy(t *t
 	if got := strings.TrimSpace(v4.subscribeRequests[0].SessionID); got != "sess_v4_bridge" {
 		t.Fatalf("expected subscribe session sess_v4_bridge, got %q", got)
 	}
-	if len(legacy.submits) != 1 || legacy.submits[0] != "exec_1" {
-		t.Fatalf("expected one legacy submit in hybrid shadow mode, got %#v", legacy.submits)
+	if len(legacy.submits) != 0 {
+		t.Fatalf("expected no legacy submit when v4 submit succeeds in hybrid mode, got %#v", legacy.submits)
 	}
-	if got := state.resolveExecutionRuntimeID("exec_1"); got != "exec_1" {
-		t.Fatalf("expected hybrid mode to keep legacy runtime id, got %q", got)
+	if got := state.resolveExecutionRuntimeID("exec_1"); got != "run_v4_bridge" {
+		t.Fatalf("expected hybrid mode to route by mapped run id after v4 submit, got %q", got)
 	}
 	if mapped := strings.TrimSpace(state.executionRuntimeRunIDs["exec_1"]); mapped != "run_v4_bridge" {
 		t.Fatalf("expected mapped run id to be stored for shadow comparison, got %q", mapped)
@@ -397,6 +397,9 @@ func TestClearExecutionRuntimeMapping_RemovesMapping(t *testing.T) {
 		executionRuntimeRunIDs: map[string]string{
 			"exec_1": "run_1",
 		},
+		executionRuntimeShadowCursor: map[string]int64{
+			"exec_1": 9,
+		},
 	}
 	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
 		Mode: "v4",
@@ -407,6 +410,9 @@ func TestClearExecutionRuntimeMapping_RemovesMapping(t *testing.T) {
 	state.clearExecutionRuntimeMapping("exec_1")
 	if got := state.resolveExecutionRuntimeID("exec_1"); got != "exec_1" {
 		t.Fatalf("expected mapping cleared to original execution id, got %q", got)
+	}
+	if _, exists := state.executionRuntimeShadowCursor["exec_1"]; exists {
+		t.Fatalf("expected shadow cursor to be cleared with runtime mapping")
 	}
 }
 
@@ -450,8 +456,14 @@ func TestCancelExecutionBestEffort_SnapshotsV4RunEventsWhenSessionKnown(t *testi
 
 	state.cancelExecutionBestEffort(context.Background(), "exec_1")
 
-	if len(legacy.cancels) != 1 || legacy.cancels[0] != "exec_1" {
-		t.Fatalf("expected legacy cancel call in hybrid mode, got %#v", legacy.cancels)
+	if len(legacy.cancels) != 0 {
+		t.Fatalf("expected no legacy cancel call when mapped run id exists, got %#v", legacy.cancels)
+	}
+	if len(v4.requests) != 1 {
+		t.Fatalf("expected one v4 cancel(control) request, got %d", len(v4.requests))
+	}
+	if action := strings.TrimSpace(v4.requests[0].Action); action != string(agentcore.ControlActionStop) {
+		t.Fatalf("expected v4 stop action, got %q", action)
 	}
 	if len(v4.subscribeRequests) != 1 {
 		t.Fatalf("expected one subscribe snapshot request, got %d", len(v4.subscribeRequests))
@@ -503,8 +515,14 @@ func TestControlExecutionBestEffort_SnapshotsV4RunEventsWhenSessionKnown(t *test
 
 	state.controlExecutionBestEffort(context.Background(), "exec_1", executionControlSignal{Action: agentcore.ControlActionStop})
 
-	if len(legacy.controlIDs) != 1 || legacy.controlIDs[0] != "exec_1" {
-		t.Fatalf("expected legacy control call in hybrid mode, got %#v", legacy.controlIDs)
+	if len(legacy.controlIDs) != 0 {
+		t.Fatalf("expected no legacy control call when mapped run id exists, got %#v", legacy.controlIDs)
+	}
+	if len(v4.requests) != 1 {
+		t.Fatalf("expected one v4 control request, got %d", len(v4.requests))
+	}
+	if action := strings.TrimSpace(v4.requests[0].Action); action != string(agentcore.ControlActionStop) {
+		t.Fatalf("expected v4 stop action, got %q", action)
 	}
 	if len(v4.subscribeRequests) != 1 {
 		t.Fatalf("expected one subscribe snapshot request, got %d", len(v4.subscribeRequests))
@@ -580,5 +598,46 @@ func TestCancelExecutionBestEffort_AppendsShadowConsistencyMismatchForTerminalCo
 	}
 	if !foundMismatch {
 		t.Fatalf("expected v4_shadow_consistency event to be appended")
+	}
+}
+
+func TestSnapshotV4RunEventsBestEffort_UsesIncrementalShadowCursor(t *testing.T) {
+	v4 := &v4BackendStub{
+		subscribeFrames: []agenthttpapi.EventFrame{
+			{
+				Type:      "run_started",
+				SessionID: "sess_v4_1",
+				RunID:     "run_v4_1",
+				Sequence:  5,
+			},
+		},
+	}
+	state := &AppState{
+		conversations: map[string]Conversation{
+			"conv_1": {
+				ID: "conv_1",
+			},
+		},
+		executions: map[string]Execution{
+			"exec_1": {
+				ID:             "exec_1",
+				ConversationID: "conv_1",
+			},
+		},
+		executionRuntimeShadowCursor: map[string]int64{},
+		v4Service:                    v4,
+	}
+
+	state.snapshotV4RunEventsBestEffort("exec_1", "sess_v4_1")
+	state.snapshotV4RunEventsBestEffort("exec_1", "sess_v4_1")
+
+	if len(v4.subscribeRequests) != 2 {
+		t.Fatalf("expected two subscribe requests, got %d", len(v4.subscribeRequests))
+	}
+	if first := strings.TrimSpace(v4.subscribeRequests[0].Cursor); first != "" {
+		t.Fatalf("expected empty first cursor, got %q", first)
+	}
+	if second := strings.TrimSpace(v4.subscribeRequests[1].Cursor); second != "5" {
+		t.Fatalf("expected second cursor=5, got %q", second)
 	}
 }

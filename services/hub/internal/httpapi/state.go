@@ -36,6 +36,7 @@ type AppState struct {
 	conversationEventSubs         map[string]map[string]chan ExecutionEvent
 	executionRuntimeRunIDs        map[string]string
 	conversationRuntimeSessionIDs map[string]string
+	executionRuntimeShadowCursor  map[string]int64
 
 	resources             map[string]Resource
 	resourceConfigs       map[string]ResourceConfig
@@ -75,6 +76,7 @@ func NewAppState(store *authzStore) *AppState {
 		conversationEventSubs:         map[string]map[string]chan ExecutionEvent{},
 		executionRuntimeRunIDs:        map[string]string{},
 		conversationRuntimeSessionIDs: map[string]string{},
+		executionRuntimeShadowCursor:  map[string]int64{},
 		resources:                     map[string]Resource{},
 		resourceConfigs:               map[string]ResourceConfig{},
 		resourceTestLogs:              []ResourceTestLog{},

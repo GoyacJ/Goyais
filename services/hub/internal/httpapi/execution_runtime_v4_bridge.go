@@ -41,9 +41,7 @@ func (s *AppState) resolveExecutionRuntimeID(executionID string) string {
 		return normalizedExecutionID
 	}
 	router := s.executionRuntime
-	if router == nil || router.mode != executionRuntimeModeV4 {
-		// Hybrid mode remains legacy-authoritative for control/cancel; v4 IDs are
-		// tracked for shadow comparison only.
+	if router == nil || router.mode == executionRuntimeModeLegacy {
 		return normalizedExecutionID
 	}
 	s.mu.RLock()
@@ -65,6 +63,7 @@ func (s *AppState) clearExecutionRuntimeMapping(executionID string) {
 	}
 	s.mu.Lock()
 	delete(s.executionRuntimeRunIDs, normalizedExecutionID)
+	delete(s.executionRuntimeShadowCursor, normalizedExecutionID)
 	s.mu.Unlock()
 }
 
@@ -152,21 +151,49 @@ func (s *AppState) snapshotV4RunEventsBestEffort(executionID string, sessionID s
 	if normalizedSessionID == "" {
 		return
 	}
+	normalizedExecutionID := strings.TrimSpace(executionID)
+	if normalizedExecutionID == "" {
+		return
+	}
+	afterSequence := int64(-1)
+	s.mu.RLock()
+	if s.executionRuntimeShadowCursor != nil {
+		if cursor, exists := s.executionRuntimeShadowCursor[normalizedExecutionID]; exists {
+			afterSequence = cursor
+		}
+	}
+	s.mu.RUnlock()
 
 	pollCtx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
 	defer cancel()
-	frames, err := s.v4Service.SubscribeSnapshot(pollCtx, agenthttpapi.SubscribeRequest{
+	subscribeReq := agenthttpapi.SubscribeRequest{
 		SessionID: normalizedSessionID,
 		Limit:     16,
-	})
+	}
+	if afterSequence >= 0 {
+		subscribeReq.Cursor = fmt.Sprintf("%d", afterSequence)
+	}
+	frames, err := s.v4Service.SubscribeSnapshot(pollCtx, subscribeReq)
 	if len(frames) == 0 {
 		return
 	}
+	highestSequence := afterSequence
 	for _, frame := range frames {
-		s.appendV4ShadowRunEvent(executionID, frame)
+		if frame.Sequence > highestSequence {
+			highestSequence = frame.Sequence
+		}
+		s.appendV4ShadowRunEvent(normalizedExecutionID, frame)
+	}
+	if highestSequence > afterSequence {
+		s.mu.Lock()
+		if s.executionRuntimeShadowCursor == nil {
+			s.executionRuntimeShadowCursor = map[string]int64{}
+		}
+		s.executionRuntimeShadowCursor[normalizedExecutionID] = highestSequence
+		s.mu.Unlock()
 	}
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
-		s.appendV4ShadowRunEvent(executionID, agenthttpapi.EventFrame{
+		s.appendV4ShadowRunEvent(normalizedExecutionID, agenthttpapi.EventFrame{
 			Type:      "shadow_poll_error",
 			SessionID: normalizedSessionID,
 			Sequence:  -1,
