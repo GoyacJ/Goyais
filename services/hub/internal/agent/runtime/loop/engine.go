@@ -244,9 +244,9 @@ func (e *Engine) Submit(_ context.Context, sessionID string, input core.UserInpu
 		e.approvalRouter.Register(newRunID)
 	}
 	session.queue = append(session.queue, newRunID)
-	e.emitEventLocked(session, newRunID, core.RunEventTypeRunQueued, core.RunQueuedPayload{
+	e.emitEventLocked(session, newSequencedEvent(session, newRunID, core.RunQueuedEventSpec, core.RunQueuedPayload{
 		QueuePosition: len(session.queue),
-	})
+	}))
 
 	e.startNextIfIdleLocked(session)
 	return string(newRunID), nil
@@ -290,9 +290,9 @@ func (e *Engine) Control(_ context.Context, runID string, action core.ControlAct
 		if err := run.machine.Transition(core.RunStateCancelled); err != nil {
 			return err
 		}
-		e.emitEventLocked(session, run.id, core.RunEventTypeRunCancelled, core.RunCancelledPayload{
+		e.emitEventLocked(session, newSequencedEvent(session, run.id, core.RunCancelledEventSpec, core.RunCancelledPayload{
 			Reason: "control_" + string(action),
-		})
+		}))
 		if e.approvalRouter != nil {
 			e.approvalRouter.Unregister(run.id)
 		}
@@ -401,7 +401,7 @@ func (e *Engine) startNextIfIdleLocked(session *sessionRuntime) {
 	runCtx, cancel := context.WithCancel(context.Background())
 	run.cancel = cancel
 
-	e.emitEventLocked(session, nextRunID, core.RunEventTypeRunStarted, core.RunStartedPayload{})
+	e.emitEventLocked(session, newSequencedEvent(session, nextRunID, core.RunStartedEventSpec, core.RunStartedPayload{}))
 	go e.executeRun(runCtx, run)
 }
 
@@ -460,25 +460,25 @@ func (e *Engine) executeRun(ctx context.Context, run *runRuntime) {
 	switch {
 	case ctx.Err() != nil:
 		_ = run.machine.Transition(core.RunStateCancelled)
-		e.emitEventLocked(session, run.id, core.RunEventTypeRunCancelled, core.RunCancelledPayload{
+		e.emitEventLocked(session, newSequencedEvent(session, run.id, core.RunCancelledEventSpec, core.RunCancelledPayload{
 			Reason: "control_stop",
-		})
+		}))
 	case runErr != nil:
 		_ = run.machine.Transition(core.RunStateFailed)
-		e.emitEventLocked(session, run.id, core.RunEventTypeRunFailed, core.RunFailedPayload{
+		e.emitEventLocked(session, newSequencedEvent(session, run.id, core.RunFailedEventSpec, core.RunFailedPayload{
 			Code:    "runtime_execute_failed",
 			Message: runErr.Error(),
-		})
+		}))
 	default:
 		if strings.TrimSpace(result.Output) != "" {
-			e.emitEventLocked(session, run.id, core.RunEventTypeRunOutputDelta, core.OutputDeltaPayload{
+			e.emitEventLocked(session, newSequencedEvent(session, run.id, core.RunOutputDeltaEventSpec, core.OutputDeltaPayload{
 				Delta: result.Output,
-			})
+			}))
 		}
 		_ = run.machine.Transition(core.RunStateCompleted)
-		e.emitEventLocked(session, run.id, core.RunEventTypeRunCompleted, core.RunCompletedPayload{
+		e.emitEventLocked(session, newSequencedEvent(session, run.id, core.RunCompletedEventSpec, core.RunCompletedPayload{
 			UsageTokens: result.UsageTokens,
-		})
+		}))
 	}
 
 	if session.active == run.id {
@@ -513,25 +513,25 @@ func (e *Engine) executeManualCompact(ctx context.Context, run *runRuntime) {
 	switch {
 	case ctx.Err() != nil:
 		_ = run.machine.Transition(core.RunStateCancelled)
-		e.emitEventLocked(session, run.id, core.RunEventTypeRunCancelled, core.RunCancelledPayload{
+		e.emitEventLocked(session, newSequencedEvent(session, run.id, core.RunCancelledEventSpec, core.RunCancelledPayload{
 			Reason: "control_stop",
-		})
+		}))
 	case compactErr != nil:
 		_ = run.machine.Transition(core.RunStateFailed)
-		e.emitEventLocked(session, run.id, core.RunEventTypeRunFailed, core.RunFailedPayload{
+		e.emitEventLocked(session, newSequencedEvent(session, run.id, core.RunFailedEventSpec, core.RunFailedPayload{
 			Code:    "compact_failed",
 			Message: compactErr.Error(),
-		})
+		}))
 	default:
 		output := "Context compacted."
 		if result.CompactedCount == 0 {
 			output = "Context compacted: no eligible history segments."
 		}
-		e.emitEventLocked(session, run.id, core.RunEventTypeRunOutputDelta, core.OutputDeltaPayload{
+		e.emitEventLocked(session, newSequencedEvent(session, run.id, core.RunOutputDeltaEventSpec, core.OutputDeltaPayload{
 			Delta: output,
-		})
+		}))
 		_ = run.machine.Transition(core.RunStateCompleted)
-		e.emitEventLocked(session, run.id, core.RunEventTypeRunCompleted, core.RunCompletedPayload{})
+		e.emitEventLocked(session, newSequencedEvent(session, run.id, core.RunCompletedEventSpec, core.RunCompletedPayload{}))
 	}
 
 	if session.active == run.id {
@@ -552,10 +552,10 @@ func (e *Engine) finishRunAsFailed(run *runRuntime, code string, cause error) {
 		return
 	}
 	_ = run.machine.Transition(core.RunStateFailed)
-	e.emitEventLocked(session, run.id, core.RunEventTypeRunFailed, core.RunFailedPayload{
+	e.emitEventLocked(session, newSequencedEvent(session, run.id, core.RunFailedEventSpec, core.RunFailedPayload{
 		Code:    strings.TrimSpace(code),
 		Message: strings.TrimSpace(cause.Error()),
-	})
+	}))
 	if session.active == run.id {
 		session.active = ""
 	}
@@ -574,9 +574,9 @@ func (e *Engine) finishRunAsCancelled(run *runRuntime, reason string) {
 		return
 	}
 	_ = run.machine.Transition(core.RunStateCancelled)
-	e.emitEventLocked(session, run.id, core.RunEventTypeRunCancelled, core.RunCancelledPayload{
+	e.emitEventLocked(session, newSequencedEvent(session, run.id, core.RunCancelledEventSpec, core.RunCancelledPayload{
 		Reason: strings.TrimSpace(reason),
-	})
+	}))
 	if session.active == run.id {
 		session.active = ""
 	}
@@ -586,17 +586,7 @@ func (e *Engine) finishRunAsCancelled(run *runRuntime, reason string) {
 	e.startNextIfIdleLocked(session)
 }
 
-func (e *Engine) emitEventLocked(session *sessionRuntime, runID core.RunID, eventType core.RunEventType, payload core.EventPayload) {
-	sequence := session.nextSequence
-	session.nextSequence++
-	event := core.EventEnvelope{
-		Type:      eventType,
-		SessionID: session.id,
-		RunID:     runID,
-		Sequence:  sequence,
-		Timestamp: time.Now().UTC(),
-		Payload:   payload,
-	}
+func (e *Engine) emitEventLocked(session *sessionRuntime, event core.EventEnvelope) {
 	if e.eventStore != nil {
 		_ = e.eventStore.Append(event)
 	}
@@ -604,6 +594,17 @@ func (e *Engine) emitEventLocked(session *sessionRuntime, runID core.RunID, even
 	if session.subscriberManager != nil {
 		_ = session.subscriberManager.Publish(context.Background(), event)
 	}
+}
+
+func newSequencedEvent[P core.EventPayload](
+	session *sessionRuntime,
+	runID core.RunID,
+	spec core.EventSpec[P],
+	payload P,
+) core.EventEnvelope {
+	sequence := session.nextSequence
+	session.nextSequence++
+	return core.NewEvent(spec, session.id, runID, sequence, time.Now().UTC(), payload)
 }
 
 func (e *Engine) subscriptionStats(sessionID core.SessionID) subscribers.Stats {

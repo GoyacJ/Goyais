@@ -5,6 +5,9 @@
 package settings
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -187,6 +190,126 @@ func TestMerge_ClonesInputMaps(t *testing.T) {
 	}
 }
 
+func TestLoadAndMerge_LoadsDefaultLayersAndOverrides(t *testing.T) {
+	workingDir := t.TempDir()
+	homeDir := t.TempDir()
+
+	mustWriteJSON(t, filepath.Join(homeDir, ".goyais", "config.json"), map[string]any{
+		"flag": "user",
+		"context": map[string]any{
+			"skillsBudgetChars": float64(20),
+		},
+		"permissions": map[string]any{
+			"allow": []any{"Read(user)"},
+		},
+	})
+	mustWriteJSON(t, filepath.Join(workingDir, ".goyais", "settings.json"), map[string]any{
+		"flag": "project",
+		"context": map[string]any{
+			"instructionDocExcludes": []any{"**/AGENTS.md"},
+			"skillsBudgetChars":      float64(64),
+		},
+		"permissions": map[string]any{
+			"allow": []any{"Read(project)"},
+		},
+	})
+	mustWriteJSON(t, filepath.Join(workingDir, ".goyais", "settings.local.json"), map[string]any{
+		"flag": "local",
+		"permissions": map[string]any{
+			"allow": []any{"Read(local)"},
+			"deny":  []any{"Write(local)"},
+		},
+	})
+	mustWriteJSON(t, filepath.Join(workingDir, ".goyais", "managed-settings.json"), map[string]any{
+		"flag": "managed-file",
+		"permissions": map[string]any{
+			"allow": []any{"Read(managed-file)"},
+		},
+	})
+
+	result, err := LoadAndMerge(LoadOptions{
+		WorkingDir: workingDir,
+		HomeDir:    homeDir,
+		CLI: map[string]any{
+			"flag": "cli",
+			"permissions": map[string]any{
+				"allow": []any{"Read(cli)"},
+			},
+		},
+		Managed: map[string]any{
+			"flag": "managed-override",
+			"permissions": map[string]any{
+				"allow": []any{"Read(managed)"},
+				"deny":  []any{"Write(managed)"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("load and merge: %v", err)
+	}
+
+	if got := result.Effective["flag"]; got != "managed-override" {
+		t.Fatalf("flag = %#v, want %q", got, "managed-override")
+	}
+
+	context := mustMap(t, result.Effective["context"])
+	if got := mustSlice(t, context["instructionDocExcludes"]); !reflect.DeepEqual(got, []any{"**/AGENTS.md"}) {
+		t.Fatalf("instructionDocExcludes = %#v, want %#v", got, []any{"**/AGENTS.md"})
+	}
+	if got := context["skillsBudgetChars"]; got != float64(64) {
+		t.Fatalf("skillsBudgetChars = %#v, want 64", got)
+	}
+
+	perms := mustMap(t, result.Effective["permissions"])
+	gotAllow := mustSlice(t, perms["allow"])
+	wantAllow := []any{
+		"Read(user)",
+		"Read(project)",
+		"Read(local)",
+		"Read(cli)",
+		"Read(managed-file)",
+		"Read(managed)",
+	}
+	if !reflect.DeepEqual(gotAllow, wantAllow) {
+		t.Fatalf("permissions.allow = %#v, want %#v", gotAllow, wantAllow)
+	}
+	gotDeny := mustSlice(t, perms["deny"])
+	wantDeny := []any{"Write(local)", "Write(managed)"}
+	if !reflect.DeepEqual(gotDeny, wantDeny) {
+		t.Fatalf("permissions.deny = %#v, want %#v", gotDeny, wantDeny)
+	}
+
+	flagTrace := result.Source["flag"]
+	if flagTrace.WinningLayer != LayerManaged {
+		t.Fatalf("flag winning layer = %q, want %q", flagTrace.WinningLayer, LayerManaged)
+	}
+	if !reflect.DeepEqual(flagTrace.ContributingLayers, []Layer{
+		LayerUser, LayerProject, LayerLocal, LayerCLI, LayerManaged,
+	}) {
+		t.Fatalf("flag contributors = %#v", flagTrace.ContributingLayers)
+	}
+}
+
+func TestLoadAndMerge_FailOpenWhenDefaultFilesMissing(t *testing.T) {
+	result, err := LoadAndMerge(LoadOptions{
+		WorkingDir: t.TempDir(),
+		HomeDir:    t.TempDir(),
+		CLI: map[string]any{
+			"only_cli": true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("load and merge without files: %v", err)
+	}
+	if got := result.Effective["only_cli"]; got != true {
+		t.Fatalf("effective only_cli = %#v, want true", got)
+	}
+	trace := result.Source["only_cli"]
+	if trace.WinningLayer != LayerCLI {
+		t.Fatalf("only_cli winning layer = %q, want %q", trace.WinningLayer, LayerCLI)
+	}
+}
+
 func mustMap(t *testing.T, value any) map[string]any {
 	t.Helper()
 	out, ok := value.(map[string]any)
@@ -203,4 +326,18 @@ func mustSlice(t *testing.T, value any) []any {
 		t.Fatalf("expected []any, got %T", value)
 	}
 	return out
+}
+
+func mustWriteJSON(t *testing.T, path string, value map[string]any) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", path, err)
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal json %s: %v", path, err)
+	}
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
 }

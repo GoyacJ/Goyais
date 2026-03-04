@@ -7,6 +7,7 @@ package loop
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -611,6 +612,100 @@ func TestEngineAutoCompactionInjectsSummaryIntoPrompt(t *testing.T) {
 	}
 	if !strings.Contains(executedPrompts[1], "[Compacted Context Summary]") {
 		t.Fatalf("second run prompt missing compaction summary: %q", executedPrompts[1])
+	}
+}
+
+func TestEngineStabilityOver120Rounds(t *testing.T) {
+	const rounds = 120
+
+	compactor := compaction.NewManager(compaction.Config{
+		WindowTokens:       120,
+		AutoCompactPercent: 70,
+		KeepRecentMessages: 4,
+	}, compaction.Dependencies{
+		Summarizer: summarizerFunc(func(_ context.Context, messages []compaction.Message) (string, error) {
+			return fmt.Sprintf("summary-%d", len(messages)), nil
+		}),
+	})
+
+	engine := NewEngineWithDeps(Dependencies{
+		Executor: executorFunc(func(_ context.Context, req ExecuteRequest) (ExecuteResult, error) {
+			return ExecuteResult{
+				Output:      "assistant:" + req.Input.Text,
+				UsageTokens: 32,
+			}, nil
+		}),
+		ContextBuilder: contextBuilderFunc(func(_ context.Context, _ core.BuildContextRequest) (core.PromptContext, error) {
+			return core.PromptContext{SystemPrompt: "stable-system"}, nil
+		}),
+		Compactor: compactor,
+	})
+
+	session, err := engine.StartSession(context.Background(), core.StartSessionRequest{
+		WorkingDir: "/tmp/stability-project",
+	})
+	if err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+
+	sub, err := engine.Subscribe(context.Background(), string(session.SessionID), "")
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Close()
+
+	runIDs := make([]string, 0, rounds)
+	for i := 0; i < rounds; i++ {
+		runID, submitErr := engine.Submit(
+			context.Background(),
+			string(session.SessionID),
+			core.UserInput{Text: fmt.Sprintf("turn-%03d %s", i, strings.Repeat("x", 96))},
+		)
+		if submitErr != nil {
+			t.Fatalf("submit round %d: %v", i, submitErr)
+		}
+		runIDs = append(runIDs, runID)
+	}
+
+	completed := make(map[string]struct{}, rounds)
+	events := waitEventsUntil(t, sub.Events(), func(event core.EventEnvelope) bool {
+		if event.Type == core.RunEventTypeRunCompleted {
+			completed[string(event.RunID)] = struct{}{}
+		}
+		return len(completed) == rounds
+	}, 20*time.Second)
+
+	for idx, event := range events {
+		if event.Sequence != int64(idx) {
+			t.Fatalf("event sequence[%d]=%d, want %d", idx, event.Sequence, idx)
+		}
+	}
+
+	terminal := make(map[string]core.RunEventType, rounds)
+	for _, event := range events {
+		switch event.Type {
+		case core.RunEventTypeRunFailed, core.RunEventTypeRunCancelled:
+			t.Fatalf("unexpected terminal failure event: run=%s type=%s", event.RunID, event.Type)
+		case core.RunEventTypeRunCompleted:
+			terminal[string(event.RunID)] = event.Type
+		}
+	}
+
+	for _, runID := range runIDs {
+		if terminal[runID] != core.RunEventTypeRunCompleted {
+			t.Fatalf("run %s terminal type = %q, want %q", runID, terminal[runID], core.RunEventTypeRunCompleted)
+		}
+	}
+
+	if snippet := compactor.SummarySnippet(session.SessionID); snippet == "" {
+		t.Fatal("expected non-empty compaction summary snippet after long session")
+	}
+	snapshot := compactor.Snapshot(session.SessionID)
+	if len(snapshot.Messages) == 0 {
+		t.Fatal("expected non-empty compactor snapshot")
+	}
+	if _, ok := compactor.ResolveCursor(session.SessionID, snapshot.Messages[0].Cursor); !ok {
+		t.Fatal("expected cursor mapping to resolve for live compacted snapshot cursor")
 	}
 }
 

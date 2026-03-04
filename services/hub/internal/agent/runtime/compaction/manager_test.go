@@ -6,7 +6,9 @@ package compaction
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"goyais/services/hub/internal/agent/core"
 )
@@ -189,5 +191,76 @@ func TestManagerSummarySnippetUsesLatestSummary(t *testing.T) {
 	}
 	if want := "[Compacted Context Summary]\nfinal compact summary"; snippet != want {
 		t.Fatalf("summary snippet = %q, want %q", snippet, want)
+	}
+}
+
+func TestManagerCompactionStabilityOver120Rounds(t *testing.T) {
+	const rounds = 120
+	sessionID := core.SessionID("sess_stability")
+
+	manager := NewManager(Config{
+		WindowTokens:       120,
+		AutoCompactPercent: 70,
+		KeepRecentMessages: 6,
+	}, Dependencies{
+		Summarizer: summarizerFunc(func(_ context.Context, messages []Message) (string, error) {
+			return fmt.Sprintf("summary(size=%d)", len(messages)), nil
+		}),
+	})
+
+	compactedCount := 0
+	for i := 0; i < rounds; i++ {
+		manager.AppendMessage(sessionID, "user", fmt.Sprintf("u-%03d %s", i, "content content content"), 24)
+		manager.AppendMessage(sessionID, "assistant", fmt.Sprintf("a-%03d %s", i, "reply reply reply"), 24)
+
+		before := manager.Snapshot(sessionID)
+		if len(before.Messages) == 0 {
+			t.Fatalf("round %d: expected non-empty snapshot before maybe-compact", i)
+		}
+		oldCursor := before.Messages[0].Cursor
+
+		result, compacted, err := manager.MaybeCompact(context.Background(), sessionID)
+		if err != nil {
+			t.Fatalf("round %d maybe-compact failed: %v", i, err)
+		}
+		if !compacted {
+			continue
+		}
+		compactedCount++
+		if result.SummaryCursor <= 0 {
+			t.Fatalf("round %d compacted summary cursor = %d, want > 0", i, result.SummaryCursor)
+		}
+		if _, ok := manager.ResolveCursor(sessionID, oldCursor); !ok {
+			t.Fatalf("round %d expected cursor %d to resolve after compaction", i, oldCursor)
+		}
+		if manager.SummarySnippet(sessionID) == "" {
+			t.Fatalf("round %d expected non-empty summary snippet after compaction", i)
+		}
+	}
+	if compactedCount == 0 {
+		t.Fatal("expected at least one auto compaction in long session")
+	}
+
+	snapshot := manager.Snapshot(sessionID)
+	if len(snapshot.Messages) == 0 {
+		t.Fatal("expected non-empty final snapshot")
+	}
+	for _, message := range snapshot.Messages {
+		mapped, ok := manager.ResolveCursor(sessionID, message.Cursor)
+		if !ok {
+			t.Fatalf("expected final cursor %d to resolve", message.Cursor)
+		}
+		if mapped != message.Cursor {
+			t.Fatalf("expected live cursor %d to map to itself, got %d", message.Cursor, mapped)
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, err := manager.Compact(ctx, Request{
+		SessionID: sessionID,
+		Trigger:   TriggerManual,
+	}); err != nil {
+		t.Fatalf("manual compact after stress failed: %v", err)
 	}
 }

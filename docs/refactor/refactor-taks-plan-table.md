@@ -24,11 +24,11 @@ Agent v4 重构任务计划表
 ├───────────┼──────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
 │ Phase A0  │ 已完成   │ 前置盘点与归属决策文档已形成，作为后续迁移合同基线。                                          │
 ├───────────┼──────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Phase A1  │ 已完成   │ `core` 合同基线可编译，状态机关键函数覆盖率达到 100%（`runstate.go`）。                          │
+│ Phase A1  │ 已完成   │ `core` 合同基线可编译；`runstate.go` 关键函数覆盖率 100%；`EventSpec + NewEvent + Validate` 完成 payload-event 绑定校验。 │
 ├───────────┼──────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
 │ Phase A2  │ 已完成   │ `runtime/loop` Engine 已作为真实执行实现（FIFO、生命周期事件、取消控制、订阅回放、compaction）。 │
 ├───────────┼──────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Phase B   │ 已完成   │ `context/settings`、`context/prompt`、`runtime/compaction` 已落地并有测试。                     │
+│ Phase B   │ 已完成   │ `context/settings` 默认层加载接入 `prompt.Builder`；10 步链条默认来源生效；`runtime/compaction` 增补 >100 轮稳定性测试证据。 │
 ├───────────┼──────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
 │ Phase C-D │ 进行中   │ tools/transport/model/policy/extensions 已有实现与测试；严格验收项（矩阵与协议级别）仍在收敛。     │
 ├───────────┼──────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
@@ -53,6 +53,22 @@ Agent v4 重构任务计划表
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ 状态机门禁 │ `cd services/hub && go test ./internal/agent/core -coverprofile=/tmp/agent_core.cover` 通过；                            │
 │            │ `go tool cover -func=/tmp/agent_core.cover` 显示 `runstate.go` 关键函数 100%。                                           │
+├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ A1 事件门禁 │ `core/events.go` 新增 `EventSpec[P]`、事件规格常量与 `NewEvent(...)`；`EventEnvelope.Validate()` 增加 Type/Payload 一致性校验。 │
+│            │ `go test ./internal/agent/core` 覆盖正反测试：`TestNewEventAndValidate_AllRunEventSpecs`、`TestEventEnvelopeValidate_RejectsTypePayloadMismatch`。 │
+├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ B1/B2 证据 │ `context/settings` 新增 `LoadLayers/LoadAndMerge` 默认层加载（managed > cli > local > project > user）；`prompt.Builder` 默认消费 merge 结果。 │
+│            │ `instructionDocExcludes` 与 `skillsBudget` 已由 settings 驱动并有测试：`TestBuilderBuild_SettingsDriveExcludesBudgetAndTrace`。 │
+│            │ 默认来源加载（user rules/memory/skills/mcp）测试：`TestBuilderBuild_DefaultSourcesLoadUserRulesMemorySkillsAndMCP`。          │
+├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ B4 压测证据 │ 长会话稳定性测试：`TestEngineStabilityOver120Rounds`（120 轮，事件有序、终态完整、自动 compaction 存活）。                  │
+│            │ compaction 高轮次测试：`TestManagerCompactionStabilityOver120Rounds`（cursor 可解析、summary 持续可注入、无超时死锁）。      │
+├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 运行链回归 │ `go test ./internal/agent/runtime/loop ./internal/agent/runtime/compaction ./internal/agent/context/settings ./internal/agent/context/prompt` 通过。 │
+├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 依赖方向扫 │ `rg -n \"AppState|internal/httpapi|internal/agentcore\" internal/agent/{core,runtime,context}` 仅命中 `core/architecture_guard_test.go` 的守卫字符串。 │
+├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 静态检查   │ `cd services/hub && go vet ./...` 通过。                                                                                     │
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ HTTP 主链  │ 默认模式已切到 `hybrid`，并在 v4 submit 成功时不再常态提交 legacy：                                                      │
 │            │ `services/hub/internal/httpapi/execution_runtime_router.go`（`newExecutionRuntimeRouter` / `submitExecutionBestEffort`） │
