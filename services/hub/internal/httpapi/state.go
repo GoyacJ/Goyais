@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -99,10 +100,21 @@ func NewAppState(store *authzStore) *AppState {
 		}
 		state.hydrateExecutionDomainFromStore()
 	}
-	state.orchestrator = NewExecutionOrchestrator(state)
+	runtimeMode := parseExecutionRuntimeMode(os.Getenv(executionRuntimeModeEnv))
+	if runtimeMode == "" {
+		runtimeMode = executionRuntimeModeHybrid
+	}
+	if runtimeMode != executionRuntimeModeV4 {
+		state.orchestrator = NewExecutionOrchestrator(state)
+	}
 	state.v4Service = agenthttpapi.NewService(loop.NewEngine(nil))
+	var legacyBackend legacyExecutionBackend
+	if state.orchestrator != nil {
+		legacyBackend = state.orchestrator
+	}
 	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
-		Legacy: state.orchestrator,
+		Mode:   string(runtimeMode),
+		Legacy: legacyBackend,
 		V4:     state.v4Service,
 	})
 

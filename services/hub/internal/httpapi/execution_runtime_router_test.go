@@ -88,6 +88,40 @@ func (s *v4BackendStub) SubscribeSnapshot(_ context.Context, req agenthttpapi.Su
 	return frames, nil
 }
 
+func TestNewAppState_DefaultRuntimeModeKeepsLegacyFallbackWired(t *testing.T) {
+	t.Setenv(executionRuntimeModeEnv, "")
+	state := NewAppState(nil)
+	if state.executionRuntime == nil {
+		t.Fatalf("expected execution runtime router to be configured")
+	}
+	if state.executionRuntime.mode != executionRuntimeModeHybrid {
+		t.Fatalf("expected default mode hybrid, got %q", state.executionRuntime.mode)
+	}
+	if state.orchestrator == nil {
+		t.Fatalf("expected legacy orchestrator wired in default mode")
+	}
+	if state.executionRuntime.legacy == nil {
+		t.Fatalf("expected legacy backend wired in default mode")
+	}
+}
+
+func TestNewAppState_V4ModeSkipsLegacyOrchestrator(t *testing.T) {
+	t.Setenv(executionRuntimeModeEnv, "v4")
+	state := NewAppState(nil)
+	if state.executionRuntime == nil {
+		t.Fatalf("expected execution runtime router to be configured")
+	}
+	if state.executionRuntime.mode != executionRuntimeModeV4 {
+		t.Fatalf("expected v4 runtime mode, got %q", state.executionRuntime.mode)
+	}
+	if state.orchestrator != nil {
+		t.Fatalf("expected legacy orchestrator to be skipped in v4 mode")
+	}
+	if state.executionRuntime.legacy != nil {
+		t.Fatalf("expected no legacy backend attached in v4 mode")
+	}
+}
+
 func TestExecutionRuntimeRouter_LegacyModeRoutesAllToLegacy(t *testing.T) {
 	legacy := &legacyBackendStub{}
 	router := newExecutionRuntimeRouter(executionRuntimeRouterOptions{
