@@ -682,3 +682,68 @@ func TestSnapshotV4RunEventsBestEffort_AppendsPollErrorWhenNoFrames(t *testing.T
 		t.Fatalf("expected non-empty event_error payload")
 	}
 }
+
+func TestSnapshotV4RunEventsBestEffort_SkipsFramesAtOrBeforeCursor(t *testing.T) {
+	v4 := &v4BackendStub{
+		subscribeFrames: []agenthttpapi.EventFrame{
+			{
+				Type:      "run_output_delta",
+				SessionID: "sess_v4_1",
+				RunID:     "run_v4_1",
+				Sequence:  4,
+			},
+			{
+				Type:      "run_output_delta",
+				SessionID: "sess_v4_1",
+				RunID:     "run_v4_1",
+				Sequence:  5,
+			},
+			{
+				Type:      "run_output_delta",
+				SessionID: "sess_v4_1",
+				RunID:     "run_v4_1",
+				Sequence:  6,
+			},
+		},
+	}
+	state := &AppState{
+		conversations: map[string]Conversation{
+			"conv_1": {
+				ID: "conv_1",
+			},
+		},
+		executions: map[string]Execution{
+			"exec_1": {
+				ID:             "exec_1",
+				ConversationID: "conv_1",
+			},
+		},
+		executionRuntimeShadowCursor: map[string]int64{"exec_1": 5},
+		v4Service:                    v4,
+	}
+
+	state.snapshotV4RunEventsBestEffort("exec_1", "sess_v4_1")
+
+	events := state.executionEvents["conv_1"]
+	if len(events) != 1 {
+		t.Fatalf("expected only one new event beyond cursor, got %d", len(events))
+	}
+	last := events[len(events)-1]
+	seqValue := int64(-1)
+	switch value := last.Payload["event_sequence"].(type) {
+	case int64:
+		seqValue = value
+	case float64:
+		seqValue = int64(value)
+	case int:
+		seqValue = int64(value)
+	default:
+		t.Fatalf("expected numeric event_sequence payload, got %T", last.Payload["event_sequence"])
+	}
+	if seqValue != 6 {
+		t.Fatalf("expected event_sequence=6, got %d", seqValue)
+	}
+	if got := state.executionRuntimeShadowCursor["exec_1"]; got != 6 {
+		t.Fatalf("expected cursor advanced to 6, got %d", got)
+	}
+}
