@@ -44,6 +44,43 @@ const (
 	DecisionDeny  = "deny"
 )
 
+// HandlerType defines the type of hook handler.
+// Ref: docs/refactor/2026-03-03-agent-v4-refactor-plan.md §7.1
+type HandlerType string
+
+const (
+	// HandlerTypeCommand executes shell commands locally.
+	HandlerTypeCommand HandlerType = "command"
+	// HandlerTypeHTTP makes POST requests to external endpoints.
+	HandlerTypeHTTP HandlerType = "http"
+	// HandlerTypePrompt performs single-turn model evaluation.
+	HandlerTypePrompt HandlerType = "prompt"
+	// HandlerTypeAgent launches multi-turn subagents.
+	HandlerTypeAgent HandlerType = "agent"
+)
+
+// CommandHandler executes a control command and returns user-facing output.
+// Used by HandlerTypeCommand.
+type CommandHandler func(ctx context.Context, event core.HookEvent, args []string) (HookHandlerResponse, error)
+
+// HTTPHandler makes POST requests to external endpoints.
+// Used by HandlerTypeHTTP.
+type HTTPHandler func(ctx context.Context, event core.HookEvent, payload map[string]any) (HookHandlerResponse, error)
+
+// PromptResolver expands a prompt command into one or more prompt sections.
+// Used by HandlerTypePrompt.
+type PromptResolver func(ctx context.Context, event core.HookEvent, args []string) ([]string, error)
+
+// AgentHandler launches multi-turn subagents.
+// Used by HandlerTypeAgent.
+type AgentHandler func(ctx context.Context, event core.HookEvent, req core.SubagentRequest) (core.SubagentResult, error)
+
+// HookHandlerResponse is the unified response from hook handlers.
+type HookHandlerResponse struct {
+	Output   string
+	Metadata map[string]any
+}
+
 // MatchMode controls how one pattern is matched against event/tool values.
 type MatchMode string
 

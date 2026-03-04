@@ -7,8 +7,10 @@ package rulesdsl
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 )
 
 // Effect is one rule decision kind.
@@ -88,20 +90,179 @@ func ParseRule(raw string) (Rule, error) {
 }
 
 // Match reports whether a rule matches the request.
+// Ref: docs/refactor/2026-03-03-agent-v4-refactor-plan.md §8.2
 func Match(rule Rule, req Request) bool {
 	if !strings.EqualFold(strings.TrimSpace(rule.Tool), strings.TrimSpace(req.Tool)) {
 		return false
 	}
-	pattern := normalizePattern(rule.Pattern)
-	argument := normalizePattern(req.Argument)
-	if strings.EqualFold(strings.TrimSpace(rule.Tool), "Bash") && !isShellPatternAllowed(pattern, argument) {
+
+	// Handle path prefixes for non-Bash tools
+	ruleTool := strings.TrimSpace(rule.Tool)
+	if !strings.EqualFold(ruleTool, "Bash") {
+		return matchWithPathPrefix(rule, req)
+	}
+
+	// Bash-specific matching with word boundary and shell operator semantics
+	pattern := rule.Pattern
+	argument := req.Argument
+
+	// Check shell operator containment
+	if !isShellPatternAllowed(pattern, argument) {
 		return false
 	}
-	ok, err := filepath.Match(pattern, argument)
-	if err != nil {
+
+	// Apply word boundary semantics for Bash
+	return matchBashWithWordBoundary(pattern, argument)
+}
+
+// matchBashWithWordBoundary applies word boundary semantics for Bash patterns.
+// "npm run *" - * after space matches word boundary (space-separated token)
+// "ls*" - no word boundary limit
+func matchBashWithWordBoundary(pattern, argument string) bool {
+	// Check if pattern has a word boundary marker (space before glob)
+	hasWordBoundary := hasWordBoundaryMarker(pattern)
+
+	if hasWordBoundary {
+		// Word boundary mode: pattern must match a complete space-separated token
+		return matchWordBoundary(pattern, argument)
+	}
+
+	// No word boundary: use standard glob matching
+	patternNorm := normalizePattern(pattern)
+	argumentNorm := normalizePattern(argument)
+	ok, err := filepath.Match(patternNorm, argumentNorm)
+	return err == nil && ok
+}
+
+// hasWordBoundaryMarker checks if the pattern has a space before glob,
+// indicating word boundary semantics.
+func hasWordBoundaryMarker(pattern string) bool {
+	// Find the last glob character (* or ?)
+	lastGlob := -1
+	for i := len(pattern) - 1; i >= 0; i-- {
+		if pattern[i] == '*' || pattern[i] == '?' {
+			lastGlob = i
+			break
+		}
+	}
+	if lastGlob <= 0 {
 		return false
 	}
-	return ok
+	// Check if there's a space before the glob
+	beforeGlob, _ := utf8.DecodeLastRuneInString(pattern[:lastGlob])
+	return beforeGlob == ' '
+}
+
+// matchWordBoundary matches pattern against argument with word boundary semantics.
+// "npm run *" matches "npm run lint" but not "npm_run lint"
+// The prefix (before the glob with trailing space) must match the start of the argument,
+// and the remainder (after the prefix) must match the glob pattern.
+func matchWordBoundary(pattern, argument string) bool {
+	// Extract the glob part from pattern
+	globPart := extractGlobPart(pattern)
+	if globPart == "" {
+		// No glob, fall back to exact match
+		return pattern == argument
+	}
+
+	// Get the prefix before the glob (including trailing space)
+	prefix := extractPrefixBeforeGlob(pattern)
+
+	// Check if argument starts with the prefix
+	if !strings.HasPrefix(argument, prefix) {
+		return false
+	}
+
+	// Get the remainder after the prefix
+	remainder := argument[len(prefix):]
+
+	// The remainder should match the glob (must be a single token, i.e., no spaces)
+	if strings.Contains(remainder, " ") {
+		// Remainder has spaces, which means it's multiple tokens - doesn't match word boundary
+		return false
+	}
+
+	// Match the remainder against the glob
+	ok, err := filepath.Match(globPart, remainder)
+	return err == nil && ok
+}
+
+// extractGlobPart extracts the glob pattern (* or ?) from the pattern string.
+func extractGlobPart(pattern string) string {
+	for i, r := range pattern {
+		if r == '*' || r == '?' {
+			return pattern[i:]
+		}
+	}
+	return ""
+}
+
+// extractPrefixBeforeGlob extracts the prefix before the first glob character.
+func extractPrefixBeforeGlob(pattern string) string {
+	for i, r := range pattern {
+		if r == '*' || r == '?' {
+			return pattern[:i]
+		}
+	}
+	return pattern
+}
+
+// matchWithPathPrefix handles path prefix matching for non-Bash tools.
+// Supports: //path (absolute), ~/path (user dir), /path (project root), path or ./path (current dir)
+func matchWithPathPrefix(rule Rule, req Request) bool {
+	pattern := rule.Pattern
+	argument := req.Argument
+
+	// Only resolve path prefixes for the pattern, not the argument
+	// The argument comes from the actual system and should be compared as-is
+	pattern = resolvePathPrefix(pattern)
+
+	// Normalize for matching
+	patternNorm := normalizePattern(pattern)
+	argumentNorm := normalizePattern(argument)
+
+	// Use glob matching
+	ok, err := filepath.Match(patternNorm, argumentNorm)
+	return err == nil && ok
+}
+
+// resolvePathPrefix converts path prefixes to their resolved form.
+// //path -> /absolute/path
+// ~/path -> /home/user/path
+// /path -> ./path (project relative)
+// path or ./path -> ./path (current dir relative)
+func resolvePathPrefix(path string) string {
+	trimmed := strings.TrimSpace(path)
+
+	// Handle //path (absolute filesystem path) - keep one slash
+	if strings.HasPrefix(trimmed, "//") {
+		// "//etc/*" -> "/etc/*"
+		return "/" + strings.TrimPrefix(trimmed, "//")
+	}
+
+	// Handle ~/path (user home directory)
+	if strings.HasPrefix(trimmed, "~") && (len(trimmed) == 1 || trimmed[1] == '/') {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return path
+		}
+		if len(trimmed) == 1 {
+			return home
+		}
+		return home + strings.TrimPrefix(trimmed, "~")
+	}
+
+	// Handle /path (project root relative) - convert to ./path
+	if strings.HasPrefix(trimmed, "/") && !strings.HasPrefix(trimmed, "//") {
+		return "." + trimmed
+	}
+
+	// Handle path or ./path - ensure ./ prefix
+	if !strings.HasPrefix(trimmed, "./") && !strings.HasPrefix(trimmed, "../") {
+		return "./" + trimmed
+	}
+
+	return trimmed
 }
 
 // Evaluate applies rules in fixed precedence deny > ask > allow.
