@@ -7,9 +7,13 @@ package acp
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	cliadapter "goyais/services/hub/internal/agent/adapters/cli"
+	agenthttpapi "goyais/services/hub/internal/agent/adapters/httpapi"
 	"goyais/services/hub/internal/agent/core"
 	eventscore "goyais/services/hub/internal/agent/core/events"
 )
@@ -26,7 +30,7 @@ type NewSessionResponse struct {
 	CreatedAt string
 }
 
-// PromptRequest is ACP-facing prompt request.
+// PromptRequest is ACP-facing run submit request.
 type PromptRequest struct {
 	SessionID string
 	Prompt    string
@@ -34,7 +38,7 @@ type PromptRequest struct {
 	Metadata  map[string]string
 }
 
-// PromptResponse summarizes prompt execution plus stream updates.
+// PromptResponse summarizes run submission plus stream updates.
 type PromptResponse struct {
 	SessionID     string
 	RunID         string
@@ -59,13 +63,17 @@ type ControlRequest struct {
 // BridgeOptions configures optional ACP bridge integrations.
 type BridgeOptions struct {
 	Projector cliadapter.RunEventProjector
+	Lifecycle SessionLifecycle
 }
 
-// Bridge delegates ACP operations to core.Engine via CLI adapter runner.
+// Bridge delegates ACP operations to Session/Run service.
 type Bridge struct {
 	engine     core.Engine
 	commandBus core.CommandBus
 	projector  cliadapter.RunEventProjector
+
+	lifecycle   SessionLifecycle
+	sessionRuns *agenthttpapi.Service
 }
 
 // NewBridge creates ACP bridge for one shared engine instance.
@@ -75,19 +83,33 @@ func NewBridge(engine core.Engine, commandBus core.CommandBus) *Bridge {
 
 // NewBridgeWithOptions creates ACP bridge with optional runtime projections.
 func NewBridgeWithOptions(engine core.Engine, commandBus core.CommandBus, options BridgeOptions) *Bridge {
-	return &Bridge{
-		engine:     engine,
-		commandBus: commandBus,
-		projector:  options.Projector,
+	bridge := &Bridge{
+		engine:      engine,
+		commandBus:  commandBus,
+		projector:   options.Projector,
+		lifecycle:   options.Lifecycle,
+		sessionRuns: nil,
 	}
+	bridge.sessionRuns = bridge.newSessionRunService()
+	return bridge
+}
+
+// SetLifecycle wires session lifecycle operations after bridge creation.
+func (b *Bridge) SetLifecycle(lifecycle SessionLifecycle) {
+	if b == nil {
+		return
+	}
+	b.lifecycle = lifecycle
+	b.sessionRuns = b.newSessionRunService()
 }
 
 // NewSession starts a new runtime session.
 func (b *Bridge) NewSession(ctx context.Context, req NewSessionRequest) (NewSessionResponse, error) {
-	if b == nil || b.engine == nil {
+	service := b.sessionRunService()
+	if service == nil {
 		return NewSessionResponse{}, core.ErrEngineNotConfigured
 	}
-	handle, err := b.engine.StartSession(ctx, core.StartSessionRequest{
+	resp, err := service.StartSession(ctx, agenthttpapi.StartSessionRequest{
 		WorkingDir:            strings.TrimSpace(req.WorkingDir),
 		AdditionalDirectories: sanitizeDirectories(req.AdditionalDirectories),
 	})
@@ -95,66 +117,319 @@ func (b *Bridge) NewSession(ctx context.Context, req NewSessionRequest) (NewSess
 		return NewSessionResponse{}, err
 	}
 	return NewSessionResponse{
-		SessionID: string(handle.SessionID),
-		CreatedAt: handle.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+		SessionID: strings.TrimSpace(resp.SessionID),
+		CreatedAt: strings.TrimSpace(resp.CreatedAt),
 	}, nil
 }
 
-// Prompt runs one prompt and captures mapped ACP updates.
+// Prompt submits user input and streams run updates to ACP.
 func (b *Bridge) Prompt(ctx context.Context, req PromptRequest) (PromptResponse, error) {
-	collector := &updateCollector{}
-	runner := cliadapter.Runner{
-		Engine:     b.engine,
-		CommandBus: b.commandBus,
-		Writer:     collector,
-		Projector:  b.projector,
+	if b == nil || b.engine == nil {
+		return PromptResponse{}, core.ErrEngineNotConfigured
 	}
-	result, err := runner.RunPrompt(ctx, cliadapter.RunRequest{
-		SessionID: strings.TrimSpace(req.SessionID),
-		Prompt:    strings.TrimSpace(req.Prompt),
-		Cursor:    strings.TrimSpace(req.Cursor),
-		Metadata:  cloneStringMap(req.Metadata),
-	})
+	service := b.sessionRunService()
+	if service == nil {
+		return PromptResponse{}, core.ErrEngineNotConfigured
+	}
+
+	prompt := strings.TrimSpace(req.Prompt)
+	if prompt == "" {
+		return PromptResponse{}, errors.New("prompt is required")
+	}
+
+	sessionID := strings.TrimSpace(req.SessionID)
+	if sessionID == "" {
+		started, err := service.StartSession(ctx, agenthttpapi.StartSessionRequest{})
+		if err != nil {
+			return PromptResponse{}, err
+		}
+		sessionID = strings.TrimSpace(started.SessionID)
+	}
+
+	if strings.HasPrefix(prompt, "/") && b.commandBus != nil {
+		commandResp, commandErr := b.runSlashCommand(ctx, sessionID, prompt)
+		if commandErr != nil {
+			return PromptResponse{}, commandErr
+		}
+		return commandResp, nil
+	}
+
+	subscription, err := b.engine.Subscribe(ctx, sessionID, strings.TrimSpace(req.Cursor))
 	if err != nil {
 		return PromptResponse{}, err
 	}
+	defer subscription.Close()
+
+	submitResp, submitErr := service.Submit(ctx, agenthttpapi.SubmitRequest{
+		SessionID: sessionID,
+		Input:     prompt,
+		Metadata:  cloneStringMap(req.Metadata),
+	})
+	if submitErr != nil {
+		return PromptResponse{}, submitErr
+	}
+	runID := strings.TrimSpace(submitResp.RunID)
+
+	updates := make([]Update, 0, 8)
+	outputChunks := make([]string, 0, 8)
+	projected := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return PromptResponse{}, ctx.Err()
+		case event, ok := <-subscription.Events():
+			if !ok {
+				return PromptResponse{
+					SessionID: sessionID,
+					RunID:     runID,
+					Output:    strings.TrimSpace(strings.Join(outputChunks, "")),
+					Updates:   updates,
+				}, nil
+			}
+			if strings.TrimSpace(string(event.RunID)) != runID {
+				continue
+			}
+			if projectErr := b.projectEvent(ctx, event, cliadapter.ProjectionOptions{
+				ConversationID: sessionID,
+				QueueIndex:     projected,
+			}); projectErr != nil {
+				return PromptResponse{}, projectErr
+			}
+			projected++
+
+			update, mapErr := mapEventEnvelopeToUpdate(event)
+			if mapErr != nil {
+				return PromptResponse{}, mapErr
+			}
+			updates = append(updates, update)
+			if delta, ok := update.Payload["delta"].(string); ok {
+				outputChunks = append(outputChunks, delta)
+			}
+			if isTerminalEvent(event.Type) {
+				return PromptResponse{
+					SessionID: sessionID,
+					RunID:     runID,
+					Output:    strings.TrimSpace(strings.Join(outputChunks, "")),
+					Updates:   updates,
+				}, nil
+			}
+		}
+	}
+}
+
+// Control forwards run-control actions directly to Session/Run service.
+func (b *Bridge) Control(ctx context.Context, req ControlRequest) error {
+	service := b.sessionRunService()
+	if service == nil {
+		return core.ErrEngineNotConfigured
+	}
+	return service.Control(ctx, agenthttpapi.ControlRequest{
+		RunID:  strings.TrimSpace(req.RunID),
+		Action: strings.TrimSpace(string(req.Action)),
+	})
+}
+
+// ResumeSession delegates to session lifecycle service.
+func (b *Bridge) ResumeSession(ctx context.Context, sessionID string) (agenthttpapi.SessionStateResponse, error) {
+	service := b.sessionRunService()
+	if service == nil {
+		return agenthttpapi.SessionStateResponse{}, core.ErrEngineNotConfigured
+	}
+	return service.ResumeSession(ctx, agenthttpapi.ResumeSessionRequest{SessionID: strings.TrimSpace(sessionID)})
+}
+
+// ForkSession delegates to session lifecycle service.
+func (b *Bridge) ForkSession(ctx context.Context, sessionID string, cwd string, additionalDirectories []string) (agenthttpapi.SessionStateResponse, error) {
+	service := b.sessionRunService()
+	if service == nil {
+		return agenthttpapi.SessionStateResponse{}, core.ErrEngineNotConfigured
+	}
+	return service.ForkSession(ctx, agenthttpapi.ForkSessionRequest{
+		SessionID:             strings.TrimSpace(sessionID),
+		WorkingDir:            strings.TrimSpace(cwd),
+		AdditionalDirectories: sanitizeDirectories(additionalDirectories),
+	})
+}
+
+// RewindSession delegates to session lifecycle service.
+func (b *Bridge) RewindSession(ctx context.Context, sessionID string, checkpointID string, targetCursor int64, clearTempPermissions bool) (agenthttpapi.SessionStateResponse, error) {
+	service := b.sessionRunService()
+	if service == nil {
+		return agenthttpapi.SessionStateResponse{}, core.ErrEngineNotConfigured
+	}
+	return service.RewindSession(ctx, agenthttpapi.RewindSessionRequest{
+		SessionID:            strings.TrimSpace(sessionID),
+		CheckpointID:         strings.TrimSpace(checkpointID),
+		TargetCursor:         targetCursor,
+		ClearTempPermissions: clearTempPermissions,
+	})
+}
+
+// ClearSession delegates to session lifecycle service.
+func (b *Bridge) ClearSession(ctx context.Context, sessionID string, reason string) (agenthttpapi.SessionStateResponse, error) {
+	service := b.sessionRunService()
+	if service == nil {
+		return agenthttpapi.SessionStateResponse{}, core.ErrEngineNotConfigured
+	}
+	return service.ClearSession(ctx, agenthttpapi.ClearSessionRequest{
+		SessionID: strings.TrimSpace(sessionID),
+		Reason:    strings.TrimSpace(reason),
+	})
+}
+
+// HandoffSession delegates to session lifecycle service.
+func (b *Bridge) HandoffSession(ctx context.Context, sessionID string, target string, pendingTaskSummary string) (agenthttpapi.HandoffSessionResponse, error) {
+	service := b.sessionRunService()
+	if service == nil {
+		return agenthttpapi.HandoffSessionResponse{}, core.ErrEngineNotConfigured
+	}
+	return service.HandoffSession(ctx, agenthttpapi.HandoffSessionRequest{
+		SessionID:          strings.TrimSpace(sessionID),
+		Target:             strings.TrimSpace(target),
+		PendingTaskSummary: strings.TrimSpace(pendingTaskSummary),
+	})
+}
+
+func (b *Bridge) sessionRunService() *agenthttpapi.Service {
+	if b == nil {
+		return nil
+	}
+	if b.sessionRuns != nil {
+		return b.sessionRuns
+	}
+	b.sessionRuns = b.newSessionRunService()
+	return b.sessionRuns
+}
+
+func (b *Bridge) newSessionRunService() *agenthttpapi.Service {
+	if b == nil {
+		return nil
+	}
+	if b.lifecycle != nil {
+		return agenthttpapi.NewServiceWithLifecycle(b.engine, b.lifecycle)
+	}
+	return agenthttpapi.NewService(b.engine)
+}
+
+func (b *Bridge) runSlashCommand(ctx context.Context, sessionID string, prompt string) (PromptResponse, error) {
+	command, err := parseSlashCommand(prompt)
+	if err != nil {
+		return PromptResponse{}, err
+	}
+	resp, err := b.commandBus.Execute(ctx, sessionID, command)
+	if err != nil {
+		return PromptResponse{}, err
+	}
+	update := Update{
+		Kind: "command_result",
+		Payload: map[string]any{
+			"command":  command.Name,
+			"output":   strings.TrimSpace(resp.Output),
+			"metadata": cloneMapAny(resp.Metadata),
+		},
+	}
 	return PromptResponse{
-		SessionID:     result.SessionID,
-		RunID:         result.RunID,
-		Output:        result.Output,
-		CommandOutput: result.CommandOutput,
-		IsCommand:     result.IsCommand,
-		Updates:       collector.updates,
+		SessionID:     sessionID,
+		CommandOutput: strings.TrimSpace(resp.Output),
+		IsCommand:     true,
+		Updates:       []Update{update},
 	}, nil
 }
 
-// Control forwards run-control actions directly to core.Engine.
-func (b *Bridge) Control(ctx context.Context, req ControlRequest) error {
-	if b == nil || b.engine == nil {
-		return core.ErrEngineNotConfigured
+func parseSlashCommand(raw string) (core.SlashCommand, error) {
+	trimmed := strings.TrimSpace(raw)
+	if !strings.HasPrefix(trimmed, "/") {
+		return core.SlashCommand{}, fmt.Errorf("slash command must start with /")
 	}
-	return b.engine.Control(ctx, strings.TrimSpace(req.RunID), req.Action)
+	parts := strings.Fields(strings.TrimPrefix(trimmed, "/"))
+	if len(parts) == 0 {
+		return core.SlashCommand{}, errors.New("slash command name is required")
+	}
+	cmd := core.SlashCommand{
+		Name:      strings.TrimSpace(parts[0]),
+		Raw:       trimmed,
+		Arguments: nil,
+	}
+	if len(parts) > 1 {
+		cmd.Arguments = append([]string(nil), parts[1:]...)
+	}
+	if err := cmd.Validate(); err != nil {
+		return core.SlashCommand{}, err
+	}
+	return cmd, nil
 }
 
-type updateCollector struct {
-	updates []Update
-}
+func mapEventEnvelopeToUpdate(event core.EventEnvelope) (Update, error) {
+	if err := eventscore.Validate(event); err != nil {
+		return Update{}, err
+	}
+	payload, err := payloadToMap(event.Payload)
+	if err != nil {
+		return Update{}, err
+	}
+	payload["event_type"] = string(event.Type)
+	payload["session_id"] = string(event.SessionID)
+	payload["run_id"] = string(event.RunID)
+	payload["sequence"] = event.Sequence
+	payload["timestamp"] = event.Timestamp.UTC().Format(time.RFC3339)
 
-func (c *updateCollector) WriteEvent(frame cliadapter.EventFrame) error {
 	kind := "run_event"
-	if frame.Type == "command_response" {
-		kind = "command_result"
-	} else if frame.Type == string(eventscore.RunEventTypeRunOutputDelta) {
+	if event.Type == eventscore.RunEventTypeRunOutputDelta {
 		kind = "assistant_message_chunk"
 	}
-	payload := cloneMapAny(frame.Payload)
-	payload["event_type"] = frame.Type
-	payload["session_id"] = frame.SessionID
-	if strings.TrimSpace(frame.RunID) != "" {
-		payload["run_id"] = frame.RunID
+	return Update{Kind: kind, Payload: payload}, nil
+}
+
+func payloadToMap(payload core.EventPayload) (map[string]any, error) {
+	switch typed := payload.(type) {
+	case core.RunQueuedPayload:
+		return map[string]any{"queue_position": typed.QueuePosition}, nil
+	case core.RunStartedPayload:
+		return map[string]any{}, nil
+	case core.OutputDeltaPayload:
+		out := map[string]any{"delta": typed.Delta}
+		if trimmed := strings.TrimSpace(typed.ToolUseID); trimmed != "" {
+			out["tool_use_id"] = trimmed
+		}
+		return out, nil
+	case core.ApprovalNeededPayload:
+		return map[string]any{
+			"tool_name":  strings.TrimSpace(typed.ToolName),
+			"input":      cloneMapAny(typed.Input),
+			"risk_level": strings.TrimSpace(typed.RiskLevel),
+		}, nil
+	case core.RunCompletedPayload:
+		return map[string]any{"usage_tokens": typed.UsageTokens}, nil
+	case core.RunFailedPayload:
+		return map[string]any{
+			"code":     strings.TrimSpace(typed.Code),
+			"message":  strings.TrimSpace(typed.Message),
+			"metadata": cloneMapAny(typed.Metadata),
+		}, nil
+	case core.RunCancelledPayload:
+		return map[string]any{"reason": strings.TrimSpace(typed.Reason)}, nil
+	default:
+		if payload == nil {
+			return nil, errors.New("payload is required")
+		}
+		return nil, fmt.Errorf("unsupported payload type %T", payload)
 	}
-	c.updates = append(c.updates, Update{Kind: kind, Payload: payload})
-	return nil
+}
+
+func isTerminalEvent(eventType core.RunEventType) bool {
+	switch eventType {
+	case eventscore.RunEventTypeRunCompleted, eventscore.RunEventTypeRunFailed, eventscore.RunEventTypeRunCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
+func (b *Bridge) projectEvent(ctx context.Context, event core.EventEnvelope, options cliadapter.ProjectionOptions) error {
+	if b == nil || b.projector == nil {
+		return nil
+	}
+	return b.projector.ProjectRunEvent(ctx, event, options)
 }
 
 func sanitizeDirectories(input []string) []string {

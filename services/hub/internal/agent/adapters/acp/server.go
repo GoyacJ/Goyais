@@ -41,10 +41,11 @@ type SessionLifecycle interface {
 type Server struct {
 	peer   *Peer
 	bridge *Bridge
-	life   SessionLifecycle
 
 	mu       sync.Mutex
 	sessions map[string]*sessionState
+	streams  map[string]*streamState
+	nextSub  int64
 }
 
 type sessionState struct {
@@ -55,17 +56,24 @@ type sessionState struct {
 	ActiveCancel context.CancelFunc
 }
 
+type streamState struct {
+	SubscriptionID string
+	SessionID      string
+	Cancel         context.CancelFunc
+}
+
 // NewServer registers ACP handlers on the given peer.
 func NewServer(peer *Peer, opts ServerOptions) *Server {
 	server := &Server{
 		peer:     peer,
 		bridge:   opts.Bridge,
-		life:     opts.Lifecycle,
 		sessions: map[string]*sessionState{},
+		streams:  map[string]*streamState{},
 	}
 	if server.bridge == nil {
 		server.bridge = NewBridge(nil, nil)
 	}
+	server.bridge.SetLifecycle(opts.Lifecycle)
 	server.registerMethods()
 	return server
 }
@@ -76,15 +84,17 @@ func (s *Server) registerMethods() {
 	}
 	s.peer.RegisterMethod("initialize", s.handleInitialize)
 	s.peer.RegisterMethod("authenticate", s.handleAuthenticate)
-	s.peer.RegisterMethod("session/new", s.handleSessionNew)
-	s.peer.RegisterMethod("session/load", s.handleSessionLoad)
+	s.peer.RegisterMethod("session.start", s.handleSessionStart)
+	s.peer.RegisterMethod("session.get", s.handleSessionGet)
+	s.peer.RegisterMethod("session.list", s.handleSessionList)
 	s.peer.RegisterMethod("session/fork", s.handleSessionFork)
 	s.peer.RegisterMethod("session/rewind", s.handleSessionRewind)
 	s.peer.RegisterMethod("session/clear", s.handleSessionClear)
 	s.peer.RegisterMethod("session/handoff", s.handleSessionHandoff)
-	s.peer.RegisterMethod("session/prompt", s.handleSessionPrompt)
-	s.peer.RegisterMethod("session/set_mode", s.handleSessionSetMode)
-	s.peer.RegisterMethod("session/cancel", s.handleSessionCancel)
+	s.peer.RegisterMethod("run.submit", s.handleRunSubmit)
+	s.peer.RegisterMethod("run.control", s.handleRunControl)
+	s.peer.RegisterMethod("stream.subscribe", s.handleStreamSubscribe)
+	s.peer.RegisterMethod("stream.unsubscribe", s.handleStreamUnsubscribe)
 }
 
 func (s *Server) handleInitialize(params any) (any, error) {
@@ -116,6 +126,63 @@ func (s *Server) handleInitialize(params any) (any, error) {
 func (s *Server) handleAuthenticate(params any) (any, error) {
 	_ = params
 	return map[string]any{}, nil
+}
+
+func (s *Server) handleSessionStart(params any) (any, error) {
+	return s.handleSessionNew(params)
+}
+
+func (s *Server) handleSessionGet(params any) (any, error) {
+	p := asMap(params)
+	sessionID := strings.TrimSpace(asString(p["sessionId"]))
+	if sessionID == "" {
+		return nil, JsonRPCError{Code: -32602, Message: "missing required param: sessionId"}
+	}
+	cwd := strings.TrimSpace(asString(p["cwd"]))
+
+	s.mu.Lock()
+	state, ok := s.sessions[sessionID]
+	s.mu.Unlock()
+	if !ok {
+		if resumed, err := s.resumeSessionState(context.Background(), sessionID, cwd); err == nil {
+			state = resumed
+			s.mu.Lock()
+			s.sessions[sessionID] = state
+			s.mu.Unlock()
+		} else {
+			return nil, JsonRPCError{Code: -32602, Message: fmt.Sprintf("session not found: %s", sessionID)}
+		}
+	}
+	if strings.TrimSpace(state.CWD) == "" {
+		state.CWD = cwd
+	}
+
+	s.sendAvailableCommands(state.SessionID)
+	s.sendCurrentMode(state)
+	return map[string]any{
+		"sessionId": state.SessionID,
+		"cwd":       state.CWD,
+		"modes":     modeState(state.CurrentMode),
+	}, nil
+}
+
+func (s *Server) handleSessionList(params any) (any, error) {
+	_ = params
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	items := make([]any, 0, len(s.sessions))
+	for _, state := range s.sessions {
+		if state == nil {
+			continue
+		}
+		items = append(items, map[string]any{
+			"sessionId": state.SessionID,
+			"cwd":       state.CWD,
+			"modeId":    nonEmptyOrDefault(strings.TrimSpace(state.CurrentMode), "default"),
+		})
+	}
+	return map[string]any{"items": items}, nil
 }
 
 func (s *Server) handleSessionNew(params any) (any, error) {
@@ -152,52 +219,11 @@ func (s *Server) handleSessionNew(params any) (any, error) {
 	}, nil
 }
 
-func (s *Server) handleSessionLoad(params any) (any, error) {
-	p := asMap(params)
-	sessionID := strings.TrimSpace(asString(p["sessionId"]))
-	cwd := strings.TrimSpace(asString(p["cwd"]))
-	if sessionID == "" {
-		return nil, JsonRPCError{Code: -32602, Message: "missing required param: sessionId"}
-	}
-	if cwd == "" {
-		return nil, JsonRPCError{Code: -32602, Message: "missing required param: cwd"}
-	}
-	if !filepath.IsAbs(cwd) {
-		return nil, JsonRPCError{Code: -32602, Message: fmt.Sprintf("cwd must be an absolute path: %s", cwd)}
-	}
-
-	s.mu.Lock()
-	state, ok := s.sessions[sessionID]
-	s.mu.Unlock()
-	if !ok {
-		if resumed, err := s.resumeSessionState(context.Background(), sessionID, cwd); err == nil {
-			state = resumed
-		} else {
-			return nil, JsonRPCError{Code: -32602, Message: fmt.Sprintf("session not found: %s", sessionID)}
-		}
-	}
-	if state != nil {
-		s.mu.Lock()
-		state.CWD = cwd
-		s.sessions[sessionID] = state
-		s.mu.Unlock()
-	}
-
-	s.sendAvailableCommands(state.SessionID)
-	s.sendCurrentMode(state)
-	return map[string]any{
-		"modes": modeState(state.CurrentMode),
-	}, nil
-}
-
 func (s *Server) handleSessionFork(params any) (any, error) {
 	p := asMap(params)
 	sessionID := strings.TrimSpace(asString(p["sessionId"]))
 	if sessionID == "" {
 		return nil, JsonRPCError{Code: -32602, Message: "missing required param: sessionId"}
-	}
-	if s == nil || s.life == nil {
-		return nil, JsonRPCError{Code: -32000, Message: "session lifecycle is not configured"}
 	}
 
 	cwd := strings.TrimSpace(asString(p["cwd"]))
@@ -211,19 +237,15 @@ func (s *Server) handleSessionFork(params any) (any, error) {
 		}
 	}
 
-	forked, err := s.life.Fork(context.Background(), runtimesession.ForkRequest{
-		SessionID:             core.SessionID(sessionID),
-		WorkingDir:            cwd,
-		AdditionalDirectories: additionalDirectories,
-	})
+	forked, err := s.bridge.ForkSession(context.Background(), sessionID, cwd, additionalDirectories)
 	if err != nil {
 		return nil, toRPCError(err)
 	}
 
 	state := &sessionState{
-		SessionID:   strings.TrimSpace(string(forked.SessionID)),
+		SessionID:   strings.TrimSpace(forked.SessionID),
 		CWD:         strings.TrimSpace(forked.WorkingDir),
-		CurrentMode: permissionModeToACPMode(forked.PermissionMode),
+		CurrentMode: permissionModeToACPMode(core.PermissionMode(forked.PermissionMode)),
 	}
 	if state.CWD == "" {
 		state.CWD = cwd
@@ -249,15 +271,9 @@ func (s *Server) handleSessionClear(params any) (any, error) {
 	if sessionID == "" {
 		return nil, JsonRPCError{Code: -32602, Message: "missing required param: sessionId"}
 	}
-	if s == nil || s.life == nil {
-		return nil, JsonRPCError{Code: -32000, Message: "session lifecycle is not configured"}
-	}
 
 	reason := strings.TrimSpace(asString(p["reason"]))
-	cleared, err := s.life.Clear(context.Background(), runtimesession.ClearRequest{
-		SessionID: core.SessionID(sessionID),
-		Reason:    reason,
-	})
+	cleared, err := s.bridge.ClearSession(context.Background(), sessionID, reason)
 	if err != nil {
 		return nil, toRPCError(err)
 	}
@@ -267,7 +283,7 @@ func (s *Server) handleSessionClear(params any) (any, error) {
 	if !exists {
 		state = &sessionState{SessionID: sessionID}
 	}
-	state.CurrentMode = permissionModeToACPMode(cleared.PermissionMode)
+	state.CurrentMode = permissionModeToACPMode(core.PermissionMode(cleared.PermissionMode))
 	if state.CurrentMode == "" {
 		state.CurrentMode = "default"
 	}
@@ -287,9 +303,6 @@ func (s *Server) handleSessionRewind(params any) (any, error) {
 	if sessionID == "" {
 		return nil, JsonRPCError{Code: -32602, Message: "missing required param: sessionId"}
 	}
-	if s == nil || s.life == nil {
-		return nil, JsonRPCError{Code: -32000, Message: "session lifecycle is not configured"}
-	}
 
 	checkpointID := strings.TrimSpace(asString(p["checkpointId"]))
 	if checkpointID == "" {
@@ -305,12 +318,7 @@ func (s *Server) handleSessionRewind(params any) (any, error) {
 	}
 	clearTempPermissions := asBool(p["clearTempPermissions"])
 
-	rewound, rewindErr := s.life.Rewind(context.Background(), runtimesession.RewindRequest{
-		SessionID:     core.SessionID(sessionID),
-		CheckpointID:  core.CheckpointID(checkpointID),
-		TargetCursor:  targetCursor,
-		ClearTempPerm: clearTempPermissions,
-	})
+	rewound, rewindErr := s.bridge.RewindSession(context.Background(), sessionID, checkpointID, targetCursor, clearTempPermissions)
 	if rewindErr != nil {
 		return nil, toRPCError(rewindErr)
 	}
@@ -320,7 +328,7 @@ func (s *Server) handleSessionRewind(params any) (any, error) {
 	if !exists {
 		state = &sessionState{SessionID: sessionID}
 	}
-	state.CurrentMode = permissionModeToACPMode(rewound.PermissionMode)
+	state.CurrentMode = permissionModeToACPMode(core.PermissionMode(rewound.PermissionMode))
 	if state.CurrentMode == "" {
 		state.CurrentMode = "default"
 	}
@@ -338,7 +346,7 @@ func (s *Server) handleSessionRewind(params any) (any, error) {
 		"clearTempPerm":    clearTempPermissions,
 		"temporaryPerms":   []any{},
 		"historyEntries":   rewound.HistoryEntries,
-		"lastCheckpointId": strings.TrimSpace(string(rewound.LastCheckpointID)),
+		"lastCheckpointId": strings.TrimSpace(rewound.LastCheckpointID),
 	}, nil
 }
 
@@ -348,9 +356,6 @@ func (s *Server) handleSessionHandoff(params any) (any, error) {
 	if sessionID == "" {
 		return nil, JsonRPCError{Code: -32602, Message: "missing required param: sessionId"}
 	}
-	if s == nil || s.life == nil {
-		return nil, JsonRPCError{Code: -32000, Message: "session lifecycle is not configured"}
-	}
 
 	target := strings.ToLower(strings.TrimSpace(asString(p["target"])))
 	if target == "" {
@@ -358,53 +363,131 @@ func (s *Server) handleSessionHandoff(params any) (any, error) {
 	}
 	pendingTaskSummary := strings.TrimSpace(asString(p["pendingTaskSummary"]))
 
-	snapshot, handoffErr := s.life.Handoff(context.Background(), runtimesession.HandoffRequest{
-		SessionID:          core.SessionID(sessionID),
-		Target:             runtimesession.HandoffTarget(target),
-		PendingTaskSummary: pendingTaskSummary,
-	})
+	snapshot, handoffErr := s.bridge.HandoffSession(context.Background(), sessionID, target, pendingTaskSummary)
 	if handoffErr != nil {
 		return nil, toRPCError(handoffErr)
 	}
 
 	return map[string]any{
-		"sessionId":             strings.TrimSpace(string(snapshot.SessionID)),
-		"target":                strings.TrimSpace(string(snapshot.Target)),
+		"sessionId":             strings.TrimSpace(snapshot.SessionID),
+		"target":                strings.TrimSpace(snapshot.Target),
 		"workingDir":            strings.TrimSpace(snapshot.WorkingDir),
 		"additionalDirectories": asAnyStringSlice(snapshot.AdditionalDirectories),
-		"permissionMode":        string(snapshot.PermissionMode),
+		"permissionMode":        strings.TrimSpace(snapshot.PermissionMode),
 		"historyEntries":        snapshot.HistoryEntries,
 		"summary":               strings.TrimSpace(snapshot.Summary),
 		"pendingTaskSummary":    strings.TrimSpace(snapshot.PendingTaskSummary),
-		"lastCheckpointId":      strings.TrimSpace(string(snapshot.LastCheckpointID)),
+		"lastCheckpointId":      strings.TrimSpace(snapshot.LastCheckpointID),
 		"nextCursor":            snapshot.NextCursor,
-		"issuedAt":              formatRFC3339(snapshot.IssuedAt),
+		"issuedAt":              strings.TrimSpace(snapshot.IssuedAt),
 	}, nil
 }
 
-func (s *Server) resumeSessionState(ctx context.Context, sessionID string, cwd string) (*sessionState, error) {
-	if s == nil || s.life == nil {
-		return nil, errors.New("session lifecycle is not configured")
+func (s *Server) handleRunSubmit(params any) (any, error) {
+	return s.handleSessionPrompt(params)
+}
+
+func (s *Server) handleRunControl(params any) (any, error) {
+	p := asMap(params)
+	runID := strings.TrimSpace(asString(p["runId"]))
+	if runID == "" {
+		return nil, JsonRPCError{Code: -32602, Message: "missing required param: runId"}
 	}
-	resumed, err := s.life.Resume(ctx, runtimesession.ResumeRequest{
-		SessionID: core.SessionID(strings.TrimSpace(sessionID)),
-	})
+	actionRaw := strings.ToLower(strings.TrimSpace(asString(p["action"])))
+	if actionRaw == "" {
+		return nil, JsonRPCError{Code: -32602, Message: "missing required param: action"}
+	}
+
+	var action core.ControlAction
+	switch actionRaw {
+	case string(core.ControlActionStop):
+		action = core.ControlActionStop
+	case string(core.ControlActionApprove):
+		action = core.ControlActionApprove
+	case string(core.ControlActionDeny):
+		action = core.ControlActionDeny
+	case string(core.ControlActionResume):
+		action = core.ControlActionResume
+	case string(core.ControlActionAnswer):
+		action = core.ControlActionAnswer
+	default:
+		return nil, JsonRPCError{Code: -32602, Message: fmt.Sprintf("unsupported action: %s", actionRaw)}
+	}
+
+	if err := s.bridge.Control(context.Background(), ControlRequest{
+		RunID:  runID,
+		Action: action,
+	}); err != nil {
+		return nil, toRPCError(err)
+	}
+	return map[string]any{}, nil
+}
+
+func (s *Server) handleStreamSubscribe(params any) (any, error) {
+	p := asMap(params)
+	sessionID := strings.TrimSpace(asString(p["sessionId"]))
+	if sessionID == "" {
+		return nil, JsonRPCError{Code: -32602, Message: "missing required param: sessionId"}
+	}
+	s.mu.Lock()
+	if _, exists := s.sessions[sessionID]; !exists {
+		s.mu.Unlock()
+		return nil, JsonRPCError{Code: -32602, Message: fmt.Sprintf("session not found: %s", sessionID)}
+	}
+	s.nextSub++
+	subID := fmt.Sprintf("sub_%06d", s.nextSub)
+	s.streams[subID] = &streamState{
+		SubscriptionID: subID,
+		SessionID:      sessionID,
+	}
+	s.mu.Unlock()
+
+	return map[string]any{
+		"subscriptionId": subID,
+	}, nil
+}
+
+func (s *Server) handleStreamUnsubscribe(params any) (any, error) {
+	p := asMap(params)
+	subscriptionID := strings.TrimSpace(asString(p["subscriptionId"]))
+	if subscriptionID == "" {
+		return nil, JsonRPCError{Code: -32602, Message: "missing required param: subscriptionId"}
+	}
+	s.mu.Lock()
+	stream, exists := s.streams[subscriptionID]
+	if exists {
+		delete(s.streams, subscriptionID)
+	}
+	s.mu.Unlock()
+
+	if exists && stream.Cancel != nil {
+		stream.Cancel()
+	}
+	return map[string]any{}, nil
+}
+
+func (s *Server) resumeSessionState(ctx context.Context, sessionID string, cwd string) (*sessionState, error) {
+	resumed, err := s.bridge.ResumeSession(ctx, strings.TrimSpace(sessionID))
 	if err != nil {
 		return nil, err
 	}
 
-	currentMode := permissionModeToACPMode(resumed.PermissionMode)
+	currentMode := permissionModeToACPMode(core.PermissionMode(resumed.PermissionMode))
 	if currentMode == "" {
 		currentMode = "default"
 	}
 
-	session := strings.TrimSpace(string(resumed.SessionID))
+	session := strings.TrimSpace(resumed.SessionID)
 	if session == "" {
 		session = strings.TrimSpace(sessionID)
 	}
+	workingDir := strings.TrimSpace(resumed.WorkingDir)
+	if workingDir == "" {
+		workingDir = strings.TrimSpace(cwd)
+	}
 	return &sessionState{
 		SessionID:   session,
-		CWD:         strings.TrimSpace(cwd),
+		CWD:         workingDir,
 		CurrentMode: currentMode,
 	}, nil
 }
@@ -416,7 +499,10 @@ func (s *Server) handleSessionPrompt(params any) (any, error) {
 		return nil, JsonRPCError{Code: -32602, Message: "missing required param: sessionId"}
 	}
 
-	promptText := blocksToText(p["prompt"])
+	promptText := strings.TrimSpace(asString(p["input"]))
+	if promptText == "" {
+		promptText = blocksToText(p["prompt"])
+	}
 	if promptText == "" {
 		promptText = blocksToText(p["content"])
 	}
@@ -444,6 +530,7 @@ func (s *Server) handleSessionPrompt(params any) (any, error) {
 	response, err := s.bridge.Prompt(promptCtx, PromptRequest{
 		SessionID: sessionID,
 		Prompt:    promptText,
+		Metadata:  mapFromStringAny(p["metadata"]),
 	})
 
 	s.mu.Lock()
@@ -471,77 +558,15 @@ func (s *Server) handleSessionPrompt(params any) (any, error) {
 	}
 
 	return map[string]any{
+		"runId":      strings.TrimSpace(response.RunID),
+		"isCommand":  response.IsCommand,
 		"stopReason": "end_turn",
 	}, nil
 }
 
-func (s *Server) handleSessionSetMode(params any) (any, error) {
-	p := asMap(params)
-	sessionID := strings.TrimSpace(asString(p["sessionId"]))
-	modeID := strings.TrimSpace(asString(p["modeId"]))
-	if sessionID == "" {
-		return nil, JsonRPCError{Code: -32602, Message: "missing required param: sessionId"}
-	}
-	if modeID == "" {
-		return nil, JsonRPCError{Code: -32602, Message: "missing required param: modeId"}
-	}
-
-	allowed := map[string]struct{}{
-		"default":           {},
-		"acceptEdits":       {},
-		"plan":              {},
-		"dontAsk":           {},
-		"bypassPermissions": {},
-	}
-	if _, ok := allowed[modeID]; !ok {
-		return nil, JsonRPCError{Code: -32602, Message: fmt.Sprintf("unknown modeId: %s", modeID)}
-	}
-
-	s.mu.Lock()
-	state, ok := s.sessions[sessionID]
-	if !ok {
-		s.mu.Unlock()
-		return nil, JsonRPCError{Code: -32602, Message: fmt.Sprintf("session not found: %s", sessionID)}
-	}
-	state.CurrentMode = modeID
-	s.mu.Unlock()
-
-	s.sendCurrentMode(state)
-	return map[string]any{}, nil
-}
-
-func (s *Server) handleSessionCancel(params any) (any, error) {
-	p := asMap(params)
-	sessionID := strings.TrimSpace(asString(p["sessionId"]))
-	if sessionID == "" {
-		return map[string]any{}, nil
-	}
-
-	s.mu.Lock()
-	state, ok := s.sessions[sessionID]
-	if !ok {
-		s.mu.Unlock()
-		return map[string]any{}, nil
-	}
-	cancel := state.ActiveCancel
-	runID := state.ActiveRunID
-	state.ActiveCancel = nil
-	state.ActiveRunID = ""
-	s.mu.Unlock()
-
-	if cancel != nil {
-		cancel()
-	}
-	if strings.TrimSpace(runID) != "" {
-		_ = s.bridge.Control(context.Background(), ControlRequest{
-			RunID:  runID,
-			Action: core.ControlActionStop,
-		})
-	}
-	return map[string]any{}, nil
-}
-
 func (s *Server) emitPromptUpdate(sessionID string, update Update) {
+	s.broadcastStreamUpdate(sessionID, update)
+
 	switch strings.TrimSpace(update.Kind) {
 	case "assistant_message_chunk":
 		s.sendAgentMessageChunk(sessionID, firstText(update.Payload, "delta", "output", "message"))
@@ -563,6 +588,57 @@ func (s *Server) sendSessionUpdate(sessionID string, update map[string]any) {
 		"sessionId": sessionID,
 		"update":    update,
 	})
+}
+
+func (s *Server) broadcastStreamUpdate(sessionID string, update Update) {
+	if s == nil || s.peer == nil {
+		return
+	}
+	session := strings.TrimSpace(sessionID)
+	if session == "" {
+		return
+	}
+	kind := strings.TrimSpace(update.Kind)
+	if kind == "" {
+		return
+	}
+
+	s.mu.Lock()
+	subscriptionIDs := make([]string, 0, len(s.streams))
+	for _, item := range s.streams {
+		if item == nil || strings.TrimSpace(item.SessionID) != session {
+			continue
+		}
+		subscriptionIDs = append(subscriptionIDs, strings.TrimSpace(item.SubscriptionID))
+	}
+	s.mu.Unlock()
+	if len(subscriptionIDs) == 0 {
+		return
+	}
+
+	method := "run_event"
+	switch kind {
+	case "command_result":
+		method = "command_result"
+	case "run_event", "assistant_message_chunk":
+		method = "run_event"
+	}
+
+	eventType := strings.TrimSpace(asString(update.Payload["event_type"]))
+	for _, subscriptionID := range subscriptionIDs {
+		params := map[string]any{
+			"subscriptionId": subscriptionID,
+			"sessionId":      session,
+			"event": map[string]any{
+				"type":    kind,
+				"payload": cloneMapAny(update.Payload),
+			},
+		}
+		_ = s.peer.SendNotification(method, params)
+		if eventType == string(core.RunEventTypeRunApprovalNeeded) {
+			_ = s.peer.SendNotification("approval_needed", params)
+		}
+	}
 }
 
 func (s *Server) sendAvailableCommands(sessionID string) {
@@ -731,6 +807,34 @@ func asBool(raw any) bool {
 	default:
 		return false
 	}
+}
+
+func mapFromStringAny(raw any) map[string]string {
+	input, ok := raw.(map[string]any)
+	if !ok || len(input) == 0 {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(input))
+	for key, value := range input {
+		normalizedKey := strings.TrimSpace(key)
+		if normalizedKey == "" {
+			continue
+		}
+		normalizedValue := strings.TrimSpace(asString(value))
+		if normalizedValue == "" {
+			continue
+		}
+		out[normalizedKey] = normalizedValue
+	}
+	return out
+}
+
+func nonEmptyOrDefault(value string, fallback string) string {
+	normalized := strings.TrimSpace(value)
+	if normalized != "" {
+		return normalized
+	}
+	return strings.TrimSpace(fallback)
 }
 
 func asInt64Param(raw any, name string) (int64, error) {

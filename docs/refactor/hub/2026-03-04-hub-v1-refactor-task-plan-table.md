@@ -28,7 +28,7 @@
 | R3 | 已完成 | 已完成 runtime 运行链路 repository-first 收口，`AppState` map 降级为 fallback/cache |
 | R4 | 已完成 | 已完成 runtime 路由切换、SSE run-only 词汇收敛、OpenAPI 与 contracts 同步、旧路径下线 |
 | R5 | 已完成 | 已完成三类 routes 的 service registry 组装、域服务分层与非 runtime 验收 |
-| R6 | 待开始 | ACP v1 协议重写 |
+| R6 | 已完成 | ACP 方法集切换至 v1，旧方法下线，并补齐 stream 订阅语义 |
 | R7 | 待开始 | CLI v1 命令面重写 |
 | R8 | 待开始 | Desktop + Shared 类型同步切换 |
 | R9 | 待开始 | Legacy 清理、文档收口、全量验收 |
@@ -276,11 +276,11 @@
 
 ### 任务清单
 
-- [ ] R6-T1 定义 ACP v1 方法集与参数/响应模型
-- [ ] R6-T2 重写 `adapters/acp/server.go` 方法注册
-- [ ] R6-T3 重写 `adapters/acp/bridge.go`，直接对接 Session/Run service
-- [ ] R6-T4 增加 `stream.subscribe/unsubscribe` 支持
-- [ ] R6-T5 删除旧方法处理逻辑与测试桩
+- [x] R6-T1 定义 ACP v1 方法集与参数/响应模型
+- [x] R6-T2 重写 `adapters/acp/server.go` 方法注册
+- [x] R6-T3 重写 `adapters/acp/bridge.go`，直接对接 Session/Run service
+- [x] R6-T4 增加 `stream.subscribe/unsubscribe` 支持
+- [x] R6-T5 删除旧方法处理逻辑与测试桩
 
 ### 关键文件面
 
@@ -293,6 +293,16 @@
 
 1. `cd services/hub && go test ./internal/agent/adapters/acp/...`
 2. `cd services/hub && go test ./cmd/goyais-acp/...`
+
+### 当前阶段证据（2026-03-04）
+
+1. 重写：`services/hub/internal/agent/adapters/acp/server.go` 注册方法切换为 `session.start/get/list`、`run.submit/control`、`stream.subscribe/unsubscribe`
+2. 下线：`session/new`、`session/load`、`session/prompt`、`session/set_mode`、`session/cancel` 不再注册
+3. 重写：`services/hub/internal/agent/adapters/acp/bridge.go` 由 CLI Runner 桥接改为直接依赖 Session/Run service（`agent/adapters/httpapi.Service`）
+4. 新增：stream 订阅通知语义，支持 `run_event` / `approval_needed` / `command_result` 三类 ACP 事件下发
+5. 更新：`services/hub/internal/agent/adapters/acp/server_test.go` 覆盖 v1 `session.get/list`、`stream.subscribe/unsubscribe` 与 legacy 方法移除校验
+6. 已验证：`cd services/hub && go test ./internal/agent/adapters/acp/...`
+7. 已验证：`cd services/hub && go test ./cmd/goyais-acp/...`
 
 ---
 

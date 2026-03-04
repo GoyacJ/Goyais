@@ -220,7 +220,7 @@ func TestServerPromptLifecycle(t *testing.T) {
 	newResp, newMsgs := harness.call(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      2,
-		"method":  "session/new",
+		"method":  "session.start",
 		"params": map[string]any{
 			"cwd": workspace,
 		},
@@ -242,7 +242,7 @@ func TestServerPromptLifecycle(t *testing.T) {
 	promptResp, promptMsgs := harness.call(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      3,
-		"method":  "session/prompt",
+		"method":  "run.submit",
 		"params": map[string]any{
 			"sessionId": sessionID,
 			"prompt": []any{
@@ -270,15 +270,141 @@ func TestServerPromptLifecycle(t *testing.T) {
 	}
 }
 
-func TestServerCancelDuringPrompt(t *testing.T) {
+func TestServerSessionGetAndListV1(t *testing.T) {
 	workspace := t.TempDir()
-	engine := &blockingEngineStub{promptStarted: make(chan struct{})}
+	engine := &acpEngineStub{submitRunID: "run_list_1"}
+	harness := newServerHarness(t, engine, nil)
+
+	startResp, _ := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "session.start",
+		"params":  map[string]any{"cwd": workspace},
+	})
+	if startResp["error"] != nil {
+		t.Fatalf("session.start error: %#v", startResp["error"])
+	}
+	sessionID := strings.TrimSpace(asString(asMap(startResp["result"])["sessionId"]))
+	if sessionID == "" {
+		t.Fatalf("missing session id from session.start")
+	}
+
+	getResp, _ := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "session.get",
+		"params": map[string]any{
+			"sessionId": sessionID,
+		},
+	})
+	if getResp["error"] != nil {
+		t.Fatalf("session.get error: %#v", getResp["error"])
+	}
+	getResult := asMap(getResp["result"])
+	if strings.TrimSpace(asString(getResult["sessionId"])) != sessionID {
+		t.Fatalf("unexpected session.get result %#v", getResult)
+	}
+
+	listResp, _ := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      3,
+		"method":  "session.list",
+	})
+	if listResp["error"] != nil {
+		t.Fatalf("session.list error: %#v", listResp["error"])
+	}
+	items, ok := asMap(listResp["result"])["items"].([]any)
+	if !ok || len(items) == 0 {
+		t.Fatalf("expected non-empty session.list items, got %#v", listResp["result"])
+	}
+}
+
+func TestServerStreamSubscribeAndUnsubscribe(t *testing.T) {
+	workspace := t.TempDir()
+	engine := &acpEngineStub{submitRunID: "run_stream_1"}
+	harness := newServerHarness(t, engine, nil)
+
+	startResp, _ := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "session.start",
+		"params":  map[string]any{"cwd": workspace},
+	})
+	sessionID := strings.TrimSpace(asString(asMap(startResp["result"])["sessionId"]))
+	if sessionID == "" {
+		t.Fatalf("missing session id from session.start")
+	}
+
+	subResp, _ := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "stream.subscribe",
+		"params": map[string]any{
+			"sessionId": sessionID,
+		},
+	})
+	if subResp["error"] != nil {
+		t.Fatalf("stream.subscribe error: %#v", subResp["error"])
+	}
+	subscriptionID := strings.TrimSpace(asString(asMap(subResp["result"])["subscriptionId"]))
+	if subscriptionID == "" {
+		t.Fatalf("missing subscription id from stream.subscribe")
+	}
+
+	submitResp, submitMessages := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      3,
+		"method":  "run.submit",
+		"params": map[string]any{
+			"sessionId": sessionID,
+			"input":     "stream me",
+		},
+	})
+	if submitResp["error"] != nil {
+		t.Fatalf("run.submit error: %#v", submitResp["error"])
+	}
+	if !containsMethod(submitMessages, "run_event") {
+		t.Fatalf("expected run_event notification after stream subscribe")
+	}
+
+	unsubResp, _ := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      4,
+		"method":  "stream.unsubscribe",
+		"params": map[string]any{
+			"subscriptionId": subscriptionID,
+		},
+	})
+	if unsubResp["error"] != nil {
+		t.Fatalf("stream.unsubscribe error: %#v", unsubResp["error"])
+	}
+}
+
+func TestServerLegacyACPMethodsAreRemoved(t *testing.T) {
+	engine := &acpEngineStub{}
+	harness := newServerHarness(t, engine, nil)
+
+	resp, _ := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "session/new",
+		"params":  map[string]any{"cwd": t.TempDir()},
+	})
+	errObj := asMap(resp["error"])
+	if asInt(errObj["code"], 0) != -32601 {
+		t.Fatalf("expected method not found for session/new, got %#v", resp["error"])
+	}
+}
+
+func TestServerRunControlDelegatesToBridge(t *testing.T) {
+	workspace := t.TempDir()
+	engine := &acpEngineStub{}
 	harness := newServerHarness(t, engine, nil)
 
 	newResp, _ := harness.call(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      1,
-		"method":  "session/new",
+		"method":  "session.start",
 		"params":  map[string]any{"cwd": workspace},
 	})
 	sessionID := strings.TrimSpace(asString(asMap(newResp["result"])["sessionId"]))
@@ -286,75 +412,41 @@ func TestServerCancelDuringPrompt(t *testing.T) {
 		t.Fatalf("missing session id")
 	}
 
-	done := make(chan struct{})
-	go func() {
-		_, _ = harness.call(map[string]any{
-			"jsonrpc": "2.0",
-			"id":      2,
-			"method":  "session/prompt",
-			"params": map[string]any{
-				"sessionId": sessionID,
-				"prompt":    "long prompt",
-			},
-		})
-		close(done)
-	}()
-
-	select {
-	case <-engine.promptStarted:
-	case <-time.After(2 * time.Second):
-		t.Fatal("prompt did not start")
+	submitResp, _ := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "run.submit",
+		"params": map[string]any{
+			"sessionId": sessionID,
+			"input":     "need control",
+		},
+	})
+	if submitResp["error"] != nil {
+		t.Fatalf("run.submit error: %#v", submitResp["error"])
+	}
+	runID := strings.TrimSpace(asString(asMap(submitResp["result"])["runId"]))
+	if runID == "" {
+		t.Fatalf("missing run id from run.submit response")
 	}
 
-	cancelResp, _ := harness.call(map[string]any{
+	controlResp, _ := harness.call(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      3,
-		"method":  "session/cancel",
-		"params":  map[string]any{"sessionId": sessionID},
+		"method":  "run.control",
+		"params": map[string]any{
+			"runId":  runID,
+			"action": "stop",
+		},
 	})
-	if cancelResp["error"] != nil {
-		t.Fatalf("cancel error: %#v", cancelResp["error"])
+	if controlResp["error"] != nil {
+		t.Fatalf("run.control error: %#v", controlResp["error"])
 	}
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("prompt did not stop after cancel")
+	if engine.controlRunID != runID {
+		t.Fatalf("expected control run id %s, got %s", runID, engine.controlRunID)
 	}
-}
-
-type blockingEngineStub struct {
-	promptStarted chan struct{}
-	once          sync.Once
-}
-
-func (s *blockingEngineStub) StartSession(_ context.Context, _ core.StartSessionRequest) (core.SessionHandle, error) {
-	return core.SessionHandle{
-		SessionID: core.SessionID("sess_block"),
-		CreatedAt: time.Now().UTC(),
-	}, nil
-}
-
-func (s *blockingEngineStub) Submit(_ context.Context, _ string, _ core.UserInput) (string, error) {
-	return "run_block", nil
-}
-
-func (s *blockingEngineStub) Control(_ context.Context, _ string, _ core.ControlAction) error {
-	return nil
-}
-
-func (s *blockingEngineStub) Subscribe(ctx context.Context, _ string, _ string) (core.EventSubscription, error) {
-	if s.promptStarted == nil {
-		s.promptStarted = make(chan struct{})
+	if engine.controlAction != core.ControlActionStop {
+		t.Fatalf("expected stop action, got %s", engine.controlAction)
 	}
-	s.once.Do(func() {
-		close(s.promptStarted)
-	})
-	ch := make(chan core.EventEnvelope)
-	go func() {
-		<-ctx.Done()
-		close(ch)
-	}()
-	return &testSubscription{events: ch}, nil
 }
 
 func containsUpdate(messages []map[string]any, kind string) bool {
@@ -386,6 +478,15 @@ func containsUpdateText(messages []map[string]any, text string) bool {
 	return false
 }
 
+func containsMethod(messages []map[string]any, method string) bool {
+	for _, message := range messages {
+		if strings.TrimSpace(asString(message["method"])) == strings.TrimSpace(method) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestServerSessionNewRejectsRelativePath(t *testing.T) {
 	engine := &acpEngineStub{}
 	harness := newServerHarness(t, engine, nil)
@@ -393,7 +494,7 @@ func TestServerSessionNewRejectsRelativePath(t *testing.T) {
 	resp, _ := harness.call(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      1,
-		"method":  "session/new",
+		"method":  "session.start",
 		"params":  map[string]any{"cwd": filepath.Join(".", "relative")},
 	})
 	if resp["error"] == nil {
@@ -415,7 +516,7 @@ func TestServerSessionLoadUsesLifecycleResumeWhenNotInMemory(t *testing.T) {
 	resp, msgs := harness.call(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      1,
-		"method":  "session/load",
+		"method":  "session.get",
 		"params": map[string]any{
 			"sessionId": "sess_loaded",
 			"cwd":       workspace,
@@ -500,7 +601,7 @@ func TestServerSessionClearUsesLifecycle(t *testing.T) {
 	newResp, _ := harness.call(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      1,
-		"method":  "session/new",
+		"method":  "session.start",
 		"params":  map[string]any{"cwd": workspace},
 	})
 	sessionID := strings.TrimSpace(asString(asMap(newResp["result"])["sessionId"]))
@@ -545,7 +646,7 @@ func TestServerSessionRewindUsesLifecycle(t *testing.T) {
 	newResp, _ := harness.call(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      1,
-		"method":  "session/new",
+		"method":  "session.start",
 		"params":  map[string]any{"cwd": workspace},
 	})
 	sessionID := strings.TrimSpace(asString(asMap(newResp["result"])["sessionId"]))
