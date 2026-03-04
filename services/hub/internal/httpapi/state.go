@@ -50,7 +50,6 @@ type AppState struct {
 	adminRoles map[Role]AdminRole
 	adminAudit []AdminAuditEvent
 
-	orchestrator     *ExecutionOrchestrator
 	executionRuntime *executionRuntimeRouter
 	v4Service        v4ExecutionService
 }
@@ -117,13 +116,14 @@ func NewAppState(store *authzStore) *AppState {
 	if runtimeMode == executionRuntimeModeLegacy {
 		allowLegacyFallback = true
 	}
+	var legacyOrchestrator *ExecutionOrchestrator
 	if runtimeMode == executionRuntimeModeLegacy || allowLegacyFallback {
-		state.orchestrator = NewExecutionOrchestrator(state)
+		legacyOrchestrator = NewExecutionOrchestrator(state)
 	}
 	state.v4Service = agenthttpapi.NewService(loop.NewEngine(nil))
 	var legacyBackend legacyExecutionBackend
-	if state.orchestrator != nil {
-		legacyBackend = state.orchestrator
+	if legacyOrchestrator != nil {
+		legacyBackend = legacyOrchestrator
 	}
 	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
 		Mode:                string(runtimeMode),
