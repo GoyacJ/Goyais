@@ -30,6 +30,8 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 	s.hookExecutionRecords = map[string][]HookExecutionRecord{}
 	s.conversationChangeLedgers = map[string]*ConversationChangeLedger{}
 	s.conversationEventSeq = map[string]int{}
+	s.executionRuntimeRunIDs = map[string]string{}
+	s.conversationRuntimeSessionIDs = map[string]string{}
 
 	for _, conversation := range snapshot.Conversations {
 		s.conversations[conversation.ID] = conversation
