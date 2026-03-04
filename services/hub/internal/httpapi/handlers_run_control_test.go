@@ -27,7 +27,7 @@ func TestRunControlEndpoint_DenyQueuedRun(t *testing.T) {
 	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
 	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
 
-	conversationRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+	conversationRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/sessions", map[string]any{
 		"workspace_id": workspaceID,
 		"name":         "RunControlConv",
 	}, authHeaders)
@@ -38,7 +38,7 @@ func TestRunControlEndpoint_DenyQueuedRun(t *testing.T) {
 	mustDecodeJSON(t, conversationRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	first := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	first := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input":       "first",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
@@ -46,7 +46,7 @@ func TestRunControlEndpoint_DenyQueuedRun(t *testing.T) {
 		t.Fatalf("expected first message 201, got %d (%s)", first.Code, first.Body.String())
 	}
 
-	second := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	second := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input":       "second",
 		"model_config_id": modelConfigID,
 	}, authHeaders)
@@ -64,7 +64,7 @@ func TestRunControlEndpoint_DenyQueuedRun(t *testing.T) {
 		t.Fatalf("expected run control deny 200/409, got %d (%s)", controlRes.Code, controlRes.Body.String())
 	}
 
-	executionsRes := performJSONRequest(t, router, http.MethodGet, "/v1/executions?conversation_id="+conversationID, nil, authHeaders)
+	executionsRes := performJSONRequest(t, router, http.MethodGet, "/v1/runs?session_id="+conversationID, nil, authHeaders)
 	if executionsRes.Code != http.StatusOK {
 		t.Fatalf("expected list executions 200, got %d (%s)", executionsRes.Code, executionsRes.Body.String())
 	}
@@ -101,7 +101,7 @@ func TestRunControlEndpoint_StopTransitionsRun(t *testing.T) {
 	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
 	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
 
-	conversationRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+	conversationRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/sessions", map[string]any{
 		"workspace_id": workspaceID,
 		"name":         "RunControlStopPollConv",
 	}, authHeaders)
@@ -112,7 +112,7 @@ func TestRunControlEndpoint_StopTransitionsRun(t *testing.T) {
 	mustDecodeJSON(t, conversationRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input":       "stop this run",
 		"model_config_id": modelConfigID,
 	}, authHeaders)

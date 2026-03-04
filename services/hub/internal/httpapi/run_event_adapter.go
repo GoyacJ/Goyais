@@ -30,8 +30,17 @@ func mapExecutionEventToRunEvent(event ExecutionEvent) mappedRunEvent {
 	for key, value := range event.Payload {
 		payload[key] = value
 	}
-	if _, exists := payload["event_type"]; !exists {
-		payload["event_type"] = string(event.Type)
+	mappedType := mapExecutionEventToRunEventType(event)
+	rawEventType := strings.TrimSpace(asStringValue(payload["event_type"]))
+	if rawEventType == "" {
+		rawEventType = string(event.Type)
+	}
+	normalizedEventType := normalizeRunEventVocabulary(rawEventType, mappedType)
+	payload["event_type"] = normalizedEventType
+	if rawEventType != "" && rawEventType != normalizedEventType {
+		if _, exists := payload["legacy_event_type"]; !exists {
+			payload["legacy_event_type"] = rawEventType
+		}
 	}
 	if _, exists := payload["queue_index"]; !exists {
 		payload["queue_index"] = event.QueueIndex
@@ -48,12 +57,41 @@ func mapExecutionEventToRunEvent(event ExecutionEvent) mappedRunEvent {
 	}
 
 	return mappedRunEvent{
-		Type:      mapExecutionEventToRunEventType(event),
+		Type:      mappedType,
 		SessionID: resolveSessionIDFromExecutionEvent(event),
 		RunID:     resolveRunIDFromExecutionEvent(event),
 		Sequence:  sequence,
 		Timestamp: parseExecutionEventTimestamp(event.Timestamp),
 		Payload:   payload,
+	}
+}
+
+func normalizeRunEventVocabulary(raw string, fallback runtimecore.RunEventType) string {
+	normalized := strings.TrimSpace(raw)
+	if normalized == "" {
+		return string(fallback)
+	}
+	switch normalized {
+	case string(runtimecore.RunEventTypeRunQueued),
+		string(runtimecore.RunEventTypeRunStarted),
+		string(runtimecore.RunEventTypeRunOutputDelta),
+		string(runtimecore.RunEventTypeRunApprovalNeeded),
+		string(runtimecore.RunEventTypeRunCompleted),
+		string(runtimecore.RunEventTypeRunFailed),
+		string(runtimecore.RunEventTypeRunCancelled):
+		return normalized
+	case string(RunEventTypeMessageReceived):
+		return string(runtimecore.RunEventTypeRunQueued)
+	case string(RunEventTypeExecutionStarted):
+		return string(runtimecore.RunEventTypeRunStarted)
+	case string(RunEventTypeExecutionDone):
+		return string(runtimecore.RunEventTypeRunCompleted)
+	case string(RunEventTypeExecutionError):
+		return string(runtimecore.RunEventTypeRunFailed)
+	case string(RunEventTypeExecutionStopped):
+		return string(runtimecore.RunEventTypeRunCancelled)
+	default:
+		return string(fallback)
 	}
 }
 

@@ -35,7 +35,7 @@ func ConversationInputCatalogHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
+		conversationID := runtimeSessionIDFromPath(r)
 		conversation, project, projectConfig, _, ok := loadConversationInputContext(state, w, r, conversationID, "conversation.read")
 		if !ok {
 			return
@@ -59,7 +59,7 @@ func ConversationInputSuggestHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
+		conversationID := runtimeSessionIDFromPath(r)
 		conversation, project, projectConfig, _, ok := loadConversationInputContext(state, w, r, conversationID, "conversation.read")
 		if !ok {
 			return
@@ -136,7 +136,7 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
+		conversationID := runtimeSessionIDFromPath(r)
 		conversationSeed, project, projectConfig, session, ok := loadConversationInputContext(state, w, r, conversationID, "conversation.write")
 		if !ok {
 			return

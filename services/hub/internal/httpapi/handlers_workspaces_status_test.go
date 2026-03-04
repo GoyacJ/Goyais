@@ -105,7 +105,7 @@ func TestWorkspaceStatusHandlerUsesRepositoryWhenExecutionMapMissing(t *testing.
 	state.conversationExecutionOrder = map[string][]string{}
 	state.mu.Unlock()
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/workspaces/"+localWorkspaceID+"/status?conversation_id="+conversationID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/workspaces/"+localWorkspaceID+"/status?session_id="+conversationID, nil)
 	req.SetPathValue("workspace_id", localWorkspaceID)
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)

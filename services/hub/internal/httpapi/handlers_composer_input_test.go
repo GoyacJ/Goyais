@@ -32,7 +32,7 @@ func TestConversationInputSubmit_AppliesExplicitRuleSelectionPerMessage(t *testi
 	})
 
 	router := composerInputTestMux(state)
-	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "@rule:" + overrideRuleID + " please apply override",
 		"selected_resources": []map[string]any{
 			{
@@ -74,7 +74,7 @@ func TestConversationInputSubmit_RejectsUnknownRuleSelection(t *testing.T) {
 	state, conversationID := seedConversationMessageValidationState(t)
 	router := composerInputTestMux(state)
 
-	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "@rule:rc_rule_blocked check this",
 		"selected_resources": []map[string]any{
 			{
@@ -99,7 +99,7 @@ func TestConversationInputSubmit_HelpReturnsCommandResultWithoutExecution(t *tes
 	state, conversationID := seedConversationMessageValidationState(t)
 	router := composerInputTestMux(state)
 
-	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "/help",
 	}, nil)
 	if res.Code != http.StatusOK {
@@ -141,7 +141,7 @@ func TestConversationInputSubmit_DynamicPromptCommandEnqueuesExecution(t *testin
 	state.projects[conversation.ProjectID] = project
 
 	router := composerInputTestMux(state)
-	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "/project-plan telemetry pipeline",
 	}, nil)
 	if res.Code != http.StatusCreated {
@@ -166,7 +166,7 @@ func TestConversationInputSubmit_EmitsStructuredTaskEvents(t *testing.T) {
 	state, conversationID := seedConversationMessageValidationState(t)
 	router := composerInputTestMux(state)
 
-	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "run structured task event check",
 	}, nil)
 	if res.Code != http.StatusCreated {
@@ -234,7 +234,7 @@ func TestConversationInputSubmit_EmitsUserPromptSubmitHookRecord(t *testing.T) {
 	state.mu.Unlock()
 
 	router := composerInputTestMux(state)
-	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "run submit hook event check",
 	}, nil)
 	if res.Code != http.StatusCreated {
@@ -290,7 +290,7 @@ func TestConversationInputSubmit_RejectsUnknownCommand(t *testing.T) {
 	state, conversationID := seedConversationMessageValidationState(t)
 	router := composerInputTestMux(state)
 
-	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "/not-real-command",
 	}, nil)
 	if res.Code != http.StatusBadRequest {
@@ -309,7 +309,7 @@ func TestConversationInputSubmit_RejectsStaleCatalogRevision(t *testing.T) {
 	state, conversationID := seedConversationMessageValidationState(t)
 	router := composerInputTestMux(state)
 
-	catalogRes := performJSONRequest(t, router, http.MethodGet, "/v1/conversations/"+conversationID+"/input/catalog", nil, nil)
+	catalogRes := performJSONRequest(t, router, http.MethodGet, "/v1/sessions/"+conversationID+"/input/catalog", nil, nil)
 	if catalogRes.Code != http.StatusOK {
 		t.Fatalf("expected catalog 200, got %d (%s)", catalogRes.Code, catalogRes.Body.String())
 	}
@@ -319,7 +319,7 @@ func TestConversationInputSubmit_RejectsStaleCatalogRevision(t *testing.T) {
 		t.Fatalf("expected non-empty catalog revision")
 	}
 
-	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input":        "run a normal prompt",
 		"catalog_revision": "stale-revision-value",
 	}, nil)
@@ -351,7 +351,7 @@ func TestConversationInputSubmit_RejectsDisabledReferencedResource(t *testing.T)
 	})
 
 	router := composerInputTestMux(state)
-	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "@rule:" + disabledRuleID + " check this",
 		"selected_resources": []map[string]any{
 			{
@@ -384,7 +384,7 @@ func TestConversationInputSubmit_AllowsFileSelectionAndSnapshotsPaths(t *testing
 	}
 
 	router := composerInputTestMux(state)
-	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "@file:src/main.ts explain this file",
 		"selected_resources": []map[string]any{
 			{
@@ -425,7 +425,7 @@ func TestConversationInputSubmit_RejectsFileOutsideProject(t *testing.T) {
 	_ = setComposerProjectRepoForTest(t, state, conversationID)
 
 	router := composerInputTestMux(state)
-	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "@file:../secret.txt check this",
 		"selected_resources": []map[string]any{
 			{
@@ -458,7 +458,7 @@ func TestConversationInputSuggest_ReturnsFileCandidates(t *testing.T) {
 	}
 
 	router := composerInputTestMux(state)
-	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/suggest", map[string]any{
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/input/suggest", map[string]any{
 		"draft":  "@file:ma",
 		"cursor": 8,
 	}, nil)
@@ -496,7 +496,7 @@ func TestConversationInputSubmit_RejectsSelectedResourcesMismatchForFileMention(
 	}
 
 	router := composerInputTestMux(state)
-	res := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "@file:src/main.ts explain this",
 	}, nil)
 	if res.Code != http.StatusBadRequest {
@@ -536,7 +536,7 @@ func TestConversationInputSuggest_UsesCommandAndResourceDetails(t *testing.T) {
 	})
 
 	router := composerInputTestMux(state)
-	commandRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/suggest", map[string]any{
+	commandRes := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/input/suggest", map[string]any{
 		"draft":  "/he",
 		"cursor": 3,
 	}, nil)
@@ -566,7 +566,7 @@ func TestConversationInputSuggest_UsesCommandAndResourceDetails(t *testing.T) {
 		t.Fatalf("expected /help suggestion to include non-empty detail, got %#v", commandSuggestions)
 	}
 
-	resourceRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/suggest", map[string]any{
+	resourceRes := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/input/suggest", map[string]any{
 		"draft":  "@rule:rc_rule_detail",
 		"cursor": len("@rule:rc_rule_detail"),
 	}, nil)
@@ -609,8 +609,8 @@ func setComposerProjectRepoForTest(t *testing.T, state *AppState, conversationID
 
 func composerInputTestMux(state *AppState) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/conversations/{conversation_id}/input/catalog", ConversationInputCatalogHandler(state))
-	mux.HandleFunc("/v1/conversations/{conversation_id}/input/suggest", ConversationInputSuggestHandler(state))
-	mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
+	mux.HandleFunc("/v1/sessions/{session_id}/input/catalog", ConversationInputCatalogHandler(state))
+	mux.HandleFunc("/v1/sessions/{session_id}/input/suggest", ConversationInputSuggestHandler(state))
+	mux.HandleFunc("/v1/sessions/{session_id}/runs", ConversationInputSubmitHandler(state))
 	return mux
 }

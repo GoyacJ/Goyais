@@ -206,7 +206,7 @@ func WorkspaceStatusHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		requestedConversationID := strings.TrimSpace(r.URL.Query().Get("conversation_id"))
+		requestedConversationID := runtimeSessionIDFromQuery(r)
 		conversationID, conversationStatus, conversationErr := resolveWorkspaceConversationStatus(r.Context(), state, workspaceID, requestedConversationID)
 		if conversationErr != nil {
 			conversationErr.write(w, r)

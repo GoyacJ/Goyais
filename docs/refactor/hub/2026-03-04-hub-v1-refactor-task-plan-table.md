@@ -26,7 +26,7 @@
 | R1 | 已完成 | 已完成 `core/events` 单一实现源收敛、`core/statemachine` 接入与兼容导出 |
 | R2 | 已完成 | 已落地 hookscope/sandbox 实现并接入 executor/hooks |
 | R3 | 已完成 | 已完成 runtime 运行链路 repository-first 收口，`AppState` map 降级为 fallback/cache |
-| R4 | 待开始 | HTTP Runtime API 重构为 Session/Run |
+| R4 | 已完成 | 已完成 runtime 路由切换、SSE run-only 词汇收敛、OpenAPI 与 contracts 同步、旧路径下线 |
 | R5 | 待开始 | 全 Hub handler/service/repository 同构改造 |
 | R6 | 待开始 | ACP v1 协议重写 |
 | R7 | 待开始 | CLI v1 命令面重写 |
@@ -206,12 +206,12 @@
 
 ### 任务清单
 
-- [ ] R4-T1 路由改名：`/v1/conversations/*` -> `/v1/sessions/*`
-- [ ] R4-T2 提交接口改名：`/input/submit` -> `POST /v1/sessions/{id}/runs`
-- [ ] R4-T3 列表接口改名：`GET /v1/executions` -> `GET /v1/runs`
-- [ ] R4-T4 SSE 切换到 run-only 事件词汇并移除 execution 映射
-- [ ] R4-T5 删除 `execution_runtime_router.go` 与 `execution_runtime_v4_bridge.go`
-- [ ] R4-T6 OpenAPI 同步更新 runtime 路径与 schema
+- [x] R4-T1 路由改名：`/v1/conversations/*` -> `/v1/sessions/*`
+- [x] R4-T2 提交接口改名：`/input/submit` -> `POST /v1/sessions/{id}/runs`
+- [x] R4-T3 列表接口改名：`GET /v1/executions` -> `GET /v1/runs`
+- [x] R4-T4 SSE 切换到 run-only 事件词汇并移除 execution 映射
+- [x] R4-T5 删除 `execution_runtime_router.go` 与 `execution_runtime_v4_bridge.go`
+- [x] R4-T6 OpenAPI 同步更新 runtime 路径与 schema
 
 ### 关键文件面
 
@@ -224,6 +224,17 @@
 
 1. `cd services/hub && go test ./internal/httpapi/...`
 2. `pnpm contracts:generate && pnpm contracts:check`
+
+### 当前阶段证据（2026-03-04）
+
+1. 切换：`services/hub/internal/runtime/routes/routes.go` 完成 runtime 主路由切换，仅保留 `/v1/sessions/*`、`/v1/runs*`，旧 `/v1/conversations*` 与 `/v1/executions` 下线
+2. 接入：`services/hub/internal/httpapi/runtime_session_path.go` 新增 query/path 双解析（`session_id` 优先，回退 `conversation_id`），`handlers_execution_flow.go` 与 `handlers_workspaces.go` 已接入
+3. 收敛：`services/hub/internal/httpapi/run_event_adapter.go` 将 SSE payload `event_type` 统一为 run-only 词汇，并保留 `legacy_event_type` 兼容诊断字段
+4. 清理：删除 `execution_runtime_router.go` 与 `execution_runtime_v4_bridge.go`，迁移为 `run_runtime_router.go` 与 `run_runtime_v4_bridge.go`
+5. 同步：`packages/contracts/openapi.yaml`、`openapi_contract_test.go`、`router_test.go` 与 runtime 相关集成/单测完成 `sessions/runs` 路径与 schema 收口
+6. 已验证：`cd services/hub && go test ./... && go vet ./...`
+7. 已验证：`pnpm contracts:generate && pnpm contracts:check`
+8. 已验证：`scripts/refactor/gate-check.sh --strict`
 
 ---
 

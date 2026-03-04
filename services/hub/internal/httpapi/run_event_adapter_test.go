@@ -29,6 +29,13 @@ func TestMapExecutionEventToRunEvent_MessageReceivedMapsToRunQueued(t *testing.T
 	if runEvent.Type != "run_queued" {
 		t.Fatalf("expected run_queued, got %q", runEvent.Type)
 	}
+	payload := runEvent.Payload
+	if payload["event_type"] != "run_queued" {
+		t.Fatalf("expected payload event_type run_queued, got %#v", payload["event_type"])
+	}
+	if payload["legacy_event_type"] != "message_received" {
+		t.Fatalf("expected payload legacy_event_type message_received, got %#v", payload["legacy_event_type"])
+	}
 	if runEvent.SessionID != event.ConversationID {
 		t.Fatalf("expected session_id=%s, got %s", event.ConversationID, runEvent.SessionID)
 	}
@@ -71,5 +78,31 @@ func TestMapExecutionEventToRunEvent_MapsApprovalDeltaToRunApprovalNeeded(t *tes
 	runEvent := mapExecutionEventToRunEvent(event)
 	if runEvent.Type != "run_approval_needed" {
 		t.Fatalf("expected run_approval_needed, got %q", runEvent.Type)
+	}
+	if runEvent.Payload["event_type"] != "run_approval_needed" {
+		t.Fatalf("expected payload event_type run_approval_needed, got %#v", runEvent.Payload["event_type"])
+	}
+}
+
+func TestMapExecutionEventToRunEvent_PreservesRunVocabularyFromPayload(t *testing.T) {
+	event := ExecutionEvent{
+		EventID:        "evt_map_payload",
+		ExecutionID:    "exec_map_payload",
+		ConversationID: "conv_map_payload",
+		Sequence:       1,
+		QueueIndex:     0,
+		Type:           RunEventTypeThinkingDelta,
+		Timestamp:      "2026-02-25T10:20:30Z",
+		Payload: map[string]any{
+			"event_type": "run_started",
+		},
+	}
+
+	runEvent := mapExecutionEventToRunEvent(event)
+	if runEvent.Payload["event_type"] != "run_started" {
+		t.Fatalf("expected payload event_type run_started, got %#v", runEvent.Payload["event_type"])
+	}
+	if _, exists := runEvent.Payload["legacy_event_type"]; exists {
+		t.Fatalf("expected no legacy_event_type when payload already uses run vocabulary, got %#v", runEvent.Payload["legacy_event_type"])
 	}
 }

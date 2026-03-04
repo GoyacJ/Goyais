@@ -11,7 +11,7 @@ import (
 
 func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
+		conversationID := runtimeSessionIDFromPath(r)
 		conversationSeed, hasConversationSeed := loadConversationByIDSeed(r.Context(), state, conversationID)
 		switch r.Method {
 		case http.MethodGet:

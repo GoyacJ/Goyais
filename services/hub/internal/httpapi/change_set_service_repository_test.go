@@ -310,8 +310,8 @@ func TestConversationChangeSetHandlerUsesRepositoryAndProjectStoreSeeds(t *testi
 	state.mu.Unlock()
 
 	handler := ConversationChangeSetHandler(state)
-	req := httptest.NewRequest(http.MethodGet, "/v1/conversations/"+conversationID+"/changeset", nil)
-	req.SetPathValue("conversation_id", conversationID)
+	req := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+conversationID+"/changeset", nil)
+	req.SetPathValue("session_id", conversationID)
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
 
@@ -394,11 +394,11 @@ func TestConversationChangeSetCommitHandlerUsesRepositoryAndProjectStoreSeeds(t 
 	handler := ConversationChangeSetCommitHandler(state)
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/v1/conversations/"+conversationID+"/changeset/commit",
+		"/v1/sessions/"+conversationID+"/changeset/commit",
 		strings.NewReader(`{"expected_change_set_id":"cs_commit_repo_seed"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
-	req.SetPathValue("conversation_id", conversationID)
+	req.SetPathValue("session_id", conversationID)
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
 

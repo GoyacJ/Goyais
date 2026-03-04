@@ -150,7 +150,7 @@ func ConversationChangeSetHandler(state *AppState) http.HandlerFunc {
 			})
 			return
 		}
-		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
+		conversationID := runtimeSessionIDFromPath(r)
 		conversationSeed, exists := loadChangeSetConversationSeed(r.Context(), state, conversationID)
 		if !exists {
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
@@ -207,7 +207,7 @@ func ConversationChangeSetCommitHandler(state *AppState) http.HandlerFunc {
 			})
 			return
 		}
-		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
+		conversationID := runtimeSessionIDFromPath(r)
 		input := ChangeSetCommitRequest{}
 		if err := decodeJSONBody(r, &input); err != nil {
 			err.write(w, r)
@@ -334,7 +334,7 @@ func ConversationChangeSetDiscardHandler(state *AppState) http.HandlerFunc {
 			})
 			return
 		}
-		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
+		conversationID := runtimeSessionIDFromPath(r)
 		input := ChangeSetDiscardRequest{}
 		if err := decodeJSONBody(r, &input); err != nil {
 			err.write(w, r)
@@ -420,7 +420,7 @@ func ConversationChangeSetExportHandler(state *AppState) http.HandlerFunc {
 			})
 			return
 		}
-		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
+		conversationID := runtimeSessionIDFromPath(r)
 		conversationSeed, exists := loadChangeSetConversationSeed(r.Context(), state, conversationID)
 		if !exists {
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})

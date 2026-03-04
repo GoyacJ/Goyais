@@ -50,7 +50,7 @@ echo
 echo "[3/7] runtime-mode default gate"
 default_mode_hits="$(
   cd "$hub_dir"
-  rg -n 'mode = executionRuntimeModeHybrid' internal/httpapi/execution_runtime_router.go | wc -l | tr -d ' '
+  rg -n 'mode = executionRuntimeModeHybrid' internal/httpapi/run_runtime_router.go | wc -l | tr -d ' '
 )"
 echo "default hybrid assignment hits: $default_mode_hits"
 if [[ "$default_mode_hits" -eq 0 ]]; then
@@ -75,7 +75,7 @@ state_legacy_wiring_hits="$(
 )"
 legacy_alias_hits="$(
   cd "$hub_dir"
-  (rg -n 'case "legacy", string\(executionRuntimeModeHybrid\):' internal/httpapi/execution_runtime_router.go || true) \
+  (rg -n 'case "legacy", string\(executionRuntimeModeHybrid\):' internal/httpapi/run_runtime_router.go || true) \
     | wc -l | tr -d ' '
 )"
 legacy_route_audit_hits="$(
@@ -85,7 +85,7 @@ legacy_route_audit_hits="$(
 )"
 legacy_mode_symbol_hits="$(
   cd "$hub_dir"
-  (rg -n 'executionRuntimeModeLegacy' internal/httpapi/execution_runtime_router.go || true) \
+  (rg -n 'executionRuntimeModeLegacy' internal/httpapi/run_runtime_router.go || true) \
     | wc -l | tr -d ' '
 )"
 legacy_fake_run_builder_defs="$(

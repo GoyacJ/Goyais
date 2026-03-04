@@ -73,8 +73,8 @@ func TestConversationEventsHandlerUsesRepositoryWhenConversationMapMissing(t *te
 	state.conversations = map[string]Conversation{}
 	state.mu.Unlock()
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/conversations/"+conversationID+"/events", nil)
-	req.SetPathValue("conversation_id", conversationID)
+	req := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+conversationID+"/events", nil)
+	req.SetPathValue("session_id", conversationID)
 	ctx, cancel := context.WithCancel(req.Context())
 	req = req.WithContext(ctx)
 	res := httptest.NewRecorder()

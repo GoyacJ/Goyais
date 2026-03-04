@@ -1000,650 +1000,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/v1/conversations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List conversations */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Opaque cursor; current implementation uses numeric offsets. */
-                    cursor?: components["parameters"]["CursorParam"];
-                    /** @description Page size for cursor-based pagination. */
-                    limit?: components["parameters"]["LimitParam"];
-                    project_id?: string;
-                    workspace_id?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Conversation list */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ListEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/conversations/{conversation_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get conversation detail */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    conversation_id: components["parameters"]["ConversationIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Conversation detail */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ConversationDetailResponse"];
-                    };
-                };
-                404: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        put?: never;
-        post?: never;
-        /** Delete conversation */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    conversation_id: components["parameters"]["ConversationIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Deleted */
-                204: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                404: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        options?: never;
-        head?: never;
-        /** Update conversation metadata */
-        patch: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    conversation_id: components["parameters"]["ConversationIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["UpdateConversationRequest"];
-                };
-            };
-            responses: {
-                /** @description Renamed conversation */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Conversation"];
-                    };
-                };
-                400: components["responses"]["StandardErrorResponse"];
-                404: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        trace?: never;
-    };
-    "/v1/conversations/{conversation_id}/changeset": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get conversation-level pending change set */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    conversation_id: components["parameters"]["ConversationIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Pending conversation changes */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ConversationChangeSet"];
-                    };
-                };
-                404: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/conversations/{conversation_id}/changeset/commit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Commit conversation-level pending change set */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    conversation_id: components["parameters"]["ConversationIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["ChangeSetCommitRequest"];
-                };
-            };
-            responses: {
-                /** @description Change set committed */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ChangeSetCommitResponse"];
-                    };
-                };
-                400: components["responses"]["StandardErrorResponse"];
-                404: components["responses"]["StandardErrorResponse"];
-                409: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/conversations/{conversation_id}/changeset/discard": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Discard conversation-level pending change set */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    conversation_id: components["parameters"]["ConversationIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["ChangeSetDiscardRequest"];
-                };
-            };
-            responses: {
-                /** @description Change set discarded */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["OkResponse"];
-                    };
-                };
-                400: components["responses"]["StandardErrorResponse"];
-                404: components["responses"]["StandardErrorResponse"];
-                409: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/conversations/{conversation_id}/changeset/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Export conversation-level pending changed files as zip archive */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    conversation_id: components["parameters"]["ConversationIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Files archive payload */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ExecutionFilesExportResponse"];
-                    };
-                };
-                404: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/conversations/{conversation_id}/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Stream execution events for conversation (SSE) */
-        get: {
-            parameters: {
-                query?: {
-                    last_event_id?: string;
-                };
-                header?: never;
-                path: {
-                    conversation_id: components["parameters"]["ConversationIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Event stream */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "text/event-stream": string;
-                    };
-                };
-                404: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/conversations/{conversation_id}/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Export conversation as markdown */
-        get: {
-            parameters: {
-                query: {
-                    format: "markdown";
-                };
-                header?: never;
-                path: {
-                    conversation_id: components["parameters"]["ConversationIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Markdown content */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "text/markdown": string;
-                    };
-                };
-                400: components["responses"]["StandardErrorResponse"];
-                404: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/conversations/{conversation_id}/input/catalog": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get composer input catalog */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    conversation_id: components["parameters"]["ConversationIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Composer catalog */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ComposerCatalogResponse"];
-                    };
-                };
-                404: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/conversations/{conversation_id}/input/submit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Submit composer input with strict command and resource validation */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    conversation_id: components["parameters"]["ConversationIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["ComposerSubmitRequest"];
-                };
-            };
-            responses: {
-                /** @description Command result response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ComposerSubmitResponse"];
-                    };
-                };
-                /** @description Execution enqueued response */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ComposerSubmitResponse"];
-                    };
-                };
-                400: components["responses"]["StandardErrorResponse"];
-                404: components["responses"]["StandardErrorResponse"];
-                409: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/conversations/{conversation_id}/input/suggest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Suggest composer tokens for draft input */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    conversation_id: components["parameters"]["ConversationIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["ComposerSuggestRequest"];
-                };
-            };
-            responses: {
-                /** @description Composer suggestions */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ComposerSuggestResponse"];
-                    };
-                };
-                400: components["responses"]["StandardErrorResponse"];
-                404: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/conversations/{conversation_id}/rollback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Rollback conversation to user message anchor */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    conversation_id: components["parameters"]["ConversationIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["RollbackRequest"];
-                };
-            };
-            responses: {
-                /** @description Rollback applied */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["OkResponse"];
-                    };
-                };
-                400: components["responses"]["StandardErrorResponse"];
-                404: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/conversations/{conversation_id}/stop": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Stop active execution and continue queued items */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    conversation_id: components["parameters"]["ConversationIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Stop accepted */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["OkResponse"];
-                    };
-                };
-                404: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/executions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List executions */
-        get: {
-            parameters: {
-                query?: {
-                    conversation_id?: string;
-                    /** @description Opaque cursor; current implementation uses numeric offsets. */
-                    cursor?: components["parameters"]["CursorParam"];
-                    /** @description Page size for cursor-based pagination. */
-                    limit?: components["parameters"]["LimitParam"];
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Execution list */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ListEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/hooks/executions/{run_id}": {
         parameters: {
             query?: never;
@@ -1988,76 +1344,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/v1/projects/{project_id}/conversations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List project conversations */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Opaque cursor; current implementation uses numeric offsets. */
-                    cursor?: components["parameters"]["CursorParam"];
-                    /** @description Page size for cursor-based pagination. */
-                    limit?: components["parameters"]["LimitParam"];
-                };
-                header?: never;
-                path: {
-                    project_id: components["parameters"]["ProjectIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Conversation list */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ListEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        /** Create conversation in project */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    project_id: components["parameters"]["ProjectIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["CreateConversationRequest"];
-                };
-            };
-            responses: {
-                /** @description Created conversation */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Conversation"];
-                    };
-                };
-                404: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/projects/{project_id}/files": {
         parameters: {
             query?: never;
@@ -2143,6 +1429,76 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{project_id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List project conversations */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Opaque cursor; current implementation uses numeric offsets. */
+                    cursor?: components["parameters"]["CursorParam"];
+                    /** @description Page size for cursor-based pagination. */
+                    limit?: components["parameters"]["LimitParam"];
+                };
+                header?: never;
+                path: {
+                    project_id: components["parameters"]["ProjectIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Conversation list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ListEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create conversation in project */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project_id: components["parameters"]["ProjectIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateConversationRequest"];
+                };
+            };
+            responses: {
+                /** @description Created conversation */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Conversation"];
+                    };
+                };
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/import": {
         parameters: {
             query?: never;
@@ -2208,6 +1564,48 @@ export type paths = {
             requestBody?: never;
             responses: {
                 /** @description Resource list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ListEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List executions */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Opaque cursor; current implementation uses numeric offsets. */
+                    cursor?: components["parameters"]["CursorParam"];
+                    /** @description Page size for cursor-based pagination. */
+                    limit?: components["parameters"]["LimitParam"];
+                    session_id?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Execution list */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -2433,6 +1831,608 @@ export type paths = {
                 400: components["responses"]["StandardErrorResponse"];
                 404: components["responses"]["StandardErrorResponse"];
                 409: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List conversations */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Opaque cursor; current implementation uses numeric offsets. */
+                    cursor?: components["parameters"]["CursorParam"];
+                    /** @description Page size for cursor-based pagination. */
+                    limit?: components["parameters"]["LimitParam"];
+                    project_id?: string;
+                    workspace_id?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Conversation list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ListEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get conversation detail */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Conversation detail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConversationDetailResponse"];
+                    };
+                };
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete conversation */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update conversation metadata */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateConversationRequest"];
+                };
+            };
+            responses: {
+                /** @description Renamed conversation */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Conversation"];
+                    };
+                };
+                400: components["responses"]["StandardErrorResponse"];
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/changeset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get conversation-level pending change set */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Pending conversation changes */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConversationChangeSet"];
+                    };
+                };
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/changeset/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit conversation-level pending change set */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChangeSetCommitRequest"];
+                };
+            };
+            responses: {
+                /** @description Change set committed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChangeSetCommitResponse"];
+                    };
+                };
+                400: components["responses"]["StandardErrorResponse"];
+                404: components["responses"]["StandardErrorResponse"];
+                409: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/changeset/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discard conversation-level pending change set */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChangeSetDiscardRequest"];
+                };
+            };
+            responses: {
+                /** @description Change set discarded */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OkResponse"];
+                    };
+                };
+                400: components["responses"]["StandardErrorResponse"];
+                404: components["responses"]["StandardErrorResponse"];
+                409: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/changeset/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Export conversation-level pending changed files as zip archive */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Files archive payload */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExecutionFilesExportResponse"];
+                    };
+                };
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream execution events for conversation (SSE) */
+        get: {
+            parameters: {
+                query?: {
+                    last_event_id?: string;
+                };
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Event stream */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/event-stream": string;
+                    };
+                };
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export conversation as markdown */
+        get: {
+            parameters: {
+                query: {
+                    format: "markdown";
+                };
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Markdown content */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/markdown": string;
+                    };
+                };
+                400: components["responses"]["StandardErrorResponse"];
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/input/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get composer input catalog */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Composer catalog */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ComposerCatalogResponse"];
+                    };
+                };
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/input/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suggest composer tokens for draft input */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ComposerSuggestRequest"];
+                };
+            };
+            responses: {
+                /** @description Composer suggestions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ComposerSuggestResponse"];
+                    };
+                };
+                400: components["responses"]["StandardErrorResponse"];
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rollback conversation to user message anchor */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RollbackRequest"];
+                };
+            };
+            responses: {
+                /** @description Rollback applied */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OkResponse"];
+                    };
+                };
+                400: components["responses"]["StandardErrorResponse"];
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit composer input with strict command and resource validation */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ComposerSubmitRequest"];
+                };
+            };
+            responses: {
+                /** @description Command result response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ComposerSubmitResponse"];
+                    };
+                };
+                /** @description Execution enqueued response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ComposerSubmitResponse"];
+                    };
+                };
+                400: components["responses"]["StandardErrorResponse"];
+                404: components["responses"]["StandardErrorResponse"];
+                409: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop active execution and continue queued items */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Stop accepted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OkResponse"];
+                    };
+                };
+                404: components["responses"]["StandardErrorResponse"];
             };
         };
         delete?: never;
@@ -3142,7 +3142,7 @@ export type paths = {
         get: {
             parameters: {
                 query?: {
-                    conversation_id?: string;
+                    session_id?: string;
                 };
                 header?: never;
                 path: {
@@ -4161,7 +4161,6 @@ export type components = {
         };
     };
     parameters: {
-        ConversationIdParam: string;
         /** @description Opaque cursor; current implementation uses numeric offsets. */
         CursorParam: string;
         ExecutionIdParam: string;
@@ -4169,6 +4168,7 @@ export type components = {
         LimitParam: number;
         ProjectIdParam: string;
         RunIdParam: string;
+        SessionIdParam: string;
         TaskIdParam: string;
         WorkspaceIdParam: string;
     };

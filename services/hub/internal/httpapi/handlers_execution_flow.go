@@ -117,7 +117,7 @@ func ExecutionsHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		conversationID := strings.TrimSpace(r.URL.Query().Get("conversation_id"))
+		conversationID := runtimeSessionIDFromQuery(r)
 		workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
 		if conversationID != "" {
 			if conversation, exists := loadExecutionFlowConversationSeed(r.Context(), state, conversationID); exists {
@@ -188,7 +188,7 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
+		conversationID := runtimeSessionIDFromPath(r)
 		conversationSeed, exists := loadExecutionFlowConversationSeed(r.Context(), state, conversationID)
 		if !exists {
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
@@ -294,7 +294,7 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
+		conversationID := runtimeSessionIDFromPath(r)
 		input := RollbackRequest{}
 		if err := decodeJSONBody(r, &input); err != nil {
 			err.write(w, r)
@@ -503,7 +503,7 @@ func ConversationExportHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
+		conversationID := runtimeSessionIDFromPath(r)
 		format := strings.TrimSpace(r.URL.Query().Get("format"))
 		if format == "" {
 			format = "markdown"

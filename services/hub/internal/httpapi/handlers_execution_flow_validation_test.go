@@ -68,9 +68,9 @@ func TestConversationInputSubmitRejectsOutOfProjectResourceSelection(t *testing.
 			state.conversations[conversationID] = conversation
 
 			mux := http.NewServeMux()
-			mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
+			mux.HandleFunc("/v1/sessions/{session_id}/runs", ConversationInputSubmitHandler(state))
 
-			res := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", testCase.requestBody, nil)
+			res := performJSONRequest(t, mux, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", testCase.requestBody, nil)
 			if res.Code != http.StatusBadRequest {
 				t.Fatalf("expected 400 validation error, got %d (%s)", res.Code, res.Body.String())
 			}
@@ -119,16 +119,16 @@ func TestConversationInputSubmitAllowsParallelExecutionsAcrossConversations(t *t
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
+	mux.HandleFunc("/v1/sessions/{session_id}/runs", ConversationInputSubmitHandler(state))
 
-	messageARes := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationAID+"/input/submit", map[string]any{
+	messageARes := performJSONRequest(t, mux, http.MethodPost, "/v1/sessions/"+conversationAID+"/runs", map[string]any{
 		"raw_input":       "message a",
 		"model_config_id": "rc_model_allowed",
 	}, nil)
 	if messageARes.Code != http.StatusCreated {
 		t.Fatalf("expected conversation A message 201, got %d (%s)", messageARes.Code, messageARes.Body.String())
 	}
-	messageBRes := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationBID+"/input/submit", map[string]any{
+	messageBRes := performJSONRequest(t, mux, http.MethodPost, "/v1/sessions/"+conversationBID+"/runs", map[string]any{
 		"raw_input":       "message b",
 		"model_config_id": "rc_model_allowed",
 	}, nil)
@@ -169,9 +169,9 @@ func TestConversationInputSubmitRejectsLegacyAgentModeValue(t *testing.T) {
 	state, conversationID := seedConversationMessageValidationState(t)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
+	mux.HandleFunc("/v1/sessions/{session_id}/runs", ConversationInputSubmitHandler(state))
 
-	res := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, mux, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "hello",
 		"mode":      "agent",
 	}, nil)
@@ -204,9 +204,9 @@ func TestConversationInputSubmitRejectsWhenProjectHasNoModelBinding(t *testing.T
 	state.conversations[conversationID] = conversation
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
+	mux.HandleFunc("/v1/sessions/{session_id}/runs", ConversationInputSubmitHandler(state))
 
-	res := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, mux, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "hello",
 	}, nil)
 	if res.Code != http.StatusBadRequest {
@@ -285,9 +285,9 @@ func TestConversationInputSubmitRejectsWhenTokenThresholdReached(t *testing.T) {
 			testCase.configure(t, state, conversation.WorkspaceID, conversation.ProjectID, conversation.ModelConfigID)
 
 			mux := http.NewServeMux()
-			mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
+			mux.HandleFunc("/v1/sessions/{session_id}/runs", ConversationInputSubmitHandler(state))
 
-			res := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+			res := performJSONRequest(t, mux, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 				"raw_input": "threshold check",
 			}, nil)
 			if res.Code != http.StatusBadRequest {
@@ -328,9 +328,9 @@ func TestConversationInputSubmitAllowsWhenTokenThresholdNotReached(t *testing.T)
 	setModelConfigTokenThresholdForTest(t, state, conversation.WorkspaceID, conversation.ModelConfigID, 22)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/conversations/{conversation_id}/input/submit", ConversationInputSubmitHandler(state))
+	mux.HandleFunc("/v1/sessions/{session_id}/runs", ConversationInputSubmitHandler(state))
 
-	res := performJSONRequest(t, mux, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	res := performJSONRequest(t, mux, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "threshold pass",
 	}, nil)
 	if res.Code != http.StatusCreated {

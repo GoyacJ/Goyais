@@ -29,7 +29,7 @@ func TestConversationEventsSSE_EmitsRunSemantics(t *testing.T) {
 	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
 	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
 
-	conversationRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+	conversationRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/sessions", map[string]any{
 		"workspace_id": workspaceID,
 		"name":         "SSEConv",
 	}, authHeaders)
@@ -40,7 +40,7 @@ func TestConversationEventsSSE_EmitsRunSemantics(t *testing.T) {
 	mustDecodeJSON(t, conversationRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "trigger sse",
 	}, authHeaders)
 	if messageRes.Code != http.StatusCreated {
@@ -50,7 +50,7 @@ func TestConversationEventsSSE_EmitsRunSemantics(t *testing.T) {
 	mustDecodeJSON(t, messageRes.Body.Bytes(), &messagePayload)
 	executionID := messagePayload["execution"].(map[string]any)["id"].(string)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/conversations/"+conversationID+"/events", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+conversationID+"/events", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	ctx, cancel := context.WithCancel(req.Context())
 	defer cancel()
@@ -125,7 +125,7 @@ func TestConversationEventsSSE_ResyncBackfillWhenLastEventMissing(t *testing.T) 
 	modelConfigID := createModelResourceConfigForTest(t, router, workspaceID, authHeaders, "OpenAI", "gpt-5.3")
 	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
 
-	conversationRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+	conversationRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/sessions", map[string]any{
 		"workspace_id": workspaceID,
 		"name":         "SSEResyncConv",
 	}, authHeaders)
@@ -136,7 +136,7 @@ func TestConversationEventsSSE_ResyncBackfillWhenLastEventMissing(t *testing.T) 
 	mustDecodeJSON(t, conversationRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/input/submit", map[string]any{
+	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "trigger sse resync",
 	}, authHeaders)
 	if messageRes.Code != http.StatusCreated {
@@ -153,7 +153,7 @@ func TestConversationEventsSSE_ResyncBackfillWhenLastEventMissing(t *testing.T) 
 		t.Fatalf("expected stop control 200/409, got %d (%s)", stopRes.Code, stopRes.Body.String())
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/conversations/"+conversationID+"/events?last_event_id=evt_missing_cursor", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+conversationID+"/events?last_event_id=evt_missing_cursor", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	ctx, cancel := context.WithCancel(req.Context())
 	req = req.WithContext(ctx)

@@ -68,8 +68,8 @@ func TestConversationsHandlerGetIncludesTokenUsage(t *testing.T) {
 	state.executions["exec_usage_list_2"] = newUsageExecution(conversationID, "exec_usage_list_2", 8, 10, now)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/conversations", ConversationsHandler(state))
-	res := performJSONRequest(t, mux, http.MethodGet, "/v1/conversations?workspace_id="+localWorkspaceID, nil, nil)
+	mux.HandleFunc("/v1/sessions", ConversationsHandler(state))
+	res := performJSONRequest(t, mux, http.MethodGet, "/v1/sessions?workspace_id="+localWorkspaceID, nil, nil)
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected conversations list 200, got %d (%s)", res.Code, res.Body.String())
 	}
@@ -137,8 +137,8 @@ func TestConversationsHandlerGetUsesRepositoryWhenConversationAndExecutionMapMis
 	state.mu.Unlock()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/conversations", ConversationsHandler(state))
-	res := performJSONRequest(t, mux, http.MethodGet, "/v1/conversations?workspace_id="+localWorkspaceID, nil, nil)
+	mux.HandleFunc("/v1/sessions", ConversationsHandler(state))
+	res := performJSONRequest(t, mux, http.MethodGet, "/v1/sessions?workspace_id="+localWorkspaceID, nil, nil)
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected conversations list 200, got %d (%s)", res.Code, res.Body.String())
 	}
@@ -207,9 +207,9 @@ func TestConversationByIDHandlerGetAndPatchIncludeTokenUsage(t *testing.T) {
 	state.executions["exec_usage_detail_1"] = newUsageExecution(conversationID, "exec_usage_detail_1", 9, 12, now)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/conversations/{conversation_id}", ConversationByIDHandler(state))
+	mux.HandleFunc("/v1/sessions/{session_id}", ConversationByIDHandler(state))
 
-	getRes := performJSONRequest(t, mux, http.MethodGet, "/v1/conversations/"+conversationID, nil, nil)
+	getRes := performJSONRequest(t, mux, http.MethodGet, "/v1/sessions/"+conversationID, nil, nil)
 	if getRes.Code != http.StatusOK {
 		t.Fatalf("expected conversation detail 200, got %d (%s)", getRes.Code, getRes.Body.String())
 	}
@@ -226,7 +226,7 @@ func TestConversationByIDHandlerGetAndPatchIncludeTokenUsage(t *testing.T) {
 		t.Fatalf("expected detail tokens_total 21, got %d", got)
 	}
 
-	patchRes := performJSONRequest(t, mux, http.MethodPatch, "/v1/conversations/"+conversationID, map[string]any{
+	patchRes := performJSONRequest(t, mux, http.MethodPatch, "/v1/sessions/"+conversationID, map[string]any{
 		"name": "After Rename",
 	}, nil)
 	if patchRes.Code != http.StatusOK {
@@ -312,9 +312,9 @@ func TestConversationByIDHandlerPatchEmitsConfigChangeHookRecordForActiveExecuti
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/conversations/{conversation_id}", ConversationByIDHandler(state))
+	mux.HandleFunc("/v1/sessions/{session_id}", ConversationByIDHandler(state))
 
-	patchRes := performJSONRequest(t, mux, http.MethodPatch, "/v1/conversations/"+conversationID, map[string]any{
+	patchRes := performJSONRequest(t, mux, http.MethodPatch, "/v1/sessions/"+conversationID, map[string]any{
 		"mode": "plan",
 	}, nil)
 	if patchRes.Code != http.StatusOK {
@@ -382,9 +382,9 @@ func TestConversationByIDHandlerGetUsesRepositoryWhenExecutionMapMissing(t *test
 	state.mu.Unlock()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/conversations/{conversation_id}", ConversationByIDHandler(state))
+	mux.HandleFunc("/v1/sessions/{session_id}", ConversationByIDHandler(state))
 
-	res := performJSONRequest(t, mux, http.MethodGet, "/v1/conversations/"+conversationID, nil, nil)
+	res := performJSONRequest(t, mux, http.MethodGet, "/v1/sessions/"+conversationID, nil, nil)
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected conversation detail 200, got %d (%s)", res.Code, res.Body.String())
 	}
@@ -483,9 +483,9 @@ func TestConversationByIDHandlerPatchUsesRepositoryWhenConversationMapMissing(t 
 	state.mu.Unlock()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/conversations/{conversation_id}", ConversationByIDHandler(state))
+	mux.HandleFunc("/v1/sessions/{session_id}", ConversationByIDHandler(state))
 
-	res := performJSONRequest(t, mux, http.MethodPatch, "/v1/conversations/"+conversationID, map[string]any{
+	res := performJSONRequest(t, mux, http.MethodPatch, "/v1/sessions/"+conversationID, map[string]any{
 		"name": "After Repository Patch",
 	}, nil)
 	if res.Code != http.StatusOK {

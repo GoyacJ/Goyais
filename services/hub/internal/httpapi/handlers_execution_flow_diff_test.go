@@ -103,8 +103,8 @@ func TestConversationRollbackHandlerFallsBackWithoutSnapshot(t *testing.T) {
 	state.conversationExecutionOrder[conversationID] = []string{executionOneID, executionTwoID}
 	state.mu.Unlock()
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/conversations/"+conversationID+"/rollback", strings.NewReader(`{"message_id":"msg_rollback_target"}`))
-	req.SetPathValue("conversation_id", conversationID)
+	req := httptest.NewRequest(http.MethodPost, "/v1/sessions/"+conversationID+"/rollback", strings.NewReader(`{"message_id":"msg_rollback_target"}`))
+	req.SetPathValue("session_id", conversationID)
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 	ConversationRollbackHandler(state).ServeHTTP(recorder, req)
@@ -244,8 +244,8 @@ func TestConversationRollbackHandlerSkipsGitRestoreWhenRepoIsNotGit(t *testing.T
 	}
 	state.mu.Unlock()
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/conversations/"+conversationID+"/rollback", strings.NewReader(`{"message_id":"msg_rollback_non_git_target"}`))
-	req.SetPathValue("conversation_id", conversationID)
+	req := httptest.NewRequest(http.MethodPost, "/v1/sessions/"+conversationID+"/rollback", strings.NewReader(`{"message_id":"msg_rollback_non_git_target"}`))
+	req.SetPathValue("session_id", conversationID)
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 	ConversationRollbackHandler(state).ServeHTTP(recorder, req)

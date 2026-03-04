@@ -78,7 +78,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/WorkspaceIdParam'
         - in: query
-          name: conversation_id
+          name: session_id
           schema:
             type: string
       responses:
@@ -251,7 +251,7 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/projects/{project_id}/conversations:
+  /v1/projects/{project_id}/sessions:
     get:
       summary: List project conversations
       parameters:
@@ -370,7 +370,7 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations:
+  /v1/sessions:
     get:
       summary: List conversations
       parameters:
@@ -392,11 +392,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ListEnvelope'
 
-  /v1/conversations/{conversation_id}:
+  /v1/sessions/{session_id}:
     get:
       summary: Get conversation detail
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       responses:
         '200':
           description: Conversation detail
@@ -409,7 +409,7 @@ paths:
     patch:
       summary: Update conversation metadata
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       requestBody:
         required: true
         content:
@@ -430,18 +430,18 @@ paths:
     delete:
       summary: Delete conversation
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       responses:
         '204':
           description: Deleted
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/input/catalog:
+  /v1/sessions/{session_id}/input/catalog:
     get:
       summary: Get composer input catalog
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       responses:
         '200':
           description: Composer catalog
@@ -452,11 +452,11 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/input/suggest:
+  /v1/sessions/{session_id}/input/suggest:
     post:
       summary: Suggest composer tokens for draft input
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       requestBody:
         required: true
         content:
@@ -475,11 +475,11 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/input/submit:
+  /v1/sessions/{session_id}/runs:
     post:
       summary: Submit composer input with strict command and resource validation
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       requestBody:
         required: true
         content:
@@ -506,11 +506,11 @@ paths:
         '409':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/events:
+  /v1/sessions/{session_id}/events:
     get:
       summary: Stream execution events for conversation (SSE)
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
         - in: query
           name: last_event_id
           schema:
@@ -525,11 +525,11 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/stop:
+  /v1/sessions/{session_id}/stop:
     post:
       summary: Stop active execution and continue queued items
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       responses:
         '200':
           description: Stop accepted
@@ -540,11 +540,11 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/export:
+  /v1/sessions/{session_id}/export:
     get:
       summary: Export conversation as markdown
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
         - in: query
           name: format
           required: true
@@ -563,12 +563,12 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/executions:
+  /v1/runs:
     get:
       summary: List executions
       parameters:
         - in: query
-          name: conversation_id
+          name: session_id
           schema:
             type: string
         - $ref: '#/components/parameters/CursorParam'
@@ -727,11 +727,11 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/changeset:
+  /v1/sessions/{session_id}/changeset:
     get:
       summary: Get conversation-level pending change set
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       responses:
         '200':
           description: Pending conversation changes
@@ -742,11 +742,11 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/changeset/commit:
+  /v1/sessions/{session_id}/changeset/commit:
     post:
       summary: Commit conversation-level pending change set
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       requestBody:
         required: true
         content:
@@ -767,11 +767,11 @@ paths:
         '409':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/changeset/discard:
+  /v1/sessions/{session_id}/changeset/discard:
     post:
       summary: Discard conversation-level pending change set
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       requestBody:
         required: true
         content:
@@ -792,11 +792,11 @@ paths:
         '409':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/changeset/export:
+  /v1/sessions/{session_id}/changeset/export:
     post:
       summary: Export conversation-level pending changed files as zip archive
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       responses:
         '200':
           description: Files archive payload
@@ -807,11 +807,11 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/rollback:
+  /v1/sessions/{session_id}/rollback:
     post:
       summary: Rollback conversation to user message anchor
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       requestBody:
         required: true
         content:
@@ -1731,9 +1731,9 @@ components:
       required: true
       schema:
         type: string
-    ConversationIdParam:
+    SessionIdParam:
       in: path
-      name: conversation_id
+      name: session_id
       required: true
       schema:
         type: string

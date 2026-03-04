@@ -306,8 +306,8 @@ func TestProjectConversationsHandlerPostDoesNotFallbackToCatalogDefaultModel(t *
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/projects/{project_id}/conversations", ProjectConversationsHandler(state))
-	res := performJSONRequest(t, mux, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+	mux.HandleFunc("/v1/projects/{project_id}/sessions", ProjectConversationsHandler(state))
+	res := performJSONRequest(t, mux, http.MethodPost, "/v1/projects/"+projectID+"/sessions", map[string]any{
 		"name": "Conversation without model",
 	}, nil)
 	if res.Code != http.StatusCreated {
@@ -404,8 +404,8 @@ func TestProjectConversationsHandlerGetIncludesTokenUsageTotals(t *testing.T) {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/projects/{project_id}/conversations", ProjectConversationsHandler(state))
-	res := performJSONRequest(t, mux, http.MethodGet, "/v1/projects/"+projectID+"/conversations", nil, nil)
+	mux.HandleFunc("/v1/projects/{project_id}/sessions", ProjectConversationsHandler(state))
+	res := performJSONRequest(t, mux, http.MethodGet, "/v1/projects/"+projectID+"/sessions", nil, nil)
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected list conversations 200, got %d (%s)", res.Code, res.Body.String())
 	}
@@ -513,8 +513,8 @@ func TestProjectConversationsHandlerGetUsesRepositoryWhenConversationMapMissing(
 	state.mu.Unlock()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/projects/{project_id}/conversations", ProjectConversationsHandler(state))
-	res := performJSONRequest(t, mux, http.MethodGet, "/v1/projects/"+projectID+"/conversations", nil, nil)
+	mux.HandleFunc("/v1/projects/{project_id}/sessions", ProjectConversationsHandler(state))
+	res := performJSONRequest(t, mux, http.MethodGet, "/v1/projects/"+projectID+"/sessions", nil, nil)
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected list conversations 200 from repository, got %d (%s)", res.Code, res.Body.String())
 	}

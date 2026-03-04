@@ -67,9 +67,9 @@ func TestConversationStopHandlerUsesRepositoryWhenConversationAndExecutionMapMis
 	state.conversationExecutionOrder = map[string][]string{}
 	state.mu.Unlock()
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/conversations/"+conversationID+"/stop", strings.NewReader(`{}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/sessions/"+conversationID+"/stop", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.SetPathValue("conversation_id", conversationID)
+	req.SetPathValue("session_id", conversationID)
 	res := httptest.NewRecorder()
 	ConversationStopHandler(state).ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -136,8 +136,8 @@ func TestConversationExportHandlerUsesRepositoryWhenConversationMapMissing(t *te
 	state.conversations = map[string]Conversation{}
 	state.mu.Unlock()
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/conversations/"+conversationID+"/export?format=markdown", nil)
-	req.SetPathValue("conversation_id", conversationID)
+	req := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+conversationID+"/export?format=markdown", nil)
+	req.SetPathValue("session_id", conversationID)
 	res := httptest.NewRecorder()
 	ConversationExportHandler(state).ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
