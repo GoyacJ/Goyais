@@ -63,7 +63,7 @@ func newExecutionRuntimeRouter(options executionRuntimeRouterOptions) *execution
 		mode = parseExecutionRuntimeMode(os.Getenv(executionRuntimeModeEnv))
 	}
 	if mode == "" {
-		mode = executionRuntimeModeLegacy
+		mode = executionRuntimeModeHybrid
 	}
 	return &executionRuntimeRouter{
 		mode:   mode,
@@ -162,27 +162,40 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 	if normalizedExecutionID == "" {
 		return
 	}
+	attemptedV4Submit := false
 	if s.shouldAttemptV4Submit() && !strings.HasPrefix(normalizedExecutionID, "run_") {
+		attemptedV4Submit = true
 		submitResult, submitErr := s.submitExecutionViaV4(ctx, normalizedExecutionID)
 		s.appendV4ShadowSubmitEvent(normalizedExecutionID, submitResult, submitErr)
 		if submitErr == nil {
+			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "success")
 			s.snapshotV4RunEventsBestEffort(normalizedExecutionID, submitResult.SessionID)
-			if s.executionRuntime != nil && s.executionRuntime.mode == executionRuntimeModeV4 {
-				return
-			}
+			return
+		}
+		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
+	}
+	if s.shouldAttemptV4Submit() && !attemptedV4Submit {
+		mappedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
+		if mappedRuntimeID != "" && mappedRuntimeID != normalizedExecutionID {
+			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "success")
+			return
 		}
 	}
 	router := s.executionRuntime
 	if router == nil {
 		if s.orchestrator != nil {
+			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "success")
 			s.orchestrator.Submit(normalizedExecutionID)
 		}
 		return
 	}
 	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
 	if err := router.Submit(ctx, resolvedRuntimeID); err != nil && resolvedRuntimeID != normalizedExecutionID && router.legacy != nil {
+		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
 		router.legacy.Submit(normalizedExecutionID)
+		return
 	}
+	s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "success")
 }
 
 func (s *AppState) cancelExecutionBestEffort(ctx context.Context, executionID string) {
@@ -196,13 +209,20 @@ func (s *AppState) cancelExecutionBestEffort(ctx context.Context, executionID st
 	router := s.executionRuntime
 	if router == nil {
 		if s.orchestrator != nil {
+			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "success")
 			s.orchestrator.Cancel(normalizedExecutionID)
 		}
 		return
 	}
 	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
-	if err := router.Cancel(ctx, resolvedRuntimeID); err != nil && resolvedRuntimeID != normalizedExecutionID && router.legacy != nil {
+	cancelErr := router.Cancel(ctx, resolvedRuntimeID)
+	if cancelErr != nil && resolvedRuntimeID != normalizedExecutionID && router.legacy != nil {
+		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
 		router.legacy.Cancel(normalizedExecutionID)
+	} else if strings.HasPrefix(strings.TrimSpace(resolvedRuntimeID), "run_") && cancelErr == nil {
+		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "success")
+	} else {
+		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "success")
 	}
 	if s.shouldAttemptV4Submit() {
 		s.snapshotV4RunEventsBestEffort(normalizedExecutionID, s.resolveRuntimeSessionIDForExecution(normalizedExecutionID))
@@ -220,15 +240,48 @@ func (s *AppState) controlExecutionBestEffort(ctx context.Context, executionID s
 	router := s.executionRuntime
 	if router == nil {
 		if s.orchestrator != nil {
+			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "success")
 			s.orchestrator.Control(normalizedExecutionID, signal)
 		}
 		return
 	}
 	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
-	if err := router.Control(ctx, resolvedRuntimeID, signal); err != nil && resolvedRuntimeID != normalizedExecutionID && router.legacy != nil {
+	controlErr := router.Control(ctx, resolvedRuntimeID, signal)
+	if controlErr != nil && resolvedRuntimeID != normalizedExecutionID && router.legacy != nil {
+		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
 		router.legacy.Control(normalizedExecutionID, signal)
+	} else if strings.HasPrefix(strings.TrimSpace(resolvedRuntimeID), "run_") && controlErr == nil {
+		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "success")
+	} else {
+		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "success")
 	}
 	if s.shouldAttemptV4Submit() {
 		s.snapshotV4RunEventsBestEffort(normalizedExecutionID, s.resolveRuntimeSessionIDForExecution(normalizedExecutionID))
 	}
+}
+
+func (s *AppState) executionRuntimeMode() executionRuntimeMode {
+	if s == nil || s.executionRuntime == nil {
+		return executionRuntimeModeLegacy
+	}
+	return s.executionRuntime.mode
+}
+
+func (s *AppState) appendExecutionRuntimeAudit(executionID string, action string, result string) {
+	if s == nil {
+		return
+	}
+	normalizedExecutionID := strings.TrimSpace(executionID)
+	normalizedAction := strings.TrimSpace(action)
+	normalizedResult := strings.TrimSpace(result)
+	if normalizedExecutionID == "" || normalizedAction == "" || normalizedResult == "" {
+		return
+	}
+	s.AppendAudit(AdminAuditEvent{
+		Actor:    "system",
+		Action:   normalizedAction,
+		Resource: "execution_runtime:" + normalizedExecutionID,
+		Result:   normalizedResult,
+		TraceID:  GenerateTraceID(),
+	})
 }

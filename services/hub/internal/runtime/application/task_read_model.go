@@ -110,11 +110,11 @@ func BuildRunTaskGraph(runID string, maxParallelism int, inputs []RunTaskInput) 
 		dependsByTaskID[id] = append([]string{}, input.DependsOn...)
 		artifact := cloneRunTaskArtifact(input.Artifact)
 		lastError := cloneOptionalString(input.LastError)
-		tasks = append(tasks, RunTaskNode{
-			TaskID:      id,
-			RunID:       runID,
-			Title:       "Execution " + id,
-			State:       mapExecutionStateToTaskState(input.State),
+			tasks = append(tasks, RunTaskNode{
+				TaskID:      id,
+				RunID:       runID,
+				Title:       "Execution " + id,
+				State:       mapRunStateToTaskState(input.State),
 			DependsOn:   []string{},
 			Children:    []string{},
 			RetryCount:  retryCount,
@@ -201,7 +201,7 @@ func FindRunTaskByID(tasks []RunTaskNode, taskID string) (RunTaskNode, bool) {
 	return RunTaskNode{}, false
 }
 
-func mapExecutionStateToTaskState(raw string) string {
+func mapRunStateToTaskState(raw string) string {
 	switch strings.TrimSpace(raw) {
 	case "queued", "pending":
 		return RunTaskStateQueued
