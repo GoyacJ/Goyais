@@ -71,6 +71,8 @@ Commands:
   plugin                                            Manage plugins and marketplaces
   skills                                            Manage skills and skill marketplaces
   approved-tools                                    Manage approved tools
+  session                                           Manage runtime sessions (start/list/get)
+  run                                               Manage session runs (submit/control/stream)
   mcp                                               Configure and manage MCP servers
   doctor                                            Check the health of your goyais-cli installation
   update                                            Show manual upgrade commands (no auto-install)

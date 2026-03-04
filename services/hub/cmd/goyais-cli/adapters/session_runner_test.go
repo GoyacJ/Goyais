@@ -60,7 +60,7 @@ func TestRunnerRunPromptReturnsDelegateError(t *testing.T) {
 	}
 }
 
-func TestRunnerRunPromptUsesV4Fallback(t *testing.T) {
+func TestRunnerRunPromptUsesSessionRunFallback(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
@@ -70,13 +70,13 @@ func TestRunnerRunPromptUsesV4Fallback(t *testing.T) {
 	}
 
 	if err := runner.RunPrompt(context.Background(), RunRequest{
-		Prompt: "hello v4",
+		Prompt: "hello session",
 		CWD:    t.TempDir(),
 	}); err != nil {
-		t.Fatalf("v4 fallback run failed: %v", err)
+		t.Fatalf("session fallback run failed: %v", err)
 	}
 
-	if !strings.Contains(stdout.String(), "Processed: hello v4") {
+	if !strings.Contains(stdout.String(), "Processed: hello session") {
 		t.Fatalf("unexpected stdout %q", stdout.String())
 	}
 	if strings.TrimSpace(stderr.String()) != "" {
@@ -84,7 +84,7 @@ func TestRunnerRunPromptUsesV4Fallback(t *testing.T) {
 	}
 }
 
-func TestRunnerRunPromptUsesV4FallbackStreamJSON(t *testing.T) {
+func TestRunnerRunPromptUsesSessionRunFallbackStreamJSON(t *testing.T) {
 	var stdout bytes.Buffer
 	runner := &Runner{
 		Output:      &stdout,
@@ -96,14 +96,14 @@ func TestRunnerRunPromptUsesV4FallbackStreamJSON(t *testing.T) {
 		CWD:          t.TempDir(),
 		OutputFormat: "stream-json",
 	}); err != nil {
-		t.Fatalf("v4 stream-json run failed: %v", err)
+		t.Fatalf("session stream-json run failed: %v", err)
 	}
 
 	output := stdout.String()
-	if !strings.Contains(output, `"type":"run_output_delta"`) {
-		t.Fatalf("expected output delta frame, got %q", output)
+	if !strings.Contains(output, `"type":"text"`) {
+		t.Fatalf("expected text stream frame, got %q", output)
 	}
-	if !strings.Contains(output, `"type":"run_completed"`) {
-		t.Fatalf("expected completed frame, got %q", output)
+	if !strings.Contains(output, `"type":"result"`) {
+		t.Fatalf("expected result stream frame, got %q", output)
 	}
 }

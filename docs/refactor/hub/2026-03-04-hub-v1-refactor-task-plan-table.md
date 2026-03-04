@@ -29,7 +29,7 @@
 | R4 | 已完成 | 已完成 runtime 路由切换、SSE run-only 词汇收敛、OpenAPI 与 contracts 同步、旧路径下线 |
 | R5 | 已完成 | 已完成三类 routes 的 service registry 组装、域服务分层与非 runtime 验收 |
 | R6 | 已完成 | ACP 方法集切换至 v1，旧方法下线，并补齐 stream 订阅语义 |
-| R7 | 待开始 | CLI v1 命令面重写 |
+| R7 | 已完成 | CLI v1 命令树落地、session/run 适配层接入与 v4 runner 下线 |
 | R8 | 待开始 | Desktop + Shared 类型同步切换 |
 | R9 | 待开始 | Legacy 清理、文档收口、全量验收 |
 
@@ -310,11 +310,11 @@
 
 ### 任务清单
 
-- [ ] R7-T1 设计 CLI v1 命令树（session/run）
-- [ ] R7-T2 替换 `NewV4Runner` 入口与 adapter 组合方式
-- [ ] R7-T3 更新 text/json/stream-json 输出协议
-- [ ] R7-T4 删除 `v4_runner.go` 及其测试
-- [ ] R7-T5 增加新命令单测与 e2e 冒烟
+- [x] R7-T1 设计 CLI v1 命令树（session/run）
+- [x] R7-T2 替换 `NewV4Runner` 入口与 adapter 组合方式
+- [x] R7-T3 更新 text/json/stream-json 输出协议
+- [x] R7-T4 删除 `v4_runner.go` 及其测试
+- [x] R7-T5 增加新命令单测与 e2e 冒烟
 
 ### 关键文件面
 
@@ -325,6 +325,16 @@
 ### 验收命令
 
 1. `cd services/hub && go test ./cmd/goyais-cli/...`
+
+### 当前阶段证据（2026-03-04）
+
+1. 新增：`services/hub/cmd/goyais-cli/adapters/session_run_runner.go`，以 `SessionRunRunner` 统一承载 `session start/list/get` 与 `run submit/control/stream` 运行能力
+2. 切换：`services/hub/cmd/goyais-cli/main.go` 与 `services/hub/cmd/goyais-cli/adapters/session_runner.go` 入口改为 `NewSessionRunRunner`，移除 `NewV4Runner` 依赖
+3. 更新：`services/hub/cmd/goyais-cli/cli/commands/registry.go` 与 `services/hub/cmd/goyais-cli/cli/commands/handlers.go` 新增 `session/*` 与 `run/*` 命令树及执行处理
+4. 更新：`services/hub/cmd/goyais-cli/adapters/session_run_runner.go` 输出协议对齐 `text/json/stream-json`，其中 `stream-json` 统一为 `type=text|tool_use|tool_result|result`
+5. 删除：`services/hub/cmd/goyais-cli/adapters/v4_runner.go` 与 `services/hub/cmd/goyais-cli/adapters/v4_runner_test.go`
+6. 新增/更新测试：`session_run_runner_test.go`、`session_runner_test.go`、`app_test.go`、`commands_behavior_test.go` 覆盖新命令树与新输出协议
+7. 已验证：`cd services/hub && go test ./cmd/goyais-cli/...`
 
 ---
 

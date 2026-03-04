@@ -261,10 +261,10 @@ func TestAppRunPrintReturnsRunnerError(t *testing.T) {
 	}
 }
 
-func TestAppRunPrintUsesV4Runner(t *testing.T) {
+func TestAppRunPrintUsesSessionRunRunner(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	runner := adapters.NewV4Runner(&stdout, &stderr)
+	runner := adapters.NewSessionRunRunner(&stdout, &stderr)
 
 	app := NewApp(Dependencies{
 		Stdout:       &stdout,

@@ -13,7 +13,7 @@ import (
 var version = "dev"
 
 func main() {
-	runner := adapters.NewV4Runner(os.Stdout, os.Stderr)
+	runner := adapters.NewSessionRunRunner(os.Stdout, os.Stderr)
 
 	shell := tui.Shell{
 		In:     os.Stdin,

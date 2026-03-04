@@ -17,7 +17,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"goyais/services/hub/cmd/goyais-cli/adapters"
 )
 
 const (
@@ -25,6 +28,27 @@ const (
 	commandStateFile    = "cli-state.json"
 	mcpServersStateFile = "mcp-servers.json"
 )
+
+var (
+	commandRuntimeMu     sync.Mutex
+	commandRuntimeRunner *adapters.SessionRunRunner
+)
+
+func getCommandRuntimeRunner() *adapters.SessionRunRunner {
+	commandRuntimeMu.Lock()
+	defer commandRuntimeMu.Unlock()
+	if commandRuntimeRunner == nil {
+		commandRuntimeRunner = adapters.NewSessionRunRunner(io.Discard, io.Discard)
+	}
+	return commandRuntimeRunner
+}
+
+// ResetRuntimeForTests resets the in-process session/run runtime singleton.
+func ResetRuntimeForTests() {
+	commandRuntimeMu.Lock()
+	defer commandRuntimeMu.Unlock()
+	commandRuntimeRunner = nil
+}
 
 type commandArgs struct {
 	Positionals []string
@@ -270,6 +294,18 @@ func executeLeafCommand(node *Node, rawArgs []string, stdout io.Writer, stderr i
 		return handleApprovedToolsList(ctx)
 	case "approved-tools remove":
 		return handleApprovedToolsRemove(ctx)
+	case "session start":
+		return handleSessionStart(ctx)
+	case "session list":
+		return handleSessionList(ctx)
+	case "session get":
+		return handleSessionGet(ctx)
+	case "run submit":
+		return handleRunSubmit(ctx)
+	case "run control":
+		return handleRunControl(ctx)
+	case "run stream":
+		return handleRunStream(ctx)
 	case "mcp serve":
 		return handleMCPServe(ctx)
 	case "mcp add-sse":
@@ -1640,6 +1676,252 @@ func handleApprovedToolsRemove(ctx commandExecutionContext) int {
 	return 0
 }
 
+func handleSessionStart(ctx commandExecutionContext) int {
+	runner := getCommandRuntimeRunner()
+	record, err := runner.StartSession(context.Background(), adapters.SessionStartRequest{
+		CWD: ctx.WorkingDir,
+	})
+	if err != nil {
+		ctx.writeErr("error: start session: %v\n", err)
+		return 1
+	}
+	if saveErr := persistSessionID(ctx.WorkingDir, record.SessionID); saveErr != nil {
+		ctx.writeErr("error: save session state: %v\n", saveErr)
+		return 1
+	}
+	if ctx.Args.Has("json") {
+		writeJSON(ctx.Stdout, record)
+		return 0
+	}
+	ctx.writeOut("session_id: %s\n", record.SessionID)
+	ctx.writeOut("created_at: %s\n", record.CreatedAt)
+	ctx.writeOut("cwd: %s\n", record.CWD)
+	return 0
+}
+
+func handleSessionList(ctx commandExecutionContext) int {
+	runner := getCommandRuntimeRunner()
+	records, err := runner.ListSessions(context.Background())
+	if err != nil {
+		ctx.writeErr("error: list sessions: %v\n", err)
+		return 1
+	}
+
+	state, stateErr := loadCommandState(ctx.WorkingDir)
+	if stateErr != nil {
+		ctx.writeErr("error: load session state: %v\n", stateErr)
+		return 1
+	}
+	recordByID := make(map[string]adapters.SessionRecord, len(records))
+	for _, record := range records {
+		recordByID[record.SessionID] = record
+	}
+	for _, sessionID := range state.Sessions {
+		if _, exists := recordByID[sessionID]; exists {
+			continue
+		}
+		recordByID[sessionID] = adapters.SessionRecord{SessionID: sessionID}
+	}
+
+	merged := make([]adapters.SessionRecord, 0, len(recordByID))
+	for _, record := range recordByID {
+		merged = append(merged, record)
+	}
+	sort.Slice(merged, func(i, j int) bool {
+		return merged[i].SessionID < merged[j].SessionID
+	})
+
+	if ctx.Args.Has("json") {
+		writeJSON(ctx.Stdout, merged)
+		return 0
+	}
+	if len(merged) == 0 {
+		ctx.writeOut("No sessions found\n")
+		return 0
+	}
+	ctx.writeOut("Sessions:\n")
+	for _, record := range merged {
+		if strings.TrimSpace(record.CreatedAt) == "" {
+			ctx.writeOut("  - %s\n", record.SessionID)
+			continue
+		}
+		ctx.writeOut("  - %s (%s)\n", record.SessionID, record.CreatedAt)
+	}
+	return 0
+}
+
+func handleSessionGet(ctx commandExecutionContext) int {
+	if len(ctx.Args.Positionals) < 1 {
+		ctx.writeErr("error: session get requires <session_id>\n")
+		return 1
+	}
+	sessionID := strings.TrimSpace(ctx.Args.Positionals[0])
+	if sessionID == "" {
+		ctx.writeErr("error: session get requires <session_id>\n")
+		return 1
+	}
+
+	runner := getCommandRuntimeRunner()
+	record, err := runner.GetSession(context.Background(), sessionID)
+	if err != nil {
+		state, stateErr := loadCommandState(ctx.WorkingDir)
+		if stateErr != nil {
+			ctx.writeErr("error: load session state: %v\n", stateErr)
+			return 1
+		}
+		found := false
+		for _, item := range state.Sessions {
+			if item == sessionID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			ctx.writeErr("error: session %q not found\n", sessionID)
+			return 1
+		}
+		record = adapters.SessionRecord{SessionID: sessionID}
+	}
+
+	if ctx.Args.Has("json") {
+		writeJSON(ctx.Stdout, record)
+		return 0
+	}
+	ctx.writeOut("Session: %s\n", record.SessionID)
+	if strings.TrimSpace(record.CreatedAt) != "" {
+		ctx.writeOut("CreatedAt: %s\n", record.CreatedAt)
+	}
+	if strings.TrimSpace(record.CWD) != "" {
+		ctx.writeOut("CWD: %s\n", record.CWD)
+	}
+	return 0
+}
+
+func handleRunSubmit(ctx commandExecutionContext) int {
+	sessionID, ok := ctx.Args.First("session")
+	if !ok || strings.TrimSpace(sessionID) == "" {
+		ctx.writeErr("error: run submit --session is required\n")
+		return 1
+	}
+
+	prompt := ""
+	if value, hasPromptFlag := ctx.Args.First("prompt"); hasPromptFlag {
+		prompt = strings.TrimSpace(value)
+	}
+	if prompt == "" && len(ctx.Args.Positionals) > 0 {
+		prompt = strings.TrimSpace(strings.Join(ctx.Args.Positionals, " "))
+	}
+	if prompt == "" {
+		ctx.writeErr("error: run submit --prompt is required\n")
+		return 1
+	}
+
+	outputFormat := "text"
+	if value, ok := ctx.Args.First("output-format"); ok && strings.TrimSpace(value) != "" {
+		outputFormat = strings.TrimSpace(value)
+	}
+
+	runner := getCommandRuntimeRunner()
+	result, err := runner.SubmitRun(context.Background(), adapters.SubmitRunRequest{
+		SessionID:    strings.TrimSpace(sessionID),
+		Prompt:       prompt,
+		CWD:          ctx.WorkingDir,
+		OutputFormat: outputFormat,
+	}, ctx.Stdout, ctx.Stderr)
+	if err != nil {
+		ctx.writeErr("error: run submit failed: %v\n", err)
+		return 1
+	}
+	if saveErr := persistSessionID(ctx.WorkingDir, result.SessionID); saveErr != nil {
+		ctx.writeErr("error: save session state: %v\n", saveErr)
+		return 1
+	}
+	if strings.EqualFold(outputFormat, "text") {
+		ctx.writeOut("run_id: %s\n", result.RunID)
+	}
+	return 0
+}
+
+func handleRunControl(ctx commandExecutionContext) int {
+	runID, ok := ctx.Args.First("run")
+	if !ok || strings.TrimSpace(runID) == "" {
+		ctx.writeErr("error: run control --run is required\n")
+		return 1
+	}
+	action, ok := ctx.Args.First("action")
+	if !ok || strings.TrimSpace(action) == "" {
+		ctx.writeErr("error: run control --action is required\n")
+		return 1
+	}
+
+	runner := getCommandRuntimeRunner()
+	if err := runner.ControlRun(context.Background(), adapters.RunControlRequest{
+		RunID:  strings.TrimSpace(runID),
+		Action: strings.TrimSpace(action),
+	}); err != nil {
+		ctx.writeErr("error: run control failed: %v\n", err)
+		return 1
+	}
+	ctx.writeOut("Controlled run %s with action %s\n", strings.TrimSpace(runID), strings.TrimSpace(action))
+	return 0
+}
+
+func handleRunStream(ctx commandExecutionContext) int {
+	sessionID, ok := ctx.Args.First("session")
+	if !ok || strings.TrimSpace(sessionID) == "" {
+		ctx.writeErr("error: run stream --session is required\n")
+		return 1
+	}
+	outputFormat := "stream-json"
+	if value, ok := ctx.Args.First("output-format"); ok && strings.TrimSpace(value) != "" {
+		outputFormat = strings.TrimSpace(value)
+	}
+	cursor := ""
+	if value, ok := ctx.Args.First("cursor"); ok {
+		cursor = strings.TrimSpace(value)
+	}
+
+	limit := 256
+	if value, ok := ctx.Args.First("limit"); ok && strings.TrimSpace(value) != "" {
+		parsed, parseErr := strconv.Atoi(strings.TrimSpace(value))
+		if parseErr != nil || parsed <= 0 {
+			ctx.writeErr("error: run stream invalid --limit %q\n", value)
+			return 1
+		}
+		limit = parsed
+	}
+
+	runner := getCommandRuntimeRunner()
+	if err := runner.StreamSession(context.Background(), adapters.StreamSessionRequest{
+		SessionID:    strings.TrimSpace(sessionID),
+		Cursor:       cursor,
+		OutputFormat: outputFormat,
+		Limit:        limit,
+	}, ctx.Stdout, ctx.Stderr); err != nil {
+		ctx.writeErr("error: run stream failed: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func persistSessionID(cwd string, sessionID string) error {
+	trimmed := strings.TrimSpace(sessionID)
+	if trimmed == "" {
+		return nil
+	}
+	state, err := loadCommandState(cwd)
+	if err != nil {
+		return err
+	}
+	for _, existing := range state.Sessions {
+		if existing == trimmed {
+			return nil
+		}
+	}
+	state.Sessions = append(state.Sessions, trimmed)
+	return saveCommandState(cwd, state)
+}
+
 func handleMCPServe(ctx commandExecutionContext) int {
 	ctx.writeOut("Starting goyais MCP server (stdio)\n")
 	ctx.writeOut("MCP server is ready\n")
@@ -2433,8 +2715,8 @@ func handleUpdate(ctx commandExecutionContext) int {
 		}
 		ctx.writeOut("New version available: %s\n", latestVersion)
 		ctx.writeOut("\nRun one of the following commands to update:\n")
-			ctx.writeOut("  bun add -g @goyais/cli@latest\n")
-			ctx.writeOut("  npm install -g @goyais/cli@latest\n")
+		ctx.writeOut("  bun add -g @goyais/cli@latest\n")
+		ctx.writeOut("  npm install -g @goyais/cli@latest\n")
 		if runtime.GOOS != "windows" {
 			ctx.writeOut("\nNote: you may need to prefix with \"sudo\" on macOS/Linux.\n")
 		}

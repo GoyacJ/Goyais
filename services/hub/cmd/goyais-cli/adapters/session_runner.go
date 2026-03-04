@@ -12,6 +12,8 @@ import (
 
 // RunRequest is the CLI prompt execution request shared by app/tui runners.
 type RunRequest struct {
+	SessionID string
+
 	Prompt               string
 	CWD                  string
 	Env                  map[string]string
@@ -68,7 +70,7 @@ func (r *Runner) resolveExecutor() PromptExecutor {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.resolved == nil {
-		r.resolved = NewV4Runner(r.Output, r.ErrorOutput)
+		r.resolved = NewSessionRunRunner(r.Output, r.ErrorOutput)
 	}
 	return r.resolved
 }

@@ -27,6 +27,7 @@ type commandFailureCase struct {
 func TestCommandsBehavior_AllLeafHandlersExecute(t *testing.T) {
 	workdir := t.TempDir()
 	fixtures := prepareCommandFixtures(t, workdir)
+	commands.ResetRuntimeForTests()
 	t.Setenv("GOYAIS_CLAUDE_DESKTOP_CONFIG", fixtures.claudeDesktopConfigPath)
 	t.Setenv("GOYAIS_UPDATE_TEST_MODE", "up-to-date")
 
@@ -63,6 +64,12 @@ func TestCommandsBehavior_AllLeafHandlersExecute(t *testing.T) {
 
 		{path: "approved-tools list", args: []string{"approved-tools", "list", "--cwd", workdir}, expectStdoutSub: "Bash"},
 		{path: "approved-tools remove", args: []string{"approved-tools", "remove", "Bash", "--cwd", workdir}, expectStdoutSub: "Removed approved tool: Bash"},
+		{path: "session start", args: []string{"session", "start", "--cwd", workdir}, expectStdoutSub: "session_id: sess_1"},
+		{path: "session list", args: []string{"session", "list", "--cwd", workdir}, expectStdoutSub: "sess_1"},
+		{path: "session get", args: []string{"session", "get", "sess_1", "--cwd", workdir}, expectStdoutSub: "Session: sess_1"},
+		{path: "run submit", args: []string{"run", "submit", "--session", "sess_1", "--prompt", "hello run", "--output-format", "stream-json", "--cwd", workdir}, expectStdoutSub: `"type":"result"`},
+		{path: "run control", args: []string{"run", "control", "--run", "run_1", "--action", "stop", "--cwd", workdir}, expectStdoutSub: "Controlled run run_1 with action stop"},
+		{path: "run stream", args: []string{"run", "stream", "--session", "sess_1", "--cursor", "0", "--output-format", "stream-json", "--cwd", workdir}, expectStdoutSub: `"type":"text"`},
 
 		{path: "mcp add-sse", args: []string{"mcp", "add-sse", "sse-main", "https://example.com/sse", "--cwd", workdir, "--scope", "local"}, expectStdoutSub: "Added SSE MCP server sse-main"},
 		{path: "mcp add-http", args: []string{"mcp", "add-http", "http-main", "https://example.com/http", "--cwd", workdir, "--scope", "local"}, expectStdoutSub: "Added HTTP MCP server http-main"},
@@ -126,6 +133,7 @@ func TestCommandsBehavior_AllLeafHandlersExecute(t *testing.T) {
 func TestCommandsBehavior_FailureSemanticsByFamily(t *testing.T) {
 	workdir := t.TempDir()
 	fixtures := prepareCommandFixtures(t, workdir)
+	commands.ResetRuntimeForTests()
 	t.Setenv("GOYAIS_CLAUDE_DESKTOP_CONFIG", fixtures.claudeDesktopConfigPath)
 
 	cases := []commandFailureCase{
@@ -135,6 +143,10 @@ func TestCommandsBehavior_FailureSemanticsByFamily(t *testing.T) {
 		{name: "plugin invalid scope", args: []string{"plugin", "install", "pack@default", "--cwd", workdir, "--scope", "bad"}, expectStderrSub: "invalid scope"},
 		{name: "skills missing install", args: []string{"skills", "uninstall", "pack@default", "--cwd", workdir}, expectStderrSub: "not installed"},
 		{name: "approved tool missing", args: []string{"approved-tools", "remove", "NOT_FOUND", "--cwd", workdir}, expectStderrSub: ""},
+		{name: "session get missing", args: []string{"session", "get"}, expectStderrSub: "missing required arguments"},
+		{name: "run submit missing session", args: []string{"run", "submit", "--prompt", "hello", "--cwd", workdir}, expectStderrSub: "--session is required"},
+		{name: "run control invalid action", args: []string{"run", "control", "--run", "run_1", "--action", "ship", "--cwd", workdir}, expectStderrSub: "invalid action"},
+		{name: "run stream missing session", args: []string{"run", "stream", "--cwd", workdir}, expectStderrSub: "--session is required"},
 		{name: "mcp unknown server", args: []string{"mcp", "get", "missing", "--cwd", workdir}, expectStderrSub: "No MCP server found"},
 		{name: "log invalid index", args: []string{"log", "not-a-number", "--cwd", workdir}, expectStderrSub: "invalid log index"},
 		{name: "resume no sessions", args: []string{"resume", "--cwd", t.TempDir()}, expectStderrSub: "No conversation found to resume"},
@@ -161,6 +173,7 @@ func TestCommandsBehavior_FailureSemanticsByFamily(t *testing.T) {
 
 func TestCommandsBehavior_MCPAddInteractiveWizard(t *testing.T) {
 	workdir := t.TempDir()
+	commands.ResetRuntimeForTests()
 	originalStdin := os.Stdin
 	defer func() {
 		os.Stdin = originalStdin

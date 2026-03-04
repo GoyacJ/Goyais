@@ -128,6 +128,7 @@ func (a *App) Run(ctx context.Context, args []string) int {
 			return 1
 		}
 		err := a.promptRunner.RunPrompt(ctx, adapters.RunRequest{
+			SessionID:            options.SessionID,
 			Prompt:               prompt,
 			CWD:                  options.CWD,
 			Env:                  cloneEnv(a.env),
