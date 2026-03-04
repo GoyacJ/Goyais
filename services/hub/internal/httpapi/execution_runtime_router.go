@@ -42,6 +42,7 @@ type v4ExecutionService interface {
 	StartSession(ctx context.Context, req agenthttpapi.StartSessionRequest) (agenthttpapi.StartSessionResponse, error)
 	Submit(ctx context.Context, req agenthttpapi.SubmitRequest) (agenthttpapi.SubmitResponse, error)
 	Control(ctx context.Context, req agenthttpapi.ControlRequest) error
+	SubscribeSnapshot(ctx context.Context, req agenthttpapi.SubscribeRequest) ([]agenthttpapi.EventFrame, error)
 }
 
 type executionRuntimeRouterOptions struct {
@@ -165,6 +166,7 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 		submitResult, submitErr := s.submitExecutionViaV4(ctx, normalizedExecutionID)
 		s.appendV4ShadowSubmitEvent(normalizedExecutionID, submitResult, submitErr)
 		if submitErr == nil {
+			s.snapshotV4RunEventsBestEffort(normalizedExecutionID, submitResult.SessionID)
 			if s.executionRuntime != nil && s.executionRuntime.mode == executionRuntimeModeV4 {
 				return
 			}

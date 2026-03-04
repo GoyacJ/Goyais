@@ -36,10 +36,12 @@ func (s *legacyBackendStub) Control(executionID string, signal executionControlS
 }
 
 type v4BackendStub struct {
-	startRequests  []agenthttpapi.StartSessionRequest
-	submitRequests []agenthttpapi.SubmitRequest
-	requests       []agenthttpapi.ControlRequest
-	err            error
+	startRequests     []agenthttpapi.StartSessionRequest
+	submitRequests    []agenthttpapi.SubmitRequest
+	subscribeRequests []agenthttpapi.SubscribeRequest
+	subscribeFrames   []agenthttpapi.EventFrame
+	requests          []agenthttpapi.ControlRequest
+	err               error
 
 	startSessionID string
 	submitRunID    string
@@ -75,6 +77,15 @@ func (s *v4BackendStub) Control(_ context.Context, req agenthttpapi.ControlReque
 	}
 	s.requests = append(s.requests, req)
 	return nil
+}
+
+func (s *v4BackendStub) SubscribeSnapshot(_ context.Context, req agenthttpapi.SubscribeRequest) ([]agenthttpapi.EventFrame, error) {
+	s.subscribeRequests = append(s.subscribeRequests, req)
+	frames := append([]agenthttpapi.EventFrame{}, s.subscribeFrames...)
+	if s.err != nil {
+		return frames, s.err
+	}
+	return frames, nil
 }
 
 func TestExecutionRuntimeRouter_LegacyModeRoutesAllToLegacy(t *testing.T) {

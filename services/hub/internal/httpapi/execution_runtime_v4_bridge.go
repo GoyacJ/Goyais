@@ -122,6 +122,93 @@ func (s *AppState) appendV4ShadowSubmitEvent(executionID string, result v4Submit
 	syncExecutionDomainBestEffort(s)
 }
 
+func (s *AppState) snapshotV4RunEventsBestEffort(executionID string, sessionID string) {
+	if s == nil || s.v4Service == nil {
+		return
+	}
+	normalizedSessionID := strings.TrimSpace(sessionID)
+	if normalizedSessionID == "" {
+		return
+	}
+
+	pollCtx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer cancel()
+	frames, err := s.v4Service.SubscribeSnapshot(pollCtx, agenthttpapi.SubscribeRequest{
+		SessionID: normalizedSessionID,
+		Limit:     16,
+	})
+	if len(frames) == 0 {
+		return
+	}
+	for _, frame := range frames {
+		s.appendV4ShadowRunEvent(executionID, frame)
+	}
+	if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+		s.appendV4ShadowRunEvent(executionID, agenthttpapi.EventFrame{
+			Type:      "shadow_poll_error",
+			SessionID: normalizedSessionID,
+			Sequence:  -1,
+			Payload: map[string]any{
+				"error": err.Error(),
+			},
+		})
+	}
+}
+
+func (s *AppState) appendV4ShadowRunEvent(executionID string, frame agenthttpapi.EventFrame) {
+	if s == nil {
+		return
+	}
+	normalizedExecutionID := strings.TrimSpace(executionID)
+	if normalizedExecutionID == "" {
+		return
+	}
+
+	s.mu.Lock()
+	execution, executionExists := s.executions[normalizedExecutionID]
+	if !executionExists {
+		s.mu.Unlock()
+		return
+	}
+	if s.conversationEventSeq == nil {
+		s.conversationEventSeq = map[string]int{}
+	}
+	if s.executionDiffs == nil {
+		s.executionDiffs = map[string][]DiffItem{}
+	}
+	if s.executionEvents == nil {
+		s.executionEvents = map[string][]ExecutionEvent{}
+	}
+	if s.conversationEventSubs == nil {
+		s.conversationEventSubs = map[string]map[string]chan ExecutionEvent{}
+	}
+	if s.conversationChangeLedgers == nil {
+		s.conversationChangeLedgers = map[string]*ConversationChangeLedger{}
+	}
+	payload := map[string]any{
+		"stage":          "v4_shadow_event",
+		"source":         "runtime_router",
+		"session_id":     strings.TrimSpace(frame.SessionID),
+		"run_id":         strings.TrimSpace(frame.RunID),
+		"event_type":     strings.TrimSpace(frame.Type),
+		"event_sequence": frame.Sequence,
+	}
+	for key, value := range cloneMapAny(frame.Payload) {
+		payload["event_"+key] = value
+	}
+	appendExecutionEventLocked(s, ExecutionEvent{
+		ExecutionID:    execution.ID,
+		ConversationID: execution.ConversationID,
+		TraceID:        strings.TrimSpace(execution.TraceID),
+		QueueIndex:     execution.QueueIndex,
+		Type:           ExecutionEventTypeThinkingDelta,
+		Timestamp:      time.Now().UTC().Format(time.RFC3339),
+		Payload:        payload,
+	})
+	s.mu.Unlock()
+	syncExecutionDomainBestEffort(s)
+}
+
 func (s *AppState) submitExecutionViaV4(ctx context.Context, executionID string) (v4SubmitResult, error) {
 	if s == nil || s.v4Service == nil {
 		return v4SubmitResult{}, errV4ExecutionBackendNotConfigured
