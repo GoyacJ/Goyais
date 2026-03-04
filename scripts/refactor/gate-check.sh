@@ -73,8 +73,14 @@ execution_enum_non_httpapi_refs="$(
     | awk '!/^internal\/httpapi\//' \
     | wc -l | tr -d ' '
 )"
+direct_orchestrator_refs="$(
+  cd "$hub_dir"
+  (rg -n --glob '!**/*_test.go' 'state\\.orchestrator|\\.orchestrator\\b' internal/httpapi || true) \
+    | wc -l | tr -d ' '
+)"
 echo "internal/agentcore external prod refs (excluding legacybridge): $agentcore_external_refs"
 echo "ExecutionState/EventType non-httpapi prod refs: $execution_enum_non_httpapi_refs"
+echo "direct state.orchestrator prod refs: $direct_orchestrator_refs"
 if [[ "$strict" -eq 1 ]]; then
   if [[ "$agentcore_external_refs" -ne 0 ]]; then
     echo "FAIL: strict mode requires zero external agentcore refs"
@@ -82,6 +88,10 @@ if [[ "$strict" -eq 1 ]]; then
   fi
   if [[ "$execution_enum_non_httpapi_refs" -ne 0 ]]; then
     echo "FAIL: strict mode requires zero non-httpapi ExecutionState/EventType refs"
+    exit 1
+  fi
+  if [[ "$direct_orchestrator_refs" -ne 0 ]]; then
+    echo "FAIL: strict mode requires zero direct state.orchestrator prod refs"
     exit 1
   fi
 fi
