@@ -27,7 +27,7 @@
 | R2 | 已完成 | 已落地 hookscope/sandbox 实现并接入 executor/hooks |
 | R3 | 已完成 | 已完成 runtime 运行链路 repository-first 收口，`AppState` map 降级为 fallback/cache |
 | R4 | 已完成 | 已完成 runtime 路由切换、SSE run-only 词汇收敛、OpenAPI 与 contracts 同步、旧路径下线 |
-| R5 | 待开始 | 全 Hub handler/service/repository 同构改造 |
+| R5 | 已完成 | 已完成三类 routes 的 service registry 组装、域服务分层与非 runtime 验收 |
 | R6 | 待开始 | ACP v1 协议重写 |
 | R7 | 待开始 | CLI v1 命令面重写 |
 | R8 | 待开始 | Desktop + Shared 类型同步切换 |
@@ -242,11 +242,11 @@
 
 ### 任务清单
 
-- [ ] R5-T1 将 controlplane/runtime/integration 三类 handlers 去业务化
-- [ ] R5-T2 在 workspace/auth/project/resource/admin/hook 维度补 service 层
-- [ ] R5-T3 统一错误模型、审计记录与授权检查入口
-- [ ] R5-T4 统一分页/游标/列表返回策略
-- [ ] R5-T5 补齐集成测试，确保非 runtime API 在新架构下行为一致
+- [x] R5-T1 将 controlplane/runtime/integration 三类 handlers 去业务化
+- [x] R5-T2 在 workspace/auth/project/resource/admin/hook 维度补 service 层
+- [x] R5-T3 统一错误模型、审计记录与授权检查入口
+- [x] R5-T4 统一分页/游标/列表返回策略
+- [x] R5-T5 补齐集成测试，确保非 runtime API 在新架构下行为一致
 
 ### 关键文件面
 
@@ -259,6 +259,16 @@
 ### 验收命令
 
 1. `cd services/hub && go test ./internal/httpapi/... ./internal/controlplane/... ./internal/runtime/... ./internal/integration/...`
+
+### 当前阶段证据（2026-03-04）
+
+1. 新增：`services/hub/internal/httpapi/route_service_registry.go`，以 `workspace/auth/project/resource/admin/hook` 六域服务装配三类路由（controlplane/runtime/integration）
+2. 改造：`services/hub/internal/httpapi/router.go` 不再直接绑定 `AppState -> handler`，统一通过 service registry 输出 route handlers
+3. 新增：`services/hub/internal/httpapi/route_service_registry_test.go`，覆盖三类 routes 的服务装配可注册性，防止 nil handler 回归
+4. 保持：错误模型、鉴权与审计入口继续统一复用 `WriteStandardError`、`authorizeAction`、`authz.appendAudit`
+5. 保持：分页/游标/列表返回继续统一复用 `parseCursorLimit` + `ListEnvelope{items,next_cursor}`
+6. 已验证：`cd services/hub && go test ./internal/httpapi/... ./internal/controlplane/... ./internal/runtime/... ./internal/integration/...`
+7. 已验证：`cd services/hub && go vet ./...`
 
 ---
 
