@@ -249,10 +249,7 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 	}
 	router := s.executionRuntime
 	if router == nil {
-		if s.orchestrator != nil {
-			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "success")
-			s.orchestrator.Submit(normalizedExecutionID)
-		}
+		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "error")
 		return
 	}
 	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
@@ -282,10 +279,7 @@ func (s *AppState) cancelExecutionBestEffort(ctx context.Context, executionID st
 	}
 	router := s.executionRuntime
 	if router == nil {
-		if s.orchestrator != nil {
-			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "success")
-			s.orchestrator.Cancel(normalizedExecutionID)
-		}
+		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "error")
 		return
 	}
 	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
@@ -319,10 +313,7 @@ func (s *AppState) controlExecutionBestEffort(ctx context.Context, executionID s
 	}
 	router := s.executionRuntime
 	if router == nil {
-		if s.orchestrator != nil {
-			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "success")
-			s.orchestrator.Control(normalizedExecutionID, signal)
-		}
+		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "error")
 		return
 	}
 	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
