@@ -252,6 +252,20 @@ func TestSubmitExecutionBestEffort_HybridModeSubmitsViaV4AndStillRunsLegacy(t *t
 	if mapped := strings.TrimSpace(state.executionRuntimeRunIDs["exec_1"]); mapped != "run_v4_bridge" {
 		t.Fatalf("expected mapped run id to be stored for shadow comparison, got %q", mapped)
 	}
+	events := state.executionEvents["conv_1"]
+	if len(events) == 0 {
+		t.Fatalf("expected shadow submit event to be appended")
+	}
+	last := events[len(events)-1]
+	if last.Type != ExecutionEventTypeThinkingDelta {
+		t.Fatalf("expected thinking_delta shadow event, got %q", last.Type)
+	}
+	if stage := strings.TrimSpace(asString(last.Payload["stage"])); stage != "v4_shadow_submit" {
+		t.Fatalf("expected v4_shadow_submit stage, got %q", stage)
+	}
+	if status := strings.TrimSpace(asString(last.Payload["status"])); status != "ok" {
+		t.Fatalf("expected ok status in shadow event, got %q", status)
+	}
 }
 
 func TestSubmitExecutionBestEffort_FallsBackToLegacyWhenV4SubmitFails(t *testing.T) {
@@ -272,6 +286,66 @@ func TestSubmitExecutionBestEffort_FallsBackToLegacyWhenV4SubmitFails(t *testing
 
 	if len(legacy.submits) != 1 || legacy.submits[0] != "exec_missing" {
 		t.Fatalf("expected legacy fallback submit for exec_missing, got %#v", legacy.submits)
+	}
+}
+
+func TestSubmitExecutionBestEffort_RecordsShadowFailureWhenV4SubmitFailsWithContext(t *testing.T) {
+	legacy := &legacyBackendStub{}
+	v4 := &v4BackendStub{err: errors.New("v4 down")}
+	state := &AppState{
+		projects: map[string]Project{
+			"proj_1": {
+				ID:       "proj_1",
+				RepoPath: "/tmp/project",
+			},
+		},
+		conversations: map[string]Conversation{
+			"conv_1": {
+				ID:          "conv_1",
+				WorkspaceID: "ws_1",
+				ProjectID:   "proj_1",
+			},
+		},
+		conversationMessages: map[string][]ConversationMessage{
+			"conv_1": {
+				{
+					ID:      "msg_1",
+					Content: "trigger failing v4 submit",
+				},
+			},
+		},
+		executions: map[string]Execution{
+			"exec_1": {
+				ID:             "exec_1",
+				ConversationID: "conv_1",
+				MessageID:      "msg_1",
+			},
+		},
+		executionRuntimeRunIDs:        map[string]string{},
+		conversationRuntimeSessionIDs: map[string]string{},
+		v4Service:                     v4,
+	}
+	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
+		Mode:   "hybrid",
+		Legacy: legacy,
+		V4:     v4,
+	})
+
+	state.submitExecutionBestEffort(context.Background(), "exec_1")
+
+	if len(legacy.submits) != 1 || legacy.submits[0] != "exec_1" {
+		t.Fatalf("expected legacy fallback submit for exec_1, got %#v", legacy.submits)
+	}
+	events := state.executionEvents["conv_1"]
+	if len(events) == 0 {
+		t.Fatalf("expected shadow failure event to be appended")
+	}
+	last := events[len(events)-1]
+	if status := strings.TrimSpace(asString(last.Payload["status"])); status != "error" {
+		t.Fatalf("expected error status in shadow event, got %q", status)
+	}
+	if errMessage := strings.TrimSpace(asString(last.Payload["error"])); errMessage == "" {
+		t.Fatalf("expected error message in shadow failure event")
 	}
 }
 

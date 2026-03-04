@@ -162,7 +162,9 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 		return
 	}
 	if s.shouldAttemptV4Submit() && !strings.HasPrefix(normalizedExecutionID, "run_") {
-		if err := s.submitExecutionViaV4(ctx, normalizedExecutionID); err == nil {
+		submitResult, submitErr := s.submitExecutionViaV4(ctx, normalizedExecutionID)
+		s.appendV4ShadowSubmitEvent(normalizedExecutionID, submitResult, submitErr)
+		if submitErr == nil {
 			if s.executionRuntime != nil && s.executionRuntime.mode == executionRuntimeModeV4 {
 				return
 			}

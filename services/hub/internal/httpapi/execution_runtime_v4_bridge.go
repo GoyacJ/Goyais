@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	agenthttpapi "goyais/services/hub/internal/agent/adapters/httpapi"
 )
@@ -17,6 +18,11 @@ var (
 	errV4SubmitContextNotFound = errors.New("execution submit context not found")
 	errV4SubmitPromptMissing   = errors.New("execution prompt message is missing")
 )
+
+type v4SubmitResult struct {
+	SessionID string
+	RunID     string
+}
 
 func (s *AppState) shouldAttemptV4Submit() bool {
 	if s == nil || s.v4Service == nil {
@@ -62,14 +68,68 @@ func (s *AppState) clearExecutionRuntimeMapping(executionID string) {
 	s.mu.Unlock()
 }
 
-func (s *AppState) submitExecutionViaV4(ctx context.Context, executionID string) error {
+func (s *AppState) appendV4ShadowSubmitEvent(executionID string, result v4SubmitResult, submitErr error) {
+	if s == nil {
+		return
+	}
+	normalizedExecutionID := strings.TrimSpace(executionID)
+	if normalizedExecutionID == "" {
+		return
+	}
+
+	s.mu.Lock()
+	execution, executionExists := s.executions[normalizedExecutionID]
+	if !executionExists {
+		s.mu.Unlock()
+		return
+	}
+	if s.conversationEventSeq == nil {
+		s.conversationEventSeq = map[string]int{}
+	}
+	if s.executionDiffs == nil {
+		s.executionDiffs = map[string][]DiffItem{}
+	}
+	if s.executionEvents == nil {
+		s.executionEvents = map[string][]ExecutionEvent{}
+	}
+	if s.conversationEventSubs == nil {
+		s.conversationEventSubs = map[string]map[string]chan ExecutionEvent{}
+	}
+	if s.conversationChangeLedgers == nil {
+		s.conversationChangeLedgers = map[string]*ConversationChangeLedger{}
+	}
+	payload := map[string]any{
+		"stage":      "v4_shadow_submit",
+		"status":     "ok",
+		"source":     "runtime_router",
+		"session_id": strings.TrimSpace(result.SessionID),
+		"run_id":     strings.TrimSpace(result.RunID),
+	}
+	if submitErr != nil {
+		payload["status"] = "error"
+		payload["error"] = submitErr.Error()
+	}
+	appendExecutionEventLocked(s, ExecutionEvent{
+		ExecutionID:    execution.ID,
+		ConversationID: execution.ConversationID,
+		TraceID:        strings.TrimSpace(execution.TraceID),
+		QueueIndex:     execution.QueueIndex,
+		Type:           ExecutionEventTypeThinkingDelta,
+		Timestamp:      time.Now().UTC().Format(time.RFC3339),
+		Payload:        payload,
+	})
+	s.mu.Unlock()
+	syncExecutionDomainBestEffort(s)
+}
+
+func (s *AppState) submitExecutionViaV4(ctx context.Context, executionID string) (v4SubmitResult, error) {
 	if s == nil || s.v4Service == nil {
-		return errV4ExecutionBackendNotConfigured
+		return v4SubmitResult{}, errV4ExecutionBackendNotConfigured
 	}
 
 	submitCtx, err := s.loadV4SubmitContext(executionID)
 	if err != nil {
-		return err
+		return v4SubmitResult{}, err
 	}
 
 	sessionID := submitCtx.SessionID
@@ -79,11 +139,11 @@ func (s *AppState) submitExecutionViaV4(ctx context.Context, executionID string)
 			WorkingDir:  submitCtx.WorkingDir,
 		})
 		if startErr != nil {
-			return startErr
+			return v4SubmitResult{}, startErr
 		}
 		sessionID = strings.TrimSpace(started.SessionID)
 		if sessionID == "" {
-			return errors.New("v4 start session returned empty session_id")
+			return v4SubmitResult{}, errors.New("v4 start session returned empty session_id")
 		}
 		s.mu.Lock()
 		existingSessionID := strings.TrimSpace(s.conversationRuntimeSessionIDs[submitCtx.ConversationID])
@@ -105,17 +165,20 @@ func (s *AppState) submitExecutionViaV4(ctx context.Context, executionID string)
 		},
 	})
 	if submitErr != nil {
-		return submitErr
+		return v4SubmitResult{}, submitErr
 	}
 	runID := strings.TrimSpace(submitResp.RunID)
 	if runID == "" {
-		return errors.New("v4 submit returned empty run_id")
+		return v4SubmitResult{}, errors.New("v4 submit returned empty run_id")
 	}
 
 	s.mu.Lock()
 	s.executionRuntimeRunIDs[submitCtx.ExecutionID] = runID
 	s.mu.Unlock()
-	return nil
+	return v4SubmitResult{
+		SessionID: sessionID,
+		RunID:     runID,
+	}, nil
 }
 
 type v4SubmitContext struct {
