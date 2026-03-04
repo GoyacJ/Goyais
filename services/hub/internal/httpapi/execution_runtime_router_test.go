@@ -179,6 +179,27 @@ func TestExecutionRuntimeRouter_V4ModeRequiresV4BackendForRunIDs(t *testing.T) {
 	}
 }
 
+func TestExecutionRuntimeRouter_V4ModeRejectsUnmappedExecutionIDs(t *testing.T) {
+	legacy := &legacyBackendStub{}
+	router := newExecutionRuntimeRouter(executionRuntimeRouterOptions{
+		Mode:   "v4",
+		Legacy: legacy,
+	})
+
+	if err := router.Submit(context.Background(), "exec_1"); !errors.Is(err, errV4ExecutionIDNotMapped) {
+		t.Fatalf("expected submit unmapped error, got %v", err)
+	}
+	if err := router.Cancel(context.Background(), "exec_1"); !errors.Is(err, errV4ExecutionIDNotMapped) {
+		t.Fatalf("expected cancel unmapped error, got %v", err)
+	}
+	if err := router.Control(context.Background(), "exec_1", executionControlSignal{Action: agentcore.ControlActionStop}); !errors.Is(err, errV4ExecutionIDNotMapped) {
+		t.Fatalf("expected control unmapped error, got %v", err)
+	}
+	if len(legacy.submits) != 0 || len(legacy.cancels) != 0 || len(legacy.controlIDs) != 0 {
+		t.Fatalf("expected no legacy fallback in v4 mode for unmapped execution ids")
+	}
+}
+
 func TestExecutionRuntimeRouter_V4ModeRejectsAnswerPayloadControl(t *testing.T) {
 	v4 := &v4BackendStub{}
 	router := newExecutionRuntimeRouter(executionRuntimeRouterOptions{
@@ -370,7 +391,7 @@ func TestSubmitExecutionBestEffort_RecordsShadowFailureWhenV4SubmitFailsWithCont
 	}
 }
 
-func TestControlExecutionBestEffort_FallsBackToLegacyWhenMappedV4ControlFails(t *testing.T) {
+func TestControlExecutionBestEffort_V4ModeDoesNotFallbackWhenMappedV4ControlFails(t *testing.T) {
 	legacy := &legacyBackendStub{}
 	v4 := &v4BackendStub{}
 	state := &AppState{
@@ -391,9 +412,84 @@ func TestControlExecutionBestEffort_FallsBackToLegacyWhenMappedV4ControlFails(t 
 		},
 	})
 
-	if len(legacy.controlIDs) != 1 || legacy.controlIDs[0] != "exec_1" {
-		t.Fatalf("expected fallback control routed to legacy for exec_1, got %#v", legacy.controlIDs)
+	if len(legacy.controlIDs) != 0 {
+		t.Fatalf("expected no legacy fallback in v4 mode for exec_1 control failure, got %#v", legacy.controlIDs)
 	}
+	if !hasRuntimeAuditActionResult(state.adminAudit, "execution.runtime.route_v4", "error") {
+		t.Fatalf("expected v4 route error audit for control failure, got %#v", state.adminAudit)
+	}
+}
+
+func TestSubmitExecutionBestEffort_V4ModeDoesNotFallbackWhenV4SubmitFails(t *testing.T) {
+	legacy := &legacyBackendStub{}
+	v4 := &v4BackendStub{err: errors.New("v4 down")}
+	state := &AppState{
+		executionRuntimeRunIDs:        map[string]string{},
+		conversationRuntimeSessionIDs: map[string]string{},
+		v4Service:                     v4,
+	}
+	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
+		Mode:   "v4",
+		Legacy: legacy,
+		V4:     v4,
+	})
+
+	state.submitExecutionBestEffort(context.Background(), "exec_missing")
+
+	if len(legacy.submits) != 0 {
+		t.Fatalf("expected no legacy submit fallback in v4 mode, got %#v", legacy.submits)
+	}
+	if !hasRuntimeAuditActionResult(state.adminAudit, "execution.runtime.route_v4", "error") {
+		t.Fatalf("expected v4 route error audit for submit failure, got %#v", state.adminAudit)
+	}
+	if hasRuntimeAuditAction(state.adminAudit, "execution.runtime.fallback_legacy") {
+		t.Fatalf("did not expect legacy fallback audit in v4 mode, got %#v", state.adminAudit)
+	}
+}
+
+func TestCancelExecutionBestEffort_V4ModeDoesNotFallbackWhenExecutionIDUnmapped(t *testing.T) {
+	legacy := &legacyBackendStub{}
+	v4 := &v4BackendStub{}
+	state := &AppState{
+		executionRuntimeRunIDs:        map[string]string{},
+		conversationRuntimeSessionIDs: map[string]string{},
+		v4Service:                     v4,
+	}
+	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
+		Mode:   "v4",
+		Legacy: legacy,
+		V4:     v4,
+	})
+
+	state.cancelExecutionBestEffort(context.Background(), "exec_unmapped")
+
+	if len(legacy.cancels) != 0 {
+		t.Fatalf("expected no legacy cancel fallback in v4 mode, got %#v", legacy.cancels)
+	}
+	if !hasRuntimeAuditActionResult(state.adminAudit, "execution.runtime.route_v4", "error") {
+		t.Fatalf("expected v4 route error audit for cancel fallback block, got %#v", state.adminAudit)
+	}
+}
+
+func hasRuntimeAuditAction(items []AdminAuditEvent, action string) bool {
+	for _, item := range items {
+		if strings.TrimSpace(item.Action) == strings.TrimSpace(action) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasRuntimeAuditActionResult(items []AdminAuditEvent, action string, result string) bool {
+	for _, item := range items {
+		if strings.TrimSpace(item.Action) != strings.TrimSpace(action) {
+			continue
+		}
+		if strings.TrimSpace(item.Result) == strings.TrimSpace(result) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestClearExecutionRuntimeMapping_RemovesMapping(t *testing.T) {

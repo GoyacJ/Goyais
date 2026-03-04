@@ -26,6 +26,7 @@ const (
 var (
 	errV4ExecutionBackendNotConfigured = errors.New("v4 execution backend is not configured")
 	errV4AnswerControlUnsupported      = errors.New("v4 execution backend does not support answer payload controls")
+	errV4ExecutionIDNotMapped          = errors.New("v4 execution runtime requires a run id mapping")
 )
 
 type legacyExecutionBackend interface {
@@ -90,11 +91,17 @@ func (r *executionRuntimeRouter) Submit(_ context.Context, executionID string) e
 	if normalizedExecutionID == "" {
 		return nil
 	}
+	if r == nil {
+		return nil
+	}
 	if r.shouldUseV4RunPath(normalizedExecutionID) {
 		// v4 runs are submitted through StartSession/Submit at the adapter layer.
 		return nil
 	}
-	if r != nil && r.legacy != nil {
+	if r.mode == executionRuntimeModeV4 {
+		return errV4ExecutionIDNotMapped
+	}
+	if r.legacy != nil {
 		r.legacy.Submit(normalizedExecutionID)
 	}
 	return nil
@@ -105,18 +112,24 @@ func (r *executionRuntimeRouter) Cancel(ctx context.Context, executionID string)
 	if normalizedExecutionID == "" {
 		return nil
 	}
+	if r == nil {
+		return nil
+	}
 	if r.shouldUseV4RunPath(normalizedExecutionID) {
-		if r != nil && r.v4 != nil {
+		if r.v4 != nil {
 			return r.v4.Control(ctx, agenthttpapi.ControlRequest{
 				RunID:  normalizedExecutionID,
 				Action: "stop",
 			})
 		}
-		if r != nil && r.mode == executionRuntimeModeV4 {
+		if r.mode == executionRuntimeModeV4 {
 			return errV4ExecutionBackendNotConfigured
 		}
 	}
-	if r != nil && r.legacy != nil {
+	if r.mode == executionRuntimeModeV4 {
+		return errV4ExecutionIDNotMapped
+	}
+	if r.legacy != nil {
 		r.legacy.Cancel(normalizedExecutionID)
 	}
 	return nil
@@ -127,21 +140,27 @@ func (r *executionRuntimeRouter) Control(ctx context.Context, executionID string
 	if normalizedExecutionID == "" {
 		return nil
 	}
+	if r == nil {
+		return nil
+	}
 	if r.shouldUseV4RunPath(normalizedExecutionID) {
 		if signal.Answer != nil {
 			return errV4AnswerControlUnsupported
 		}
-		if r != nil && r.v4 != nil {
+		if r.v4 != nil {
 			return r.v4.Control(ctx, agenthttpapi.ControlRequest{
 				RunID:  normalizedExecutionID,
 				Action: string(signal.Action),
 			})
 		}
-		if r != nil && r.mode == executionRuntimeModeV4 {
+		if r.mode == executionRuntimeModeV4 {
 			return errV4ExecutionBackendNotConfigured
 		}
 	}
-	if r != nil && r.legacy != nil {
+	if r.mode == executionRuntimeModeV4 {
+		return errV4ExecutionIDNotMapped
+	}
+	if r.legacy != nil {
 		r.legacy.Control(normalizedExecutionID, signal)
 	}
 	return nil
@@ -172,6 +191,10 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 			s.snapshotV4RunEventsBestEffort(normalizedExecutionID, submitResult.SessionID)
 			return
 		}
+		if s.executionRuntimeMode() == executionRuntimeModeV4 {
+			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "error")
+			return
+		}
 		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
 	}
 	if s.shouldAttemptV4Submit() && !attemptedV4Submit {
@@ -190,9 +213,17 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 		return
 	}
 	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
-	if err := router.Submit(ctx, resolvedRuntimeID); err != nil && resolvedRuntimeID != normalizedExecutionID && router.legacy != nil {
-		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
-		router.legacy.Submit(normalizedExecutionID)
+	if err := router.Submit(ctx, resolvedRuntimeID); err != nil {
+		if resolvedRuntimeID != normalizedExecutionID && router.legacy != nil && s.executionRuntimeMode() != executionRuntimeModeV4 {
+			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
+			router.legacy.Submit(normalizedExecutionID)
+			return
+		}
+		if strings.HasPrefix(strings.TrimSpace(resolvedRuntimeID), "run_") || s.executionRuntimeMode() == executionRuntimeModeV4 {
+			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "error")
+			return
+		}
+		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "error")
 		return
 	}
 	s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "success")
@@ -216,10 +247,16 @@ func (s *AppState) cancelExecutionBestEffort(ctx context.Context, executionID st
 	}
 	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
 	cancelErr := router.Cancel(ctx, resolvedRuntimeID)
-	if cancelErr != nil && resolvedRuntimeID != normalizedExecutionID && router.legacy != nil {
-		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
-		router.legacy.Cancel(normalizedExecutionID)
-	} else if strings.HasPrefix(strings.TrimSpace(resolvedRuntimeID), "run_") && cancelErr == nil {
+	if cancelErr != nil {
+		if resolvedRuntimeID != normalizedExecutionID && router.legacy != nil && s.executionRuntimeMode() != executionRuntimeModeV4 {
+			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
+			router.legacy.Cancel(normalizedExecutionID)
+		} else if strings.HasPrefix(strings.TrimSpace(resolvedRuntimeID), "run_") || s.executionRuntimeMode() == executionRuntimeModeV4 {
+			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "error")
+		} else {
+			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "error")
+		}
+	} else if strings.HasPrefix(strings.TrimSpace(resolvedRuntimeID), "run_") {
 		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "success")
 	} else {
 		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "success")
@@ -247,10 +284,16 @@ func (s *AppState) controlExecutionBestEffort(ctx context.Context, executionID s
 	}
 	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
 	controlErr := router.Control(ctx, resolvedRuntimeID, signal)
-	if controlErr != nil && resolvedRuntimeID != normalizedExecutionID && router.legacy != nil {
-		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
-		router.legacy.Control(normalizedExecutionID, signal)
-	} else if strings.HasPrefix(strings.TrimSpace(resolvedRuntimeID), "run_") && controlErr == nil {
+	if controlErr != nil {
+		if resolvedRuntimeID != normalizedExecutionID && router.legacy != nil && s.executionRuntimeMode() != executionRuntimeModeV4 {
+			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.fallback_legacy", "fallback")
+			router.legacy.Control(normalizedExecutionID, signal)
+		} else if strings.HasPrefix(strings.TrimSpace(resolvedRuntimeID), "run_") || s.executionRuntimeMode() == executionRuntimeModeV4 {
+			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "error")
+		} else {
+			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "error")
+		}
+	} else if strings.HasPrefix(strings.TrimSpace(resolvedRuntimeID), "run_") {
 		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_v4", "success")
 	} else {
 		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.route_legacy", "success")
