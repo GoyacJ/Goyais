@@ -237,6 +237,7 @@ func TestSubmitExecutionBestEffort_HybridModeSubmitsViaV4AndSkipsLegacyOnSuccess
 			},
 		},
 		executionRuntimeRunIDs:        map[string]string{},
+		executionRuntimeShadowCursor:  map[string]int64{"exec_1": 42},
 		conversationRuntimeSessionIDs: map[string]string{},
 		v4Service:                     v4,
 	}
@@ -256,6 +257,9 @@ func TestSubmitExecutionBestEffort_HybridModeSubmitsViaV4AndSkipsLegacyOnSuccess
 	}
 	if len(v4.subscribeRequests) != 1 {
 		t.Fatalf("expected one v4 subscribe snapshot request, got %d", len(v4.subscribeRequests))
+	}
+	if got := strings.TrimSpace(v4.subscribeRequests[0].Cursor); got != "" {
+		t.Fatalf("expected first submit snapshot to clear stale cursor, got %q", got)
 	}
 	if got := strings.TrimSpace(v4.subscribeRequests[0].SessionID); got != "sess_v4_bridge" {
 		t.Fatalf("expected subscribe session sess_v4_bridge, got %q", got)

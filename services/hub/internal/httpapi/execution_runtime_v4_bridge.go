@@ -325,6 +325,7 @@ func (s *AppState) submitExecutionViaV4(ctx context.Context, executionID string)
 
 	s.mu.Lock()
 	s.executionRuntimeRunIDs[submitCtx.ExecutionID] = runID
+	delete(s.executionRuntimeShadowCursor, submitCtx.ExecutionID)
 	s.mu.Unlock()
 	return v4SubmitResult{
 		SessionID: sessionID,
