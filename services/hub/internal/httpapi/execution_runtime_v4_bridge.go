@@ -122,6 +122,28 @@ func (s *AppState) appendV4ShadowSubmitEvent(executionID string, result v4Submit
 	syncExecutionDomainBestEffort(s)
 }
 
+func expectedExecutionStateForV4ShadowEvent(eventType string) (ExecutionState, bool) {
+	switch strings.TrimSpace(eventType) {
+	case "run_completed":
+		return ExecutionStateCompleted, true
+	case "run_failed":
+		return ExecutionStateFailed, true
+	case "run_cancelled":
+		return ExecutionStateCancelled, true
+	default:
+		return "", false
+	}
+}
+
+func isTerminalExecutionState(state ExecutionState) bool {
+	switch state {
+	case ExecutionStateCompleted, ExecutionStateFailed, ExecutionStateCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *AppState) snapshotV4RunEventsBestEffort(executionID string, sessionID string) {
 	if s == nil || s.v4Service == nil {
 		return
@@ -205,6 +227,24 @@ func (s *AppState) appendV4ShadowRunEvent(executionID string, frame agenthttpapi
 		Timestamp:      time.Now().UTC().Format(time.RFC3339),
 		Payload:        payload,
 	})
+	if expectedState, isTerminalEvent := expectedExecutionStateForV4ShadowEvent(frame.Type); isTerminalEvent && isTerminalExecutionState(execution.State) && execution.State != expectedState {
+		appendExecutionEventLocked(s, ExecutionEvent{
+			ExecutionID:    execution.ID,
+			ConversationID: execution.ConversationID,
+			TraceID:        strings.TrimSpace(execution.TraceID),
+			QueueIndex:     execution.QueueIndex,
+			Type:           ExecutionEventTypeThinkingDelta,
+			Timestamp:      time.Now().UTC().Format(time.RFC3339),
+			Payload: map[string]any{
+				"stage":          "v4_shadow_consistency",
+				"status":         "mismatch",
+				"source":         "runtime_router",
+				"event_type":     strings.TrimSpace(frame.Type),
+				"expected_state": expectedState,
+				"actual_state":   execution.State,
+			},
+		})
+	}
 	s.mu.Unlock()
 	syncExecutionDomainBestEffort(s)
 }

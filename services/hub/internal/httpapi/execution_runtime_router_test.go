@@ -518,3 +518,67 @@ func TestControlExecutionBestEffort_SnapshotsV4RunEventsWhenSessionKnown(t *test
 		t.Fatalf("expected v4_shadow_event stage, got %q", stage)
 	}
 }
+
+func TestCancelExecutionBestEffort_AppendsShadowConsistencyMismatchForTerminalConflict(t *testing.T) {
+	legacy := &legacyBackendStub{}
+	v4 := &v4BackendStub{
+		subscribeFrames: []agenthttpapi.EventFrame{
+			{
+				Type:      "run_failed",
+				SessionID: "sess_v4_1",
+				RunID:     "run_v4_1",
+				Sequence:  3,
+			},
+		},
+	}
+	state := &AppState{
+		conversations: map[string]Conversation{
+			"conv_1": {
+				ID:          "conv_1",
+				WorkspaceID: "ws_1",
+			},
+		},
+		executions: map[string]Execution{
+			"exec_1": {
+				ID:             "exec_1",
+				ConversationID: "conv_1",
+				State:          ExecutionStateCompleted,
+			},
+		},
+		executionRuntimeRunIDs:        map[string]string{"exec_1": "run_v4_1"},
+		conversationRuntimeSessionIDs: map[string]string{"conv_1": "sess_v4_1"},
+		v4Service:                     v4,
+	}
+	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
+		Mode:   "hybrid",
+		Legacy: legacy,
+		V4:     v4,
+	})
+
+	state.cancelExecutionBestEffort(context.Background(), "exec_1")
+
+	events := state.executionEvents["conv_1"]
+	if len(events) < 2 {
+		t.Fatalf("expected shadow event and consistency event, got %d", len(events))
+	}
+	foundMismatch := false
+	for _, event := range events {
+		stage := strings.TrimSpace(asString(event.Payload["stage"]))
+		if stage != "v4_shadow_consistency" {
+			continue
+		}
+		foundMismatch = true
+		if status := strings.TrimSpace(asString(event.Payload["status"])); status != "mismatch" {
+			t.Fatalf("expected mismatch status, got %q", status)
+		}
+		if expected := strings.TrimSpace(asString(event.Payload["expected_state"])); expected != string(ExecutionStateFailed) {
+			t.Fatalf("expected state %q, got %q", ExecutionStateFailed, expected)
+		}
+		if actual := strings.TrimSpace(asString(event.Payload["actual_state"])); actual != string(ExecutionStateCompleted) {
+			t.Fatalf("actual state mismatch, got %q", actual)
+		}
+	}
+	if !foundMismatch {
+		t.Fatalf("expected v4_shadow_consistency event to be appended")
+	}
+}
