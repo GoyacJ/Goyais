@@ -20,13 +20,14 @@ Goyais 是一个 AI Agent 平台。Hub（Go 后端）是执行中枢。
 ## 重构上下文（必读）
 - 架构方案：docs/refactor/2026-03-03-agent-v4-refactor-plan.md
 - 任务计划：docs/refactor/refactor-taks-plan-table.md
-- 当前阶段：Phase E（进行中，更新于 2026-03-04）
+- 当前阶段：Phase F（已完成，更新于 2026-03-04）
 - 阶段判定依据：
   - A0（前置盘点与决策）文档已齐备并已落库。
   - A1（core 合同基线）已完成：`core/interfaces.go` 与核心类型/状态机/事件模型可编译；`runstate.go` 关键函数覆盖率达 100%。
   - A2/B 已完成：`internal/agent/runtime/loop`、`context/settings`、`context/prompt`、`runtime/compaction` 已落地并具备测试。
-  - E 正在收敛：CLI/ACP 已统一接线；HTTP 默认模式已切至 `hybrid`，v4 成功时优先走 v4 主链。
-  - 尚未满足 E→F 门禁：legacy fallback 与旧枚举/旧 orchestrator 清理尚未完成。
+  - C-D 已完成：`tools/transport/model/policy/extensions` 子系统与协议级测试均已回归通过。
+  - E 已完成：CLI/ACP/HTTP 三端已统一走 v4 Engine 主路径，session 生命周期（resume/fork/rewind/clear/handoff）闭环可测。
+  - F 已完成：legacy orchestrator/回退路径已清理，`scripts/refactor/gate-check.sh --strict`、`pnpm contracts:generate/check` 与 `make health` 通过。
 
 ## 关键约束
 1. internal/agent/ 是所有新代码的根目录

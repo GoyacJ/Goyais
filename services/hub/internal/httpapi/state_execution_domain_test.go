@@ -2,7 +2,7 @@ package httpapi
 
 import "testing"
 
-func TestHydrateExecutionDomainFromStoreKeepsExecutionState(t *testing.T) {
+func TestHydrateExecutionDomainFromStoreKeepsRunState(t *testing.T) {
 	store, err := openAuthzStore(":memory:")
 	if err != nil {
 		t.Fatalf("open authz store failed: %v", err)
@@ -43,7 +43,7 @@ func TestHydrateExecutionDomainFromStoreKeepsExecutionState(t *testing.T) {
 				WorkspaceID:    localWorkspaceID,
 				ConversationID: conversationID,
 				MessageID:      "msg_legacy",
-				State:          ExecutionState("confirming"),
+				State:          RunState("confirming"),
 				Mode:           PermissionModeDefault,
 				ModelID:        "gpt-5.3",
 				ModeSnapshot:   PermissionModeDefault,
@@ -74,7 +74,7 @@ func TestHydrateExecutionDomainFromStoreKeepsExecutionState(t *testing.T) {
 	if !exists {
 		t.Fatalf("expected execution %s to exist after hydrate", executionID)
 	}
-	if restoredExecution.State != ExecutionState("confirming") {
+	if restoredExecution.State != RunState("confirming") {
 		t.Fatalf("expected execution state confirming to remain unchanged, got %s", restoredExecution.State)
 	}
 
@@ -132,7 +132,7 @@ func TestHydrateExecutionDomainFromStoreAccumulatesExecutionDiffEvents(t *testin
 				WorkspaceID:    localWorkspaceID,
 				ConversationID: conversationID,
 				MessageID:      "msg_hydrate",
-				State:          ExecutionStateCompleted,
+				State:          RunStateCompleted,
 				Mode:           PermissionModeDefault,
 				ModelID:        "gpt-5.3",
 				ModeSnapshot:   PermissionModeDefault,
@@ -153,7 +153,7 @@ func TestHydrateExecutionDomainFromStoreAccumulatesExecutionDiffEvents(t *testin
 				TraceID:        "tr_hydrate",
 				Sequence:       1,
 				QueueIndex:     0,
-				Type:           ExecutionEventTypeDiffGenerated,
+				Type:           RunEventTypeDiffGenerated,
 				Timestamp:      "2026-02-24T00:00:01Z",
 				Payload: map[string]any{
 					"diff": []any{
@@ -172,7 +172,7 @@ func TestHydrateExecutionDomainFromStoreAccumulatesExecutionDiffEvents(t *testin
 				TraceID:        "tr_hydrate",
 				Sequence:       2,
 				QueueIndex:     0,
-				Type:           ExecutionEventTypeDiffGenerated,
+				Type:           RunEventTypeDiffGenerated,
 				Timestamp:      "2026-02-24T00:00:02Z",
 				Payload: map[string]any{
 					"diff": []any{
@@ -255,7 +255,7 @@ func TestHydrateExecutionDomainFromStoreReplaysConversationEventSequence(t *test
 				ConversationID: "conv_seq_1",
 				ExecutionID:    "exec_seq_1",
 				Sequence:       1,
-				Type:           ExecutionEventTypeExecutionStarted,
+				Type:           RunEventTypeExecutionStarted,
 				Payload:        map[string]any{},
 			},
 			{
@@ -263,7 +263,7 @@ func TestHydrateExecutionDomainFromStoreReplaysConversationEventSequence(t *test
 				ConversationID: "conv_seq_1",
 				ExecutionID:    "exec_seq_1",
 				Sequence:       3,
-				Type:           ExecutionEventTypeExecutionDone,
+				Type:           RunEventTypeExecutionDone,
 				Payload:        map[string]any{},
 			},
 			{
@@ -271,7 +271,7 @@ func TestHydrateExecutionDomainFromStoreReplaysConversationEventSequence(t *test
 				ConversationID: "conv_seq_1",
 				ExecutionID:    "exec_seq_1",
 				Sequence:       2,
-				Type:           ExecutionEventTypeExecutionStarted,
+				Type:           RunEventTypeExecutionStarted,
 				Payload:        map[string]any{},
 			},
 			{
@@ -279,7 +279,7 @@ func TestHydrateExecutionDomainFromStoreReplaysConversationEventSequence(t *test
 				ConversationID: "conv_seq_2",
 				ExecutionID:    "exec_seq_2",
 				Sequence:       7,
-				Type:           ExecutionEventTypeExecutionDone,
+				Type:           RunEventTypeExecutionDone,
 				Payload:        map[string]any{},
 			},
 		},
@@ -317,7 +317,7 @@ func TestHydrateExecutionDomainFromStoreRestoresHooks(t *testing.T) {
 				ID:          "policy_1",
 				Scope:       HookScopeGlobal,
 				Event:       HookEventTypePreToolUse,
-				HandlerType: HookHandlerTypePlugin,
+				HandlerType: HookHandlerTypeAgent,
 				ToolName:    "Write",
 				Enabled:     true,
 				Decision: HookDecision{
@@ -375,7 +375,7 @@ func TestCaptureExecutionDomainSnapshotIncludesHooks(t *testing.T) {
 		ID:          "policy_1",
 		Scope:       HookScopeGlobal,
 		Event:       HookEventTypePreToolUse,
-		HandlerType: HookHandlerTypePlugin,
+		HandlerType: HookHandlerTypeAgent,
 		ToolName:    "Write",
 		Enabled:     true,
 		Decision: HookDecision{

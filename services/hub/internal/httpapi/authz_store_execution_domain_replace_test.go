@@ -231,7 +231,7 @@ func TestReplaceExecutionDomainSnapshotNormalizesExecutionFields(t *testing.T) {
 				WorkspaceID:    localWorkspaceID,
 				ConversationID: "conv_exec_norm",
 				MessageID:      "msg_exec_norm_1",
-				State:          ExecutionState(" running "),
+				State:          RunState(" running "),
 				Mode:           ConversationMode(" default "),
 				ModelID:        "gpt-5.3",
 				ModeSnapshot:   ConversationMode(" default "),
@@ -284,7 +284,7 @@ func TestReplaceExecutionDomainSnapshotNormalizesHookFields(t *testing.T) {
 				ID:             "policy_1",
 				Scope:          HookScope(" local "),
 				Event:          HookEventType(" pre_tool_use "),
-				HandlerType:    HookHandlerType(" plugin "),
+				HandlerType:    HookHandlerType(" agent "),
 				ToolName:       " Write ",
 				WorkspaceID:    " ws_local ",
 				ProjectID:      "",
@@ -329,7 +329,7 @@ func TestReplaceExecutionDomainSnapshotNormalizesHookFields(t *testing.T) {
 	if len(policyRows) != 1 {
 		t.Fatalf("expected 1 hook policy row, got %#v", policyRows)
 	}
-	if policyRows[0].Scope != "local" || policyRows[0].Event != "pre_tool_use" || policyRows[0].HandlerType != "plugin" {
+	if policyRows[0].Scope != "local" || policyRows[0].Event != "pre_tool_use" || policyRows[0].HandlerType != "agent" {
 		t.Fatalf("expected normalized hook policy enums, got %#v", policyRows[0])
 	}
 	if policyRows[0].ToolName != "Write" || !policyRows[0].Enabled {

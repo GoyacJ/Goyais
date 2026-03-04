@@ -3543,7 +3543,7 @@ export type components = {
             project_revision_snapshot: number;
             queue_index: number;
             resource_profile_snapshot?: components["schemas"]["ExecutionResourceProfile"];
-            state: components["schemas"]["ExecutionState"];
+            state: components["schemas"]["RunState"];
             tokens_in: number;
             tokens_out: number;
             trace_id: string;
@@ -3569,13 +3569,11 @@ export type components = {
             /** Format: date-time */
             timestamp?: string;
             trace_id?: string;
-            type: components["schemas"]["ExecutionEventType"];
+            type: components["schemas"]["RunEventType"];
         };
         ExecutionEventBatchRequest: {
             events: components["schemas"]["ExecutionEvent"][];
         };
-        /** @enum {string} */
-        ExecutionEventType: "message_received" | "user_prompt_submit" | "execution_started" | "thinking_delta" | "pre_tool_use" | "permission_request" | "tool_call" | "tool_result" | "post_tool_use" | "post_tool_use_failure" | "diff_generated" | "change_set_updated" | "change_set_committed" | "change_set_discarded" | "change_set_rolled_back" | "execution_stopped" | "execution_done" | "execution_error" | "task_graph_configured" | "task_dependencies_updated" | "task_retry_policy_updated" | "task_artifact_emitted" | "task_failed" | "task_started" | "task_completed" | "task_cancelled";
         ExecutionFilesExportResponse: {
             archive_base64: string;
             file_name: string;
@@ -3588,8 +3586,6 @@ export type components = {
             rule_ids?: string[];
             skill_ids?: string[];
         };
-        /** @enum {string} */
-        ExecutionState: "queued" | "pending" | "executing" | "confirming" | "awaiting_input" | "completed" | "failed" | "cancelled";
         ExecutionUserAnswer: {
             question_id: string;
             selected_option_id?: string;
@@ -3617,7 +3613,7 @@ export type components = {
         /** @enum {string} */
         HookDecisionAction: "allow" | "deny" | "ask";
         /** @enum {string} */
-        HookEventType: "session_start" | "user_prompt_submit" | "pre_tool_use" | "permission_request" | "post_tool_use" | "post_tool_use_failure" | "stop" | "subagent_stop" | "notification" | "config_change";
+        HookEventType: "session_start" | "session_end" | "user_prompt_submit" | "pre_tool_use" | "permission_request" | "post_tool_use" | "post_tool_use_failure" | "subagent_start" | "stop" | "subagent_stop" | "teammate_idle" | "task_completed" | "notification" | "config_change" | "worktree_create" | "worktree_remove" | "pre_compact";
         HookExecutionListResponse: {
             items: components["schemas"]["HookExecutionRecord"][];
         };
@@ -3634,7 +3630,7 @@ export type components = {
             tool_name?: string;
         };
         /** @enum {string} */
-        HookHandlerType: "command" | "http" | "plugin";
+        HookHandlerType: "command" | "http" | "prompt" | "agent";
         HookPolicy: {
             conversation_id?: string;
             decision: components["schemas"]["HookDecision"];
@@ -3994,14 +3990,18 @@ export type components = {
         RunControlResponse: {
             /** @constant */
             ok: true;
-            previous_state: components["schemas"]["ExecutionState"];
+            previous_state: components["schemas"]["RunState"];
             run_id: string;
-            state: components["schemas"]["ExecutionState"];
+            state: components["schemas"]["RunState"];
         };
+        /** @enum {string} */
+        RunEventType: "message_received" | "user_prompt_submit" | "execution_started" | "thinking_delta" | "pre_tool_use" | "permission_request" | "tool_call" | "tool_result" | "post_tool_use" | "post_tool_use_failure" | "diff_generated" | "change_set_updated" | "change_set_committed" | "change_set_discarded" | "change_set_rolled_back" | "execution_stopped" | "execution_done" | "execution_error" | "task_graph_configured" | "task_dependencies_updated" | "task_retry_policy_updated" | "task_artifact_emitted" | "task_failed" | "task_started" | "task_completed" | "task_cancelled";
         RunGraphEdge: {
             from_task_id: string;
             to_task_id: string;
         };
+        /** @enum {string} */
+        RunState: "queued" | "pending" | "executing" | "confirming" | "awaiting_input" | "completed" | "failed" | "cancelled";
         RunTaskListResponse: {
             items: components["schemas"]["TaskNode"][];
             next_cursor: string | null;

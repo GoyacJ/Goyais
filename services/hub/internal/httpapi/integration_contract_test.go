@@ -1517,7 +1517,7 @@ func waitForExecutionTerminalState(
 					continue
 				}
 				state := strings.TrimSpace(asString(item["state"]))
-				if state == string(ExecutionStateCompleted) || state == string(ExecutionStateFailed) || state == string(ExecutionStateCancelled) {
+				if state == string(RunStateCompleted) || state == string(RunStateFailed) || state == string(RunStateCancelled) {
 					return
 				}
 			}

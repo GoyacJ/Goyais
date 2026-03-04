@@ -1,13 +1,13 @@
 import type {
   ChangeSetCapability,
   DiffChangeType,
-  ExecutionState,
   InspectorTabKey,
   MessageRole,
   PermissionMode,
   ProjectKind,
   QueueState,
   RunControlAction,
+  RunState,
   TraceDetailLevel
 } from "./api-common";
 
@@ -82,7 +82,7 @@ export type ConversationSnapshot = {
   messages: ConversationMessage[];
   execution_snapshots?: Array<{
     id: string;
-    state: ExecutionState;
+    state: RunState;
     queue_index: number;
     message_id: string;
     updated_at: string;
@@ -103,7 +103,7 @@ export type Execution = {
   workspace_id: string;
   conversation_id: string;
   message_id: string;
-  state: ExecutionState;
+  state: RunState;
   mode: PermissionMode;
   model_id: string;
   mode_snapshot: PermissionMode;
@@ -140,7 +140,7 @@ export type Execution = {
   updated_at: string;
 };
 
-export type ExecutionEventType =
+export type RunEventType =
   | "message_received"
   | "user_prompt_submit"
   | "execution_started"
@@ -175,12 +175,12 @@ export type ExecutionEvent = {
   trace_id: string;
   sequence: number;
   queue_index: number;
-  type: ExecutionEventType;
+  type: RunEventType;
   timestamp: string;
   payload: Record<string, unknown>;
 };
 
-export type RunEventType =
+export type StreamRunEventType =
   | "run_queued"
   | "run_started"
   | "run_output_delta"
@@ -190,7 +190,7 @@ export type RunEventType =
   | "run_cancelled";
 
 export type RunEvent = {
-  type: RunEventType;
+  type: StreamRunEventType;
   session_id: string;
   run_id: string;
   sequence: number;

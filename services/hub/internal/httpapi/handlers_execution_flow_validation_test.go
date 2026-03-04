@@ -517,7 +517,7 @@ func seedHistoricalTokenUsageExecution(state *AppState, conversationID string, m
 		WorkspaceID:    conversation.WorkspaceID,
 		ConversationID: conversationID,
 		MessageID:      "msg_seed_usage",
-		State:          ExecutionStateCompleted,
+		State:          RunStateCompleted,
 		Mode:           PermissionModeDefault,
 		ModelID:        "gpt-5.3",
 		ModeSnapshot:   PermissionModeDefault,

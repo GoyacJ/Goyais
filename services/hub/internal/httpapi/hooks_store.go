@@ -191,6 +191,8 @@ func normalizeHookEventType(value HookEventType) (HookEventType, bool) {
 	switch HookEventType(strings.TrimSpace(string(value))) {
 	case HookEventTypeSessionStart:
 		return HookEventTypeSessionStart, true
+	case HookEventTypeSessionEnd:
+		return HookEventTypeSessionEnd, true
 	case HookEventTypeUserPromptSubmit:
 		return HookEventTypeUserPromptSubmit, true
 	case HookEventTypePreToolUse:
@@ -201,14 +203,26 @@ func normalizeHookEventType(value HookEventType) (HookEventType, bool) {
 		return HookEventTypePostToolUse, true
 	case HookEventTypePostToolUseFailure:
 		return HookEventTypePostToolUseFailure, true
+	case HookEventTypeSubagentStart:
+		return HookEventTypeSubagentStart, true
 	case HookEventTypeStop:
 		return HookEventTypeStop, true
 	case HookEventTypeSubagentStop:
 		return HookEventTypeSubagentStop, true
+	case HookEventTypeTeammateIdle:
+		return HookEventTypeTeammateIdle, true
+	case HookEventTypeTaskCompleted:
+		return HookEventTypeTaskCompleted, true
 	case HookEventTypeNotification:
 		return HookEventTypeNotification, true
 	case HookEventTypeConfigChange:
 		return HookEventTypeConfigChange, true
+	case HookEventTypeWorktreeCreate:
+		return HookEventTypeWorktreeCreate, true
+	case HookEventTypeWorktreeRemove:
+		return HookEventTypeWorktreeRemove, true
+	case HookEventTypePreCompact:
+		return HookEventTypePreCompact, true
 	default:
 		return "", false
 	}
@@ -220,8 +234,10 @@ func normalizeHookHandlerType(value HookHandlerType) (HookHandlerType, bool) {
 		return HookHandlerTypeCommand, true
 	case HookHandlerTypeHTTP:
 		return HookHandlerTypeHTTP, true
-	case HookHandlerTypePlugin:
-		return HookHandlerTypePlugin, true
+	case HookHandlerTypePrompt:
+		return HookHandlerTypePrompt, true
+	case HookHandlerTypeAgent:
+		return HookHandlerTypeAgent, true
 	default:
 		return "", false
 	}

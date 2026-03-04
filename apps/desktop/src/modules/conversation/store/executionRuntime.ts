@@ -5,7 +5,7 @@ import {
   cloneExecution,
   mergeExecution,
   normalizeExecutionList,
-  resolveMergedExecutionState
+  resolveMergedRunState
 } from "@/modules/conversation/store/executionMerge";
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
 
@@ -37,23 +37,23 @@ export function ensureExecution(runtime: ConversationRuntime, conversationId: st
   return execution;
 }
 
-export function applyExecutionState(execution: Execution, event: ExecutionEvent): void {
+export function applyRunState(execution: Execution, event: ExecutionEvent): void {
   if (event.type === "thinking_delta") {
     const runState = asString(event.payload.run_state);
     if (runState === "waiting_approval") {
-      execution.state = resolveMergedExecutionState(execution.state, "confirming");
+      execution.state = resolveMergedRunState(execution.state, "confirming");
       execution.updated_at = event.timestamp;
       return;
     }
     if (runState === "waiting_user_input") {
-      execution.state = resolveMergedExecutionState(execution.state, "awaiting_input");
+      execution.state = resolveMergedRunState(execution.state, "awaiting_input");
       execution.updated_at = event.timestamp;
       return;
     }
   }
   const nextState = executionStateByEventType[event.type];
   if (nextState) {
-    execution.state = resolveMergedExecutionState(execution.state, nextState);
+    execution.state = resolveMergedRunState(execution.state, nextState);
   }
   const usage = parseUsageFromPayload(event.payload);
   if (usage) {

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   ensureConversationRuntime,
-  getExecutionStateCounts,
+  getRunStateCounts,
   hydrateConversationRuntime,
   resetConversationStore
 } from "@/modules/conversation/store";
@@ -131,7 +131,7 @@ describe("conversation runtime hydration", () => {
       }
     ];
 
-    const counts = getExecutionStateCounts(runtime);
+    const counts = getRunStateCounts(runtime);
     expect(counts.pending).toBe(1);
     expect(counts.executing).toBe(1);
     expect(counts.queued).toBe(1);

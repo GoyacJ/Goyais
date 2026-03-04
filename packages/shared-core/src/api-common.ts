@@ -6,20 +6,12 @@ export type PermissionMode = "default" | "acceptEdits" | "plan" | "dontAsk" | "b
 // Backward-compatible type name for existing imports.
 export type ConversationMode = PermissionMode;
 export type ConversationStatus = "running" | "queued" | "stopped" | "done" | "error";
-export type ExecutionState =
+export type RunState =
   | "queued"
   | "pending"
   | "executing"
   | "confirming"
   | "awaiting_input"
-  | "completed"
-  | "failed"
-  | "cancelled";
-export type RunState =
-  | "queued"
-  | "running"
-  | "waiting_approval"
-  | "waiting_user_input"
   | "completed"
   | "failed"
   | "cancelled";

@@ -61,6 +61,8 @@ echo
 
 echo "[4/6] runtime hardening regression gates"
 legacy_orchestrator_file="$hub_dir/internal/httpapi/execution_orchestrator.go"
+legacy_agentcore_dir="$hub_dir/internal/agentcore"
+legacy_agentcoretools_dir="$hub_dir/internal/legacybridge/agentcoretools"
 legacy_orchestrator_test_files="$(
   cd "$hub_dir"
   (rg --files internal/httpapi | rg 'execution_orchestrator.*_test\\.go$' || true) \
@@ -74,6 +76,11 @@ state_legacy_wiring_hits="$(
 legacy_alias_hits="$(
   cd "$hub_dir"
   (rg -n 'case "legacy", string\(executionRuntimeModeHybrid\):' internal/httpapi/execution_runtime_router.go || true) \
+    | wc -l | tr -d ' '
+)"
+legacy_route_audit_hits="$(
+  cd "$hub_dir"
+  (rg -n --glob '!**/*_test.go' 'execution\\.runtime\\.route_legacy|route_legacy' internal/httpapi internal/agent cmd || true) \
     | wc -l | tr -d ' '
 )"
 legacy_mode_symbol_hits="$(
@@ -92,14 +99,25 @@ legacy_stdout_guard_refs="$(
     | wc -l | tr -d ' '
 )"
 echo "legacy orchestrator file exists: $([[ -f "$legacy_orchestrator_file" ]] && echo yes || echo no)"
+echo "legacy agentcore dir exists: $([[ -d "$legacy_agentcore_dir" ]] && echo yes || echo no)"
+echo "legacy agentcoretools dir exists: $([[ -d "$legacy_agentcoretools_dir" ]] && echo yes || echo no)"
 echo "legacy orchestrator test files count: $legacy_orchestrator_test_files"
 echo "AppState legacy backend wiring hits: $state_legacy_wiring_hits"
-echo "runtime mode alias (legacy->hybrid) hits: $legacy_alias_hits"
+echo "runtime mode legacy alias hits: $legacy_alias_hits"
+echo "legacy route audit hits: $legacy_route_audit_hits"
 echo "legacy runtime mode symbol hits: $legacy_mode_symbol_hits"
 echo "legacy fake-run builder definitions: $legacy_fake_run_builder_defs"
 echo "legacy StdoutGuard refs: $legacy_stdout_guard_refs"
 if [[ -f "$legacy_orchestrator_file" ]]; then
   echo "FAIL: legacy orchestrator file must stay deleted"
+  exit 1
+fi
+if [[ -d "$legacy_agentcore_dir" ]]; then
+  echo "FAIL: internal/agentcore directory must stay deleted"
+  exit 1
+fi
+if [[ -d "$legacy_agentcoretools_dir" ]]; then
+  echo "FAIL: internal/legacybridge/agentcoretools directory must stay deleted"
   exit 1
 fi
 if [[ "$legacy_orchestrator_test_files" -ne 0 ]]; then
@@ -110,8 +128,12 @@ if [[ "$state_legacy_wiring_hits" -ne 0 ]]; then
   echo "FAIL: AppState must not wire legacy backend in production path"
   exit 1
 fi
-if [[ "$legacy_alias_hits" -eq 0 ]]; then
-  echo "FAIL: runtime mode parser must keep legacy compatibility alias to hybrid"
+if [[ "$legacy_alias_hits" -ne 0 ]]; then
+  echo "FAIL: runtime mode parser must not keep legacy compatibility alias"
+  exit 1
+fi
+if [[ "$legacy_route_audit_hits" -ne 0 ]]; then
+  echo "FAIL: legacy route audit markers must stay deleted"
   exit 1
 fi
 if [[ "$legacy_mode_symbol_hits" -ne 0 ]]; then
@@ -132,14 +154,20 @@ echo "[5/6] legacy reference counters"
 agentcore_external_refs="$(
   cd "$hub_dir"
   (rg -n --glob '!**/*_test.go' 'internal/agentcore' internal cmd || true) \
-    | awk '!/^internal\/agentcore\//' \
-    | awk '!/^internal\/legacybridge\/agentcoretools\//' \
     | wc -l | tr -d ' '
 )"
-execution_enum_non_httpapi_refs="$(
+execution_enum_hub_refs="$(
   cd "$hub_dir"
   (rg -n --glob '!**/*_test.go' 'ExecutionState|ExecutionEventType' internal cmd || true) \
-    | awk '!/^internal\/httpapi\//' \
+    | wc -l | tr -d ' '
+)"
+execution_enum_contract_refs="$(
+  cd "$repo_root"
+  (rg -n --glob '!**/*_test.go' 'ExecutionState|ExecutionEventType' \
+    packages/contracts/openapi.yaml \
+    packages/shared-core/src/api-common.ts \
+    packages/shared-core/src/api-project.ts \
+    packages/shared-core/src/generated/openapi.ts || true) \
     | wc -l | tr -d ' '
 )"
 direct_orchestrator_refs="$(
@@ -147,16 +175,21 @@ direct_orchestrator_refs="$(
   (rg -n --glob '!**/*_test.go' 'state\\.orchestrator|\\.orchestrator\\b' internal/httpapi || true) \
     | wc -l | tr -d ' '
 )"
-echo "internal/agentcore external prod refs (excluding legacybridge): $agentcore_external_refs"
-echo "ExecutionState/EventType non-httpapi prod refs: $execution_enum_non_httpapi_refs"
+echo "internal/agentcore prod refs: $agentcore_external_refs"
+echo "ExecutionState/EventType hub prod refs: $execution_enum_hub_refs"
+echo "ExecutionState/EventType contracts refs: $execution_enum_contract_refs"
 echo "direct state.orchestrator prod refs: $direct_orchestrator_refs"
 if [[ "$strict" -eq 1 ]]; then
   if [[ "$agentcore_external_refs" -ne 0 ]]; then
     echo "FAIL: strict mode requires zero external agentcore refs"
     exit 1
   fi
-  if [[ "$execution_enum_non_httpapi_refs" -ne 0 ]]; then
-    echo "FAIL: strict mode requires zero non-httpapi ExecutionState/EventType refs"
+  if [[ "$execution_enum_hub_refs" -ne 0 ]]; then
+    echo "FAIL: strict mode requires zero hub ExecutionState/EventType refs"
+    exit 1
+  fi
+  if [[ "$execution_enum_contract_refs" -ne 0 ]]; then
+    echo "FAIL: strict mode requires zero contracts ExecutionState/EventType refs"
     exit 1
   fi
   if [[ "$direct_orchestrator_refs" -ne 0 ]]; then

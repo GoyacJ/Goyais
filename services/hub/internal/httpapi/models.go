@@ -63,17 +63,17 @@ const (
 // Backward-compatible type alias for existing references while moving to PermissionMode.
 type ConversationMode = PermissionMode
 
-type ExecutionState string
+type RunState string
 
 const (
-	ExecutionStateQueued        ExecutionState = "queued"
-	ExecutionStatePending       ExecutionState = "pending"
-	ExecutionStateExecuting     ExecutionState = "executing"
-	ExecutionStateConfirming    ExecutionState = "confirming"
-	ExecutionStateAwaitingInput ExecutionState = "awaiting_input"
-	ExecutionStateCompleted     ExecutionState = "completed"
-	ExecutionStateFailed        ExecutionState = "failed"
-	ExecutionStateCancelled     ExecutionState = "cancelled"
+	RunStateQueued        RunState = "queued"
+	RunStatePending       RunState = "pending"
+	RunStateExecuting     RunState = "executing"
+	RunStateConfirming    RunState = "confirming"
+	RunStateAwaitingInput RunState = "awaiting_input"
+	RunStateCompleted     RunState = "completed"
+	RunStateFailed        RunState = "failed"
+	RunStateCancelled     RunState = "cancelled"
 )
 
 type TaskState string
@@ -101,15 +101,22 @@ type HookEventType string
 
 const (
 	HookEventTypeSessionStart       HookEventType = "session_start"
+	HookEventTypeSessionEnd         HookEventType = "session_end"
 	HookEventTypeUserPromptSubmit   HookEventType = "user_prompt_submit"
 	HookEventTypePreToolUse         HookEventType = "pre_tool_use"
 	HookEventTypePermissionRequest  HookEventType = "permission_request"
 	HookEventTypePostToolUse        HookEventType = "post_tool_use"
 	HookEventTypePostToolUseFailure HookEventType = "post_tool_use_failure"
+	HookEventTypeSubagentStart      HookEventType = "subagent_start"
 	HookEventTypeStop               HookEventType = "stop"
 	HookEventTypeSubagentStop       HookEventType = "subagent_stop"
+	HookEventTypeTeammateIdle       HookEventType = "teammate_idle"
+	HookEventTypeTaskCompleted      HookEventType = "task_completed"
 	HookEventTypeNotification       HookEventType = "notification"
 	HookEventTypeConfigChange       HookEventType = "config_change"
+	HookEventTypeWorktreeCreate     HookEventType = "worktree_create"
+	HookEventTypeWorktreeRemove     HookEventType = "worktree_remove"
+	HookEventTypePreCompact         HookEventType = "pre_compact"
 )
 
 type HookHandlerType string
@@ -117,7 +124,8 @@ type HookHandlerType string
 const (
 	HookHandlerTypeCommand HookHandlerType = "command"
 	HookHandlerTypeHTTP    HookHandlerType = "http"
-	HookHandlerTypePlugin  HookHandlerType = "plugin"
+	HookHandlerTypePrompt  HookHandlerType = "prompt"
+	HookHandlerTypeAgent   HookHandlerType = "agent"
 )
 
 type HookDecisionAction string
@@ -466,7 +474,7 @@ type Execution struct {
 	WorkspaceID             string                        `json:"workspace_id"`
 	ConversationID          string                        `json:"conversation_id"`
 	MessageID               string                        `json:"message_id"`
-	State                   ExecutionState                `json:"state"`
+	State                   RunState                      `json:"state"`
 	Mode                    ConversationMode              `json:"mode"`
 	ModelID                 string                        `json:"model_id"`
 	ModeSnapshot            ConversationMode              `json:"mode_snapshot"`
@@ -729,47 +737,47 @@ type ProjectFileContentResponse struct {
 	Content string `json:"content"`
 }
 
-type ExecutionEventType string
+type RunEventType string
 
 const (
-	ExecutionEventTypeMessageReceived         ExecutionEventType = "message_received"
-	ExecutionEventTypeUserPromptSubmit        ExecutionEventType = "user_prompt_submit"
-	ExecutionEventTypeExecutionStarted        ExecutionEventType = "execution_started"
-	ExecutionEventTypeThinkingDelta           ExecutionEventType = "thinking_delta"
-	ExecutionEventTypePreToolUse              ExecutionEventType = "pre_tool_use"
-	ExecutionEventTypePermissionRequest       ExecutionEventType = "permission_request"
-	ExecutionEventTypeToolCall                ExecutionEventType = "tool_call"
-	ExecutionEventTypeToolResult              ExecutionEventType = "tool_result"
-	ExecutionEventTypePostToolUse             ExecutionEventType = "post_tool_use"
-	ExecutionEventTypePostToolUseFailure      ExecutionEventType = "post_tool_use_failure"
-	ExecutionEventTypeDiffGenerated           ExecutionEventType = "diff_generated"
-	ExecutionEventTypeChangeSetUpdated        ExecutionEventType = "change_set_updated"
-	ExecutionEventTypeChangeSetCommitted      ExecutionEventType = "change_set_committed"
-	ExecutionEventTypeChangeSetDiscarded      ExecutionEventType = "change_set_discarded"
-	ExecutionEventTypeChangeSetRolledBack     ExecutionEventType = "change_set_rolled_back"
-	ExecutionEventTypeExecutionStopped        ExecutionEventType = "execution_stopped"
-	ExecutionEventTypeExecutionDone           ExecutionEventType = "execution_done"
-	ExecutionEventTypeExecutionError          ExecutionEventType = "execution_error"
-	ExecutionEventTypeTaskGraphConfigured     ExecutionEventType = "task_graph_configured"
-	ExecutionEventTypeTaskDependenciesUpdated ExecutionEventType = "task_dependencies_updated"
-	ExecutionEventTypeTaskRetryPolicyUpdated  ExecutionEventType = "task_retry_policy_updated"
-	ExecutionEventTypeTaskArtifactEmitted     ExecutionEventType = "task_artifact_emitted"
-	ExecutionEventTypeTaskFailed              ExecutionEventType = "task_failed"
-	ExecutionEventTypeTaskStarted             ExecutionEventType = "task_started"
-	ExecutionEventTypeTaskCompleted           ExecutionEventType = "task_completed"
-	ExecutionEventTypeTaskCancelled           ExecutionEventType = "task_cancelled"
+	RunEventTypeMessageReceived         RunEventType = "message_received"
+	RunEventTypeUserPromptSubmit        RunEventType = "user_prompt_submit"
+	RunEventTypeExecutionStarted        RunEventType = "execution_started"
+	RunEventTypeThinkingDelta           RunEventType = "thinking_delta"
+	RunEventTypePreToolUse              RunEventType = "pre_tool_use"
+	RunEventTypePermissionRequest       RunEventType = "permission_request"
+	RunEventTypeToolCall                RunEventType = "tool_call"
+	RunEventTypeToolResult              RunEventType = "tool_result"
+	RunEventTypePostToolUse             RunEventType = "post_tool_use"
+	RunEventTypePostToolUseFailure      RunEventType = "post_tool_use_failure"
+	RunEventTypeDiffGenerated           RunEventType = "diff_generated"
+	RunEventTypeChangeSetUpdated        RunEventType = "change_set_updated"
+	RunEventTypeChangeSetCommitted      RunEventType = "change_set_committed"
+	RunEventTypeChangeSetDiscarded      RunEventType = "change_set_discarded"
+	RunEventTypeChangeSetRolledBack     RunEventType = "change_set_rolled_back"
+	RunEventTypeExecutionStopped        RunEventType = "execution_stopped"
+	RunEventTypeExecutionDone           RunEventType = "execution_done"
+	RunEventTypeExecutionError          RunEventType = "execution_error"
+	RunEventTypeTaskGraphConfigured     RunEventType = "task_graph_configured"
+	RunEventTypeTaskDependenciesUpdated RunEventType = "task_dependencies_updated"
+	RunEventTypeTaskRetryPolicyUpdated  RunEventType = "task_retry_policy_updated"
+	RunEventTypeTaskArtifactEmitted     RunEventType = "task_artifact_emitted"
+	RunEventTypeTaskFailed              RunEventType = "task_failed"
+	RunEventTypeTaskStarted             RunEventType = "task_started"
+	RunEventTypeTaskCompleted           RunEventType = "task_completed"
+	RunEventTypeTaskCancelled           RunEventType = "task_cancelled"
 )
 
 type ExecutionEvent struct {
-	EventID        string             `json:"event_id"`
-	ExecutionID    string             `json:"execution_id"`
-	ConversationID string             `json:"conversation_id"`
-	TraceID        string             `json:"trace_id"`
-	Sequence       int                `json:"sequence"`
-	QueueIndex     int                `json:"queue_index"`
-	Type           ExecutionEventType `json:"type"`
-	Timestamp      string             `json:"timestamp"`
-	Payload        map[string]any     `json:"payload"`
+	EventID        string         `json:"event_id"`
+	ExecutionID    string         `json:"execution_id"`
+	ConversationID string         `json:"conversation_id"`
+	TraceID        string         `json:"trace_id"`
+	Sequence       int            `json:"sequence"`
+	QueueIndex     int            `json:"queue_index"`
+	Type           RunEventType   `json:"type"`
+	Timestamp      string         `json:"timestamp"`
+	Payload        map[string]any `json:"payload"`
 }
 
 type ExecutionEventBatchRequest struct {

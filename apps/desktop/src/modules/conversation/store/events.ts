@@ -1,11 +1,11 @@
 import { createMockId } from "@/shared/utils/id";
-import type { ExecutionEvent, ExecutionEventType } from "@/shared/types/api";
+import type { ExecutionEvent, RunEventType } from "@/shared/types/api";
 
 export function createExecutionEvent(
   conversationId: string,
   executionId: string,
   queueIndex: number,
-  type: ExecutionEventType,
+  type: RunEventType,
   payload: Record<string, unknown>
 ): ExecutionEvent {
   return {

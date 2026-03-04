@@ -18,7 +18,7 @@ func TestMapExecutionEventToRunEvent_MessageReceivedMapsToRunQueued(t *testing.T
 		ConversationID: "conv_map_1",
 		Sequence:       7,
 		QueueIndex:     1,
-		Type:           ExecutionEventTypeMessageReceived,
+		Type:           RunEventTypeMessageReceived,
 		Timestamp:      "2026-02-25T10:20:30Z",
 		Payload: map[string]any{
 			"content": "hello",
@@ -43,8 +43,8 @@ func TestMapExecutionEventToRunEvent_MessageReceivedMapsToRunQueued(t *testing.T
 	}
 }
 
-func TestMapExecutionStateToRunState_SupportsLegacyConfirming(t *testing.T) {
-	runState, err := mapExecutionStateToRunState(ExecutionState("confirming"))
+func TestMapRunStateToCoreState_SupportsLegacyConfirming(t *testing.T) {
+	runState, err := mapRunStateToCoreState(RunState("confirming"))
 	if err != nil {
 		t.Fatalf("expected confirming to be supported, got %v", err)
 	}
@@ -60,7 +60,7 @@ func TestMapExecutionEventToRunEvent_MapsApprovalDeltaToRunApprovalNeeded(t *tes
 		ConversationID: "conv_map_approval",
 		Sequence:       1,
 		QueueIndex:     0,
-		Type:           ExecutionEventTypeThinkingDelta,
+		Type:           RunEventTypeThinkingDelta,
 		Timestamp:      "2026-02-25T10:20:30Z",
 		Payload: map[string]any{
 			"stage":     "run_approval_needed",
@@ -73,4 +73,3 @@ func TestMapExecutionEventToRunEvent_MapsApprovalDeltaToRunApprovalNeeded(t *tes
 		t.Fatalf("expected run_approval_needed, got %q", runEvent.Type)
 	}
 }
-

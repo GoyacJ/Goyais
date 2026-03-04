@@ -161,7 +161,7 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 
 		if conversation.ActiveExecutionID != nil {
 			execution := state.executions[*conversation.ActiveExecutionID]
-			execution.State = ExecutionStateCancelled
+			execution.State = RunStateCancelled
 			execution.UpdatedAt = now
 			state.executions[execution.ID] = execution
 			cancelExecutionID = execution.ID
@@ -172,7 +172,7 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 				ConversationID: conversationID,
 				TraceID:        TraceIDFromContext(r.Context()),
 				QueueIndex:     execution.QueueIndex,
-				Type:           ExecutionEventTypeExecutionStopped,
+				Type:           RunEventTypeExecutionStopped,
 				Timestamp:      now,
 				Payload: map[string]any{
 					"reason": "user_stop",
@@ -349,7 +349,7 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 			ConversationID: conversationID,
 			TraceID:        TraceIDFromContext(r.Context()),
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeThinkingDelta,
+			Type:           RunEventTypeThinkingDelta,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"stage":      "rollback_requested",
@@ -374,7 +374,7 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 			ConversationID: conversationID,
 			TraceID:        TraceIDFromContext(r.Context()),
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeThinkingDelta,
+			Type:           RunEventTypeThinkingDelta,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"stage":      "snapshot_applied",
@@ -386,7 +386,7 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 		conversation.ActiveExecutionID = nil
 		for _, id := range ordered {
 			exec := state.executions[id]
-			if exec.State == ExecutionStateExecuting || exec.State == ExecutionStatePending || exec.State == ExecutionStateConfirming || exec.State == ExecutionStateAwaitingInput {
+			if exec.State == RunStateExecuting || exec.State == RunStatePending || exec.State == RunStateConfirming || exec.State == RunStateAwaitingInput {
 				conversation.ActiveExecutionID = &id
 				break
 			}
@@ -399,7 +399,7 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 			ConversationID: conversationID,
 			TraceID:        TraceIDFromContext(r.Context()),
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeThinkingDelta,
+			Type:           RunEventTypeThinkingDelta,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"stage":      "rollback_completed",
@@ -411,7 +411,7 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 			ConversationID: conversationID,
 			TraceID:        TraceIDFromContext(r.Context()),
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeChangeSetRolledBack,
+			Type:           RunEventTypeChangeSetRolledBack,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"rolled_back_message_id": input.MessageID,
@@ -682,7 +682,7 @@ func deriveQueueStateLocked(state *AppState, conversationID string, activeExecut
 		return QueueStateRunning
 	}
 	for _, id := range state.conversationExecutionOrder[conversationID] {
-		if exec, ok := state.executions[id]; ok && exec.State == ExecutionStateQueued {
+		if exec, ok := state.executions[id]; ok && exec.State == RunStateQueued {
 			return QueueStateQueued
 		}
 	}
@@ -692,10 +692,10 @@ func deriveQueueStateLocked(state *AppState, conversationID string, activeExecut
 func startNextQueuedExecutionLocked(state *AppState, conversationID string) string {
 	for _, id := range state.conversationExecutionOrder[conversationID] {
 		exec, ok := state.executions[id]
-		if !ok || exec.State != ExecutionStateQueued {
+		if !ok || exec.State != RunStateQueued {
 			continue
 		}
-		exec.State = ExecutionStatePending
+		exec.State = RunStatePending
 		exec.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 		state.executions[id] = exec
 		return id

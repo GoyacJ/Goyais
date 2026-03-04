@@ -118,7 +118,7 @@ func TestRunTaskControlHandlerDelegatesToRunControl(t *testing.T) {
 	state.mu.RLock()
 	updated := state.executions[targetTaskID]
 	state.mu.RUnlock()
-	if updated.State != ExecutionStateCancelled {
+	if updated.State != RunStateCancelled {
 		t.Fatalf("expected delegated stop to cancel execution, got %s", updated.State)
 	}
 }
@@ -136,7 +136,7 @@ func TestRunTaskGraphBuildUsesExecutionEventMetadata(t *testing.T) {
 			TraceID:        "tr_meta_1",
 			Sequence:       1,
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeThinkingDelta,
+			Type:           RunEventTypeThinkingDelta,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"max_parallelism": 2,
@@ -149,7 +149,7 @@ func TestRunTaskGraphBuildUsesExecutionEventMetadata(t *testing.T) {
 			TraceID:        "tr_meta_2",
 			Sequence:       2,
 			QueueIndex:     1,
-			Type:           ExecutionEventTypeThinkingDelta,
+			Type:           RunEventTypeThinkingDelta,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"depends_on":  []any{taskIDs[0]},
@@ -173,7 +173,7 @@ func TestRunTaskGraphBuildUsesExecutionEventMetadata(t *testing.T) {
 			TraceID:        "tr_meta_3",
 			Sequence:       3,
 			QueueIndex:     2,
-			Type:           ExecutionEventTypeThinkingDelta,
+			Type:           RunEventTypeThinkingDelta,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"task": map[string]any{
@@ -236,7 +236,7 @@ func TestRunTaskGraphBuildUsesStructuredTaskEvents(t *testing.T) {
 			TraceID:        "tr_task_cfg",
 			Sequence:       1,
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeTaskGraphConfigured,
+			Type:           RunEventTypeTaskGraphConfigured,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"max_parallelism": 2,
@@ -249,7 +249,7 @@ func TestRunTaskGraphBuildUsesStructuredTaskEvents(t *testing.T) {
 			TraceID:        "tr_task_dep",
 			Sequence:       2,
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeTaskDependenciesUpdated,
+			Type:           RunEventTypeTaskDependenciesUpdated,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"task_id":    taskIDs[1],
@@ -264,7 +264,7 @@ func TestRunTaskGraphBuildUsesStructuredTaskEvents(t *testing.T) {
 			TraceID:        "tr_task_retry",
 			Sequence:       3,
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeTaskRetryPolicyUpdated,
+			Type:           RunEventTypeTaskRetryPolicyUpdated,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"task_id":     taskIDs[1],
@@ -279,7 +279,7 @@ func TestRunTaskGraphBuildUsesStructuredTaskEvents(t *testing.T) {
 			TraceID:        "tr_task_artifact",
 			Sequence:       4,
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeTaskArtifactEmitted,
+			Type:           RunEventTypeTaskArtifactEmitted,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"task_id": taskIDs[1],
@@ -300,7 +300,7 @@ func TestRunTaskGraphBuildUsesStructuredTaskEvents(t *testing.T) {
 			TraceID:        "tr_task_failed",
 			Sequence:       5,
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeTaskFailed,
+			Type:           RunEventTypeTaskFailed,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"task_id":       taskIDs[1],
@@ -356,7 +356,7 @@ func TestRunTaskGraphBuildUsesStructuredTaskLifecycleEvents(t *testing.T) {
 			TraceID:        "tr_task_started",
 			Sequence:       1,
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeTaskStarted,
+			Type:           RunEventTypeTaskStarted,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"task_id": taskIDs[1],
@@ -369,7 +369,7 @@ func TestRunTaskGraphBuildUsesStructuredTaskLifecycleEvents(t *testing.T) {
 			TraceID:        "tr_task_cancelled",
 			Sequence:       2,
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeTaskCancelled,
+			Type:           RunEventTypeTaskCancelled,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"task_id": taskIDs[0],
@@ -383,7 +383,7 @@ func TestRunTaskGraphBuildUsesStructuredTaskLifecycleEvents(t *testing.T) {
 			TraceID:        "tr_task_completed",
 			Sequence:       3,
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeTaskCompleted,
+			Type:           RunEventTypeTaskCompleted,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"task_id": taskIDs[2],
@@ -445,7 +445,7 @@ func seedRunTaskGraphState() (*AppState, string, []string) {
 		WorkspaceID:    localWorkspaceID,
 		ConversationID: conversationID,
 		MessageID:      "msg_task_" + randomHex(4),
-		State:          ExecutionStateExecuting,
+		State:          RunStateExecuting,
 		Mode:           PermissionModeDefault,
 		ModelID:        "gpt-5.3",
 		ModeSnapshot:   PermissionModeDefault,
@@ -460,7 +460,7 @@ func seedRunTaskGraphState() (*AppState, string, []string) {
 		WorkspaceID:    localWorkspaceID,
 		ConversationID: conversationID,
 		MessageID:      "msg_task_" + randomHex(4),
-		State:          ExecutionStateQueued,
+		State:          RunStateQueued,
 		Mode:           PermissionModeDefault,
 		ModelID:        "gpt-5.3",
 		ModeSnapshot:   PermissionModeDefault,
@@ -475,7 +475,7 @@ func seedRunTaskGraphState() (*AppState, string, []string) {
 		WorkspaceID:    localWorkspaceID,
 		ConversationID: conversationID,
 		MessageID:      "msg_task_" + randomHex(4),
-		State:          ExecutionStateCompleted,
+		State:          RunStateCompleted,
 		Mode:           PermissionModeDefault,
 		ModelID:        "gpt-5.3",
 		ModeSnapshot:   PermissionModeDefault,

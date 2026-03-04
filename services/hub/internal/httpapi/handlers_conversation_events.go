@@ -115,7 +115,7 @@ func buildSSEBackfillResyncEvent(conversationID string, lastEventID string, late
 		TraceID:        GenerateTraceID(),
 		Sequence:       0,
 		QueueIndex:     0,
-		Type:           ExecutionEventTypeThinkingDelta,
+		Type:           RunEventTypeThinkingDelta,
 		Timestamp:      time.Now().UTC().Format(time.RFC3339),
 		Payload: map[string]any{
 			"stage":           "sse_resync_required",

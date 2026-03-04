@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyIncomingExecutionEvent,
   ensureConversationRuntime,
-  getExecutionStateCounts,
+  getRunStateCounts,
   resetConversationStore,
   setConversationDraft,
   submitConversationMessage
@@ -105,7 +105,7 @@ describe("conversation execution race", () => {
     );
     expect(doneMessages).toHaveLength(1);
 
-    const counts = getExecutionStateCounts(runtime);
+    const counts = getRunStateCounts(runtime);
     expect(counts.pending).toBe(0);
     expect(counts.executing).toBe(0);
   });

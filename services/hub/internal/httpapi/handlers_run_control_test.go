@@ -77,7 +77,7 @@ func TestRunControlEndpoint_DenyQueuedRun(t *testing.T) {
 		item := raw.(map[string]any)
 		stateByExecutionID[item["id"].(string)] = item["state"].(string)
 	}
-	if stateByExecutionID[runID] != string(ExecutionStateCancelled) && stateByExecutionID[runID] != string(ExecutionStateFailed) {
+	if stateByExecutionID[runID] != string(RunStateCancelled) && stateByExecutionID[runID] != string(RunStateFailed) {
 		t.Fatalf("expected run %s to be cancelled/failed, got %q", runID, stateByExecutionID[runID])
 	}
 }
@@ -131,7 +131,7 @@ func TestRunControlEndpoint_StopTransitionsRun(t *testing.T) {
 	}
 	controlPayload := map[string]any{}
 	mustDecodeJSON(t, controlRes.Body.Bytes(), &controlPayload)
-	if controlRes.Code == http.StatusOK && controlPayload["state"] != string(ExecutionStateCancelled) {
+	if controlRes.Code == http.StatusOK && controlPayload["state"] != string(RunStateCancelled) {
 		t.Fatalf("expected cancelled state on successful stop, got %#v", controlPayload["state"])
 	}
 }
@@ -163,7 +163,7 @@ func TestRunControlEndpoint_DenyConfirmingRunResumesExecution(t *testing.T) {
 		WorkspaceID:    localWorkspaceID,
 		ConversationID: conversationID,
 		MessageID:      "msg_" + randomHex(4),
-		State:          ExecutionStateConfirming,
+		State:          RunStateConfirming,
 		Mode:           PermissionModeDefault,
 		ModelID:        "gpt-5.3",
 		ModeSnapshot:   PermissionModeDefault,
@@ -188,7 +188,7 @@ func TestRunControlEndpoint_DenyConfirmingRunResumesExecution(t *testing.T) {
 
 	payload := map[string]any{}
 	mustDecodeJSON(t, res.Body.Bytes(), &payload)
-	if got := strings.TrimSpace(asString(payload["state"])); got != string(ExecutionStateExecuting) {
+	if got := strings.TrimSpace(asString(payload["state"])); got != string(RunStateExecuting) {
 		t.Fatalf("expected state executing after deny confirming run, got %q", got)
 	}
 }
@@ -220,7 +220,7 @@ func TestRunControlEndpoint_AnswerAwaitingInputTransitionsToExecuting(t *testing
 		WorkspaceID:    localWorkspaceID,
 		ConversationID: conversationID,
 		MessageID:      "msg_" + randomHex(4),
-		State:          ExecutionStateAwaitingInput,
+		State:          RunStateAwaitingInput,
 		Mode:           PermissionModePlan,
 		ModelID:        "gpt-5.3",
 		ModeSnapshot:   PermissionModePlan,
@@ -255,7 +255,7 @@ func TestRunControlEndpoint_AnswerAwaitingInputTransitionsToExecuting(t *testing
 
 	payload := map[string]any{}
 	mustDecodeJSON(t, res.Body.Bytes(), &payload)
-	if got := strings.TrimSpace(asString(payload["state"])); got != string(ExecutionStateExecuting) {
+	if got := strings.TrimSpace(asString(payload["state"])); got != string(RunStateExecuting) {
 		t.Fatalf("expected state executing after answer, got %q", got)
 	}
 
@@ -294,7 +294,7 @@ func TestRunControlEndpoint_AnswerRejectsMismatchedQuestionID(t *testing.T) {
 		WorkspaceID:    localWorkspaceID,
 		ConversationID: conversationID,
 		MessageID:      "msg_" + randomHex(4),
-		State:          ExecutionStateAwaitingInput,
+		State:          RunStateAwaitingInput,
 		Mode:           PermissionModePlan,
 		ModelID:        "gpt-5.3",
 		ModeSnapshot:   PermissionModePlan,
@@ -330,7 +330,7 @@ func TestRunControlEndpoint_AnswerRejectsMismatchedQuestionID(t *testing.T) {
 	execution := state.executions[executionID]
 	_, pendingExists := state.pendingUserQuestions[executionID]
 	state.mu.RUnlock()
-	if execution.State != ExecutionStateAwaitingInput {
+	if execution.State != RunStateAwaitingInput {
 		t.Fatalf("expected execution state awaiting_input after mismatch, got %s", execution.State)
 	}
 	if !pendingExists {
@@ -365,7 +365,7 @@ func TestRunControlEndpoint_AnswerRejectsInvalidOptionAndDuplicateAnswer(t *test
 		WorkspaceID:    localWorkspaceID,
 		ConversationID: conversationID,
 		MessageID:      "msg_" + randomHex(4),
-		State:          ExecutionStateAwaitingInput,
+		State:          RunStateAwaitingInput,
 		Mode:           PermissionModePlan,
 		ModelID:        "gpt-5.3",
 		ModeSnapshot:   PermissionModePlan,
@@ -440,7 +440,7 @@ func TestRunControlEndpoint_StopQueuedRunEmitsTaskCancelledEvent(t *testing.T) {
 		WorkspaceID:    localWorkspaceID,
 		ConversationID: conversationID,
 		MessageID:      "msg_" + randomHex(4),
-		State:          ExecutionStateQueued,
+		State:          RunStateQueued,
 		Mode:           PermissionModeDefault,
 		ModelID:        "gpt-5.3",
 		ModeSnapshot:   PermissionModeDefault,
@@ -467,13 +467,13 @@ func TestRunControlEndpoint_StopQueuedRunEmitsTaskCancelledEvent(t *testing.T) {
 	execution := state.executions[executionID]
 	events := append([]ExecutionEvent{}, state.executionEvents[conversationID]...)
 	state.mu.RUnlock()
-	if execution.State != ExecutionStateCancelled {
+	if execution.State != RunStateCancelled {
 		t.Fatalf("expected execution cancelled, got %s", execution.State)
 	}
 
 	foundTaskCancelled := false
 	for _, event := range events {
-		if event.Type != ExecutionEventTypeTaskCancelled {
+		if event.Type != RunEventTypeTaskCancelled {
 			continue
 		}
 		if strings.TrimSpace(asString(event.Payload["task_id"])) != executionID {
@@ -514,7 +514,7 @@ func TestRunControlEndpoint_DenyQueuedRunEmitsTaskCancelledEvent(t *testing.T) {
 		WorkspaceID:    localWorkspaceID,
 		ConversationID: conversationID,
 		MessageID:      "msg_" + randomHex(4),
-		State:          ExecutionStateQueued,
+		State:          RunStateQueued,
 		Mode:           PermissionModeDefault,
 		ModelID:        "gpt-5.3",
 		ModeSnapshot:   PermissionModeDefault,
@@ -541,13 +541,13 @@ func TestRunControlEndpoint_DenyQueuedRunEmitsTaskCancelledEvent(t *testing.T) {
 	execution := state.executions[executionID]
 	events := append([]ExecutionEvent{}, state.executionEvents[conversationID]...)
 	state.mu.RUnlock()
-	if execution.State != ExecutionStateCancelled {
+	if execution.State != RunStateCancelled {
 		t.Fatalf("expected execution cancelled, got %s", execution.State)
 	}
 
 	foundTaskCancelled := false
 	for _, event := range events {
-		if event.Type != ExecutionEventTypeTaskCancelled {
+		if event.Type != RunEventTypeTaskCancelled {
 			continue
 		}
 		if strings.TrimSpace(asString(event.Payload["task_id"])) != executionID {
@@ -593,7 +593,7 @@ func TestRunControlEndpoint_StopEmitsHookStopRecord(t *testing.T) {
 		WorkspaceID:    localWorkspaceID,
 		ConversationID: conversationID,
 		MessageID:      "msg_" + randomHex(4),
-		State:          ExecutionStateExecuting,
+		State:          RunStateExecuting,
 		Mode:           PermissionModeDefault,
 		ModelID:        "gpt-5.3",
 		ModeSnapshot:   PermissionModeDefault,
@@ -608,7 +608,7 @@ func TestRunControlEndpoint_StopEmitsHookStopRecord(t *testing.T) {
 		ID:          "policy_stop_deny",
 		Scope:       HookScopeGlobal,
 		Event:       HookEventTypeStop,
-		HandlerType: HookHandlerTypePlugin,
+		HandlerType: HookHandlerTypeAgent,
 		Enabled:     true,
 		Decision: HookDecision{
 			Action: HookDecisionActionDeny,

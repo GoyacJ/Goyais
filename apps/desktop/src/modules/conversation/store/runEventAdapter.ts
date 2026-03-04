@@ -1,6 +1,6 @@
-import type { ExecutionEvent, ExecutionEventType, RunEventType } from "@/shared/types/api";
+import type { ExecutionEvent, RunEventType, StreamRunEventType } from "@/shared/types/api";
 
-const runEventTypes: readonly RunEventType[] = [
+const runEventTypes: readonly StreamRunEventType[] = [
   "run_queued",
   "run_started",
   "run_output_delta",
@@ -10,7 +10,7 @@ const runEventTypes: readonly RunEventType[] = [
   "run_cancelled"
 ];
 
-const runToExecutionTypeMap: Record<Exclude<RunEventType, "run_output_delta" | "run_approval_needed">, ExecutionEventType> = {
+const runToExecutionTypeMap: Record<Exclude<StreamRunEventType, "run_output_delta" | "run_approval_needed">, RunEventType> = {
   run_queued: "message_received",
   run_started: "execution_started",
   run_completed: "execution_done",
@@ -36,7 +36,7 @@ export function toExecutionEventFromStreamPayload(raw: unknown, fallbackConversa
 
 function mapRunEventToExecutionEvent(
   raw: Record<string, unknown>,
-  runType: RunEventType,
+  runType: StreamRunEventType,
   fallbackConversationId: string
 ): ExecutionEvent {
   const payload = asRecord(raw.payload);
@@ -89,7 +89,7 @@ function mapRunEventToExecutionEvent(
   };
 }
 
-function resolveExecutionTypeForRunOutputDelta(payload: Record<string, unknown>): ExecutionEventType {
+function resolveExecutionTypeForRunOutputDelta(payload: Record<string, unknown>): RunEventType {
   const explicitEventType = asString(payload.event_type);
   if (
     explicitEventType === "change_set_updated" ||
@@ -127,8 +127,8 @@ function resolveConversationId(rawConversationId: string, fallbackConversationId
   return fallbackConversationId.trim();
 }
 
-function isRunEventType(value: string): value is RunEventType {
-  return runEventTypes.includes(value as RunEventType);
+function isRunEventType(value: string): value is StreamRunEventType {
+  return runEventTypes.includes(value as StreamRunEventType);
 }
 
 function asString(value: unknown): string {

@@ -59,15 +59,15 @@ func TestDeriveConversationStatusLockedMappings(t *testing.T) {
 
 	cases := []struct {
 		name   string
-		states []ExecutionState
+		states []RunState
 		want   ConversationStatus
 	}{
-		{name: "running from executing", states: []ExecutionState{ExecutionStateExecuting}, want: ConversationStatusRunning},
-		{name: "running from confirming", states: []ExecutionState{ExecutionStateConfirming}, want: ConversationStatusRunning},
-		{name: "queued from pending", states: []ExecutionState{ExecutionStatePending}, want: ConversationStatusQueued},
-		{name: "done from completed", states: []ExecutionState{ExecutionStateCompleted}, want: ConversationStatusDone},
-		{name: "error from failed", states: []ExecutionState{ExecutionStateFailed}, want: ConversationStatusError},
-		{name: "stopped from cancelled", states: []ExecutionState{ExecutionStateCancelled}, want: ConversationStatusStopped},
+		{name: "running from executing", states: []RunState{RunStateExecuting}, want: ConversationStatusRunning},
+		{name: "running from confirming", states: []RunState{RunStateConfirming}, want: ConversationStatusRunning},
+		{name: "queued from pending", states: []RunState{RunStatePending}, want: ConversationStatusQueued},
+		{name: "done from completed", states: []RunState{RunStateCompleted}, want: ConversationStatusDone},
+		{name: "error from failed", states: []RunState{RunStateFailed}, want: ConversationStatusError},
+		{name: "stopped from cancelled", states: []RunState{RunStateCancelled}, want: ConversationStatusStopped},
 		{name: "stopped from empty", states: nil, want: ConversationStatusStopped},
 	}
 

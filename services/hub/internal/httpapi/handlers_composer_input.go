@@ -368,9 +368,9 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 		}
 		state.conversationMessages[conversationID] = append(state.conversationMessages[conversationID], message)
 
-		executionState := ExecutionStateQueued
+		executionState := RunStateQueued
 		if conversation.ActiveExecutionID == nil {
-			executionState = ExecutionStatePending
+			executionState = RunStatePending
 		}
 		execution := Execution{
 			ID:             "exec_" + randomHex(6),
@@ -431,7 +431,7 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			ConversationID: conversationID,
 			TraceID:        execution.TraceID,
 			QueueIndex:     execution.QueueIndex,
-			Type:           ExecutionEventTypeMessageReceived,
+			Type:           RunEventTypeMessageReceived,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"message_id":      msgID,
@@ -446,7 +446,7 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			ConversationID: conversationID,
 			TraceID:        execution.TraceID,
 			QueueIndex:     execution.QueueIndex,
-			Type:           ExecutionEventTypeTaskGraphConfigured,
+			Type:           RunEventTypeTaskGraphConfigured,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"task_id":         execution.ID,
@@ -466,7 +466,7 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			ConversationID: conversationID,
 			TraceID:        execution.TraceID,
 			QueueIndex:     execution.QueueIndex,
-			Type:           ExecutionEventTypeTaskDependenciesUpdated,
+			Type:           RunEventTypeTaskDependenciesUpdated,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"task_id":    execution.ID,
@@ -479,7 +479,7 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			ConversationID: conversationID,
 			TraceID:        execution.TraceID,
 			QueueIndex:     execution.QueueIndex,
-			Type:           ExecutionEventTypeTaskRetryPolicyUpdated,
+			Type:           RunEventTypeTaskRetryPolicyUpdated,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"task_id":     execution.ID,

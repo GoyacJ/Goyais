@@ -193,13 +193,13 @@ func TestConversationInputSubmit_EmitsStructuredTaskEvents(t *testing.T) {
 	foundRetryPolicyUpdated := false
 	for _, event := range events {
 		switch event.Type {
-		case ExecutionEventTypeTaskGraphConfigured:
+		case RunEventTypeTaskGraphConfigured:
 			foundGraphConfigured = true
-		case ExecutionEventTypeTaskDependenciesUpdated:
+		case RunEventTypeTaskDependenciesUpdated:
 			if gotTaskID := strings.TrimSpace(asString(event.Payload["task_id"])); gotTaskID == executionID {
 				foundDependenciesUpdated = true
 			}
-		case ExecutionEventTypeTaskRetryPolicyUpdated:
+		case RunEventTypeTaskRetryPolicyUpdated:
 			if gotTaskID := strings.TrimSpace(asString(event.Payload["task_id"])); gotTaskID == executionID {
 				foundRetryPolicyUpdated = true
 			}
@@ -223,7 +223,7 @@ func TestConversationInputSubmit_EmitsUserPromptSubmitHookRecord(t *testing.T) {
 		ID:          "policy_user_prompt_submit_deny",
 		Scope:       HookScopeGlobal,
 		Event:       HookEventTypeUserPromptSubmit,
-		HandlerType: HookHandlerTypePlugin,
+		HandlerType: HookHandlerTypeAgent,
 		Enabled:     true,
 		Decision: HookDecision{
 			Action: HookDecisionActionDeny,
@@ -273,7 +273,7 @@ func TestConversationInputSubmit_EmitsUserPromptSubmitHookRecord(t *testing.T) {
 
 	foundHookExecutionEvent := false
 	for _, event := range events {
-		if event.ExecutionID != executionID || event.Type != ExecutionEventTypeUserPromptSubmit {
+		if event.ExecutionID != executionID || event.Type != RunEventTypeUserPromptSubmit {
 			continue
 		}
 		if strings.TrimSpace(asString(event.Payload["policy_id"])) != "policy_user_prompt_submit_deny" {

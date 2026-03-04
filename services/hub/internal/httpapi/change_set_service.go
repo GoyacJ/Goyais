@@ -278,7 +278,7 @@ func ConversationChangeSetCommitHandler(state *AppState) http.HandlerFunc {
 			ConversationID: conversationID,
 			TraceID:        TraceIDFromContext(r.Context()),
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeChangeSetCommitted,
+			Type:           RunEventTypeChangeSetCommitted,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"change_set_id": ledger.PendingChangeSetID,
@@ -365,7 +365,7 @@ func ConversationChangeSetDiscardHandler(state *AppState) http.HandlerFunc {
 			ConversationID: conversationID,
 			TraceID:        TraceIDFromContext(r.Context()),
 			QueueIndex:     0,
-			Type:           ExecutionEventTypeChangeSetDiscarded,
+			Type:           RunEventTypeChangeSetDiscarded,
 			Timestamp:      now,
 			Payload: map[string]any{
 				"change_set_id": ledger.PendingChangeSetID,
@@ -443,7 +443,7 @@ func applyExecutionEventToChangeLedgerLocked(state *AppState, event ExecutionEve
 	}
 	ledger := ensureConversationChangeLedgerLocked(state, conversationID)
 	switch event.Type {
-	case ExecutionEventTypeDiffGenerated:
+	case RunEventTypeDiffGenerated:
 		diffItems := parseDiffItemsFromPayload(event.Payload)
 		if len(diffItems) == 0 {
 			return
@@ -456,7 +456,7 @@ func applyExecutionEventToChangeLedgerLocked(state *AppState, event ExecutionEve
 			upsertChangeEntryInLedger(ledger, event, messageID, item)
 		}
 		bumpPendingChangeSetIDLocked(ledger)
-	case ExecutionEventTypeChangeSetCommitted:
+	case RunEventTypeChangeSetCommitted:
 		ledger.Entries = []ChangeEntry{}
 		if checkpoint, ok := checkpointFromPayload(event.Payload); ok {
 			ledger.LastCommittedCheckpoint = &checkpoint
@@ -466,14 +466,14 @@ func applyExecutionEventToChangeLedgerLocked(state *AppState, event ExecutionEve
 		} else {
 			bumpPendingChangeSetIDLocked(ledger)
 		}
-	case ExecutionEventTypeChangeSetDiscarded:
+	case RunEventTypeChangeSetDiscarded:
 		ledger.Entries = []ChangeEntry{}
 		if changeSetID := strings.TrimSpace(asStringValue(event.Payload["change_set_id"])); changeSetID != "" {
 			ledger.PendingChangeSetID = changeSetID
 		} else {
 			bumpPendingChangeSetIDLocked(ledger)
 		}
-	case ExecutionEventTypeChangeSetRolledBack:
+	case RunEventTypeChangeSetRolledBack:
 		rebuildConversationChangeLedgerFromStateLocked(state, conversationID)
 	default:
 		return
@@ -682,7 +682,7 @@ func hasMutableExecutionsLocked(state *AppState, conversationID string) bool {
 			continue
 		}
 		switch execution.State {
-		case ExecutionStateQueued, ExecutionStatePending, ExecutionStateExecuting, ExecutionStateConfirming, ExecutionStateAwaitingInput:
+		case RunStateQueued, RunStatePending, RunStateExecuting, RunStateConfirming, RunStateAwaitingInput:
 			return true
 		}
 	}

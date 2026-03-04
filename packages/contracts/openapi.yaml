@@ -1856,7 +1856,7 @@ components:
       type: string
       enum: [default, acceptEdits, plan, dontAsk, bypassPermissions]
 
-    ExecutionState:
+    RunState:
       type: string
       enum: [queued, pending, executing, confirming, awaiting_input, completed, failed, cancelled]
 
@@ -1864,7 +1864,7 @@ components:
       type: string
       enum: [stop, approve, deny, resume, answer]
 
-    ExecutionEventType:
+    RunEventType:
       type: string
       enum:
         - message_received
@@ -2537,7 +2537,7 @@ components:
         message_id:
           type: string
         state:
-          $ref: '#/components/schemas/ExecutionState'
+          $ref: '#/components/schemas/RunState'
         mode:
           $ref: '#/components/schemas/PermissionMode'
         model_id:
@@ -3501,7 +3501,7 @@ components:
         trace_id:
           type: string
         type:
-          $ref: '#/components/schemas/ExecutionEventType'
+          $ref: '#/components/schemas/RunEventType'
         sequence:
           type: integer
         queue_index:
@@ -3541,9 +3541,9 @@ components:
         run_id:
           type: string
         state:
-          $ref: '#/components/schemas/ExecutionState'
+          $ref: '#/components/schemas/RunState'
         previous_state:
-          $ref: '#/components/schemas/ExecutionState'
+          $ref: '#/components/schemas/RunState'
 
     TaskState:
       type: string
@@ -3677,11 +3677,28 @@ components:
 
     HookEventType:
       type: string
-      enum: [session_start, user_prompt_submit, pre_tool_use, permission_request, post_tool_use, post_tool_use_failure, stop, subagent_stop, notification, config_change]
+      enum:
+        - session_start
+        - session_end
+        - user_prompt_submit
+        - pre_tool_use
+        - permission_request
+        - post_tool_use
+        - post_tool_use_failure
+        - subagent_start
+        - stop
+        - subagent_stop
+        - teammate_idle
+        - task_completed
+        - notification
+        - config_change
+        - worktree_create
+        - worktree_remove
+        - pre_compact
 
     HookHandlerType:
       type: string
-      enum: [command, http, plugin]
+      enum: [command, http, prompt, agent]
 
     HookDecisionAction:
       type: string

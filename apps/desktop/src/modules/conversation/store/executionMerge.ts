@@ -24,19 +24,19 @@ export function cloneExecution(execution: Execution): Execution {
   };
 }
 
-export function isTerminalExecutionState(state: Execution["state"]): boolean {
+export function isTerminalRunState(state: Execution["state"]): boolean {
   return state === "completed" || state === "failed" || state === "cancelled";
 }
 
-export function resolveMergedExecutionState(
+export function resolveMergedRunState(
   current: Execution["state"],
   incoming: Execution["state"]
 ): Execution["state"] {
   if (current === incoming) {
     return current;
   }
-  const currentTerminal = isTerminalExecutionState(current);
-  const incomingTerminal = isTerminalExecutionState(incoming);
+  const currentTerminal = isTerminalRunState(current);
+  const incomingTerminal = isTerminalRunState(incoming);
   if (currentTerminal && !incomingTerminal) {
     return current;
   }
@@ -59,7 +59,7 @@ export function mergeExecution(current: Execution, incoming: Execution): Executi
   return {
     ...current,
     ...incoming,
-    state: resolveMergedExecutionState(current.state, incoming.state),
+    state: resolveMergedRunState(current.state, incoming.state),
     workspace_id: preferNonEmpty(current.workspace_id, incoming.workspace_id),
     conversation_id: preferNonEmpty(current.conversation_id, incoming.conversation_id),
     message_id: preferNonEmpty(current.message_id, incoming.message_id),

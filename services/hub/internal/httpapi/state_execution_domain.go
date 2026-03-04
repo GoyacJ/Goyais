@@ -241,7 +241,7 @@ func toHTTPAPIExecutionEvent(event runtimedomain.Event) ExecutionEvent {
 		TraceID:        event.TraceID,
 		Sequence:       event.Sequence,
 		QueueIndex:     event.QueueIndex,
-		Type:           ExecutionEventType(event.Type),
+		Type:           RunEventType(event.Type),
 		Timestamp:      event.Timestamp,
 		Payload:        cloneMapAny(event.Payload),
 	}

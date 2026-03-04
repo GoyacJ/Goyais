@@ -1,5 +1,5 @@
 import {
-  applyExecutionState,
+  applyRunState,
   dedupeExecutions,
   ensureExecution,
   parseDiff
@@ -26,7 +26,7 @@ export function updateExecutionTransition(
 
   const previousState = runtime.executions.find((item) => item.id === event.execution_id)?.state;
   const execution = ensureExecution(runtime, conversationId, event);
-  applyExecutionState(execution, event);
+  applyRunState(execution, event);
   dedupeExecutions(runtime);
   const nextState = runtime.executions.find((item) => item.id === event.execution_id)?.state;
   return { previousState, nextState, messageID: execution.message_id };

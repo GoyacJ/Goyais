@@ -116,42 +116,36 @@ func TestNewAppState_V4ModeSkipsLegacyOrchestrator(t *testing.T) {
 	}
 }
 
-func TestNewAppState_LegacyModeAliasMapsToHybrid(t *testing.T) {
+func TestNewAppState_UnknownRuntimeModeFallsBackToHybrid(t *testing.T) {
 	t.Setenv(executionRuntimeModeEnv, "legacy")
 	state := NewAppState(nil)
 	if state.executionRuntime.mode != executionRuntimeModeHybrid {
-		t.Fatalf("expected legacy mode alias to map to hybrid runtime mode, got %q", state.executionRuntime.mode)
+		t.Fatalf("expected unknown mode to fall back to hybrid runtime mode, got %q", state.executionRuntime.mode)
 	}
 	if state.executionRuntime.legacy != nil {
 		t.Fatalf("expected no legacy backend wired by app state")
 	}
 }
 
-func TestExecutionRuntimeRouter_LegacyAliasRoutesExecutionIDsToInjectedLegacyBackend(t *testing.T) {
+func TestExecutionRuntimeRouter_LegacyModeDoesNotRouteExecutionIDsToLegacyBackend(t *testing.T) {
 	legacy := &legacyBackendStub{}
 	router := newExecutionRuntimeRouter(executionRuntimeRouterOptions{
 		Mode:   "legacy",
 		Legacy: legacy,
 	})
 
-	if err := router.Submit(context.Background(), "exec_1"); err != nil {
-		t.Fatalf("submit failed: %v", err)
+	if err := router.Submit(context.Background(), "exec_1"); !errors.Is(err, errV4ExecutionIDNotMapped) {
+		t.Fatalf("expected unmapped execution id error on submit, got %v", err)
 	}
-	if err := router.Cancel(context.Background(), "exec_1"); err != nil {
-		t.Fatalf("cancel failed: %v", err)
+	if err := router.Cancel(context.Background(), "exec_1"); !errors.Is(err, errV4ExecutionIDNotMapped) {
+		t.Fatalf("expected unmapped execution id error on cancel, got %v", err)
 	}
-	if err := router.Control(context.Background(), "exec_1", executionControlSignal{Action: agentcore.ControlActionApprove}); err != nil {
-		t.Fatalf("control failed: %v", err)
+	if err := router.Control(context.Background(), "exec_1", executionControlSignal{Action: agentcore.ControlActionApprove}); !errors.Is(err, errV4ExecutionIDNotMapped) {
+		t.Fatalf("expected unmapped execution id error on control, got %v", err)
 	}
 
-	if len(legacy.submits) != 1 || legacy.submits[0] != "exec_1" {
-		t.Fatalf("expected one legacy submit for exec_1, got %#v", legacy.submits)
-	}
-	if len(legacy.cancels) != 1 || legacy.cancels[0] != "exec_1" {
-		t.Fatalf("expected one legacy cancel for exec_1, got %#v", legacy.cancels)
-	}
-	if len(legacy.controlIDs) != 1 || legacy.controlIDs[0] != "exec_1" {
-		t.Fatalf("expected one legacy control for exec_1, got %#v", legacy.controlIDs)
+	if len(legacy.submits) != 0 || len(legacy.cancels) != 0 || len(legacy.controlIDs) != 0 {
+		t.Fatalf("expected no legacy routing calls for execution ids")
 	}
 }
 
@@ -204,19 +198,19 @@ func TestExecutionRuntimeRouter_HybridModeReturnsErrorWhenV4Missing(t *testing.T
 	}
 }
 
-func TestExecutionRuntimeRouter_HybridModeReturnsLegacyBackendMissingForExecutionIDs(t *testing.T) {
+func TestExecutionRuntimeRouter_HybridModeRejectsUnmappedExecutionIDs(t *testing.T) {
 	router := newExecutionRuntimeRouter(executionRuntimeRouterOptions{
 		Mode: "hybrid",
 	})
 
-	if err := router.Submit(context.Background(), "exec_1"); !errors.Is(err, errLegacyExecutionBackendMissing) {
-		t.Fatalf("expected missing legacy backend error on submit, got %v", err)
+	if err := router.Submit(context.Background(), "exec_1"); !errors.Is(err, errV4ExecutionIDNotMapped) {
+		t.Fatalf("expected unmapped run id error on submit, got %v", err)
 	}
-	if err := router.Cancel(context.Background(), "exec_1"); !errors.Is(err, errLegacyExecutionBackendMissing) {
-		t.Fatalf("expected missing legacy backend error on cancel, got %v", err)
+	if err := router.Cancel(context.Background(), "exec_1"); !errors.Is(err, errV4ExecutionIDNotMapped) {
+		t.Fatalf("expected unmapped run id error on cancel, got %v", err)
 	}
-	if err := router.Control(context.Background(), "exec_1", executionControlSignal{Action: agentcore.ControlActionStop}); !errors.Is(err, errLegacyExecutionBackendMissing) {
-		t.Fatalf("expected missing legacy backend error on control, got %v", err)
+	if err := router.Control(context.Background(), "exec_1", executionControlSignal{Action: agentcore.ControlActionStop}); !errors.Is(err, errV4ExecutionIDNotMapped) {
+		t.Fatalf("expected unmapped run id error on control, got %v", err)
 	}
 }
 
@@ -351,7 +345,7 @@ func TestSubmitExecutionBestEffort_HybridModeSubmitsViaV4AndSkipsLegacyOnSuccess
 		t.Fatalf("expected shadow submit event to be appended")
 	}
 	last := events[len(events)-1]
-	if last.Type != ExecutionEventTypeThinkingDelta {
+	if last.Type != RunEventTypeThinkingDelta {
 		t.Fatalf("expected thinking_delta shadow event, got %q", last.Type)
 	}
 	if stage := strings.TrimSpace(asString(last.Payload["stage"])); stage != "v4_shadow_submit" {
@@ -748,7 +742,7 @@ func TestCancelExecutionBestEffort_AppendsShadowConsistencyMismatchForTerminalCo
 			"exec_1": {
 				ID:             "exec_1",
 				ConversationID: "conv_1",
-				State:          ExecutionStateCompleted,
+				State:          RunStateCompleted,
 			},
 		},
 		executionRuntimeRunIDs:        map[string]string{"exec_1": "run_v4_1"},
@@ -777,10 +771,10 @@ func TestCancelExecutionBestEffort_AppendsShadowConsistencyMismatchForTerminalCo
 		if status := strings.TrimSpace(asString(event.Payload["status"])); status != "mismatch" {
 			t.Fatalf("expected mismatch status, got %q", status)
 		}
-		if expected := strings.TrimSpace(asString(event.Payload["expected_state"])); expected != string(ExecutionStateFailed) {
-			t.Fatalf("expected state %q, got %q", ExecutionStateFailed, expected)
+		if expected := strings.TrimSpace(asString(event.Payload["expected_state"])); expected != string(RunStateFailed) {
+			t.Fatalf("expected state %q, got %q", RunStateFailed, expected)
 		}
-		if actual := strings.TrimSpace(asString(event.Payload["actual_state"])); actual != string(ExecutionStateCompleted) {
+		if actual := strings.TrimSpace(asString(event.Payload["actual_state"])); actual != string(RunStateCompleted) {
 			t.Fatalf("actual state mismatch, got %q", actual)
 		}
 	}

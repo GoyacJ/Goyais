@@ -60,72 +60,72 @@ func mapExecutionEventToRunEvent(event ExecutionEvent) mappedRunEvent {
 func mapExecutionEventToRunEventType(event ExecutionEvent) runtimecore.RunEventType {
 	eventType := event.Type
 	switch eventType {
-	case ExecutionEventTypeMessageReceived:
+	case RunEventTypeMessageReceived:
 		return runtimecore.RunEventTypeRunQueued
-	case ExecutionEventTypeExecutionStarted:
+	case RunEventTypeExecutionStarted:
 		return runtimecore.RunEventTypeRunStarted
-	case ExecutionEventTypeExecutionDone:
+	case RunEventTypeExecutionDone:
 		return runtimecore.RunEventTypeRunCompleted
-	case ExecutionEventTypeExecutionError:
+	case RunEventTypeExecutionError:
 		return runtimecore.RunEventTypeRunFailed
-	case ExecutionEventTypeExecutionStopped:
+	case RunEventTypeExecutionStopped:
 		return runtimecore.RunEventTypeRunCancelled
-	case ExecutionEventTypeThinkingDelta:
+	case RunEventTypeThinkingDelta:
 		if stage := strings.TrimSpace(asStringValue(event.Payload["stage"])); stage == "run_approval_needed" {
 			return runtimecore.RunEventTypeRunApprovalNeeded
 		}
 		return runtimecore.RunEventTypeRunOutputDelta
-	case ExecutionEventTypeToolCall,
-		ExecutionEventTypeToolResult,
-		ExecutionEventTypeDiffGenerated:
+	case RunEventTypeToolCall,
+		RunEventTypeToolResult,
+		RunEventTypeDiffGenerated:
 		return runtimecore.RunEventTypeRunOutputDelta
 	default:
 		return runtimecore.RunEventTypeRunOutputDelta
 	}
 }
 
-func mapExecutionStateToRunState(executionState ExecutionState) (runtimecore.RunState, error) {
+func mapRunStateToCoreState(executionState RunState) (runtimecore.RunState, error) {
 	switch strings.TrimSpace(string(executionState)) {
-	case string(ExecutionStateQueued):
+	case string(RunStateQueued):
 		return runtimecore.RunStateQueued, nil
-	case string(ExecutionStatePending):
+	case string(RunStatePending):
 		return runtimecore.RunStateQueued, nil
-	case string(ExecutionStateExecuting):
+	case string(RunStateExecuting):
 		return runtimecore.RunStateRunning, nil
-	case string(ExecutionStateConfirming), string(runtimecore.RunStateWaitingApproval):
+	case string(RunStateConfirming), string(runtimecore.RunStateWaitingApproval):
 		return runtimecore.RunStateWaitingApproval, nil
-	case string(ExecutionStateAwaitingInput), string(runtimecore.RunStateWaitingUserInput):
+	case string(RunStateAwaitingInput), string(runtimecore.RunStateWaitingUserInput):
 		return runtimecore.RunStateWaitingUserInput, nil
-	case string(ExecutionStateCompleted):
+	case string(RunStateCompleted):
 		return runtimecore.RunStateCompleted, nil
-	case string(ExecutionStateFailed):
+	case string(RunStateFailed):
 		return runtimecore.RunStateFailed, nil
-	case string(ExecutionStateCancelled):
+	case string(RunStateCancelled):
 		return runtimecore.RunStateCancelled, nil
 	default:
-		return "", fmt.Errorf("unsupported execution state %q", executionState)
+		return "", fmt.Errorf("unsupported run state %q", executionState)
 	}
 }
 
-func mapRunStateToExecutionState(runState runtimecore.RunState, current ExecutionState) ExecutionState {
+func mapCoreStateToRunState(runState runtimecore.RunState, current RunState) RunState {
 	switch runState {
 	case runtimecore.RunStateQueued:
-		return ExecutionStateQueued
+		return RunStateQueued
 	case runtimecore.RunStateRunning:
-		if current == ExecutionStateExecuting || current == ExecutionStateConfirming {
-			return ExecutionStateExecuting
+		if current == RunStateExecuting || current == RunStateConfirming {
+			return RunStateExecuting
 		}
-		return ExecutionStatePending
+		return RunStatePending
 	case runtimecore.RunStateWaitingApproval:
-		return ExecutionStateConfirming
+		return RunStateConfirming
 	case runtimecore.RunStateWaitingUserInput:
-		return ExecutionStateAwaitingInput
+		return RunStateAwaitingInput
 	case runtimecore.RunStateCompleted:
-		return ExecutionStateCompleted
+		return RunStateCompleted
 	case runtimecore.RunStateFailed:
-		return ExecutionStateFailed
+		return RunStateFailed
 	case runtimecore.RunStateCancelled:
-		return ExecutionStateCancelled
+		return RunStateCancelled
 	default:
 		return current
 	}
@@ -174,4 +174,3 @@ func parseExecutionEventTimestamp(raw string) time.Time {
 	}
 	return parsed.UTC()
 }
-

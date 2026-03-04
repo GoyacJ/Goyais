@@ -30,13 +30,13 @@ Agent v4 重构任务计划表
 ├───────────┼──────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
 │ Phase B   │ 已完成   │ `context/settings` 默认层加载接入 `prompt.Builder`；10 步链条默认来源生效；`runtime/compaction` 增补 >100 轮稳定性测试证据。 │
 ├───────────┼──────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Phase C-D │ 进行中   │ tools/transport/model/policy/extensions 已有实现与测试；严格验收项（矩阵与协议级别）仍在收敛。     │
+│ Phase C-D │ 已完成   │ tools/transport/model/policy/extensions 严格验收项已闭环，协议级测试覆盖矩阵已通过。                 │
 ├───────────┼──────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Phase E   │ 进行中   │ CLI/ACP 已统一走 v4 Engine；HTTP 默认切至 hybrid，且在 v4 成功后主链优先走 v4。                 │
+│ Phase E   │ 已完成   │ CLI/ACP/HTTP 三端统一走 v4 Engine 主路径；session 生命周期（resume/fork/rewind/clear/handoff）闭环。 │
 ├───────────┼──────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
 │ E→F 门禁  │ 已达成   │ CLI/ACP/HTTP 三端已统一到 Engine 主路径；HTTP 侧 legacy fallback 与 `ExecutionOrchestrator` 已清理。│
 ├───────────┼──────────┼───────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Phase F   │ 进行中   │ 已完成 legacy orchestrator 收口；旧引用清零、枚举收敛、合约同步与全量回归仍在推进。                │
+│ Phase F   │ 已完成   │ legacy 收口、旧引用清零、合约同步与全量回归已达成，满足 `F 完成` 门禁条件。                           │
 └───────────┴──────────┴───────────────────────────────────────────────────────────────────────────────────────────────┘
 
 门禁证据栏（2026-03-04）
@@ -70,6 +70,12 @@ Agent v4 重构任务计划表
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ 静态检查   │ `cd services/hub && go vet ./...` 通过。                                                                                     │
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 全量回归   │ `cd services/hub && go test ./...` 通过；C1-C5 / D1-D7 / E1-E4 / F1-F3 对应子包测试全部绿。                                │
+├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 严格门禁   │ `scripts/refactor/gate-check.sh --strict` 通过；legacy 清理、旧引用计数与三端统一主路径锚点检查全部通过。                   │
+├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 发布烟检   │ `make health` 通过；smoke 检查（hub+desktop）通过并产出 `artifacts/smoke.json`。                                            │
+├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ HTTP 主链  │ 默认模式已切到 `hybrid`，并在 v4 submit 成功时不再常态提交 legacy：                                                      │
 │            │ `services/hub/internal/httpapi/execution_runtime_router.go`（`newExecutionRuntimeRouter` / `submitExecutionBestEffort`） │
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
@@ -84,6 +90,31 @@ Agent v4 重构任务计划表
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ 审计链路   │ runtime 路由审计事件（`route_v4` / `route_legacy`）已覆盖成功与失败分支，并有测试断言。                                    │
 └────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+阶段验收映射（2026-03-04）
+
+1. Phase C（C1-C5）
+   - C1/C2（tools+diff）：`internal/agent/tools/executor`、`internal/agent/tools/diff`、`internal/agent/tools/interaction` 全量测试通过。
+   - C3（checkpoint）：`internal/agent/tools/checkpoint/store_test.go`（`TestStoreSnapshotAndRestoreFileContent`、`TestStoreRestoreDeletesFileCreatedAfterSnapshot`）。
+   - C4（transport/subscriber）：`internal/agent/transport/subscribers/manager_test.go`（`TestManagerSubscribeAndUnsubscribe`、`TestManagerDropNewestPolicy`、`TestManagerPruneIdleSubscribers`）。
+   - C5（model/codec）：`internal/agent/runtime/model/loop_test.go`（`TestRunLoop_RespectsMaxModelTurns`）与 `internal/agent/runtime/model/codec/codec_test.go`（Google/OpenAI 解析与 `MergeUsage`）通过。
+2. Phase D（D1-D7）
+   - D1（policy/DSL）：`internal/agent/policy/gate_test.go`（`TestGate_Evaluate_ModeRiskMatrix`）与 `internal/agent/policy/rulesdsl/dsl_test.go`（shell 操作符绕过、优先级）通过。
+   - D2（hooks）：`internal/agent/extensions/hooks/dispatcher_test.go`（deny>ask>allow、matcher、metadata）通过。
+   - D3（skills）：`internal/agent/extensions/skills/loader_test.go`（frontmatter、参数展开、预算截断、`!cmd` 注入）通过。
+   - D4（subagents）：`internal/agent/extensions/subagents/runner_test.go`（嵌套深度限制、工具收敛、worktree 隔离、并发归并）通过。
+   - D5（teams）：`internal/agent/extensions/teams/coordinator_test.go`（任务锁、邮箱、审批流、门禁 hook）通过。
+   - D6（plugins）：`internal/agent/extensions/plugins/manager_test.go`（discover/validate/load/activate/deactivate）通过。
+   - D7（mcp+outputstyles）：`internal/agent/extensions/mcp/prompts_test.go`、`internal/agent/extensions/outputstyles/loader_test.go` 通过。
+3. Phase E（E1-E4）
+   - E1（httpapi thin adapter）：`internal/agent/adapters/httpapi/service_test.go`（Engine 委托与生命周期委托）通过。
+   - E2（cli+acp）：`internal/agent/adapters/cli` 与 `internal/agent/adapters/acp` 全量测试通过。
+   - E3（session lifecycle）：`internal/agent/runtime/session/manager_test.go`（resume/fork/rewind/clear/handoff）通过。
+   - E4（runtimebridge）：`internal/agent/adapters/runtimebridge/bridge_test.go` 通过。
+4. Phase F（F1-F3）
+   - F1（删旧与引用清零）：`scripts/refactor/gate-check.sh --strict` 通过（legacy orchestrator 文件/测试、`buildSlashEvents`、`StdoutGuard`、外部 `agentcore` 引用均为 0）。
+   - F2（合约同步）：`pnpm contracts:generate` 与 `pnpm contracts:check` 通过。
+   - F3（全量回归）：`cd services/hub && go test ./... && go vet ./...`、`make health` 通过。
 
   ---
 Phase 0：前置盘点与决策（A0）

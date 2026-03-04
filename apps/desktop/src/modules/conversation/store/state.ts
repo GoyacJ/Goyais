@@ -292,7 +292,7 @@ export function countActiveAndQueued(runtime: ConversationRuntime): number {
   ).length;
 }
 
-export function getExecutionStateCounts(runtime: ConversationRuntime): {
+export function getRunStateCounts(runtime: ConversationRuntime): {
   queued: number;
   pending: number;
   executing: number;
@@ -314,7 +314,7 @@ export function getExecutionStateCounts(runtime: ConversationRuntime): {
 }
 
 export function hasUnfinishedExecutions(runtime: ConversationRuntime): boolean {
-  const counts = getExecutionStateCounts(runtime);
+  const counts = getRunStateCounts(runtime);
   return counts.queued > 0 || counts.pending > 0 || counts.executing > 0;
 }
 

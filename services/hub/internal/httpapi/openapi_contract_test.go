@@ -290,13 +290,13 @@ func TestOpenAPIExecutionAndPermissionEnumsAreSynced(t *testing.T) {
 	requiredMarkers := []string{
 		"PermissionMode:",
 		"enum: [default, acceptEdits, plan, dontAsk, bypassPermissions]",
-		"ExecutionState:",
+		"RunState:",
 		"enum: [queued, pending, executing, confirming, awaiting_input, completed, failed, cancelled]",
 		"default_mode:",
 		"$ref: '#/components/schemas/PermissionMode'",
 		"mode_snapshot:",
 		"state:",
-		"$ref: '#/components/schemas/ExecutionState'",
+		"$ref: '#/components/schemas/RunState'",
 	}
 	for _, marker := range requiredMarkers {
 		if !strings.Contains(spec, marker) {
@@ -314,7 +314,7 @@ func TestOpenAPIRunControlAndExecutionEventEnumsAreSynced(t *testing.T) {
 		"question_id:",
 		"RunControlRequest:",
 		"answer:",
-		"ExecutionEventType:",
+		"RunEventType:",
 		"user_prompt_submit",
 		"task_graph_configured",
 		"task_dependencies_updated",
@@ -324,7 +324,7 @@ func TestOpenAPIRunControlAndExecutionEventEnumsAreSynced(t *testing.T) {
 		"task_started",
 		"task_completed",
 		"task_cancelled",
-		"$ref: '#/components/schemas/ExecutionEventType'",
+		"$ref: '#/components/schemas/RunEventType'",
 	}
 	for _, marker := range requiredMarkers {
 		if !strings.Contains(spec, marker) {

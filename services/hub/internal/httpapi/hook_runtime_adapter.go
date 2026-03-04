@@ -104,7 +104,7 @@ func appendHookExecutionRecordAndEventWithState(
 	if state == nil {
 		return
 	}
-	eventName, hasMappedExecutionEvent := mapHookEventTypeToExecutionEventType(eventType)
+	eventName, hasMappedExecutionEvent := mapHookEventTypeToRunEventType(eventType)
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	payload := map[string]any{
@@ -159,18 +159,18 @@ func appendHookExecutionRecordAndEventWithState(
 	state.mu.Unlock()
 }
 
-func mapHookEventTypeToExecutionEventType(eventType HookEventType) (ExecutionEventType, bool) {
+func mapHookEventTypeToRunEventType(eventType HookEventType) (RunEventType, bool) {
 	switch eventType {
 	case HookEventTypeUserPromptSubmit:
-		return ExecutionEventTypeUserPromptSubmit, true
+		return RunEventTypeUserPromptSubmit, true
 	case HookEventTypePreToolUse:
-		return ExecutionEventTypePreToolUse, true
+		return RunEventTypePreToolUse, true
 	case HookEventTypePermissionRequest:
-		return ExecutionEventTypePermissionRequest, true
+		return RunEventTypePermissionRequest, true
 	case HookEventTypePostToolUse:
-		return ExecutionEventTypePostToolUse, true
+		return RunEventTypePostToolUse, true
 	case HookEventTypePostToolUseFailure:
-		return ExecutionEventTypePostToolUseFailure, true
+		return RunEventTypePostToolUseFailure, true
 	default:
 		return "", false
 	}

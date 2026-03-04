@@ -8,12 +8,12 @@ func TestListExecutionEventsSinceLockedWithoutCursorReturnsAll(t *testing.T) {
 	appendExecutionEventLocked(state, ExecutionEvent{
 		EventID:        "evt_1",
 		ConversationID: "conv_1",
-		Type:           ExecutionEventTypeThinkingDelta,
+		Type:           RunEventTypeThinkingDelta,
 	})
 	appendExecutionEventLocked(state, ExecutionEvent{
 		EventID:        "evt_2",
 		ConversationID: "conv_1",
-		Type:           ExecutionEventTypeThinkingDelta,
+		Type:           RunEventTypeThinkingDelta,
 	})
 	items, resyncRequired := listExecutionEventsSinceLocked(state, "conv_1", "")
 	state.mu.Unlock()
@@ -32,17 +32,17 @@ func TestListExecutionEventsSinceLockedWithExistingCursorReturnsTail(t *testing.
 	appendExecutionEventLocked(state, ExecutionEvent{
 		EventID:        "evt_1",
 		ConversationID: "conv_1",
-		Type:           ExecutionEventTypeThinkingDelta,
+		Type:           RunEventTypeThinkingDelta,
 	})
 	appendExecutionEventLocked(state, ExecutionEvent{
 		EventID:        "evt_2",
 		ConversationID: "conv_1",
-		Type:           ExecutionEventTypeThinkingDelta,
+		Type:           RunEventTypeThinkingDelta,
 	})
 	appendExecutionEventLocked(state, ExecutionEvent{
 		EventID:        "evt_3",
 		ConversationID: "conv_1",
-		Type:           ExecutionEventTypeThinkingDelta,
+		Type:           RunEventTypeThinkingDelta,
 	})
 	items, resyncRequired := listExecutionEventsSinceLocked(state, "conv_1", "evt_2")
 	state.mu.Unlock()
@@ -61,12 +61,12 @@ func TestListExecutionEventsSinceLockedWithMissingCursorTriggersResync(t *testin
 	appendExecutionEventLocked(state, ExecutionEvent{
 		EventID:        "evt_1",
 		ConversationID: "conv_1",
-		Type:           ExecutionEventTypeThinkingDelta,
+		Type:           RunEventTypeThinkingDelta,
 	})
 	appendExecutionEventLocked(state, ExecutionEvent{
 		EventID:        "evt_2",
 		ConversationID: "conv_1",
-		Type:           ExecutionEventTypeThinkingDelta,
+		Type:           RunEventTypeThinkingDelta,
 	})
 	items, resyncRequired := listExecutionEventsSinceLocked(state, "conv_1", "evt_missing")
 	state.mu.Unlock()
@@ -85,7 +85,7 @@ func TestListExecutionEventsSinceLockedOnTailCursorReturnsEmptyWithoutResync(t *
 	appendExecutionEventLocked(state, ExecutionEvent{
 		EventID:        "evt_1",
 		ConversationID: "conv_1",
-		Type:           ExecutionEventTypeThinkingDelta,
+		Type:           RunEventTypeThinkingDelta,
 	})
 	items, resyncRequired := listExecutionEventsSinceLocked(state, "conv_1", "evt_1")
 	state.mu.Unlock()
@@ -104,7 +104,7 @@ func TestAppendExecutionEventLockedAccumulatesDiffItemsByExecution(t *testing.T)
 	appendExecutionEventLocked(state, ExecutionEvent{
 		ConversationID: "conv_1",
 		ExecutionID:    "exec_1",
-		Type:           ExecutionEventTypeDiffGenerated,
+		Type:           RunEventTypeDiffGenerated,
 		Payload: map[string]any{
 			"diff": []any{
 				map[string]any{
@@ -118,7 +118,7 @@ func TestAppendExecutionEventLockedAccumulatesDiffItemsByExecution(t *testing.T)
 	appendExecutionEventLocked(state, ExecutionEvent{
 		ConversationID: "conv_1",
 		ExecutionID:    "exec_1",
-		Type:           ExecutionEventTypeDiffGenerated,
+		Type:           RunEventTypeDiffGenerated,
 		Payload: map[string]any{
 			"diff": []any{
 				map[string]any{
@@ -146,7 +146,7 @@ func TestAppendExecutionEventLockedMergesDiffItemsByPath(t *testing.T) {
 	appendExecutionEventLocked(state, ExecutionEvent{
 		ConversationID: "conv_1",
 		ExecutionID:    "exec_1",
-		Type:           ExecutionEventTypeDiffGenerated,
+		Type:           RunEventTypeDiffGenerated,
 		Payload: map[string]any{
 			"diff": []any{
 				map[string]any{
@@ -161,7 +161,7 @@ func TestAppendExecutionEventLockedMergesDiffItemsByPath(t *testing.T) {
 	appendExecutionEventLocked(state, ExecutionEvent{
 		ConversationID: "conv_1",
 		ExecutionID:    "exec_1",
-		Type:           ExecutionEventTypeDiffGenerated,
+		Type:           RunEventTypeDiffGenerated,
 		Payload: map[string]any{
 			"diff": []any{
 				map[string]any{
@@ -193,7 +193,7 @@ func TestAppendExecutionEventLockedNormalizesMissingMetadata(t *testing.T) {
 	event := appendExecutionEventLocked(state, ExecutionEvent{
 		ConversationID: "conv_1",
 		ExecutionID:    "exec_1",
-		Type:           ExecutionEventTypeThinkingDelta,
+		Type:           RunEventTypeThinkingDelta,
 	})
 	state.mu.Unlock()
 

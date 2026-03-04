@@ -36,7 +36,7 @@ func TestLoadExecutionDomainSnapshotIncludesExecutionEvents(t *testing.T) {
 				TraceID:        "tr_evt_1",
 				Sequence:       1,
 				QueueIndex:     0,
-				Type:           ExecutionEventTypeExecutionStarted,
+				Type:           RunEventTypeExecutionStarted,
 				Timestamp:      "2026-03-01T00:00:01Z",
 				Payload: map[string]any{
 					"step": "start",
@@ -274,7 +274,7 @@ func TestLoadExecutionDomainSnapshotHydratesHooks(t *testing.T) {
 				ID:             "policy_deny_write",
 				Scope:          HookScopeLocal,
 				Event:          HookEventTypePreToolUse,
-				HandlerType:    HookHandlerTypePlugin,
+				HandlerType:    HookHandlerTypeAgent,
 				ToolName:       "Write",
 				WorkspaceID:    "ws_local",
 				ProjectID:      "",

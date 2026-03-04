@@ -9,9 +9,9 @@ import (
 
 const defaultHubInternalToken = "goyais-internal-token"
 
-func shouldFinalizeExecution(eventType ExecutionEventType, payload map[string]any) bool {
+func shouldFinalizeExecution(eventType RunEventType, payload map[string]any) bool {
 	switch eventType {
-	case ExecutionEventTypeExecutionDone, ExecutionEventTypeExecutionError, ExecutionEventTypeExecutionStopped:
+	case RunEventTypeExecutionDone, RunEventTypeExecutionError, RunEventTypeExecutionStopped:
 		return true
 	default:
 		return false

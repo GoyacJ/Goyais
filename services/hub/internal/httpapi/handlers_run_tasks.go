@@ -323,32 +323,32 @@ func applyRunTaskExecutionMetadata(item *runTaskExecutionMetadata, payload map[s
 	}
 }
 
-func applyStructuredTaskEventMetadata(item *runTaskExecutionMetadata, eventType ExecutionEventType, payload map[string]any, executionID string) {
+func applyStructuredTaskEventMetadata(item *runTaskExecutionMetadata, eventType RunEventType, payload map[string]any, executionID string) {
 	if item == nil {
 		return
 	}
 	switch eventType {
-	case ExecutionEventTypeTaskDependenciesUpdated:
+	case RunEventTypeTaskDependenciesUpdated:
 		if dependsOn, ok := parseStringList(payload["depends_on"]); ok {
 			item.DependsOn = dependsOn
 		}
 		if priority, ok := parseInt(payload["priority"]); ok {
 			item.Priority = priority
 		}
-	case ExecutionEventTypeTaskRetryPolicyUpdated:
+	case RunEventTypeTaskRetryPolicyUpdated:
 		if retryCount, ok := parseNonNegativeInt(payload["retry_count"]); ok {
 			item.RetryCount = retryCount
 		}
 		if maxRetries, ok := parseNonNegativeInt(payload["max_retries"]); ok {
 			item.MaxRetries = maxRetries
 		}
-	case ExecutionEventTypeTaskArtifactEmitted:
+	case RunEventTypeTaskArtifactEmitted:
 		if artifact, ok := parseTaskArtifact(payload["artifact"], executionID); ok {
 			item.Artifact = artifact
 		} else if artifact, ok := parseTaskArtifact(payload["task_artifact"], executionID); ok {
 			item.Artifact = artifact
 		}
-	case ExecutionEventTypeTaskFailed:
+	case RunEventTypeTaskFailed:
 		failedState := string(TaskStateFailed)
 		item.State = &failedState
 		if message := strings.TrimSpace(parseScalarString(payload["error_message"])); message != "" {
@@ -358,13 +358,13 @@ func applyStructuredTaskEventMetadata(item *runTaskExecutionMetadata, eventType 
 		if message, ok := parseLastErrorMessage(payload); ok {
 			item.LastError = &message
 		}
-	case ExecutionEventTypeTaskStarted:
-		startedState := string(ExecutionStateExecuting)
+	case RunEventTypeTaskStarted:
+		startedState := string(RunStateExecuting)
 		item.State = &startedState
-	case ExecutionEventTypeTaskCompleted:
+	case RunEventTypeTaskCompleted:
 		completedState := string(TaskStateCompleted)
 		item.State = &completedState
-	case ExecutionEventTypeTaskCancelled:
+	case RunEventTypeTaskCancelled:
 		cancelledState := string(TaskStateCancelled)
 		item.State = &cancelledState
 	}
@@ -389,7 +389,7 @@ func parseTaskState(value any) (string, bool) {
 	case string(TaskStateBlocked):
 		return string(TaskStateBlocked), true
 	case string(TaskStateRunning):
-		return string(ExecutionStateExecuting), true
+		return string(RunStateExecuting), true
 	case string(TaskStateRetrying):
 		return string(TaskStateRetrying), true
 	case string(TaskStateCompleted):
@@ -398,7 +398,7 @@ func parseTaskState(value any) (string, bool) {
 		return string(TaskStateFailed), true
 	case string(TaskStateCancelled):
 		return string(TaskStateCancelled), true
-	case string(ExecutionStatePending), string(ExecutionStateExecuting), string(ExecutionStateConfirming), string(ExecutionStateAwaitingInput):
+	case string(RunStatePending), string(RunStateExecuting), string(RunStateConfirming), string(RunStateAwaitingInput):
 		return string(TaskStateRunning), true
 	default:
 		return "", false

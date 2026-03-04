@@ -1,4 +1,4 @@
-import { isTerminalExecutionState } from "@/modules/conversation/store/executionMerge";
+import { isTerminalRunState } from "@/modules/conversation/store/executionMerge";
 import { normalizeExecutionEventsByExecution } from "@/modules/conversation/trace/normalize";
 import { truncateText } from "@/modules/conversation/trace/summarize";
 import type {
@@ -679,7 +679,7 @@ function resolveStartedAt(execution: Execution, events: NormalizedTraceEvent[]):
 }
 
 function resolveEndedAt(execution: Execution, now: Date): Date {
-  if (!isTerminalExecutionState(execution.state)) {
+  if (!isTerminalRunState(execution.state)) {
     return now;
   }
   return toDateOrNow(execution.updated_at);

@@ -18,15 +18,22 @@ type EventType string
 
 const (
 	EventTypeSessionStart       EventType = "session_start"
+	EventTypeSessionEnd         EventType = "session_end"
 	EventTypeUserPromptSubmit   EventType = "user_prompt_submit"
 	EventTypePreToolUse         EventType = "pre_tool_use"
 	EventTypePermissionRequest  EventType = "permission_request"
 	EventTypePostToolUse        EventType = "post_tool_use"
 	EventTypePostToolUseFailure EventType = "post_tool_use_failure"
+	EventTypeSubagentStart      EventType = "subagent_start"
 	EventTypeStop               EventType = "stop"
 	EventTypeSubagentStop       EventType = "subagent_stop"
+	EventTypeTeammateIdle       EventType = "teammate_idle"
+	EventTypeTaskCompleted      EventType = "task_completed"
 	EventTypeNotification       EventType = "notification"
 	EventTypeConfigChange       EventType = "config_change"
+	EventTypeWorktreeCreate     EventType = "worktree_create"
+	EventTypeWorktreeRemove     EventType = "worktree_remove"
+	EventTypePreCompact         EventType = "pre_compact"
 )
 
 type Action string

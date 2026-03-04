@@ -180,7 +180,7 @@ func (s *authzStore) loadExecutionDomainSnapshot() (executionDomainSnapshot, err
 			WorkspaceID:             record.WorkspaceID,
 			ConversationID:          record.ConversationID,
 			MessageID:               record.MessageID,
-			State:                   ExecutionState(record.State),
+			State:                   RunState(record.State),
 			Mode:                    NormalizePermissionMode(record.Mode),
 			ModelID:                 record.ModelID,
 			ModeSnapshot:            NormalizePermissionMode(record.ModeSnapshot),

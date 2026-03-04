@@ -5,7 +5,7 @@ import {
   controlConversationRunTask,
   conversationStore,
   ensureConversationRuntime,
-  getExecutionStateCounts,
+  getRunStateCounts,
   loadConversationRunTaskById,
   loadConversationRunTaskGraph,
   loadConversationRunTasks,
@@ -170,7 +170,7 @@ export function useMainScreenController() {
   const placeholder = computed(() => t("conversation.placeholderInput"));
   const executionStateCounts = computed(() =>
     runtime.value
-      ? getExecutionStateCounts(runtime.value)
+      ? getRunStateCounts(runtime.value)
       : {
         queued: 0,
         pending: 0,

@@ -113,7 +113,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		runState, runStateErr := mapExecutionStateToRunState(execution.State)
+		runState, runStateErr := mapRunStateToCoreState(execution.State)
 		if runStateErr != nil {
 			state.mu.Unlock()
 			WriteStandardError(w, r, http.StatusConflict, "RUN_STATE_UNSUPPORTED", "Run state cannot be controlled", map[string]any{
@@ -142,7 +142,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		}
 
 		previousState := execution.State
-		desiredState := mapRunStateToExecutionState(machine.State(), execution.State)
+		desiredState := mapCoreStateToRunState(machine.State(), execution.State)
 
 		switch action {
 		case agentcore.ControlActionApprove, agentcore.ControlActionResume:
@@ -157,11 +157,11 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			activeID := execution.ID
 			conversation.ActiveExecutionID = &activeID
 			conversation.QueueState = QueueStateRunning
-			if execution.State == ExecutionStateQueued {
-				execution.State = ExecutionStatePending
+			if execution.State == RunStateQueued {
+				execution.State = RunStatePending
 				nextExecutionToSubmit = execution.ID
-			} else if execution.State == ExecutionStateConfirming {
-				desiredState = ExecutionStateExecuting
+			} else if execution.State == RunStateConfirming {
+				desiredState = RunStateExecuting
 				actionCopy := action
 				controlSignalAction = &actionCopy
 				appendExecutionEventLocked(state, ExecutionEvent{
@@ -169,7 +169,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 					ConversationID: execution.ConversationID,
 					TraceID:        TraceIDFromContext(r.Context()),
 					QueueIndex:     execution.QueueIndex,
-					Type:           ExecutionEventTypeThinkingDelta,
+					Type:           RunEventTypeThinkingDelta,
 					Timestamp:      now,
 					Payload: map[string]any{
 						"stage":  "approval_resolved",
@@ -183,7 +183,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 				ConversationID: execution.ConversationID,
 				TraceID:        TraceIDFromContext(r.Context()),
 				QueueIndex:     execution.QueueIndex,
-				Type:           ExecutionEventTypeExecutionStarted,
+				Type:           RunEventTypeExecutionStarted,
 				Timestamp:      now,
 				Payload: map[string]any{
 					"action": string(action),
@@ -191,8 +191,8 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 				},
 			})
 		case agentcore.ControlActionDeny:
-			if execution.State == ExecutionStateConfirming {
-				desiredState = ExecutionStateExecuting
+			if execution.State == RunStateConfirming {
+				desiredState = RunStateExecuting
 				actionCopy := action
 				controlSignalAction = &actionCopy
 				appendExecutionEventLocked(state, ExecutionEvent{
@@ -200,7 +200,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 					ConversationID: execution.ConversationID,
 					TraceID:        TraceIDFromContext(r.Context()),
 					QueueIndex:     execution.QueueIndex,
-					Type:           ExecutionEventTypeThinkingDelta,
+					Type:           RunEventTypeThinkingDelta,
 					Timestamp:      now,
 					Payload: map[string]any{
 						"stage":  "approval_denied",
@@ -218,7 +218,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 					ConversationID: execution.ConversationID,
 					TraceID:        TraceIDFromContext(r.Context()),
 					QueueIndex:     execution.QueueIndex,
-					Type:           ExecutionEventTypeExecutionStopped,
+					Type:           RunEventTypeExecutionStopped,
 					Timestamp:      now,
 					Payload: map[string]any{
 						"action": string(action),
@@ -230,7 +230,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 					ConversationID: execution.ConversationID,
 					TraceID:        TraceIDFromContext(r.Context()),
 					QueueIndex:     execution.QueueIndex,
-					Type:           ExecutionEventTypeTaskCancelled,
+					Type:           RunEventTypeTaskCancelled,
 					Timestamp:      now,
 					Payload: map[string]any{
 						"task_id": execution.ID,
@@ -261,7 +261,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 				ConversationID: execution.ConversationID,
 				TraceID:        TraceIDFromContext(r.Context()),
 				QueueIndex:     execution.QueueIndex,
-				Type:           ExecutionEventTypeExecutionStopped,
+				Type:           RunEventTypeExecutionStopped,
 				Timestamp:      now,
 				Payload: map[string]any{
 					"action": string(action),
@@ -273,7 +273,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 				ConversationID: execution.ConversationID,
 				TraceID:        TraceIDFromContext(r.Context()),
 				QueueIndex:     execution.QueueIndex,
-				Type:           ExecutionEventTypeTaskCancelled,
+				Type:           RunEventTypeTaskCancelled,
 				Timestamp:      now,
 				Payload: map[string]any{
 					"task_id": execution.ID,
@@ -305,7 +305,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
-			if execution.State != ExecutionStateAwaitingInput {
+			if execution.State != RunStateAwaitingInput {
 				state.mu.Unlock()
 				WriteStandardError(w, r, http.StatusConflict, "RUN_CONTROL_STATE_CONFLICT", "answer action requires awaiting_input state", map[string]any{
 					"run_id": runID,
@@ -329,7 +329,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 				WriteStandardError(w, r, answerValidationErr.StatusCode, answerValidationErr.Code, answerValidationErr.Message, answerValidationErr.Details)
 				return
 			}
-			desiredState = ExecutionStateExecuting
+			desiredState = RunStateExecuting
 			activeID := execution.ID
 			conversation.ActiveExecutionID = &activeID
 			conversation.QueueState = QueueStateRunning
@@ -347,7 +347,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 				ConversationID: execution.ConversationID,
 				TraceID:        TraceIDFromContext(r.Context()),
 				QueueIndex:     execution.QueueIndex,
-				Type:           ExecutionEventTypeThinkingDelta,
+				Type:           RunEventTypeThinkingDelta,
 				Timestamp:      now,
 				Payload: map[string]any{
 					"stage":                 "run_user_question_resolved",
@@ -365,13 +365,13 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		execution.State = desiredState
 		execution.UpdatedAt = now
 		state.executions[execution.ID] = execution
-		if desiredState != ExecutionStateAwaitingInput {
+		if desiredState != RunStateAwaitingInput {
 			delete(state.pendingUserQuestions, execution.ID)
 		}
 		conversation.UpdatedAt = now
 		state.conversations[conversation.ID] = conversation
 		state.mu.Unlock()
-		if action == agentcore.ControlActionStop || (action == agentcore.ControlActionDeny && previousState != ExecutionStateConfirming) {
+		if action == agentcore.ControlActionStop || (action == agentcore.ControlActionDeny && previousState != RunStateConfirming) {
 			decision, matchedPolicyID := evaluateHookDecisionWithState(state, execution, HookEventTypeStop, "")
 			appendHookExecutionRecordAndEventWithState(
 				state,

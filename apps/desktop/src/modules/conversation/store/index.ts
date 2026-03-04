@@ -1,7 +1,7 @@
 export {
   appendRuntimeEvent,
   clearConversationTimer,
-  getExecutionStateCounts,
+  getRunStateCounts,
   getLatestFinishedExecution,
   hasUnfinishedExecutions,
   hydrateConversationRuntime,

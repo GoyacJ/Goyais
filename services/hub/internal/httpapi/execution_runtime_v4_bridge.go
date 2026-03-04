@@ -113,7 +113,7 @@ func (s *AppState) appendV4ShadowSubmitEvent(executionID string, result v4Submit
 		ConversationID: execution.ConversationID,
 		TraceID:        strings.TrimSpace(execution.TraceID),
 		QueueIndex:     execution.QueueIndex,
-		Type:           ExecutionEventTypeThinkingDelta,
+		Type:           RunEventTypeThinkingDelta,
 		Timestamp:      time.Now().UTC().Format(time.RFC3339),
 		Payload:        payload,
 	})
@@ -121,22 +121,22 @@ func (s *AppState) appendV4ShadowSubmitEvent(executionID string, result v4Submit
 	syncExecutionDomainBestEffort(s)
 }
 
-func expectedExecutionStateForV4ShadowEvent(eventType string) (ExecutionState, bool) {
+func expectedRunStateForV4ShadowEvent(eventType string) (RunState, bool) {
 	switch strings.TrimSpace(eventType) {
 	case "run_completed":
-		return ExecutionStateCompleted, true
+		return RunStateCompleted, true
 	case "run_failed":
-		return ExecutionStateFailed, true
+		return RunStateFailed, true
 	case "run_cancelled":
-		return ExecutionStateCancelled, true
+		return RunStateCancelled, true
 	default:
 		return "", false
 	}
 }
 
-func isTerminalExecutionState(state ExecutionState) bool {
+func isTerminalRunState(state RunState) bool {
 	switch state {
-	case ExecutionStateCompleted, ExecutionStateFailed, ExecutionStateCancelled:
+	case RunStateCompleted, RunStateFailed, RunStateCancelled:
 		return true
 	default:
 		return false
@@ -250,17 +250,17 @@ func (s *AppState) appendV4ShadowRunEvent(executionID string, frame agenthttpapi
 		ConversationID: execution.ConversationID,
 		TraceID:        strings.TrimSpace(execution.TraceID),
 		QueueIndex:     execution.QueueIndex,
-		Type:           ExecutionEventTypeThinkingDelta,
+		Type:           RunEventTypeThinkingDelta,
 		Timestamp:      time.Now().UTC().Format(time.RFC3339),
 		Payload:        payload,
 	})
-	if expectedState, isTerminalEvent := expectedExecutionStateForV4ShadowEvent(frame.Type); isTerminalEvent && isTerminalExecutionState(execution.State) && execution.State != expectedState {
+	if expectedState, isTerminalEvent := expectedRunStateForV4ShadowEvent(frame.Type); isTerminalEvent && isTerminalRunState(execution.State) && execution.State != expectedState {
 		appendExecutionEventLocked(s, ExecutionEvent{
 			ExecutionID:    execution.ID,
 			ConversationID: execution.ConversationID,
 			TraceID:        strings.TrimSpace(execution.TraceID),
 			QueueIndex:     execution.QueueIndex,
-			Type:           ExecutionEventTypeThinkingDelta,
+			Type:           RunEventTypeThinkingDelta,
 			Timestamp:      time.Now().UTC().Format(time.RFC3339),
 			Payload: map[string]any{
 				"stage":          "v4_shadow_consistency",

@@ -12,8 +12,9 @@
 1. `internal/agent` 目录骨架已覆盖 core/context/runtime/tools/policy/extensions/transport/adapters，并具备对应测试。
 2. `runtime/loop.Engine` 已作为真实执行实现（FIFO、生命周期事件、控制动作、订阅回放、compaction 联动）。
 3. CLI/ACP 已统一接入 v4 Engine；HTTP 运行时默认模式已切换为 `hybrid`，且 v4 submit 成功后优先走 v4 主链。
-4. 仍处于 E→F 收敛期：legacy fallback、旧枚举（`ExecutionState/ExecutionEventType`）与 `ExecutionOrchestrator` 主职责尚未清理完成。
-5. 本文仍为架构主基线；阶段进度与门禁证据以 `docs/refactor/refactor-taks-plan-table.md` 最新快照为准。
+4. E→F 收口门禁已达成并稳定通过：legacy fallback 与 `ExecutionOrchestrator` 已清理，`GOYAIS_HTTP_RUNTIME_MODE=legacy` 仅保留映射到 `hybrid` 的兼容别名。
+5. 全量验证链已通过：`cd services/hub && go test ./... && go vet ./...`、`scripts/refactor/gate-check.sh --strict`、`pnpm contracts:generate`、`pnpm contracts:check`、`make health`。
+6. 本文仍为架构主基线；阶段进度与门禁证据以 `docs/refactor/refactor-taks-plan-table.md` 最新快照为准。
 
 ---
 
