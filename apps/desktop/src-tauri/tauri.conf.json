@@ -17,7 +17,7 @@
         "decorations": false,
         "transparent": true,
         "backgroundColor": "#00000000",
-        "shadow": false,
+        "shadow": true,
         "width": 1280,
         "height": 800
       }

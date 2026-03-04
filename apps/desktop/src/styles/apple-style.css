@@ -2,7 +2,7 @@
 
 :root {
   /* 1. 更饱满且平滑的圆角 (Radius) */
-  --global-radius-16: 22px; /* 提升全局外框圆角，符合现代 Mac/iOS 质感 */
+  --global-radius-16: 12px; /* 提升全局外框圆角，符合现代 Mac/iOS 质感 */
   --component-button-radius: 12px;
   --component-input-radius: 12px;
   --component-card-radius: 16px;
