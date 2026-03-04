@@ -331,3 +331,20 @@ func (s *AppState) loadV4SubmitContext(executionID string) (v4SubmitContext, err
 		SessionID:      sessionID,
 	}, nil
 }
+
+func (s *AppState) resolveRuntimeSessionIDForExecution(executionID string) string {
+	if s == nil {
+		return ""
+	}
+	normalizedExecutionID := strings.TrimSpace(executionID)
+	if normalizedExecutionID == "" || strings.HasPrefix(normalizedExecutionID, "run_") {
+		return ""
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	execution, executionExists := s.executions[normalizedExecutionID]
+	if !executionExists {
+		return ""
+	}
+	return strings.TrimSpace(s.conversationRuntimeSessionIDs[execution.ConversationID])
+}

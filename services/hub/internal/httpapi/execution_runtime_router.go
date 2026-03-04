@@ -204,6 +204,9 @@ func (s *AppState) cancelExecutionBestEffort(ctx context.Context, executionID st
 	if err := router.Cancel(ctx, resolvedRuntimeID); err != nil && resolvedRuntimeID != normalizedExecutionID && router.legacy != nil {
 		router.legacy.Cancel(normalizedExecutionID)
 	}
+	if s.shouldAttemptV4Submit() {
+		s.snapshotV4RunEventsBestEffort(normalizedExecutionID, s.resolveRuntimeSessionIDForExecution(normalizedExecutionID))
+	}
 }
 
 func (s *AppState) controlExecutionBestEffort(ctx context.Context, executionID string, signal executionControlSignal) {
@@ -224,5 +227,8 @@ func (s *AppState) controlExecutionBestEffort(ctx context.Context, executionID s
 	resolvedRuntimeID := s.resolveExecutionRuntimeID(normalizedExecutionID)
 	if err := router.Control(ctx, resolvedRuntimeID, signal); err != nil && resolvedRuntimeID != normalizedExecutionID && router.legacy != nil {
 		router.legacy.Control(normalizedExecutionID, signal)
+	}
+	if s.shouldAttemptV4Submit() {
+		s.snapshotV4RunEventsBestEffort(normalizedExecutionID, s.resolveRuntimeSessionIDForExecution(normalizedExecutionID))
 	}
 }

@@ -254,6 +254,12 @@ func TestSubmitExecutionBestEffort_HybridModeSubmitsViaV4AndStillRunsLegacy(t *t
 	if len(v4.submitRequests) != 1 {
 		t.Fatalf("expected one v4 submit request, got %d", len(v4.submitRequests))
 	}
+	if len(v4.subscribeRequests) != 1 {
+		t.Fatalf("expected one v4 subscribe snapshot request, got %d", len(v4.subscribeRequests))
+	}
+	if got := strings.TrimSpace(v4.subscribeRequests[0].SessionID); got != "sess_v4_bridge" {
+		t.Fatalf("expected subscribe session sess_v4_bridge, got %q", got)
+	}
 	if len(legacy.submits) != 1 || legacy.submits[0] != "exec_1" {
 		t.Fatalf("expected one legacy submit in hybrid shadow mode, got %#v", legacy.submits)
 	}
@@ -401,5 +407,114 @@ func TestClearExecutionRuntimeMapping_RemovesMapping(t *testing.T) {
 	state.clearExecutionRuntimeMapping("exec_1")
 	if got := state.resolveExecutionRuntimeID("exec_1"); got != "exec_1" {
 		t.Fatalf("expected mapping cleared to original execution id, got %q", got)
+	}
+}
+
+func TestCancelExecutionBestEffort_SnapshotsV4RunEventsWhenSessionKnown(t *testing.T) {
+	legacy := &legacyBackendStub{}
+	v4 := &v4BackendStub{
+		subscribeFrames: []agenthttpapi.EventFrame{
+			{
+				Type:      "run_started",
+				SessionID: "sess_v4_1",
+				RunID:     "run_v4_1",
+				Sequence:  1,
+				Payload: map[string]any{
+					"delta": "started",
+				},
+			},
+		},
+	}
+	state := &AppState{
+		conversations: map[string]Conversation{
+			"conv_1": {
+				ID:          "conv_1",
+				WorkspaceID: "ws_1",
+			},
+		},
+		executions: map[string]Execution{
+			"exec_1": {
+				ID:             "exec_1",
+				ConversationID: "conv_1",
+			},
+		},
+		executionRuntimeRunIDs:        map[string]string{"exec_1": "run_v4_1"},
+		conversationRuntimeSessionIDs: map[string]string{"conv_1": "sess_v4_1"},
+		v4Service:                     v4,
+	}
+	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
+		Mode:   "hybrid",
+		Legacy: legacy,
+		V4:     v4,
+	})
+
+	state.cancelExecutionBestEffort(context.Background(), "exec_1")
+
+	if len(legacy.cancels) != 1 || legacy.cancels[0] != "exec_1" {
+		t.Fatalf("expected legacy cancel call in hybrid mode, got %#v", legacy.cancels)
+	}
+	if len(v4.subscribeRequests) != 1 {
+		t.Fatalf("expected one subscribe snapshot request, got %d", len(v4.subscribeRequests))
+	}
+	events := state.executionEvents["conv_1"]
+	if len(events) == 0 {
+		t.Fatalf("expected shadow run event appended")
+	}
+	last := events[len(events)-1]
+	if stage := strings.TrimSpace(asString(last.Payload["stage"])); stage != "v4_shadow_event" {
+		t.Fatalf("expected v4_shadow_event stage, got %q", stage)
+	}
+}
+
+func TestControlExecutionBestEffort_SnapshotsV4RunEventsWhenSessionKnown(t *testing.T) {
+	legacy := &legacyBackendStub{}
+	v4 := &v4BackendStub{
+		subscribeFrames: []agenthttpapi.EventFrame{
+			{
+				Type:      "run_output_delta",
+				SessionID: "sess_v4_1",
+				RunID:     "run_v4_1",
+				Sequence:  2,
+			},
+		},
+	}
+	state := &AppState{
+		conversations: map[string]Conversation{
+			"conv_1": {
+				ID:          "conv_1",
+				WorkspaceID: "ws_1",
+			},
+		},
+		executions: map[string]Execution{
+			"exec_1": {
+				ID:             "exec_1",
+				ConversationID: "conv_1",
+			},
+		},
+		executionRuntimeRunIDs:        map[string]string{"exec_1": "run_v4_1"},
+		conversationRuntimeSessionIDs: map[string]string{"conv_1": "sess_v4_1"},
+		v4Service:                     v4,
+	}
+	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
+		Mode:   "hybrid",
+		Legacy: legacy,
+		V4:     v4,
+	})
+
+	state.controlExecutionBestEffort(context.Background(), "exec_1", executionControlSignal{Action: agentcore.ControlActionStop})
+
+	if len(legacy.controlIDs) != 1 || legacy.controlIDs[0] != "exec_1" {
+		t.Fatalf("expected legacy control call in hybrid mode, got %#v", legacy.controlIDs)
+	}
+	if len(v4.subscribeRequests) != 1 {
+		t.Fatalf("expected one subscribe snapshot request, got %d", len(v4.subscribeRequests))
+	}
+	events := state.executionEvents["conv_1"]
+	if len(events) == 0 {
+		t.Fatalf("expected shadow run event appended")
+	}
+	last := events[len(events)-1]
+	if stage := strings.TrimSpace(asString(last.Payload["stage"])); stage != "v4_shadow_event" {
+		t.Fatalf("expected v4_shadow_event stage, got %q", stage)
 	}
 }
