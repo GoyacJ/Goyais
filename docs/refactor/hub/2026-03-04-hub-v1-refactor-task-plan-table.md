@@ -30,7 +30,7 @@
 | R5 | 已完成 | 已完成三类 routes 的 service registry 组装、域服务分层与非 runtime 验收 |
 | R6 | 已完成 | ACP 方法集切换至 v1，旧方法下线，并补齐 stream 订阅语义 |
 | R7 | 已完成 | CLI v1 命令树落地、session/run 适配层接入与 v4 runner 下线 |
-| R8 | 待开始 | Desktop + Shared 类型同步切换 |
+| R8 | 进行中 | 已启动 Desktop 服务路径切换与 Shared Session/Run 过渡类型出口 |
 | R9 | 待开始 | Legacy 清理、文档收口、全量验收 |
 
 ---
@@ -363,6 +363,17 @@
 2. `pnpm test`
 3. `pnpm test:strict`
 4. `pnpm e2e:smoke`
+
+### 当前阶段证据（2026-03-05）
+
+1. 切换：`apps/desktop/src/modules/conversation/services/index.ts` 会话主链路请求路径切换为 `/v1/sessions/*` 与 `/v1/runs/*`
+2. 切换：`apps/desktop/src/modules/project/services/index.ts` project 维度会话路径从 `/conversations` 切换为 `/sessions`
+3. 过渡：`packages/shared-core/src/api-project.ts` 新增 `Session/Run` 等别名类型出口，保持旧 `Conversation/Execution` 兼容
+4. 更新测试：`apps/desktop/src/modules/conversation/tests/conversation.spec.ts` 与 `conversation-race.spec.ts` 的 URL 断言同步改为 session/run 路径
+5. 已验证：`pnpm --filter @goyais/desktop test -- src/modules/conversation/tests/conversation.spec.ts src/modules/conversation/tests/conversation-race.spec.ts`
+6. 已验证：`pnpm --filter @goyais/desktop lint`
+7. 已验证：`pnpm lint && pnpm test`
+8. 已验证：`pnpm test:strict && pnpm e2e:smoke`
 
 ---
 

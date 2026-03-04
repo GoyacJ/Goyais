@@ -49,7 +49,7 @@ export function streamConversationEvents(
     onError: (error: Error) => void;
   }
 ) {
-  const url = `${getHubBaseUrl()}/v1/conversations/${conversationId}/events`;
+  const url = `${getHubBaseUrl()}/v1/sessions/${conversationId}/events`;
   return connectConversationEvents(url, {
     token: options.token,
     initialLastEventId: options.initialLastEventId,
@@ -60,33 +60,33 @@ export function streamConversationEvents(
 }
 
 export async function getComposerCatalog(conversationId: string): Promise<ComposerCatalog> {
-  return getControlClient().get<ComposerCatalog>(`/v1/conversations/${conversationId}/input/catalog`);
+  return getControlClient().get<ComposerCatalog>(`/v1/sessions/${conversationId}/input/catalog`);
 }
 
 export async function suggestComposerInput(
   conversationId: string,
   input: ComposerSuggestRequest
 ): Promise<ComposerSuggestResponse> {
-  return getControlClient().post<ComposerSuggestResponse>(`/v1/conversations/${conversationId}/input/suggest`, input);
+  return getControlClient().post<ComposerSuggestResponse>(`/v1/sessions/${conversationId}/input/suggest`, input);
 }
 
 export async function submitComposerInput(
   conversation: Conversation,
   input: ComposerSubmitRequest
 ): Promise<ComposerSubmitResponse> {
-  return getControlClient().post<ComposerSubmitResponse>(`/v1/conversations/${conversation.id}/input/submit`, input);
+  return getControlClient().post<ComposerSubmitResponse>(`/v1/sessions/${conversation.id}/runs`, input);
 }
 
 export async function getConversationDetail(
   conversationId: string,
   options: ConversationServiceOptions = {}
 ): Promise<ConversationDetailResponse> {
-  return getControlClient().get<ConversationDetailResponse>(`/v1/conversations/${conversationId}`, { token: options.token });
+  return getControlClient().get<ConversationDetailResponse>(`/v1/sessions/${conversationId}`, { token: options.token });
 }
 
 export async function cancelExecution(conversationId: string, executionId: string): Promise<void> {
   void executionId;
-  await getControlClient().post<void>(`/v1/conversations/${conversationId}/stop`);
+  await getControlClient().post<void>(`/v1/sessions/${conversationId}/stop`);
 }
 
 export async function controlExecutionRun(
@@ -148,31 +148,31 @@ export async function controlRunTask(
 }
 
 export async function rollbackExecution(conversationId: string, messageId: string): Promise<void> {
-  await getControlClient().post<void>(`/v1/conversations/${conversationId}/rollback`, {
+  await getControlClient().post<void>(`/v1/sessions/${conversationId}/rollback`, {
     message_id: messageId
   });
 }
 
 export async function getConversationChangeSet(conversationId: string): Promise<ConversationChangeSet> {
-  return getControlClient().get<ConversationChangeSet>(`/v1/conversations/${conversationId}/changeset`);
+  return getControlClient().get<ConversationChangeSet>(`/v1/sessions/${conversationId}/changeset`);
 }
 
 export async function commitConversationChangeSet(
   conversationId: string,
   input: ChangeSetCommitRequest
 ): Promise<ChangeSetCommitResponse> {
-  return getControlClient().post<ChangeSetCommitResponse>(`/v1/conversations/${conversationId}/changeset/commit`, input);
+  return getControlClient().post<ChangeSetCommitResponse>(`/v1/sessions/${conversationId}/changeset/commit`, input);
 }
 
 export async function discardConversationChangeSet(
   conversationId: string,
   input: ChangeSetDiscardRequest
 ): Promise<void> {
-  await getControlClient().post<void>(`/v1/conversations/${conversationId}/changeset/discard`, input);
+  await getControlClient().post<void>(`/v1/sessions/${conversationId}/changeset/discard`, input);
 }
 
 export async function exportConversationChangeSet(conversationId: string): Promise<ExecutionFilesExportResponse> {
-  return getControlClient().post<ExecutionFilesExportResponse>(`/v1/conversations/${conversationId}/changeset/export`, {});
+  return getControlClient().post<ExecutionFilesExportResponse>(`/v1/sessions/${conversationId}/changeset/export`, {});
 }
 
 export function resolveDiffCapability(_isGitProject: boolean): ChangeSetCapability {

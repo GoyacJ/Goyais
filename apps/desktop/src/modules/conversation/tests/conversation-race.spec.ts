@@ -65,7 +65,7 @@ describe("conversation execution race", () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? "GET";
-      if (url.endsWith(`/v1/conversations/${mockConversation.id}/input/submit`) && method === "POST") {
+      if (url.endsWith(`/v1/sessions/${mockConversation.id}/runs`) && method === "POST") {
         return new Promise<Response>((resolve) => {
           resolveCreate = () => resolve(jsonResponse(createResponse, 201));
         });

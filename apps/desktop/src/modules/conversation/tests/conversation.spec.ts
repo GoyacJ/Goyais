@@ -49,7 +49,7 @@ describe("conversation store", () => {
       const url = String(input);
       const method = init?.method ?? "GET";
 
-      if (url.includes("/v1/conversations/") && url.endsWith("/input/submit") && method === "POST") {
+      if (url.includes("/v1/sessions/") && url.endsWith("/runs") && method === "POST") {
         executionCounter += 1;
         return jsonResponse(
           {
@@ -165,7 +165,7 @@ describe("conversation store", () => {
     });
 
     const submitCalls = fetchMock.mock.calls.filter(([url, init]) =>
-      String(url).endsWith(`/v1/conversations/${mockConversation.id}/input/submit`) && (init?.method ?? "GET") === "POST"
+      String(url).endsWith(`/v1/sessions/${mockConversation.id}/runs`) && (init?.method ?? "GET") === "POST"
     );
     expect(submitCalls).toHaveLength(2);
     const secondBody = JSON.parse(String(submitCalls[1]?.[1]?.body ?? "{}")) as { catalog_revision?: string };
@@ -187,7 +187,7 @@ describe("conversation store", () => {
 
     expect(conversationStore.error).toContain("当前项目未绑定可用模型");
     const messageCalls = fetchMock.mock.calls.filter(([url, init]) => {
-      return String(url).endsWith(`/v1/conversations/${conversationWithoutModel.id}/input/submit`) && (init?.method ?? "GET") === "POST";
+      return String(url).endsWith(`/v1/sessions/${conversationWithoutModel.id}/runs`) && (init?.method ?? "GET") === "POST";
     });
     expect(messageCalls).toHaveLength(0);
     const runtime = ensureConversationRuntime(conversationWithoutModel, true);
@@ -447,7 +447,7 @@ describe("conversation store", () => {
     await stopConversationExecution(mockConversation);
 
     const stopCalls = fetchMock.mock.calls.filter(([url, init]) => {
-      return String(url).endsWith(`/v1/conversations/${mockConversation.id}/stop`) && (init?.method ?? "GET") === "POST";
+      return String(url).endsWith(`/v1/sessions/${mockConversation.id}/stop`) && (init?.method ?? "GET") === "POST";
     });
     expect(stopCalls.length).toBe(1);
   });
@@ -476,7 +476,7 @@ describe("conversation store", () => {
     await stopConversationExecution(mockConversation);
 
     const stopCalls = fetchMock.mock.calls.filter(([url, init]) => {
-      return String(url).endsWith(`/v1/conversations/${mockConversation.id}/stop`) && (init?.method ?? "GET") === "POST";
+      return String(url).endsWith(`/v1/sessions/${mockConversation.id}/stop`) && (init?.method ?? "GET") === "POST";
     });
     expect(stopCalls.length).toBe(1);
   });

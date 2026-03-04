@@ -60,6 +60,10 @@ export type Conversation = {
   updated_at: string;
 };
 
+// Session/Run aliases are introduced as the v1 runtime canonical terms.
+// Existing Conversation/Execution exports remain during the Desktop migration.
+export type Session = Conversation;
+
 export type ConversationMessage = {
   id: string;
   conversation_id: string;
@@ -69,6 +73,8 @@ export type ConversationMessage = {
   queue_index?: number;
   can_rollback?: boolean;
 };
+
+export type SessionMessage = ConversationMessage;
 
 export type ConversationSnapshot = {
   id: string;
@@ -91,12 +97,16 @@ export type ConversationSnapshot = {
   created_at: string;
 };
 
+export type SessionSnapshot = ConversationSnapshot;
+
 export type ConversationDetailResponse = {
   conversation: Conversation;
   messages: ConversationMessage[];
   executions: Execution[];
   snapshots: ConversationSnapshot[];
 };
+
+export type SessionDetailResponse = ConversationDetailResponse;
 
 export type Execution = {
   id: string;
@@ -140,6 +150,8 @@ export type Execution = {
   updated_at: string;
 };
 
+export type Run = Execution;
+
 export type RunEventType =
   | "message_received"
   | "user_prompt_submit"
@@ -180,6 +192,8 @@ export type ExecutionEvent = {
   payload: Record<string, unknown>;
 };
 
+export type RunLifecycleEvent = ExecutionEvent;
+
 export type StreamRunEventType =
   | "run_queued"
   | "run_started"
@@ -200,6 +214,8 @@ export type RunEvent = {
 };
 
 export type ConversationStreamEvent = ExecutionEvent | RunEvent;
+
+export type SessionStreamEvent = ConversationStreamEvent;
 
 export type RunControlRequest = {
   action: RunControlAction;
@@ -264,6 +280,8 @@ export type ConversationChangeSet = {
   suggested_message: CommitSuggestion;
   last_committed_checkpoint?: CheckpointSummary;
 };
+
+export type SessionChangeSet = ConversationChangeSet;
 
 export type ChangeSetCommitRequest = {
   message: string;
@@ -368,3 +386,5 @@ export type ConversationRuntime = {
   inspectorTab: InspectorTabKey;
   diffCapability: ChangeSetCapability;
 };
+
+export type SessionRuntime = ConversationRuntime;

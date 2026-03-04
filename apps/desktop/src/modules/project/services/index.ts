@@ -62,14 +62,14 @@ export async function listConversations(
   options: ProjectServiceOptions = {}
 ): Promise<ListEnvelope<Conversation>> {
   const search = buildPaginationSearch(query);
-  return getControlClient().get<ListEnvelope<Conversation>>(`/v1/projects/${projectId}/conversations${search}`, {
+  return getControlClient().get<ListEnvelope<Conversation>>(`/v1/projects/${projectId}/sessions${search}`, {
     token: options.token
   });
 }
 
 export async function createConversation(project: Project, name: string, options: ProjectServiceOptions = {}): Promise<Conversation> {
   return getControlClient().post<Conversation>(
-    `/v1/projects/${project.id}/conversations`,
+    `/v1/projects/${project.id}/sessions`,
     {
       workspace_id: project.workspace_id,
       name
@@ -98,7 +98,7 @@ export async function patchConversation(
   },
   options: ProjectServiceOptions = {}
 ): Promise<Conversation> {
-  return getControlClient().request<Conversation>(`/v1/conversations/${conversationId}`, {
+  return getControlClient().request<Conversation>(`/v1/sessions/${conversationId}`, {
     method: "PATCH",
     body: patch,
     token: options.token
@@ -106,14 +106,14 @@ export async function patchConversation(
 }
 
 export async function removeConversation(conversationId: string, options: ProjectServiceOptions = {}): Promise<void> {
-  await getControlClient().request<void>(`/v1/conversations/${conversationId}`, {
+  await getControlClient().request<void>(`/v1/sessions/${conversationId}`, {
     method: "DELETE",
     token: options.token
   });
 }
 
 export async function exportConversationMarkdown(conversationId: string, options: ProjectServiceOptions = {}): Promise<string> {
-  return getControlClient().get<string>(`/v1/conversations/${conversationId}/export?format=markdown`, {
+  return getControlClient().get<string>(`/v1/sessions/${conversationId}/export?format=markdown`, {
     token: options.token
   });
 }
