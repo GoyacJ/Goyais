@@ -54,6 +54,9 @@ Agent v4 重构任务计划表
 │ HTTP 主链  │ 默认模式已切到 `hybrid`，并在 v4 submit 成功时不再常态提交 legacy：                                                      │
 │            │ `services/hub/internal/httpapi/execution_runtime_router.go`（`newExecutionRuntimeRouter` / `submitExecutionBestEffort`） │
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 回退开关   │ 新增 `GOYAIS_HTTP_RUNTIME_LEGACY_FALLBACK` 受控回退开关（v4 模式强制禁回退；hybrid 可按环境变量关闭回退）。               │
+│            │ 对应测试已覆盖 hybrid/v4 两种模式下的“禁回退”行为。                                                                     │
+├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ 映射收敛   │ hybrid/v4 均可解析 execution→run 映射 ID：                                                                                │
 │            │ `services/hub/internal/httpapi/execution_runtime_v4_bridge.go`（`resolveExecutionRuntimeID`）                            │
 ├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤

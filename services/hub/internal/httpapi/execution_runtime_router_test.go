@@ -47,6 +47,10 @@ type v4BackendStub struct {
 	submitRunID    string
 }
 
+func boolPtr(v bool) *bool {
+	return &v
+}
+
 func (s *v4BackendStub) StartSession(_ context.Context, req agenthttpapi.StartSessionRequest) (agenthttpapi.StartSessionResponse, error) {
 	if s.err != nil {
 		return agenthttpapi.StartSessionResponse{}, s.err
@@ -119,6 +123,16 @@ func TestNewAppState_V4ModeSkipsLegacyOrchestrator(t *testing.T) {
 	}
 	if state.executionRuntime.legacy != nil {
 		t.Fatalf("expected no legacy backend attached in v4 mode")
+	}
+}
+
+func TestExecutionRuntimeRouter_HybridModeFallbackCanBeDisabledByEnv(t *testing.T) {
+	t.Setenv(executionRuntimeLegacyFallbackEnv, "false")
+	router := newExecutionRuntimeRouter(executionRuntimeRouterOptions{
+		Mode: "hybrid",
+	})
+	if router.shouldAllowLegacyFallback() {
+		t.Fatalf("expected legacy fallback disabled by env")
 	}
 }
 
@@ -199,6 +213,27 @@ func TestExecutionRuntimeRouter_HybridModeFallsBackToLegacyWhenV4Missing(t *test
 	}
 	if len(legacy.controlIDs) != 1 || legacy.controlIDs[0] != "run_1" {
 		t.Fatalf("expected fallback control routed to legacy, got %#v", legacy.controlIDs)
+	}
+}
+
+func TestExecutionRuntimeRouter_HybridModeDoesNotFallbackWhenDisabled(t *testing.T) {
+	legacy := &legacyBackendStub{}
+	router := newExecutionRuntimeRouter(executionRuntimeRouterOptions{
+		Mode:                "hybrid",
+		Legacy:              legacy,
+		AllowLegacyFallback: boolPtr(false),
+	})
+
+	cancelErr := router.Cancel(context.Background(), "run_1")
+	if !errors.Is(cancelErr, errV4ExecutionBackendNotConfigured) {
+		t.Fatalf("expected missing v4 backend error when fallback disabled, got %v", cancelErr)
+	}
+	controlErr := router.Control(context.Background(), "run_1", executionControlSignal{Action: agentcore.ControlActionStop})
+	if !errors.Is(controlErr, errV4ExecutionBackendNotConfigured) {
+		t.Fatalf("expected missing v4 backend error when fallback disabled, got %v", controlErr)
+	}
+	if len(legacy.cancels) != 0 || len(legacy.controlIDs) != 0 {
+		t.Fatalf("expected no legacy fallback calls when disabled, got cancels=%#v controls=%#v", legacy.cancels, legacy.controlIDs)
 	}
 }
 
@@ -365,6 +400,34 @@ func TestSubmitExecutionBestEffort_FallsBackToLegacyWhenV4SubmitFails(t *testing
 	}
 }
 
+func TestSubmitExecutionBestEffort_HybridModeNoFallbackWhenDisabled(t *testing.T) {
+	legacy := &legacyBackendStub{}
+	v4 := &v4BackendStub{err: errors.New("v4 down")}
+	state := &AppState{
+		executionRuntimeRunIDs:        map[string]string{},
+		conversationRuntimeSessionIDs: map[string]string{},
+		v4Service:                     v4,
+	}
+	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
+		Mode:                "hybrid",
+		Legacy:              legacy,
+		V4:                  v4,
+		AllowLegacyFallback: boolPtr(false),
+	})
+
+	state.submitExecutionBestEffort(context.Background(), "exec_missing")
+
+	if len(legacy.submits) != 0 {
+		t.Fatalf("expected no legacy submit fallback when disabled, got %#v", legacy.submits)
+	}
+	if !hasRuntimeAuditActionResult(state.adminAudit, "execution.runtime.route_v4", "error") {
+		t.Fatalf("expected v4 route error audit when fallback disabled, got %#v", state.adminAudit)
+	}
+	if hasRuntimeAuditAction(state.adminAudit, "execution.runtime.fallback_legacy") {
+		t.Fatalf("did not expect legacy fallback audit when fallback disabled, got %#v", state.adminAudit)
+	}
+}
+
 func TestSubmitExecutionBestEffort_RecordsShadowFailureWhenV4SubmitFailsWithContext(t *testing.T) {
 	legacy := &legacyBackendStub{}
 	v4 := &v4BackendStub{err: errors.New("v4 down")}
@@ -502,6 +565,31 @@ func TestCancelExecutionBestEffort_V4ModeDoesNotFallbackWhenExecutionIDUnmapped(
 	}
 	if !hasRuntimeAuditActionResult(state.adminAudit, "execution.runtime.route_v4", "error") {
 		t.Fatalf("expected v4 route error audit for cancel fallback block, got %#v", state.adminAudit)
+	}
+}
+
+func TestCancelExecutionBestEffort_HybridModeDoesNotFallbackWhenDisabled(t *testing.T) {
+	legacy := &legacyBackendStub{}
+	state := &AppState{
+		executionRuntimeRunIDs:        map[string]string{"exec_1": "run_1"},
+		conversationRuntimeSessionIDs: map[string]string{},
+	}
+	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
+		Mode:                "hybrid",
+		Legacy:              legacy,
+		AllowLegacyFallback: boolPtr(false),
+	})
+
+	state.cancelExecutionBestEffort(context.Background(), "exec_1")
+
+	if len(legacy.cancels) != 0 {
+		t.Fatalf("expected no legacy cancel fallback when disabled, got %#v", legacy.cancels)
+	}
+	if !hasRuntimeAuditActionResult(state.adminAudit, "execution.runtime.route_v4", "error") {
+		t.Fatalf("expected v4 route error audit for disabled hybrid fallback, got %#v", state.adminAudit)
+	}
+	if hasRuntimeAuditAction(state.adminAudit, "execution.runtime.fallback_legacy") {
+		t.Fatalf("did not expect fallback_legacy audit when disabled, got %#v", state.adminAudit)
 	}
 }
 
