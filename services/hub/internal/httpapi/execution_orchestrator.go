@@ -266,6 +266,7 @@ func (o *ExecutionOrchestrator) transitionExecutionToCompleted(executionID strin
 	}
 	o.state.executions[execution.ID] = execution
 	delete(o.state.pendingUserQuestions, execution.ID)
+	delete(o.state.executionRuntimeRunIDs, execution.ID)
 
 	appendExecutionMessageLocked(o.state, execution.ConversationID, MessageRoleAssistant, strings.TrimSpace(output), execution.QueueIndex, false, now)
 	appendExecutionEventLocked(o.state, ExecutionEvent{
@@ -333,6 +334,7 @@ func (o *ExecutionOrchestrator) transitionExecutionToFailed(executionID string, 
 	execution.UpdatedAt = now
 	o.state.executions[execution.ID] = execution
 	delete(o.state.pendingUserQuestions, execution.ID)
+	delete(o.state.executionRuntimeRunIDs, execution.ID)
 
 	message := firstNonEmpty(strings.TrimSpace(executionErr.Error()), "Execution failed.")
 	appendExecutionMessageLocked(o.state, execution.ConversationID, MessageRoleSystem, message, execution.QueueIndex, false, now)
@@ -418,6 +420,7 @@ func (o *ExecutionOrchestrator) transitionExecutionToCancelled(executionID strin
 	execution.UpdatedAt = now
 	o.state.executions[execution.ID] = execution
 	delete(o.state.pendingUserQuestions, execution.ID)
+	delete(o.state.executionRuntimeRunIDs, execution.ID)
 	appendExecutionEventLocked(o.state, ExecutionEvent{
 		ExecutionID:    execution.ID,
 		ConversationID: execution.ConversationID,
