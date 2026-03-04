@@ -104,6 +104,19 @@ func NewAppState(store *authzStore) *AppState {
 	if runtimeMode == "" {
 		runtimeMode = executionRuntimeModeHybrid
 	}
+	allowLegacyFallback := runtimeMode == executionRuntimeModeLegacy
+	if runtimeMode == executionRuntimeModeHybrid {
+		allowLegacyFallback = false
+	}
+	if raw, exists := os.LookupEnv(executionRuntimeLegacyFallbackEnv); exists {
+		allowLegacyFallback = parseLegacyFallback(raw, allowLegacyFallback)
+	}
+	if runtimeMode == executionRuntimeModeV4 {
+		allowLegacyFallback = false
+	}
+	if runtimeMode == executionRuntimeModeLegacy {
+		allowLegacyFallback = true
+	}
 	if runtimeMode != executionRuntimeModeV4 {
 		state.orchestrator = NewExecutionOrchestrator(state)
 	}
@@ -113,9 +126,10 @@ func NewAppState(store *authzStore) *AppState {
 		legacyBackend = state.orchestrator
 	}
 	state.executionRuntime = newExecutionRuntimeRouter(executionRuntimeRouterOptions{
-		Mode:   string(runtimeMode),
-		Legacy: legacyBackend,
-		V4:     state.v4Service,
+		Mode:                string(runtimeMode),
+		Legacy:              legacyBackend,
+		V4:                  state.v4Service,
+		AllowLegacyFallback: &allowLegacyFallback,
 	})
 
 	state.adminRoles = defaultRoles()

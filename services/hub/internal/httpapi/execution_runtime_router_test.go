@@ -107,6 +107,9 @@ func TestNewAppState_DefaultRuntimeModeKeepsLegacyFallbackWired(t *testing.T) {
 	if state.executionRuntime.legacy == nil {
 		t.Fatalf("expected legacy backend wired in default mode")
 	}
+	if state.executionRuntime.shouldAllowLegacyFallback() {
+		t.Fatalf("expected legacy fallback disabled by default in hybrid mode")
+	}
 }
 
 func TestNewAppState_V4ModeSkipsLegacyOrchestrator(t *testing.T) {
@@ -123,6 +126,18 @@ func TestNewAppState_V4ModeSkipsLegacyOrchestrator(t *testing.T) {
 	}
 	if state.executionRuntime.legacy != nil {
 		t.Fatalf("expected no legacy backend attached in v4 mode")
+	}
+	if state.executionRuntime.shouldAllowLegacyFallback() {
+		t.Fatalf("expected legacy fallback disabled in v4 mode")
+	}
+}
+
+func TestNewAppState_HybridModeCanEnableLegacyFallbackByEnv(t *testing.T) {
+	t.Setenv(executionRuntimeModeEnv, "")
+	t.Setenv(executionRuntimeLegacyFallbackEnv, "true")
+	state := NewAppState(nil)
+	if !state.executionRuntime.shouldAllowLegacyFallback() {
+		t.Fatalf("expected legacy fallback enabled by env in hybrid mode")
 	}
 }
 
