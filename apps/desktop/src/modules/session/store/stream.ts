@@ -154,7 +154,7 @@ function resolveLatestEventIDFromResyncPayload(event: RunLifecycleEvent): string
   return raw.trim();
 }
 
-function normalizeExecutionEvent(raw: unknown, fallbackConversationId: string): RunLifecycleEvent | null {
+function normalizeExecutionEvent(raw: unknown, sessionIdHint: string): RunLifecycleEvent | null {
   if (!isRecord(raw)) {
     return null;
   }
@@ -162,7 +162,7 @@ function normalizeExecutionEvent(raw: unknown, fallbackConversationId: string): 
   if (rawType === "" || !isRunEventType(rawType)) {
     return null;
   }
-  return mapRunEventToExecutionEvent(raw, rawType, fallbackConversationId);
+  return mapRunEventToExecutionEvent(raw, rawType, sessionIdHint);
 }
 
 function toError(value: unknown): Error {
@@ -175,12 +175,12 @@ function toError(value: unknown): Error {
 function mapRunEventToExecutionEvent(
   raw: Record<string, unknown>,
   runType: StreamRunEventType,
-  fallbackConversationId: string
+  sessionIdHint: string
 ): RunLifecycleEvent {
   const payload = asRecord(raw.payload);
   const queueIndex = asInteger(raw.queue_index, asInteger(payload.queue_index, 0));
   const traceId = asString(raw.trace_id) || asString(payload.trace_id);
-  const conversationId = resolveConversationID(asString(raw.session_id), fallbackConversationId);
+  const conversationId = resolveSessionID(asString(raw.session_id), sessionIdHint);
 
   if (runType === "run_output_delta") {
     return {
@@ -257,12 +257,12 @@ function resolveExecutionTypeForRunOutputDelta(payload: Record<string, unknown>)
   return "thinking_delta";
 }
 
-function resolveConversationID(rawConversationID: string, fallbackConversationID: string): string {
-  const trimmed = rawConversationID.trim();
+function resolveSessionID(rawSessionID: string, sessionIdHint: string): string {
+  const trimmed = rawSessionID.trim();
   if (trimmed !== "") {
     return trimmed;
   }
-  return fallbackConversationID.trim();
+  return sessionIdHint.trim();
 }
 
 function isRunEventType(value: string): value is StreamRunEventType {
@@ -276,7 +276,7 @@ function asString(value: unknown): string {
   return value.trim();
 }
 
-function asInteger(value: unknown, fallback: number): number {
+function asInteger(value: unknown, defaultValue: number): number {
   if (typeof value === "number" && Number.isFinite(value)) {
     return Math.trunc(value);
   }
@@ -286,7 +286,7 @@ function asInteger(value: unknown, fallback: number): number {
       return parsed;
     }
   }
-  return fallback;
+  return defaultValue;
 }
 
 function asTimestamp(value: unknown): string {

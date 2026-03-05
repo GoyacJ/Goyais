@@ -33,7 +33,7 @@ export type SessionRuntime = {
   messages: SessionMessage[];
   events: RunLifecycleEvent[];
   runs: Run[];
-  // Backward-compatibility projection while callers migrate to `runs`.
+  // Keep a mirrored projection for existing execution-oriented callers.
   executions: Run[];
   snapshots: SessionSnapshot[];
   draft: string;
@@ -70,7 +70,7 @@ export const MAX_RUNTIME_EVENTS = 1000;
 
 type SessionState = {
   bySessionId: Record<string, SessionRuntime>;
-  // Backward-compatibility projection while callers migrate to `bySessionId`.
+  // Keep a mirrored projection for existing conversation-oriented callers.
   byConversationId: Record<string, SessionRuntime>;
   sessionTimers: Record<string, ReturnType<typeof setTimeout> | undefined>;
   timers: Record<string, ReturnType<typeof setTimeout> | undefined>;
@@ -138,11 +138,11 @@ export function ensureSessionRuntime(
 ): SessionRuntime {
   const existing = sessionStore.bySessionId[session.id];
   if (existing) {
-    return ensureLegacyExecutionAlias(existing);
+    return syncExecutionProjection(existing);
   }
 
   const runs: Run[] = [];
-  const runtime: SessionRuntime = ensureLegacyExecutionAlias({
+  const runtime: SessionRuntime = syncExecutionProjection({
     messages: [],
     events: [],
     runs,
@@ -218,7 +218,7 @@ export function hydrateSessionRuntime(
   runtime.changeSet = null;
   runtime.diffCapability = resolveDiffCapability(isGitProject);
   runtime.hydrated = true;
-  return ensureLegacyExecutionAlias(runtime);
+  return syncExecutionProjection(runtime);
 }
 
 export function hydrateConversationRuntime(
@@ -269,7 +269,7 @@ export function getSessionRuntime(sessionId: string): SessionRuntime | undefined
   if (!runtime) {
     return undefined;
   }
-  return ensureLegacyExecutionAlias(runtime);
+  return syncExecutionProjection(runtime);
 }
 
 export function getConversationRuntime(conversationId: string): ConversationRuntime | undefined {
@@ -438,7 +438,7 @@ export function getLatestFinishedExecution(conversationId: string): Run | undefi
   return getLatestFinishedRun(conversationId);
 }
 
-function ensureLegacyExecutionAlias(runtime: SessionRuntime): SessionRuntime {
+function syncExecutionProjection(runtime: SessionRuntime): SessionRuntime {
   runtime.executions = runtime.runs;
   return runtime;
 }

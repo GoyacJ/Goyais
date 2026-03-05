@@ -134,15 +134,15 @@ func (s *AppState) GetCatalogRoot(workspaceID string) (CatalogRootResponse, erro
 	}
 
 	root := s.defaultCatalogRoot(workspaceID)
-	fallback := CatalogRootResponse{
+	defaultRoot := CatalogRootResponse{
 		WorkspaceID: workspaceID,
 		CatalogRoot: root,
 		UpdatedAt:   nowUTC(),
 	}
 	s.mu.Lock()
-	s.workspaceCatalogRoots[workspaceID] = fallback
+	s.workspaceCatalogRoots[workspaceID] = defaultRoot
 	s.mu.Unlock()
-	return fallback, nil
+	return defaultRoot, nil
 }
 
 func (s *AppState) LoadModelCatalog(workspaceID string, force bool) (ModelCatalogResponse, error) {
@@ -185,7 +185,7 @@ func (s *AppState) loadModelCatalogDetailed(workspaceID string, force bool) (Mod
 		meta.FallbackUsed = true
 		meta.FallbackReason = "parse_failed"
 		meta.FallbackError = parseErr.Error()
-		resolved, payload, err = fallbackToEmbeddedCatalog("parse_failed")
+		resolved, payload, err = loadEmbeddedCatalogForRecovery("parse_failed")
 		if err != nil {
 			return ModelCatalogResponse{}, meta, err
 		}
@@ -198,7 +198,7 @@ func (s *AppState) loadModelCatalogDetailed(workspaceID string, force bool) (Mod
 			meta.FallbackUsed = true
 			meta.FallbackReason = "autofill_marshal_failed"
 			meta.FallbackError = marshalErr.Error()
-			resolved, payload, err = fallbackToEmbeddedCatalog("autofill_marshal_failed")
+			resolved, payload, err = loadEmbeddedCatalogForRecovery("autofill_marshal_failed")
 			if err != nil {
 				return ModelCatalogResponse{}, meta, err
 			}
@@ -209,7 +209,7 @@ func (s *AppState) loadModelCatalogDetailed(workspaceID string, force bool) (Mod
 				meta.FallbackUsed = true
 				meta.FallbackReason = "autofill_write_failed"
 				meta.FallbackError = writeErr.Error()
-				resolved, payload, err = fallbackToEmbeddedCatalog("autofill_write_failed")
+				resolved, payload, err = loadEmbeddedCatalogForRecovery("autofill_write_failed")
 				if err != nil {
 					return ModelCatalogResponse{}, meta, err
 				}
@@ -250,7 +250,7 @@ func (s *AppState) loadModelCatalogDetailed(workspaceID string, force bool) (Mod
 	return response, meta, nil
 }
 
-func fallbackToEmbeddedCatalog(reason string) (resolvedCatalogSource, modelCatalogFile, error) {
+func loadEmbeddedCatalogForRecovery(reason string) (resolvedCatalogSource, modelCatalogFile, error) {
 	resolved, err := loadEmbeddedModelCatalogData()
 	if err != nil {
 		return resolvedCatalogSource{}, modelCatalogFile{}, fmt.Errorf("fallback to embedded catalog failed (%s): %w", reason, err)

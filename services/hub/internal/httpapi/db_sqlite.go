@@ -27,7 +27,7 @@ type authzStore struct {
 	dbPath string
 }
 
-var legacyDBBackupCopyFile = copyFileContents
+var schemaBackupCopyFile = copyFileContents
 
 func openAuthzStore(path string) (*authzStore, error) {
 	if strings.TrimSpace(path) == "" {
@@ -449,19 +449,19 @@ func (s *authzStore) migrate() error {
 	}
 	if validationErr := s.validateStrictSchema(); validationErr != nil {
 		backupPath := ""
-		if shouldBackupLegacySchema(s.dbPath, validationErr) {
+		if shouldBackupPreviousSchema(s.dbPath, validationErr) {
 			var backupErr error
-			backupPath, backupErr = backupLegacyDBFile(s.dbPath)
+			backupPath, backupErr = backupPreviousSchemaDBFile(s.dbPath)
 			if backupErr != nil {
-				return fmt.Errorf("backup legacy db before rebuild: %w", backupErr)
+				return fmt.Errorf("backup previous-schema db before rebuild: %w", backupErr)
 			}
-			log.Printf("legacy authz db schema detected (%s); backup created at %s", s.dbPath, backupPath)
+			log.Printf("previous authz db schema detected (%s); backup created at %s", s.dbPath, backupPath)
 		}
 		if rebuildErr := s.rebuildSchema(statements); rebuildErr != nil {
 			return fmt.Errorf("rebuild schema after validation failure: %w (original: %v)", rebuildErr, validationErr)
 		}
 		if backupPath != "" {
-			log.Printf("legacy authz db schema rebuild succeeded (%s) using backup %s", s.dbPath, backupPath)
+			log.Printf("previous authz db schema rebuild succeeded (%s) using backup %s", s.dbPath, backupPath)
 		}
 	}
 	return nil
@@ -579,7 +579,7 @@ func (s *authzStore) ensureRuntimeRunModelConfigIDColumn() error {
 	return err
 }
 
-func shouldBackupLegacySchema(dbPath string, validationErr error) bool {
+func shouldBackupPreviousSchema(dbPath string, validationErr error) bool {
 	if validationErr == nil {
 		return false
 	}
@@ -587,30 +587,30 @@ func shouldBackupLegacySchema(dbPath string, validationErr error) bool {
 	if normalized == "" || normalized == ":memory:" {
 		return false
 	}
-	return strings.Contains(strings.ToLower(validationErr.Error()), "legacy db schema detected")
+	return strings.Contains(strings.ToLower(validationErr.Error()), "previous db schema detected")
 }
 
-func backupLegacyDBFile(dbPath string) (string, error) {
+func backupPreviousSchemaDBFile(dbPath string) (string, error) {
 	normalized := strings.TrimSpace(dbPath)
 	if normalized == "" || normalized == ":memory:" {
 		return "", nil
 	}
 	info, statErr := os.Stat(normalized)
 	if statErr != nil {
-		return "", fmt.Errorf("stat legacy db: %w", statErr)
+		return "", fmt.Errorf("stat previous db: %w", statErr)
 	}
 	if info.IsDir() {
-		return "", fmt.Errorf("legacy db path is a directory: %s", normalized)
+		return "", fmt.Errorf("previous db path is a directory: %s", normalized)
 	}
 
 	now := time.Now().UTC()
 	backupPath := fmt.Sprintf(
-		"%s.legacy-%s%09d.bak",
+		"%s.previous-%s%09d.bak",
 		normalized,
 		now.Format("20060102150405"),
 		now.Nanosecond(),
 	)
-	if copyErr := legacyDBBackupCopyFile(normalized, backupPath); copyErr != nil {
+	if copyErr := schemaBackupCopyFile(normalized, backupPath); copyErr != nil {
 		return "", copyErr
 	}
 	return backupPath, nil
@@ -697,37 +697,37 @@ func (s *authzStore) validateStrictSchema() error {
 			return fmt.Errorf("validate schema %s.%s: %w", field.table, field.column, err)
 		}
 		if !ok {
-			return fmt.Errorf("legacy db schema detected: missing required column %s.%s; remove existing hub db and restart", field.table, field.column)
+			return fmt.Errorf("previous db schema detected: missing required column %s.%s; remove existing hub db and restart", field.table, field.column)
 		}
 	}
 
-	forbiddenLegacyColumns := []struct {
+	forbiddenUnexpectedColumns := []struct {
 		table  string
 		column string
 	}{
 		{table: "resource_configs", column: "name"},
 	}
-	for _, field := range forbiddenLegacyColumns {
+	for _, field := range forbiddenUnexpectedColumns {
 		ok, err := tableHasColumn(s.db, field.table, field.column)
 		if err != nil {
 			return fmt.Errorf("validate schema %s.%s: %w", field.table, field.column, err)
 		}
 		if ok {
-			return fmt.Errorf("legacy db schema detected: unexpected legacy column %s.%s", field.table, field.column)
+			return fmt.Errorf("previous db schema detected: unexpected old column %s.%s", field.table, field.column)
 		}
 	}
-	forbiddenLegacyTables := []string{
+	forbiddenUnexpectedTables := []string{
 		"execution_control_commands",
 		"execution_leases",
 		"workers",
 	}
-	for _, table := range forbiddenLegacyTables {
+	for _, table := range forbiddenUnexpectedTables {
 		exists, err := tableExists(s.db, table)
 		if err != nil {
 			return fmt.Errorf("validate schema table %s: %w", table, err)
 		}
 		if exists {
-			return fmt.Errorf("legacy db schema detected: unexpected table %s", table)
+			return fmt.Errorf("previous db schema detected: unexpected table %s", table)
 		}
 	}
 	return nil
