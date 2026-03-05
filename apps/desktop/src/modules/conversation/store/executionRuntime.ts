@@ -7,9 +7,9 @@ import {
   normalizeExecutionList,
   resolveMergedRunState
 } from "@/modules/conversation/store/executionMerge";
-import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import type { SessionRuntime } from "@/modules/conversation/store/state";
 
-export function ensureExecution(runtime: ConversationRuntime, conversationId: string, event: RunLifecycleEvent): Run {
+export function ensureExecution(runtime: SessionRuntime, conversationId: string, event: RunLifecycleEvent): Run {
   const executionId = event.execution_id.trim();
   let execution = runtime.executions.find((item) => item.id === executionId);
   if (execution) {
@@ -101,7 +101,7 @@ function toNonNegativeInteger(value: unknown): number | null {
   return Math.trunc(value);
 }
 
-export function upsertExecutionFromServer(runtime: ConversationRuntime, incoming: Run): Run {
+export function upsertExecutionFromServer(runtime: SessionRuntime, incoming: Run): Run {
   const normalizedIncoming = cloneExecution(incoming);
   const index = runtime.executions.findIndex((item) => item.id === normalizedIncoming.id);
   if (index < 0) {
@@ -116,7 +116,7 @@ export function upsertExecutionFromServer(runtime: ConversationRuntime, incoming
   return merged;
 }
 
-export function dedupeExecutions(runtime: ConversationRuntime): void {
+export function dedupeExecutions(runtime: SessionRuntime): void {
   runtime.executions = normalizeExecutionList(runtime.executions);
   runtime.runs = runtime.executions;
 }
@@ -150,7 +150,7 @@ function toOptionalNonNegativeInteger(value: unknown): number | undefined {
 }
 
 export function restoreExecutionsFromSnapshot(
-  runtime: ConversationRuntime,
+  runtime: SessionRuntime,
   conversationId: string,
   snapshot: SessionSnapshot
 ): Run[] {

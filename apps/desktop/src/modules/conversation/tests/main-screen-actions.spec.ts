@@ -2,7 +2,7 @@ import { computed, ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Router } from "vue-router";
 
-import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import type { SessionRuntime } from "@/modules/conversation/store/state";
 import { useMainScreenActions } from "@/modules/conversation/views/useMainScreenActions";
 import type { Project, Run, Session, SessionMessage } from "@/shared/types/api";
 
@@ -345,7 +345,7 @@ function createActionsContext(input: {
 
   const activeConversationRef = ref<Session | undefined>(conversation);
   const activeProjectRef = ref<Project | undefined>(project);
-  const runtimeRef = ref<ConversationRuntime | undefined>(runtimeValue);
+  const runtimeRef = ref<SessionRuntime | undefined>(runtimeValue);
 
   const inputRefs = {
     inspectorCollapsed: ref(false),
@@ -435,8 +435,8 @@ function createExecution(id: string, state: Run["state"]): Run {
   };
 }
 
-function createRuntime(overrides: Partial<ConversationRuntime> = {}): ConversationRuntime {
-  const runtime: ConversationRuntime = {
+function createRuntime(overrides: Partial<SessionRuntime> = {}): SessionRuntime {
+  const runtime: SessionRuntime = {
     messages: [],
     events: [],
     runs: [],

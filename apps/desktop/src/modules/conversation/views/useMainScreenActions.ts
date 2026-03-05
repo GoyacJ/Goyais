@@ -17,7 +17,7 @@ import {
   submitConversationMessage
 } from "@/modules/conversation/store";
 import { exportConversationChangeSet } from "@/modules/conversation/services";
-import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import type { SessionRuntime } from "@/modules/conversation/store/state";
 import { buildNameFromFirstMessage, isDefaultConversationName } from "@/modules/conversation/views/conversationNamePolicy";
 import {
   addConversation,
@@ -49,7 +49,7 @@ type MainScreenActionsInput = {
   router: Router;
   activeConversation: ComputedRef<Session | undefined>;
   activeProject: ComputedRef<Project | undefined>;
-  runtime: ComputedRef<ConversationRuntime | undefined>;
+  runtime: ComputedRef<SessionRuntime | undefined>;
   modelOptions: ComputedRef<Array<{ value: string; label: string }>>;
   composerCatalogRevision: ComputedRef<string>;
   inspectorCollapsed: Ref<boolean>;

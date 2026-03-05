@@ -1,7 +1,7 @@
 import { ref } from "vue";
 import { describe, expect, it } from "vitest";
 
-import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import type { SessionRuntime } from "@/modules/conversation/store/state";
 import { useQueueMessagesView } from "@/modules/conversation/views/useQueueMessagesView";
 
 describe("useQueueMessagesView", () => {
@@ -98,8 +98,8 @@ describe("useQueueMessagesView", () => {
   });
 });
 
-function createRuntime(overrides: Partial<ConversationRuntime>): ConversationRuntime {
-  const runtime: ConversationRuntime = {
+function createRuntime(overrides: Partial<SessionRuntime>): SessionRuntime {
+  const runtime: SessionRuntime = {
     messages: [],
     events: [],
     runs: [],

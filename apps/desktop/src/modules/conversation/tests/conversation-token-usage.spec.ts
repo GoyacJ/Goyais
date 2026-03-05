@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import type { SessionRuntime } from "@/modules/conversation/store/state";
 import { resolveConversationUsage, summarizeExecutionTokens } from "@/modules/conversation/views/conversationTokenUsage";
 import type { Run, Session } from "@/shared/types/api";
 
@@ -43,7 +43,7 @@ describe("conversation token usage helpers", () => {
     });
     const runtime = {
       executions: [createExecution({ id: "exec_runtime_1", tokens_in: 2, tokens_out: 4 })]
-    } as Pick<ConversationRuntime, "executions">;
+    } as Pick<SessionRuntime, "executions">;
 
     const usage = resolveConversationUsage(conversation, runtime);
     expect(usage).toEqual({

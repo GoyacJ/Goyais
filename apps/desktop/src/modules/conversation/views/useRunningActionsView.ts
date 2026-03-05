@@ -5,7 +5,7 @@ import {
   buildRunningActionBaseViewModels,
   type RunningActionViewModel
 } from "@/modules/conversation/views/runningActions";
-import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import type { SessionRuntime } from "@/modules/conversation/store/state";
 import type { Locale } from "@/shared/i18n/messages";
 import type { Run } from "@/shared/types/api";
 
@@ -15,7 +15,7 @@ type RunningActionsViewOptions = {
 };
 
 export function useRunningActionsView(
-  runtime: Ref<ConversationRuntime | undefined>,
+  runtime: Ref<SessionRuntime | undefined>,
   options: RunningActionsViewOptions
 ) {
   const nowTick = ref(Date.now());

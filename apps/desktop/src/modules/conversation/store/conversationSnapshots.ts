@@ -6,7 +6,7 @@ import type {
   QueueState
 } from "@/shared/types/api";
 
-import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import type { SessionRuntime } from "@/modules/conversation/store/state";
 
 export function createInitialMessages(conversationId: string): ConversationMessage[] {
   void conversationId;
@@ -14,7 +14,7 @@ export function createInitialMessages(conversationId: string): ConversationMessa
 }
 
 export function buildConversationSnapshot(
-  runtime: ConversationRuntime,
+  runtime: SessionRuntime,
   conversationId: string,
   rollbackPointMessageId: string
 ): ConversationSnapshot {
@@ -43,7 +43,7 @@ export function buildConversationSnapshot(
   };
 }
 
-function deriveQueueState(runtime: ConversationRuntime): QueueState {
+function deriveQueueState(runtime: SessionRuntime): QueueState {
   const executions = normalizeExecutionList(runtime.executions);
   const hasRunning = executions.some((execution) =>
     execution.state === "pending" || execution.state === "executing"

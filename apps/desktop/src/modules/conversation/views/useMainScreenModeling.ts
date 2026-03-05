@@ -2,13 +2,13 @@ import { computed, type ComputedRef } from "vue";
 
 import { projectStore } from "@/modules/project/store";
 import { resourceStore } from "@/modules/resource/store";
-import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import type { SessionRuntime } from "@/modules/conversation/store/state";
 import type { Project, Session } from "@/shared/types/api";
 
 type MainScreenModelingInput = {
   activeProject: ComputedRef<Project | undefined>;
   activeConversation: ComputedRef<Session | undefined>;
-  runtime: ComputedRef<ConversationRuntime | undefined>;
+  runtime: ComputedRef<SessionRuntime | undefined>;
 };
 
 export function useMainScreenModeling(input: MainScreenModelingInput) {

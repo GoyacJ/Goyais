@@ -1,6 +1,6 @@
 import { computed, type Ref } from "vue";
 
-import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import type { SessionRuntime } from "@/modules/conversation/store/state";
 import type { Run, SessionMessage } from "@/shared/types/api";
 
 export type QueuedMessageViewModel = {
@@ -16,7 +16,7 @@ type UserMessageLookup = {
   byQueueIndex: Map<number, SessionMessage>;
 };
 
-export function useQueueMessagesView(runtime: Ref<ConversationRuntime | undefined>) {
+export function useQueueMessagesView(runtime: Ref<SessionRuntime | undefined>) {
   const userMessages = computed<UserMessageLookup>(() => {
     const byID = new Map<string, SessionMessage>();
     const byQueueIndex = new Map<number, SessionMessage>();

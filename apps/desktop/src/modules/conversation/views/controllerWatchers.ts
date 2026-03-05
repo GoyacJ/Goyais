@@ -1,6 +1,6 @@
 import { ref, watch, type ComputedRef } from "vue";
 
-import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import type { SessionRuntime } from "@/modules/conversation/store/state";
 import type { Session } from "@/shared/types/api";
 
 type ModelOption = { value: string; label: string };
@@ -10,7 +10,7 @@ type AutoModelSyncWatcherInput = {
   activeCount: ComputedRef<number>;
   modelOptions: ComputedRef<ModelOption[]>;
   resolveSemanticModelID: (raw: string) => string;
-  runtime: ComputedRef<ConversationRuntime | undefined>;
+  runtime: ComputedRef<SessionRuntime | undefined>;
   updateModel: (modelID: string) => Promise<void>;
 };
 

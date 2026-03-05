@@ -1,5 +1,5 @@
 import { normalizeExecutionList } from "@/modules/conversation/store/executionMerge";
-import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import type { SessionRuntime } from "@/modules/conversation/store/state";
 import type { Run, Session } from "@/shared/types/api";
 
 export type ConversationTokenUsage = {
@@ -27,7 +27,7 @@ export function summarizeExecutionTokens(executions: Run[]): ConversationTokenUs
 
 export function resolveConversationUsage(
   conversation: Session | undefined,
-  runtime?: Pick<ConversationRuntime, "executions">
+  runtime?: Pick<SessionRuntime, "executions">
 ): ConversationTokenUsage {
   if (runtime) {
     return summarizeExecutionTokens(runtime.executions);

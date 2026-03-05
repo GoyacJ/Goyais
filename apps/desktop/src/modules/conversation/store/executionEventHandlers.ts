@@ -5,7 +5,7 @@ import {
   parseDiff
 } from "@/modules/conversation/store/executionRuntime";
 import { shouldAppendTerminalMessage } from "@/modules/conversation/store/executionEventIdempotency";
-import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import type { SessionRuntime } from "@/modules/conversation/store/state";
 import { createMockId } from "@/shared/utils/id";
 import type { RunLifecycleEvent, SessionMessage } from "@/shared/types/api";
 
@@ -16,7 +16,7 @@ export type ExecutionTransition = {
 };
 
 export function updateExecutionTransition(
-  runtime: ConversationRuntime,
+  runtime: SessionRuntime,
   conversationId: string,
   event: RunLifecycleEvent
 ): ExecutionTransition {
@@ -32,7 +32,7 @@ export function updateExecutionTransition(
   return { previousState, nextState, messageID: execution.message_id };
 }
 
-export function applyDiffUpdate(runtime: ConversationRuntime, event: RunLifecycleEvent): void {
+export function applyDiffUpdate(runtime: SessionRuntime, event: RunLifecycleEvent): void {
   if (event.type === "diff_generated") {
     const incoming = parseDiff(event.payload);
     if (incoming.length > 0) {
@@ -51,7 +51,7 @@ export function applyDiffUpdate(runtime: ConversationRuntime, event: RunLifecycl
 }
 
 export function appendTerminalMessageFromEvent(
-  runtime: ConversationRuntime,
+  runtime: SessionRuntime,
   conversationId: string,
   event: RunLifecycleEvent,
   transition: ExecutionTransition
@@ -72,7 +72,7 @@ export function appendTerminalMessageFromEvent(
 }
 
 function appendExecutionDoneMessage(
-  runtime: ConversationRuntime,
+  runtime: SessionRuntime,
   conversationId: string,
   event: RunLifecycleEvent,
   transition: ExecutionTransition
@@ -92,7 +92,7 @@ function appendExecutionDoneMessage(
 }
 
 function appendExecutionErrorMessage(
-  runtime: ConversationRuntime,
+  runtime: SessionRuntime,
   conversationId: string,
   event: RunLifecycleEvent,
   transition: ExecutionTransition
@@ -112,7 +112,7 @@ function appendExecutionErrorMessage(
 }
 
 function appendUserAnswerMessage(
-  runtime: ConversationRuntime,
+  runtime: SessionRuntime,
   conversationId: string,
   event: RunLifecycleEvent
 ): void {
@@ -157,7 +157,7 @@ function asNonEmptyString(value: unknown): string {
   return typeof value === "string" && value.trim() !== "" ? value : "";
 }
 
-function appendTerminalMessage(runtime: ConversationRuntime, message: SessionMessage): void {
+function appendTerminalMessage(runtime: SessionRuntime, message: SessionMessage): void {
   if (typeof message.queue_index !== "number") {
     runtime.messages.push(message);
     return;
@@ -181,8 +181,8 @@ function appendTerminalMessage(runtime: ConversationRuntime, message: SessionMes
   runtime.messages.splice(insertAfter + 1, 0, message);
 }
 
-function mergeDiffByPath(existing: ConversationRuntime["diff"], incoming: ConversationRuntime["diff"]): ConversationRuntime["diff"] {
-  const mergedByPath = new Map<string, ConversationRuntime["diff"][number]>();
+function mergeDiffByPath(existing: SessionRuntime["diff"], incoming: SessionRuntime["diff"]): SessionRuntime["diff"] {
+  const mergedByPath = new Map<string, SessionRuntime["diff"][number]>();
   for (const item of existing) {
     mergedByPath.set(item.path, item);
   }

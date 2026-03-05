@@ -1,4 +1,4 @@
-import type { ConversationRuntime } from "@/modules/conversation/store/state";
+import type { SessionRuntime } from "@/modules/conversation/store/state";
 import type { RunLifecycleEvent } from "@/shared/types/api";
 
 const MAX_PROCESSED_EVENT_KEYS = 5000;
@@ -12,7 +12,7 @@ export function buildEventDedupKey(event: RunLifecycleEvent): string {
   return `fallback:${event.conversation_id}:${event.execution_id}:${event.sequence}:${event.type}`;
 }
 
-export function rememberProcessedEvent(runtime: ConversationRuntime, eventDedupKey: string): void {
+export function rememberProcessedEvent(runtime: SessionRuntime, eventDedupKey: string): void {
   if (eventDedupKey === "") {
     return;
   }
@@ -28,7 +28,7 @@ export function rememberProcessedEvent(runtime: ConversationRuntime, eventDedupK
 }
 
 export function shouldAppendTerminalMessage(
-  runtime: ConversationRuntime,
+  runtime: SessionRuntime,
   event: RunLifecycleEvent,
   previousState: string | undefined,
   nextState: string | undefined,
@@ -53,7 +53,7 @@ export function shouldAppendTerminalMessage(
   return true;
 }
 
-function rememberCompletionMessage(runtime: ConversationRuntime, completionKey: string): void {
+function rememberCompletionMessage(runtime: SessionRuntime, completionKey: string): void {
   runtime.completionMessageKeySet.add(completionKey);
   runtime.completionMessageKeys.push(completionKey);
   if (runtime.completionMessageKeys.length > MAX_COMPLETION_MESSAGE_KEYS) {
@@ -65,7 +65,7 @@ function rememberCompletionMessage(runtime: ConversationRuntime, completionKey: 
   }
 }
 
-function hasMessageContext(runtime: ConversationRuntime, event: RunLifecycleEvent, messageID: string): boolean {
+function hasMessageContext(runtime: SessionRuntime, event: RunLifecycleEvent, messageID: string): boolean {
   const normalizedMessageID = messageID.trim();
   if (normalizedMessageID !== "" && runtime.messages.some((item) => item.id === normalizedMessageID)) {
     return true;
