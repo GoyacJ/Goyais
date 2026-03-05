@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Conversation } from "@/shared/types/api";
+import type { Session } from "@/shared/types/api";
 
 const streamSessionEventsMock = vi.fn();
 const applyIncomingExecutionEventMock = vi.fn();
@@ -20,14 +20,14 @@ vi.mock("@/modules/conversation/store/executionActions", () => ({
 }));
 
 import {
-  attachConversationStream,
-  conversationStore,
-  detachConversationStream,
-  ensureConversationRuntime,
-  resetConversationStore
+  attachSessionStream,
+  sessionStore,
+  detachSessionStream,
+  ensureSessionRuntime,
+  resetSessionStore
 } from "@/modules/conversation/store";
 
-const conversationA: Conversation = {
+const conversationA: Session = {
   id: "conv_stream_a",
   workspace_id: "ws_local",
   project_id: "proj_stream",
@@ -44,7 +44,7 @@ const conversationA: Conversation = {
   updated_at: "2026-02-24T00:00:00Z"
 };
 
-const conversationB: Conversation = {
+const conversationB: Session = {
   ...conversationA,
   id: "conv_stream_b",
   name: "B"
@@ -61,7 +61,7 @@ describe("conversation stream routing", () => {
     | undefined;
 
   beforeEach(() => {
-    resetConversationStore();
+    resetSessionStore();
     vi.stubGlobal("EventSource", class MockEventSource {});
     onEvent = undefined;
     optionsUsed = undefined;
@@ -70,8 +70,10 @@ describe("conversation stream routing", () => {
     applyIncomingExecutionEventMock.mockReset();
     getSessionDetailMock.mockReset();
     getSessionDetailMock.mockResolvedValue({
+      session: conversationA,
       conversation: conversationA,
       messages: [],
+      runs: [],
       executions: [],
       snapshots: []
     });
@@ -86,18 +88,18 @@ describe("conversation stream routing", () => {
         lastEventId: () => "evt_stream_last_handle"
       };
     });
-    ensureConversationRuntime(conversationA, true);
-    ensureConversationRuntime(conversationB, true);
+    ensureSessionRuntime(conversationA, true);
+    ensureSessionRuntime(conversationB, true);
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    resetConversationStore();
+    resetSessionStore();
   });
 
   it("routes mismatched stream events by event.conversation_id", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    attachConversationStream(conversationA);
+    attachSessionStream(conversationA);
     expect(typeof onEvent).toBe("function");
 
     onEvent?.({
@@ -124,7 +126,7 @@ describe("conversation stream routing", () => {
 
   it("routes run-centric events by session_id and run_id", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    attachConversationStream(conversationA);
+    attachSessionStream(conversationA);
     expect(typeof onEvent).toBe("function");
 
     onEvent?.({
@@ -153,10 +155,10 @@ describe("conversation stream routing", () => {
   });
 
   it("passes lastEventId during attach and updates runtime lastEventId from incoming event", () => {
-    const runtime = ensureConversationRuntime(conversationA, true);
+    const runtime = ensureSessionRuntime(conversationA, true);
     runtime.lastEventId = "evt_stream_resume_from";
 
-    attachConversationStream(conversationA);
+    attachSessionStream(conversationA);
 
     expect(optionsUsed?.initialLastEventId).toBe("evt_stream_resume_from");
     onEvent?.({
@@ -176,19 +178,20 @@ describe("conversation stream routing", () => {
   });
 
   it("detaches stream handle", () => {
-    attachConversationStream(conversationA);
-    expect(conversationStore.streams[conversationA.id]).toBeTruthy();
+    attachSessionStream(conversationA);
+    expect(sessionStore.sessionStreams[conversationA.id]).toBeTruthy();
 
-    detachConversationStream(conversationA.id);
+    detachSessionStream(conversationA.id);
     expect(closeHandle).toHaveBeenCalledTimes(1);
-    expect(conversationStore.streams[conversationA.id]).toBeUndefined();
-    expect(conversationStore.byConversationId[conversationA.id]?.lastEventId).toBe("evt_stream_last_handle");
+    expect(sessionStore.sessionStreams[conversationA.id]).toBeUndefined();
+    expect(sessionStore.bySessionId[conversationA.id]?.lastEventId).toBe("evt_stream_last_handle");
   });
 
   it("triggers forced detail hydration when server requires SSE resync", async () => {
-    const runtime = ensureConversationRuntime(conversationA, true);
+    const runtime = ensureSessionRuntime(conversationA, true);
     runtime.lastEventId = "evt_stream_stale";
     getSessionDetailMock.mockResolvedValue({
+      session: conversationA,
       conversation: conversationA,
       messages: [
         {
@@ -199,11 +202,12 @@ describe("conversation stream routing", () => {
           created_at: "2026-02-24T00:00:00Z"
         }
       ],
+      runs: [],
       executions: [],
       snapshots: []
     });
 
-    attachConversationStream(conversationA, "at_remote");
+    attachSessionStream(conversationA, "at_remote");
     onEvent?.({
       type: "run_output_delta",
       event_id: "evt_stream_resync_signal",

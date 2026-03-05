@@ -23,12 +23,12 @@ const storeMocks = vi.hoisted(() => ({
   getWorkspaceToken: vi.fn()
 }));
 
-const conversationStoreMocks = vi.hoisted(() => ({
-  conversationStore: {
-    byConversationId: {} as Record<string, unknown>
+const sessionStoreMocks = vi.hoisted(() => ({
+  sessionStore: {
+    bySessionId: {} as Record<string, unknown>
   },
-  detachConversationStream: vi.fn(),
-  clearConversationTimer: vi.fn()
+  detachSessionStream: vi.fn(),
+  clearSessionTimer: vi.fn()
 }));
 
 vi.mock("@/modules/project/services", () => ({
@@ -55,9 +55,12 @@ vi.mock("@/shared/stores/authStore", () => ({
 }));
 
 vi.mock("@/modules/conversation/store", () => ({
-  conversationStore: conversationStoreMocks.conversationStore,
-  detachConversationStream: conversationStoreMocks.detachConversationStream,
-  clearConversationTimer: conversationStoreMocks.clearConversationTimer
+  sessionStore: sessionStoreMocks.sessionStore,
+  detachSessionStream: sessionStoreMocks.detachSessionStream,
+  clearSessionTimer: sessionStoreMocks.clearSessionTimer,
+  conversationStore: sessionStoreMocks.sessionStore,
+  detachConversationStream: sessionStoreMocks.detachSessionStream,
+  clearConversationTimer: sessionStoreMocks.clearSessionTimer
 }));
 
 import { importProjectByDirectory, projectStore, refreshProjects, resetProjectStore, updateProjectBinding } from "@/modules/project/store";
@@ -66,7 +69,7 @@ describe("project store token forwarding", () => {
   beforeEach(() => {
     resetProjectStore();
     vi.clearAllMocks();
-    conversationStoreMocks.conversationStore.byConversationId = {};
+    sessionStoreMocks.sessionStore.bySessionId = {};
 
     storeMocks.getCurrentWorkspace.mockReturnValue({
       id: "ws_remote_1",
@@ -209,7 +212,7 @@ describe("project store token forwarding", () => {
       retainedConversation
     ];
     projectStore.activeConversationId = "conv_remove";
-    conversationStoreMocks.conversationStore.byConversationId = {
+    sessionStoreMocks.sessionStore.bySessionId = {
       conv_remove: { hydrated: true },
       conv_keep: { hydrated: true }
     };
@@ -239,9 +242,9 @@ describe("project store token forwarding", () => {
     expect(updated).toBe(true);
     expect(serviceMocks.updateProjectConfig).toHaveBeenCalledTimes(1);
     expect(serviceMocks.listConversations).toHaveBeenCalledTimes(1);
-    expect(conversationStoreMocks.detachConversationStream).toHaveBeenCalledWith("conv_remove");
-    expect(conversationStoreMocks.clearConversationTimer).toHaveBeenCalledWith("conv_remove");
-    expect(conversationStoreMocks.conversationStore.byConversationId).not.toHaveProperty("conv_remove");
+    expect(sessionStoreMocks.detachSessionStream).toHaveBeenCalledWith("conv_remove");
+    expect(sessionStoreMocks.clearSessionTimer).toHaveBeenCalledWith("conv_remove");
+    expect(sessionStoreMocks.sessionStore.bySessionId).not.toHaveProperty("conv_remove");
     expect(projectStore.activeConversationId).toBe("");
     expect(projectStore.conversationsByProjectId.proj_alpha).toHaveLength(1);
     expect(projectStore.conversationsByProjectId.proj_alpha[0]?.id).toBe("conv_keep");

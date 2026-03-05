@@ -368,7 +368,7 @@ wait_for_http "hub.readiness" "http://127.0.0.1:${HUB_PORT}/health"
 check_health_json "hub.health" "http://127.0.0.1:${HUB_PORT}/health" "$LOG_DIR/hub_health.json"
 check_workspace_list_envelope "hub.list.workspaces" "http://127.0.0.1:${HUB_PORT}/v1/workspaces" "$LOG_DIR/_v1_workspaces_list.json"
 
-for path in /v1/projects /v1/conversations /v1/executions; do
+for path in /v1/projects /v1/sessions /v1/runs; do
   check_name="hub.list.${path#/v1/}"
   output_file="$LOG_DIR/${path//\//_}_list.json"
   check_list_envelope "$check_name" "http://127.0.0.1:${HUB_PORT}${path}" "$output_file"

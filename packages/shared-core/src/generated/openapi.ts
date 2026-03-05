@@ -1436,7 +1436,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List project conversations */
+        /** List project sessions */
         get: {
             parameters: {
                 query?: {
@@ -1453,7 +1453,7 @@ export type paths = {
             };
             requestBody?: never;
             responses: {
-                /** @description Conversation list */
+                /** @description Session list */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -1465,7 +1465,7 @@ export type paths = {
             };
         };
         put?: never;
-        /** Create conversation in project */
+        /** Create session in project */
         post: {
             parameters: {
                 query?: never;
@@ -1477,17 +1477,17 @@ export type paths = {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["CreateConversationRequest"];
+                    "application/json": components["schemas"]["CreateSessionRequest"];
                 };
             };
             responses: {
-                /** @description Created conversation */
+                /** @description Created session */
                 201: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Conversation"];
+                        "application/json": components["schemas"]["Session"];
                     };
                 };
                 404: components["responses"]["StandardErrorResponse"];
@@ -1589,7 +1589,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List executions */
+        /** List runs */
         get: {
             parameters: {
                 query?: {
@@ -1605,7 +1605,7 @@ export type paths = {
             };
             requestBody?: never;
             responses: {
-                /** @description Execution list */
+                /** @description Run list */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -1846,7 +1846,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List conversations */
+        /** List sessions */
         get: {
             parameters: {
                 query?: {
@@ -1863,7 +1863,7 @@ export type paths = {
             };
             requestBody?: never;
             responses: {
-                /** @description Conversation list */
+                /** @description Session list */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -1889,7 +1889,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Get conversation detail */
+        /** Get session detail */
         get: {
             parameters: {
                 query?: never;
@@ -1901,13 +1901,13 @@ export type paths = {
             };
             requestBody?: never;
             responses: {
-                /** @description Conversation detail */
+                /** @description Session detail */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["ConversationDetailResponse"];
+                        "application/json": components["schemas"]["SessionDetailResponse"];
                     };
                 };
                 404: components["responses"]["StandardErrorResponse"];
@@ -1915,7 +1915,7 @@ export type paths = {
         };
         put?: never;
         post?: never;
-        /** Delete conversation */
+        /** Delete session */
         delete: {
             parameters: {
                 query?: never;
@@ -1939,7 +1939,7 @@ export type paths = {
         };
         options?: never;
         head?: never;
-        /** Update conversation metadata */
+        /** Update session metadata */
         patch: {
             parameters: {
                 query?: never;
@@ -1951,17 +1951,17 @@ export type paths = {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["UpdateConversationRequest"];
+                    "application/json": components["schemas"]["UpdateSessionRequest"];
                 };
             };
             responses: {
-                /** @description Renamed conversation */
+                /** @description Updated session */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Conversation"];
+                        "application/json": components["schemas"]["Session"];
                     };
                 };
                 400: components["responses"]["StandardErrorResponse"];
@@ -1977,7 +1977,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Get conversation-level pending change set */
+        /** Get session-level pending change set */
         get: {
             parameters: {
                 query?: never;
@@ -1989,13 +1989,13 @@ export type paths = {
             };
             requestBody?: never;
             responses: {
-                /** @description Pending conversation changes */
+                /** @description Pending session changes */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["ConversationChangeSet"];
+                        "application/json": components["schemas"]["SessionChangeSet"];
                     };
                 };
                 404: components["responses"]["StandardErrorResponse"];
@@ -2018,7 +2018,7 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Commit conversation-level pending change set */
+        /** Commit session-level pending change set */
         post: {
             parameters: {
                 query?: never;
@@ -2063,7 +2063,7 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Discard conversation-level pending change set */
+        /** Discard session-level pending change set */
         post: {
             parameters: {
                 query?: never;
@@ -2108,7 +2108,7 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Export conversation-level pending changed files as zip archive */
+        /** Export session-level pending changed files as zip archive */
         post: {
             parameters: {
                 query?: never;
@@ -2126,7 +2126,7 @@ export type paths = {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["ExecutionFilesExportResponse"];
+                        "application/json": components["schemas"]["RunFilesExportResponse"];
                     };
                 };
                 404: components["responses"]["StandardErrorResponse"];
@@ -2145,7 +2145,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Stream execution events for conversation (SSE) */
+        /** Stream run events for session (SSE) */
         get: {
             parameters: {
                 query?: {
@@ -2186,7 +2186,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Export conversation as markdown */
+        /** Export session as markdown */
         get: {
             parameters: {
                 query: {
@@ -2313,7 +2313,7 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Rollback conversation to user message anchor */
+        /** Rollback session to user message anchor */
         post: {
             parameters: {
                 query?: never;
@@ -2382,7 +2382,7 @@ export type paths = {
                         "application/json": components["schemas"]["ComposerSubmitResponse"];
                     };
                 };
-                /** @description Execution enqueued response */
+                /** @description Run enqueued response */
                 201: {
                     headers: {
                         [name: string]: unknown;
@@ -2411,7 +2411,7 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Stop active execution and continue queued items */
+        /** Stop active run and continue queued items */
         post: {
             parameters: {
                 query?: never;
@@ -3404,6 +3404,13 @@ export type components = {
             queue_index: number;
             /** @enum {string} */
             queue_state: "idle" | "running" | "queued";
+        } | {
+            /** @enum {string} */
+            kind: "run_enqueued";
+            queue_index: number;
+            /** @enum {string} */
+            queue_state: "idle" | "running" | "queued";
+            run: components["schemas"]["Run"];
         };
         ComposerSuggestion: {
             detail?: string;
@@ -3506,6 +3513,7 @@ export type components = {
             repo_path: string;
             workspace_id: string;
         };
+        CreateSessionRequest: components["schemas"]["CreateConversationRequest"];
         CreateWorkspaceRequest: {
             /**
              * @default password_or_token
@@ -3981,6 +3989,8 @@ export type components = {
         RuleSpec: {
             content: string;
         };
+        Run: components["schemas"]["Execution"];
+        RunAgentConfigSnapshot: components["schemas"]["ExecutionAgentConfigSnapshot"];
         /** @enum {string} */
         RunControlAction: "stop" | "approve" | "deny" | "resume" | "answer";
         RunControlRequest: {
@@ -3996,16 +4006,24 @@ export type components = {
         };
         /** @enum {string} */
         RunEventType: "message_received" | "user_prompt_submit" | "execution_started" | "thinking_delta" | "pre_tool_use" | "permission_request" | "tool_call" | "tool_result" | "post_tool_use" | "post_tool_use_failure" | "diff_generated" | "change_set_updated" | "change_set_committed" | "change_set_discarded" | "change_set_rolled_back" | "execution_stopped" | "execution_done" | "execution_error" | "task_graph_configured" | "task_dependencies_updated" | "task_retry_policy_updated" | "task_artifact_emitted" | "task_failed" | "task_started" | "task_completed" | "task_cancelled";
+        RunFilesExportResponse: components["schemas"]["ExecutionFilesExportResponse"];
         RunGraphEdge: {
             from_task_id: string;
             to_task_id: string;
         };
+        RunResourceProfile: components["schemas"]["ExecutionResourceProfile"];
         /** @enum {string} */
         RunState: "queued" | "pending" | "executing" | "confirming" | "awaiting_input" | "completed" | "failed" | "cancelled";
         RunTaskListResponse: {
             items: components["schemas"]["TaskNode"][];
             next_cursor: string | null;
         };
+        Session: components["schemas"]["Conversation"];
+        SessionChangeSet: components["schemas"]["ConversationChangeSet"];
+        SessionDetailResponse: components["schemas"]["ConversationDetailResponse"];
+        SessionInspector: components["schemas"]["ConversationInspector"];
+        SessionMessage: components["schemas"]["ConversationMessage"];
+        SessionSnapshot: components["schemas"]["ConversationSnapshot"];
         ShareRequest: {
             approver_user_id?: string;
             /** Format: date-time */
@@ -4084,6 +4102,7 @@ export type components = {
             rule_ids?: string[];
             skill_ids?: string[];
         };
+        UpdateSessionRequest: components["schemas"]["UpdateConversationRequest"];
         Workspace: {
             /** @enum {string} */
             auth_mode: "disabled" | "password_or_token" | "token_only";

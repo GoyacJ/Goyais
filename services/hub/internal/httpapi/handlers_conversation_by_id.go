@@ -275,7 +275,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				}
 				delete(state.executions, executionID)
 				delete(state.executionDiffs, executionID)
-				delete(state.executionRuntimeRunIDs, executionID)
+				delete(state.executionRunIDs, executionID)
 				executionIDsToCancel = append(executionIDsToCancel, executionID)
 			}
 			delete(state.conversations, conversationID)
@@ -284,7 +284,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			delete(state.conversationExecutionOrder, conversationID)
 			delete(state.executionEvents, conversationID)
 			delete(state.conversationEventSeq, conversationID)
-			delete(state.conversationRuntimeSessionIDs, conversationID)
+			delete(state.conversationSessionIDs, conversationID)
 			if subscribers, ok := state.conversationEventSubs[conversationID]; ok {
 				for id := range subscribers {
 					unregisterConversationEventSubscriberLocked(state, conversationID, id)

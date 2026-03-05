@@ -99,9 +99,10 @@ describe("useQueueMessagesView", () => {
 });
 
 function createRuntime(overrides: Partial<ConversationRuntime>): ConversationRuntime {
-  return {
+  const runtime: ConversationRuntime = {
     messages: [],
     events: [],
+    runs: [],
     executions: [],
     snapshots: [],
     draft: "",
@@ -130,6 +131,15 @@ function createRuntime(overrides: Partial<ConversationRuntime>): ConversationRun
     completionMessageKeySet: new Set<string>(),
     ...overrides
   };
+
+  if (!overrides.runs && overrides.executions) {
+    runtime.runs = overrides.executions;
+  }
+  if (!overrides.executions && overrides.runs) {
+    runtime.executions = overrides.runs;
+  }
+
+  return runtime;
 }
 
 function createUserMessage(id: string, queueIndex: number, content: string) {

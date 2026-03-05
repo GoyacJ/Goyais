@@ -133,7 +133,7 @@ func purgeProjectConversationsLocked(state *AppState, projectID string) (project
 			executionIDsToCancel = append(executionIDsToCancel, executionID)
 			delete(state.executions, executionID)
 			delete(state.executionDiffs, executionID)
-			delete(state.executionRuntimeRunIDs, executionID)
+			delete(state.executionRunIDs, executionID)
 			result.PurgedExecutions++
 		}
 		delete(state.conversations, conversationID)
@@ -142,7 +142,7 @@ func purgeProjectConversationsLocked(state *AppState, projectID string) (project
 		delete(state.conversationExecutionOrder, conversationID)
 		delete(state.executionEvents, conversationID)
 		delete(state.conversationEventSeq, conversationID)
-		delete(state.conversationRuntimeSessionIDs, conversationID)
+		delete(state.conversationSessionIDs, conversationID)
 		if subscribers, ok := state.conversationEventSubs[conversationID]; ok {
 			for subID := range subscribers {
 				unregisterConversationEventSubscriberLocked(state, conversationID, subID)

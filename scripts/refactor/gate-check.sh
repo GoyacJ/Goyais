@@ -47,14 +47,23 @@ if [[ "$runstate_not_full" -gt 0 ]]; then
 fi
 echo
 
-echo "[3/7] runtime-mode default gate"
-default_mode_hits="$(
-  cd "$hub_dir"
-  rg -n 'mode = executionRuntimeModeHybrid' internal/httpapi/run_runtime_router.go | wc -l | tr -d ' '
-)"
-echo "default hybrid assignment hits: $default_mode_hits"
-if [[ "$default_mode_hits" -eq 0 ]]; then
-  echo "FAIL: execution runtime default mode is not hybrid"
+echo "[3/7] runtime bridge removal gate"
+legacy_run_router_file="$hub_dir/internal/httpapi/run_runtime_router.go"
+legacy_run_bridge_file="$hub_dir/internal/httpapi/run_runtime_v4_bridge.go"
+legacy_runtimebridge_dir="$hub_dir/internal/agent/adapters/runtimebridge"
+echo "legacy run router file exists: $([[ -f "$legacy_run_router_file" ]] && echo yes || echo no)"
+echo "legacy run bridge file exists: $([[ -f "$legacy_run_bridge_file" ]] && echo yes || echo no)"
+echo "legacy runtimebridge dir exists: $([[ -d "$legacy_runtimebridge_dir" ]] && echo yes || echo no)"
+if [[ -f "$legacy_run_router_file" ]]; then
+  echo "FAIL: legacy run runtime router file must stay deleted"
+  exit 1
+fi
+if [[ -f "$legacy_run_bridge_file" ]]; then
+  echo "FAIL: legacy run runtime bridge file must stay deleted"
+  exit 1
+fi
+if [[ -d "$legacy_runtimebridge_dir" ]]; then
+  echo "FAIL: runtimebridge adapter directory must stay deleted"
   exit 1
 fi
 echo
@@ -73,21 +82,27 @@ state_legacy_wiring_hits="$(
   (rg -n 'Legacy\\s*:' internal/httpapi/state.go || true) \
     | wc -l | tr -d ' '
 )"
-legacy_alias_hits="$(
-  cd "$hub_dir"
-  (rg -n 'case "legacy", string\(executionRuntimeModeHybrid\):' internal/httpapi/run_runtime_router.go || true) \
-    | wc -l | tr -d ' '
-)"
+legacy_alias_hits=0
+if [[ -f "$hub_dir/internal/httpapi/run_runtime_router.go" ]]; then
+  legacy_alias_hits="$(
+    cd "$hub_dir"
+    (rg -n 'case "legacy", string\(executionRuntimeModeHybrid\):' internal/httpapi/run_runtime_router.go || true) \
+      | wc -l | tr -d ' '
+  )"
+fi
 legacy_route_audit_hits="$(
   cd "$hub_dir"
   (rg -n --glob '!**/*_test.go' 'execution\\.runtime\\.route_legacy|route_legacy' internal/httpapi internal/agent cmd || true) \
     | wc -l | tr -d ' '
 )"
-legacy_mode_symbol_hits="$(
-  cd "$hub_dir"
-  (rg -n 'executionRuntimeModeLegacy' internal/httpapi/run_runtime_router.go || true) \
-    | wc -l | tr -d ' '
-)"
+legacy_mode_symbol_hits=0
+if [[ -f "$hub_dir/internal/httpapi/run_runtime_router.go" ]]; then
+  legacy_mode_symbol_hits="$(
+    cd "$hub_dir"
+    (rg -n 'executionRuntimeModeLegacy' internal/httpapi/run_runtime_router.go || true) \
+      | wc -l | tr -d ' '
+  )"
+fi
 legacy_fake_run_builder_defs="$(
   cd "$hub_dir"
   (rg -n --glob '!**/*_test.go' 'func[[:space:]]+buildSlashEvents\(' internal cmd || true) \
@@ -202,12 +217,12 @@ echo
 echo "[6/7] three-surface anchor checks"
 loop_engine_hits="$(
   cd "$hub_dir"
-  (rg -n 'loop.NewEngine' cmd/goyais-cli/main.go cmd/goyais-cli/adapters/v4_runner.go cmd/goyais-acp/main.go internal/httpapi/state.go || true) \
+  (rg -n 'loop.NewEngine' cmd/goyais-cli/main.go cmd/goyais-acp/main.go internal/httpapi/state.go || true) \
     | wc -l | tr -d ' '
 )"
-echo "loop.NewEngine anchor hits (cli main+adapter, acp, httpapi): $loop_engine_hits"
-if [[ "$loop_engine_hits" -lt 3 ]]; then
-  echo "FAIL: missing loop.NewEngine anchor in one or more surfaces"
+echo "loop.NewEngine anchor hits (cli/acp/httpapi): $loop_engine_hits"
+if [[ "$loop_engine_hits" -lt 2 ]]; then
+  echo "FAIL: missing loop.NewEngine anchor in ACP/httpapi surfaces"
   exit 1
 fi
 echo

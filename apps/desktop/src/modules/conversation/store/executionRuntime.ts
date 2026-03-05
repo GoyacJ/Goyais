@@ -106,16 +106,19 @@ export function upsertExecutionFromServer(runtime: ConversationRuntime, incoming
   const index = runtime.executions.findIndex((item) => item.id === normalizedIncoming.id);
   if (index < 0) {
     runtime.executions.push(normalizedIncoming);
+    runtime.runs = runtime.executions;
     return normalizedIncoming;
   }
 
   const merged = mergeExecution(runtime.executions[index], normalizedIncoming);
   runtime.executions[index] = merged;
+  runtime.runs = runtime.executions;
   return merged;
 }
 
 export function dedupeExecutions(runtime: ConversationRuntime): void {
   runtime.executions = normalizeExecutionList(runtime.executions);
+  runtime.runs = runtime.executions;
 }
 
 export function parseDiff(payload: Record<string, unknown>): DiffItem[] {

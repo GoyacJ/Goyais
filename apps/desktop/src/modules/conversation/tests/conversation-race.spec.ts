@@ -39,8 +39,8 @@ describe("conversation execution race", () => {
   it("keeps a single terminal execution when done arrives before create response", async () => {
     let resolveCreate: (() => void) | undefined;
     const createResponse = {
-      kind: "execution_enqueued" as const,
-      execution: {
+      kind: "run_enqueued" as const,
+      run: {
         id: "exec_race_1",
         workspace_id: "ws_local",
         conversation_id: mockConversation.id,

@@ -436,9 +436,10 @@ function createExecution(id: string, state: Execution["state"]): Execution {
 }
 
 function createRuntime(overrides: Partial<ConversationRuntime> = {}): ConversationRuntime {
-  return {
+  const runtime: ConversationRuntime = {
     messages: [],
     events: [],
+    runs: [],
     executions: [],
     snapshots: [],
     draft: "",
@@ -467,4 +468,13 @@ function createRuntime(overrides: Partial<ConversationRuntime> = {}): Conversati
     completionMessageKeySet: new Set<string>(),
     ...overrides
   };
+
+  if (!overrides.runs && overrides.executions) {
+    runtime.runs = overrides.executions;
+  }
+  if (!overrides.executions && overrides.runs) {
+    runtime.executions = overrides.runs;
+  }
+
+  return runtime;
 }

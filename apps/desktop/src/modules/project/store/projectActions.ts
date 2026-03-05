@@ -1,7 +1,7 @@
 import {
-  clearConversationTimer,
-  conversationStore,
-  detachConversationStream,
+  clearSessionTimer,
+  sessionStore,
+  detachSessionStream,
 } from "@/modules/conversation/store";
 import {
   refreshConversationsForActiveProject,
@@ -199,9 +199,9 @@ function pruneRemovedConversationRuntime(previousConversationIDs: string[], next
     if (normalizedConversationID === "" || nextIDSet.has(normalizedConversationID)) {
       continue;
     }
-    detachConversationStream(normalizedConversationID);
-    clearConversationTimer(normalizedConversationID);
-    delete conversationStore.byConversationId[normalizedConversationID];
+    detachSessionStream(normalizedConversationID);
+    clearSessionTimer(normalizedConversationID);
+    delete sessionStore.bySessionId[normalizedConversationID];
   }
 }
 

@@ -5,23 +5,26 @@ import type {
   OpenAPIContractComponents,
   ChangeSetCommitRequest,
   ChangeSetCommitResponse,
-  ChangeSetDiscardRequest,
   ChangeSetCapability,
-  ConversationChangeSet,
+  ChangeSetDiscardRequest,
   ComposerCatalog,
   ComposerSubmitRequest,
   ComposerSubmitResponse,
   ComposerSuggestRequest,
   ComposerSuggestResponse,
   Conversation,
-  ConversationStreamEvent,
+  ConversationChangeSet,
   ConversationDetailResponse,
+  ConversationStreamEvent,
   ExecutionFilesExportResponse,
-  Session,
-  SessionStreamEvent,
-  SessionDetailResponse,
   RunControlAction,
-  RunControlResponse
+  RunControlResponse,
+  RunFilesExportResponse,
+  Session,
+  SessionChangeSet,
+  SessionDetailResponse,
+  SessionStreamEvent,
+  SessionSubmitResponse,
 } from "@/shared/types/api";
 
 type ConversationServiceOptions = {
@@ -115,8 +118,9 @@ export async function submitComposerInput(
 export async function submitSessionInput(
   session: Session,
   input: ComposerSubmitRequest
-): Promise<ComposerSubmitResponse> {
-  return submitComposerInput(session, input);
+): Promise<SessionSubmitResponse> {
+  const response = await submitComposerInput(session, input);
+  return normalizeSessionSubmitResponse(response);
 }
 
 export async function getConversationDetail(
@@ -130,7 +134,8 @@ export async function getSessionDetail(
   sessionId: string,
   options: SessionServiceOptions = {}
 ): Promise<SessionDetailResponse> {
-  return getConversationDetail(sessionId, options);
+  const detail = await getConversationDetail(sessionId, options);
+  return normalizeSessionDetailResponse(detail);
 }
 
 export async function cancelExecution(conversationId: string, executionId: string): Promise<void> {
@@ -226,7 +231,7 @@ export async function getConversationChangeSet(conversationId: string): Promise<
   return getControlClient().get<ConversationChangeSet>(`/v1/sessions/${conversationId}/changeset`);
 }
 
-export async function getSessionChangeSet(sessionId: string): Promise<ConversationChangeSet> {
+export async function getSessionChangeSet(sessionId: string): Promise<SessionChangeSet> {
   return getConversationChangeSet(sessionId);
 }
 
@@ -262,7 +267,7 @@ export async function exportConversationChangeSet(conversationId: string): Promi
   return getControlClient().post<ExecutionFilesExportResponse>(`/v1/sessions/${conversationId}/changeset/export`, {});
 }
 
-export async function exportSessionChangeSet(sessionId: string): Promise<ExecutionFilesExportResponse> {
+export async function exportSessionChangeSet(sessionId: string): Promise<RunFilesExportResponse> {
   return exportConversationChangeSet(sessionId);
 }
 
@@ -272,6 +277,36 @@ export function resolveDiffCapability(_isGitProject: boolean): ChangeSetCapabili
     can_discard: true,
     can_export: true,
     can_export_patch: true
+  };
+}
+
+function normalizeSessionDetailResponse(detail: ConversationDetailResponse): SessionDetailResponse {
+  const session = detail.session ?? detail.conversation;
+  const runs = detail.runs ?? detail.executions;
+  return {
+    session,
+    messages: detail.messages,
+    runs,
+    snapshots: detail.snapshots,
+    conversation: detail.conversation,
+    executions: detail.executions,
+  };
+}
+
+function normalizeSessionSubmitResponse(response: ComposerSubmitResponse | SessionSubmitResponse): SessionSubmitResponse {
+  if (response.kind === "command_result") {
+    return response;
+  }
+
+  if (response.kind === "run_enqueued" && "run" in response) {
+    return response;
+  }
+
+  return {
+    kind: "run_enqueued",
+    run: response.execution,
+    queue_state: response.queue_state,
+    queue_index: response.queue_index
   };
 }
 

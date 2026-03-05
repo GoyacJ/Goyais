@@ -4,7 +4,7 @@ import {
   sessionStore,
   detachSessionStream,
   ensureSessionRuntime,
-  hasUnfinishedExecutions,
+  hasUnfinishedRuns,
   hydrateSessionRuntime
 } from "@/modules/conversation/store";
 import type { Project, Session } from "@/shared/types/api";
@@ -45,7 +45,7 @@ export function createSessionStreamCoordinator(input: StreamCoordinatorInput) {
       return;
     }
 
-    const existingRuntime = sessionStore.byConversationId[sessionId];
+    const existingRuntime = sessionStore.bySessionId[sessionId];
     const hasHydratedData = Boolean(existingRuntime?.hydrated);
     if (!force && hasHydratedData) {
       return;
@@ -70,8 +70,8 @@ export function createSessionStreamCoordinator(input: StreamCoordinatorInput) {
     for (const project of input.projects()) {
       const conversations = input.conversationsByProjectId()[project.id] ?? [];
       for (const session of conversations) {
-        const runtime = sessionStore.byConversationId[session.id];
-        const trackedByRuntime = runtime ? hasUnfinishedExecutions(runtime) : false;
+        const runtime = sessionStore.bySessionId[session.id];
+        const trackedByRuntime = runtime ? hasUnfinishedRuns(runtime) : false;
         const trackedByServerState =
           session.queue_state === "running" ||
           session.queue_state === "queued" ||
@@ -95,21 +95,21 @@ export function createSessionStreamCoordinator(input: StreamCoordinatorInput) {
 
     for (const context of trackedContexts) {
       ensureSessionRuntime(context.session, context.isGitProject);
-      if (!sessionStore.streams[context.session.id]) {
+      if (!sessionStore.sessionStreams[context.session.id]) {
         attachSessionStream(context.session, token);
       }
       void hydrateSessionDetail(context, false);
     }
 
-    for (const streamSessionId of Object.keys(sessionStore.streams)) {
+    for (const streamSessionId of Object.keys(sessionStore.sessionStreams)) {
       if (trackedIds.has(streamSessionId)) {
         continue;
       }
       if (streamSessionId === input.activeSessionId()) {
         continue;
       }
-      const runtime = sessionStore.byConversationId[streamSessionId];
-      if (runtime && hasUnfinishedExecutions(runtime)) {
+      const runtime = sessionStore.bySessionId[streamSessionId];
+      if (runtime && hasUnfinishedRuns(runtime)) {
         continue;
       }
       detachSessionStream(streamSessionId);
@@ -117,7 +117,7 @@ export function createSessionStreamCoordinator(input: StreamCoordinatorInput) {
   }
 
   function clearStreams(): void {
-    for (const sessionId of Object.keys(sessionStore.streams)) {
+    for (const sessionId of Object.keys(sessionStore.sessionStreams)) {
       detachSessionStream(sessionId);
     }
     hydratedSessionIds.clear();

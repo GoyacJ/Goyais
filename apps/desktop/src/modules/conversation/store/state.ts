@@ -8,10 +8,10 @@ import { normalizeExecutionList } from "@/modules/conversation/store/executionMe
 import { pinia } from "@/shared/stores/pinia";
 import type {
   ChangeSetCapability,
-  ConversationDetailResponse,
-  ConversationChangeSet,
   ConnectionStatus,
   Conversation,
+  ConversationChangeSet,
+  ConversationDetailResponse,
   ConversationMessage,
   ConversationMode,
   ConversationSnapshot,
@@ -20,6 +20,7 @@ import type {
   ExecutionEvent,
   InspectorTabKey,
   ProjectKind,
+  Run,
   Session,
   SessionChangeSet,
   SessionDetailResponse,
@@ -33,10 +34,12 @@ export type StreamHandle = {
   lastEventId: () => string;
 };
 
-export type ConversationRuntime = {
+export type SessionRuntime = {
   messages: ConversationMessage[];
   events: ExecutionEvent[];
-  executions: Execution[];
+  runs: Run[];
+  // Backward-compatibility projection while callers migrate to `runs`.
+  executions: Run[];
   snapshots: ConversationSnapshot[];
   draft: string;
   mode: ConversationMode;
@@ -48,7 +51,7 @@ export type ConversationRuntime = {
   diff: DiffItem[];
   projectKind: ProjectKind;
   diffCapability: ChangeSetCapability;
-  changeSet: ConversationChangeSet | null;
+  changeSet: SessionChangeSet | null;
   inspectorTab: InspectorTabKey;
   worktreeRef: string | null;
   hydrated: boolean;
@@ -59,72 +62,96 @@ export type ConversationRuntime = {
   completionMessageKeySet: Set<string>;
 };
 
-export type SessionRuntime = ConversationRuntime;
+export type ConversationRuntime = SessionRuntime;
 
 export const MAX_RUNTIME_EVENTS = 1000;
 
-type ConversationState = {
-  byConversationId: Record<string, ConversationRuntime>;
+type SessionState = {
+  bySessionId: Record<string, SessionRuntime>;
+  // Backward-compatibility projection while callers migrate to `bySessionId`.
+  byConversationId: Record<string, SessionRuntime>;
+  sessionTimers: Record<string, ReturnType<typeof setTimeout> | undefined>;
   timers: Record<string, ReturnType<typeof setTimeout> | undefined>;
+  sessionStreams: Record<string, StreamHandle | undefined>;
   streams: Record<string, StreamHandle | undefined>;
   loading: boolean;
   error: string;
 };
 
-const initialState: ConversationState = {
-  byConversationId: {},
-  timers: {},
-  streams: {},
-  loading: false,
-  error: ""
+const initialState = (): SessionState => {
+  const bySessionId: Record<string, SessionRuntime> = {};
+  const sessionTimers: Record<string, ReturnType<typeof setTimeout> | undefined> = {};
+  const sessionStreams: Record<string, StreamHandle | undefined> = {};
+  return {
+    bySessionId,
+    byConversationId: bySessionId,
+    sessionTimers,
+    timers: sessionTimers,
+    sessionStreams,
+    streams: sessionStreams,
+    loading: false,
+    error: ""
+  };
 };
 
-const useConversationStoreDefinition = defineStore("conversation", {
-  state: (): ConversationState => ({ ...initialState })
+const useSessionStoreDefinition = defineStore("conversation", {
+  state: (): SessionState => initialState()
 });
 
-export const useConversationStore = useConversationStoreDefinition;
-export const conversationStore = useConversationStoreDefinition(pinia);
-export const useSessionStore = useConversationStoreDefinition;
-export const sessionStore = conversationStore;
+export const useSessionStore = useSessionStoreDefinition;
+export const sessionStore = useSessionStoreDefinition(pinia);
+export const useConversationStore = useSessionStoreDefinition;
+export const conversationStore = sessionStore;
 
-export function resetConversationStore(): void {
-  for (const timer of Object.values(conversationStore.timers)) {
+export function resetSessionStore(): void {
+  for (const timer of Object.values(sessionStore.sessionTimers)) {
     if (timer) {
       clearTimeout(timer);
     }
   }
-  for (const stream of Object.values(conversationStore.streams)) {
+  for (const stream of Object.values(sessionStore.sessionStreams)) {
     stream?.close();
   }
 
-  conversationStore.byConversationId = {};
-  conversationStore.timers = {};
-  conversationStore.streams = {};
-  conversationStore.loading = false;
-  conversationStore.error = "";
+  const bySessionId: Record<string, SessionRuntime> = {};
+  const sessionTimers: Record<string, ReturnType<typeof setTimeout> | undefined> = {};
+  const sessionStreams: Record<string, StreamHandle | undefined> = {};
+  sessionStore.bySessionId = bySessionId;
+  sessionStore.byConversationId = bySessionId;
+  sessionStore.sessionTimers = sessionTimers;
+  sessionStore.timers = sessionTimers;
+  sessionStore.sessionStreams = sessionStreams;
+  sessionStore.streams = sessionStreams;
+  sessionStore.loading = false;
+  sessionStore.error = "";
 }
 
-export function ensureConversationRuntime(
-  conversation: Conversation,
+export function resetConversationStore(): void {
+  resetSessionStore();
+}
+
+export function ensureSessionRuntime(
+  session: Session,
   isGitProject: boolean
-): ConversationRuntime {
-  const existing = conversationStore.byConversationId[conversation.id];
+): SessionRuntime {
+  const existing = sessionStore.bySessionId[session.id];
   if (existing) {
-    return existing;
+    return ensureLegacyExecutionAlias(existing);
   }
 
-  const runtime: ConversationRuntime = {
+  const runs: Run[] = [];
+  const runtime: SessionRuntime = ensureLegacyExecutionAlias({
     messages: [],
     events: [],
-    executions: [],
+    runs,
+    executions: runs,
     snapshots: [],
     draft: "",
-    mode: conversation.default_mode,
-    modelId: conversation.model_config_id,
-    ruleIds: [...(conversation.rule_ids ?? [])],
-    skillIds: [...(conversation.skill_ids ?? [])],
-    mcpIds: [...(conversation.mcp_ids ?? [])],
+    mode: session.default_mode,
+    modelId: session.model_config_id,
+    ruleIds: [...(session.rule_ids ?? [])],
+    skillIds: [...(session.skill_ids ?? [])],
+    mcpIds: [...(session.mcp_ids ?? [])],
     status: "connected",
     diff: [],
     projectKind: isGitProject ? "git" : "non_git",
@@ -138,41 +165,43 @@ export function ensureConversationRuntime(
     processedEventKeySet: new Set<string>(),
     completionMessageKeys: [],
     completionMessageKeySet: new Set<string>()
-  };
+  });
 
-  conversationStore.byConversationId[conversation.id] = runtime;
+  sessionStore.bySessionId[session.id] = runtime;
   return runtime;
 }
 
-export function ensureSessionRuntime(
-  session: Session,
+export function ensureConversationRuntime(
+  conversation: Conversation,
   isGitProject: boolean
-): SessionRuntime {
-  return ensureConversationRuntime(session, isGitProject);
+): ConversationRuntime {
+  return ensureSessionRuntime(conversation, isGitProject);
 }
 
-export function hydrateConversationRuntime(
-  conversation: Conversation,
+export function hydrateSessionRuntime(
+  session: Session,
   isGitProject: boolean,
-  detail: ConversationDetailResponse
-): ConversationRuntime {
-  const runtime = ensureConversationRuntime(conversation, isGitProject);
-  runtime.mode = detail.conversation.default_mode;
-  runtime.modelId = detail.conversation.model_config_id;
-  runtime.ruleIds = [...(detail.conversation.rule_ids ?? [])];
-  runtime.skillIds = [...(detail.conversation.skill_ids ?? [])];
-  runtime.mcpIds = [...(detail.conversation.mcp_ids ?? [])];
+  detail: SessionDetailResponse
+): SessionRuntime {
+  const runtime = ensureSessionRuntime(session, isGitProject);
+  runtime.mode = detail.session.default_mode;
+  runtime.modelId = detail.session.model_config_id;
+  runtime.ruleIds = [...(detail.session.rule_ids ?? [])];
+  runtime.skillIds = [...(detail.session.skill_ids ?? [])];
+  runtime.mcpIds = [...(detail.session.mcp_ids ?? [])];
   runtime.projectKind = isGitProject ? "git" : "non_git";
   runtime.messages = detail.messages.map((message) => ({ ...message }));
-  runtime.executions = detail.executions.map((execution) => ({
-    ...execution,
+  const runs = detail.runs.map((run) => ({
+    ...run,
     model_snapshot: {
-      ...execution.model_snapshot
+      ...run.model_snapshot
     },
-    agent_config_snapshot: execution.agent_config_snapshot
-      ? { ...execution.agent_config_snapshot }
+    agent_config_snapshot: run.agent_config_snapshot
+      ? { ...run.agent_config_snapshot }
       : undefined
   }));
+  runtime.runs = runs;
+  runtime.executions = runs;
   runtime.snapshots = detail.snapshots.map((snapshot) => ({
     ...snapshot,
     messages: snapshot.messages.map((message) => ({ ...message })),
@@ -187,19 +216,19 @@ export function hydrateConversationRuntime(
   runtime.changeSet = null;
   runtime.diffCapability = resolveDiffCapability(isGitProject);
   runtime.hydrated = true;
-  return runtime;
+  return ensureLegacyExecutionAlias(runtime);
 }
 
-export function hydrateSessionRuntime(
-  session: Session,
+export function hydrateConversationRuntime(
+  conversation: Conversation,
   isGitProject: boolean,
-  detail: SessionDetailResponse
-): SessionRuntime {
-  return hydrateConversationRuntime(session, isGitProject, detail);
+  detail: ConversationDetailResponse
+): ConversationRuntime {
+  return hydrateSessionRuntime(conversation, isGitProject, toSessionDetailResponse(detail));
 }
 
-export function setConversationChangeSet(conversationId: string, changeSet: ConversationChangeSet | null): void {
-  const runtime = conversationStore.byConversationId[conversationId];
+export function setSessionChangeSet(sessionId: string, changeSet: SessionChangeSet | null): void {
+  const runtime = sessionStore.bySessionId[sessionId];
   if (!runtime) {
     return;
   }
@@ -229,19 +258,23 @@ export function setConversationChangeSet(conversationId: string, changeSet: Conv
   };
 }
 
-export function setSessionChangeSet(sessionId: string, changeSet: SessionChangeSet | null): void {
-  setConversationChangeSet(sessionId, changeSet);
-}
-
-export function getConversationRuntime(conversationId: string): ConversationRuntime | undefined {
-  return conversationStore.byConversationId[conversationId];
+export function setConversationChangeSet(conversationId: string, changeSet: ConversationChangeSet | null): void {
+  setSessionChangeSet(conversationId, changeSet);
 }
 
 export function getSessionRuntime(sessionId: string): SessionRuntime | undefined {
-  return getConversationRuntime(sessionId);
+  const runtime = sessionStore.bySessionId[sessionId];
+  if (!runtime) {
+    return undefined;
+  }
+  return ensureLegacyExecutionAlias(runtime);
 }
 
-export function appendRuntimeEvent(runtime: ConversationRuntime, event: ExecutionEvent): void {
+export function getConversationRuntime(conversationId: string): ConversationRuntime | undefined {
+  return getSessionRuntime(conversationId);
+}
+
+export function appendRuntimeEvent(runtime: SessionRuntime, event: ExecutionEvent): void {
   const eventID = event.event_id?.trim();
   if (eventID) {
     runtime.lastEventId = eventID;
@@ -252,76 +285,76 @@ export function appendRuntimeEvent(runtime: ConversationRuntime, event: Executio
   }
 }
 
-export function setConversationDraft(conversationId: string, draft: string): void {
-  const runtime = conversationStore.byConversationId[conversationId];
+export function setSessionDraft(sessionId: string, draft: string): void {
+  const runtime = sessionStore.bySessionId[sessionId];
   if (runtime) {
     runtime.draft = draft;
   }
 }
 
-export function setSessionDraft(sessionId: string, draft: string): void {
-  setConversationDraft(sessionId, draft);
+export function setConversationDraft(conversationId: string, draft: string): void {
+  setSessionDraft(conversationId, draft);
 }
 
-export function setConversationMode(conversationId: string, mode: ConversationMode): void {
-  const runtime = conversationStore.byConversationId[conversationId];
+export function setSessionMode(sessionId: string, mode: SessionMode): void {
+  const runtime = sessionStore.bySessionId[sessionId];
   if (runtime) {
     runtime.mode = mode;
   }
 }
 
-export function setSessionMode(sessionId: string, mode: SessionMode): void {
-  setConversationMode(sessionId, mode);
+export function setConversationMode(conversationId: string, mode: ConversationMode): void {
+  setSessionMode(conversationId, mode);
 }
 
-export function setConversationModel(conversationId: string, modelId: string): void {
-  const runtime = conversationStore.byConversationId[conversationId];
+export function setSessionModel(sessionId: string, modelId: string): void {
+  const runtime = sessionStore.bySessionId[sessionId];
   if (runtime) {
     runtime.modelId = modelId;
   }
 }
 
-export function setSessionModel(sessionId: string, modelId: string): void {
-  setConversationModel(sessionId, modelId);
+export function setConversationModel(conversationId: string, modelId: string): void {
+  setSessionModel(conversationId, modelId);
 }
 
-export function setConversationInspectorTab(conversationId: string, tab: InspectorTabKey): void {
-  const runtime = conversationStore.byConversationId[conversationId];
+export function setSessionInspectorTab(sessionId: string, tab: InspectorTabKey): void {
+  const runtime = sessionStore.bySessionId[sessionId];
   if (runtime) {
     runtime.inspectorTab = tab;
   }
 }
 
-export function setSessionInspectorTab(sessionId: string, tab: InspectorTabKey): void {
-  setConversationInspectorTab(sessionId, tab);
+export function setConversationInspectorTab(conversationId: string, tab: InspectorTabKey): void {
+  setSessionInspectorTab(conversationId, tab);
 }
 
 export function setConversationError(error: string): void {
-  conversationStore.error = error;
-}
-
-export function clearConversationTimer(conversationId: string): void {
-  const timer = conversationStore.timers[conversationId];
-  if (timer) {
-    clearTimeout(timer);
-  }
-  delete conversationStore.timers[conversationId];
+  sessionStore.error = error;
 }
 
 export function clearSessionTimer(sessionId: string): void {
-  clearConversationTimer(sessionId);
+  const timer = sessionStore.sessionTimers[sessionId];
+  if (timer) {
+    clearTimeout(timer);
+  }
+  delete sessionStore.sessionTimers[sessionId];
 }
 
-export function createConversationSnapshot(runtime: ConversationRuntime, conversationId: string, rollbackPointMessageId: string): ConversationSnapshot {
-  return buildConversationSnapshot(runtime, conversationId, rollbackPointMessageId);
+export function clearConversationTimer(conversationId: string): void {
+  clearSessionTimer(conversationId);
 }
 
 export function createSessionSnapshot(runtime: SessionRuntime, sessionId: string, rollbackPointMessageId: string): SessionSnapshot {
-  return createConversationSnapshot(runtime, sessionId, rollbackPointMessageId);
+  return buildConversationSnapshot(runtime, sessionId, rollbackPointMessageId);
 }
 
-export function pushConversationSnapshot(conversationId: string, snapshot: ConversationSnapshot): void {
-  const runtime = conversationStore.byConversationId[conversationId];
+export function createConversationSnapshot(runtime: ConversationRuntime, conversationId: string, rollbackPointMessageId: string): ConversationSnapshot {
+  return createSessionSnapshot(runtime, conversationId, rollbackPointMessageId);
+}
+
+export function pushSessionSnapshot(sessionId: string, snapshot: SessionSnapshot): void {
+  const runtime = sessionStore.bySessionId[sessionId];
   if (!runtime) {
     return;
   }
@@ -329,12 +362,12 @@ export function pushConversationSnapshot(conversationId: string, snapshot: Conve
   runtime.snapshots.push(snapshot);
 }
 
-export function pushSessionSnapshot(sessionId: string, snapshot: SessionSnapshot): void {
-  pushConversationSnapshot(sessionId, snapshot);
+export function pushConversationSnapshot(conversationId: string, snapshot: ConversationSnapshot): void {
+  pushSessionSnapshot(conversationId, snapshot);
 }
 
-export function findSnapshotForMessage(conversationId: string, messageId: string): ConversationSnapshot | undefined {
-  const runtime = conversationStore.byConversationId[conversationId];
+export function findSessionSnapshotForMessage(sessionId: string, messageId: string): SessionSnapshot | undefined {
+  const runtime = sessionStore.bySessionId[sessionId];
   if (!runtime) {
     return undefined;
   }
@@ -342,34 +375,34 @@ export function findSnapshotForMessage(conversationId: string, messageId: string
   return [...runtime.snapshots].reverse().find((snapshot) => snapshot.rollback_point_message_id === messageId);
 }
 
-export function findSessionSnapshotForMessage(sessionId: string, messageId: string): SessionSnapshot | undefined {
-  return findSnapshotForMessage(sessionId, messageId);
+export function findSnapshotForMessage(conversationId: string, messageId: string): ConversationSnapshot | undefined {
+  return findSessionSnapshotForMessage(conversationId, messageId);
 }
 
-export function countActiveAndQueued(runtime: ConversationRuntime): number {
-  const executions = normalizeExecutionList(runtime.executions);
-  return executions.filter((execution) =>
-    execution.state === "queued" ||
-    execution.state === "pending" ||
-    execution.state === "executing" ||
-    execution.state === "confirming" ||
-    execution.state === "awaiting_input"
+export function countActiveAndQueued(runtime: SessionRuntime): number {
+  const runs = normalizeExecutionList(runtime.executions);
+  return runs.filter((run) =>
+    run.state === "queued" ||
+    run.state === "pending" ||
+    run.state === "executing" ||
+    run.state === "confirming" ||
+    run.state === "awaiting_input"
   ).length;
 }
 
-export function getRunStateCounts(runtime: ConversationRuntime): {
+export function getRunStateCounts(runtime: SessionRuntime): {
   queued: number;
   pending: number;
   executing: number;
 } {
-  const executions = normalizeExecutionList(runtime.executions);
-  return executions.reduce(
-    (acc, execution) => {
-      if (execution.state === "queued") {
+  const runs = normalizeExecutionList(runtime.executions);
+  return runs.reduce(
+    (acc, run) => {
+      if (run.state === "queued") {
         acc.queued += 1;
-      } else if (execution.state === "pending") {
+      } else if (run.state === "pending") {
         acc.pending += 1;
-      } else if (execution.state === "executing" || execution.state === "confirming" || execution.state === "awaiting_input") {
+      } else if (run.state === "executing" || run.state === "confirming" || run.state === "awaiting_input") {
         acc.executing += 1;
       }
       return acc;
@@ -378,23 +411,45 @@ export function getRunStateCounts(runtime: ConversationRuntime): {
   );
 }
 
-export function hasUnfinishedExecutions(runtime: ConversationRuntime): boolean {
+export function hasUnfinishedRuns(runtime: SessionRuntime): boolean {
   const counts = getRunStateCounts(runtime);
   return counts.queued > 0 || counts.pending > 0 || counts.executing > 0;
 }
 
-export function getLatestFinishedExecution(conversationId: string): Execution | undefined {
-  const runtime = conversationStore.byConversationId[conversationId];
+export function hasUnfinishedExecutions(runtime: ConversationRuntime): boolean {
+  return hasUnfinishedRuns(runtime);
+}
+
+export function getLatestFinishedRun(sessionId: string): Execution | undefined {
+  const runtime = sessionStore.bySessionId[sessionId];
   if (!runtime) {
     return undefined;
   }
 
-  const executions = normalizeExecutionList(runtime.executions);
-  return [...executions]
+  const runs = normalizeExecutionList(runtime.executions);
+  return [...runs]
     .reverse()
-    .find((execution) => execution.state === "completed" || execution.state === "failed" || execution.state === "cancelled");
+    .find((run) => run.state === "completed" || run.state === "failed" || run.state === "cancelled");
 }
 
-export function getLatestFinishedRun(sessionId: string): Execution | undefined {
-  return getLatestFinishedExecution(sessionId);
+export function getLatestFinishedExecution(conversationId: string): Execution | undefined {
+  return getLatestFinishedRun(conversationId);
+}
+
+function toSessionDetailResponse(detail: ConversationDetailResponse): SessionDetailResponse {
+  const session = detail.session ?? detail.conversation;
+  const runs = detail.runs ?? detail.executions;
+  return {
+    session,
+    messages: detail.messages,
+    runs,
+    snapshots: detail.snapshots,
+    conversation: detail.conversation,
+    executions: detail.executions
+  };
+}
+
+function ensureLegacyExecutionAlias(runtime: SessionRuntime): SessionRuntime {
+  runtime.executions = runtime.runs;
+  return runtime;
 }

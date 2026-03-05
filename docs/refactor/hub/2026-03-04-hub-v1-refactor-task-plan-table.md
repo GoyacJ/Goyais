@@ -30,8 +30,8 @@
 | R5 | 已完成 | 已完成三类 routes 的 service registry 组装、域服务分层与非 runtime 验收 |
 | R6 | 已完成 | ACP 方法集切换至 v1，旧方法下线，并补齐 stream 订阅语义 |
 | R7 | 已完成 | CLI v1 命令树落地、session/run 适配层接入与 v4 runner 下线 |
-| R8 | 进行中 | 已启动 Desktop 服务路径切换与 Shared Session/Run 过渡类型出口 |
-| R9 | 待开始 | Legacy 清理、文档收口、全量验收 |
+| R8 | 已完成 | Desktop + Shared 已完成 Session/Run 切换并通过 R8 验收门禁 |
+| R9 | 已完成 | Legacy/v4 过渡层清理完成，OpenAPI 升级 1.0.0，并通过全量门禁验收 |
 
 ---
 
@@ -342,12 +342,12 @@
 
 ### 任务清单
 
-- [ ] R8-T1 更新 OpenAPI 生成类型并替换 `Conversation/Execution` 为 `Session/Run`
-- [ ] R8-T2 重写 Desktop conversation store 为 session/run store
+- [x] R8-T1 更新 OpenAPI 生成类型并替换 `Conversation/Execution` 为 `Session/Run`
+- [x] R8-T2 重写 Desktop conversation store 为 session/run store
 - [x] R8-T3 删除 `runEventAdapter` 的 execution 映射层
 - [x] R8-T4 服务调用路径切换到 `/v1/sessions/*`、`/v1/runs/*`
 - [x] R8-T5 UI 文案统一改为 Session
-- [ ] R8-T6 更新全部测试快照与 mock
+- [x] R8-T6 更新全部测试快照与 mock
 
 ### 关键文件面
 
@@ -379,6 +379,16 @@
 11. 统一文案：`messages.en-US.ts`、`messages.zh-CN.ts`、`MainScreenView.vue`、资源配置说明改为 Session/会话主语义；默认命名切换为 `Session`/`新会话` 并保持旧 `Conversation`/`新对话` 识别兼容
 12. 过渡 facade：`conversation/services`、`project/services` 与 `conversation/store` 新增 `Session/Run` 命名导出（保持旧 `Conversation/Execution` 导出兼容），用于分批切换调用面
 13. 调用面切换：流式主链（`store/stream.ts`、`views/streamCoordinator.ts`、`workspaceStatusStore.ts`）改用 `Session` 命名 service/store facade，并同步更新相关测试 mock
+14. 契约补齐：`packages/contracts/openapi.yaml` 增加 `Session/Run` 兼容 schema（`CreateSessionRequest`、`SessionDetailResponse`、`SessionChangeSet`、`RunFilesExportResponse` 等）并将 `/v1/sessions/*` 路径引用切换到 Session/Run 命名；`packages/shared-core/src/generated/openapi.ts` 已重新生成
+15. 共享类型切换：`packages/shared-core/src/api-project.ts` 以 `Session/Run` 为主导类型，保留 `Conversation/Execution` 兼容别名；新增 `SessionSubmitResponse` 供 Desktop run-only 提交流程消费
+16. Store 重构：`apps/desktop/src/modules/conversation/store/state.ts` 与 `store/stream.ts` 切换到 `sessionStore.bySessionId/sessionStreams` 主路径，保留 `byConversationId/streams` 兼容映射；`executionActions.ts` 与 `executionRuntime.ts` 切换到 session/run 归一化路径
+17. 测试同步：`conversation.spec.ts`、`conversation-race.spec.ts`、`conversation-stream.spec.ts`、`project-store.spec.ts`、`main-screen-actions.spec.ts`、`use-queue-messages-view.spec.ts` 更新 run_enqueued payload 与 sessionStore mock/runtime 夹具（补齐 `runs` 字段）
+18. 已验证：`pnpm contracts:generate`
+19. 已验证：`pnpm contracts:check`
+20. 已验证：`pnpm lint`
+21. 已验证：`pnpm test`
+22. 已验证：`pnpm test:strict`
+23. 已验证：`pnpm e2e:smoke`
 
 ---
 
@@ -386,18 +396,19 @@
 
 ### 任务清单
 
-- [ ] R9-T1 删除所有 legacy/v4 过渡实现与死代码
-- [ ] R9-T2 OpenAPI 版本升级到 `1.0.0`
-- [ ] R9-T3 更新 `docs/refactor` 主文档与任务状态
-- [ ] R9-T4 执行全量门禁命令并沉淀证据
+- [x] R9-T1 删除所有 legacy/v4 过渡实现与死代码
+- [x] R9-T2 OpenAPI 版本升级到 `1.0.0`
+- [x] R9-T3 更新 `docs/refactor` 主文档与任务状态
+- [x] R9-T4 执行全量门禁命令并沉淀证据
 
 ### 关键文件面
 
-1. `services/hub/internal/httpapi/execution_runtime_*`（删除）
+1. `services/hub/internal/httpapi/run_runtime_router.go`、`run_runtime_v4_bridge.go`（删除）
 2. `services/hub/internal/agent/adapters/runtimebridge/*`（删除）
-3. `services/hub/cmd/goyais-cli/adapters/v4_runner.go`（删除）
+3. `services/hub/cmd/goyais-acp/main.go`（去除 runtimebridge 依赖）
 4. `packages/contracts/openapi.yaml`
-5. `docs/refactor/hub/*`
+5. `scripts/refactor/gate-check.sh`、`scripts/smoke/health_check.sh`
+6. `docs/refactor/hub/*`
 
 ### 验收命令
 
@@ -406,6 +417,23 @@
 3. `pnpm lint && pnpm test`
 4. `pnpm test:strict && pnpm e2e:smoke`
 5. `make health`
+
+### 当前阶段证据（2026-03-05）
+
+1. 清理：删除 `services/hub/internal/httpapi/run_runtime_router.go` 与 `services/hub/internal/httpapi/run_runtime_v4_bridge.go`，移除 legacy runtime-mode/v4 过渡代码。
+2. 清理：删除 `services/hub/internal/httpapi/execution_runtime_router_test.go` 与 `services/hub/internal/agent/adapters/runtimebridge/*`（含测试与目录指令文档）。
+3. 替换：新增 `services/hub/internal/httpapi/run_execution_dispatcher.go`，保留 execution->run 提交/控制最小桥接，去除 v4/router 模式分支。
+4. 收敛：`services/hub/internal/httpapi/state.go`、`state_execution_domain.go`、`project_store_helpers.go`、`handlers_conversation_by_id.go` 运行映射字段改为 `executionRunIDs` / `conversationSessionIDs`。
+5. ACP：`services/hub/cmd/goyais-acp/main.go` 改为 `acpadapter.NewBridge(engine, nil)`，去除 runtimebridge projector 注入。
+6. 门禁：`scripts/refactor/gate-check.sh` 更新为 R9 基线（新增 runtime bridge removal gate，移除对已删除 `v4_runner` 的锚点依赖）。
+7. 健康检查：`scripts/smoke/health_check.sh` smoke 路径由 `/v1/conversations`、`/v1/executions` 切换为 `/v1/sessions`、`/v1/runs`。
+8. 契约：`packages/contracts/openapi.yaml` `info.version` 已升级为 `1.0.0`，并已重新执行 contracts generate/check。
+9. 已验证：`cd services/hub && go test ./... && go vet ./...`
+10. 已验证：`pnpm contracts:generate && pnpm contracts:check`
+11. 已验证：`pnpm lint && pnpm test`
+12. 已验证：`pnpm test:strict && pnpm e2e:smoke`
+13. 已验证：`make health`
+14. 已验证：`scripts/refactor/gate-check.sh --strict`
 
 ---
 

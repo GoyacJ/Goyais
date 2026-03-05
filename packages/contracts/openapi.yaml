@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Goyais Contracts
-  version: 0.4.0
+  version: 1.0.0
 servers:
   - url: http://127.0.0.1:8787
 paths:
@@ -253,20 +253,20 @@ paths:
 
   /v1/projects/{project_id}/sessions:
     get:
-      summary: List project conversations
+      summary: List project sessions
       parameters:
         - $ref: '#/components/parameters/ProjectIdParam'
         - $ref: '#/components/parameters/CursorParam'
         - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
-          description: Conversation list
+          description: Session list
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListEnvelope'
     post:
-      summary: Create conversation in project
+      summary: Create session in project
       parameters:
         - $ref: '#/components/parameters/ProjectIdParam'
       requestBody:
@@ -274,14 +274,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateConversationRequest'
+              $ref: '#/components/schemas/CreateSessionRequest'
       responses:
         '201':
-          description: Created conversation
+          description: Created session
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Conversation'
+                $ref: '#/components/schemas/Session'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
@@ -372,7 +372,7 @@ paths:
 
   /v1/sessions:
     get:
-      summary: List conversations
+      summary: List sessions
       parameters:
         - in: query
           name: workspace_id
@@ -386,7 +386,7 @@ paths:
         - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
-          description: Conversation list
+          description: Session list
           content:
             application/json:
               schema:
@@ -394,20 +394,20 @@ paths:
 
   /v1/sessions/{session_id}:
     get:
-      summary: Get conversation detail
+      summary: Get session detail
       parameters:
         - $ref: '#/components/parameters/SessionIdParam'
       responses:
         '200':
-          description: Conversation detail
+          description: Session detail
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConversationDetailResponse'
+                $ref: '#/components/schemas/SessionDetailResponse'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
     patch:
-      summary: Update conversation metadata
+      summary: Update session metadata
       parameters:
         - $ref: '#/components/parameters/SessionIdParam'
       requestBody:
@@ -415,20 +415,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateConversationRequest'
+              $ref: '#/components/schemas/UpdateSessionRequest'
       responses:
         '200':
-          description: Renamed conversation
+          description: Updated session
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Conversation'
+                $ref: '#/components/schemas/Session'
         '400':
           $ref: '#/components/responses/StandardErrorResponse'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
     delete:
-      summary: Delete conversation
+      summary: Delete session
       parameters:
         - $ref: '#/components/parameters/SessionIdParam'
       responses:
@@ -494,7 +494,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ComposerSubmitResponse'
         '201':
-          description: Execution enqueued response
+          description: Run enqueued response
           content:
             application/json:
               schema:
@@ -508,7 +508,7 @@ paths:
 
   /v1/sessions/{session_id}/events:
     get:
-      summary: Stream execution events for conversation (SSE)
+      summary: Stream run events for session (SSE)
       parameters:
         - $ref: '#/components/parameters/SessionIdParam'
         - in: query
@@ -527,7 +527,7 @@ paths:
 
   /v1/sessions/{session_id}/stop:
     post:
-      summary: Stop active execution and continue queued items
+      summary: Stop active run and continue queued items
       parameters:
         - $ref: '#/components/parameters/SessionIdParam'
       responses:
@@ -542,7 +542,7 @@ paths:
 
   /v1/sessions/{session_id}/export:
     get:
-      summary: Export conversation as markdown
+      summary: Export session as markdown
       parameters:
         - $ref: '#/components/parameters/SessionIdParam'
         - in: query
@@ -565,7 +565,7 @@ paths:
 
   /v1/runs:
     get:
-      summary: List executions
+      summary: List runs
       parameters:
         - in: query
           name: session_id
@@ -575,7 +575,7 @@ paths:
         - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
-          description: Execution list
+          description: Run list
           content:
             application/json:
               schema:
@@ -729,22 +729,22 @@ paths:
 
   /v1/sessions/{session_id}/changeset:
     get:
-      summary: Get conversation-level pending change set
+      summary: Get session-level pending change set
       parameters:
         - $ref: '#/components/parameters/SessionIdParam'
       responses:
         '200':
-          description: Pending conversation changes
+          description: Pending session changes
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConversationChangeSet'
+                $ref: '#/components/schemas/SessionChangeSet'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
   /v1/sessions/{session_id}/changeset/commit:
     post:
-      summary: Commit conversation-level pending change set
+      summary: Commit session-level pending change set
       parameters:
         - $ref: '#/components/parameters/SessionIdParam'
       requestBody:
@@ -769,7 +769,7 @@ paths:
 
   /v1/sessions/{session_id}/changeset/discard:
     post:
-      summary: Discard conversation-level pending change set
+      summary: Discard session-level pending change set
       parameters:
         - $ref: '#/components/parameters/SessionIdParam'
       requestBody:
@@ -794,7 +794,7 @@ paths:
 
   /v1/sessions/{session_id}/changeset/export:
     post:
-      summary: Export conversation-level pending changed files as zip archive
+      summary: Export session-level pending changed files as zip archive
       parameters:
         - $ref: '#/components/parameters/SessionIdParam'
       responses:
@@ -803,13 +803,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExecutionFilesExportResponse'
+                $ref: '#/components/schemas/RunFilesExportResponse'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
   /v1/sessions/{session_id}/rollback:
     post:
-      summary: Rollback conversation to user message anchor
+      summary: Rollback session to user message anchor
       parameters:
         - $ref: '#/components/parameters/SessionIdParam'
       requestBody:
@@ -2335,6 +2335,10 @@ components:
           type: string
           format: date-time
 
+    Session:
+      allOf:
+        - $ref: '#/components/schemas/Conversation'
+
     ConversationMessage:
       type: object
       required: [id, conversation_id, role, content, created_at]
@@ -2356,6 +2360,10 @@ components:
           type: string
           format: date-time
 
+    SessionMessage:
+      allOf:
+        - $ref: '#/components/schemas/ConversationMessage'
+
     ConversationInspector:
       type: object
       required: [tab]
@@ -2363,6 +2371,10 @@ components:
         tab:
           type: string
           enum: [diff, run, trace, risk]
+
+    SessionInspector:
+      allOf:
+        - $ref: '#/components/schemas/ConversationInspector'
 
     ConversationSnapshot:
       type: object
@@ -2401,6 +2413,10 @@ components:
           type: string
           format: date-time
 
+    SessionSnapshot:
+      allOf:
+        - $ref: '#/components/schemas/ConversationSnapshot'
+
     ConversationDetailResponse:
       type: object
       required: [conversation, messages, executions, snapshots]
@@ -2420,6 +2436,10 @@ components:
           items:
             $ref: '#/components/schemas/ConversationSnapshot'
 
+    SessionDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/ConversationDetailResponse'
+
     CreateConversationRequest:
       type: object
       required: [workspace_id, name]
@@ -2428,6 +2448,10 @@ components:
           type: string
         name:
           type: string
+
+    CreateSessionRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateConversationRequest'
 
     UpdateConversationRequest:
       type: object
@@ -2450,6 +2474,10 @@ components:
           type: array
           items:
             type: string
+
+    UpdateSessionRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateConversationRequest'
 
     ModelSnapshot:
       type: object
@@ -2483,6 +2511,10 @@ components:
           type: string
           enum: [basic, verbose]
 
+    RunAgentConfigSnapshot:
+      allOf:
+        - $ref: '#/components/schemas/ExecutionAgentConfigSnapshot'
+
     ExecutionResourceProfile:
       type: object
       required: [model_id]
@@ -2507,6 +2539,10 @@ components:
           type: array
           items:
             type: string
+
+    RunResourceProfile:
+      allOf:
+        - $ref: '#/components/schemas/ExecutionResourceProfile'
 
     Execution:
       type: object
@@ -2569,6 +2605,10 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    Run:
+      allOf:
+        - $ref: '#/components/schemas/Execution'
 
     ComposerSelectedResource:
       type: object
@@ -2709,6 +2749,19 @@ components:
               enum: [execution_enqueued]
             execution:
               $ref: '#/components/schemas/Execution'
+            queue_state:
+              type: string
+              enum: [idle, running, queued]
+            queue_index:
+              type: integer
+        - type: object
+          required: [kind, run, queue_state, queue_index]
+          properties:
+            kind:
+              type: string
+              enum: [run_enqueued]
+            run:
+              $ref: '#/components/schemas/Run'
             queue_state:
               type: string
               enum: [idle, running, queued]
@@ -2855,6 +2908,10 @@ components:
         last_committed_checkpoint:
           $ref: '#/components/schemas/CheckpointSummary'
 
+    SessionChangeSet:
+      allOf:
+        - $ref: '#/components/schemas/ConversationChangeSet'
+
     ChangeSetCommitRequest:
       type: object
       required: [message, expected_change_set_id]
@@ -2888,6 +2945,10 @@ components:
           type: string
         archive_base64:
           type: string
+
+    RunFilesExportResponse:
+      allOf:
+        - $ref: '#/components/schemas/ExecutionFilesExportResponse'
 
     ProjectFileEntry:
       type: object

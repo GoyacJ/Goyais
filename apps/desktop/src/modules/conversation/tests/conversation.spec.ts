@@ -53,8 +53,8 @@ describe("conversation store", () => {
         executionCounter += 1;
         return jsonResponse(
           {
-            kind: "execution_enqueued",
-            execution: {
+            kind: "run_enqueued",
+            run: {
               id: `exec_${executionCounter}`,
               workspace_id: "ws_local",
               conversation_id: mockConversation.id,

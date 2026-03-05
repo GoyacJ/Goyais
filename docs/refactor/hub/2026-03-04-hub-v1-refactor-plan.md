@@ -282,8 +282,8 @@ Desktop
 
 必须删除：
 
-1. `services/hub/internal/httpapi/execution_runtime_router.go`
-2. `services/hub/internal/httpapi/execution_runtime_v4_bridge.go`
+1. `services/hub/internal/httpapi/run_runtime_router.go`
+2. `services/hub/internal/httpapi/run_runtime_v4_bridge.go`
 3. `services/hub/internal/agent/adapters/runtimebridge/*`
 4. `services/hub/cmd/goyais-cli/adapters/v4_runner.go`
 5. 所有依赖 execution shadow/v4 runtime mode 的测试与脚本。
@@ -295,6 +295,17 @@ Desktop
 3. `route_v4`
 4. `legacy_execution_id`
 5. `runEventAdapter` 中 execution 映射逻辑
+
+---
+
+## 11.1 R9 完成快照（2026-03-05）
+
+1. Hub 侧 legacy/v4 过渡层已清理：`run_runtime_router.go`、`run_runtime_v4_bridge.go`、`execution_runtime_router_test.go` 与 `runtimebridge` 目录均已删除。
+2. ACP 启动链路已去除 runtimebridge 依赖，改为直接构造 `acpadapter.NewBridge(engine, nil)`。
+3. `AppState` 运行映射字段收敛为 `executionRunIDs` / `conversationSessionIDs`，并由 `run_execution_dispatcher.go` 负责最小 execution->run 调度桥接。
+4. OpenAPI `info.version` 已升级为 `1.0.0`，contracts 已重新生成并通过一致性检查。
+5. 发布健康检查脚本已切到 `/v1/sessions`、`/v1/runs` 路径并通过 `make health`。
+6. 门禁脚本 `scripts/refactor/gate-check.sh --strict` 已通过，并新增 runtime bridge 删除门禁。
 
 ---
 

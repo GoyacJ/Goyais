@@ -1,17 +1,17 @@
 import {
-  cancelExecution,
-  commitConversationChangeSet,
+  cancelSessionRun,
+  commitSessionChangeSet,
   controlRunTask,
-  controlExecutionRun,
-  discardConversationChangeSet,
+  controlRun,
+  discardSessionChangeSet,
   getComposerCatalog,
-  getConversationChangeSet,
-  getConversationDetail,
+  getSessionChangeSet,
+  getSessionDetail,
   getRunTaskById,
   getRunTaskGraph,
-  rollbackExecution,
+  rollbackSessionToMessage,
   listRunTasks,
-  submitComposerInput
+  submitSessionInput
 } from "@/modules/conversation/services";
 import { createExecutionEvent } from "@/modules/conversation/store/events";
 import {
@@ -22,13 +22,13 @@ import {
 import { buildEventDedupKey, rememberProcessedEvent } from "@/modules/conversation/store/executionEventIdempotency";
 import {
   appendRuntimeEvent,
-  conversationStore,
-  createConversationSnapshot,
-  ensureConversationRuntime,
-  findSnapshotForMessage,
-  hydrateConversationRuntime,
-  pushConversationSnapshot,
-  setConversationChangeSet
+  sessionStore,
+  createSessionSnapshot,
+  ensureSessionRuntime,
+  findSessionSnapshotForMessage,
+  hydrateSessionRuntime,
+  pushSessionSnapshot,
+  setSessionChangeSet
 } from "@/modules/conversation/store/state";
 import {
   applyDiffUpdate,
@@ -55,13 +55,13 @@ export async function submitConversationMessage(
     catalogRevision?: string;
   } = {}
 ): Promise<void> {
-  const runtime = ensureConversationRuntime(conversation, isGitProject);
+  const runtime = ensureSessionRuntime(conversation, isGitProject);
   const content = runtime.draft.trim();
   if (content === "") {
     return;
   }
   if (runtime.modelId.trim() === "") {
-    conversationStore.error = "当前项目未绑定可用模型，请先在项目配置中绑定模型";
+    sessionStore.error = "当前项目未绑定可用模型，请先在项目配置中绑定模型";
     return;
   }
 
@@ -78,9 +78,9 @@ export async function submitConversationMessage(
     created_at: new Date().toISOString()
   };
   runtime.messages.push(userMessage);
-  pushConversationSnapshot(
+  pushSessionSnapshot(
     conversation.id,
-    createConversationSnapshot(runtime, conversation.id, userMessage.id)
+    createSessionSnapshot(runtime, conversation.id, userMessage.id)
   );
 
   try {
@@ -93,11 +93,11 @@ export async function submitConversationMessage(
     };
     let response;
     try {
-      response = await submitComposerInput(conversation, baseInput);
+      response = await submitSessionInput(conversation, baseInput);
     } catch (error) {
       if (isCatalogStaleError(error)) {
         const catalog = await getComposerCatalog(conversation.id);
-        response = await submitComposerInput(conversation, {
+        response = await submitSessionInput(conversation, {
           ...baseInput,
           catalog_revision: catalog.revision
         });
@@ -117,22 +117,23 @@ export async function submitConversationMessage(
       return;
     }
 
-    upsertExecutionFromServer(runtime, response.execution);
+    const run = response.kind === "run_enqueued" ? response.run : response.execution;
+    upsertExecutionFromServer(runtime, run);
     dedupeExecutions(runtime);
     appendRuntimeEvent(
       runtime,
-      createExecutionEvent(conversation.id, response.execution.id, response.queue_index, "message_received", {
-        message_id: response.execution.message_id,
+      createExecutionEvent(conversation.id, run.id, response.queue_index, "message_received", {
+        message_id: run.message_id,
         queue_state: response.queue_state
       })
     );
   } catch (error) {
-    conversationStore.error = toDisplayError(error);
+    sessionStore.error = toDisplayError(error);
     runtime.messages.push({
       id: createMockId("msg"),
       conversation_id: conversation.id,
       role: "system",
-      content: conversationStore.error,
+      content: sessionStore.error,
       created_at: new Date().toISOString()
     });
   }
@@ -164,7 +165,7 @@ function extractSelectedResources(rawInput: string): ComposerResourceSelection[]
 }
 
 export async function stopConversationExecution(conversation: Conversation): Promise<void> {
-  const runtime = conversationStore.byConversationId[conversation.id];
+  const runtime = sessionStore.bySessionId[conversation.id];
   if (!runtime) {
     return;
   }
@@ -177,9 +178,9 @@ export async function stopConversationExecution(conversation: Conversation): Pro
   }
 
   try {
-    await cancelExecution(conversation.id, active.id);
+    await cancelSessionRun(conversation.id, active.id);
   } catch (error) {
-    conversationStore.error = toDisplayError(error);
+    sessionStore.error = toDisplayError(error);
   }
 }
 
@@ -187,7 +188,7 @@ export async function removeQueuedConversationExecution(
   conversation: Conversation,
   executionID: string
 ): Promise<void> {
-  const runtime = conversationStore.byConversationId[conversation.id];
+  const runtime = sessionStore.bySessionId[conversation.id];
   if (!runtime) {
     return;
   }
@@ -205,14 +206,14 @@ export async function removeQueuedConversationExecution(
   }
 
   try {
-    await controlExecutionRun(queuedExecution.id, "stop");
+    await controlRun(queuedExecution.id, "stop");
   } catch (error) {
-    conversationStore.error = toDisplayError(error);
+    sessionStore.error = toDisplayError(error);
   }
 }
 
 export async function approveConversationExecution(conversation: Conversation): Promise<void> {
-  const runtime = conversationStore.byConversationId[conversation.id];
+  const runtime = sessionStore.bySessionId[conversation.id];
   if (!runtime) {
     return;
   }
@@ -223,14 +224,14 @@ export async function approveConversationExecution(conversation: Conversation): 
   }
 
   try {
-    await controlExecutionRun(confirming.id, "approve");
+    await controlRun(confirming.id, "approve");
   } catch (error) {
-    conversationStore.error = toDisplayError(error);
+    sessionStore.error = toDisplayError(error);
   }
 }
 
 export async function denyConversationExecution(conversation: Conversation): Promise<void> {
-  const runtime = conversationStore.byConversationId[conversation.id];
+  const runtime = sessionStore.bySessionId[conversation.id];
   if (!runtime) {
     return;
   }
@@ -241,9 +242,9 @@ export async function denyConversationExecution(conversation: Conversation): Pro
   }
 
   try {
-    await controlExecutionRun(confirming.id, "deny");
+    await controlRun(confirming.id, "deny");
   } catch (error) {
-    conversationStore.error = toDisplayError(error);
+    sessionStore.error = toDisplayError(error);
   }
 }
 
@@ -256,7 +257,7 @@ export async function answerConversationExecutionQuestion(
     text?: string;
   }
 ): Promise<void> {
-  const runtime = conversationStore.byConversationId[conversation.id];
+  const runtime = sessionStore.bySessionId[conversation.id];
   if (!runtime) {
     return;
   }
@@ -276,18 +277,18 @@ export async function answerConversationExecutionQuestion(
   }
 
   try {
-    await controlExecutionRun(awaitingInput.id, "answer", {
+    await controlRun(awaitingInput.id, "answer", {
       question_id: questionID,
       selected_option_id: selectedOptionID || undefined,
       text: text || undefined
     });
   } catch (error) {
-    conversationStore.error = toDisplayError(error);
+    sessionStore.error = toDisplayError(error);
   }
 }
 
 export async function rollbackConversationToMessage(conversationId: string, messageId: string): Promise<void> {
-  const runtime = conversationStore.byConversationId[conversationId];
+  const runtime = sessionStore.bySessionId[conversationId];
   if (!runtime) {
     return;
   }
@@ -307,38 +308,39 @@ export async function rollbackConversationToMessage(conversationId: string, mess
   );
 
   try {
-    await rollbackExecution(conversationId, messageId);
+    await rollbackSessionToMessage(conversationId, messageId);
   } catch (error) {
-    conversationStore.error = toDisplayError(error);
+    sessionStore.error = toDisplayError(error);
     return;
   }
 
   try {
-    const detail = await getConversationDetail(conversationId);
-    hydrateConversationRuntime(
-      detail.conversation,
+    const detail = await getSessionDetail(conversationId);
+    hydrateSessionRuntime(
+      detail.session,
       runtime.projectKind === "git",
       detail
     );
-    setConversationChangeSet(conversationId, null);
+    setSessionChangeSet(conversationId, null);
     void refreshConversationChangeSet(conversationId);
     return;
   } catch {
     // Fall back to local snapshot recovery if detail refresh fails.
   }
 
-  const snapshot = findSnapshotForMessage(conversationId, messageId);
+  const snapshot = findSessionSnapshotForMessage(conversationId, messageId);
   if (!snapshot) {
-    conversationStore.error = "ROLLBACK_SYNC_FAILED: rollback succeeded but local state refresh failed";
+    sessionStore.error = "ROLLBACK_SYNC_FAILED: rollback succeeded but local state refresh failed";
     return;
   }
 
   runtime.messages = snapshot.messages.map((message) => ({ ...message }));
   runtime.executions = restoreExecutionsFromSnapshot(runtime, conversationId, snapshot);
+  runtime.runs = runtime.executions;
   runtime.snapshots = runtime.snapshots.filter((item) => item.created_at <= snapshot.created_at);
   runtime.worktreeRef = snapshot.worktree_ref;
   runtime.inspectorTab = snapshot.inspector_state.tab;
-  setConversationChangeSet(conversationId, null);
+  setSessionChangeSet(conversationId, null);
 
   appendRuntimeEvent(
     runtime,
@@ -360,86 +362,86 @@ export async function rollbackConversationToMessage(conversationId: string, mess
 }
 
 export async function commitConversationChangeset(conversationId: string, message = ""): Promise<void> {
-  const runtime = conversationStore.byConversationId[conversationId];
+  const runtime = sessionStore.bySessionId[conversationId];
   if (!runtime) {
     return;
   }
   const current = runtime.changeSet;
   if (!current) {
-    conversationStore.error = "CHANGESET_NOT_FOUND: no changeset found for current conversation";
+    sessionStore.error = "CHANGESET_NOT_FOUND: no changeset found for current conversation";
     return;
   }
   if (!current.capability.can_commit) {
-    conversationStore.error = current.capability.reason || "CHANGESET_COMMIT_DISABLED: changeset cannot be committed currently";
+    sessionStore.error = current.capability.reason || "CHANGESET_COMMIT_DISABLED: changeset cannot be committed currently";
     return;
   }
   const changeSetID = current.change_set_id.trim();
   if (changeSetID === "") {
-    conversationStore.error = "CHANGESET_ID_MISSING: changeset id is required";
+    sessionStore.error = "CHANGESET_ID_MISSING: changeset id is required";
     return;
   }
   const finalMessage = message.trim() || current.suggested_message.message.trim();
   if (finalMessage === "") {
-    conversationStore.error = "CHANGESET_MESSAGE_REQUIRED: commit message is required";
+    sessionStore.error = "CHANGESET_MESSAGE_REQUIRED: commit message is required";
     return;
   }
 
   try {
-    await commitConversationChangeSet(conversationId, {
+    await commitSessionChangeSet(conversationId, {
       message: finalMessage,
       expected_change_set_id: changeSetID
     });
     await refreshConversationChangeSet(conversationId);
   } catch (error) {
-    conversationStore.error = toDisplayError(error);
+    sessionStore.error = toDisplayError(error);
   }
 }
 
 export async function discardConversationChangeset(conversationId: string): Promise<void> {
-  const runtime = conversationStore.byConversationId[conversationId];
+  const runtime = sessionStore.bySessionId[conversationId];
   if (!runtime) {
     return;
   }
   const current = runtime.changeSet;
   if (!current) {
-    conversationStore.error = "CHANGESET_NOT_FOUND: no changeset found for current conversation";
+    sessionStore.error = "CHANGESET_NOT_FOUND: no changeset found for current conversation";
     return;
   }
   if (!current.capability.can_discard) {
-    conversationStore.error = current.capability.reason || "CHANGESET_DISCARD_DISABLED: changeset cannot be discarded currently";
+    sessionStore.error = current.capability.reason || "CHANGESET_DISCARD_DISABLED: changeset cannot be discarded currently";
     return;
   }
   const changeSetID = current.change_set_id.trim();
   if (changeSetID === "") {
-    conversationStore.error = "CHANGESET_ID_MISSING: changeset id is required";
+    sessionStore.error = "CHANGESET_ID_MISSING: changeset id is required";
     return;
   }
 
   try {
-    await discardConversationChangeSet(conversationId, {
+    await discardSessionChangeSet(conversationId, {
       expected_change_set_id: changeSetID
     });
     await refreshConversationChangeSet(conversationId);
   } catch (error) {
-    conversationStore.error = toDisplayError(error);
+    sessionStore.error = toDisplayError(error);
   }
 }
 
 export async function refreshConversationChangeSet(conversationId: string): Promise<void> {
-  const runtime = conversationStore.byConversationId[conversationId];
+  const runtime = sessionStore.bySessionId[conversationId];
   if (!runtime) {
     return;
   }
   try {
-    const changeSet = await getConversationChangeSet(conversationId);
-    setConversationChangeSet(conversationId, changeSet);
+    const changeSet = await getSessionChangeSet(conversationId);
+    setSessionChangeSet(conversationId, changeSet);
   } catch (error) {
-    conversationStore.error = toDisplayError(error);
+    sessionStore.error = toDisplayError(error);
   }
 }
 
 export async function loadConversationRunTaskGraph(conversationId: string): Promise<ConversationRunTaskGraph | null> {
-  const runtime = conversationStore.byConversationId[conversationId];
+  const runtime = sessionStore.bySessionId[conversationId];
   if (!runtime) {
     return null;
   }
@@ -450,7 +452,7 @@ export async function loadConversationRunTaskGraph(conversationId: string): Prom
   try {
     return await getRunTaskGraph(runID);
   } catch (error) {
-    conversationStore.error = toDisplayError(error);
+    sessionStore.error = toDisplayError(error);
     return null;
   }
 }
@@ -463,7 +465,7 @@ export async function loadConversationRunTasks(
     limit?: number;
   } = {}
 ): Promise<ConversationRunTaskListResponse | null> {
-  const runtime = conversationStore.byConversationId[conversationId];
+  const runtime = sessionStore.bySessionId[conversationId];
   if (!runtime) {
     return null;
   }
@@ -474,13 +476,13 @@ export async function loadConversationRunTasks(
   try {
     return await listRunTasks(runID, options);
   } catch (error) {
-    conversationStore.error = toDisplayError(error);
+    sessionStore.error = toDisplayError(error);
     return null;
   }
 }
 
 export async function loadConversationRunTaskById(conversationId: string, taskId: string): Promise<ConversationRunTaskNode | null> {
-  const runtime = conversationStore.byConversationId[conversationId];
+  const runtime = sessionStore.bySessionId[conversationId];
   if (!runtime) {
     return null;
   }
@@ -495,7 +497,7 @@ export async function loadConversationRunTaskById(conversationId: string, taskId
   try {
     return await getRunTaskById(runID, normalizedTaskID);
   } catch (error) {
-    conversationStore.error = toDisplayError(error);
+    sessionStore.error = toDisplayError(error);
     return null;
   }
 }
@@ -506,7 +508,7 @@ export async function controlConversationRunTask(
   action: ConversationRunTaskControlAction,
   reason?: string
 ): Promise<ConversationRunTaskControlResponse | null> {
-  const runtime = conversationStore.byConversationId[conversation.id];
+  const runtime = sessionStore.bySessionId[conversation.id];
   if (!runtime) {
     return null;
   }
@@ -521,13 +523,13 @@ export async function controlConversationRunTask(
   try {
     return await controlRunTask(runID, normalizedTaskID, action, reason);
   } catch (error) {
-    conversationStore.error = toDisplayError(error);
+    sessionStore.error = toDisplayError(error);
     return null;
   }
 }
 
 export function applyIncomingExecutionEvent(conversationId: string, event: ExecutionEvent): void {
-  const runtime = conversationStore.byConversationId[conversationId];
+  const runtime = sessionStore.bySessionId[conversationId];
   if (!runtime) {
     return;
   }
