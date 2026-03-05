@@ -344,9 +344,9 @@
 
 - [ ] R8-T1 更新 OpenAPI 生成类型并替换 `Conversation/Execution` 为 `Session/Run`
 - [ ] R8-T2 重写 Desktop conversation store 为 session/run store
-- [ ] R8-T3 删除 `runEventAdapter` 的 execution 映射层
-- [ ] R8-T4 服务调用路径切换到 `/v1/sessions/*`、`/v1/runs/*`
-- [ ] R8-T5 UI 文案统一改为 Session
+- [x] R8-T3 删除 `runEventAdapter` 的 execution 映射层
+- [x] R8-T4 服务调用路径切换到 `/v1/sessions/*`、`/v1/runs/*`
+- [x] R8-T5 UI 文案统一改为 Session
 - [ ] R8-T6 更新全部测试快照与 mock
 
 ### 关键文件面
@@ -374,6 +374,9 @@
 6. 已验证：`pnpm --filter @goyais/desktop lint`
 7. 已验证：`pnpm lint && pnpm test`
 8. 已验证：`pnpm test:strict && pnpm e2e:smoke`
+9. 收敛：删除 `apps/desktop/src/modules/conversation/store/runEventAdapter.ts`，并在 `store/stream.ts` 内联 run->execution 事件归一化，移除独立 execution 映射层
+10. 清理测试：删除 `run-event-adapter.spec.ts`，并由 `conversation-stream.spec.ts` 覆盖 run-centric SSE 事件映射与路由行为
+11. 统一文案：`messages.en-US.ts`、`messages.zh-CN.ts`、`MainScreenView.vue`、资源配置说明改为 Session/会话主语义；默认命名切换为 `Session`/`新会话` 并保持旧 `Conversation`/`新对话` 识别兼容
 
 ---
 

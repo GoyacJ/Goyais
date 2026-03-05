@@ -3,7 +3,15 @@ import { describe, expect, it } from "vitest";
 import { buildNameFromFirstMessage, isDefaultConversationName } from "@/modules/conversation/views/conversationNamePolicy";
 
 describe("conversation name policy", () => {
-  it("recognizes default conversation names in Chinese and English", () => {
+  it("recognizes default session names in Chinese and English", () => {
+    expect(isDefaultConversationName("新会话")).toBe(true);
+    expect(isDefaultConversationName("新会话 1")).toBe(true);
+    expect(isDefaultConversationName("  新会话   23  ")).toBe(true);
+    expect(isDefaultConversationName("Session")).toBe(true);
+    expect(isDefaultConversationName("Session 3")).toBe(true);
+  });
+
+  it("keeps compatibility with historical default conversation names", () => {
     expect(isDefaultConversationName("新对话")).toBe(true);
     expect(isDefaultConversationName("新对话 1")).toBe(true);
     expect(isDefaultConversationName("  新对话   23  ")).toBe(true);
@@ -13,6 +21,7 @@ describe("conversation name policy", () => {
 
   it("does not match custom or non-number-suffixed names", () => {
     expect(isDefaultConversationName("我的会话")).toBe(false);
+    expect(isDefaultConversationName("Session x")).toBe(false);
     expect(isDefaultConversationName("Conversation x")).toBe(false);
     expect(isDefaultConversationName("新对话 alpha")).toBe(false);
   });

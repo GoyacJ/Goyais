@@ -43,7 +43,7 @@
             :disabled="loading || saving || !canWrite"
           />
           <small class="field-hint text-[var(--global-font-size-11)] text-[var(--semantic-text-subtle)]">
-            开启后在对话区展示 thinking/tool/command 过程轨迹
+            开启后在会话区展示 thinking/tool/command 过程轨迹
           </small>
         </label>
 

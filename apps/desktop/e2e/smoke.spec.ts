@@ -50,14 +50,14 @@ test.beforeEach(async ({ page }) => {
 test("main screen smoke renders primary frame", async ({ page }) => {
   await page.goto("/main");
   await expect(page).toHaveURL(/\/main$/);
-  await expect(page.getByText("未选择对话")).toBeVisible();
+  await expect(page.getByText("未选择会话")).toBeVisible();
   await expect(page.locator(".workspace-btn")).toContainText("Local Workspace");
 });
 
 test("remote route redirects to main in local workspace mode", async ({ page }) => {
   await page.goto("/remote/account");
   await expect(page).toHaveURL(/\/main\?reason=remote_required/);
-  await expect(page.getByText("未选择对话")).toBeVisible();
+  await expect(page.getByText("未选择会话")).toBeVisible();
 });
 
 test("settings theme route renders controls", async ({ page }) => {

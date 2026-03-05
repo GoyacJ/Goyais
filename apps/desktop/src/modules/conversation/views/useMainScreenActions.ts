@@ -216,7 +216,7 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
       return;
     }
     const nextIndex = (projectStore.conversationsByProjectId[project.id] ?? []).length + 1;
-    await addConversation(project, `新对话 ${nextIndex}`);
+    await addConversation(project, `新会话 ${nextIndex}`);
   }
   async function deleteConversationById(projectId: string, conversationId: string): Promise<void> {
     await deleteConversation(projectId, conversationId);

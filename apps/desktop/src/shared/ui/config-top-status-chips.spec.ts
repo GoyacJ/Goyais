@@ -18,7 +18,7 @@ describe("config top status chips", () => {
       }
     });
 
-    expect(wrapper.text()).toContain("conversation: running");
+    expect(wrapper.text()).toContain("session: running");
     expect(wrapper.text()).not.toContain("scope:");
   });
 

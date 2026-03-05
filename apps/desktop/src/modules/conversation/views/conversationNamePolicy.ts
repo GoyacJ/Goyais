@@ -1,4 +1,4 @@
-const DEFAULT_NAME_PATTERN = /^(?:新对话(?: \d+)?|Conversation(?: \d+)?)$/i;
+const DEFAULT_NAME_PATTERN = /^(?:新会话(?: \d+)?|Session(?: \d+)?|新对话(?: \d+)?|Conversation(?: \d+)?)$/i;
 
 export function isDefaultConversationName(name: string): boolean {
   const normalized = normalizeWhitespace(name);

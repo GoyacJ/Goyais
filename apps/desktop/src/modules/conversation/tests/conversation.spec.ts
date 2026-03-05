@@ -96,17 +96,6 @@ describe("conversation store", () => {
         return jsonResponse({ ok: true });
       }
 
-      if (url.includes("/v1/executions/") && url.endsWith("/diff") && method === "GET") {
-        return jsonResponse([
-          {
-            id: "diff_1",
-            path: "src/main.ts",
-            change_type: "modified",
-            summary: "queue updated"
-          }
-        ]);
-      }
-
       return jsonResponse(
         {
           code: "ROUTE_NOT_FOUND",

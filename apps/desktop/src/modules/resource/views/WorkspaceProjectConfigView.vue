@@ -236,7 +236,7 @@ const {
 const supportsDirectoryImport = isRuntimeCapabilitySupported("supportsDirectoryImport");
 
 type BindingField = "modelIds" | "ruleIds" | "skillIds" | "mcpIds";
-const PROJECT_BINDING_PURGE_CONFIRM_MESSAGE = "保存后将清空当前项目下所有历史对话与执行记录，是否继续？";
+const PROJECT_BINDING_PURGE_CONFIRM_MESSAGE = "保存后将清空当前项目下所有历史会话与运行记录，是否继续？";
 
 async function addProject(): Promise<void> {
   if (!supportsDirectoryImport) {

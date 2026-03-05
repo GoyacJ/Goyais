@@ -173,8 +173,8 @@
         </template>
 
         <div v-else class="main-empty">
-          <p class="main-empty-title">未选择对话</p>
-          <p class="main-empty-description">请在左侧会话列表中选择一个对话后开始。</p>
+          <p class="main-empty-title">未选择会话</p>
+          <p class="main-empty-description">请在左侧会话列表中选择一个会话后开始。</p>
         </div>
       </div>
     </template>

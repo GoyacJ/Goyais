@@ -106,7 +106,7 @@ describe("main screen actions - auto conversation naming", () => {
   it("renames default conversation from first user message after submit", async () => {
     conversationStoreMocks.submitConversationMessage.mockResolvedValue(undefined);
     const { actions, project, conversation } = createActionsContext({
-      conversationName: "新对话 2",
+      conversationName: "新会话 2",
       draft: "  这是第一行\n第二行还有  "
     });
 
@@ -148,7 +148,7 @@ describe("main screen actions - auto conversation naming", () => {
       created_at: "2026-02-26T00:00:00Z"
     };
     const { actions } = createActionsContext({
-      conversationName: "新对话 1",
+      conversationName: "新会话 1",
       draft: "这是第二条消息",
       runtimeMessages: [existingUserMessage]
     });
@@ -161,7 +161,7 @@ describe("main screen actions - auto conversation naming", () => {
   it("renames even when submit message throws", async () => {
     conversationStoreMocks.submitConversationMessage.mockRejectedValue(new Error("submit failed"));
     const { actions, project, conversation } = createActionsContext({
-      conversationName: "Conversation",
+      conversationName: "Session",
       draft: "first message for title"
     });
 
