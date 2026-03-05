@@ -11,14 +11,14 @@
 
 | 风险 ID | 风险主题 | 触发条件 | 监控信号 | 缓解策略 | 回滚策略 | 当前状态 |
 |---|---|---|---|---|---|---|
-| R-001 | 契约错配（OpenAPI/HUB/Desktop） | 任一层仍引用旧 schema 或旧字段 | `contracts:check` 失败、Hub/Desktop 类型编译错误 | 契约先行冻结（Week 1），先改 OpenAPI 与 shared-core，再改调用方 | 回滚到上一个契约冻结提交，恢复生成类型 | Open |
-| R-002 | 字段改名连锁故障 | `conversation_id/execution_id` 切换后调用链未全量更新 | 运行时 4xx、SSE 解析失败、E2E 用例失败 | 采用“单周单域收口”，每次改名后执行跨层 grep 审计 | 临时回滚到上个通过的跨层提交，重新分批改名 | Open |
-| R-003 | 前端全量重命名引发路径断裂 | `modules/conversation` 迁移后 import 大面积失效 | `pnpm lint`/`pnpm test` 大量失败 | 先 `git mv` 目录，再批量修复 import，最后改 i18n key | 回滚目录迁移提交，拆分为更小批次重试 | Open |
-| R-004 | DB 破坏式重建导致环境不可用 | 旧库文件与新 schema 命名冲突，启动失败 | Hub 启动报 schema 错误、集成测试异常 | 明确无历史迁移策略，统一重建流程与测试夹具 | 回滚存储层提交并恢复旧 schema，重新设计重建脚本 | Open |
-| R-005 | 测试回归窗口过大 | 多周改动叠加，问题定位困难 | Week 5/6 出现大量未知回归 | 周周执行对应门禁，不积压未验证改动 | 回滚最近一周增量，逐批 rebase 修复 | Open |
+| R-001 | 契约错配（OpenAPI/HUB/Desktop） | 任一层仍引用旧 schema 或旧字段 | `contracts:check` 失败、Hub/Desktop 类型编译错误 | 契约先行冻结（Week 1），先改 OpenAPI 与 shared-core，再改调用方 | 回滚到上一个契约冻结提交，恢复生成类型 | Mitigated |
+| R-002 | 字段改名连锁故障 | `conversation_id/execution_id` 切换后调用链未全量更新 | 运行时 4xx、SSE 解析失败、E2E 用例失败 | 采用“单周单域收口”，每次改名后执行跨层 grep 审计 | 临时回滚到上个通过的跨层提交，重新分批改名 | Mitigated |
+| R-003 | 前端全量重命名引发路径断裂 | `modules/conversation` 迁移后 import 大面积失效 | `pnpm lint`/`pnpm test` 大量失败 | 先 `git mv` 目录，再批量修复 import，最后改 i18n key | 回滚目录迁移提交，拆分为更小批次重试 | Mitigated |
+| R-004 | DB 破坏式重建导致环境不可用 | 旧库文件与新 schema 命名冲突，启动失败 | Hub 启动报 schema 错误、集成测试异常 | 明确无历史迁移策略，统一重建流程与测试夹具 | 回滚存储层提交并恢复旧 schema，重新设计重建脚本 | Mitigated |
+| R-005 | 测试回归窗口过大 | 多周改动叠加，问题定位困难 | Week 5/6 出现大量未知回归 | 周周执行对应门禁，不积压未验证改动 | 回滚最近一周增量，逐批 rebase 修复 | Mitigated |
 | R-006 | 兼容代码漏删导致双轨运行 | legacy/compat/fallback 残留触发旧路径 | grep 审计命中、门禁脚本告警 | Week 5 完成兼容清零并启用防回流门禁 | 回滚门禁脚本修改并补齐白名单后重试 | Mitigated |
-| R-007 | 权限键改名造成鉴权异常 | `conversation.*` -> `session.*` 切换不完整 | 403 异常、审计事件键名混乱 | 权限键改名与审计改名同一周完成并联测 | 回滚权限模型改名提交，保留最小可用键集 | Open |
-| R-008 | 文档基线漂移 | 团队并行新增平行计划文档 | `docs/refactor` 出现重复主计划 | 固定以 `master-plan/task-schedule/risk-register` 为唯一基线 | 回滚新增平行文档并在 README 再次声明 | Open |
+| R-007 | 权限键改名造成鉴权异常 | `conversation.*` -> `session.*` 切换不完整 | 403 异常、审计事件键名混乱 | 权限键改名与审计改名同一周完成并联测 | 回滚权限模型改名提交，保留最小可用键集 | Mitigated |
+| R-008 | 文档基线漂移 | 团队并行新增平行计划文档 | `docs/refactor` 出现重复主计划 | 固定以 `master-plan/task-schedule/risk-register` 为唯一基线 | 回滚新增平行文档并在 README 再次声明 | Mitigated |
 
 ---
 
@@ -153,3 +153,17 @@
 - 已关闭风险：无
 - 需要决策：
   - Week 6 前是否将 `catalog_files.go` 中 `fallback_*` 审计字段切换到中性命名（仅可观测性层，不影响协议）。
+
+### 更新记录（2026-03-05，Week 6 收口）
+
+- 更新人：Codex
+- 周次：Week 6（收口完成）
+- 风险变更：
+  - `R-001`: `Open -> Mitigated`（执行 `pnpm contracts:generate && pnpm contracts:check`、`go test ./... && go vet ./...`、`scripts/refactor/gate-check.sh --strict` 全通过，契约错配监控信号未触发）
+  - `R-002`: `Open -> Mitigated`（Desktop+Hub+E2E 全矩阵通过，未出现字段切换导致的 4xx/SSE 解析失败）
+  - `R-005`: `Open -> Mitigated`（Week 6 全量矩阵 7/7 命令退出码均为 `0`，回归窗口风险收敛）
+  - `R-008`: `Open -> Mitigated`（新增 closure 文档并在 `docs/refactor/README.md` 注册归档入口，维持单基线治理）
+- 新增风险：无
+- 已关闭风险：无
+- 需要决策：
+  - 已决策：`catalog_files.go` 的 `fallback_*` 审计字段与阶段名已在 Week 6-1 收敛为中性命名 `recovery_*` / `recovery_or_failed`（仅可观测层）。

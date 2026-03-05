@@ -430,3 +430,52 @@ Week 6 收口标准：
 6. `pnpm slides:build` ✅
 7. `make health` ✅
 8. 准入判断：满足 Week 6 前置门槛（`fallback to in-memory map = 0`，审计总量不回升，跨栈矩阵通过）。
+
+### 6.18 Week 6 启动快照（2026-03-05）
+
+1. 启动时间：`2026-03-05 21:02:22 +0800`。
+2. 启动提交基线：`345edd2`（`docs(refactor): record week5-3 closure and trim gate whitelist`）。
+3. 启动目标：执行 Week 6 全量矩阵 + 风险归档 + closure 文档归档。
+4. 启动时门禁口径审计（`scripts/refactor/gate-check.sh`）：
+   - `conversation/execution`: `1588`（baseline `1592`）
+   - `v1/v2/v3/v4`: `763`（baseline `769`）
+   - `legacy/compat/fallback/alias`: `208`（baseline `358`）
+
+### 6.19 Week 6-1 遗留项收口（2026-03-05）
+
+1. 已完成 `catalog_files.go` 可观测层中性命名收口：
+   - 审计阶段：`model_catalog.reload.fallback_or_failed` -> `model_catalog.reload.recovery_or_failed`
+   - 审计 details：`fallback_used/reason/error` -> `recovery_used/reason/error`
+2. 改动范围限定在可观测层，无协议字段与对外路径变更（`/v1/*` 保持不变）。
+3. 最小批次验证：
+   - `cd services/hub && go test ./internal/httpapi -run TestRecordModelCatalogReloadAudit_FailureIncludesRecoveryStage -count=1` ✅（先红后绿）
+   - `cd services/hub && go test ./internal/httpapi/...` ✅
+   - `scripts/refactor/gate-check.sh` ✅
+
+### 6.20 Week 6-2 全量矩阵执行结果（2026-03-05）
+
+执行窗口：`2026-03-05 21:02:22 +0800` -> `2026-03-05 21:02:59 +0800`。
+
+1. `pnpm contracts:generate && pnpm contracts:check` ✅（1s）
+2. `cd services/hub && go test ./... && go vet ./...` ✅（11s）
+3. `pnpm lint && pnpm test && pnpm test:strict && pnpm e2e:smoke` ✅（6s）
+4. `pnpm lint:mobile && pnpm test:mobile && pnpm build:mobile && pnpm --filter @goyais/mobile e2e:smoke` ✅（10s）
+5. `pnpm docs:build && pnpm slides:build` ✅（3s）
+6. `make health` ✅（4s）
+7. `scripts/refactor/gate-check.sh --strict` ✅（2s）
+
+本轮 strict gate 审计快照：
+1. `conversation/execution hits: 1588 (baseline: 1592)`。
+2. `version token hits: 763 (baseline: 769)`。
+3. `legacy/compat/fallback/alias hits: 208 (baseline: 358)`。
+
+结论：
+1. W6-T1（跨栈验证矩阵执行）完成，全部命令退出码 `0`。
+2. 审计总量未回升，且关键兼容回流词仍保持阻断。
+
+### 6.21 Week 6-3 风险归档与 Closure 完成（2026-03-05）
+
+1. W6-T2 完成：`risk-register` 顶部风险状态与周更记录已对齐，高优先项 `R-001/R-003/R-004/R-005` 全部更新为 `Mitigated` 并补充矩阵证据。
+2. W6-T3 完成：新增 closure 文档 `2026-03-05-session-run-unification-week6-closure.md`，覆盖设计债、新结构收益、影响面、兼容性与验证证据。
+3. 基线索引完成：`docs/refactor/README.md` 已登记 closure 归档入口，并明确“活动基线三件套 + closure 归档”治理规则。
+4. 发布敏感检查：`make health` 已在 Week 6-2 全量矩阵中通过，满足发布收口条件。

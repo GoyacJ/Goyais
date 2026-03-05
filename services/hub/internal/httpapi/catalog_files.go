@@ -612,19 +612,19 @@ func (s *AppState) recordModelCatalogReloadAudit(workspaceID string, trigger str
 	if loadErr != nil {
 		details["error"] = loadErr.Error()
 		details["reason"] = firstNonEmpty(meta.FallbackReason, "load_failed")
-		s.appendModelCatalogAudit(workspaceID, actor, traceID, "fallback_or_failed", "failed", details)
+		s.appendModelCatalogAudit(workspaceID, actor, traceID, "recovery_or_failed", "failed", details)
 		return
 	}
 
-	details["fallback_used"] = meta.FallbackUsed
-	details["fallback_reason"] = meta.FallbackReason
-	details["fallback_error"] = meta.FallbackError
+	details["recovery_used"] = meta.FallbackUsed
+	details["recovery_reason"] = meta.FallbackReason
+	details["recovery_error"] = meta.FallbackError
 	details["autofilled"] = meta.AutoFilled
 	details["autofill_writeback"] = meta.AutoFillWriteback
 	details["autofill_write_error"] = meta.AutoFillWriteErr
 	s.appendModelCatalogAudit(workspaceID, actor, traceID, "apply", "success", details)
 	if meta.FallbackUsed {
-		s.appendModelCatalogAudit(workspaceID, actor, traceID, "fallback_or_failed", "success", details)
+		s.appendModelCatalogAudit(workspaceID, actor, traceID, "recovery_or_failed", "success", details)
 	}
 }
 

@@ -175,7 +175,7 @@ func TestLoadModelCatalogDetailed_AutoFillWriteFailedFallsBackToEmbedded(t *test
 	}
 }
 
-func TestRecordModelCatalogReloadAudit_FailureIncludesFallbackStage(t *testing.T) {
+func TestRecordModelCatalogReloadAudit_FailureIncludesRecoveryStage(t *testing.T) {
 	state := NewAppState(nil)
 	workspaceID := "ws_catalog_audit"
 	traceID := "tr_catalog_audit"
@@ -199,11 +199,11 @@ func TestRecordModelCatalogReloadAudit_FailureIncludesFallbackStage(t *testing.T
 		if item.Action == "model_catalog.reload.requested" && item.Result == "success" && item.TraceID == traceID {
 			foundRequested = true
 		}
-		if item.Action == "model_catalog.reload.fallback_or_failed" && item.Result == "failed" && item.TraceID == traceID {
+		if item.Action == "model_catalog.reload.recovery_or_failed" && item.Result == "failed" && item.TraceID == traceID {
 			foundFailed = true
 		}
 	}
 	if !foundRequested || !foundFailed {
-		t.Fatalf("expected requested+fallback_or_failed audit entries, got %#v", state.adminAudit)
+		t.Fatalf("expected requested+recovery_or_failed audit entries, got %#v", state.adminAudit)
 	}
 }
