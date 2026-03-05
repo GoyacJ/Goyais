@@ -1,4 +1,4 @@
-import type { ComputedRef, Ref } from "vue";
+import { computed, ref, type ComputedRef, type Ref } from "vue";
 import type { Router } from "vue-router";
 import {
   answerConversationExecutionQuestion,
@@ -61,6 +61,17 @@ type MainScreenActionsInput = {
   resolveSemanticModelID: (raw: string) => string;
 };
 export function useMainScreenActions(input: MainScreenActionsInput) {
+  const modelSwitchingConversationID = ref("");
+  const modelSwitchPromiseByConversationID = new Map<string, Promise<boolean>>();
+
+  const isSwitchingModel = computed<boolean>(() => {
+    const conversationID = input.activeConversation.value?.id?.trim() ?? "";
+    if (conversationID === "") {
+      return false;
+    }
+    return modelSwitchingConversationID.value === conversationID;
+  });
+
   function updateDraft(value: string): void {
     if (!input.activeConversation.value) {
       return;
@@ -94,9 +105,25 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
       input.runtime.value?.modelId ?? input.activeConversation.value.model_config_id
     );
     setConversationModel(conversationId, targetModelID);
-    const updated = await updateConversationModelById(projectId, conversationId, targetModelID);
-    if (!updated) {
-      setConversationModel(conversationId, previousModel);
+    modelSwitchingConversationID.value = conversationId;
+    const pending = (async () => {
+      const updated = await updateConversationModelById(projectId, conversationId, targetModelID);
+      if (!updated) {
+        setConversationModel(conversationId, previousModel);
+      }
+      return updated;
+    })();
+    modelSwitchPromiseByConversationID.set(conversationId, pending);
+    try {
+      await pending;
+    } finally {
+      const currentPending = modelSwitchPromiseByConversationID.get(conversationId);
+      if (currentPending === pending) {
+        modelSwitchPromiseByConversationID.delete(conversationId);
+      }
+      if (modelSwitchingConversationID.value === conversationId) {
+        modelSwitchingConversationID.value = "";
+      }
     }
   }
   function changeInspectorTab(tab: InspectorTabKey): void {
@@ -123,6 +150,14 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     if (!hasAllowedModel) {
       setConversationError("当前项目未绑定可用模型，请先在项目配置中绑定模型");
       return;
+    }
+    const switchingPromise = modelSwitchPromiseByConversationID.get(conversation.id);
+    if (switchingPromise) {
+      const switched = await switchingPromise;
+      if (!switched) {
+        setConversationError("模型切换失败，请重试后再发送");
+        return;
+      }
     }
 
     const conversationId = conversation.id;
@@ -415,6 +450,7 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     startEditConversationName,
     stopExecution,
     switchWorkspace,
+    isSwitchingModel,
     updateDraft,
     updateMode,
     updateModel

@@ -177,6 +177,37 @@ describe("conversation stream routing", () => {
     expect(runtime.lastEventId).toBe("evt_stream_new");
   });
 
+  it("does not classify hook user_prompt_submit output delta as tool_call", () => {
+    attachSessionStream(conversationA);
+    expect(typeof onEvent).toBe("function");
+
+    onEvent?.({
+      type: "run_output_delta",
+      event_id: "evt_stream_hook_prompt",
+      session_id: conversationA.id,
+      run_id: "exec_stream_hook",
+      sequence: 1,
+      timestamp: "2026-02-24T00:00:00Z",
+      payload: {
+        event_type: "run_output_delta",
+        source: "hook_policy",
+        event: "user_prompt_submit",
+        call_id: "exec_stream_hook",
+        queue_index: 0,
+        trace_id: "tr_stream_hook"
+      }
+    });
+
+    expect(applyIncomingExecutionEventMock).toHaveBeenCalledTimes(1);
+    expect(applyIncomingExecutionEventMock).toHaveBeenCalledWith(
+      conversationA.id,
+      expect.objectContaining({
+        run_id: "exec_stream_hook",
+        type: "thinking_delta"
+      })
+    );
+  });
+
   it("detaches stream handle", () => {
     attachSessionStream(conversationA);
     expect(sessionStore.sessionStreams[conversationA.id]).toBeTruthy();

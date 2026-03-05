@@ -75,6 +75,13 @@ func normalizeRunEventVocabulary(raw string, fallback runtimecore.RunEventType) 
 		string(runtimecore.RunEventTypeRunFailed),
 		string(runtimecore.RunEventTypeRunCancelled):
 		return normalized
+	case string(RunEventTypeUserPromptSubmit):
+		return string(runtimecore.RunEventTypeRunQueued)
+	case string(RunEventTypePreToolUse),
+		string(RunEventTypePermissionRequest),
+		string(RunEventTypePostToolUse),
+		string(RunEventTypePostToolUseFailure):
+		return string(runtimecore.RunEventTypeRunOutputDelta)
 	case string(RunEventTypeMessageReceived):
 		return string(runtimecore.RunEventTypeRunQueued)
 	case string(RunEventTypeExecutionStarted):
@@ -95,6 +102,8 @@ func mapExecutionEventToRunEventType(event ExecutionEvent) runtimecore.RunEventT
 	switch eventType {
 	case RunEventTypeMessageReceived:
 		return runtimecore.RunEventTypeRunQueued
+	case RunEventTypeUserPromptSubmit:
+		return runtimecore.RunEventTypeRunQueued
 	case RunEventTypeExecutionStarted:
 		return runtimecore.RunEventTypeRunStarted
 	case RunEventTypeExecutionDone:
@@ -110,6 +119,10 @@ func mapExecutionEventToRunEventType(event ExecutionEvent) runtimecore.RunEventT
 		return runtimecore.RunEventTypeRunOutputDelta
 	case RunEventTypeToolCall,
 		RunEventTypeToolResult,
+		RunEventTypePreToolUse,
+		RunEventTypePermissionRequest,
+		RunEventTypePostToolUse,
+		RunEventTypePostToolUseFailure,
 		RunEventTypeDiffGenerated:
 		return runtimecore.RunEventTypeRunOutputDelta
 	default:

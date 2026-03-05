@@ -311,6 +311,7 @@ const props = withDefaults(
     draft: string;
     mode: ConversationMode;
     modelId: string;
+    isModelSwitching?: boolean;
     placeholder: string;
     composerSuggestions?: ComposerSuggestion[];
     composerSuggesting?: boolean;
@@ -321,6 +322,7 @@ const props = withDefaults(
     queuedMessages: () => [],
     composerSuggestions: () => [],
     composerSuggesting: false,
+    isModelSwitching: false,
     hasConfirmingExecution: false,
     pendingQuestions: () => []
   }
@@ -411,7 +413,15 @@ const activeSuggestionIndex = ref(0);
 const suggestionItemRefs = ref<Array<HTMLButtonElement | null>>([]);
 const showSuggestionPanel = computed(() => props.composerSuggestions.length > 0 || props.composerSuggesting);
 const shouldShowStopAction = computed(() => props.hasActiveExecution && props.draft.trim() === "");
-const isPrimaryActionDisabled = computed(() => (shouldShowStopAction.value ? !props.hasActiveExecution : !hasModelOptions.value));
+const isPrimaryActionDisabled = computed(() => {
+  if (shouldShowStopAction.value) {
+    return !props.hasActiveExecution;
+  }
+  if (!hasModelOptions.value) {
+    return true;
+  }
+  return props.isModelSwitching;
+});
 const primaryActionAriaLabel = computed(() => (shouldShowStopAction.value ? t("session.stop") : t("session.send")));
 const permissionModeOptions = computed<Array<{ id: ConversationMode; label: string; dangerous: boolean }>>(() => [
   { id: "default", label: t("session.mode.option.default"), dangerous: false },

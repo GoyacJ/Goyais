@@ -7,40 +7,67 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"goyais/services/hub/internal/agent/runtime/model"
 	"goyais/services/hub/internal/agent/runtime/model/codec"
 	"goyais/services/hub/internal/agent/runtime/model/providers"
 )
 
+const (
+	runtimeMetadataModelProvider = "model_provider"
+	runtimeMetadataModelEndpoint = "model_endpoint"
+	runtimeMetadataModelName     = "model_name"
+	runtimeMetadataModelAPIKey   = "model_api_key"
+	runtimeMetadataModelParams   = "model_params_json"
+	runtimeMetadataModelTimeout  = "model_timeout_ms"
+	runtimeMetadataMaxModelTurns = "max_model_turns"
+)
+
+type resolvedModelConfig struct {
+	ProviderName  string
+	Endpoint      string
+	ModelName     string
+	APIKey        string
+	Params        map[string]any
+	TimeoutMS     int
+	MaxModelTurns int
+}
+
 func executeWithConfiguredModel(ctx context.Context, req ExecuteRequest) (ExecuteResult, bool, error) {
-	providerName := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_AGENT_MODEL_PROVIDER")))
-	endpoint := strings.TrimSpace(os.Getenv("GOYAIS_AGENT_MODEL_ENDPOINT"))
-	modelName := strings.TrimSpace(os.Getenv("GOYAIS_AGENT_MODEL_NAME"))
-	apiKey := strings.TrimSpace(os.Getenv("GOYAIS_AGENT_MODEL_API_KEY"))
-	if providerName == "" || endpoint == "" {
-		return ExecuteResult{}, false, nil
+	config, configured := resolveModelConfigFromMetadata(req.Input.Metadata)
+	if !configured {
+		config, configured = resolveModelConfigFromEnv()
+	}
+	if !configured {
+		return ExecuteResult{}, true, model.ErrProviderMissing
 	}
 
 	var provider model.Provider
-	switch providerName {
+	client := defaultModelHTTPClient(config.TimeoutMS)
+	switch config.ProviderName {
 	case "openai", "openai-compatible", "openai_compatible":
 		provider = providers.NewOpenAI(providers.OpenAIConfig{
-			Endpoint: endpoint,
-			APIKey:   apiKey,
-			Model:    modelName,
+			Endpoint:   config.Endpoint,
+			APIKey:     config.APIKey,
+			Model:      config.ModelName,
+			Params:     cloneMapAny(config.Params),
+			HTTPClient: client,
 		})
 	case "google", "gemini":
 		provider = providers.NewGoogle(providers.GoogleConfig{
-			Endpoint: endpoint,
-			APIKey:   apiKey,
-			Model:    modelName,
+			Endpoint:   config.Endpoint,
+			APIKey:     config.APIKey,
+			Model:      config.ModelName,
+			HTTPClient: client,
 		})
 	default:
-		return ExecuteResult{}, false, nil
+		return ExecuteResult{}, true, fmt.Errorf("unsupported model provider %q", config.ProviderName)
 	}
 
 	loopResult, err := model.RunLoop(ctx, model.LoopRequest{
@@ -48,7 +75,7 @@ func executeWithConfiguredModel(ctx context.Context, req ExecuteRequest) (Execut
 		ToolInvoker:   defaultModelToolInvoker{},
 		SystemPrompt:  req.PromptContext.SystemPrompt,
 		UserInput:     req.Input.Text,
-		MaxModelTurns: readEnvInt("GOYAIS_AGENT_MAX_MODEL_TURNS", 8),
+		MaxModelTurns: config.MaxModelTurns,
 	})
 	if err != nil {
 		return ExecuteResult{}, true, err
@@ -58,6 +85,69 @@ func executeWithConfiguredModel(ctx context.Context, req ExecuteRequest) (Execut
 		Output:      strings.TrimSpace(loopResult.AssistantText),
 		UsageTokens: sumUsageTokens(loopResult.Usage),
 	}, true, nil
+}
+
+func resolveModelConfigFromMetadata(metadata map[string]string) (resolvedModelConfig, bool) {
+	if len(metadata) == 0 {
+		return resolvedModelConfig{}, false
+	}
+	providerName := strings.ToLower(strings.TrimSpace(metadata[runtimeMetadataModelProvider]))
+	endpoint := strings.TrimSpace(metadata[runtimeMetadataModelEndpoint])
+	if providerName == "" || endpoint == "" {
+		return resolvedModelConfig{}, false
+	}
+
+	params := decodeModelParamsJSON(metadata[runtimeMetadataModelParams])
+	return resolvedModelConfig{
+		ProviderName:  providerName,
+		Endpoint:      endpoint,
+		ModelName:     strings.TrimSpace(metadata[runtimeMetadataModelName]),
+		APIKey:        strings.TrimSpace(metadata[runtimeMetadataModelAPIKey]),
+		Params:        params,
+		TimeoutMS:     readMapInt(metadata, runtimeMetadataModelTimeout, 30000),
+		MaxModelTurns: readMapInt(metadata, runtimeMetadataMaxModelTurns, 8),
+	}, true
+}
+
+func resolveModelConfigFromEnv() (resolvedModelConfig, bool) {
+	providerName := strings.ToLower(strings.TrimSpace(os.Getenv("GOYAIS_AGENT_MODEL_PROVIDER")))
+	endpoint := strings.TrimSpace(os.Getenv("GOYAIS_AGENT_MODEL_ENDPOINT"))
+	if providerName == "" || endpoint == "" {
+		return resolvedModelConfig{}, false
+	}
+	return resolvedModelConfig{
+		ProviderName:  providerName,
+		Endpoint:      endpoint,
+		ModelName:     strings.TrimSpace(os.Getenv("GOYAIS_AGENT_MODEL_NAME")),
+		APIKey:        strings.TrimSpace(os.Getenv("GOYAIS_AGENT_MODEL_API_KEY")),
+		Params:        map[string]any{},
+		TimeoutMS:     readEnvInt("GOYAIS_AGENT_MODEL_TIMEOUT_MS", 30000),
+		MaxModelTurns: readEnvInt("GOYAIS_AGENT_MAX_MODEL_TURNS", 8),
+	}, true
+}
+
+func decodeModelParamsJSON(raw string) map[string]any {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return map[string]any{}
+	}
+	decoded := map[string]any{}
+	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
+		return map[string]any{}
+	}
+	return decoded
+}
+
+func readMapInt(source map[string]string, key string, fallback int) int {
+	value := strings.TrimSpace(source[key])
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }
 
 func readEnvInt(key string, fallback int) int {
@@ -70,6 +160,27 @@ func readEnvInt(key string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func defaultModelHTTPClient(timeoutMS int) *http.Client {
+	effectiveTimeoutMS := timeoutMS
+	if effectiveTimeoutMS <= 0 {
+		effectiveTimeoutMS = 30000
+	}
+	return &http.Client{
+		Timeout: time.Duration(effectiveTimeoutMS) * time.Millisecond,
+	}
+}
+
+func cloneMapAny(input map[string]any) map[string]any {
+	if len(input) == 0 {
+		return map[string]any{}
+	}
+	output := make(map[string]any, len(input))
+	for key, value := range input {
+		output[key] = value
+	}
+	return output
 }
 
 func sumUsageTokens(usage map[string]any) int {

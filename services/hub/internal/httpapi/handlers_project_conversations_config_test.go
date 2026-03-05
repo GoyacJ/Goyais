@@ -7,8 +7,10 @@ import (
 	"time"
 )
 
-func TestProjectConfigHandlerPutPurgesProjectConversationHistory(t *testing.T) {
+func TestProjectConfigHandlerPutSyncsConversationModelWithoutPurgingHistory(t *testing.T) {
 	state := NewAppState(nil)
+	state.runtimeService = &runtimeBridgeServiceStub{runID: "run_project_config_restart"}
+	state.runtimeEngine = &runtimeEngineSubscribeStub{}
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	workspaceID := localWorkspaceID
@@ -18,6 +20,8 @@ func TestProjectConfigHandlerPutPurgesProjectConversationHistory(t *testing.T) {
 	otherConversationID := "conv_other"
 	targetExecutionID := "exec_target"
 	otherExecutionID := "exec_other"
+	targetActiveExecutionID := targetExecutionID
+	otherActiveExecutionID := otherExecutionID
 
 	state.projects[targetProjectID] = Project{
 		ID:          targetProjectID,
@@ -50,6 +54,7 @@ func TestProjectConfigHandlerPutPurgesProjectConversationHistory(t *testing.T) {
 		Model: &ModelSpec{
 			Vendor:  ModelVendorOpenAI,
 			ModelID: "gpt-5.3",
+			BaseURL: "https://api.openai.com/v1",
 		},
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -64,6 +69,7 @@ func TestProjectConfigHandlerPutPurgesProjectConversationHistory(t *testing.T) {
 		Model: &ModelSpec{
 			Vendor:  ModelVendorOpenAI,
 			ModelID: "gpt-5.4",
+			BaseURL: "https://api.openai.com/v1",
 		},
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -78,6 +84,7 @@ func TestProjectConfigHandlerPutPurgesProjectConversationHistory(t *testing.T) {
 		Model: &ModelSpec{
 			Vendor:  ModelVendorOpenAI,
 			ModelID: "gpt-4.1",
+			BaseURL: "https://api.openai.com/v1",
 		},
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -105,26 +112,28 @@ func TestProjectConfigHandlerPutPurgesProjectConversationHistory(t *testing.T) {
 	}
 
 	state.conversations[targetConversationID] = Conversation{
-		ID:            targetConversationID,
-		WorkspaceID:   workspaceID,
-		ProjectID:     targetProjectID,
-		Name:          "Target Conversation",
-		QueueState:    QueueStateRunning,
-		DefaultMode:   PermissionModeDefault,
-		ModelConfigID: oldModelID,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:                targetConversationID,
+		WorkspaceID:       workspaceID,
+		ProjectID:         targetProjectID,
+		Name:              "Target Conversation",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     oldModelID,
+		ActiveExecutionID: &targetActiveExecutionID,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	state.conversations[otherConversationID] = Conversation{
-		ID:            otherConversationID,
-		WorkspaceID:   workspaceID,
-		ProjectID:     otherProjectID,
-		Name:          "Other Conversation",
-		QueueState:    QueueStateRunning,
-		DefaultMode:   PermissionModeDefault,
-		ModelConfigID: otherModelID,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:                otherConversationID,
+		WorkspaceID:       workspaceID,
+		ProjectID:         otherProjectID,
+		Name:              "Other Conversation",
+		QueueState:        QueueStateRunning,
+		DefaultMode:       PermissionModeDefault,
+		ModelConfigID:     otherModelID,
+		ActiveExecutionID: &otherActiveExecutionID,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 
 	state.conversationMessages[targetConversationID] = []ConversationMessage{{
@@ -190,6 +199,7 @@ func TestProjectConfigHandlerPutPurgesProjectConversationHistory(t *testing.T) {
 		ID:             targetExecutionID,
 		WorkspaceID:    workspaceID,
 		ConversationID: targetConversationID,
+		MessageID:      "msg_target",
 		State:          RunStateExecuting,
 		Mode:           PermissionModeDefault,
 		ModelID:        oldModelID,
@@ -200,6 +210,7 @@ func TestProjectConfigHandlerPutPurgesProjectConversationHistory(t *testing.T) {
 		ID:             otherExecutionID,
 		WorkspaceID:    workspaceID,
 		ConversationID: otherConversationID,
+		MessageID:      "msg_other",
 		State:          RunStateExecuting,
 		Mode:           PermissionModeDefault,
 		ModelID:        otherModelID,
@@ -233,51 +244,53 @@ func TestProjectConfigHandlerPutPurgesProjectConversationHistory(t *testing.T) {
 		t.Fatalf("expected updated default_model_config_id %s, got %s", newModelID, got)
 	}
 
-	if _, exists := state.conversations[targetConversationID]; exists {
-		t.Fatalf("expected target conversation removed")
+	targetConversation := state.conversations[targetConversationID]
+	if targetConversation.ModelConfigID != newModelID {
+		t.Fatalf("expected target conversation model_config_id %s, got %s", newModelID, targetConversation.ModelConfigID)
 	}
-	if _, exists := state.conversationMessages[targetConversationID]; exists {
-		t.Fatalf("expected target conversation messages removed")
+	if _, exists := state.conversationMessages[targetConversationID]; !exists {
+		t.Fatalf("expected target conversation messages preserved")
 	}
-	if _, exists := state.conversationSnapshots[targetConversationID]; exists {
-		t.Fatalf("expected target conversation snapshots removed")
+	if _, exists := state.conversationSnapshots[targetConversationID]; !exists {
+		t.Fatalf("expected target conversation snapshots preserved")
 	}
-	if _, exists := state.conversationExecutionOrder[targetConversationID]; exists {
-		t.Fatalf("expected target execution order removed")
+	if _, exists := state.conversationExecutionOrder[targetConversationID]; !exists {
+		t.Fatalf("expected target execution order preserved")
 	}
-	if _, exists := state.executionEvents[targetConversationID]; exists {
-		t.Fatalf("expected target execution events removed")
+	if _, exists := state.executions[targetExecutionID]; !exists {
+		t.Fatalf("expected target execution preserved")
 	}
-	if _, exists := state.conversationEventSeq[targetConversationID]; exists {
-		t.Fatalf("expected target event seq removed")
+	if _, exists := state.executionDiffs[targetExecutionID]; !exists {
+		t.Fatalf("expected target execution diff preserved")
 	}
-	if _, exists := state.conversationEventSubs[targetConversationID]; exists {
-		t.Fatalf("expected target subscribers removed")
-	}
-	if _, exists := state.executions[targetExecutionID]; exists {
-		t.Fatalf("expected target execution removed")
-	}
-	if _, exists := state.executionDiffs[targetExecutionID]; exists {
-		t.Fatalf("expected target execution diff removed")
+	if _, exists := state.conversationEventSubs[targetConversationID]; !exists {
+		t.Fatalf("expected target subscribers preserved")
 	}
 
-	if _, exists := state.conversations[otherConversationID]; !exists {
-		t.Fatalf("expected other project conversation preserved")
+	targetExecution := state.executions[targetExecutionID]
+	if targetExecution.ModelSnapshot.ConfigID != newModelID {
+		t.Fatalf("expected target execution model snapshot config %s, got %s", newModelID, targetExecution.ModelSnapshot.ConfigID)
 	}
-	if _, exists := state.executions[otherExecutionID]; !exists {
-		t.Fatalf("expected other project execution preserved")
+	if targetExecution.State != RunStatePending {
+		t.Fatalf("expected target execution pending after restart flow submit, got %s", targetExecution.State)
 	}
-	if _, exists := state.conversationEventSubs[otherConversationID]; !exists {
-		t.Fatalf("expected other project subscribers preserved")
+	if mappedRunID := strings.TrimSpace(state.executionRunIDs[targetExecutionID]); mappedRunID != "run_project_config_restart" {
+		t.Fatalf("expected target execution remapped run id, got %q", mappedRunID)
+	}
+
+	if state.conversations[otherConversationID].ModelConfigID != otherModelID {
+		t.Fatalf("expected other project conversation model preserved")
+	}
+	if _, exists := state.executionEvents[otherConversationID]; !exists {
+		t.Fatalf("expected other project events preserved")
 	}
 
 	select {
 	case _, ok := <-targetSub:
-		if ok {
-			t.Fatalf("expected target subscriber channel closed")
+		if !ok {
+			t.Fatalf("expected target subscriber channel to stay open")
 		}
-	case <-time.After(500 * time.Millisecond):
-		t.Fatalf("expected target subscriber channel to close")
+	default:
 	}
 }
 

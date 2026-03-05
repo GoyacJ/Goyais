@@ -22,13 +22,13 @@ func TestSessionRunRunnerRunPromptText(t *testing.T) {
 		CWD:    t.TempDir(),
 	})
 	if err != nil {
-		t.Fatalf("run prompt failed: %v", err)
+		t.Fatalf("expected runner to surface failure through stderr without returning error, got %v", err)
 	}
-	if got := stdout.String(); !strings.Contains(got, "Processed: hello") {
-		t.Fatalf("stdout = %q, want output chunk", got)
+	if got := stdout.String(); got != "" {
+		t.Fatalf("stdout should be empty, got %q", got)
 	}
-	if strings.TrimSpace(stderr.String()) != "" {
-		t.Fatalf("stderr should be empty, got %q", stderr.String())
+	if !strings.Contains(stderr.String(), "model provider is required") {
+		t.Fatalf("expected stderr to contain provider error, got %q", stderr.String())
 	}
 }
 
@@ -42,18 +42,15 @@ func TestSessionRunRunnerRunPromptStreamJSONProtocol(t *testing.T) {
 		OutputFormat: "stream-json",
 	})
 	if err != nil {
-		t.Fatalf("run prompt failed: %v", err)
+		t.Fatalf("expected stream-json runner to return nil and emit failed result frame, got %v", err)
 	}
 
 	output := stdout.String()
-	if !strings.Contains(output, `"type":"text"`) {
-		t.Fatalf("expected text stream frame, got %q", output)
-	}
 	if !strings.Contains(output, `"type":"result"`) {
 		t.Fatalf("expected result stream frame, got %q", output)
 	}
-	if !strings.Contains(output, `"status":"completed"`) {
-		t.Fatalf("expected completed status in result frame, got %q", output)
+	if !strings.Contains(output, `"status":"failed"`) {
+		t.Fatalf("expected failed status in result frame, got %q", output)
 	}
 }
 
@@ -100,7 +97,7 @@ func TestSessionRunRunnerControlAndStream(t *testing.T) {
 		Prompt:    "hello control",
 		CWD:       t.TempDir(),
 	}); err != nil {
-		t.Fatalf("submit run failed: %v", err)
+		t.Fatalf("expected submit run to return nil and keep failed state in stream replay, got %v", err)
 	}
 
 	if err := runner.ControlRun(context.Background(), RunControlRequest{
@@ -118,7 +115,7 @@ func TestSessionRunRunnerControlAndStream(t *testing.T) {
 	}, streamOut, io.Discard); err != nil {
 		t.Fatalf("stream session failed: %v", err)
 	}
-	if !strings.Contains(streamOut.String(), `"type":"text"`) {
-		t.Fatalf("expected replayed text frame, got %q", streamOut.String())
+	if !strings.Contains(streamOut.String(), `"status":"failed"`) {
+		t.Fatalf("expected replayed failed result frame, got %q", streamOut.String())
 	}
 }

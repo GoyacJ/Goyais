@@ -127,13 +127,11 @@ func (defaultExecutor) Execute(ctx context.Context, req ExecuteRequest) (Execute
 		return ExecuteResult{}, ctx.Err()
 	default:
 	}
-	if result, configured, err := executeWithConfiguredModel(ctx, req); configured {
-		return result, err
+	result, _, err := executeWithConfiguredModel(ctx, req)
+	if err != nil {
+		return ExecuteResult{}, err
 	}
-	return ExecuteResult{
-		Output:      "Processed: " + strings.TrimSpace(req.Input.Text),
-		UsageTokens: 0,
-	}, nil
+	return result, nil
 }
 
 // NewEngine constructs a loop engine with explicit execution dependency.

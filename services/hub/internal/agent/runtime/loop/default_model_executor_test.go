@@ -7,11 +7,13 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"goyais/services/hub/internal/agent/core"
+	"goyais/services/hub/internal/agent/runtime/model"
 )
 
 func TestDefaultExecutorFallbackWithoutModelEnv(t *testing.T) {
@@ -19,14 +21,14 @@ func TestDefaultExecutorFallbackWithoutModelEnv(t *testing.T) {
 	t.Setenv("GOYAIS_AGENT_MODEL_ENDPOINT", "")
 	executor := defaultExecutor{}
 
-	result, err := executor.Execute(context.Background(), ExecuteRequest{
+	_, err := executor.Execute(context.Background(), ExecuteRequest{
 		Input: core.UserInput{Text: "hello"},
 	})
-	if err != nil {
-		t.Fatalf("execute failed: %v", err)
+	if err == nil {
+		t.Fatal("expected execute to fail when provider is not configured")
 	}
-	if result.Output != "Processed: hello" {
-		t.Fatalf("unexpected fallback output %q", result.Output)
+	if !errors.Is(err, model.ErrProviderMissing) {
+		t.Fatalf("expected ErrProviderMissing, got %v", err)
 	}
 }
 
@@ -117,5 +119,77 @@ func TestDefaultExecutorOpenAIHandlesToolCallsWithoutHardFailure(t *testing.T) {
 	}
 	if result.Output != "final after tool" {
 		t.Fatalf("unexpected output %q", result.Output)
+	}
+}
+
+func TestDefaultExecutorUsesMetadataBeforeEnv(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"choices":[{"message":{"content":"metadata model output"}}],
+			"usage":{"prompt_tokens":1,"completion_tokens":2}
+		}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("GOYAIS_AGENT_MODEL_PROVIDER", "")
+	t.Setenv("GOYAIS_AGENT_MODEL_ENDPOINT", "")
+
+	executor := defaultExecutor{}
+	result, err := executor.Execute(context.Background(), ExecuteRequest{
+		Input: core.UserInput{
+			Text: "hello from metadata",
+			Metadata: map[string]string{
+				runtimeMetadataModelProvider: "openai-compatible",
+				runtimeMetadataModelEndpoint: server.URL,
+				runtimeMetadataModelName:     "gpt-metadata",
+				runtimeMetadataModelTimeout:  "45000",
+				runtimeMetadataMaxModelTurns: "6",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if result.Output != "metadata model output" {
+		t.Fatalf("unexpected model output %q", result.Output)
+	}
+	if result.UsageTokens != 3 {
+		t.Fatalf("unexpected usage tokens %d", result.UsageTokens)
+	}
+}
+
+func TestDefaultExecutorMetadataParamsApplied(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request failed: %v", err)
+		}
+		if got, _ := body["temperature"].(float64); got != 0.6 {
+			t.Fatalf("expected temperature from metadata params, got %#v", body["temperature"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"choices":[{"message":{"content":"ok"}}],
+			"usage":{"prompt_tokens":1,"completion_tokens":1}
+		}`))
+	}))
+	defer server.Close()
+
+	executor := defaultExecutor{}
+	_, err := executor.Execute(context.Background(), ExecuteRequest{
+		Input: core.UserInput{
+			Text: "hello params",
+			Metadata: map[string]string{
+				runtimeMetadataModelProvider: "openai-compatible",
+				runtimeMetadataModelEndpoint: server.URL,
+				runtimeMetadataModelName:     "gpt-metadata",
+				runtimeMetadataModelParams:   `{"temperature":0.6}`,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute failed: %v", err)
 	}
 }

@@ -355,6 +355,51 @@ describe("conversation store", () => {
     expect(assistantMessages).toHaveLength(1);
   });
 
+  it("does not append assistant message for execution_done without content", () => {
+    const runtime = ensureConversationRuntime(mockConversation, true);
+    runtime.messages.push({
+      id: "msg_user_empty_done",
+      session_id: mockConversation.id,
+      role: "user",
+      content: "empty done",
+      queue_index: 0,
+      created_at: new Date().toISOString()
+    });
+    runtime.executions.push({
+      id: "exec_done_empty",
+      workspace_id: "ws_local",
+      session_id: mockConversation.id,
+      message_id: "msg_user_empty_done",
+      state: "executing",
+      mode: "default",
+      model_id: "gpt-5.3",
+      mode_snapshot: "default",
+      model_snapshot: {
+        model_id: "gpt-5.3"
+      },
+      project_revision_snapshot: 0,
+      queue_index: 0,
+      trace_id: "tr_done_empty",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+
+    applyIncomingExecutionEvent(mockConversation.id, {
+      event_id: "evt_done_empty",
+      run_id: "exec_done_empty",
+      session_id: mockConversation.id,
+      trace_id: "tr_done_empty",
+      sequence: 10,
+      queue_index: 0,
+      type: "execution_done",
+      timestamp: new Date().toISOString(),
+      payload: {}
+    });
+
+    const assistantMessages = runtime.messages.filter((message) => message.role === "assistant");
+    expect(assistantMessages).toHaveLength(0);
+  });
+
   it("inserts terminal message by queue_index to keep message order stable", () => {
     const runtime = ensureConversationRuntime(mockConversation, true);
     runtime.messages.push(

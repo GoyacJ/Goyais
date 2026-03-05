@@ -90,6 +90,7 @@
             :draft="runtime?.draft ?? ''"
             :mode="runtime?.mode ?? 'default'"
             :model-id="activeModelId"
+            :is-model-switching="isSwitchingModel"
             :model-options="modelOptions"
             :placeholder="placeholder"
             :composer-suggestions="composerSuggestions"
@@ -241,6 +242,7 @@ const {
   exportConversation,
   exportPatch,
   importProjectDirectory,
+  isSwitchingModel,
   inspectorCollapsed,
   inspectorTabs,
   loginWorkspace,

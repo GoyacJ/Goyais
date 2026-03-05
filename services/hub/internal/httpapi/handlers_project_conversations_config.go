@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"sort"
 	"strings"
@@ -272,14 +273,15 @@ func ProjectConfigHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
-			purgeResult := purgeProjectConversations(state, projectID)
+			syncResult := syncProjectConversationsModelConfig(state, projectID, project.WorkspaceID, project.DefaultModelConfigID)
 			syncExecutionDomainBestEffort(state)
 			writeJSON(w, http.StatusOK, updatedConfig)
 			if state.authz != nil {
 				_ = state.authz.appendAudit(workspaceID, session.UserID, "project.write", "project_config", projectID, "success", map[string]any{
-					"operation":                 "update",
-					"purged_conversation_count": purgeResult.PurgedConversations,
-					"purged_execution_count":    purgeResult.PurgedExecutions,
+					"operation":                  "update",
+					"updated_conversation_count": syncResult.UpdatedConversations,
+					"restarted_execution_count":  syncResult.RestartedExecutions,
+					"updated_execution_count":    syncResult.UpdatedExecutions,
 				}, TraceIDFromContext(r.Context()))
 			}
 		default:
@@ -289,6 +291,149 @@ func ProjectConfigHandler(state *AppState) http.HandlerFunc {
 			})
 		}
 	}
+}
+
+type projectConversationModelSyncResult struct {
+	UpdatedConversations int
+	UpdatedExecutions    int
+	RestartedExecutions  int
+}
+
+func syncProjectConversationsModelConfig(
+	state *AppState,
+	projectID string,
+	workspaceID string,
+	defaultModelConfigID string,
+) projectConversationModelSyncResult {
+	normalizedProjectID := strings.TrimSpace(projectID)
+	normalizedWorkspaceID := strings.TrimSpace(workspaceID)
+	normalizedModelConfigID := strings.TrimSpace(defaultModelConfigID)
+	if state == nil || normalizedProjectID == "" || normalizedWorkspaceID == "" {
+		return projectConversationModelSyncResult{}
+	}
+
+	now := nowUTC()
+	result := projectConversationModelSyncResult{}
+	restartExecutionIDs := make([]string, 0, 4)
+
+	var selectedModelConfig ResourceConfig
+	hasSelectedModelConfig := false
+	if normalizedModelConfigID != "" {
+		item, exists, err := getWorkspaceEnabledModelConfigByID(state, normalizedWorkspaceID, normalizedModelConfigID)
+		if err == nil && exists && item.Model != nil {
+			selectedModelConfig = item
+			hasSelectedModelConfig = true
+		}
+	}
+
+	state.mu.Lock()
+	for conversationID, conversation := range state.conversations {
+		if conversation.ProjectID != normalizedProjectID {
+			continue
+		}
+		if conversation.ModelConfigID != normalizedModelConfigID {
+			conversation.ModelConfigID = normalizedModelConfigID
+			conversation.UpdatedAt = now
+			state.conversations[conversationID] = conversation
+			result.UpdatedConversations++
+		}
+
+		for executionID, execution := range state.executions {
+			if execution.ConversationID != conversationID {
+				continue
+			}
+			if execution.State == RunStateCompleted || execution.State == RunStateFailed || execution.State == RunStateCancelled {
+				continue
+			}
+			updated := applyLatestModelConfigToExecutionLocked(
+				state,
+				&execution,
+				normalizedWorkspaceID,
+				normalizedModelConfigID,
+				selectedModelConfig,
+				hasSelectedModelConfig,
+			)
+			if !updated {
+				continue
+			}
+			execution.UpdatedAt = now
+			state.executions[executionID] = execution
+			result.UpdatedExecutions++
+
+			if conversation.ActiveExecutionID != nil && strings.TrimSpace(*conversation.ActiveExecutionID) == executionID {
+				appendExecutionEventLocked(state, ExecutionEvent{
+					ExecutionID:    execution.ID,
+					ConversationID: execution.ConversationID,
+					TraceID:        execution.TraceID,
+					QueueIndex:     execution.QueueIndex,
+					Type:           RunEventTypeThinkingDelta,
+					Timestamp:      now,
+					Payload: map[string]any{
+						"stage":            "model_config_changed",
+						"source":           "project_config_update",
+						"model_config_id":  normalizedModelConfigID,
+						"restart_strategy": "cancel_and_resubmit",
+					},
+				})
+				if execution.State != RunStatePending {
+					execution.State = RunStatePending
+					execution.UpdatedAt = now
+					state.executions[executionID] = execution
+				}
+				restartExecutionIDs = append(restartExecutionIDs, executionID)
+			}
+		}
+	}
+	state.mu.Unlock()
+
+	for _, executionID := range restartExecutionIDs {
+		state.cancelExecutionBestEffort(context.Background(), executionID)
+		state.clearExecutionRuntimeMapping(executionID)
+		state.submitExecutionBestEffort(context.Background(), executionID)
+	}
+
+	result.RestartedExecutions = len(restartExecutionIDs)
+	return result
+}
+
+func applyLatestModelConfigToExecutionLocked(
+	state *AppState,
+	execution *Execution,
+	workspaceID string,
+	modelConfigID string,
+	selectedModelConfig ResourceConfig,
+	hasSelectedModelConfig bool,
+) bool {
+	if state == nil || execution == nil {
+		return false
+	}
+	normalizedModelConfigID := strings.TrimSpace(modelConfigID)
+	if normalizedModelConfigID == "" {
+		return false
+	}
+
+	modelConfig := selectedModelConfig
+	if !hasSelectedModelConfig {
+		item, exists, err := getWorkspaceEnabledModelConfigByID(state, workspaceID, normalizedModelConfigID)
+		if err != nil || !exists || item.Model == nil {
+			return false
+		}
+		modelConfig = item
+	}
+
+	resolvedModelID, resolvedSnapshot := resolveExecutionModelSnapshot(state, workspaceID, modelConfig)
+	if strings.TrimSpace(resolvedModelID) == "" {
+		return false
+	}
+
+	execution.ModelID = resolvedModelID
+	execution.ModelSnapshot = resolvedSnapshot
+	if execution.ResourceProfileSnapshot == nil {
+		execution.ResourceProfileSnapshot = &ExecutionResourceProfile{}
+	}
+	execution.ResourceProfileSnapshot.ModelConfigID = normalizedModelConfigID
+	execution.ResourceProfileSnapshot.ModelID = resolvedModelID
+	return true
 }
 
 func containsString(items []string, target string) bool {

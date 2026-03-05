@@ -47,6 +47,19 @@ describe("run trace summarize", () => {
     expect(intent.value).toBe("pnpm lint");
   });
 
+  it("ignores hook policy payload for operation intent and summary", () => {
+    const payload = {
+      source: "hook_policy",
+      event: "user_prompt_submit",
+      decision: {
+        action: "allow"
+      }
+    };
+
+    expect(extractOperationIntent(payload)).toEqual({ kind: "none", value: "" });
+    expect(extractOperationSummary(payload)).toBe("");
+  });
+
   it("extracts result summary from error when failed", () => {
     const summary = extractResultSummary(
       {

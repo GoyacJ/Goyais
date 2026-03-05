@@ -73,14 +73,14 @@ func TestRunnerRunPromptUsesSessionRunFallback(t *testing.T) {
 		Prompt: "hello session",
 		CWD:    t.TempDir(),
 	}); err != nil {
-		t.Fatalf("session fallback run failed: %v", err)
+		t.Fatalf("expected session fallback to return nil and report failure via stderr, got %v", err)
 	}
 
-	if !strings.Contains(stdout.String(), "Processed: hello session") {
-		t.Fatalf("unexpected stdout %q", stdout.String())
+	if strings.TrimSpace(stdout.String()) != "" {
+		t.Fatalf("stdout should be empty, got %q", stdout.String())
 	}
-	if strings.TrimSpace(stderr.String()) != "" {
-		t.Fatalf("stderr should be empty, got %q", stderr.String())
+	if !strings.Contains(stderr.String(), "model provider is required") {
+		t.Fatalf("expected provider error in stderr, got %q", stderr.String())
 	}
 }
 
@@ -96,14 +96,14 @@ func TestRunnerRunPromptUsesSessionRunFallbackStreamJSON(t *testing.T) {
 		CWD:          t.TempDir(),
 		OutputFormat: "stream-json",
 	}); err != nil {
-		t.Fatalf("session stream-json run failed: %v", err)
+		t.Fatalf("expected session stream-json fallback to return nil and emit failed result frame, got %v", err)
 	}
 
 	output := stdout.String()
-	if !strings.Contains(output, `"type":"text"`) {
-		t.Fatalf("expected text stream frame, got %q", output)
-	}
 	if !strings.Contains(output, `"type":"result"`) {
 		t.Fatalf("expected result stream frame, got %q", output)
+	}
+	if !strings.Contains(output, `"status":"failed"`) {
+		t.Fatalf("expected failed stream result frame, got %q", output)
 	}
 }

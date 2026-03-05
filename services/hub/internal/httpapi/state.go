@@ -1,11 +1,13 @@
 package httpapi
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"time"
 
 	agenthttpapi "goyais/services/hub/internal/agent/adapters/httpapi"
+	agentcore "goyais/services/hub/internal/agent/core"
 	"goyais/services/hub/internal/agent/runtime/loop"
 )
 
@@ -19,23 +21,26 @@ type AppState struct {
 	workspaces map[string]Workspace
 	sessions   map[string]Session
 
-	projects                   map[string]Project
-	projectConfigs             map[string]ProjectConfig
-	conversations              map[string]Conversation
-	conversationMessages       map[string][]ConversationMessage
-	conversationSnapshots      map[string][]ConversationSnapshot
-	conversationExecutionOrder map[string][]string
-	executions                 map[string]Execution
-	pendingUserQuestions       map[string]pendingUserQuestion
-	executionEvents            map[string][]ExecutionEvent
-	executionDiffs             map[string][]DiffItem
-	hookPolicies               map[string]HookPolicy
-	hookExecutionRecords       map[string][]HookExecutionRecord
-	conversationChangeLedgers  map[string]*ConversationChangeLedger
-	conversationEventSeq       map[string]int
-	conversationEventSubs      map[string]map[string]chan ExecutionEvent
-	executionRunIDs            map[string]string
-	conversationSessionIDs     map[string]string
+	projects                      map[string]Project
+	projectConfigs                map[string]ProjectConfig
+	conversations                 map[string]Conversation
+	conversationMessages          map[string][]ConversationMessage
+	conversationSnapshots         map[string][]ConversationSnapshot
+	conversationExecutionOrder    map[string][]string
+	executions                    map[string]Execution
+	pendingUserQuestions          map[string]pendingUserQuestion
+	executionEvents               map[string][]ExecutionEvent
+	executionDiffs                map[string][]DiffItem
+	hookPolicies                  map[string]HookPolicy
+	hookExecutionRecords          map[string][]HookExecutionRecord
+	conversationChangeLedgers     map[string]*ConversationChangeLedger
+	conversationEventSeq          map[string]int
+	conversationEventSubs         map[string]map[string]chan ExecutionEvent
+	executionRunIDs               map[string]string
+	executionOutputBuffers        map[string]string
+	conversationSessionIDs        map[string]string
+	conversationProjectionCancels map[string]context.CancelFunc
+	conversationProjectionLastSeq map[string]int64
 
 	resources             map[string]Resource
 	resourceConfigs       map[string]ResourceConfig
@@ -48,40 +53,44 @@ type AppState struct {
 	adminRoles map[Role]AdminRole
 	adminAudit []AdminAuditEvent
 
+	runtimeEngine  agentcore.Engine
 	runtimeService runtimeRunBridgeService
 }
 
 func NewAppState(store *authzStore) *AppState {
 	state := &AppState{
-		authz:                      store,
-		workspaces:                 map[string]Workspace{},
-		sessions:                   map[string]Session{},
-		projects:                   map[string]Project{},
-		projectConfigs:             map[string]ProjectConfig{},
-		conversations:              map[string]Conversation{},
-		conversationMessages:       map[string][]ConversationMessage{},
-		conversationSnapshots:      map[string][]ConversationSnapshot{},
-		conversationExecutionOrder: map[string][]string{},
-		executions:                 map[string]Execution{},
-		pendingUserQuestions:       map[string]pendingUserQuestion{},
-		executionEvents:            map[string][]ExecutionEvent{},
-		executionDiffs:             map[string][]DiffItem{},
-		hookPolicies:               map[string]HookPolicy{},
-		hookExecutionRecords:       map[string][]HookExecutionRecord{},
-		conversationChangeLedgers:  map[string]*ConversationChangeLedger{},
-		conversationEventSeq:       map[string]int{},
-		conversationEventSubs:      map[string]map[string]chan ExecutionEvent{},
-		executionRunIDs:            map[string]string{},
-		conversationSessionIDs:     map[string]string{},
-		resources:                  map[string]Resource{},
-		resourceConfigs:            map[string]ResourceConfig{},
-		resourceTestLogs:           []ResourceTestLog{},
-		workspaceCatalogRoots:      map[string]CatalogRootResponse{},
-		modelCatalogCache:          map[string]modelCatalogCacheEntry{},
-		shareRequests:              map[string]ShareRequest{},
-		adminUsers:                 map[string]AdminUser{},
-		adminRoles:                 map[Role]AdminRole{},
-		adminAudit:                 []AdminAuditEvent{},
+		authz:                         store,
+		workspaces:                    map[string]Workspace{},
+		sessions:                      map[string]Session{},
+		projects:                      map[string]Project{},
+		projectConfigs:                map[string]ProjectConfig{},
+		conversations:                 map[string]Conversation{},
+		conversationMessages:          map[string][]ConversationMessage{},
+		conversationSnapshots:         map[string][]ConversationSnapshot{},
+		conversationExecutionOrder:    map[string][]string{},
+		executions:                    map[string]Execution{},
+		pendingUserQuestions:          map[string]pendingUserQuestion{},
+		executionEvents:               map[string][]ExecutionEvent{},
+		executionDiffs:                map[string][]DiffItem{},
+		hookPolicies:                  map[string]HookPolicy{},
+		hookExecutionRecords:          map[string][]HookExecutionRecord{},
+		conversationChangeLedgers:     map[string]*ConversationChangeLedger{},
+		conversationEventSeq:          map[string]int{},
+		conversationEventSubs:         map[string]map[string]chan ExecutionEvent{},
+		executionRunIDs:               map[string]string{},
+		executionOutputBuffers:        map[string]string{},
+		conversationSessionIDs:        map[string]string{},
+		conversationProjectionCancels: map[string]context.CancelFunc{},
+		conversationProjectionLastSeq: map[string]int64{},
+		resources:                     map[string]Resource{},
+		resourceConfigs:               map[string]ResourceConfig{},
+		resourceTestLogs:              []ResourceTestLog{},
+		workspaceCatalogRoots:         map[string]CatalogRootResponse{},
+		modelCatalogCache:             map[string]modelCatalogCacheEntry{},
+		shareRequests:                 map[string]ShareRequest{},
+		adminUsers:                    map[string]AdminUser{},
+		adminRoles:                    map[Role]AdminRole{},
+		adminAudit:                    []AdminAuditEvent{},
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -95,7 +104,9 @@ func NewAppState(store *authzStore) *AppState {
 		}
 		state.hydrateExecutionDomainFromStore()
 	}
-	state.runtimeService = agenthttpapi.NewService(loop.NewEngine(nil))
+	engine := loop.NewEngine(nil)
+	state.runtimeEngine = engine
+	state.runtimeService = agenthttpapi.NewService(engine)
 
 	state.adminRoles = defaultRoles()
 	state.adminUsers["u_local_admin"] = AdminUser{

@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sort"
@@ -30,6 +32,15 @@ func TestCommandsBehavior_AllLeafHandlersExecute(t *testing.T) {
 	commands.ResetRuntimeForTests()
 	t.Setenv("GOYAIS_CLAUDE_DESKTOP_CONFIG", fixtures.claudeDesktopConfigPath)
 	t.Setenv("GOYAIS_UPDATE_TEST_MODE", "up-to-date")
+	modelServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+	}))
+	defer modelServer.Close()
+	t.Setenv("GOYAIS_AGENT_MODEL_PROVIDER", "openai")
+	t.Setenv("GOYAIS_AGENT_MODEL_ENDPOINT", modelServer.URL)
+	t.Setenv("GOYAIS_AGENT_MODEL_NAME", "gpt-test")
+	t.Setenv("GOYAIS_AGENT_MODEL_API_KEY", "test-key")
 
 	testCases := []commandSuccessCase{
 		{path: "config set", args: []string{"config", "set", "alpha", "beta", "--cwd", workdir}, expectStdoutSub: "Set alpha to beta"},

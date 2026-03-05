@@ -275,12 +275,13 @@ func TestAppRunPrintUsesSessionRunRunner(t *testing.T) {
 	prompt := "what is 2+2? return only number"
 	code := app.Run(context.Background(), []string{"--print", prompt})
 	if code != 0 {
-		t.Fatalf("expected print mode exit 0, got %d (%s)", code, stderr.String())
+		t.Fatalf("expected print mode exit 0 while surfacing provider failure in stderr, got %d (%s)", code, stderr.String())
 	}
-
-	got := strings.TrimSpace(stdout.String())
-	if got == "" {
-		t.Fatalf("expected non-empty output")
+	if strings.TrimSpace(stdout.String()) != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "model provider is required") {
+		t.Fatalf("expected provider error in stderr, got %q", stderr.String())
 	}
 }
 

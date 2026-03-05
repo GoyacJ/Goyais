@@ -131,6 +131,36 @@ describe("run trace present", () => {
     expect(traces[0]?.steps).toHaveLength(2);
   });
 
+  it("hides hook policy thinking noise from trace steps", () => {
+    const traces = buildRunTraceViewModelData(
+      [
+        {
+          event_id: "evt_present_hook_noise",
+          run_id: "exec_present_1",
+          session_id: "conv_present_1",
+          trace_id: "tr_present_1",
+          sequence: 0,
+          queue_index: 0,
+          type: "thinking_delta",
+          timestamp: "2026-02-24T00:00:00Z",
+          payload: {
+            stage: "other",
+            source: "hook_policy",
+            event: "user_prompt_submit",
+            delta: "processing"
+          }
+        },
+        ...events
+      ],
+      [baseExecution],
+      "zh-CN",
+      new Date("2026-02-24T00:00:03Z")
+    );
+
+    expect(traces[0]?.steps.some((step) => step.summary.includes("user_prompt_submit"))).toBe(false);
+    expect(traces[0]?.steps).toHaveLength(2);
+  });
+
   it("maps summary tone by execution state and trace signals", () => {
     const completedExecution: Run = {
       ...baseExecution,

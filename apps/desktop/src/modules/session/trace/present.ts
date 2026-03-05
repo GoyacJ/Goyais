@@ -566,6 +566,9 @@ function isMeaningfulThinkingEvent(event: NormalizedTraceEvent): boolean {
   if (event.type !== "thinking_delta") {
     return true;
   }
+  if (isHookNoiseEvent(event)) {
+    return false;
+  }
 
   if (event.stage === "model_call" || event.stage === "assistant_output") {
     return event.reasoningSentence !== "";
@@ -583,6 +586,18 @@ function isMeaningfulThinkingEvent(event: NormalizedTraceEvent): boolean {
     return true;
   }
   return event.reasoningSentence !== "";
+}
+
+function isHookNoiseEvent(event: NormalizedTraceEvent): boolean {
+  const source = String(event.payload.source ?? "").trim().toLowerCase();
+  if (source === "hook_policy") {
+    return true;
+  }
+  const hookEvent = String(event.payload.event ?? "").trim().toLowerCase();
+  if (hookEvent === "") {
+    return false;
+  }
+  return hookEvent.startsWith("user_prompt_") || hookEvent.endsWith("_tool_use") || hookEvent === "permission_request";
 }
 
 function formatRunningPrimary(

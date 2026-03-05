@@ -170,6 +170,39 @@ describe("main screen actions - auto conversation naming", () => {
     expect(projectStoreMocks.renameConversationById).toHaveBeenCalledWith(project.id, conversation.id, "first mess");
   });
 
+  it("waits for model switch confirmation before sending", async () => {
+    conversationStoreMocks.submitConversationMessage.mockResolvedValue(undefined);
+    let resolveModelUpdate: ((value: boolean) => void) | undefined;
+    projectStoreMocks.updateConversationModelById.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveModelUpdate = resolve;
+      })
+    );
+
+    const { actions } = createActionsContext({
+      conversationName: "新会话 3",
+      draft: "send after switch",
+      modelOptions: [
+        { value: "rc_model_1", label: "rc_model_1" },
+        { value: "rc_model_2", label: "rc_model_2" }
+      ]
+    });
+
+    const updatePromise = actions.updateModel("rc_model_2");
+    expect(actions.isSwitchingModel.value).toBe(true);
+
+    const sendPromise = actions.sendMessage();
+    await Promise.resolve();
+    expect(conversationStoreMocks.submitConversationMessage).not.toHaveBeenCalled();
+
+    resolveModelUpdate?.(true);
+    await updatePromise;
+    await sendPromise;
+
+    expect(conversationStoreMocks.submitConversationMessage).toHaveBeenCalledTimes(1);
+    expect(actions.isSwitchingModel.value).toBe(false);
+  });
+
   it("keeps manual rename editing flow available", async () => {
     const { actions, inputRefs, project, conversation } = createActionsContext({
       conversationName: "已有名称",
@@ -334,6 +367,7 @@ function createActionsContext(input: {
   draft: string;
   runtimeMessages?: SessionMessage[];
   runtimeExecutions?: Run[];
+  modelOptions?: Array<{ value: string; label: string }>;
 }) {
   const conversation = createConversation(input.conversationName);
   const project = createProject();
@@ -361,7 +395,7 @@ function createActionsContext(input: {
     activeConversation: computed(() => activeConversationRef.value),
     activeProject: computed(() => activeProjectRef.value),
     runtime: computed(() => runtimeRef.value),
-    modelOptions: computed(() => [{ value: "rc_model_1", label: "rc_model_1" }]),
+    modelOptions: computed(() => input.modelOptions ?? [{ value: "rc_model_1", label: "rc_model_1" }]),
     composerCatalogRevision: computed(() => "rev_test"),
     inspectorCollapsed: inputRefs.inspectorCollapsed,
     editingConversationName: inputRefs.editingConversationName,

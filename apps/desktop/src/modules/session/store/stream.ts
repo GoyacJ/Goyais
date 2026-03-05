@@ -228,6 +228,19 @@ function mapRunEventToExecutionEvent(
 }
 
 function resolveExecutionTypeForRunOutputDelta(payload: Record<string, unknown>): RunEventType {
+  const source = asString(payload.source).toLowerCase();
+  const hookEvent = asString(payload.event).toLowerCase();
+  if (
+    source === "hook_policy" ||
+    hookEvent === "user_prompt_submit" ||
+    hookEvent === "pre_tool_use" ||
+    hookEvent === "permission_request" ||
+    hookEvent === "post_tool_use" ||
+    hookEvent === "post_tool_use_failure"
+  ) {
+    return "thinking_delta";
+  }
+
   const explicitEventType = asString(payload.event_type);
   if (
     explicitEventType === "change_set_updated" ||
@@ -240,14 +253,16 @@ function resolveExecutionTypeForRunOutputDelta(payload: Record<string, unknown>)
   if (Array.isArray(payload.diff)) {
     return "diff_generated";
   }
-  if (asString(payload.call_id) !== "") {
+  const callID = asString(payload.call_id);
+  const hasToolName = asString(payload.name) !== "";
+  const hasToolInput = payload.input !== undefined;
+  if (callID !== "" && (hasToolName || hasToolInput)) {
     if (payload.output !== undefined || typeof payload.ok === "boolean") {
       return "tool_result";
     }
     return "tool_call";
   }
 
-  const hasToolName = asString(payload.name) !== "";
   if (hasToolName && payload.output !== undefined) {
     return "tool_result";
   }

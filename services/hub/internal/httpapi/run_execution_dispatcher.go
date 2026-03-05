@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	agenthttpapi "goyais/services/hub/internal/agent/adapters/httpapi"
 )
@@ -31,7 +32,21 @@ type executionSubmitContext struct {
 	WorkingDir     string
 	Prompt         string
 	SessionID      string
+	RuntimeModel   runtimeModelConfig
 }
+
+const (
+	runtimeMetadataRunID         = "run_id"
+	runtimeMetadataSessionID     = "session_id"
+	runtimeMetadataWorkspaceID   = "workspace_id"
+	runtimeMetadataModelProvider = "model_provider"
+	runtimeMetadataModelEndpoint = "model_endpoint"
+	runtimeMetadataModelName     = "model_name"
+	runtimeMetadataModelAPIKey   = "model_api_key"
+	runtimeMetadataModelParams   = "model_params_json"
+	runtimeMetadataModelTimeout  = "model_timeout_ms"
+	runtimeMetadataMaxModelTurns = "max_model_turns"
+)
 
 func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID string) {
 	normalizedExecutionID := strings.TrimSpace(executionID)
@@ -41,6 +56,7 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 
 	service := s.runtimeRunService()
 	if service == nil {
+		s.failExecutionAndAdvanceQueue(normalizedExecutionID, "runtime_service_unavailable", "runtime_submit", nil)
 		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.submit", "error")
 		return
 	}
@@ -52,6 +68,7 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 
 	submitCtx, err := s.loadExecutionSubmitContext(normalizedExecutionID)
 	if err != nil {
+		s.failExecutionAndAdvanceQueue(normalizedExecutionID, "submit_context_missing", "runtime_submit", err)
 		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.submit", "error")
 		return
 	}
@@ -63,11 +80,13 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 			WorkingDir:  submitCtx.WorkingDir,
 		})
 		if startErr != nil {
+			s.failExecutionAndAdvanceQueue(normalizedExecutionID, "start_session_failed", "runtime_submit", startErr)
 			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.submit", "error")
 			return
 		}
 		sessionID = strings.TrimSpace(started.SessionID)
 		if sessionID == "" {
+			s.failExecutionAndAdvanceQueue(normalizedExecutionID, "session_id_empty", "runtime_submit", nil)
 			s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.submit", "error")
 			return
 		}
@@ -77,23 +96,26 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 	submitResp, submitErr := service.Submit(ctx, agenthttpapi.SubmitRequest{
 		SessionID: sessionID,
 		Input:     submitCtx.Prompt,
-		Metadata: map[string]string{
-			"run_id":    submitCtx.ExecutionID,
-			"session_id": submitCtx.ConversationID,
-			"workspace_id":    submitCtx.WorkspaceID,
-		},
+		Metadata:  buildRuntimeSubmitMetadata(submitCtx),
 	})
 	if submitErr != nil {
+		s.failExecutionAndAdvanceQueue(normalizedExecutionID, "submit_failed", "runtime_submit", submitErr)
 		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.submit", "error")
 		return
 	}
 	runID := strings.TrimSpace(submitResp.RunID)
 	if runID == "" {
+		s.failExecutionAndAdvanceQueue(normalizedExecutionID, "run_id_empty", "runtime_submit", nil)
 		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.submit", "error")
 		return
 	}
 
 	s.bindExecutionRunID(submitCtx.ExecutionID, runID)
+	if projectionErr := s.ensureConversationProjection(submitCtx.ConversationID, sessionID); projectionErr != nil {
+		s.failExecutionAndAdvanceQueue(normalizedExecutionID, "projection_subscribe_failed", "runtime_projection", projectionErr)
+		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.submit", "error")
+		return
+	}
 	s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.submit", "success")
 }
 
@@ -255,6 +277,11 @@ func (s *AppState) loadExecutionSubmitContext(executionID string) (executionSubm
 		workingDir = "."
 	}
 
+	runtimeModel, runtimeModelErr := resolveRuntimeModelConfigForExecution(s, execution)
+	if runtimeModelErr != nil {
+		return executionSubmitContext{}, runtimeModelErr
+	}
+
 	return executionSubmitContext{
 		ExecutionID:    normalizedExecutionID,
 		ConversationID: conversation.ID,
@@ -262,7 +289,30 @@ func (s *AppState) loadExecutionSubmitContext(executionID string) (executionSubm
 		WorkingDir:     workingDir,
 		Prompt:         prompt,
 		SessionID:      sessionID,
+		RuntimeModel:   runtimeModel,
 	}, nil
+}
+
+func buildRuntimeSubmitMetadata(submitCtx executionSubmitContext) map[string]string {
+	metadata := map[string]string{
+		runtimeMetadataRunID:         strings.TrimSpace(submitCtx.ExecutionID),
+		runtimeMetadataSessionID:     strings.TrimSpace(submitCtx.ConversationID),
+		runtimeMetadataWorkspaceID:   strings.TrimSpace(submitCtx.WorkspaceID),
+		runtimeMetadataModelProvider: strings.TrimSpace(submitCtx.RuntimeModel.Provider),
+		runtimeMetadataModelEndpoint: strings.TrimSpace(submitCtx.RuntimeModel.Endpoint),
+		runtimeMetadataModelName:     strings.TrimSpace(submitCtx.RuntimeModel.ModelName),
+		runtimeMetadataModelAPIKey:   strings.TrimSpace(submitCtx.RuntimeModel.APIKey),
+	}
+	if paramsJSON := strings.TrimSpace(submitCtx.RuntimeModel.ParamsJSON); paramsJSON != "" {
+		metadata[runtimeMetadataModelParams] = paramsJSON
+	}
+	if submitCtx.RuntimeModel.TimeoutMS > 0 {
+		metadata[runtimeMetadataModelTimeout] = fmt.Sprintf("%d", submitCtx.RuntimeModel.TimeoutMS)
+	}
+	if submitCtx.RuntimeModel.MaxModelTurns > 0 {
+		metadata[runtimeMetadataMaxModelTurns] = fmt.Sprintf("%d", submitCtx.RuntimeModel.MaxModelTurns)
+	}
+	return metadata
 }
 
 func (s *AppState) appendExecutionRuntimeAudit(executionID string, action string, result string) {
@@ -282,4 +332,80 @@ func (s *AppState) appendExecutionRuntimeAudit(executionID string, action string
 		Result:   normalizedResult,
 		TraceID:  GenerateTraceID(),
 	})
+}
+
+func (s *AppState) failExecutionAndAdvanceQueue(
+	executionID string,
+	reason string,
+	source string,
+	cause error,
+) {
+	normalizedExecutionID := strings.TrimSpace(executionID)
+	normalizedReason := strings.TrimSpace(reason)
+	normalizedSource := strings.TrimSpace(source)
+	if s == nil || normalizedExecutionID == "" {
+		return
+	}
+	if normalizedReason == "" {
+		normalizedReason = "runtime_submit_failed"
+	}
+	if normalizedSource == "" {
+		normalizedSource = "runtime_submit"
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	message := normalizedReason
+	if cause != nil {
+		if causeMessage := strings.TrimSpace(cause.Error()); causeMessage != "" {
+			message = causeMessage
+		}
+	}
+
+	nextExecutionToSubmit := ""
+	s.mu.Lock()
+	execution, exists := s.executions[normalizedExecutionID]
+	if !exists {
+		s.mu.Unlock()
+		return
+	}
+	if execution.State == RunStateCompleted || execution.State == RunStateFailed || execution.State == RunStateCancelled {
+		s.mu.Unlock()
+		return
+	}
+	execution.State = RunStateFailed
+	execution.UpdatedAt = now
+	s.executions[execution.ID] = execution
+	appendExecutionEventLocked(s, ExecutionEvent{
+		ExecutionID:    execution.ID,
+		ConversationID: execution.ConversationID,
+		TraceID:        execution.TraceID,
+		QueueIndex:     execution.QueueIndex,
+		Type:           RunEventTypeExecutionError,
+		Timestamp:      now,
+		Payload: map[string]any{
+			"message": message,
+			"reason":  normalizedReason,
+			"source":  normalizedSource,
+		},
+	})
+	conversation, exists := s.conversations[execution.ConversationID]
+	if exists && conversation.ActiveExecutionID != nil && strings.TrimSpace(*conversation.ActiveExecutionID) == execution.ID {
+		conversation.ActiveExecutionID = nil
+		nextID := startNextQueuedExecutionLocked(s, execution.ConversationID)
+		if nextID == "" {
+			conversation.QueueState = QueueStateIdle
+		} else {
+			conversation.ActiveExecutionID = &nextID
+			conversation.QueueState = QueueStateRunning
+			nextExecutionToSubmit = nextID
+		}
+		conversation.UpdatedAt = now
+		s.conversations[execution.ConversationID] = conversation
+	}
+	s.mu.Unlock()
+
+	syncExecutionDomainBestEffort(s)
+	if nextExecutionToSubmit != "" {
+		s.submitExecutionBestEffort(context.Background(), nextExecutionToSubmit)
+	}
 }

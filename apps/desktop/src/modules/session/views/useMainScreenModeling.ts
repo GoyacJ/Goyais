@@ -68,9 +68,11 @@ export function useMainScreenModeling(input: MainScreenModelingInput) {
   });
 
   const activeModelId = computed(() => {
-    const runtimeModelID = resolveSemanticModelID(
-      input.runtime.value?.modelId ?? input.activeConversation.value?.model_config_id ?? ""
-    );
+    const conversationModelID = resolveSemanticModelID(input.activeConversation.value?.model_config_id ?? "");
+    if (conversationModelID !== "" && modelOptions.value.some((item) => item.value === conversationModelID)) {
+      return conversationModelID;
+    }
+    const runtimeModelID = resolveSemanticModelID(input.runtime.value?.modelId ?? "");
     if (runtimeModelID !== "" && modelOptions.value.some((item) => item.value === runtimeModelID)) {
       return runtimeModelID;
     }

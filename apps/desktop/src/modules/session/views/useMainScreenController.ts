@@ -43,7 +43,7 @@ import {
 import { useI18n } from "@/shared/i18n";
 import { authStore } from "@/shared/stores/authStore";
 import { useWorkspaceStatusSync } from "@/shared/stores/workspaceStatusStore";
-import { setConversationError } from "@/modules/session/store";
+import { setConversationError, setConversationModel } from "@/modules/session/store";
 import type {
   ChangeSetCapability,
   ComposerCatalog,
@@ -715,6 +715,24 @@ export function useMainScreenController() {
   onUnmounted(() => {
     streamCoordinator.clearStreams();
   });
+
+  watch(
+    () => ({
+      conversationID: activeConversation.value?.id ?? "",
+      conversationModelID: activeConversation.value?.model_config_id ?? ""
+    }),
+    ({ conversationID, conversationModelID }) => {
+      const runtimeModelID = runtime.value?.modelId ?? "";
+      if (conversationID === "") {
+        return;
+      }
+      if (conversationModelID.trim() === "" || conversationModelID.trim() === runtimeModelID.trim()) {
+        return;
+      }
+      setConversationModel(conversationID, conversationModelID);
+    },
+    { immediate: true }
+  );
 
   watch(
     () => projectStore.activeProjectId,

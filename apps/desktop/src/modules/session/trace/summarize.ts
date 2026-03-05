@@ -19,6 +19,9 @@ const IGNORED_SCALAR_KEYS: ReadonlySet<string> = new Set([
   "call_id",
   "risk_level",
   "source",
+  "event",
+  "policy_id",
+  "decision",
   "ok",
   "stage",
   "turn",
@@ -72,6 +75,10 @@ export type OperationIntent = {
 };
 
 export function extractOperationIntent(payload: Record<string, unknown>): OperationIntent {
+  if (isHookPayload(payload)) {
+    return { kind: "none", value: "" };
+  }
+
   const input = asRecord(payload.input);
   const source = input ?? payload;
 
@@ -215,6 +222,15 @@ function resolveOperationIntentFromRecord(record: Record<string, unknown>): Oper
   }
 
   return { kind: "none", value: "" };
+}
+
+function isHookPayload(payload: Record<string, unknown>): boolean {
+  const source = asString(payload.source).toLowerCase();
+  if (source === "hook_policy") {
+    return true;
+  }
+  const event = asString(payload.event).toLowerCase();
+  return event.startsWith("user_prompt_") || event.endsWith("_tool_use") || event === "permission_request";
 }
 
 function cleanText(value: string): string {

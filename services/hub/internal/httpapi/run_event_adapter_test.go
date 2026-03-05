@@ -106,3 +106,26 @@ func TestMapExecutionEventToRunEvent_PreservesRunVocabularyFromPayload(t *testin
 		t.Fatalf("expected no legacy_event_type when payload already uses run vocabulary, got %#v", runEvent.Payload["legacy_event_type"])
 	}
 }
+
+func TestMapExecutionEventToRunEvent_UserPromptSubmitMapsToRunQueued(t *testing.T) {
+	event := ExecutionEvent{
+		EventID:        "evt_map_user_prompt_submit",
+		ExecutionID:    "exec_map_user_prompt_submit",
+		ConversationID: "conv_map_user_prompt_submit",
+		Sequence:       1,
+		QueueIndex:     0,
+		Type:           RunEventTypeUserPromptSubmit,
+		Timestamp:      "2026-02-25T10:20:30Z",
+		Payload: map[string]any{
+			"event": "user_prompt_submit",
+		},
+	}
+
+	runEvent := mapExecutionEventToRunEvent(event)
+	if runEvent.Type != runtimecore.RunEventTypeRunQueued {
+		t.Fatalf("expected run_queued for user_prompt_submit, got %q", runEvent.Type)
+	}
+	if runEvent.Payload["event_type"] != "run_queued" {
+		t.Fatalf("expected normalized event_type run_queued, got %#v", runEvent.Payload["event_type"])
+	}
+}

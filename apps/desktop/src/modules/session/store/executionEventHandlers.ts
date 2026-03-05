@@ -80,7 +80,10 @@ function appendExecutionDoneMessage(
   if (!shouldAppendTerminalMessage(runtime, event, transition.previousState, transition.nextState, transition.messageID, "assistant")) {
     return;
   }
-  const content = asNonEmptyString(event.payload.content) || `Run ${event.run_id} completed.`;
+  const content = asNonEmptyString(event.payload.content);
+  if (content === "") {
+    return;
+  }
   appendTerminalMessage(runtime, {
     id: createMockId("msg"),
     session_id: conversationId,
