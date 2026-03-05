@@ -55,7 +55,7 @@ func TestRunControlEndpoint_DenyQueuedRun(t *testing.T) {
 	}
 	secondPayload := map[string]any{}
 	mustDecodeJSON(t, second.Body.Bytes(), &secondPayload)
-	runID := secondPayload["execution"].(map[string]any)["id"].(string)
+	runID := secondPayload["run"].(map[string]any)["id"].(string)
 
 	controlRes := performJSONRequest(t, router, http.MethodPost, "/v1/runs/"+runID+"/control", map[string]any{
 		"action": "deny",
@@ -121,7 +121,7 @@ func TestRunControlEndpoint_StopTransitionsRun(t *testing.T) {
 	}
 	messagePayload := map[string]any{}
 	mustDecodeJSON(t, messageRes.Body.Bytes(), &messagePayload)
-	runID := messagePayload["execution"].(map[string]any)["id"].(string)
+	runID := messagePayload["run"].(map[string]any)["id"].(string)
 
 	controlRes := performJSONRequest(t, router, http.MethodPost, "/v1/runs/"+runID+"/control", map[string]any{
 		"action": "stop",

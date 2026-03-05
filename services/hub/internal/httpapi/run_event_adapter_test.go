@@ -33,8 +33,8 @@ func TestMapExecutionEventToRunEvent_MessageReceivedMapsToRunQueued(t *testing.T
 	if payload["event_type"] != "run_queued" {
 		t.Fatalf("expected payload event_type run_queued, got %#v", payload["event_type"])
 	}
-	if payload["legacy_event_type"] != "message_received" {
-		t.Fatalf("expected payload legacy_event_type message_received, got %#v", payload["legacy_event_type"])
+	if _, exists := payload["legacy_event_type"]; exists {
+		t.Fatalf("expected no payload legacy_event_type, got %#v", payload["legacy_event_type"])
 	}
 	if runEvent.SessionID != event.ConversationID {
 		t.Fatalf("expected session_id=%s, got %s", event.ConversationID, runEvent.SessionID)

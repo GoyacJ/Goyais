@@ -296,17 +296,7 @@ function normalizeSessionSubmitResponse(response: ComposerSubmitResponse | Sessi
   if (response.kind === "command_result") {
     return response;
   }
-
-  if (response.kind === "run_enqueued" && "run" in response) {
-    return response;
-  }
-
-  return {
-    kind: "run_enqueued",
-    run: response.execution,
-    queue_state: response.queue_state,
-    queue_index: response.queue_index
-  };
+  return response;
 }
 
 function getHubBaseUrl(): string {

@@ -640,7 +640,7 @@ type ComposerCommandResult struct {
 type ComposerSubmitResponse struct {
 	Kind          string                 `json:"kind"`
 	CommandResult *ComposerCommandResult `json:"command_result,omitempty"`
-	Execution     *Execution             `json:"execution,omitempty"`
+	Run           *Execution             `json:"run,omitempty"`
 	QueueState    QueueState             `json:"queue_state,omitempty"`
 	QueueIndex    *int                   `json:"queue_index,omitempty"`
 }

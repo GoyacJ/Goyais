@@ -147,7 +147,7 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 	}
 	msg1Payload := map[string]any{}
 	mustDecodeJSON(t, msg1.Body.Bytes(), &msg1Payload)
-	exec1 := msg1Payload["execution"].(map[string]any)
+	exec1 := msg1Payload["run"].(map[string]any)
 	messageID := exec1["message_id"].(string)
 
 	msg2 := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
@@ -160,7 +160,7 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 	}
 	msg2Payload := map[string]any{}
 	mustDecodeJSON(t, msg2.Body.Bytes(), &msg2Payload)
-	exec2 := msg2Payload["execution"].(map[string]any)
+	exec2 := msg2Payload["run"].(map[string]any)
 	if exec2["state"] != "queued" && exec2["state"] != "pending" {
 		t.Fatalf("expected second execution queued/pending, got %#v", exec2["state"])
 	}
@@ -774,7 +774,7 @@ func TestWorkspaceAgentConfigPersistsAndExecutionSnapshotIsFrozen(t *testing.T) 
 	}
 	executionPayload := map[string]any{}
 	mustDecodeJSON(t, createExecutionRes.Body.Bytes(), &executionPayload)
-	execution := executionPayload["execution"].(map[string]any)
+	execution := executionPayload["run"].(map[string]any)
 	executionID := strings.TrimSpace(asString(execution["id"]))
 	agentConfigSnapshot := execution["agent_config_snapshot"].(map[string]any)
 	if got := int(agentConfigSnapshot["max_model_turns"].(float64)); got != 8 {
@@ -1352,7 +1352,7 @@ func TestExecutionConfirmEndpointRemoved(t *testing.T) {
 	}
 	executionPayload := map[string]any{}
 	mustDecodeJSON(t, messageRes.Body.Bytes(), &executionPayload)
-	executionID := executionPayload["execution"].(map[string]any)["id"].(string)
+	executionID := executionPayload["run"].(map[string]any)["id"].(string)
 
 	confirmRes := performJSONRequest(t, router, http.MethodPost, "/v1/runs/"+executionID+"/confirm", map[string]any{
 		"decision": "approve",

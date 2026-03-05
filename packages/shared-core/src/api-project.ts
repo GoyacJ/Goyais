@@ -345,12 +345,6 @@ export type ComposerSubmitResponse =
       command: string;
       output: string;
     };
-  }
-  | {
-    kind: "execution_enqueued";
-    execution: Run;
-    queue_state: QueueState;
-    queue_index: number;
   };
 
 export type SessionSubmitResponse =
@@ -364,13 +358,6 @@ export type SessionSubmitResponse =
   | {
     kind: "run_enqueued";
     run: Run;
-    queue_state: QueueState;
-    queue_index: number;
-  }
-  | {
-    // Transitional compatibility for current Hub payload.
-    kind: "execution_enqueued";
-    execution: Run;
     queue_state: QueueState;
     queue_index: number;
   };

@@ -54,7 +54,12 @@ func ConversationsHandler(state *AppState) http.HandlerFunc {
 				}
 				state.mu.Unlock()
 			} else {
-				log.Printf("runtime conversation list query failed, fallback to in-memory map: %v", err)
+				WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to load sessions", map[string]any{
+					"workspace_id": workspaceID,
+					"project_id":   projectID,
+					"error":        err.Error(),
+				})
+				return
 			}
 		}
 		if !loadedFromRepository {
@@ -91,8 +96,12 @@ func ConversationsHandler(state *AppState) http.HandlerFunc {
 					items[index].TokensTotal = totals.Total
 				}
 			} else {
-				log.Printf("runtime conversation usage query failed, fallback to in-memory map: %v", err)
-				applyInMemoryConversationUsage()
+				WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to load session usage", map[string]any{
+					"workspace_id": workspaceID,
+					"project_id":   projectID,
+					"error":        err.Error(),
+				})
+				return
 			}
 		} else {
 			applyInMemoryConversationUsage()
@@ -155,7 +164,12 @@ func ExecutionsHandler(state *AppState) http.HandlerFunc {
 				writeJSON(w, http.StatusOK, ListEnvelope{Items: raw, NextCursor: next})
 				return
 			}
-			log.Printf("runtime execution query failed, fallback to in-memory map: %v", err)
+			WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to load runs", map[string]any{
+				"workspace_id": workspaceID,
+				"session_id":   conversationID,
+				"error":        err.Error(),
+			})
+			return
 		}
 		state.mu.RLock()
 		items := make([]Execution, 0)
@@ -566,7 +580,7 @@ func loadExecutionFlowConversationSeed(ctx context.Context, state *AppState, con
 	}
 	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
 	if err != nil {
-		log.Printf("runtime execution flow conversation lookup failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime execution flow session lookup failed: %v", err)
 		return Conversation{}, false
 	}
 	if !exists {

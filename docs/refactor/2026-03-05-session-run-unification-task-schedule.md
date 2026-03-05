@@ -346,3 +346,24 @@ Week 6 收口标准：
 1. Week 4 Batch A/B/C 已完成并通过高风险门禁（`test:strict` + `e2e:smoke`）。
 2. 目录迁移导致的路径断裂风险（R-003）已从“潜在”转为“可控并已验证”。
 3. 当前可准入 Week 5（兼容清零与门禁升级），前提是继续按“分批门禁 + 日终全量门禁”执行。
+
+### 6.12 Week 5-1 兼容路径清零与门禁升级增量（2026-03-05）
+
+1. Phase A 冻结基线：以提交 `bc6ea79` 固化 Week 4 目录迁移与命名收口结果，作为独立可回滚检查点。
+2. Phase B（Hub+Desktop+Contracts）推进：移除 `execution_enqueued` 兼容响应分支，统一为 `run_enqueued`，并将 payload 字段从 `execution` 收敛为 `run`（contracts/shared-core/httpapi/desktop 同步）。
+3. Phase B（SSE）推进：移除 `legacy_event_type` 写回逻辑，事件 payload 不再输出该兼容字段。
+4. Phase B（Hub fallback 收口）推进：`ConversationsHandler`/`ExecutionsHandler` 在 repository 可用但查询失败时不再回落到内存 map，改为显式 `RUNTIME_QUERY_FAILED`。
+5. Phase C 推进：`scripts/refactor/gate-check.sh` 新增增量阻断词 `execution_enqueued`、`legacy_event_type`、`fallback to in-memory map`（仅针对新增代码）。
+6. 审计快照刷新：
+   - `rg -n "\\b(conversation|execution|Conversation|Execution)\\b" ... | wc -l` -> `1592`（较 Week 4 快照 `1620` 下降 `28`）
+   - `rg -n "\\b(v1|v2|v3|v4|V1|V2|V3|V4)\\b" ... | wc -l` -> `769`（持平）
+   - `rg -n "\\blegacy\\w*|\\bcompat\\w*|fallback|alias" ... | wc -l` -> `358`（较 Week 4 快照 `370` 下降 `12`）
+
+### 6.13 本批次验收命令与结果摘要（2026-03-05，Week 5-1）
+
+1. `pnpm contracts:generate && pnpm contracts:check` ✅
+2. `cd services/hub && go test ./internal/httpapi/...` ✅
+3. `cd services/hub && go test ./... && go vet ./...` ✅
+4. `pnpm lint && pnpm test` ✅
+5. `pnpm test:strict && pnpm e2e:smoke` ✅
+6. `scripts/refactor/gate-check.sh` ✅

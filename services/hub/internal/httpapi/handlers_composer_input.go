@@ -515,8 +515,8 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 
 		queueIndexValue := createdExecution.QueueIndex
 		writeJSON(w, http.StatusCreated, ComposerSubmitResponse{
-			Kind:       "execution_enqueued",
-			Execution:  &createdExecution,
+			Kind:       "run_enqueued",
+			Run:        &createdExecution,
 			QueueState: queueState,
 			QueueIndex: &queueIndexValue,
 		})

@@ -2704,19 +2704,6 @@ components:
             command_result:
               $ref: '#/components/schemas/ComposerCommandResult'
         - type: object
-          required: [kind, execution, queue_state, queue_index]
-          properties:
-            kind:
-              type: string
-              enum: [execution_enqueued]
-            execution:
-              $ref: '#/components/schemas/Run'
-            queue_state:
-              type: string
-              enum: [idle, running, queued]
-            queue_index:
-              type: integer
-        - type: object
           required: [kind, run, queue_state, queue_index]
           properties:
             kind:

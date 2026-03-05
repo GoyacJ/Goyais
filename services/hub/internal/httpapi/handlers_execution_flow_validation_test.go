@@ -141,8 +141,8 @@ func TestConversationInputSubmitAllowsParallelExecutionsAcrossConversations(t *t
 	payloadB := map[string]any{}
 	mustDecodeJSON(t, messageBRes.Body.Bytes(), &payloadB)
 
-	executionA := payloadA["execution"].(map[string]any)
-	executionB := payloadB["execution"].(map[string]any)
+	executionA := payloadA["run"].(map[string]any)
+	executionB := payloadB["run"].(map[string]any)
 	executionAID := strings.TrimSpace(asString(executionA["id"]))
 	executionBID := strings.TrimSpace(asString(executionB["id"]))
 	if executionAID == "" || executionBID == "" {

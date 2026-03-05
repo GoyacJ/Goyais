@@ -452,7 +452,7 @@ func loadRunControlExecutionSeed(ctx context.Context, state *AppState, runID str
 	}
 	item, exists, err := service.repositories.Runs.GetByID(ctx, normalizedRunID)
 	if err != nil {
-		log.Printf("runtime run control lookup failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime run control lookup failed: %v", err)
 		return Execution{}, false
 	}
 	if !exists {
@@ -480,7 +480,7 @@ func loadRunControlConversationSeed(ctx context.Context, state *AppState, conver
 	}
 	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
 	if err != nil {
-		log.Printf("runtime run control conversation lookup failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime run control session lookup failed: %v", err)
 		return Conversation{}, false
 	}
 	if !exists {

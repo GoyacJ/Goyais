@@ -37,11 +37,6 @@ func mapExecutionEventToRunEvent(event ExecutionEvent) mappedRunEvent {
 	}
 	normalizedEventType := normalizeRunEventVocabulary(rawEventType, mappedType)
 	payload["event_type"] = normalizedEventType
-	if rawEventType != "" && rawEventType != normalizedEventType {
-		if _, exists := payload["legacy_event_type"]; !exists {
-			payload["legacy_event_type"] = rawEventType
-		}
-	}
 	if _, exists := payload["queue_index"]; !exists {
 		payload["queue_index"] = event.QueueIndex
 	}

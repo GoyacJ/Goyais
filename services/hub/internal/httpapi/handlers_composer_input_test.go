@@ -47,13 +47,13 @@ func TestConversationInputSubmit_AppliesExplicitRuleSelectionPerMessage(t *testi
 
 	payload := map[string]any{}
 	mustDecodeJSON(t, res.Body.Bytes(), &payload)
-	if got := strings.TrimSpace(asString(payload["kind"])); got != "execution_enqueued" {
-		t.Fatalf("expected kind execution_enqueued, got %q", got)
+	if got := strings.TrimSpace(asString(payload["kind"])); got != "run_enqueued" {
+		t.Fatalf("expected kind run_enqueued, got %q", got)
 	}
 
-	execution, ok := payload["execution"].(map[string]any)
+	execution, ok := payload["run"].(map[string]any)
 	if !ok {
-		t.Fatalf("expected execution payload, got %#v", payload["execution"])
+		t.Fatalf("expected run payload, got %#v", payload["run"])
 	}
 	profile, ok := execution["resource_profile_snapshot"].(map[string]any)
 	if !ok {
@@ -150,8 +150,8 @@ func TestConversationInputSubmit_DynamicPromptCommandEnqueuesExecution(t *testin
 
 	payload := map[string]any{}
 	mustDecodeJSON(t, res.Body.Bytes(), &payload)
-	if got := strings.TrimSpace(asString(payload["kind"])); got != "execution_enqueued" {
-		t.Fatalf("expected execution_enqueued, got %q", got)
+	if got := strings.TrimSpace(asString(payload["kind"])); got != "run_enqueued" {
+		t.Fatalf("expected run_enqueued, got %q", got)
 	}
 	if len(state.executions) != 1 {
 		t.Fatalf("expected execution created for prompt command, got %d", len(state.executions))
@@ -175,13 +175,13 @@ func TestConversationInputSubmit_EmitsStructuredTaskEvents(t *testing.T) {
 
 	payload := map[string]any{}
 	mustDecodeJSON(t, res.Body.Bytes(), &payload)
-	execution, ok := payload["execution"].(map[string]any)
+	execution, ok := payload["run"].(map[string]any)
 	if !ok {
-		t.Fatalf("expected execution payload, got %#v", payload["execution"])
+		t.Fatalf("expected run payload, got %#v", payload["run"])
 	}
 	executionID := strings.TrimSpace(asString(execution["id"]))
 	if executionID == "" {
-		t.Fatalf("expected execution id, got %#v", execution)
+		t.Fatalf("expected run id, got %#v", execution)
 	}
 
 	state.mu.RLock()
@@ -209,10 +209,10 @@ func TestConversationInputSubmit_EmitsStructuredTaskEvents(t *testing.T) {
 		t.Fatalf("expected task_graph_configured event, got %#v", events)
 	}
 	if !foundDependenciesUpdated {
-		t.Fatalf("expected task_dependencies_updated event for execution %s, got %#v", executionID, events)
+		t.Fatalf("expected task_dependencies_updated event for run %s, got %#v", executionID, events)
 	}
 	if !foundRetryPolicyUpdated {
-		t.Fatalf("expected task_retry_policy_updated event for execution %s, got %#v", executionID, events)
+		t.Fatalf("expected task_retry_policy_updated event for run %s, got %#v", executionID, events)
 	}
 }
 
@@ -243,13 +243,13 @@ func TestConversationInputSubmit_EmitsUserPromptSubmitHookRecord(t *testing.T) {
 
 	payload := map[string]any{}
 	mustDecodeJSON(t, res.Body.Bytes(), &payload)
-	execution, ok := payload["execution"].(map[string]any)
+	execution, ok := payload["run"].(map[string]any)
 	if !ok {
-		t.Fatalf("expected execution payload, got %#v", payload["execution"])
+		t.Fatalf("expected run payload, got %#v", payload["run"])
 	}
 	executionID := strings.TrimSpace(asString(execution["id"]))
 	if executionID == "" {
-		t.Fatalf("expected execution id, got %#v", execution)
+		t.Fatalf("expected run id, got %#v", execution)
 	}
 
 	state.mu.RLock()
@@ -399,9 +399,9 @@ func TestConversationInputSubmit_AllowsFileSelectionAndSnapshotsPaths(t *testing
 
 	payload := map[string]any{}
 	mustDecodeJSON(t, res.Body.Bytes(), &payload)
-	execution, ok := payload["execution"].(map[string]any)
+	execution, ok := payload["run"].(map[string]any)
 	if !ok {
-		t.Fatalf("expected execution payload, got %#v", payload["execution"])
+		t.Fatalf("expected run payload, got %#v", payload["run"])
 	}
 	profile, ok := execution["resource_profile_snapshot"].(map[string]any)
 	if !ok {

@@ -3398,13 +3398,6 @@ export type components = {
             /** @enum {string} */
             kind: "command_result";
         } | {
-            execution: components["schemas"]["Run"];
-            /** @enum {string} */
-            kind: "execution_enqueued";
-            queue_index: number;
-            /** @enum {string} */
-            queue_state: "idle" | "running" | "queued";
-        } | {
             /** @enum {string} */
             kind: "run_enqueued";
             queue_index: number;

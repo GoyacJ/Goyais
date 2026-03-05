@@ -256,6 +256,9 @@ forbidden_addition_patterns=(
   'v4Service'
   'V4Runner'
   'runtimebridge'
+  'execution_enqueued'
+  'legacy_event_type'
+  'fallback to in-memory map'
 )
 if [[ -n "$changed_files" ]]; then
   while IFS= read -r file; do

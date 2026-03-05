@@ -117,7 +117,7 @@ export async function submitConversationMessage(
       return;
     }
 
-    const run = response.kind === "run_enqueued" ? response.run : response.execution;
+    const run = response.run;
     upsertExecutionFromServer(runtime, run);
     dedupeExecutions(runtime);
     appendRuntimeEvent(

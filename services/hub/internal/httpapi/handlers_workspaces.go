@@ -313,7 +313,7 @@ func selectWorkspaceConversationIDFromRepository(ctx context.Context, state *App
 			Offset: offset,
 		})
 		if err != nil {
-			log.Printf("runtime workspace session list query failed, fallback to in-memory map: %v", err)
+			log.Printf("runtime workspace session list query failed: %v", err)
 			return ""
 		}
 		if len(page) == 0 {
@@ -361,7 +361,7 @@ func loadWorkspaceStatusConversationSeed(ctx context.Context, state *AppState, c
 	}
 	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
 	if err != nil {
-		log.Printf("runtime workspace status conversation lookup failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime workspace status session lookup failed: %v", err)
 		return Conversation{}, false
 	}
 	if !exists {
@@ -386,7 +386,7 @@ func deriveConversationStatus(ctx context.Context, state *AppState, conversation
 		if err == nil {
 			return deriveConversationStatusFromExecutions(executions)
 		}
-		log.Printf("runtime workspace status query failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime workspace status query failed: %v", err)
 	}
 
 	state.mu.RLock()

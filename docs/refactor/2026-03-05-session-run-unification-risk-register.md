@@ -16,7 +16,7 @@
 | R-003 | 前端全量重命名引发路径断裂 | `modules/conversation` 迁移后 import 大面积失效 | `pnpm lint`/`pnpm test` 大量失败 | 先 `git mv` 目录，再批量修复 import，最后改 i18n key | 回滚目录迁移提交，拆分为更小批次重试 | Open |
 | R-004 | DB 破坏式重建导致环境不可用 | 旧库文件与新 schema 命名冲突，启动失败 | Hub 启动报 schema 错误、集成测试异常 | 明确无历史迁移策略，统一重建流程与测试夹具 | 回滚存储层提交并恢复旧 schema，重新设计重建脚本 | Open |
 | R-005 | 测试回归窗口过大 | 多周改动叠加，问题定位困难 | Week 5/6 出现大量未知回归 | 周周执行对应门禁，不积压未验证改动 | 回滚最近一周增量，逐批 rebase 修复 | Open |
-| R-006 | 兼容代码漏删导致双轨运行 | legacy/compat/fallback 残留触发旧路径 | grep 审计命中、门禁脚本告警 | Week 5 完成兼容清零并启用防回流门禁 | 回滚门禁脚本修改并补齐白名单后重试 | Open |
+| R-006 | 兼容代码漏删导致双轨运行 | legacy/compat/fallback 残留触发旧路径 | grep 审计命中、门禁脚本告警 | Week 5 完成兼容清零并启用防回流门禁 | 回滚门禁脚本修改并补齐白名单后重试 | Mitigated |
 | R-007 | 权限键改名造成鉴权异常 | `conversation.*` -> `session.*` 切换不完整 | 403 异常、审计事件键名混乱 | 权限键改名与审计改名同一周完成并联测 | 回滚权限模型改名提交，保留最小可用键集 | Open |
 | R-008 | 文档基线漂移 | 团队并行新增平行计划文档 | `docs/refactor` 出现重复主计划 | 固定以 `master-plan/task-schedule/risk-register` 为唯一基线 | 回滚新增平行文档并在 README 再次声明 | Open |
 
@@ -114,3 +114,16 @@
   - 无
 - 需要决策：
   - Week 5 是否优先清理 `legacy/compat/fallback/alias` 存量（当前审计 `370` 持平）。
+
+### 更新记录（2026-03-05，Week 5-1）
+
+- 更新人：Codex
+- 周次：Week 5（执行中）
+- 风险变更：
+  - `R-006`: `Open -> Mitigated`（`execution_enqueued` 与 `legacy_event_type` 兼容输出已清理，Hub 部分查询路径移除 repository-error fallback，且 `gate-check.sh` 已新增增量阻断词并本地验证通过）
+  - `R-001`: 保持 `Open`（contracts/shared-core/hub/desktop 全链路验证通过，但旧语义命中仍有存量，需继续压降）
+  - `R-005`: 保持 `Open`（本批次继续执行 strict/e2e 与 gate-check，均通过；仍需 Week 5 后续批次持续验证）
+- 新增风险：无
+- 已关闭风险：无
+- 需要决策：
+  - Week 5-2 是否将增量阻断从“仅新增代码”扩展为“总量阈值 + 白名单”模式（建议在下一批次落地）。

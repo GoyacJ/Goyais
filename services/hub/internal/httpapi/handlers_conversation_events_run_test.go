@@ -48,7 +48,7 @@ func TestConversationEventsSSE_EmitsRunSemantics(t *testing.T) {
 	}
 	messagePayload := map[string]any{}
 	mustDecodeJSON(t, messageRes.Body.Bytes(), &messagePayload)
-	executionID := messagePayload["execution"].(map[string]any)["id"].(string)
+	executionID := messagePayload["run"].(map[string]any)["id"].(string)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+conversationID+"/events", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -144,7 +144,7 @@ func TestConversationEventsSSE_ResyncBackfillWhenLastEventMissing(t *testing.T) 
 	}
 	messagePayload := map[string]any{}
 	mustDecodeJSON(t, messageRes.Body.Bytes(), &messagePayload)
-	executionID := messagePayload["execution"].(map[string]any)["id"].(string)
+	executionID := messagePayload["run"].(map[string]any)["id"].(string)
 
 	stopRes := performJSONRequest(t, router, http.MethodPost, "/v1/runs/"+executionID+"/control", map[string]any{
 		"action": "stop",
