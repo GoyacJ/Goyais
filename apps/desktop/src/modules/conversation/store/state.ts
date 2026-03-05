@@ -9,7 +9,6 @@ import { pinia } from "@/shared/stores/pinia";
 import type {
   ChangeSetCapability,
   ConnectionStatus,
-  Conversation,
   ConversationMode,
   DiffItem,
   InspectorTabKey,
@@ -177,7 +176,7 @@ export function ensureSessionRuntime(
 }
 
 export function ensureConversationRuntime(
-  conversation: Conversation,
+  conversation: Session,
   isGitProject: boolean
 ): ConversationRuntime {
   return ensureSessionRuntime(conversation, isGitProject);
@@ -225,7 +224,7 @@ export function hydrateSessionRuntime(
 }
 
 export function hydrateConversationRuntime(
-  conversation: Conversation,
+  conversation: Session,
   isGitProject: boolean,
   detail: SessionDetailCompatibilityPayload
 ): ConversationRuntime {

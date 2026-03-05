@@ -48,8 +48,8 @@ import type {
   ChangeSetCapability,
   ComposerCatalog,
   ComposerSuggestion,
-  ExecutionEvent,
   InspectorTabKey,
+  RunLifecycleEvent,
   OpenAPIContractComponents
 } from "@/shared/types/api";
 
@@ -910,7 +910,7 @@ export function useMainScreenController() {
 }
 
 function toPendingQuestionFromEvent(
-  event: ExecutionEvent,
+  event: RunLifecycleEvent,
   executionByID: Map<string, { id: string; message_id: string; queue_index: number }>
 ): PendingExecutionQuestionViewModel | null {
   if (event.type !== "thinking_delta") {
@@ -956,7 +956,7 @@ function toPendingQuestionFromEvent(
   };
 }
 
-function isPendingQuestionResolvedEvent(event: ExecutionEvent): boolean {
+function isPendingQuestionResolvedEvent(event: RunLifecycleEvent): boolean {
   return event.type === "thinking_delta" && stringOrEmpty(event.payload.stage) === "run_user_question_resolved";
 }
 
