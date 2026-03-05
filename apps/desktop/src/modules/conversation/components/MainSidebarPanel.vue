@@ -118,7 +118,7 @@ import { dismissToastByKey, showToast } from "@/shared/stores/toastStore";
 import { formatTokenUsageWithThreshold } from "@/shared/utils/tokenDisplay";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import type { ConnectionState } from "@/shared/stores/workspaceStore";
-import type { Conversation, Project, Workspace, WorkspaceMode } from "@/shared/types/api";
+import type { Project, Session, Workspace, WorkspaceMode } from "@/shared/types/api";
 import WorkspaceCreateModal from "@/shared/ui/sidebar/WorkspaceCreateModal.vue";
 import UserProfileMenuCard from "@/shared/ui/sidebar/UserProfileMenuCard.vue";
 import WorkspaceSwitcherCard from "@/shared/ui/sidebar/WorkspaceSwitcherCard.vue";
@@ -139,7 +139,7 @@ const props = defineProps<{
     canNext: boolean;
     loading: boolean;
   };
-  conversationsByProjectId: Record<string, Conversation[]>;
+  conversationsByProjectId: Record<string, Session[]>;
   conversationTokenUsageById: Record<string, { input: number; output: number; total: number }>;
   conversationPageByProjectId: Record<
     string,
@@ -282,7 +282,7 @@ function setEditingInputRef(element: Element | ComponentPublicInstance | null): 
   editingInputRef.value = element instanceof HTMLInputElement ? element : null;
 }
 
-async function startConversationRename(projectId: string, conversation: Conversation): Promise<void> {
+async function startConversationRename(projectId: string, conversation: Session): Promise<void> {
   emit("selectConversation", projectId, conversation.id);
   editingProjectId.value = projectId;
   editingConversationId.value = conversation.id;
@@ -302,7 +302,7 @@ function cancelConversationRename(): void {
   editingDraft.value = "";
 }
 
-function commitConversationRename(projectId: string, conversation: Conversation): void {
+function commitConversationRename(projectId: string, conversation: Session): void {
   if (!isConversationEditing(projectId, conversation.id)) {
     return;
   }

@@ -212,11 +212,11 @@ import { useI18n } from "@/shared/i18n";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import type {
   ChangeEntry,
-  ConversationChangeSet,
-  ConversationMessage,
+  SessionChangeSet,
+  SessionMessage,
   DiffItem,
-  Execution,
-  ExecutionEvent,
+  Run,
+  RunLifecycleEvent,
   InspectorTabKey,
   OpenAPIContractComponents
 } from "@/shared/types/api";
@@ -250,7 +250,7 @@ const emit = defineEmits<{
 }>();
 
 const props = withDefaults(defineProps<{
-  changeSet?: ConversationChangeSet | null;
+  changeSet?: SessionChangeSet | null;
   diff?: DiffItem[];
   capability: InspectorCapability;
   queuedCount: number;
@@ -265,9 +265,9 @@ const props = withDefaults(defineProps<{
   runTaskStateFilter?: RunTaskState | "";
   selectedRunTask?: RunTaskNode | null;
   runTaskDetailLoading?: boolean;
-  executions: Execution[];
-  events: ExecutionEvent[];
-  messages?: ConversationMessage[];
+  executions: Run[];
+  events: RunLifecycleEvent[];
+  messages?: SessionMessage[];
   executionTraces?: ExecutionTraceViewModel[];
   selectedTraceMessageId?: string;
   selectedTraceExecutionId?: string;
@@ -606,7 +606,7 @@ function toDateOrNow(input: string): Date {
   return value;
 }
 
-function isExecutionTerminal(state: Execution["state"]): boolean {
+function isExecutionTerminal(state: Run["state"]): boolean {
   return state === "completed" || state === "failed" || state === "cancelled";
 }
 

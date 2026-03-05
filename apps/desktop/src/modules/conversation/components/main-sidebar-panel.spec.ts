@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MainSidebarPanel from "@/modules/conversation/components/MainSidebarPanel.vue";
 import { pickDirectoryPath } from "@/shared/services/directoryPicker";
 import { dismissToastByKey, showToast } from "@/shared/stores/toastStore";
-import type { Conversation, Project } from "@/shared/types/api";
+import type { Project, Session } from "@/shared/types/api";
 
 vi.mock("@/shared/services/directoryPicker", () => ({
   pickDirectoryPath: vi.fn()
@@ -255,7 +255,7 @@ function mountSidebar(
     projectImportError: string;
     connectionState: string;
     projects: Project[];
-    conversationsByProjectId: Record<string, Conversation[]>;
+    conversationsByProjectId: Record<string, Session[]>;
     conversationTokenUsageById: Record<string, { input: number; output: number; total: number }>;
   }> = {}
 ) {
