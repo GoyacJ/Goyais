@@ -8,9 +8,9 @@ import {
   loadConversationRunTasks,
   resetConversationStore
 } from "@/modules/conversation/store";
-import type { Conversation } from "@/shared/types/api";
+import type { Session } from "@/shared/types/api";
 
-const conversation: Conversation = {
+const conversation: Session = {
   id: "conv_run_tasks",
   workspace_id: "ws_local",
   project_id: "proj_1",

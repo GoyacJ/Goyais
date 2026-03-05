@@ -19,9 +19,9 @@ import {
 import MainConversationPanel from "@/modules/conversation/components/MainConversationPanel.vue";
 import MainInspectorPanel from "@/modules/conversation/components/MainInspectorPanel.vue";
 import { setLocale } from "@/shared/i18n";
-import type { Conversation } from "@/shared/types/api";
+import type { Session } from "@/shared/types/api";
 
-const mockConversation: Conversation = {
+const mockConversation: Session = {
   id: "conv_test",
   workspace_id: "ws_local",
   project_id: "proj_1",
@@ -164,7 +164,7 @@ describe("conversation store", () => {
   });
 
   it("rejects submit when no model is configured", async () => {
-    const conversationWithoutModel: Conversation = {
+    const conversationWithoutModel: Session = {
       ...mockConversation,
       id: "conv_without_model",
       model_config_id: ""

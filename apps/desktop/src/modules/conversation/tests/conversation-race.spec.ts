@@ -8,9 +8,9 @@ import {
   setConversationDraft,
   submitConversationMessage
 } from "@/modules/conversation/store";
-import type { Conversation } from "@/shared/types/api";
+import type { Session } from "@/shared/types/api";
 
-const mockConversation: Conversation = {
+const mockConversation: Session = {
   id: "conv_race",
   workspace_id: "ws_local",
   project_id: "proj_1",
