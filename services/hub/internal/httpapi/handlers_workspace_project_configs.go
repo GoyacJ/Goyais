@@ -44,7 +44,14 @@ func WorkspaceProjectConfigsHandler(state *AppState) http.HandlerFunc {
 			})
 			return
 		}
-		aggregate := computeTokenUsageAggregate(state, workspaceID)
+		aggregate, aggregateErr := computeTokenUsageAggregate(state, workspaceID)
+		if aggregateErr != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to compute workspace project token usage", map[string]any{
+				"workspace_id": workspaceID,
+				"error":        aggregateErr.Error(),
+			})
+			return
+		}
 		for index := range items {
 			projectID := strings.TrimSpace(items[index].ProjectID)
 			projectTotals := aggregate.projectTotals[projectID]

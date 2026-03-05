@@ -77,7 +77,10 @@ func TestComputeTokenUsageAggregateUsesRepositoryWhenExecutionMapMissing(t *test
 	state.conversationExecutionOrder = map[string][]string{}
 	state.mu.Unlock()
 
-	aggregate := computeTokenUsageAggregate(state, localWorkspaceID)
+	aggregate, aggregateErr := computeTokenUsageAggregate(state, localWorkspaceID)
+	if aggregateErr != nil {
+		t.Fatalf("compute token usage aggregate failed: %v", aggregateErr)
+	}
 	projectTotals := aggregate.projectTotals[projectID]
 	if projectTotals.Input != 7 || projectTotals.Output != 9 || projectTotals.Total != 16 {
 		t.Fatalf("unexpected project usage totals: %#v", projectTotals)
@@ -133,7 +136,10 @@ func TestComputeTokenUsageAggregateFallsBackToInMemoryMap(t *testing.T) {
 	}
 	state.mu.Unlock()
 
-	aggregate := computeTokenUsageAggregate(state, localWorkspaceID)
+	aggregate, aggregateErr := computeTokenUsageAggregate(state, localWorkspaceID)
+	if aggregateErr != nil {
+		t.Fatalf("compute token usage aggregate failed: %v", aggregateErr)
+	}
 	projectTotals := aggregate.projectTotals[projectID]
 	if projectTotals.Input != 2 || projectTotals.Output != 3 || projectTotals.Total != 5 {
 		t.Fatalf("unexpected in-memory project usage totals: %#v", projectTotals)

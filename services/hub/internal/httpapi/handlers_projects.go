@@ -56,7 +56,14 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 				}
 				return items[i].CreatedAt > items[j].CreatedAt
 			})
-			aggregate := computeTokenUsageAggregate(state, workspaceID)
+			aggregate, aggregateErr := computeTokenUsageAggregate(state, workspaceID)
+			if aggregateErr != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to compute project token usage", map[string]any{
+					"workspace_id": workspaceID,
+					"error":        aggregateErr.Error(),
+				})
+				return
+			}
 			for index := range items {
 				projectID := strings.TrimSpace(items[index].ID)
 				if config, exists := projectConfigsByID[projectID]; exists {

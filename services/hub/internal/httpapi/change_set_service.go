@@ -785,7 +785,7 @@ func loadChangeSetConversationSeed(ctx context.Context, state *AppState, convers
 	}
 	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
 	if err != nil {
-		log.Printf("runtime changeset conversation lookup failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime changeset session lookup failed: %v", err)
 		return Conversation{}, false
 	}
 	if !exists {

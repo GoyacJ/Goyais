@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"log"
 	"net/http"
 	"strings"
 )
@@ -79,7 +78,11 @@ func HookExecutionsHandler(state *AppState) http.HandlerFunc {
 				writeJSON(w, http.StatusOK, HookExecutionListResponse{Items: items})
 				return
 			}
-			log.Printf("runtime hook execution query failed, fallback to in-memory map: %v", err)
+			WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to load hook executions", map[string]any{
+				"run_id": runID,
+				"error":  err.Error(),
+			})
+			return
 		}
 
 		state.mu.RLock()

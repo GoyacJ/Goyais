@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -57,7 +56,12 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 					}
 					state.mu.Unlock()
 				} else {
-					log.Printf("runtime project conversation list query failed, fallback to in-memory map: %v", err)
+					WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to load project sessions", map[string]any{
+						"project_id":   projectID,
+						"workspace_id": workspaceID,
+						"error":        err.Error(),
+					})
+					return
 				}
 			}
 			applyInMemoryConversationUsage := func() {
@@ -91,8 +95,12 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 						items[index].TokensTotal = totals.Total
 					}
 				} else {
-					log.Printf("runtime project conversation usage query failed, fallback to in-memory map: %v", err)
-					applyInMemoryConversationUsage()
+					WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to load project session usage", map[string]any{
+						"project_id":   projectID,
+						"workspace_id": workspaceID,
+						"error":        err.Error(),
+					})
+					return
 				}
 			}
 			sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt < items[j].CreatedAt })

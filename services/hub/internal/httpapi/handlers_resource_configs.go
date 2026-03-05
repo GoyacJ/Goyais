@@ -42,7 +42,14 @@ func ResourceConfigsHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
-			items = decorateModelResourceConfigUsage(state, items)
+			items, decorateErr := decorateModelResourceConfigUsage(state, items)
+			if decorateErr != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to compute model token usage", map[string]any{
+					"workspace_id": workspaceID,
+					"error":        decorateErr.Error(),
+				})
+				return
+			}
 			raw := make([]any, 0, len(items))
 			for _, item := range items {
 				raw = append(raw, item)
@@ -434,9 +441,9 @@ func validateModelSpecAgainstCatalog(state *AppState, workspaceID string, curren
 	return fmt.Errorf("vendor %s does not exist in catalog", vendor)
 }
 
-func decorateModelResourceConfigUsage(state *AppState, items []ResourceConfig) []ResourceConfig {
+func decorateModelResourceConfigUsage(state *AppState, items []ResourceConfig) ([]ResourceConfig, error) {
 	if len(items) == 0 {
-		return items
+		return items, nil
 	}
 	workspaceIDs := make([]string, 0, len(items))
 	for _, item := range items {
@@ -445,7 +452,10 @@ func decorateModelResourceConfigUsage(state *AppState, items []ResourceConfig) [
 		}
 		workspaceIDs = append(workspaceIDs, strings.TrimSpace(item.WorkspaceID))
 	}
-	aggregate := computeTokenUsageAggregate(state, workspaceIDs...)
+	aggregate, aggregateErr := computeTokenUsageAggregate(state, workspaceIDs...)
+	if aggregateErr != nil {
+		return nil, aggregateErr
+	}
 
 	decorated := make([]ResourceConfig, 0, len(items))
 	for _, item := range items {
@@ -460,5 +470,5 @@ func decorateModelResourceConfigUsage(state *AppState, items []ResourceConfig) [
 		}
 		decorated = append(decorated, item)
 	}
-	return decorated
+	return decorated, nil
 }

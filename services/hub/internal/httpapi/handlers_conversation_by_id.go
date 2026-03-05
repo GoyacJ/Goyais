@@ -52,7 +52,11 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 					executions = repositoryExecutions
 					conversation = decorateConversationUsageFromExecutions(conversation, executions)
 				} else {
-					log.Printf("runtime conversation execution query failed, fallback to in-memory map: %v", err)
+					WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to load session runs", map[string]any{
+						"session_id": conversationID,
+						"error":      err.Error(),
+					})
+					return
 				}
 			}
 
@@ -323,7 +327,7 @@ func loadConversationByIDSeed(ctx context.Context, state *AppState, conversation
 	}
 	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
 	if err != nil {
-		log.Printf("runtime conversation detail lookup failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime session detail lookup failed: %v", err)
 		return Conversation{}, false
 	}
 	if !exists {

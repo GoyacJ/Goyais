@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"strings"
 )
 
@@ -18,17 +18,17 @@ type tokenUsageAggregate struct {
 	workspaceModelTotals map[string]map[string]tokenUsageTotals
 }
 
-func computeTokenUsageAggregate(state *AppState, workspaceIDs ...string) tokenUsageAggregate {
+func computeTokenUsageAggregate(state *AppState, workspaceIDs ...string) (tokenUsageAggregate, error) {
 	if service, ok := newRunQueryService(state); ok {
 		aggregate, err := service.ComputeTokenUsageAggregate(context.Background(), workspaceIDs)
 		if err == nil {
-			return aggregate
+			return aggregate, nil
 		}
-		log.Printf("runtime token usage aggregate query failed, fallback to in-memory map: %v", err)
+		return tokenUsageAggregate{}, fmt.Errorf("runtime token usage aggregate query failed: %w", err)
 	}
 	state.mu.RLock()
 	defer state.mu.RUnlock()
-	return computeTokenUsageAggregateLocked(state)
+	return computeTokenUsageAggregateLocked(state), nil
 }
 
 func computeTokenUsageAggregateLocked(state *AppState) tokenUsageAggregate {
