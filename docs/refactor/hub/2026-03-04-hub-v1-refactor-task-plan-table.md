@@ -377,6 +377,7 @@
 9. 收敛：删除 `apps/desktop/src/modules/conversation/store/runEventAdapter.ts`，并在 `store/stream.ts` 内联 run->execution 事件归一化，移除独立 execution 映射层
 10. 清理测试：删除 `run-event-adapter.spec.ts`，并由 `conversation-stream.spec.ts` 覆盖 run-centric SSE 事件映射与路由行为
 11. 统一文案：`messages.en-US.ts`、`messages.zh-CN.ts`、`MainScreenView.vue`、资源配置说明改为 Session/会话主语义；默认命名切换为 `Session`/`新会话` 并保持旧 `Conversation`/`新对话` 识别兼容
+12. 过渡 facade：`conversation/services`、`project/services` 与 `conversation/store` 新增 `Session/Run` 命名导出（保持旧 `Conversation/Execution` 导出兼容），用于分批切换调用面
 
 ---
 

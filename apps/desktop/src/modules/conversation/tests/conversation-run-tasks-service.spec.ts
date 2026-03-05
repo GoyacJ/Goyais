@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  controlRun,
   controlRunTask,
   getRunTaskById,
   getRunTaskGraph,
@@ -50,6 +51,15 @@ describe("conversation run task services", () => {
           ok: true,
           run_id: "run_1",
           task_id: "task_1",
+          state: "cancelled",
+          previous_state: "queued"
+        });
+      }
+
+      if (url.endsWith("/v1/runs/run_1/control") && method === "POST") {
+        return jsonResponse({
+          ok: true,
+          run_id: "run_1",
           state: "cancelled",
           previous_state: "queued"
         });
@@ -120,6 +130,18 @@ describe("conversation run task services", () => {
     expect(call).toBeDefined();
     const payload = JSON.parse(String(call?.[1]?.body ?? "{}")) as { action?: string; reason?: string };
     expect(payload).toEqual({ action: "cancel", reason: "user_requested" });
+  });
+
+  it("controls run via session-first alias", async () => {
+    const response = await controlRun("run_1", "stop");
+
+    expect(response.ok).toBe(true);
+    const call = fetchMock.mock.calls.find(([url, init]) => {
+      return String(url).endsWith("/v1/runs/run_1/control") && (init?.method ?? "GET") === "POST";
+    });
+    expect(call).toBeDefined();
+    const payload = JSON.parse(String(call?.[1]?.body ?? "{}")) as { action?: string };
+    expect(payload.action).toBe("stop");
   });
 });
 

@@ -17,6 +17,9 @@ import type {
   ConversationStreamEvent,
   ConversationDetailResponse,
   ExecutionFilesExportResponse,
+  Session,
+  SessionStreamEvent,
+  SessionDetailResponse,
   RunControlAction,
   RunControlResponse
 } from "@/shared/types/api";
@@ -24,6 +27,8 @@ import type {
 type ConversationServiceOptions = {
   token?: string;
 };
+
+export type SessionServiceOptions = ConversationServiceOptions;
 
 type AgentGraph = OpenAPIContractComponents["schemas"]["AgentGraph"];
 type TaskNode = OpenAPIContractComponents["schemas"]["TaskNode"];
@@ -38,6 +43,12 @@ export type ConversationRunTaskState = TaskState;
 export type ConversationRunTaskListResponse = RunTaskListResponse;
 export type ConversationRunTaskControlAction = TaskControlAction;
 export type ConversationRunTaskControlResponse = TaskControlResponse;
+export type SessionRunTaskGraph = ConversationRunTaskGraph;
+export type SessionRunTaskNode = ConversationRunTaskNode;
+export type SessionRunTaskState = ConversationRunTaskState;
+export type SessionRunTaskListResponse = ConversationRunTaskListResponse;
+export type SessionRunTaskControlAction = ConversationRunTaskControlAction;
+export type SessionRunTaskControlResponse = ConversationRunTaskControlResponse;
 
 export function streamConversationEvents(
   conversationId: string,
@@ -59,8 +70,25 @@ export function streamConversationEvents(
   });
 }
 
+export function streamSessionEvents(
+  sessionId: string,
+  options: {
+    token?: string;
+    initialLastEventId?: string;
+    onEvent: (event: SessionStreamEvent) => void;
+    onStatusChange: (status: "connected" | "reconnecting" | "disconnected") => void;
+    onError: (error: Error) => void;
+  }
+) {
+  return streamConversationEvents(sessionId, options);
+}
+
 export async function getComposerCatalog(conversationId: string): Promise<ComposerCatalog> {
   return getControlClient().get<ComposerCatalog>(`/v1/sessions/${conversationId}/input/catalog`);
+}
+
+export async function getSessionComposerCatalog(sessionId: string): Promise<ComposerCatalog> {
+  return getComposerCatalog(sessionId);
 }
 
 export async function suggestComposerInput(
@@ -70,11 +98,25 @@ export async function suggestComposerInput(
   return getControlClient().post<ComposerSuggestResponse>(`/v1/sessions/${conversationId}/input/suggest`, input);
 }
 
+export async function suggestSessionInput(
+  sessionId: string,
+  input: ComposerSuggestRequest
+): Promise<ComposerSuggestResponse> {
+  return suggestComposerInput(sessionId, input);
+}
+
 export async function submitComposerInput(
   conversation: Conversation,
   input: ComposerSubmitRequest
 ): Promise<ComposerSubmitResponse> {
   return getControlClient().post<ComposerSubmitResponse>(`/v1/sessions/${conversation.id}/runs`, input);
+}
+
+export async function submitSessionInput(
+  session: Session,
+  input: ComposerSubmitRequest
+): Promise<ComposerSubmitResponse> {
+  return submitComposerInput(session, input);
 }
 
 export async function getConversationDetail(
@@ -84,9 +126,20 @@ export async function getConversationDetail(
   return getControlClient().get<ConversationDetailResponse>(`/v1/sessions/${conversationId}`, { token: options.token });
 }
 
+export async function getSessionDetail(
+  sessionId: string,
+  options: SessionServiceOptions = {}
+): Promise<SessionDetailResponse> {
+  return getConversationDetail(sessionId, options);
+}
+
 export async function cancelExecution(conversationId: string, executionId: string): Promise<void> {
   void executionId;
   await getControlClient().post<void>(`/v1/sessions/${conversationId}/stop`);
+}
+
+export async function cancelSessionRun(sessionId: string, runId: string): Promise<void> {
+  await cancelExecution(sessionId, runId);
 }
 
 export async function controlExecutionRun(
@@ -102,6 +155,18 @@ export async function controlExecutionRun(
     action,
     ...(answer ? { answer } : {})
   });
+}
+
+export async function controlRun(
+  runId: string,
+  action: RunControlAction,
+  answer?: {
+    question_id: string;
+    selected_option_id?: string;
+    text?: string;
+  }
+): Promise<RunControlResponse> {
+  return controlExecutionRun(runId, action, answer);
 }
 
 export async function getRunTaskGraph(runId: string): Promise<AgentGraph> {
@@ -153,8 +218,16 @@ export async function rollbackExecution(conversationId: string, messageId: strin
   });
 }
 
+export async function rollbackSessionToMessage(sessionId: string, messageId: string): Promise<void> {
+  await rollbackExecution(sessionId, messageId);
+}
+
 export async function getConversationChangeSet(conversationId: string): Promise<ConversationChangeSet> {
   return getControlClient().get<ConversationChangeSet>(`/v1/sessions/${conversationId}/changeset`);
+}
+
+export async function getSessionChangeSet(sessionId: string): Promise<ConversationChangeSet> {
+  return getConversationChangeSet(sessionId);
 }
 
 export async function commitConversationChangeSet(
@@ -164,6 +237,13 @@ export async function commitConversationChangeSet(
   return getControlClient().post<ChangeSetCommitResponse>(`/v1/sessions/${conversationId}/changeset/commit`, input);
 }
 
+export async function commitSessionChangeSet(
+  sessionId: string,
+  input: ChangeSetCommitRequest
+): Promise<ChangeSetCommitResponse> {
+  return commitConversationChangeSet(sessionId, input);
+}
+
 export async function discardConversationChangeSet(
   conversationId: string,
   input: ChangeSetDiscardRequest
@@ -171,8 +251,19 @@ export async function discardConversationChangeSet(
   await getControlClient().post<void>(`/v1/sessions/${conversationId}/changeset/discard`, input);
 }
 
+export async function discardSessionChangeSet(
+  sessionId: string,
+  input: ChangeSetDiscardRequest
+): Promise<void> {
+  await discardConversationChangeSet(sessionId, input);
+}
+
 export async function exportConversationChangeSet(conversationId: string): Promise<ExecutionFilesExportResponse> {
   return getControlClient().post<ExecutionFilesExportResponse>(`/v1/sessions/${conversationId}/changeset/export`, {});
+}
+
+export async function exportSessionChangeSet(sessionId: string): Promise<ExecutionFilesExportResponse> {
+  return exportConversationChangeSet(sessionId);
 }
 
 export function resolveDiffCapability(_isGitProject: boolean): ChangeSetCapability {

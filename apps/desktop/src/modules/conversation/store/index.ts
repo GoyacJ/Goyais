@@ -1,22 +1,37 @@
 export {
   appendRuntimeEvent,
   clearConversationTimer,
+  clearSessionTimer,
   getRunStateCounts,
+  getLatestFinishedRun,
   getLatestFinishedExecution,
   hasUnfinishedExecutions,
   hydrateConversationRuntime,
+  hydrateSessionRuntime,
   conversationStore,
+  sessionStore,
   findSnapshotForMessage,
+  findSessionSnapshotForMessage,
   pushConversationSnapshot,
+  pushSessionSnapshot,
   setConversationInspectorTab,
+  setSessionInspectorTab,
   createConversationSnapshot,
+  createSessionSnapshot,
   ensureConversationRuntime,
+  ensureSessionRuntime,
   getConversationRuntime,
+  getSessionRuntime,
   resetConversationStore,
   setConversationDraft,
+  setSessionDraft,
   setConversationError,
   setConversationMode,
-  setConversationModel
+  setSessionMode,
+  setConversationModel,
+  setSessionModel,
+  setSessionChangeSet,
+  useSessionStore
 } from "@/modules/conversation/store/state";
 export {
   answerConversationExecutionQuestion,
@@ -35,4 +50,25 @@ export {
   stopConversationExecution,
   submitConversationMessage
 } from "@/modules/conversation/store/executionActions";
+export {
+  answerConversationExecutionQuestion as answerSessionRunQuestion,
+  approveConversationExecution as approveSessionRun,
+  applyIncomingExecutionEvent as applyIncomingRunEvent,
+  commitConversationChangeset as commitSessionChangeset,
+  controlConversationRunTask as controlSessionRunTask,
+  denyConversationExecution as denySessionRun,
+  discardConversationChangeset as discardSessionChangeset,
+  loadConversationRunTaskById as loadSessionRunTaskById,
+  loadConversationRunTaskGraph as loadSessionRunTaskGraph,
+  loadConversationRunTasks as loadSessionRunTasks,
+  removeQueuedConversationExecution as removeQueuedSessionRun,
+  refreshConversationChangeSet as refreshSessionChangeSet,
+  rollbackConversationToMessage as rollbackSessionToMessage,
+  stopConversationExecution as stopSessionRun,
+  submitConversationMessage as submitSessionMessage
+} from "@/modules/conversation/store/executionActions";
 export { attachConversationStream, detachConversationStream } from "@/modules/conversation/store/stream";
+export {
+  attachConversationStream as attachSessionStream,
+  detachConversationStream as detachSessionStream
+} from "@/modules/conversation/store/stream";

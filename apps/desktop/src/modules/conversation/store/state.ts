@@ -19,8 +19,14 @@ import type {
   Execution,
   ExecutionEvent,
   InspectorTabKey,
-  ProjectKind
+  ProjectKind,
+  Session,
+  SessionChangeSet,
+  SessionDetailResponse,
+  SessionSnapshot
 } from "@/shared/types/api";
+
+type SessionMode = ConversationMode;
 
 export type StreamHandle = {
   close: () => void;
@@ -53,6 +59,8 @@ export type ConversationRuntime = {
   completionMessageKeySet: Set<string>;
 };
 
+export type SessionRuntime = ConversationRuntime;
+
 export const MAX_RUNTIME_EVENTS = 1000;
 
 type ConversationState = {
@@ -77,6 +85,8 @@ const useConversationStoreDefinition = defineStore("conversation", {
 
 export const useConversationStore = useConversationStoreDefinition;
 export const conversationStore = useConversationStoreDefinition(pinia);
+export const useSessionStore = useConversationStoreDefinition;
+export const sessionStore = conversationStore;
 
 export function resetConversationStore(): void {
   for (const timer of Object.values(conversationStore.timers)) {
@@ -134,6 +144,13 @@ export function ensureConversationRuntime(
   return runtime;
 }
 
+export function ensureSessionRuntime(
+  session: Session,
+  isGitProject: boolean
+): SessionRuntime {
+  return ensureConversationRuntime(session, isGitProject);
+}
+
 export function hydrateConversationRuntime(
   conversation: Conversation,
   isGitProject: boolean,
@@ -173,6 +190,14 @@ export function hydrateConversationRuntime(
   return runtime;
 }
 
+export function hydrateSessionRuntime(
+  session: Session,
+  isGitProject: boolean,
+  detail: SessionDetailResponse
+): SessionRuntime {
+  return hydrateConversationRuntime(session, isGitProject, detail);
+}
+
 export function setConversationChangeSet(conversationId: string, changeSet: ConversationChangeSet | null): void {
   const runtime = conversationStore.byConversationId[conversationId];
   if (!runtime) {
@@ -204,8 +229,16 @@ export function setConversationChangeSet(conversationId: string, changeSet: Conv
   };
 }
 
+export function setSessionChangeSet(sessionId: string, changeSet: SessionChangeSet | null): void {
+  setConversationChangeSet(sessionId, changeSet);
+}
+
 export function getConversationRuntime(conversationId: string): ConversationRuntime | undefined {
   return conversationStore.byConversationId[conversationId];
+}
+
+export function getSessionRuntime(sessionId: string): SessionRuntime | undefined {
+  return getConversationRuntime(sessionId);
 }
 
 export function appendRuntimeEvent(runtime: ConversationRuntime, event: ExecutionEvent): void {
@@ -226,11 +259,19 @@ export function setConversationDraft(conversationId: string, draft: string): voi
   }
 }
 
+export function setSessionDraft(sessionId: string, draft: string): void {
+  setConversationDraft(sessionId, draft);
+}
+
 export function setConversationMode(conversationId: string, mode: ConversationMode): void {
   const runtime = conversationStore.byConversationId[conversationId];
   if (runtime) {
     runtime.mode = mode;
   }
+}
+
+export function setSessionMode(sessionId: string, mode: SessionMode): void {
+  setConversationMode(sessionId, mode);
 }
 
 export function setConversationModel(conversationId: string, modelId: string): void {
@@ -240,11 +281,19 @@ export function setConversationModel(conversationId: string, modelId: string): v
   }
 }
 
+export function setSessionModel(sessionId: string, modelId: string): void {
+  setConversationModel(sessionId, modelId);
+}
+
 export function setConversationInspectorTab(conversationId: string, tab: InspectorTabKey): void {
   const runtime = conversationStore.byConversationId[conversationId];
   if (runtime) {
     runtime.inspectorTab = tab;
   }
+}
+
+export function setSessionInspectorTab(sessionId: string, tab: InspectorTabKey): void {
+  setConversationInspectorTab(sessionId, tab);
 }
 
 export function setConversationError(error: string): void {
@@ -259,8 +308,16 @@ export function clearConversationTimer(conversationId: string): void {
   delete conversationStore.timers[conversationId];
 }
 
+export function clearSessionTimer(sessionId: string): void {
+  clearConversationTimer(sessionId);
+}
+
 export function createConversationSnapshot(runtime: ConversationRuntime, conversationId: string, rollbackPointMessageId: string): ConversationSnapshot {
   return buildConversationSnapshot(runtime, conversationId, rollbackPointMessageId);
+}
+
+export function createSessionSnapshot(runtime: SessionRuntime, sessionId: string, rollbackPointMessageId: string): SessionSnapshot {
+  return createConversationSnapshot(runtime, sessionId, rollbackPointMessageId);
 }
 
 export function pushConversationSnapshot(conversationId: string, snapshot: ConversationSnapshot): void {
@@ -272,6 +329,10 @@ export function pushConversationSnapshot(conversationId: string, snapshot: Conve
   runtime.snapshots.push(snapshot);
 }
 
+export function pushSessionSnapshot(sessionId: string, snapshot: SessionSnapshot): void {
+  pushConversationSnapshot(sessionId, snapshot);
+}
+
 export function findSnapshotForMessage(conversationId: string, messageId: string): ConversationSnapshot | undefined {
   const runtime = conversationStore.byConversationId[conversationId];
   if (!runtime) {
@@ -279,6 +340,10 @@ export function findSnapshotForMessage(conversationId: string, messageId: string
   }
 
   return [...runtime.snapshots].reverse().find((snapshot) => snapshot.rollback_point_message_id === messageId);
+}
+
+export function findSessionSnapshotForMessage(sessionId: string, messageId: string): SessionSnapshot | undefined {
+  return findSnapshotForMessage(sessionId, messageId);
 }
 
 export function countActiveAndQueued(runtime: ConversationRuntime): number {
@@ -328,4 +393,8 @@ export function getLatestFinishedExecution(conversationId: string): Execution | 
   return [...executions]
     .reverse()
     .find((execution) => execution.state === "completed" || execution.state === "failed" || execution.state === "cancelled");
+}
+
+export function getLatestFinishedRun(sessionId: string): Execution | undefined {
+  return getLatestFinishedExecution(sessionId);
 }
