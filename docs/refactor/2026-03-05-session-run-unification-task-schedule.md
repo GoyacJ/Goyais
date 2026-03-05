@@ -170,6 +170,7 @@ Week 6 收口标准：
 9. W1-T3 持续推进：Desktop `modules/project` 子域服务层与 store 层类型注解收敛到 `Session` 主类型，减少 `Conversation` 类型别名扩散。
 10. W1-T3 持续推进：Desktop `modules/project` 子域内部调用链切换到 `listSessions/createSession/patchSession/removeSession/exportSessionMarkdown`，并保留 conversation 命名服务函数作为兼容壳。
 11. W1-T3 持续推进：Desktop `modules/conversation` 视图与事件去重子域完成类型注解收敛（`Conversation/Execution/ExecutionEvent` -> `Session/Run/RunLifecycleEvent`），保持运行时字段与行为不变。
+12. W1-T3 持续推进：Desktop `modules/conversation/store` 核心执行编排子域完成类型注解收敛（`executionActions/executionEventHandlers/events` 切换到 `Session/SessionMessage/RunLifecycleEvent`），保留函数命名与字段语义兼容。
 
 ### 6.3 最新审计快照（2026-03-05）
 
@@ -193,3 +194,4 @@ Week 6 收口标准：
 11. `pnpm --filter @goyais/desktop exec vitest run src/modules/project/store/project-store.spec.ts` ✅
 12. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/execution-trace-state.spec.ts src/modules/conversation/tests/conversation.spec.ts` ✅
 13. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/running-actions.spec.ts src/modules/conversation/tests/process-trace.spec.ts src/modules/conversation/tests/conversation-token-usage.spec.ts src/modules/conversation/tests/use-queue-messages-view.spec.ts src/modules/conversation/tests/main-screen-actions.spec.ts` ✅
+14. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/conversation.spec.ts src/modules/conversation/tests/conversation-stream.spec.ts src/modules/conversation/tests/conversation-race.spec.ts src/modules/conversation/tests/main-screen-actions.spec.ts src/modules/conversation/tests/conversation-run-tasks-actions.spec.ts` ✅

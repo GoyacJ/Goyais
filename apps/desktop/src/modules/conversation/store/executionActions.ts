@@ -38,7 +38,7 @@ import {
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { ApiError } from "@/shared/services/http";
 import { createMockId } from "@/shared/utils/id";
-import type { ComposerResourceSelection, Conversation, ConversationMessage, ExecutionEvent } from "@/shared/types/api";
+import type { ComposerResourceSelection, RunLifecycleEvent, Session, SessionMessage } from "@/shared/types/api";
 import type {
   ConversationRunTaskControlAction,
   ConversationRunTaskControlResponse,
@@ -49,7 +49,7 @@ import type {
 } from "@/modules/conversation/services";
 
 export async function submitConversationMessage(
-  conversation: Conversation,
+  conversation: Session,
   isGitProject: boolean,
   options: {
     catalogRevision?: string;
@@ -68,7 +68,7 @@ export async function submitConversationMessage(
   runtime.draft = "";
   const queueIndex = runtime.executions.length;
 
-  const userMessage: ConversationMessage = {
+  const userMessage: SessionMessage = {
     id: createMockId("msg"),
     conversation_id: conversation.id,
     role: "user",
@@ -164,7 +164,7 @@ function extractSelectedResources(rawInput: string): ComposerResourceSelection[]
   return selections;
 }
 
-export async function stopConversationExecution(conversation: Conversation): Promise<void> {
+export async function stopConversationExecution(conversation: Session): Promise<void> {
   const runtime = sessionStore.bySessionId[conversation.id];
   if (!runtime) {
     return;
@@ -185,7 +185,7 @@ export async function stopConversationExecution(conversation: Conversation): Pro
 }
 
 export async function removeQueuedConversationExecution(
-  conversation: Conversation,
+  conversation: Session,
   executionID: string
 ): Promise<void> {
   const runtime = sessionStore.bySessionId[conversation.id];
@@ -212,7 +212,7 @@ export async function removeQueuedConversationExecution(
   }
 }
 
-export async function approveConversationExecution(conversation: Conversation): Promise<void> {
+export async function approveConversationExecution(conversation: Session): Promise<void> {
   const runtime = sessionStore.bySessionId[conversation.id];
   if (!runtime) {
     return;
@@ -230,7 +230,7 @@ export async function approveConversationExecution(conversation: Conversation): 
   }
 }
 
-export async function denyConversationExecution(conversation: Conversation): Promise<void> {
+export async function denyConversationExecution(conversation: Session): Promise<void> {
   const runtime = sessionStore.bySessionId[conversation.id];
   if (!runtime) {
     return;
@@ -249,7 +249,7 @@ export async function denyConversationExecution(conversation: Conversation): Pro
 }
 
 export async function answerConversationExecutionQuestion(
-  conversation: Conversation,
+  conversation: Session,
   input: {
     executionId: string;
     questionId: string;
@@ -503,7 +503,7 @@ export async function loadConversationRunTaskById(conversationId: string, taskId
 }
 
 export async function controlConversationRunTask(
-  conversation: Conversation,
+  conversation: Session,
   taskId: string,
   action: ConversationRunTaskControlAction,
   reason?: string
@@ -528,7 +528,7 @@ export async function controlConversationRunTask(
   }
 }
 
-export function applyIncomingExecutionEvent(conversationId: string, event: ExecutionEvent): void {
+export function applyIncomingExecutionEvent(conversationId: string, event: RunLifecycleEvent): void {
   const runtime = sessionStore.bySessionId[conversationId];
   if (!runtime) {
     return;

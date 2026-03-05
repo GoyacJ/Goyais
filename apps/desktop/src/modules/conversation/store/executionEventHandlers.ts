@@ -7,7 +7,7 @@ import {
 import { shouldAppendTerminalMessage } from "@/modules/conversation/store/executionEventIdempotency";
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
 import { createMockId } from "@/shared/utils/id";
-import type { ConversationMessage, ExecutionEvent } from "@/shared/types/api";
+import type { RunLifecycleEvent, SessionMessage } from "@/shared/types/api";
 
 export type ExecutionTransition = {
   previousState: string | undefined;
@@ -18,7 +18,7 @@ export type ExecutionTransition = {
 export function updateExecutionTransition(
   runtime: ConversationRuntime,
   conversationId: string,
-  event: ExecutionEvent
+  event: RunLifecycleEvent
 ): ExecutionTransition {
   if (!event.execution_id) {
     return { previousState: undefined, nextState: undefined, messageID: "" };
@@ -32,7 +32,7 @@ export function updateExecutionTransition(
   return { previousState, nextState, messageID: execution.message_id };
 }
 
-export function applyDiffUpdate(runtime: ConversationRuntime, event: ExecutionEvent): void {
+export function applyDiffUpdate(runtime: ConversationRuntime, event: RunLifecycleEvent): void {
   if (event.type === "diff_generated") {
     const incoming = parseDiff(event.payload);
     if (incoming.length > 0) {
@@ -53,7 +53,7 @@ export function applyDiffUpdate(runtime: ConversationRuntime, event: ExecutionEv
 export function appendTerminalMessageFromEvent(
   runtime: ConversationRuntime,
   conversationId: string,
-  event: ExecutionEvent,
+  event: RunLifecycleEvent,
   transition: ExecutionTransition
 ): void {
   switch (event.type) {
@@ -74,7 +74,7 @@ export function appendTerminalMessageFromEvent(
 function appendExecutionDoneMessage(
   runtime: ConversationRuntime,
   conversationId: string,
-  event: ExecutionEvent,
+  event: RunLifecycleEvent,
   transition: ExecutionTransition
 ): void {
   if (!shouldAppendTerminalMessage(runtime, event, transition.previousState, transition.nextState, transition.messageID, "assistant")) {
@@ -94,7 +94,7 @@ function appendExecutionDoneMessage(
 function appendExecutionErrorMessage(
   runtime: ConversationRuntime,
   conversationId: string,
-  event: ExecutionEvent,
+  event: RunLifecycleEvent,
   transition: ExecutionTransition
 ): void {
   if (!shouldAppendTerminalMessage(runtime, event, transition.previousState, transition.nextState, transition.messageID, "system")) {
@@ -114,7 +114,7 @@ function appendExecutionErrorMessage(
 function appendUserAnswerMessage(
   runtime: ConversationRuntime,
   conversationId: string,
-  event: ExecutionEvent
+  event: RunLifecycleEvent
 ): void {
   const stage = asNonEmptyString(event.payload.stage);
   if (stage !== "run_user_question_resolved") {
@@ -157,7 +157,7 @@ function asNonEmptyString(value: unknown): string {
   return typeof value === "string" && value.trim() !== "" ? value : "";
 }
 
-function appendTerminalMessage(runtime: ConversationRuntime, message: ConversationMessage): void {
+function appendTerminalMessage(runtime: ConversationRuntime, message: SessionMessage): void {
   if (typeof message.queue_index !== "number") {
     runtime.messages.push(message);
     return;
