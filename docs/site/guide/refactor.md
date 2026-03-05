@@ -1,23 +1,14 @@
-# Frontend Refactor Scope (2026-02-25)
+# Architecture Evolution Summary
 
-This phase enforces a strict debt-cleanup strategy:
+The major session/run and Agent v4 architecture migration has been completed.
 
-- remove runtime fallback/mock branches from desktop frontend
-- migrate state to Pinia
-- migrate UI styling to UnoCSS with token alignment
-- remove Hub legacy compatibility paths while keeping `/v1`
-- keep verification evidence for each task and checkpoint
+## Current Baseline
 
-## Canonical Plan Documents
+- Stable runtime semantics are now the default.
+- Legacy compatibility branches are removed from primary paths.
+- Ongoing changes follow normal engineering evolution rules instead of migration-phase rules.
 
-- [Master plan](https://github.com/GoyacJ/Goyais/blob/main/docs/refactor/2026-02-25-frontend-refactor-master-plan.md)
-- [Task plan](https://github.com/GoyacJ/Goyais/blob/main/docs/refactor/2026-02-25-frontend-refactor-task-plan.md)
-- [Spec baseline](https://github.com/GoyacJ/Goyais/blob/main/docs/refactor/2026-02-25-frontend-spec-plan.md)
+## References
 
-## Current Acceptance Gates
-
-- desktop lint/test/strict/coverage/token/quality gates
-- hub go test suite
-- worker pytest + lint
-- smoke E2E
-- docs and slides build
+- [Overview](./overview.md)
+- [Release Checklist](https://github.com/GoyacJ/Goyais/blob/main/docs/release-checklist.md)

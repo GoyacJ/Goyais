@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "Goyais 文档站"
   text: "桌面端 / Hub / Worker 工程文档"
-  tagline: "双语沉淀架构、重构决策与交付门禁。"
+  tagline: "双语沉淀架构决策与交付门禁。"
   actions:
     - theme: brand
       text: 阅读指南
@@ -14,7 +14,7 @@ hero:
       link: /
 
 features:
-  - title: 重构留痕
+  - title: 工程留痕
     details: 决策日志、API 变化、检查点与验证证据可追溯。
   - title: 多运行时边界
     details: Desktop（Vue/Tauri）、Hub（Go）、Worker（Python）职责清晰。

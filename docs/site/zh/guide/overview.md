@@ -18,6 +18,6 @@ Goyais 由三块运行时组成：
 
 ## 关键文档入口
 
-- 重构计划：[docs/refactor](https://github.com/GoyacJ/Goyais/tree/main/docs/refactor)
+- 架构文档：[docs/site](https://github.com/GoyacJ/Goyais/tree/main/docs/site)
 - 发布清单：[docs/release-checklist.md](https://github.com/GoyacJ/Goyais/blob/main/docs/release-checklist.md)
 - 评审记录：[docs/reviews](https://github.com/GoyacJ/Goyais/tree/main/docs/reviews)

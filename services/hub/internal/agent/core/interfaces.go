@@ -10,9 +10,9 @@
 // This file is the immovable anchor for the entire Agent v4 refactor.
 // Every implementation produced by later phases (A2–F) MUST satisfy
 // the interfaces defined here. Changes to these signatures require
-// explicit justification and version bump in the refactor plan.
+// explicit justification and version bump in the architecture governance docs.
 //
-// Ref: docs/refactor/2026-03-03-agent-v4-refactor-plan.md §10.2
+// Ref: docs/site/guide/overview.md §10.2
 package core
 
 import "context"

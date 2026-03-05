@@ -1,38 +1,30 @@
 import { defineConfig } from "vitepress";
 
 const navEN = [
-  { text: "Guide", link: "/guide/overview" },
-  { text: "Refactor", link: "/guide/refactor" }
+  { text: "Guide", link: "/guide/overview" }
 ];
 
 const navZH = [
-  { text: "指南", link: "/zh/guide/overview" },
-  { text: "重构", link: "/zh/guide/refactor" }
+  { text: "指南", link: "/zh/guide/overview" }
 ];
 
 const sidebarEN = [
   {
     text: "Guide",
-    items: [
-      { text: "Overview", link: "/guide/overview" },
-      { text: "Refactor Scope", link: "/guide/refactor" }
-    ]
+    items: [{ text: "Overview", link: "/guide/overview" }]
   }
 ];
 
 const sidebarZH = [
   {
     text: "指南",
-    items: [
-      { text: "总览", link: "/zh/guide/overview" },
-      { text: "重构范围", link: "/zh/guide/refactor" }
-    ]
+    items: [{ text: "总览", link: "/zh/guide/overview" }]
   }
 ];
 
 export default defineConfig({
   title: "Goyais Docs",
-  description: "Goyais engineering documentation and refactor notes",
+  description: "Goyais engineering documentation and platform/runtime notes",
   lastUpdated: true,
   cleanUrls: true,
   themeConfig: {

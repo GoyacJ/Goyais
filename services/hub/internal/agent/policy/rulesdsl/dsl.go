@@ -90,7 +90,7 @@ func ParseRule(raw string) (Rule, error) {
 }
 
 // Match reports whether a rule matches the request.
-// Ref: docs/refactor/2026-03-03-agent-v4-refactor-plan.md §8.2
+// Ref: docs/site/guide/overview.md §8.2
 func Match(rule Rule, req Request) bool {
 	if !strings.EqualFold(strings.TrimSpace(rule.Tool), strings.TrimSpace(req.Tool)) {
 		return false

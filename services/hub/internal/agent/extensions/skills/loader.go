@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 // Package skills provides Agent v4 skill discovery, parsing, rendering, and
-// budget control based on the refactor contract in §7.2.
+// budget control based on the stable architecture contract in §7.2.
 package skills
 
 import (

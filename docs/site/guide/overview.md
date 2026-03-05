@@ -18,6 +18,6 @@ Goyais is split into three runtime surfaces:
 
 ## Where to Look
 
-- Refactor plans: [docs/refactor](https://github.com/GoyacJ/Goyais/tree/main/docs/refactor)
+- Architecture docs: [docs/site](https://github.com/GoyacJ/Goyais/tree/main/docs/site)
 - Release checklist: [docs/release-checklist.md](https://github.com/GoyacJ/Goyais/blob/main/docs/release-checklist.md)
 - Review artifacts: [docs/reviews](https://github.com/GoyacJ/Goyais/tree/main/docs/reviews)

@@ -17,7 +17,7 @@ import (
 	"goyais/services/hub/internal/agent/policy/hookscope"
 )
 
-// Event names aligned with the v4 refactor plan.
+// Event names aligned with the stable v4 architecture contract.
 const (
 	EventSessionStart      = "SessionStart"
 	EventSessionEnd        = "SessionEnd"
@@ -46,7 +46,7 @@ const (
 )
 
 // HandlerType defines the type of hook handler.
-// Ref: docs/refactor/2026-03-03-agent-v4-refactor-plan.md §7.1
+// Ref: docs/site/guide/overview.md §7.1
 type HandlerType string
 
 const (

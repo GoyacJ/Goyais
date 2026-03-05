@@ -14,7 +14,7 @@ hero:
       link: /zh/
 
 features:
-  - title: Refactor Records
+  - title: Engineering Records
     details: Track decisions, API deltas, checkpoints, and verification evidence.
   - title: Multi-runtime Design
     details: Desktop (Vue/Tauri), Hub (Go), Worker (Python) with clear boundaries.
