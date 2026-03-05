@@ -367,3 +367,36 @@ Week 6 收口标准：
 4. `pnpm lint && pnpm test` ✅
 5. `pnpm test:strict && pnpm e2e:smoke` ✅
 6. `scripts/refactor/gate-check.sh` ✅
+
+### 6.14 Week 5-2A/B/C 实施结果（2026-03-05）
+
+1. W5-2A（Hub fallback 清零）完成：`internal/httpapi` 中 8 处 `fallback to in-memory map` 运行时分支清理完成，统一为“repository 不可用才走内存；repository 可用但查询失败返回 `RUNTIME_QUERY_FAILED`”。
+2. W5-2A 覆盖模块：`change_set_service`、`conversation_by_id`、`token_usage_aggregate`、`project_conversations_config`、`run_tasks`、`hooks`。
+3. W5-2A 链路联动：`computeTokenUsageAggregate` 改为显式错误返回，`projects/workspace_project_configs/resource_configs` 调用侧统一透传 `RUNTIME_QUERY_FAILED`。
+4. W5-2B（门禁升级）完成：`scripts/refactor/gate-check.sh` 新增“总量不回升”校验，并接入白名单与基线文件。
+5. W5-2B 新增文件：`scripts/refactor/gate-whitelist.txt`、`scripts/refactor/gate-baseline.env`。
+6. W5-2B 本地演示完成：临时注入 `execution_enqueued` 新增行后，`gate-check.sh` 按预期阻断；还原注入后门禁恢复通过。
+7. W5-2C（文档收口）完成：本文件与 `risk-register` 写入 Week 5-2 delta 与失败样例证据。
+
+### 6.15 Week 5-2 审计快照与门禁证据（2026-03-05）
+
+1. 审计 before（Week 5-1 基线）：
+   - `conversation/execution`：`1592`
+   - `v1/v2/v3/v4`：`769`
+   - `legacy/compat/fallback/alias`：`358`
+   - `fallback to in-memory map`（httpapi）：`8`
+2. 审计 after（Week 5-2）：
+   - `rg -n "\\b(conversation|execution|Conversation|Execution)\\b" ... | wc -l` -> `1586`（下降 `6`）
+   - `rg -n "\\b(v1|v2|v3|v4|V1|V2|V3|V4)\\b" ... | wc -l` -> `769`（持平）
+   - `rg -n "\\blegacy\\w*|\\bcompat\\w*|fallback|alias" ... | wc -l` -> `350`（下降 `8`）
+   - `rg -n "fallback to in-memory map" services/hub/internal/httpapi` -> `0`（下降 `8`）
+3. 失败样例（本地注入验证）：
+   - 门禁输出：`FAIL: detected forbidden addition pattern: execution_enqueued in services/hub/internal/httpapi/handlers_hooks.go`
+   - 处置：移除临时注入后复跑 `scripts/refactor/gate-check.sh` 通过。
+4. 本批次验收命令：
+   - `pnpm contracts:generate && pnpm contracts:check` ✅
+   - `cd services/hub && go test ./internal/httpapi/...` ✅
+   - `cd services/hub && go test ./... && go vet ./...` ✅
+   - `pnpm lint && pnpm test` ✅
+   - `pnpm test:strict && pnpm e2e:smoke` ✅
+   - `scripts/refactor/gate-check.sh` ✅

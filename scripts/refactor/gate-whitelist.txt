@@ -1,0 +1,9 @@
+# Copyright (c) 2026 Ysmjjsy
+# Author: Goyais Team
+# SPDX-License-Identifier: MIT
+
+# Regex patterns against `rg -n` output lines (<path>:<line>:<text>).
+# Keep this list minimal; only include externally constrained naming.
+services/hub/internal/httpapi/templates/models\.default\.json:.*Alias
+services/hub/internal/httpapi/templates/models\.default\.json:.*compatible-mode/v1
+services/hub/internal/httpapi/model_probe(_test)?\.go:.*compatible-mode/v1

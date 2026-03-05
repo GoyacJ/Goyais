@@ -127,3 +127,16 @@
 - 已关闭风险：无
 - 需要决策：
   - Week 5-2 是否将增量阻断从“仅新增代码”扩展为“总量阈值 + 白名单”模式（建议在下一批次落地）。
+
+### 更新记录（2026-03-05，Week 5-2）
+
+- 更新人：Codex
+- 周次：Week 5（执行中）
+- 风险变更：
+  - `R-006`: 保持 `Mitigated`（`fallback to in-memory map` 在 `internal/httpapi` 命中已从 `8 -> 0`，并完成门禁“新增阻断 + 总量不回升 + 白名单”落地）
+  - `R-001`: 保持 `Open`（Week 5-2 全链路验证通过，但旧语义审计仍有存量：`conversation/execution=1586`）
+  - `R-005`: 保持 `Open`（本批次继续执行 contracts/hub/desktop/strict/e2e/gate-check 全绿，仍需持续观察 Week 5 后续切片）
+- 新增风险：无
+- 已关闭风险：无
+- 需要决策：
+  - Week 5 后续是否将 `gate-baseline` 由静态数字切换为“按通过提交自动刷新”的受控流程（避免人工漂移）。

@@ -227,7 +227,7 @@ if [[ "$loop_engine_hits" -lt 2 ]]; then
 fi
 echo
 
-echo "[7/7] incremental legacy-token gate (new additions only)"
+echo "[7/8] incremental legacy-token gate (new additions only)"
 diff_paths=(
   services/hub
   apps/desktop
@@ -339,6 +339,79 @@ if [[ -n "$runtime_changed_files" ]]; then
       exit 1
     fi
   done <<<"$runtime_changed_files"
+fi
+echo
+
+echo "[8/8] refactor audit totals gate (no regression)"
+baseline_file="$repo_root/scripts/refactor/gate-baseline.env"
+whitelist_file="$repo_root/scripts/refactor/gate-whitelist.txt"
+if [[ ! -f "$baseline_file" ]]; then
+  echo "FAIL: missing baseline file: $baseline_file"
+  exit 1
+fi
+if [[ ! -f "$whitelist_file" ]]; then
+  echo "FAIL: missing whitelist file: $whitelist_file"
+  exit 1
+fi
+# shellcheck disable=SC1090
+source "$baseline_file"
+if [[ -z "${conversation_execution_hits_baseline:-}" || -z "${version_token_hits_baseline:-}" || -z "${legacy_compat_fallback_alias_hits_baseline:-}" ]]; then
+  echo "FAIL: baseline file must define conversation_execution_hits_baseline/version_token_hits_baseline/legacy_compat_fallback_alias_hits_baseline"
+  exit 1
+fi
+whitelist_patterns=()
+while IFS= read -r whitelist_line; do
+  whitelist_patterns+=("$whitelist_line")
+done < <(sed -E 's/[[:space:]]+$//' "$whitelist_file" | rg -v '^\s*(#|$)' || true)
+search_paths=(
+  services/hub
+  apps/desktop/src
+  packages/shared-core/src
+  packages/contracts
+)
+count_audit_hits() {
+  local pattern="$1"
+  local raw
+  raw="$(
+    cd "$repo_root"
+    rg -n "$pattern" "${search_paths[@]}" --glob '!**/node_modules/**' || true
+  )"
+  if [[ -z "$raw" ]]; then
+    echo 0
+    return
+  fi
+  local filtered="$raw"
+  if [[ "${#whitelist_patterns[@]}" -gt 0 ]]; then
+    for whitelist_pattern in "${whitelist_patterns[@]}"; do
+      filtered="$(printf "%s\n" "$filtered" | rg -v -- "$whitelist_pattern" || true)"
+      if [[ -z "$filtered" ]]; then
+        break
+      fi
+    done
+  fi
+  if [[ -z "$filtered" ]]; then
+    echo 0
+    return
+  fi
+  printf "%s\n" "$filtered" | wc -l | tr -d ' '
+}
+conversation_execution_hits="$(count_audit_hits '\b(conversation|execution|Conversation|Execution)\b')"
+version_token_hits="$(count_audit_hits '\b(v1|v2|v3|v4|V1|V2|V3|V4)\b')"
+legacy_compat_fallback_alias_hits="$(count_audit_hits '\blegacy\w*|\bcompat\w*|fallback|alias')"
+echo "conversation/execution hits: $conversation_execution_hits (baseline: $conversation_execution_hits_baseline)"
+echo "version token hits: $version_token_hits (baseline: $version_token_hits_baseline)"
+echo "legacy/compat/fallback/alias hits: $legacy_compat_fallback_alias_hits (baseline: $legacy_compat_fallback_alias_hits_baseline)"
+if (( conversation_execution_hits > conversation_execution_hits_baseline )); then
+  echo "FAIL: conversation/execution audit total regressed"
+  exit 1
+fi
+if (( version_token_hits > version_token_hits_baseline )); then
+  echo "FAIL: version-token audit total regressed"
+  exit 1
+fi
+if (( legacy_compat_fallback_alias_hits > legacy_compat_fallback_alias_hits_baseline )); then
+  echo "FAIL: legacy/compat/fallback/alias audit total regressed"
+  exit 1
 fi
 echo
 
