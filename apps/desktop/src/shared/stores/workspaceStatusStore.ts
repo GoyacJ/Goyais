@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, reactive, toValue, watch, type MaybeRefOrGetter } from "vue";
 
-import { streamConversationEvents } from "@/modules/conversation/services";
+import { streamSessionEvents } from "@/modules/conversation/services";
 import { getWorkspaceStatus } from "@/modules/workspace/services";
 import { ApiError } from "@/shared/services/http";
 import { authStore } from "@/shared/stores/authStore";
@@ -35,7 +35,7 @@ export function useWorkspaceStatusSync(options: WorkspaceStatusSyncOptions = {})
 
   let disposed = false;
   let refreshSequence = 0;
-  let streamConversationID = "";
+  let streamSessionID = "";
   let streamHandle: StreamHandle | null = null;
   let syncContext = {
     workspaceID: "",
@@ -104,13 +104,13 @@ export function useWorkspaceStatusSync(options: WorkspaceStatusSyncOptions = {})
     }
   }
 
-  function rebindStream(conversationID: string, token: string): void {
-    const normalizedConversationID = normalizeID(conversationID);
-    if (normalizedConversationID === "") {
+  function rebindStream(sessionID: string, token: string): void {
+    const normalizedSessionID = normalizeID(sessionID);
+    if (normalizedSessionID === "") {
       closeStream();
       return;
     }
-    if (streamConversationID === normalizedConversationID && streamHandle) {
+    if (streamSessionID === normalizedSessionID && streamHandle) {
       return;
     }
 
@@ -119,8 +119,8 @@ export function useWorkspaceStatusSync(options: WorkspaceStatusSyncOptions = {})
       return;
     }
 
-    streamConversationID = normalizedConversationID;
-    streamHandle = streamConversationEvents(normalizedConversationID, {
+    streamSessionID = normalizedSessionID;
+    streamHandle = streamSessionEvents(normalizedSessionID, {
       token: token === "" ? undefined : token,
       onEvent: () => {
         void refreshStatus();
@@ -149,7 +149,7 @@ export function useWorkspaceStatusSync(options: WorkspaceStatusSyncOptions = {})
   function closeStream(): void {
     streamHandle?.close();
     streamHandle = null;
-    streamConversationID = "";
+    streamSessionID = "";
   }
 
   onBeforeUnmount(() => {

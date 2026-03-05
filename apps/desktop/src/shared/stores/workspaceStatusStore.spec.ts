@@ -8,14 +8,14 @@ import { resetWorkspaceStore, setCurrentWorkspace, setWorkspaces } from "@/share
 import type { WorkspaceStatusResponse } from "@/shared/types/api";
 
 const getWorkspaceStatusMock = vi.fn();
-const streamConversationEventsMock = vi.fn();
+const streamSessionEventsMock = vi.fn();
 
 vi.mock("@/modules/workspace/services", () => ({
   getWorkspaceStatus: (...args: unknown[]) => getWorkspaceStatusMock(...args)
 }));
 
 vi.mock("@/modules/conversation/services", () => ({
-  streamConversationEvents: (...args: unknown[]) => streamConversationEventsMock(...args)
+  streamSessionEvents: (...args: unknown[]) => streamSessionEventsMock(...args)
 }));
 
 describe("workspace status sync", () => {
@@ -23,7 +23,7 @@ describe("workspace status sync", () => {
     resetWorkspaceStore();
     resetAuthStore();
     getWorkspaceStatusMock.mockReset();
-    streamConversationEventsMock.mockReset();
+    streamSessionEventsMock.mockReset();
     vi.stubGlobal("EventSource", class {});
   });
 
@@ -37,7 +37,7 @@ describe("workspace status sync", () => {
     };
     let streamOptions: StreamOptions | undefined;
     const close = vi.fn();
-    streamConversationEventsMock.mockImplementation((_conversationID: string, options: StreamOptions) => {
+    streamSessionEventsMock.mockImplementation((_sessionID: string, options: StreamOptions) => {
       streamOptions = options;
       return {
         close
@@ -55,7 +55,7 @@ describe("workspace status sync", () => {
       conversationId: "conv_sync",
       token: "at_remote"
     });
-    expect(streamConversationEventsMock).toHaveBeenCalledWith(
+    expect(streamSessionEventsMock).toHaveBeenCalledWith(
       "conv_sync",
       expect.objectContaining({
         token: "at_remote"
@@ -78,7 +78,7 @@ describe("workspace status sync", () => {
 
     const closeFirst = vi.fn();
     const closeSecond = vi.fn();
-    streamConversationEventsMock
+    streamSessionEventsMock
       .mockImplementationOnce(() => ({
         close: closeFirst
       }))
@@ -101,7 +101,7 @@ describe("workspace status sync", () => {
       token: "at_remote"
     });
     expect(closeFirst).toHaveBeenCalledTimes(1);
-    expect(streamConversationEventsMock).toHaveBeenNthCalledWith(2, "conv_b", expect.any(Object));
+    expect(streamSessionEventsMock).toHaveBeenNthCalledWith(2, "conv_b", expect.any(Object));
     expect(harness.api?.conversationStatus.value).toBe("done");
 
     harness.wrapper.unmount();
@@ -115,7 +115,7 @@ describe("workspace status sync", () => {
     const harness = mountHarness("conv_error");
     await flushPromises();
 
-    expect(streamConversationEventsMock).not.toHaveBeenCalled();
+    expect(streamSessionEventsMock).not.toHaveBeenCalled();
     expect(harness.api?.conversationStatus.value).toBe("stopped");
     expect(harness.api?.connectionStatus.value).toBe("disconnected");
     expect(harness.api?.error.value).toContain("status unavailable");

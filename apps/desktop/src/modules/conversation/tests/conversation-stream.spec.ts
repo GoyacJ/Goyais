@@ -2,16 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Conversation } from "@/shared/types/api";
 
-const streamConversationEventsMock = vi.fn();
+const streamSessionEventsMock = vi.fn();
 const applyIncomingExecutionEventMock = vi.fn();
-const getConversationDetailMock = vi.fn();
+const getSessionDetailMock = vi.fn();
 
 vi.mock("@/modules/conversation/services", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/modules/conversation/services")>();
   return {
     ...actual,
-    streamConversationEvents: (...args: unknown[]) => streamConversationEventsMock(...args),
-    getConversationDetail: (...args: unknown[]) => getConversationDetailMock(...args)
+    streamSessionEvents: (...args: unknown[]) => streamSessionEventsMock(...args),
+    getSessionDetail: (...args: unknown[]) => getSessionDetailMock(...args)
   };
 });
 
@@ -66,16 +66,16 @@ describe("conversation stream routing", () => {
     onEvent = undefined;
     optionsUsed = undefined;
     closeHandle = vi.fn();
-    streamConversationEventsMock.mockReset();
+    streamSessionEventsMock.mockReset();
     applyIncomingExecutionEventMock.mockReset();
-    getConversationDetailMock.mockReset();
-    getConversationDetailMock.mockResolvedValue({
+    getSessionDetailMock.mockReset();
+    getSessionDetailMock.mockResolvedValue({
       conversation: conversationA,
       messages: [],
       executions: [],
       snapshots: []
     });
-    streamConversationEventsMock.mockImplementation((
+    streamSessionEventsMock.mockImplementation((
       _conversationId: string,
       options: { initialLastEventId?: string; onEvent: (event: unknown) => void }
     ) => {
@@ -188,7 +188,7 @@ describe("conversation stream routing", () => {
   it("triggers forced detail hydration when server requires SSE resync", async () => {
     const runtime = ensureConversationRuntime(conversationA, true);
     runtime.lastEventId = "evt_stream_stale";
-    getConversationDetailMock.mockResolvedValue({
+    getSessionDetailMock.mockResolvedValue({
       conversation: conversationA,
       messages: [
         {
@@ -222,9 +222,9 @@ describe("conversation stream routing", () => {
     });
 
     await vi.waitFor(() => {
-      expect(getConversationDetailMock).toHaveBeenCalledTimes(1);
+      expect(getSessionDetailMock).toHaveBeenCalledTimes(1);
     });
-    expect(getConversationDetailMock).toHaveBeenCalledWith(conversationA.id, { token: "at_remote" });
+    expect(getSessionDetailMock).toHaveBeenCalledWith(conversationA.id, { token: "at_remote" });
     expect(runtime.lastEventId).toBe("evt_stream_latest");
     expect(runtime.messages).toHaveLength(1);
     expect(runtime.messages[0]?.id).toBe("msg_server_1");

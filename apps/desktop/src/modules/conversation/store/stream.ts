@@ -1,4 +1,4 @@
-import { getConversationDetail, streamConversationEvents } from "@/modules/conversation/services";
+import { getSessionDetail, streamSessionEvents } from "@/modules/conversation/services";
 import { applyIncomingExecutionEvent, refreshConversationChangeSet } from "@/modules/conversation/store/executionActions";
 import {
   appendRuntimeEvent,
@@ -6,7 +6,7 @@ import {
   hydrateConversationRuntime
 } from "@/modules/conversation/store/state";
 import { createExecutionEvent } from "@/modules/conversation/store/events";
-import type { Conversation, ExecutionEvent, RunEventType, StreamRunEventType } from "@/shared/types/api";
+import type { ExecutionEvent, RunEventType, Session, StreamRunEventType } from "@/shared/types/api";
 
 const runEventTypes: readonly StreamRunEventType[] = [
   "run_queued",
@@ -26,22 +26,22 @@ const runToExecutionTypeMap: Record<Exclude<StreamRunEventType, "run_output_delt
   run_cancelled: "execution_stopped"
 };
 
-export function attachConversationStream(conversation: Conversation, token?: string): void {
+export function attachConversationStream(session: Session, token?: string): void {
   if (typeof EventSource === "undefined") {
     return;
   }
 
-  const runtime = conversationStore.byConversationId[conversation.id];
-  if (!runtime || conversationStore.streams[conversation.id]) {
+  const runtime = conversationStore.byConversationId[session.id];
+  if (!runtime || conversationStore.streams[session.id]) {
     return;
   }
   let resyncInFlight = false;
 
-  conversationStore.streams[conversation.id] = streamConversationEvents(conversation.id, {
+  conversationStore.streams[session.id] = streamSessionEvents(session.id, {
     token,
     initialLastEventId: runtime.lastEventId,
     onEvent: (event) => {
-      const incoming = normalizeExecutionEvent(event, conversation.id);
+      const incoming = normalizeExecutionEvent(event, session.id);
       if (!incoming) {
         return;
       }
@@ -52,18 +52,18 @@ export function attachConversationStream(conversation: Conversation, token?: str
           return;
         }
         resyncInFlight = true;
-        void getConversationDetail(conversation.id, { token })
+        void getSessionDetail(session.id, { token })
           .then((detail) => {
-            const current = conversationStore.byConversationId[conversation.id];
+            const current = conversationStore.byConversationId[session.id];
             if (!current) {
               return;
             }
             const isGitProject = current.projectKind === "git";
-            hydrateConversationRuntime(conversation, isGitProject, detail);
+            hydrateConversationRuntime(session, isGitProject, detail);
             if (latestEventID !== "") {
               current.lastEventId = latestEventID;
             }
-            void refreshConversationChangeSet(conversation.id);
+            void refreshConversationChangeSet(session.id);
           })
           .catch((error) => {
             conversationStore.error = toError(error).message;
@@ -81,9 +81,9 @@ export function attachConversationStream(conversation: Conversation, token?: str
         runtime.lastEventId = incomingEventID;
       }
       const eventConversationId = incoming.conversation_id.trim();
-      if (eventConversationId !== conversation.id) {
+      if (eventConversationId !== session.id) {
         console.warn(
-          `[conversation-stream] routed event by event.conversation_id, stream=${conversation.id}, event=${eventConversationId}`
+          `[session-stream] routed event by event.conversation_id, stream=${session.id}, event=${eventConversationId}`
         );
       }
       const current = conversationStore.byConversationId[eventConversationId];
@@ -93,7 +93,7 @@ export function attachConversationStream(conversation: Conversation, token?: str
       applyIncomingExecutionEvent(eventConversationId, incoming);
     },
     onStatusChange: (status) => {
-      const current = conversationStore.byConversationId[conversation.id];
+      const current = conversationStore.byConversationId[session.id];
       if (!current) {
         return;
       }
@@ -102,7 +102,7 @@ export function attachConversationStream(conversation: Conversation, token?: str
       if (status !== "connected") {
         appendRuntimeEvent(
           current,
-          createExecutionEvent(conversation.id, "", 0, "thinking_delta", {
+          createExecutionEvent(session.id, "", 0, "thinking_delta", {
             sse_status: status
           })
         );

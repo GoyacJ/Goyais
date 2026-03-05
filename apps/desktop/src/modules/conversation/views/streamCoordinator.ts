@@ -1,132 +1,177 @@
-import { getConversationDetail } from "@/modules/conversation/services";
+import { getSessionDetail } from "@/modules/conversation/services";
 import {
-  attachConversationStream,
-  conversationStore,
-  detachConversationStream,
-  ensureConversationRuntime,
+  attachSessionStream,
+  sessionStore,
+  detachSessionStream,
+  ensureSessionRuntime,
   hasUnfinishedExecutions,
-  hydrateConversationRuntime
+  hydrateSessionRuntime
 } from "@/modules/conversation/store";
-import type { Conversation, Project } from "@/shared/types/api";
+import type { Project, Session } from "@/shared/types/api";
 
-type ConversationContext = {
-  conversation: Conversation;
+type SessionContext = {
+  session: Session;
   isGitProject: boolean;
 };
 
 type StreamCoordinatorInput = {
   projects: () => Project[];
-  conversationsByProjectId: () => Record<string, Conversation[]>;
-  activeConversationId: () => string;
+  conversationsByProjectId: () => Record<string, Session[]>;
+  activeSessionId: () => string;
   resolveToken: () => string | undefined;
 };
 
-export function createConversationStreamCoordinator(input: StreamCoordinatorInput) {
-  const hydratingConversationIds = new Set<string>();
-  const hydratedConversationIds = new Set<string>();
+export function createSessionStreamCoordinator(input: StreamCoordinatorInput) {
+  const hydratingSessionIds = new Set<string>();
+  const hydratedSessionIds = new Set<string>();
 
-  function findConversationContextById(conversationId: string): ConversationContext | undefined {
+  function findSessionContextById(sessionId: string): SessionContext | undefined {
     for (const project of input.projects()) {
       const conversations = input.conversationsByProjectId()[project.id] ?? [];
-      const conversation = conversations.find((item) => item.id === conversationId);
-      if (conversation) {
-        return { conversation, isGitProject: project.is_git };
+      const session = conversations.find((item) => item.id === sessionId);
+      if (session) {
+        return { session, isGitProject: project.is_git };
       }
     }
     return undefined;
   }
 
-  async function hydrateConversationDetail(context: ConversationContext, force = false): Promise<void> {
-    const conversationId = context.conversation.id;
-    if (hydratingConversationIds.has(conversationId)) {
+  async function hydrateSessionDetail(context: SessionContext, force = false): Promise<void> {
+    const sessionId = context.session.id;
+    if (hydratingSessionIds.has(sessionId)) {
       return;
     }
-    if (!force && hydratedConversationIds.has(conversationId)) {
+    if (!force && hydratedSessionIds.has(sessionId)) {
       return;
     }
 
-    const existingRuntime = conversationStore.byConversationId[conversationId];
+    const existingRuntime = sessionStore.byConversationId[sessionId];
     const hasHydratedData = Boolean(existingRuntime?.hydrated);
     if (!force && hasHydratedData) {
       return;
     }
 
-    hydratingConversationIds.add(conversationId);
+    hydratingSessionIds.add(sessionId);
     try {
-      const detail = await getConversationDetail(conversationId, { token: input.resolveToken() });
-      hydrateConversationRuntime(context.conversation, context.isGitProject, detail);
-      hydratedConversationIds.add(conversationId);
+      const detail = await getSessionDetail(sessionId, { token: input.resolveToken() });
+      hydrateSessionRuntime(context.session, context.isGitProject, detail);
+      hydratedSessionIds.add(sessionId);
     } catch {
-      ensureConversationRuntime(context.conversation, context.isGitProject);
+      ensureSessionRuntime(context.session, context.isGitProject);
     } finally {
-      hydratingConversationIds.delete(conversationId);
+      hydratingSessionIds.delete(sessionId);
     }
   }
 
-  function collectTrackedConversationContexts(): ConversationContext[] {
-    const activeConversationId = input.activeConversationId();
-    const trackedByConversationId = new Map<string, ConversationContext>();
+  function collectTrackedSessionContexts(): SessionContext[] {
+    const activeSessionId = input.activeSessionId();
+    const trackedBySessionId = new Map<string, SessionContext>();
 
     for (const project of input.projects()) {
       const conversations = input.conversationsByProjectId()[project.id] ?? [];
-      for (const conversation of conversations) {
-        const runtime = conversationStore.byConversationId[conversation.id];
+      for (const session of conversations) {
+        const runtime = sessionStore.byConversationId[session.id];
         const trackedByRuntime = runtime ? hasUnfinishedExecutions(runtime) : false;
         const trackedByServerState =
-          conversation.queue_state === "running" ||
-          conversation.queue_state === "queued" ||
-          (conversation.active_execution_id ?? "").trim() !== "";
-        if (conversation.id === activeConversationId || trackedByRuntime || trackedByServerState) {
-          trackedByConversationId.set(conversation.id, {
-            conversation,
+          session.queue_state === "running" ||
+          session.queue_state === "queued" ||
+          (session.active_execution_id ?? "").trim() !== "";
+        if (session.id === activeSessionId || trackedByRuntime || trackedByServerState) {
+          trackedBySessionId.set(session.id, {
+            session,
             isGitProject: project.is_git
           });
         }
       }
     }
 
-    return [...trackedByConversationId.values()];
+    return [...trackedBySessionId.values()];
   }
 
-  function syncConversationStreams(): void {
-    const trackedContexts = collectTrackedConversationContexts();
-    const trackedIds = new Set(trackedContexts.map((item) => item.conversation.id));
+  function syncSessionStreams(): void {
+    const trackedContexts = collectTrackedSessionContexts();
+    const trackedIds = new Set(trackedContexts.map((item) => item.session.id));
     const token = input.resolveToken();
 
     for (const context of trackedContexts) {
-      ensureConversationRuntime(context.conversation, context.isGitProject);
-      if (!conversationStore.streams[context.conversation.id]) {
-        attachConversationStream(context.conversation, token);
+      ensureSessionRuntime(context.session, context.isGitProject);
+      if (!sessionStore.streams[context.session.id]) {
+        attachSessionStream(context.session, token);
       }
-      void hydrateConversationDetail(context, false);
+      void hydrateSessionDetail(context, false);
     }
 
-    for (const streamConversationId of Object.keys(conversationStore.streams)) {
-      if (trackedIds.has(streamConversationId)) {
+    for (const streamSessionId of Object.keys(sessionStore.streams)) {
+      if (trackedIds.has(streamSessionId)) {
         continue;
       }
-      if (streamConversationId === input.activeConversationId()) {
+      if (streamSessionId === input.activeSessionId()) {
         continue;
       }
-      const runtime = conversationStore.byConversationId[streamConversationId];
+      const runtime = sessionStore.byConversationId[streamSessionId];
       if (runtime && hasUnfinishedExecutions(runtime)) {
         continue;
       }
-      detachConversationStream(streamConversationId);
+      detachSessionStream(streamSessionId);
     }
   }
 
   function clearStreams(): void {
-    for (const conversationId of Object.keys(conversationStore.streams)) {
-      detachConversationStream(conversationId);
+    for (const sessionId of Object.keys(sessionStore.streams)) {
+      detachSessionStream(sessionId);
     }
-    hydratedConversationIds.clear();
+    hydratedSessionIds.clear();
   }
 
   return {
     clearStreams,
+    findSessionContextById,
+    hydrateSessionDetail,
+    syncSessionStreams
+  };
+}
+
+export function createConversationStreamCoordinator(input: {
+  projects: () => Project[];
+  conversationsByProjectId: () => Record<string, Session[]>;
+  activeConversationId: () => string;
+  resolveToken: () => string | undefined;
+}) {
+  const sessionCoordinator = createSessionStreamCoordinator({
+    projects: input.projects,
+    conversationsByProjectId: input.conversationsByProjectId,
+    activeSessionId: input.activeConversationId,
+    resolveToken: input.resolveToken
+  });
+
+  function findConversationContextById(conversationId: string): { conversation: Session; isGitProject: boolean } | undefined {
+    const context = sessionCoordinator.findSessionContextById(conversationId);
+    if (!context) {
+      return undefined;
+    }
+    return {
+      conversation: context.session,
+      isGitProject: context.isGitProject
+    };
+  }
+
+  async function hydrateConversationDetail(
+    context: { conversation: Session; isGitProject: boolean },
+    force = false
+  ): Promise<void> {
+    await sessionCoordinator.hydrateSessionDetail(
+      {
+        session: context.conversation,
+        isGitProject: context.isGitProject
+      },
+      force
+    );
+  }
+
+  return {
+    clearStreams: sessionCoordinator.clearStreams,
     findConversationContextById,
     hydrateConversationDetail,
-    syncConversationStreams
+    syncConversationStreams: sessionCoordinator.syncSessionStreams
   };
 }
