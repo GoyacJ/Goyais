@@ -177,6 +177,7 @@ Week 6 收口标准：
 16. W1-T3 持续推进：Desktop 测试与辅助视图类型注解继续收敛（`useExecutionTraceState` 与 `main-screen-actions/execution-merge/execution-trace-state` 测试由 `Conversation/Execution/ConversationMessage` 切换至 `Session/Run/SessionMessage`），断言逻辑不变。
 17. W1-T3 持续推进：Desktop `modules/conversation` 内部 runtime 类型别名使用收敛（`ConversationRuntime` 注解统一替换为 `SessionRuntime`），保持 store 对外兼容导出不变。
 18. W1-T3 持续推进：Desktop 核心会话测试类型注解继续收敛（`conversation/conversation-hydration/conversation-race/conversation-run-tasks-actions` 测试中的 `Conversation` 切换至 `Session`），仅类型替换不改断言。
+19. W1-T3 持续推进：Desktop trace 展示层命名收敛（新增 `RunTraceViewModel/RunTraceStep` 主别名，组件与 controller 切换到 run 命名；保留 `ExecutionTrace*` 与 `buildExecutionTraceViewModels` 兼容导出）。
 
 ### 6.3 最新审计快照（2026-03-05）
 
@@ -207,3 +208,4 @@ Week 6 收口标准：
 18. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/main-screen-actions.spec.ts src/modules/conversation/tests/execution-merge.spec.ts src/modules/conversation/tests/execution-trace-state.spec.ts` ✅
 19. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/main-screen-actions.spec.ts src/modules/conversation/tests/use-queue-messages-view.spec.ts src/modules/conversation/tests/conversation-token-usage.spec.ts src/modules/conversation/tests/conversation.spec.ts` ✅
 20. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/conversation.spec.ts src/modules/conversation/tests/conversation-hydration.spec.ts src/modules/conversation/tests/conversation-race.spec.ts src/modules/conversation/tests/conversation-run-tasks-actions.spec.ts` ✅
+21. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/execution-trace-state.spec.ts src/modules/conversation/tests/process-trace.spec.ts src/modules/conversation/tests/main-inspector-run-tasks.spec.ts src/modules/conversation/tests/conversation.spec.ts` ✅

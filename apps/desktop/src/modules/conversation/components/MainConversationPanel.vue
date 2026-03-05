@@ -253,14 +253,14 @@ import {
   type ConversationMessage,
   type ConversationMode
 } from "@/shared/types/api";
-import type { ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
+import type { RunTraceViewModel } from "@/modules/conversation/views/processTrace";
 import type { RunningActionViewModel } from "@/modules/conversation/views/runningActions";
 import ExecutionTraceBlock from "@/modules/conversation/components/ExecutionTraceBlock.vue";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import { useI18n } from "@/shared/i18n";
 import { showToast } from "@/shared/stores/toastStore";
 
-type ExecutionTrace = ExecutionTraceViewModel;
+type ExecutionTrace = RunTraceViewModel;
 type QueuedMessageViewModel = {
   executionId: string;
   messageId: string;

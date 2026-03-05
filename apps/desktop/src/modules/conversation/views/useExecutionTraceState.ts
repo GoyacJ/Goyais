@@ -1,24 +1,24 @@
 import { computed, ref, watch, type Ref } from "vue";
 
-import type { ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
+import type { RunTraceViewModel } from "@/modules/conversation/views/processTrace";
 import type { SessionMessage } from "@/shared/types/api";
 
 type TraceMessageItem = {
   id: string;
-  traces: ExecutionTraceViewModel[];
+  traces: RunTraceViewModel[];
 };
 
 export function useExecutionTraceState(
-  baseExecutionTraces: Ref<ExecutionTraceViewModel[]>,
+  baseExecutionTraces: Ref<RunTraceViewModel[]>,
   baseMessages: Ref<SessionMessage[]>
 ) {
   const selectedTraceMessageId = ref("");
   const selectedTraceExecutionId = ref("");
-  const executionTraces = computed<ExecutionTraceViewModel[]>(() => baseExecutionTraces.value);
+  const executionTraces = computed<RunTraceViewModel[]>(() => baseExecutionTraces.value);
   const activeTraceCount = computed(() => executionTraces.value.filter((trace) => trace.isRunning).length);
   const traceMessageItems = computed<TraceMessageItem[]>(() => {
-    const tracesByMessageId = new Map<string, ExecutionTraceViewModel[]>();
-    const tracesByQueueIndex = new Map<number, ExecutionTraceViewModel[]>();
+    const tracesByMessageId = new Map<string, RunTraceViewModel[]>();
+    const tracesByQueueIndex = new Map<number, RunTraceViewModel[]>();
     for (const trace of executionTraces.value) {
       const messageID = trace.messageId.trim();
       if (messageID !== "") {
@@ -44,7 +44,7 @@ export function useExecutionTraceState(
       const queueMatches = typeof message.queue_index === "number"
         ? tracesByQueueIndex.get(message.queue_index) ?? []
         : [];
-      const merged = new Map<string, ExecutionTraceViewModel>();
+      const merged = new Map<string, RunTraceViewModel>();
       for (const trace of directMatches) {
         merged.set(trace.executionId, trace);
       }
@@ -58,7 +58,7 @@ export function useExecutionTraceState(
     }
     return result;
   });
-  const selectedExecutionTrace = computed<ExecutionTraceViewModel | undefined>(() => {
+  const selectedExecutionTrace = computed<RunTraceViewModel | undefined>(() => {
     const traces = executionTraces.value;
     if (traces.length <= 0) {
       return undefined;

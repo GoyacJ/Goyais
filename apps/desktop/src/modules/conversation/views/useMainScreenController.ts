@@ -14,7 +14,7 @@ import {
 import {
   useAutoModelSyncWatcher
 } from "@/modules/conversation/views/controllerWatchers";
-import { buildExecutionTraceViewModels, type ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
+import { buildRunTraceViewModels, type RunTraceViewModel } from "@/modules/conversation/views/processTrace";
 import { useExecutionTraceState } from "@/modules/conversation/views/useExecutionTraceState";
 import { useRunningActionsView } from "@/modules/conversation/views/useRunningActionsView";
 import { useQueueMessagesView } from "@/modules/conversation/views/useQueueMessagesView";
@@ -224,7 +224,7 @@ export function useMainScreenController() {
     visibleMessages,
     visibleTraceExecutionIds
   } = useQueueMessagesView(runtime);
-  const baseExecutionTraces = computed<ExecutionTraceViewModel[]>(() => {
+  const baseExecutionTraces = computed<RunTraceViewModel[]>(() => {
     const currentRuntime = runtime.value;
     if (!currentRuntime) {
       return [];
@@ -232,9 +232,9 @@ export function useMainScreenController() {
     const tracedExecutions = currentRuntime.executions.filter(
       (execution) => execution.agent_config_snapshot?.show_process_trace ?? true
     );
-    return buildExecutionTraceViewModels(currentRuntime.events, tracedExecutions, locale.value);
+    return buildRunTraceViewModels(currentRuntime.events, tracedExecutions, locale.value);
   });
-  const visibleExecutionTraces = computed<ExecutionTraceViewModel[]>(() =>
+  const visibleExecutionTraces = computed<RunTraceViewModel[]>(() =>
     baseExecutionTraces.value.filter((trace) => visibleTraceExecutionIds.value.has(trace.executionId))
   );
   const {

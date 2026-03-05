@@ -2,10 +2,10 @@ import { nextTick, ref } from "vue";
 import { describe, expect, it } from "vitest";
 
 import { useExecutionTraceState } from "@/modules/conversation/views/useExecutionTraceState";
-import type { ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
+import type { RunTraceViewModel } from "@/modules/conversation/views/processTrace";
 import type { SessionMessage } from "@/shared/types/api";
 
-function createTrace(overrides?: Partial<ExecutionTraceViewModel>): ExecutionTraceViewModel {
+function createTrace(overrides?: Partial<RunTraceViewModel>): RunTraceViewModel {
   return {
     executionId: "exec_trace_state_1",
     messageId: "msg_trace_state_1",
@@ -22,7 +22,7 @@ function createTrace(overrides?: Partial<ExecutionTraceViewModel>): ExecutionTra
 
 describe("execution trace selection state", () => {
   it("selects latest trace by default", () => {
-    const baseTraces = ref<ExecutionTraceViewModel[]>([
+    const baseTraces = ref<RunTraceViewModel[]>([
       createTrace({ executionId: "exec_trace_state_1" }),
       createTrace({ executionId: "exec_trace_state_2", queueIndex: 1 })
     ]);
@@ -38,7 +38,7 @@ describe("execution trace selection state", () => {
   });
 
   it("keeps user-selected trace when list updates", async () => {
-    const baseTraces = ref<ExecutionTraceViewModel[]>([
+    const baseTraces = ref<RunTraceViewModel[]>([
       createTrace({ executionId: "exec_trace_state_1" }),
       createTrace({ executionId: "exec_trace_state_2", queueIndex: 1 })
     ]);
@@ -62,7 +62,7 @@ describe("execution trace selection state", () => {
   });
 
   it("falls back to latest trace when selected trace disappears", async () => {
-    const baseTraces = ref<ExecutionTraceViewModel[]>([
+    const baseTraces = ref<RunTraceViewModel[]>([
       createTrace({ executionId: "exec_trace_state_1" }),
       createTrace({ executionId: "exec_trace_state_2", queueIndex: 1 })
     ]);

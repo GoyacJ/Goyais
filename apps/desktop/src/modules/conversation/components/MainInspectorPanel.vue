@@ -207,7 +207,7 @@
 <script setup lang="ts">
 import { computed, toRefs } from "vue";
 
-import type { ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
+import type { RunTraceViewModel } from "@/modules/conversation/views/processTrace";
 import { useI18n } from "@/shared/i18n";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import type {
@@ -268,7 +268,7 @@ const props = withDefaults(defineProps<{
   executions: Run[];
   events: RunLifecycleEvent[];
   messages?: SessionMessage[];
-  executionTraces?: ExecutionTraceViewModel[];
+  executionTraces?: RunTraceViewModel[];
   selectedTraceMessageId?: string;
   selectedTraceExecutionId?: string;
   activeTab: InspectorTabKey;
@@ -460,10 +460,10 @@ const traceMessageItems = computed<Array<{
   id: string;
   preview: string;
   queueIndex: number;
-  traces: ExecutionTraceViewModel[];
+  traces: RunTraceViewModel[];
 }>>(() => {
-  const tracesByMessageId = new Map<string, ExecutionTraceViewModel[]>();
-  const tracesByQueueIndex = new Map<number, ExecutionTraceViewModel[]>();
+  const tracesByMessageId = new Map<string, RunTraceViewModel[]>();
+  const tracesByQueueIndex = new Map<number, RunTraceViewModel[]>();
   for (const trace of executionTraces.value) {
     const messageId = trace.messageId.trim();
     if (messageId !== "") {
@@ -481,7 +481,7 @@ const traceMessageItems = computed<Array<{
     id: string;
     preview: string;
     queueIndex: number;
-    traces: ExecutionTraceViewModel[];
+    traces: RunTraceViewModel[];
   }> = [];
   for (const message of messages.value) {
     if (message.role !== "user") {
@@ -495,7 +495,7 @@ const traceMessageItems = computed<Array<{
     const queueMatches = typeof message.queue_index === "number"
       ? tracesByQueueIndex.get(message.queue_index) ?? []
       : [];
-    const merged = new Map<string, ExecutionTraceViewModel>();
+    const merged = new Map<string, RunTraceViewModel>();
     for (const trace of directMatches) {
       merged.set(trace.executionId, trace);
     }
@@ -529,7 +529,7 @@ const selectedTraceMessage = computed(() => {
 
 const selectedTraceMessageTraces = computed(() => selectedTraceMessage.value?.traces ?? []);
 
-const selectedTrace = computed<ExecutionTraceViewModel | null>(() => {
+const selectedTrace = computed<RunTraceViewModel | null>(() => {
   const traces = selectedTraceMessageTraces.value;
   if (traces.length <= 0) {
     return null;

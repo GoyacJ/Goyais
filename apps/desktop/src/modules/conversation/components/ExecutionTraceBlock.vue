@@ -40,12 +40,12 @@
 </template>
 
 <script setup lang="ts">
-import type { ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
+import type { RunTraceViewModel } from "@/modules/conversation/views/processTrace";
 import type { RunningActionViewModel } from "@/modules/conversation/views/runningActions";
 import { useI18n } from "@/shared/i18n";
 
 const props = defineProps<{
-  trace: ExecutionTraceViewModel;
+  trace: RunTraceViewModel;
   runningActions: RunningActionViewModel[];
 }>();
 
