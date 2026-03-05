@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { buildExecutionTraceViewModels } from "@/modules/conversation/views/processTrace";
-import type { Execution, ExecutionEvent } from "@/shared/types/api";
+import type { Run, RunLifecycleEvent } from "@/shared/types/api";
 
-const baseExecution: Execution = {
+const baseExecution: Run = {
   id: "exec_trace_1",
   workspace_id: "ws_local",
   conversation_id: "conv_trace_1",
@@ -24,7 +24,7 @@ const baseExecution: Execution = {
   updated_at: "2026-02-24T00:00:20Z"
 };
 
-const baseEvent: ExecutionEvent = {
+const baseEvent: RunLifecycleEvent = {
   event_id: "evt_trace_1",
   execution_id: "exec_trace_1",
   conversation_id: "conv_trace_1",
@@ -38,7 +38,7 @@ const baseEvent: ExecutionEvent = {
 
 describe("execution trace view model", () => {
   it("groups events by execution and builds readable summaries", () => {
-    const events: ExecutionEvent[] = [
+    const events: RunLifecycleEvent[] = [
       baseEvent,
       {
         ...baseEvent,
@@ -104,7 +104,7 @@ describe("execution trace view model", () => {
   });
 
   it("renders basic detail level without raw payload", () => {
-    const execution: Execution = {
+    const execution: Run = {
       ...baseExecution,
       id: "exec_trace_basic",
       message_id: "msg_trace_basic",
@@ -116,7 +116,7 @@ describe("execution trace view model", () => {
         trace_detail_level: "basic"
       }
     };
-    const events: ExecutionEvent[] = [
+    const events: RunLifecycleEvent[] = [
       {
         ...baseEvent,
         event_id: "evt_trace_basic_call",
@@ -152,14 +152,14 @@ describe("execution trace view model", () => {
   });
 
   it("handles failed execution summary with failed tool count", () => {
-    const execution: Execution = {
+    const execution: Run = {
       ...baseExecution,
       id: "exec_trace_failed",
       message_id: "msg_trace_failed",
       state: "failed",
       updated_at: "2026-02-24T00:02:00Z"
     };
-    const events: ExecutionEvent[] = [
+    const events: RunLifecycleEvent[] = [
       {
         ...baseEvent,
         event_id: "evt_trace_failed_start",
@@ -190,7 +190,7 @@ describe("execution trace view model", () => {
   });
 
   it("renders no-token secondary summary when usage is missing", () => {
-    const execution: Execution = {
+    const execution: Run = {
       ...baseExecution,
       id: "exec_trace_no_usage",
       message_id: "msg_trace_no_usage",

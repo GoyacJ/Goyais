@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
 import { resolveConversationUsage, summarizeExecutionTokens } from "@/modules/conversation/views/conversationTokenUsage";
-import type { Conversation, Execution } from "@/shared/types/api";
+import type { Run, Session } from "@/shared/types/api";
 
 describe("conversation token usage helpers", () => {
   it("summarizes token usage from deduped execution list", () => {
@@ -73,7 +73,7 @@ describe("conversation token usage helpers", () => {
   });
 });
 
-function createConversation(overrides: Partial<Conversation> = {}): Conversation {
+function createConversation(overrides: Partial<Session> = {}): Session {
   return {
     id: "conv_1",
     workspace_id: "ws_1",
@@ -93,7 +93,7 @@ function createConversation(overrides: Partial<Conversation> = {}): Conversation
   };
 }
 
-function createExecution(overrides: Partial<Execution> = {}): Execution {
+function createExecution(overrides: Partial<Run> = {}): Run {
   return {
     id: "exec_1",
     workspace_id: "ws_1",

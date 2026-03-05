@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizeExecutionEventsByExecution } from "@/modules/conversation/trace/normalize";
-import type { ExecutionEvent } from "@/shared/types/api";
+import type { RunLifecycleEvent } from "@/shared/types/api";
 
 describe("trace normalize", () => {
   it("sorts by sequence and timestamp and maps stage", () => {
-    const events: ExecutionEvent[] = [
+    const events: RunLifecycleEvent[] = [
       {
         event_id: "evt_2",
         execution_id: "exec_1",
@@ -52,7 +52,7 @@ describe("trace normalize", () => {
   });
 
   it("redacts sensitive payload keys", () => {
-    const events: ExecutionEvent[] = [
+    const events: RunLifecycleEvent[] = [
       {
         event_id: "evt_sensitive",
         execution_id: "exec_sensitive",
@@ -81,7 +81,7 @@ describe("trace normalize", () => {
   });
 
   it("does not fallback reasoning sentence to stage placeholders", () => {
-    const events: ExecutionEvent[] = [
+    const events: RunLifecycleEvent[] = [
       {
         event_id: "evt_placeholder",
         execution_id: "exec_placeholder",

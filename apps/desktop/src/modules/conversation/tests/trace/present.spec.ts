@@ -5,9 +5,9 @@ import {
   buildRunningActionBaseViewModelData,
   hydrateRunningActionElapsed
 } from "@/modules/conversation/trace/present";
-import type { Execution, ExecutionEvent } from "@/shared/types/api";
+import type { Run, RunLifecycleEvent } from "@/shared/types/api";
 
-const baseExecution: Execution = {
+const baseExecution: Run = {
   id: "exec_present_1",
   workspace_id: "ws_local",
   conversation_id: "conv_present_1",
@@ -26,7 +26,7 @@ const baseExecution: Execution = {
   updated_at: "2026-02-24T00:00:10Z"
 };
 
-const events: ExecutionEvent[] = [
+const events: RunLifecycleEvent[] = [
   {
     event_id: "evt_present_model",
     execution_id: "exec_present_1",
@@ -76,7 +76,7 @@ describe("trace present", () => {
   });
 
   it("does not expose raw payload for basic detail level", () => {
-    const execution: Execution = {
+    const execution: Run = {
       ...baseExecution,
       id: "exec_present_basic",
       message_id: "msg_present_basic",
@@ -132,14 +132,14 @@ describe("trace present", () => {
   });
 
   it("maps summary tone by execution state and trace signals", () => {
-    const completedExecution: Execution = {
+    const completedExecution: Run = {
       ...baseExecution,
       id: "exec_present_completed",
       message_id: "msg_present_completed",
       state: "completed",
       updated_at: "2026-02-24T00:00:12Z"
     };
-    const completedEvents: ExecutionEvent[] = [
+    const completedEvents: RunLifecycleEvent[] = [
       {
         ...events[1]!,
         event_id: "evt_present_completed_call",
@@ -167,14 +167,14 @@ describe("trace present", () => {
       }
     ];
 
-    const failedExecution: Execution = {
+    const failedExecution: Run = {
       ...baseExecution,
       id: "exec_present_failed",
       message_id: "msg_present_failed",
       state: "failed",
       updated_at: "2026-02-24T00:00:12Z"
     };
-    const failedEvents: ExecutionEvent[] = [
+    const failedEvents: RunLifecycleEvent[] = [
       {
         ...events[1]!,
         event_id: "evt_present_failed_result",
@@ -189,14 +189,14 @@ describe("trace present", () => {
       }
     ];
 
-    const confirmingExecution: Execution = {
+    const confirmingExecution: Run = {
       ...baseExecution,
       id: "exec_present_confirming",
       message_id: "msg_present_confirming",
       state: "confirming",
       updated_at: "2026-02-24T00:00:12Z"
     };
-    const confirmingEvents: ExecutionEvent[] = [
+    const confirmingEvents: RunLifecycleEvent[] = [
       {
         ...events[0]!,
         event_id: "evt_present_approval",
@@ -211,14 +211,14 @@ describe("trace present", () => {
       }
     ];
 
-    const cancelledExecution: Execution = {
+    const cancelledExecution: Run = {
       ...baseExecution,
       id: "exec_present_cancelled",
       message_id: "msg_present_cancelled",
       state: "cancelled",
       updated_at: "2026-02-24T00:00:12Z"
     };
-    const cancelledEvents: ExecutionEvent[] = [
+    const cancelledEvents: RunLifecycleEvent[] = [
       {
         ...events[1]!,
         event_id: "evt_present_cancelled_call",

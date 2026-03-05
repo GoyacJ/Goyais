@@ -1,4 +1,4 @@
-import type { ExecutionEvent } from "@/shared/types/api";
+import type { RunLifecycleEvent } from "@/shared/types/api";
 
 import type { NormalizedThinkingStage, NormalizedTraceEvent, TraceEventType } from "@/modules/conversation/trace/types";
 import {
@@ -18,7 +18,7 @@ const RENDERED_EVENT_TYPES: ReadonlySet<string> = new Set([
   "tool_result"
 ]);
 
-export function normalizeExecutionEventsByExecution(events: ExecutionEvent[]): Map<string, NormalizedTraceEvent[]> {
+export function normalizeExecutionEventsByExecution(events: RunLifecycleEvent[]): Map<string, NormalizedTraceEvent[]> {
   const grouped = new Map<string, NormalizedTraceEvent[]>();
 
   for (let index = 0; index < events.length; index += 1) {
@@ -45,7 +45,7 @@ export function normalizeExecutionEventsByExecution(events: ExecutionEvent[]): M
   return grouped;
 }
 
-function normalizeExecutionEvent(event: ExecutionEvent, index: number): NormalizedTraceEvent {
+function normalizeExecutionEvent(event: RunLifecycleEvent, index: number): NormalizedTraceEvent {
   const type = event.type as TraceEventType;
   const payload = redactSensitivePayload(event.payload ?? {});
   const stage = type === "thinking_delta"

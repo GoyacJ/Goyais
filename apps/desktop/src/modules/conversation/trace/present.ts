@@ -15,7 +15,7 @@ import type {
   TraceStatusTone
 } from "@/modules/conversation/trace/types";
 import { messages } from "@/shared/i18n/messages";
-import type { Execution, ExecutionEvent, TraceDetailLevel } from "@/shared/types/api";
+import type { Run, RunLifecycleEvent, TraceDetailLevel } from "@/shared/types/api";
 
 type ActiveAction = RunningActionBaseViewModel & {
   toolName: string;
@@ -23,8 +23,8 @@ type ActiveAction = RunningActionBaseViewModel & {
 };
 
 export function buildExecutionTraceViewModelData(
-  events: ExecutionEvent[],
-  executions: Execution[],
+  events: RunLifecycleEvent[],
+  executions: Run[],
   locale: TraceLocale,
   now: Date = new Date()
 ): ExecutionTraceViewModelData[] {
@@ -62,8 +62,8 @@ export function buildExecutionTraceViewModelData(
 }
 
 export function buildRunningActionBaseViewModelData(
-  events: ExecutionEvent[],
-  executions: Execution[],
+  events: RunLifecycleEvent[],
+  executions: Run[],
   locale: TraceLocale
 ): RunningActionBaseViewModel[] {
   const groupedEvents = normalizeExecutionEventsByExecution(events);
@@ -111,7 +111,7 @@ export function hydrateRunningActionElapsed(
 }
 
 function collectActiveActionsForExecution(
-  execution: Execution,
+  execution: Run,
   events: NormalizedTraceEvent[],
   locale: TraceLocale
 ): RunningActionBaseViewModel[] {
@@ -141,7 +141,7 @@ function collectActiveActionsForExecution(
 }
 
 function handleThinkingDeltaEvent(
-  execution: Execution,
+  execution: Run,
   event: NormalizedTraceEvent,
   locale: TraceLocale,
   activeActions: Map<string, ActiveAction>,
@@ -239,7 +239,7 @@ function handleThinkingDeltaEvent(
 }
 
 function handleToolCallEvent(
-  execution: Execution,
+  execution: Run,
   event: NormalizedTraceEvent,
   locale: TraceLocale,
   activeActions: Map<string, ActiveAction>,
@@ -265,7 +265,7 @@ function handleToolCallEvent(
 }
 
 function handleToolResultEvent(
-  execution: Execution,
+  execution: Run,
   event: NormalizedTraceEvent,
   activeActions: Map<string, ActiveAction>
 ): void {
@@ -284,7 +284,7 @@ function handleToolResultEvent(
 }
 
 function buildTraceSummary(
-  execution: Execution,
+  execution: Run,
   events: NormalizedTraceEvent[],
   locale: TraceLocale,
   now: Date
@@ -349,7 +349,7 @@ function buildTraceSummary(
   };
 }
 
-function resolveSummaryTone(execution: Execution, events: NormalizedTraceEvent[]): TraceSummaryTone {
+function resolveSummaryTone(execution: Run, events: NormalizedTraceEvent[]): TraceSummaryTone {
   const hasFailedToolResult = events.some((event) => event.type === "tool_result" && event.isSuccess === false);
   if (execution.state === "failed" || hasFailedToolResult) {
     return "error";
@@ -653,7 +653,7 @@ function formatTimestamp(value: string, locale: TraceLocale): string {
   }
 }
 
-function resolveDurationSeconds(execution: Execution, events: NormalizedTraceEvent[], now: Date): number {
+function resolveDurationSeconds(execution: Run, events: NormalizedTraceEvent[], now: Date): number {
   const startedAt = resolveStartedAt(execution, events);
   const endedAt = resolveEndedAt(execution, now);
   const durationMs = endedAt.getTime() - startedAt.getTime();
@@ -663,7 +663,7 @@ function resolveDurationSeconds(execution: Execution, events: NormalizedTraceEve
   return Math.round(durationMs / 1000);
 }
 
-function resolveMessageDurationSeconds(execution: Execution, now: Date): number {
+function resolveMessageDurationSeconds(execution: Run, now: Date): number {
   const startedAt = toDateOrNow(execution.created_at);
   const endedAt = resolveEndedAt(execution, now);
   const durationMs = endedAt.getTime() - startedAt.getTime();
@@ -673,12 +673,12 @@ function resolveMessageDurationSeconds(execution: Execution, now: Date): number 
   return Math.round(durationMs / 1000);
 }
 
-function resolveStartedAt(execution: Execution, events: NormalizedTraceEvent[]): Date {
+function resolveStartedAt(execution: Run, events: NormalizedTraceEvent[]): Date {
   const startedEvent = events.find((item) => item.type === "execution_started");
   return toDateOrNow(startedEvent?.timestamp || execution.created_at);
 }
 
-function resolveEndedAt(execution: Execution, now: Date): Date {
+function resolveEndedAt(execution: Run, now: Date): Date {
   if (!isTerminalRunState(execution.state)) {
     return now;
   }

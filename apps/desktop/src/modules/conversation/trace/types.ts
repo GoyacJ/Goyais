@@ -1,5 +1,5 @@
 import type { Locale } from "@/shared/i18n/messages";
-import type { Execution } from "@/shared/types/api";
+import type { Run } from "@/shared/types/api";
 
 export type TraceLocale = Locale;
 
@@ -41,7 +41,7 @@ export type NormalizedTraceEvent = {
 };
 
 export type NormalizedExecutionTrace = {
-  execution: Execution;
+  execution: Run;
   events: NormalizedTraceEvent[];
 };
 
@@ -65,7 +65,7 @@ export type ExecutionTraceViewModelData = {
   executionId: string;
   messageId: string;
   queueIndex: number;
-  state: Execution["state"];
+  state: Run["state"];
   isRunning: boolean;
   summaryPrimary: string;
   summarySecondary: string;

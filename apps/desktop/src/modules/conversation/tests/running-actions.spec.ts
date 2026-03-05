@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { buildRunningActionViewModels } from "@/modules/conversation/views/runningActions";
-import type { Execution, ExecutionEvent } from "@/shared/types/api";
+import type { Run, RunLifecycleEvent } from "@/shared/types/api";
 
-const baseExecution: Execution = {
+const baseExecution: Run = {
   id: "exec_running_1",
   workspace_id: "ws_local",
   conversation_id: "conv_running_1",
@@ -22,7 +22,7 @@ const baseExecution: Execution = {
   updated_at: "2026-02-24T00:00:00Z"
 };
 
-const baseEvent: ExecutionEvent = {
+const baseEvent: RunLifecycleEvent = {
   event_id: "evt_running_1",
   execution_id: "exec_running_1",
   conversation_id: "conv_running_1",
@@ -36,7 +36,7 @@ const baseEvent: ExecutionEvent = {
 
 describe("running actions view", () => {
   it("shows concurrent running actions with elapsed time", () => {
-    const events: ExecutionEvent[] = [
+    const events: RunLifecycleEvent[] = [
       {
         ...baseEvent,
         event_id: "evt_model_call",
@@ -96,7 +96,7 @@ describe("running actions view", () => {
   });
 
   it("falls back to name+sequence matching when call_id is missing", () => {
-    const events: ExecutionEvent[] = [
+    const events: RunLifecycleEvent[] = [
       {
         ...baseEvent,
         event_id: "evt_tool_call_old",
@@ -137,12 +137,12 @@ describe("running actions view", () => {
   });
 
   it("shows approval action while execution is confirming", () => {
-    const confirmingExecution: Execution = {
+    const confirmingExecution: Run = {
       ...baseExecution,
       id: "exec_confirming_1",
       state: "confirming"
     };
-    const events: ExecutionEvent[] = [
+    const events: RunLifecycleEvent[] = [
       {
         ...baseEvent,
         execution_id: "exec_confirming_1",
@@ -167,7 +167,7 @@ describe("running actions view", () => {
   });
 
   it("localizes primary labels in english locale", () => {
-    const events: ExecutionEvent[] = [
+    const events: RunLifecycleEvent[] = [
       {
         ...baseEvent,
         event_id: "evt_tool_call_en",

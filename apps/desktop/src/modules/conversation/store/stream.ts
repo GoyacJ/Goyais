@@ -6,7 +6,7 @@ import {
   sessionStore
 } from "@/modules/conversation/store/state";
 import { createExecutionEvent } from "@/modules/conversation/store/events";
-import type { ExecutionEvent, RunEventType, Session, StreamRunEventType } from "@/shared/types/api";
+import type { RunEventType, RunLifecycleEvent, Session, StreamRunEventType } from "@/shared/types/api";
 
 const runEventTypes: readonly StreamRunEventType[] = [
   "run_queued",
@@ -135,7 +135,7 @@ export function detachConversationStream(conversationId: string): void {
   detachSessionStream(conversationId);
 }
 
-function isSSEBackfillResyncEvent(event: ExecutionEvent): boolean {
+function isSSEBackfillResyncEvent(event: RunLifecycleEvent): boolean {
   if (event.type !== "thinking_delta") {
     return false;
   }
@@ -146,7 +146,7 @@ function isSSEBackfillResyncEvent(event: ExecutionEvent): boolean {
   return payload.resync_required === true && payload.reason === "last_event_id_not_found";
 }
 
-function resolveLatestEventIDFromResyncPayload(event: ExecutionEvent): string {
+function resolveLatestEventIDFromResyncPayload(event: RunLifecycleEvent): string {
   const raw = event.payload?.latest_event_id;
   if (typeof raw !== "string") {
     return "";
@@ -154,7 +154,7 @@ function resolveLatestEventIDFromResyncPayload(event: ExecutionEvent): string {
   return raw.trim();
 }
 
-function normalizeExecutionEvent(raw: unknown, fallbackConversationId: string): ExecutionEvent | null {
+function normalizeExecutionEvent(raw: unknown, fallbackConversationId: string): RunLifecycleEvent | null {
   if (!isRecord(raw)) {
     return null;
   }
@@ -176,7 +176,7 @@ function mapRunEventToExecutionEvent(
   raw: Record<string, unknown>,
   runType: StreamRunEventType,
   fallbackConversationId: string
-): ExecutionEvent {
+): RunLifecycleEvent {
   const payload = asRecord(raw.payload);
   const queueIndex = asInteger(raw.queue_index, asInteger(payload.queue_index, 0));
   const traceId = asString(raw.trace_id) || asString(payload.trace_id);
