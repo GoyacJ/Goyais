@@ -72,53 +72,53 @@ func TestCORSPreflightForModelCatalog(t *testing.T) {
 	}
 }
 
-func TestRemovedAliasRoutesReturn404(t *testing.T) {
+func TestRemovedDeprecatedRoutesReturn404(t *testing.T) {
 	router := NewRouter()
 
-	legacyRemoteConnect := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/remote/connect", map[string]any{
-		"name":     "Legacy Alias",
+	removedRemoteConnect := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/remote/connect", map[string]any{
+		"name":     "Removed Route",
 		"hub_url":  "http://127.0.0.1:9999",
-		"username": "legacy",
-		"password": "legacy",
+		"username": "removed",
+		"password": "removed",
 	}, nil)
-	if legacyRemoteConnect.Code != http.StatusNotFound {
-		t.Fatalf("expected legacy remote alias route to return 404, got %d", legacyRemoteConnect.Code)
+	if removedRemoteConnect.Code != http.StatusNotFound {
+		t.Fatalf("expected removed remote route to return 404, got %d", removedRemoteConnect.Code)
 	}
 
-	legacyCatalogSync := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/ws_local/model-catalog/sync", map[string]any{
+	removedCatalogSync := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/ws_local/model-catalog/sync", map[string]any{
 		"source": "manual",
 	}, nil)
-	if legacyCatalogSync.Code != http.StatusNotFound {
-		t.Fatalf("expected legacy model catalog alias route to return 404, got %d", legacyCatalogSync.Code)
+	if removedCatalogSync.Code != http.StatusNotFound {
+		t.Fatalf("expected removed model catalog route to return 404, got %d", removedCatalogSync.Code)
 	}
 
-	legacyConversationChangeSet := performJSONRequest(t, router, http.MethodGet, "/v2/conversations/conv_legacy/changeset", nil, nil)
-	if legacyConversationChangeSet.Code != http.StatusNotFound {
-		t.Fatalf("expected legacy conversation changeset route to return 404, got %d", legacyConversationChangeSet.Code)
+	removedConversationChangeSet := performJSONRequest(t, router, http.MethodGet, "/v2/conversations/conv_removed/changeset", nil, nil)
+	if removedConversationChangeSet.Code != http.StatusNotFound {
+		t.Fatalf("expected removed conversation changeset route to return 404, got %d", removedConversationChangeSet.Code)
 	}
 
-	legacyConversationRollback := performJSONRequest(t, router, http.MethodPost, "/v2/conversations/conv_legacy/rollback", map[string]any{
-		"message_id": "msg_legacy",
+	removedConversationRollback := performJSONRequest(t, router, http.MethodPost, "/v2/conversations/conv_removed/rollback", map[string]any{
+		"message_id": "msg_removed",
 	}, nil)
-	if legacyConversationRollback.Code != http.StatusNotFound {
-		t.Fatalf("expected legacy conversation rollback route to return 404, got %d", legacyConversationRollback.Code)
+	if removedConversationRollback.Code != http.StatusNotFound {
+		t.Fatalf("expected removed conversation rollback route to return 404, got %d", removedConversationRollback.Code)
 	}
 
-	legacyConversationList := performJSONRequest(t, router, http.MethodGet, "/v1/conversations", nil, nil)
-	if legacyConversationList.Code != http.StatusNotFound {
-		t.Fatalf("expected legacy conversation list route to return 404, got %d", legacyConversationList.Code)
+	removedConversationList := performJSONRequest(t, router, http.MethodGet, "/v1/conversations", nil, nil)
+	if removedConversationList.Code != http.StatusNotFound {
+		t.Fatalf("expected removed conversation list route to return 404, got %d", removedConversationList.Code)
 	}
 
-	legacyConversationSubmit := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/conv_legacy/input/submit", map[string]any{
-		"raw_input": "legacy",
+	removedConversationSubmit := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/conv_removed/input/submit", map[string]any{
+		"raw_input": "removed",
 	}, nil)
-	if legacyConversationSubmit.Code != http.StatusNotFound {
-		t.Fatalf("expected legacy conversation submit route to return 404, got %d", legacyConversationSubmit.Code)
+	if removedConversationSubmit.Code != http.StatusNotFound {
+		t.Fatalf("expected removed conversation submit route to return 404, got %d", removedConversationSubmit.Code)
 	}
 
-	legacyExecutionList := performJSONRequest(t, router, http.MethodGet, "/v1/executions", nil, nil)
-	if legacyExecutionList.Code != http.StatusNotFound {
-		t.Fatalf("expected legacy execution list route to return 404, got %d", legacyExecutionList.Code)
+	removedExecutionList := performJSONRequest(t, router, http.MethodGet, "/v1/executions", nil, nil)
+	if removedExecutionList.Code != http.StatusNotFound {
+		t.Fatalf("expected removed execution list route to return 404, got %d", removedExecutionList.Code)
 	}
 }
 
@@ -148,7 +148,7 @@ func TestRuntimeSessionRunSubmitRoute(t *testing.T) {
 		"raw_input": "hello",
 	}, nil)
 	if res.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for missing session on alias route, got %d (%s)", res.Code, res.Body.String())
+		t.Fatalf("expected 404 for missing session on removed route, got %d (%s)", res.Code, res.Body.String())
 	}
 
 	payload := StandardError{}
@@ -235,22 +235,22 @@ func TestRemoteSessionWorkspaceListIsScoped(t *testing.T) {
 	}
 }
 
-func TestLegacyXAuthTokenHeaderIsRejected(t *testing.T) {
+func TestRemovedXAuthTokenHeaderIsRejected(t *testing.T) {
 	router := NewRouter()
 	remoteID := createRemoteWorkspace(t, router, "Remote Auth Header", "http://127.0.0.1:9885", false)
 	token := loginRemoteWorkspace(t, router, remoteID, "header-user", "pw", RoleDeveloper, true)
 
-	legacyHeaderRes := performJSONRequest(t, router, http.MethodGet, "/v1/workspaces/"+remoteID+"/status", nil, map[string]string{
+	removedHeaderRes := performJSONRequest(t, router, http.MethodGet, "/v1/workspaces/"+remoteID+"/status", nil, map[string]string{
 		"X-Auth-Token": token,
 	})
-	if legacyHeaderRes.Code != http.StatusUnauthorized {
-		t.Fatalf("expected legacy X-Auth-Token request to be rejected with 401, got %d (%s)", legacyHeaderRes.Code, legacyHeaderRes.Body.String())
+	if removedHeaderRes.Code != http.StatusUnauthorized {
+		t.Fatalf("expected removed X-Auth-Token request to be rejected with 401, got %d (%s)", removedHeaderRes.Code, removedHeaderRes.Body.String())
 	}
 
-	legacyPayload := StandardError{}
-	mustDecodeJSON(t, legacyHeaderRes.Body.Bytes(), &legacyPayload)
-	if legacyPayload.Code != "AUTH_TOKEN_REQUIRED" {
-		t.Fatalf("expected AUTH_TOKEN_REQUIRED for legacy header auth, got %s", legacyPayload.Code)
+	removedPayload := StandardError{}
+	mustDecodeJSON(t, removedHeaderRes.Body.Bytes(), &removedPayload)
+	if removedPayload.Code != "AUTH_TOKEN_REQUIRED" {
+		t.Fatalf("expected AUTH_TOKEN_REQUIRED for removed header auth, got %s", removedPayload.Code)
 	}
 
 	bearerRes := performJSONRequest(t, router, http.MethodGet, "/v1/workspaces/"+remoteID+"/status", nil, map[string]string{

@@ -14,12 +14,12 @@ import (
 
 func TestOpenAuthzStoreRebuildsLegacyResourceConfigsSchema(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "hub.sqlite3")
-	legacyDB, err := sql.Open("sqlite", dbPath)
+	previousDB, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		t.Fatalf("open legacy sqlite db failed: %v", err)
+		t.Fatalf("open previous sqlite db failed: %v", err)
 	}
 
-	if _, err := legacyDB.Exec(`CREATE TABLE resource_configs (
+	if _, err := previousDB.Exec(`CREATE TABLE resource_configs (
 		id TEXT PRIMARY KEY,
 		workspace_id TEXT NOT NULL,
 		type TEXT NOT NULL,
@@ -29,18 +29,18 @@ func TestOpenAuthzStoreRebuildsLegacyResourceConfigsSchema(t *testing.T) {
 		created_at TEXT NOT NULL,
 		updated_at TEXT NOT NULL
 	)`); err != nil {
-		t.Fatalf("create legacy resource_configs failed: %v", err)
+		t.Fatalf("create previous resource_configs failed: %v", err)
 	}
-	if _, err := legacyDB.Exec(`CREATE INDEX idx_resource_configs_workspace_type ON resource_configs(workspace_id, type)`); err != nil {
-		t.Fatalf("create legacy index failed: %v", err)
+	if _, err := previousDB.Exec(`CREATE INDEX idx_resource_configs_workspace_type ON resource_configs(workspace_id, type)`); err != nil {
+		t.Fatalf("create previous index failed: %v", err)
 	}
-	if err := legacyDB.Close(); err != nil {
-		t.Fatalf("close legacy sqlite db failed: %v", err)
+	if err := previousDB.Close(); err != nil {
+		t.Fatalf("close previous sqlite db failed: %v", err)
 	}
 
 	store, err := openAuthzStore(dbPath)
 	if err != nil {
-		t.Fatalf("expected open authz store to rebuild legacy schema, got %v", err)
+		t.Fatalf("expected open authz store to rebuild previous schema, got %v", err)
 	}
 	defer func() {
 		if closeErr := store.close(); closeErr != nil {
@@ -58,11 +58,11 @@ func TestOpenAuthzStoreRebuildsLegacyResourceConfigsSchema(t *testing.T) {
 
 func TestOpenAuthzStoreRebuildsLegacyProjectsSchema(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "hub.sqlite3")
-	legacyDB, err := sql.Open("sqlite", dbPath)
+	previousDB, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		t.Fatalf("open legacy sqlite db failed: %v", err)
+		t.Fatalf("open previous sqlite db failed: %v", err)
 	}
-	if _, err := legacyDB.Exec(`CREATE TABLE projects (
+	if _, err := previousDB.Exec(`CREATE TABLE projects (
 		id TEXT PRIMARY KEY,
 		workspace_id TEXT NOT NULL,
 		name TEXT NOT NULL,
@@ -73,15 +73,15 @@ func TestOpenAuthzStoreRebuildsLegacyProjectsSchema(t *testing.T) {
 		created_at TEXT NOT NULL,
 		updated_at TEXT NOT NULL
 	)`); err != nil {
-		t.Fatalf("create legacy projects table failed: %v", err)
+		t.Fatalf("create previous projects table failed: %v", err)
 	}
-	if err := legacyDB.Close(); err != nil {
-		t.Fatalf("close legacy sqlite db failed: %v", err)
+	if err := previousDB.Close(); err != nil {
+		t.Fatalf("close previous sqlite db failed: %v", err)
 	}
 
 	store, err := openAuthzStore(dbPath)
 	if err != nil {
-		t.Fatalf("expected open authz store to rebuild legacy projects schema, got %v", err)
+		t.Fatalf("expected open authz store to rebuild previous projects schema, got %v", err)
 	}
 	defer func() {
 		if closeErr := store.close(); closeErr != nil {
@@ -99,11 +99,11 @@ func TestOpenAuthzStoreRebuildsLegacyProjectsSchema(t *testing.T) {
 
 func TestOpenAuthzStoreBacksUpLegacyDBBeforeRebuild(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "hub.sqlite3")
-	legacyDB, err := sql.Open("sqlite", dbPath)
+	previousDB, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		t.Fatalf("open legacy sqlite db failed: %v", err)
+		t.Fatalf("open previous sqlite db failed: %v", err)
 	}
-	if _, err := legacyDB.Exec(`CREATE TABLE projects (
+	if _, err := previousDB.Exec(`CREATE TABLE projects (
 		id TEXT PRIMARY KEY,
 		workspace_id TEXT NOT NULL,
 		name TEXT NOT NULL,
@@ -114,15 +114,15 @@ func TestOpenAuthzStoreBacksUpLegacyDBBeforeRebuild(t *testing.T) {
 		created_at TEXT NOT NULL,
 		updated_at TEXT NOT NULL
 	)`); err != nil {
-		t.Fatalf("create legacy projects table failed: %v", err)
+		t.Fatalf("create previous projects table failed: %v", err)
 	}
-	if err := legacyDB.Close(); err != nil {
-		t.Fatalf("close legacy sqlite db failed: %v", err)
+	if err := previousDB.Close(); err != nil {
+		t.Fatalf("close previous sqlite db failed: %v", err)
 	}
 
 	store, err := openAuthzStore(dbPath)
 	if err != nil {
-		t.Fatalf("expected open authz store to rebuild legacy schema with backup, got %v", err)
+		t.Fatalf("expected open authz store to rebuild previous schema with backup, got %v", err)
 	}
 	defer func() {
 		if closeErr := store.close(); closeErr != nil {
@@ -130,17 +130,17 @@ func TestOpenAuthzStoreBacksUpLegacyDBBeforeRebuild(t *testing.T) {
 		}
 	}()
 
-	backupPaths, globErr := filepath.Glob(dbPath + ".legacy-*.bak")
+	backupPaths, globErr := filepath.Glob(dbPath + ".previous-*.bak")
 	if globErr != nil {
-		t.Fatalf("glob legacy backup files failed: %v", globErr)
+		t.Fatalf("glob previous backup files failed: %v", globErr)
 	}
 	if len(backupPaths) != 1 {
-		t.Fatalf("expected exactly one legacy backup file, got %d (%v)", len(backupPaths), backupPaths)
+		t.Fatalf("expected exactly one previous backup file, got %d (%v)", len(backupPaths), backupPaths)
 	}
 
 	backupDB, backupErr := sql.Open("sqlite", backupPaths[0])
 	if backupErr != nil {
-		t.Fatalf("open legacy backup db failed: %v", backupErr)
+		t.Fatalf("open previous backup db failed: %v", backupErr)
 	}
 	defer backupDB.Close()
 
@@ -149,7 +149,7 @@ func TestOpenAuthzStoreBacksUpLegacyDBBeforeRebuild(t *testing.T) {
 		t.Fatalf("check backup projects.current_revision failed: %v", hasRevisionColumnErr)
 	}
 	if hasRevisionColumnInBackup {
-		t.Fatalf("expected backup db to preserve legacy schema without projects.current_revision")
+		t.Fatalf("expected backup db to preserve previous schema without projects.current_revision")
 	}
 
 	hasRevisionColumnInCurrentDB, currentDBErr := tableHasColumn(store.db, "projects", "current_revision")
@@ -163,11 +163,11 @@ func TestOpenAuthzStoreBacksUpLegacyDBBeforeRebuild(t *testing.T) {
 
 func TestOpenAuthzStoreFailsWhenLegacyBackupFails(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "hub.sqlite3")
-	legacyDB, err := sql.Open("sqlite", dbPath)
+	previousDB, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		t.Fatalf("open legacy sqlite db failed: %v", err)
+		t.Fatalf("open previous sqlite db failed: %v", err)
 	}
-	if _, err := legacyDB.Exec(`CREATE TABLE projects (
+	if _, err := previousDB.Exec(`CREATE TABLE projects (
 		id TEXT PRIMARY KEY,
 		workspace_id TEXT NOT NULL,
 		name TEXT NOT NULL,
@@ -178,18 +178,18 @@ func TestOpenAuthzStoreFailsWhenLegacyBackupFails(t *testing.T) {
 		created_at TEXT NOT NULL,
 		updated_at TEXT NOT NULL
 	)`); err != nil {
-		t.Fatalf("create legacy projects table failed: %v", err)
+		t.Fatalf("create previous projects table failed: %v", err)
 	}
-	if err := legacyDB.Close(); err != nil {
-		t.Fatalf("close legacy sqlite db failed: %v", err)
+	if err := previousDB.Close(); err != nil {
+		t.Fatalf("close previous sqlite db failed: %v", err)
 	}
 
-	originalCopyFn := legacyDBBackupCopyFile
-	legacyDBBackupCopyFile = func(_ string, _ string) error {
+	originalCopyFn := schemaBackupCopyFile
+	schemaBackupCopyFile = func(_ string, _ string) error {
 		return errors.New("forced backup failure")
 	}
 	t.Cleanup(func() {
-		legacyDBBackupCopyFile = originalCopyFn
+		schemaBackupCopyFile = originalCopyFn
 	})
 
 	store, openErr := openAuthzStore(dbPath)
@@ -197,21 +197,21 @@ func TestOpenAuthzStoreFailsWhenLegacyBackupFails(t *testing.T) {
 		if store != nil {
 			_ = store.close()
 		}
-		t.Fatalf("expected open authz store to fail when legacy backup fails")
+		t.Fatalf("expected open authz store to fail when previous backup fails")
 	}
-	if !strings.Contains(openErr.Error(), "backup legacy db before rebuild") {
+	if !strings.Contains(openErr.Error(), "backup previous-schema db before rebuild") {
 		t.Fatalf("expected backup failure context in error, got %v", openErr)
 	}
 	if !strings.Contains(openErr.Error(), "forced backup failure") {
 		t.Fatalf("expected original backup error in message, got %v", openErr)
 	}
 
-	backupPaths, globErr := filepath.Glob(dbPath + ".legacy-*.bak")
+	backupPaths, globErr := filepath.Glob(dbPath + ".previous-*.bak")
 	if globErr != nil {
-		t.Fatalf("glob legacy backup files failed: %v", globErr)
+		t.Fatalf("glob previous backup files failed: %v", globErr)
 	}
 	if len(backupPaths) != 0 {
-		t.Fatalf("expected no legacy backup file created on forced failure, got %v", backupPaths)
+		t.Fatalf("expected no previous backup file created on forced failure, got %v", backupPaths)
 	}
 }
 
@@ -332,7 +332,7 @@ func TestResolveHubDBPathFromEnvUsesUserConfigDirByDefault(t *testing.T) {
 
 	resolved := resolveHubDBPathFromEnv()
 	if strings.HasSuffix(filepath.Clean(resolved), filepath.Clean(filepath.Join("data", "hub.sqlite3"))) {
-		t.Fatalf("expected default db path to be decoupled from legacy data path, got %q", resolved)
+		t.Fatalf("expected default db path to be decoupled from previous data path, got %q", resolved)
 	}
 	expectedSuffix := filepath.Clean(filepath.Join(defaultHubDBAppName, defaultHubDBFileName))
 	if !strings.HasSuffix(filepath.Clean(resolved), expectedSuffix) {
@@ -353,28 +353,28 @@ func TestOpenAuthzStoreDoesNotAutoMigrateLegacyDBToDefaultPath(t *testing.T) {
 		_ = os.Chdir(originalCWD)
 	})
 
-	legacyPath := filepath.Join("data", "hub.sqlite3")
-	legacyStore, err := openAuthzStore(legacyPath)
+	previousPath := filepath.Join("data", "hub.sqlite3")
+	previousStore, err := openAuthzStore(previousPath)
 	if err != nil {
-		t.Fatalf("open legacy store failed: %v", err)
+		t.Fatalf("open previous store failed: %v", err)
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	legacyURL := "http://legacy.local"
-	if _, err := legacyStore.upsertWorkspace(Workspace{
+	previousURL := "http://previous.local"
+	if _, err := previousStore.upsertWorkspace(Workspace{
 		ID:             "ws_migrated",
 		Name:           "Migrated",
 		Mode:           WorkspaceModeRemote,
-		HubURL:         &legacyURL,
+		HubURL:         &previousURL,
 		IsDefaultLocal: false,
 		CreatedAt:      now,
 		LoginDisabled:  false,
 		AuthMode:       AuthModePasswordOrToken,
 	}); err != nil {
-		_ = legacyStore.close()
-		t.Fatalf("seed legacy workspace failed: %v", err)
+		_ = previousStore.close()
+		t.Fatalf("seed previous workspace failed: %v", err)
 	}
-	if err := legacyStore.close(); err != nil {
-		t.Fatalf("close legacy store failed: %v", err)
+	if err := previousStore.close(); err != nil {
+		t.Fatalf("close previous store failed: %v", err)
 	}
 
 	t.Setenv("HUB_DB_PATH", "")
@@ -395,8 +395,8 @@ func TestOpenAuthzStoreDoesNotAutoMigrateLegacyDBToDefaultPath(t *testing.T) {
 	if _, err := os.Stat(targetPath); err != nil {
 		t.Fatalf("expected default db at %q: %v", targetPath, err)
 	}
-	if _, err := os.Stat(filepath.Join(baseDir, legacyPath)); err != nil {
-		t.Fatalf("expected legacy db kept at %q: %v", filepath.Join(baseDir, legacyPath), err)
+	if _, err := os.Stat(filepath.Join(baseDir, previousPath)); err != nil {
+		t.Fatalf("expected previous db kept at %q: %v", filepath.Join(baseDir, previousPath), err)
 	}
 
 	workspaces, err := store.listWorkspaces()
@@ -404,7 +404,7 @@ func TestOpenAuthzStoreDoesNotAutoMigrateLegacyDBToDefaultPath(t *testing.T) {
 		t.Fatalf("list workspaces from default store failed: %v", err)
 	}
 	if len(workspaces) != 0 {
-		t.Fatalf("expected default store to remain empty without legacy path migration, got %#v", workspaces)
+		t.Fatalf("expected default store to remain empty without previous path migration, got %#v", workspaces)
 	}
 }
 

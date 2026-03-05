@@ -428,7 +428,7 @@ function toTraceStep(
       ? tr(locale, "session.trace.step.detail.toolMeta", { tool: toolName })
       : tr(locale, "session.trace.step.detail.toolMetaWithRisk", { tool: toolName, risk: riskLabel });
     const operationDetail = event.operationSummary === ""
-      ? tr(locale, "session.trace.step.detail.operationFallback")
+      ? tr(locale, "session.trace.step.detail.operationDefault")
       : tr(locale, "session.trace.step.detail.operation", {
         operation: event.operationSummary
       });
@@ -456,8 +456,8 @@ function toTraceStep(
     detail: event.resultSummary !== ""
       ? event.resultSummary
       : success
-        ? tr(locale, "session.trace.step.detail.resultFallbackSuccess")
-        : tr(locale, "session.trace.step.detail.resultFallbackFailed"),
+        ? tr(locale, "session.trace.step.detail.resultDefaultSuccess")
+        : tr(locale, "session.trace.step.detail.resultDefaultFailed"),
     timestampLabel,
     statusTone: success ? "success" : "error",
     rawPayload
@@ -552,7 +552,7 @@ function formatIntentLabel(
   if (intentKind === "scalar" && value !== "") {
     return tr(locale, "session.trace.intent.scalar", { value });
   }
-  return tr(locale, "session.trace.intent.toolFallback", { tool: toolName });
+  return tr(locale, "session.trace.intent.toolDefault", { tool: toolName });
 }
 
 function isMeaningfulTraceStepEvent(event: NormalizedTraceEvent): boolean {
@@ -630,7 +630,7 @@ function composeSecondary(locale: TraceLocale, reasoning: string, operation: str
 function resolveToolName(locale: TraceLocale, toolName: string): string {
   const normalized = toolName.trim();
   if (normalized === "") {
-    return tr(locale, "session.trace.toolFallback");
+    return tr(locale, "session.trace.toolDefault");
   }
   return normalized;
 }

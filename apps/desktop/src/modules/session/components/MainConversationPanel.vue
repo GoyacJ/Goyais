@@ -107,7 +107,7 @@
           <div class="queued-main">
             <AppIcon name="corner-down-right" :size="12" />
             <p class="queued-text" :title="queuedMessage.content.trim()">
-              {{ queuedMessage.preview !== "" ? queuedMessage.preview : t("session.queue.itemFallback") }}
+              {{ queuedMessage.preview !== "" ? queuedMessage.preview : t("session.queue.itemDefault") }}
             </p>
           </div>
           <button

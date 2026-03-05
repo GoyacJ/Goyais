@@ -590,7 +590,7 @@ function displayDiffLineCount(value: unknown): number {
 function buildTraceMessagePreview(content: string): string {
   const normalized = content.trim().replace(/\s+/g, " ");
   if (normalized === "") {
-    return t("session.inspector.trace.messageFallback");
+    return t("session.inspector.trace.messageDefault");
   }
   if (normalized.length <= 60) {
     return normalized;

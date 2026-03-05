@@ -39,7 +39,7 @@
         { "id": "deepseek-reasoner", "label": "DeepSeek Reasoner", "enabled": true }
       ],
       "notes": [
-        "DeepSeek 对话与推理模型通过 OpenAI-compatible chat/completions 接口调用。"
+        "DeepSeek 对话与推理模型通过 OpenAI chat/completions 兼容接口调用。"
       ]
     },
     {
@@ -80,7 +80,7 @@
       },
       "models": [
         { "id": "qwen-plus-latest", "label": "Qwen Plus (Latest)", "enabled": true },
-        { "id": "qwen-plus", "label": "Qwen Plus (Stable Alias)", "enabled": true },
+        { "id": "qwen-plus", "label": "Qwen Plus (Stable)", "enabled": true },
 
         { "id": "qwen-flash", "label": "Qwen Flash (Stable)", "enabled": true },
 
@@ -90,7 +90,7 @@
         { "id": "qwen-coder-plus-latest", "label": "Qwen Coder Plus (Latest)", "enabled": true },
         { "id": "qwen-coder-turbo-latest", "label": "Qwen Coder Turbo (Latest)", "enabled": true },
 
-        { "id": "qwen-turbo", "label": "Qwen Turbo (Legacy)", "enabled": false }
+        { "id": "qwen-turbo", "label": "Qwen Turbo (Old ID)", "enabled": false }
       ],
       "notes": [
         "qwen-plus-latest / qwen-flash / qwen-max-latest / qwen-coder-*-latest 均来自阿里云百炼“模型列表”官方表格。"
@@ -111,9 +111,9 @@
         { "id": "doubao-seed-2-0-pro-260215", "label": "Doubao Seed 2.0 Pro (2026-02-15)", "enabled": true },
         { "id": "doubao-seed-1-8-251228", "label": "Doubao Seed 1.8 (2025-12-28)", "enabled": true },
 
-        { "id": "doubao-pro-32k", "label": "Doubao Pro 32k (Alias/Old)", "enabled": false },
-        { "id": "doubao-lite-32k", "label": "Doubao Lite 32k (Alias/Old)", "enabled": false },
-        { "id": "doubao-pro-128k", "label": "Doubao Pro 128k (Alias/Old)", "enabled": false }
+        { "id": "doubao-pro-32k", "label": "Doubao Pro 32k (Old ID)", "enabled": false },
+        { "id": "doubao-lite-32k", "label": "Doubao Lite 32k (Old ID)", "enabled": false },
+        { "id": "doubao-pro-128k", "label": "Doubao Pro 128k (Old ID)", "enabled": false }
       ],
       "notes": [
         "Seed 2.0 的模型ID以官方发布公告为准；Seed 1.8 的 model id 在“豆包大模型1.8(最新)”官方页可查。"
