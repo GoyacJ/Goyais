@@ -169,6 +169,7 @@ Week 6 收口标准：
 8. W1-T3 启动：shared-core `api-project.ts` 将 `SessionDetailResponse` 设为主结构并将旧字段降级为可选兼容，`ConversationDetailResponse` 收敛为别名；Desktop conversation 核心类型注解迁移到 `Session/Run` 主类型并保留旧 payload 兼容归一化。
 9. W1-T3 持续推进：Desktop `modules/project` 子域服务层与 store 层类型注解收敛到 `Session` 主类型，减少 `Conversation` 类型别名扩散。
 10. W1-T3 持续推进：Desktop `modules/project` 子域内部调用链切换到 `listSessions/createSession/patchSession/removeSession/exportSessionMarkdown`，并保留 conversation 命名服务函数作为兼容壳。
+11. W1-T3 持续推进：Desktop `modules/conversation` 视图与事件去重子域完成类型注解收敛（`Conversation/Execution/ExecutionEvent` -> `Session/Run/RunLifecycleEvent`），保持运行时字段与行为不变。
 
 ### 6.3 最新审计快照（2026-03-05）
 
@@ -190,3 +191,5 @@ Week 6 收口标准：
 9. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/execution-merge.spec.ts src/modules/conversation/tests/conversation-hydration.spec.ts src/modules/conversation/tests/conversation-run-tasks-service.spec.ts` ✅
 10. `pnpm --filter @goyais/shared-core build` ✅
 11. `pnpm --filter @goyais/desktop exec vitest run src/modules/project/store/project-store.spec.ts` ✅
+12. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/execution-trace-state.spec.ts src/modules/conversation/tests/conversation.spec.ts` ✅
+13. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/running-actions.spec.ts src/modules/conversation/tests/process-trace.spec.ts src/modules/conversation/tests/conversation-token-usage.spec.ts src/modules/conversation/tests/use-queue-messages-view.spec.ts src/modules/conversation/tests/main-screen-actions.spec.ts` ✅

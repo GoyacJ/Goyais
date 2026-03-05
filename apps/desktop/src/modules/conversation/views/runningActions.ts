@@ -8,15 +8,15 @@ import type {
   RunningActionViewModelData,
   TraceLocale
 } from "@/modules/conversation/trace/types";
-import type { Execution, ExecutionEvent } from "@/shared/types/api";
+import type { Run, RunLifecycleEvent } from "@/shared/types/api";
 
 export type RunningActionViewModel = RunningActionViewModelData;
 export type RunningActionBase = RunningActionBaseViewModel;
 export type { RunningActionType };
 
 export function buildRunningActionBaseViewModels(
-  events: ExecutionEvent[],
-  executions: Execution[],
+  events: RunLifecycleEvent[],
+  executions: Run[],
   locale: TraceLocale
 ): RunningActionBase[] {
   return buildRunningActionBaseViewModelData(events, executions, locale);
@@ -31,8 +31,8 @@ export function applyRunningActionElapsed(
 }
 
 export function buildRunningActionViewModels(
-  events: ExecutionEvent[],
-  executions: Execution[],
+  events: RunLifecycleEvent[],
+  executions: Run[],
   locale: TraceLocale,
   now: Date = new Date()
 ): RunningActionViewModel[] {

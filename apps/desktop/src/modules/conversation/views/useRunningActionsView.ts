@@ -7,11 +7,11 @@ import {
 } from "@/modules/conversation/views/runningActions";
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
 import type { Locale } from "@/shared/i18n/messages";
-import type { Execution } from "@/shared/types/api";
+import type { Run } from "@/shared/types/api";
 
 type RunningActionsViewOptions = {
   locale: Ref<Locale>;
-  executionFilter?: (execution: Execution) => boolean;
+  executionFilter?: (execution: Run) => boolean;
 };
 
 export function useRunningActionsView(

@@ -1,10 +1,10 @@
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
-import type { ExecutionEvent } from "@/shared/types/api";
+import type { RunLifecycleEvent } from "@/shared/types/api";
 
 const MAX_PROCESSED_EVENT_KEYS = 5000;
 const MAX_COMPLETION_MESSAGE_KEYS = 2000;
 
-export function buildEventDedupKey(event: ExecutionEvent): string {
+export function buildEventDedupKey(event: RunLifecycleEvent): string {
   const eventID = event.event_id?.trim();
   if (eventID !== "") {
     return `id:${eventID}`;
@@ -29,7 +29,7 @@ export function rememberProcessedEvent(runtime: ConversationRuntime, eventDedupK
 
 export function shouldAppendTerminalMessage(
   runtime: ConversationRuntime,
-  event: ExecutionEvent,
+  event: RunLifecycleEvent,
   previousState: string | undefined,
   nextState: string | undefined,
   messageID: string,
@@ -65,7 +65,7 @@ function rememberCompletionMessage(runtime: ConversationRuntime, completionKey: 
   }
 }
 
-function hasMessageContext(runtime: ConversationRuntime, event: ExecutionEvent, messageID: string): boolean {
+function hasMessageContext(runtime: ConversationRuntime, event: RunLifecycleEvent, messageID: string): boolean {
   const normalizedMessageID = messageID.trim();
   if (normalizedMessageID !== "" && runtime.messages.some((item) => item.id === normalizedMessageID)) {
     return true;
@@ -75,7 +75,7 @@ function hasMessageContext(runtime: ConversationRuntime, event: ExecutionEvent, 
   );
 }
 
-function buildCompletionKey(event: ExecutionEvent, role: "assistant" | "system"): string {
+function buildCompletionKey(event: RunLifecycleEvent, role: "assistant" | "system"): string {
   const eventID = event.event_id?.trim();
   if (eventID !== "") {
     return `${role}:id:${eventID}`;

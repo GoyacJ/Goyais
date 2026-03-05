@@ -3,11 +3,11 @@ import { computed, type ComputedRef } from "vue";
 import { projectStore } from "@/modules/project/store";
 import { resourceStore } from "@/modules/resource/store";
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
-import type { Conversation, Project } from "@/shared/types/api";
+import type { Project, Session } from "@/shared/types/api";
 
 type MainScreenModelingInput = {
   activeProject: ComputedRef<Project | undefined>;
-  activeConversation: ComputedRef<Conversation | undefined>;
+  activeConversation: ComputedRef<Session | undefined>;
   runtime: ComputedRef<ConversationRuntime | undefined>;
 };
 

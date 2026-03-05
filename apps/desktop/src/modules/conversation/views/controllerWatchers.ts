@@ -1,12 +1,12 @@
 import { ref, watch, type ComputedRef } from "vue";
 
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
-import type { Conversation } from "@/shared/types/api";
+import type { Session } from "@/shared/types/api";
 
 type ModelOption = { value: string; label: string };
 
 type AutoModelSyncWatcherInput = {
-  activeConversation: ComputedRef<Conversation | undefined>;
+  activeConversation: ComputedRef<Session | undefined>;
   activeCount: ComputedRef<number>;
   modelOptions: ComputedRef<ModelOption[]>;
   resolveSemanticModelID: (raw: string) => string;

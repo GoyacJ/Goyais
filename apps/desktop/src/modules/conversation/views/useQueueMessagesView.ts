@@ -1,7 +1,7 @@
 import { computed, type Ref } from "vue";
 
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
-import type { ConversationMessage, Execution } from "@/shared/types/api";
+import type { Run, SessionMessage } from "@/shared/types/api";
 
 export type QueuedMessageViewModel = {
   executionId: string;
@@ -12,14 +12,14 @@ export type QueuedMessageViewModel = {
 };
 
 type UserMessageLookup = {
-  byID: Map<string, ConversationMessage>;
-  byQueueIndex: Map<number, ConversationMessage>;
+  byID: Map<string, SessionMessage>;
+  byQueueIndex: Map<number, SessionMessage>;
 };
 
 export function useQueueMessagesView(runtime: Ref<ConversationRuntime | undefined>) {
   const userMessages = computed<UserMessageLookup>(() => {
-    const byID = new Map<string, ConversationMessage>();
-    const byQueueIndex = new Map<number, ConversationMessage>();
+    const byID = new Map<string, SessionMessage>();
+    const byQueueIndex = new Map<number, SessionMessage>();
     for (const message of runtime.value?.messages ?? []) {
       if (message.role !== "user") {
         continue;
@@ -91,7 +91,7 @@ export function useQueueMessagesView(runtime: Ref<ConversationRuntime | undefine
     })
   );
 
-  const visibleMessages = computed<ConversationMessage[]>(() => {
+  const visibleMessages = computed<SessionMessage[]>(() => {
     const hiddenIndexes = hiddenQueueIndexes.value;
     return (runtime.value?.messages ?? []).filter((message) => {
       if (message.role !== "user") {
@@ -122,7 +122,7 @@ export function useQueueMessagesView(runtime: Ref<ConversationRuntime | undefine
   };
 }
 
-function resolveUserMessageForExecution(execution: Execution, userMessages: UserMessageLookup): ConversationMessage | undefined {
+function resolveUserMessageForExecution(execution: Run, userMessages: UserMessageLookup): SessionMessage | undefined {
   if (typeof execution.queue_index === "number") {
     const byQueueIndex = userMessages.byQueueIndex.get(execution.queue_index);
     if (byQueueIndex) {
@@ -136,7 +136,7 @@ function resolveUserMessageForExecution(execution: Execution, userMessages: User
   return undefined;
 }
 
-function isHiddenExecution(execution: Execution, removedQueuedExecutionIDs: Set<string>): boolean {
+function isHiddenExecution(execution: Run, removedQueuedExecutionIDs: Set<string>): boolean {
   if (execution.state === "queued") {
     return true;
   }

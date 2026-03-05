@@ -43,11 +43,11 @@ import { createRemoteConnection, loginWorkspace as loginWorkspaceRequest } from 
 import { refreshMeForCurrentWorkspace, setWorkspaceToken } from "@/shared/stores/authStore";
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
-import type { Conversation, InspectorTabKey, PermissionMode, Project } from "@/shared/types/api";
+import type { InspectorTabKey, PermissionMode, Project, Session } from "@/shared/types/api";
 import { setWorkspaceConnection, switchWorkspaceContext, upsertWorkspace } from "@/modules/workspace/store";
 type MainScreenActionsInput = {
   router: Router;
-  activeConversation: ComputedRef<Conversation | undefined>;
+  activeConversation: ComputedRef<Session | undefined>;
   activeProject: ComputedRef<Project | undefined>;
   runtime: ComputedRef<ConversationRuntime | undefined>;
   modelOptions: ComputedRef<Array<{ value: string; label: string }>>;
