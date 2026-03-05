@@ -148,10 +148,10 @@ Week 6 收口标准：
 
 | 任务 ID | 当前状态 | 进展说明 | 关键证据 |
 |---|---|---|---|
-| W1-T1 | In Progress | OpenAPI 已将主 schema 反转为 `Session/Run` 主定义，`Conversation/Execution` 退为 alias；字段级旧语义仍有存量 | `Session/Run/SessionDetailResponse/SessionChangeSet/RunFilesExportResponse` 已为主定义 |
+| W1-T1 | In Progress | OpenAPI 已将主 schema 收敛为 `Session/Run` 主定义，并移除 `Conversation/Execution` 及相关 alias schema（含 change-set/export/event-batch 兼容壳） | `contracts:generate` / `contracts:check` 持续通过，schema 命中仅剩业务字段级旧语义 |
 | W1-T2 | In Progress | 已完成 `hooks` 与 `workspace-status` 的 `session_id/run_id` 及 `session_status` 子域切换；并完成 Hub 对应结构体字段名收敛（`SessionID/SessionStatus`）；核心会话/执行链路尚未全量切换 | hooks payload/模型字段、workspace status payload/模型字段均已切到 session 语义 |
-| W1-T3 | In Progress | 已启动 shared-core/desktop 类型去别名收口：`SessionDetailResponse` 改为主结构 + 旧字段可选兼容，Desktop conversation 核心服务/状态层改用 `Session/Run` 主类型并保留入参兼容归一化 | `api-project.ts`、`modules/conversation/services/index.ts`、`store/{state,executionMerge,executionRuntime}.ts` 已落地主类型改造 |
-| W1-T4 | Not Started | 契约未冻结，仍处于持续切换阶段 | 本文件状态为执行中 |
+| W1-T3 | In Progress | shared-core/desktop 类型去别名持续推进：`SessionDetailResponse` 去除 `conversation/executions` 兼容镜像，组件/SSE/快照链路改用 `Session*` / `SessionStreamEvent` 主类型 | `api-project.ts`、`modules/conversation/services/index.ts`、`store/state.ts`、`shared/services/sseClient.ts`、`conversationSnapshots.ts` |
+| W1-T4 | In Progress | 契约冻结进入收口阶段，当前以 `Session/Run` 主契约验证为准 | `pnpm contracts:generate && pnpm contracts:check` 连续通过 |
 | W2-T1 | In Progress | controlplane hooks 路由已切换为 run 语义，其他入口仍需继续收口 | `/v1/hooks/runs/{run_id}` 已注册 |
 | W2-T2 | In Progress | 已移除 runtime session path/query 对 `conversation_id` 的回退解析，并同步清理 hooks/workspace-status 子域内部字段名混用 | `runtime_session_path.go` 仅接受 `session_id`；hooks/workspace-status Hub 模型字段已收敛到 `SessionID/SessionStatus` |
 | W2-T3 | Done | hooks 路径由 `hooks/executions` 完成切换到 `hooks/runs`，并联动 OpenAPI/Hub/shared-core/tests | 全仓 grep `hooks/executions` 命中 0 |
@@ -164,7 +164,7 @@ Week 6 收口标准：
 3. workspace-status 字段收敛：响应字段与 desktop 消费方统一使用 `session_id`。
 4. Hub 入参回退收敛：runtime session 解析已移除 `conversation_id` fallback，仅保留 `session_id`。
 5. workspace-status 状态字段收敛：`conversation_status` -> `session_status`（contracts + hub + shared-core + desktop）。
-6. OpenAPI 主 schema 收敛：`Session/Run` 成为主定义，`Conversation/Execution` 改为 alias（并联动 contract tests 与 generated types）。
+6. OpenAPI 主 schema 收敛：`Session/Run` 成为主定义，并删除 `Conversation/Execution` 及相关 alias schema（并联动 contract types regenerate）。
 7. Hub 内部命名收敛：hooks/workspace-status 结构体字段由旧语义映射名进一步收敛为 `SessionID/SessionStatus`，并联动快照持久化与测试夹具同步。
 8. W1-T3 启动：shared-core `api-project.ts` 将 `SessionDetailResponse` 设为主结构并将旧字段降级为可选兼容，`ConversationDetailResponse` 收敛为别名；Desktop conversation 核心类型注解迁移到 `Session/Run` 主类型并保留旧 payload 兼容归一化。
 9. W1-T3 持续推进：Desktop `modules/project` 子域服务层与 store 层类型注解收敛到 `Session` 主类型，减少 `Conversation` 类型别名扩散。
@@ -174,16 +174,33 @@ Week 6 收口标准：
 13. W1-T3 持续推进：Desktop `modules/conversation/trace + store/stream` 子域完成类型注解收敛（`Execution/ExecutionEvent` -> `Run/RunLifecycleEvent`），保留 normalize/build 系列函数命名以避免调用面震荡。
 14. W1-T3 持续推进：Desktop `modules/conversation/store/state` 与 `views/useMainScreenController` 补齐类型收敛（`Conversation` 参数类型改 `Session`，`ExecutionEvent` 注解改 `RunLifecycleEvent`），保持函数命名与数据字段兼容。
 15. W1-T3 持续推进：Desktop `modules/conversation/components` 组件层类型注解收敛（`MainInspectorPanel/MainSidebarPanel` 由 `Conversation/Execution/ExecutionEvent` 切换至 `Session/Run/RunLifecycleEvent`），仅调整类型签名不改交互行为。
-16. W1-T3 持续推进：Desktop 测试与辅助视图类型注解继续收敛（`useExecutionTraceState` 与 `main-screen-actions/execution-merge/execution-trace-state` 测试由 `Conversation/Execution/ConversationMessage` 切换至 `Session/Run/SessionMessage`），断言逻辑不变。
+16. W1-T3 持续推进：Desktop 测试与辅助视图类型注解继续收敛（`useRunTraceState` 与 `main-screen-actions/execution-merge/run-trace-state` 测试统一为 `Session/Run/SessionMessage`），断言逻辑不变。
 17. W1-T3 持续推进：Desktop `modules/conversation` 内部 runtime 类型别名使用收敛（`ConversationRuntime` 注解统一替换为 `SessionRuntime`），保持 store 对外兼容导出不变。
 18. W1-T3 持续推进：Desktop 核心会话测试类型注解继续收敛（`conversation/conversation-hydration/conversation-race/conversation-run-tasks-actions` 测试中的 `Conversation` 切换至 `Session`），仅类型替换不改断言。
-19. W1-T3 持续推进：Desktop trace 展示层命名收敛（新增 `RunTraceViewModel/RunTraceStep` 主别名，组件与 controller 切换到 run 命名；保留 `ExecutionTrace*` 与 `buildExecutionTraceViewModels` 兼容导出）。
+19. W1-T3 持续推进：Desktop trace 展示层命名收敛（统一使用 `RunTraceViewModel/RunTraceStep/buildRunTraceViewModels` 主符号，组件与 controller 全量切换到 run 命名）。
+20. W1-T3 持续推进：Desktop `modules/project/services` 清理会话旧别名导出（移除 `listConversations/createConversation/patchConversation/renameConversation/removeConversation/exportConversationMarkdown`），`session` 命名成为该子域唯一服务接口，并同步更新 project store 测试 mock。
+21. W1-T3 持续推进：Desktop trace 状态与展示链路进一步收敛到 run 命名（`buildRunTraceViewModelData/buildRunTraceViewModels/useRunTraceState` 成为主符号，移除 `processTrace` 子域 `ExecutionTrace*` 兼容导出，联动 controller 与测试更新）。
+22. W1-T3 持续推进：Desktop trace 状态文件完成命名收口（统一使用 `useRunTraceState.ts`），controller 返回对象统一对外为 `selectedRunTrace`。
+23. W1-T3 持续推进：Desktop trace 组件文件级命名收口（统一使用 `RunTraceBlock.{vue,css}`），并同步 `MainConversationPanel` 内部组件引用与局部类型命名。
+24. W1-T3 持续推进：Desktop trace 测试文件级命名收口，统一使用 `run-trace-state.spec.ts`，并将测试描述文案同步到 run 语义。
+25. W1-T3 持续推进：Desktop trace 测试文件继续收口，统一使用 `run-trace.spec.ts`，并将测试套件标题同步为 run 语义。
+26. W1-T3 持续推进：Desktop trace 子目录测试命名收口，统一使用 `tests/trace/run-present.spec.ts`，并将测试套件标题同步为 run 语义。
+27. W1-T3 持续推进：Desktop trace 子目录测试继续收口，统一使用 `tests/trace/run-normalize.spec.ts`，并将测试套件标题同步为 run 语义。
+28. W1-T3 持续推进：Desktop trace 子目录测试完成收口，统一使用 `tests/trace/run-summarize.spec.ts`，并将测试套件标题同步为 run 语义。
+29. W1-T1/W1-T3 推进：OpenAPI 删除 `Conversation/Execution/CreateConversationRequest/UpdateConversationRequest/ConversationChangeSet/ExecutionFilesExportResponse/ExecutionEventBatchRequest` alias schema，并将事件 schema 主名切换到 `RunLifecycleEvent`。
+30. W1-T3 推进：shared-core `api-project.ts` 移除 `Conversation*/Execution*` 类型别名与 `SessionDetailResponse` 兼容镜像字段，`SessionSnapshot.messages` 收敛为 `SessionMessage[]`。
+31. W1-T3 推进：Desktop 契约消费链路去别名（`sseClient` 切换到 `SessionStreamEvent`，`MainConversationPanel` 与 `conversationSnapshots` 改用 `SessionMessage/SessionSnapshot`，`conversation services/state` 仅消费 `session/runs` 详情结构）。
+32. W1-T3 推进：Desktop hydration 相关测试夹具改用 `session/runs` 字段，消除 `conversation/executions` 兼容输入依赖。
+33. W1-T2/W2-T4 推进：Hub `internal/httpapi` 对外 JSON 字段继续收敛（`active_execution_id`/`conversation_id`/`execution_id`/`execution_ids` -> `active_run_id`/`session_id`/`run_id`/`run_ids`），并同步标准错误详情键。
+34. W1-T1/W1-T3 推进：OpenAPI 与 shared-core 字段级语义继续收敛（`Session`/`Run`/`RunLifecycleEvent`/`SessionChangeSet` 等模型字段统一使用 `session_id/run_id` 族）。
+35. W1-T3/W4-T2 推进：Desktop `modules/conversation` 消费链路字段统一切换到 `session_id/run_id/active_run_id/run_ids`，SSE、trace、hydration 与测试夹具同步收口。
+36. W4-T3 推进：Desktop i18n 用户可见文案从 “execution” 向 “run” 收敛（trace/inspector/settings 关键文案）。
 
 ### 6.3 最新审计快照（2026-03-05）
 
-1. `rg -n "\\b(conversation|execution|Conversation|Execution)\\b" services/hub apps/desktop/src packages/shared-core/src packages/contracts` -> `2498`（较上一轮 `2517` 下降 `19`）。
-2. `rg -n "\\b(v1|v2|v3|v4|V1|V2|V3|V4)\\b" services/hub apps/desktop/src packages/shared-core/src packages/contracts` -> `821`（含 `/v1` 路径与允许白名单）。
-3. `rg -n "\\blegacy\\w*|\\bcompat\\w*|fallback|alias" services/hub apps/desktop/src packages/shared-core/src packages/contracts` -> `371`。
+1. `rg -n "\\b(conversation|execution|Conversation|Execution)\\b" services/hub apps/desktop/src packages/shared-core/src packages/contracts` -> `2403`（较上一轮 `2422` 下降 `19`）。
+2. `rg -n "\\b(v1|v2|v3|v4|V1|V2|V3|V4)\\b" services/hub apps/desktop/src packages/shared-core/src packages/contracts` -> `812`（含 `/v1` 路径与允许白名单）。
+3. `rg -n "\\blegacy\\w*|\\bcompat\\w*|fallback|alias" services/hub apps/desktop/src packages/shared-core/src packages/contracts` -> `370`。
 4. `rg -n "hooks/executions" services/hub apps/desktop/src packages/shared-core/src packages/contracts` -> `0`（代码子域已清零，文档中保留历史描述不计入）。
 
 ### 6.4 验收命令与结果摘要（本轮）
@@ -199,13 +216,133 @@ Week 6 收口标准：
 9. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/execution-merge.spec.ts src/modules/conversation/tests/conversation-hydration.spec.ts src/modules/conversation/tests/conversation-run-tasks-service.spec.ts` ✅
 10. `pnpm --filter @goyais/shared-core build` ✅
 11. `pnpm --filter @goyais/desktop exec vitest run src/modules/project/store/project-store.spec.ts` ✅
-12. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/execution-trace-state.spec.ts src/modules/conversation/tests/conversation.spec.ts` ✅
-13. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/running-actions.spec.ts src/modules/conversation/tests/process-trace.spec.ts src/modules/conversation/tests/conversation-token-usage.spec.ts src/modules/conversation/tests/use-queue-messages-view.spec.ts src/modules/conversation/tests/main-screen-actions.spec.ts` ✅
+12. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/run-trace-state.spec.ts src/modules/conversation/tests/conversation.spec.ts` ✅
+13. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/running-actions.spec.ts src/modules/conversation/tests/run-trace.spec.ts src/modules/conversation/tests/conversation-token-usage.spec.ts src/modules/conversation/tests/use-queue-messages-view.spec.ts src/modules/conversation/tests/main-screen-actions.spec.ts` ✅
 14. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/conversation.spec.ts src/modules/conversation/tests/conversation-stream.spec.ts src/modules/conversation/tests/conversation-race.spec.ts src/modules/conversation/tests/main-screen-actions.spec.ts src/modules/conversation/tests/conversation-run-tasks-actions.spec.ts` ✅
-15. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/trace/normalize.spec.ts src/modules/conversation/tests/trace/present.spec.ts src/modules/conversation/tests/process-trace.spec.ts src/modules/conversation/tests/running-actions.spec.ts src/modules/conversation/tests/conversation-token-usage.spec.ts src/modules/conversation/tests/conversation-stream.spec.ts` ✅
+15. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/trace/run-normalize.spec.ts src/modules/conversation/tests/trace/run-present.spec.ts src/modules/conversation/tests/run-trace.spec.ts src/modules/conversation/tests/running-actions.spec.ts src/modules/conversation/tests/conversation-token-usage.spec.ts src/modules/conversation/tests/conversation-stream.spec.ts` ✅
 16. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/main-screen-controller.spec.ts src/modules/conversation/tests/conversation.spec.ts` ✅
 17. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/components/main-sidebar-panel.spec.ts src/modules/conversation/tests/main-inspector-run-tasks.spec.ts src/modules/conversation/tests/conversation.spec.ts` ✅
-18. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/main-screen-actions.spec.ts src/modules/conversation/tests/execution-merge.spec.ts src/modules/conversation/tests/execution-trace-state.spec.ts` ✅
+18. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/main-screen-actions.spec.ts src/modules/conversation/tests/execution-merge.spec.ts src/modules/conversation/tests/run-trace-state.spec.ts` ✅
 19. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/main-screen-actions.spec.ts src/modules/conversation/tests/use-queue-messages-view.spec.ts src/modules/conversation/tests/conversation-token-usage.spec.ts src/modules/conversation/tests/conversation.spec.ts` ✅
 20. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/conversation.spec.ts src/modules/conversation/tests/conversation-hydration.spec.ts src/modules/conversation/tests/conversation-race.spec.ts src/modules/conversation/tests/conversation-run-tasks-actions.spec.ts` ✅
-21. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/execution-trace-state.spec.ts src/modules/conversation/tests/process-trace.spec.ts src/modules/conversation/tests/main-inspector-run-tasks.spec.ts src/modules/conversation/tests/conversation.spec.ts` ✅
+21. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/run-trace-state.spec.ts src/modules/conversation/tests/run-trace.spec.ts src/modules/conversation/tests/main-inspector-run-tasks.spec.ts src/modules/conversation/tests/conversation.spec.ts` ✅
+22. `pnpm --filter @goyais/desktop exec vitest run src/modules/project/store/project-store.spec.ts` ✅
+23. `pnpm --filter @goyais/desktop build` ✅
+24. `pnpm lint` ✅
+25. `pnpm test` ✅
+26. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/run-trace.spec.ts src/modules/conversation/tests/trace/run-present.spec.ts src/modules/conversation/tests/run-trace-state.spec.ts src/modules/conversation/tests/main-screen-controller.spec.ts` ✅
+27. `pnpm --filter @goyais/desktop build` ✅
+28. `pnpm lint` ✅
+29. `pnpm test` ✅
+30. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/run-trace-state.spec.ts src/modules/conversation/tests/main-screen-controller.spec.ts src/modules/conversation/tests/run-trace.spec.ts src/modules/conversation/tests/trace/run-present.spec.ts` ✅
+31. `pnpm --filter @goyais/desktop build` ✅
+32. `pnpm lint` ✅
+33. `pnpm test` ✅
+34. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/components/main-sidebar-panel.spec.ts src/modules/conversation/tests/main-screen-actions.spec.ts src/modules/conversation/tests/conversation.spec.ts src/modules/conversation/tests/run-trace.spec.ts` ✅
+35. `pnpm --filter @goyais/desktop build` ✅
+36. `pnpm lint` ✅
+37. `pnpm test` ✅
+38. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/run-trace-state.spec.ts src/modules/conversation/tests/main-screen-controller.spec.ts src/modules/conversation/tests/run-trace.spec.ts src/modules/conversation/tests/trace/run-present.spec.ts` ✅
+39. `pnpm --filter @goyais/desktop build` ✅
+40. `pnpm lint` ✅
+41. `pnpm test` ✅
+42. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/run-trace.spec.ts src/modules/conversation/tests/run-trace-state.spec.ts` ✅
+43. `pnpm lint` ✅
+44. `pnpm test` ✅
+45. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/trace/run-present.spec.ts src/modules/conversation/tests/run-trace.spec.ts src/modules/conversation/tests/run-trace-state.spec.ts` ✅
+46. `pnpm lint` ✅
+47. `pnpm test` ✅
+48. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/trace/run-normalize.spec.ts src/modules/conversation/tests/trace/run-present.spec.ts src/modules/conversation/tests/run-trace.spec.ts src/modules/conversation/tests/run-trace-state.spec.ts` ✅
+49. `pnpm lint` ✅
+50. `pnpm test` ✅
+51. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/trace/run-summarize.spec.ts src/modules/conversation/tests/trace/run-normalize.spec.ts src/modules/conversation/tests/trace/run-present.spec.ts src/modules/conversation/tests/run-trace.spec.ts src/modules/conversation/tests/run-trace-state.spec.ts` ✅
+52. `pnpm lint` ✅
+53. `pnpm test` ✅
+54. `pnpm contracts:generate` ✅
+55. `pnpm contracts:check` ✅
+56. `pnpm --filter @goyais/shared-core build` ✅
+57. `pnpm lint` ✅
+58. `pnpm test` ✅
+59. `cd services/hub && go test ./... && go vet ./...` ✅
+60. `scripts/refactor/gate-check.sh` ✅
+61. `pnpm contracts:generate && pnpm contracts:check` ✅
+62. `cd services/hub && go test ./... && go vet ./...` ✅
+63. `pnpm lint && pnpm test` ✅
+64. `pnpm --filter @goyais/shared-core build` ✅
+
+### 6.5 Week 3 Hub 先行批次增量（2026-03-05）
+
+1. W3-T1 推进：Hub runtime 仓储命名收口，runtime 仓储装配命名收敛为 `RuntimeRepositorySet/NewSQLiteRuntimeRepositorySet`，并联动查询服务与状态同步链路。
+2. W3-T1 推进：Hub runtime 日志文案去版本后缀，runtime fallback 日志文案去版本后缀并统一为 runtime 语义。
+3. W3-T2/W3-T3 推进：Hub 权限键完成切换，`conversation.read/conversation.write/execution.control` 收敛为 `session.read/session.write/run.control`，并同步 `authorization_engine`、`authz_defaults`、角色默认权限、权限字典与 handler 审计键。
+4. W3-T2/W3-T3 推进：Desktop 权限消费侧最小联动完成，角色权限展示与 workspace 测试断言同步改为 `session.*`。
+5. W3-T2 推进：Hub runtime 存储命名收口，sqlite schema 表/索引统一收敛为无版本后缀命名，重建路径同步删除 `_v1` 表清理逻辑。
+6. W3-T4 推进：Week 3 审计快照更新，旧语义命中 `2403 -> 2370`（下降 `33`），版本词命中 `812 -> 770`（下降 `42`），兼容词命中保持 `370`。
+
+### 6.6 本批次新增验收命令与结果摘要（2026-03-05）
+
+1. `cd services/hub && go test ./internal/httpapi -count=1` ✅
+2. `pnpm contracts:generate` ✅
+3. `pnpm contracts:check` ✅
+4. `cd services/hub && go test ./...` ✅
+5. `cd services/hub && go vet ./...` ✅
+6. `pnpm lint` ✅
+7. `pnpm test` ✅
+8. `scripts/refactor/gate-check.sh` ✅
+9. `rg -n "\\b(conversation|execution|Conversation|Execution)\\b" ... | wc -l` -> `2370`
+10. `rg -n "\\b(v1|v2|v3|v4|V1|V2|V3|V4)\\b" ... | wc -l` -> `770`
+11. `rg -n "\\blegacy\\w*|\\bcompat\\w*|fallback|alias" ... | wc -l` -> `370`
+
+### 6.7 Week 3 收口补充批次（2026-03-05 夜间）
+
+1. W3-C1：补齐 DB 双冷启动自动化证据，新增 `TestOpenAuthzStoreSupportsRuntimeSchemaAfterTwoColdStarts`，每轮均执行“删除 sqlite 文件 -> 重建 -> 校验 session/run/events/changeset/hooks runtime 仓储链路”。
+2. W3-C1：执行重启集成用例，覆盖 `project-config` 与 `workspace-agent-config` 在 router 重启后的持久化可用性，作为“冷启动后核心链路可用”补充证据。
+3. W3-C2：完成残余命名收口，runtime 相关测试文件级命名全部去版本后缀。
+4. W3-C2：修正残余 runtime 文案并完成代码子域去版本语义清零（仅文档历史记录保留）。
+5. W3-C4：Week4 preflight 边界冻结完成，更新 `week3-preflight-checklist` 新增“路由/store/views/tests/i18n”批次拆分与回滚粒度。
+6. W3-T4 推进：审计快照刷新为 `conversation/execution=2370`、`v* token=769`、`legacy/compat/fallback/alias=370`。
+
+### 6.8 本批次新增验收命令与结果摘要（2026-03-05 夜间）
+
+1. `cd services/hub && go test ./internal/httpapi -run 'TestOpenAuthzStoreSupportsRuntimeSchemaAfterTwoColdStarts|TestProjectConfigPersistsAcrossRouterRestart|TestWorkspaceAgentConfigPersistsAndExecutionSnapshotIsFrozen|TestConversationChangeSetEndpointForNonGitProject|TestConversationInputSubmit_EmitsUserPromptSubmitHookRecord|TestHookExecutionsHandlerListsRecordsForRunConversation' -count=1` ✅
+2. `cd services/hub && go test ./...` ✅
+3. `cd services/hub && go vet ./...` ✅
+4. `pnpm contracts:generate` ✅
+5. `pnpm contracts:check` ✅
+6. `pnpm lint` ✅
+7. `pnpm test` ✅
+8. `scripts/refactor/gate-check.sh` ✅
+9. `rg -n "\\b(conversation|execution|Conversation|Execution)\\b" ... | wc -l` -> `2370`
+10. `rg -n "\\b(v1|v2|v3|v4|V1|V2|V3|V4)\\b" ... | wc -l` -> `769`
+11. `rg -n "\\blegacy\\w*|\\bcompat\\w*|fallback|alias" ... | wc -l` -> `370`
+
+### 6.9 Week 4 Batch A/B/C 实施结果（2026-03-05）
+
+1. W4-T1 达成：目录完成迁移 `apps/desktop/src/modules/conversation` -> `apps/desktop/src/modules/session`，并同步修复 router 与 vitest 覆盖入口。
+2. W4-T2 推进：Desktop 会话主链路 import 全量切换到 `@/modules/session/*`，移除 `@/modules/conversation/*` 导入残留。
+3. W4-T3 推进：i18n key 全量收敛为 `session.*`，`messages.en-US.ts` 与 `messages.zh-CN.ts` 及调用点完成联动。
+4. Phase 1（Hub 小步收口）推进：`internal/httpapi` 去 `_v1` 文件级命名（`run_query_service`、`hook_run_query_service`、`run_task_query_service`、`repository/repository_sqlite`）并同步符号重命名。
+5. 过程故障已闭环：Batch C 首轮发生变量误替换（`conversation.id` 被替换为 `session.id`）导致 `pnpm lint`/`pnpm test` 失败；已在同批修复并重新验证通过。
+
+### 6.10 本批次验收命令与结果摘要（2026-03-05，Batch A/B/C/D）
+
+1. `pnpm contracts:check` ✅
+2. `cd services/hub && go test ./internal/httpapi/...` ✅
+3. `pnpm lint` ❌（首轮：变量误替换导致 `session is not defined`）
+4. `pnpm test` ❌（首轮：同上）
+5. 变量引用修复后，`pnpm lint` ✅
+6. 变量引用修复后，`pnpm test` ✅
+7. `pnpm contracts:generate && pnpm contracts:check` ✅
+8. `cd services/hub && go test ./... && go vet ./...` ✅
+9. `pnpm test:strict` ✅
+10. `pnpm e2e:smoke` ✅
+11. `scripts/refactor/gate-check.sh` ✅
+12. `rg -n "\\b(conversation|execution|Conversation|Execution)\\b" ... | wc -l` -> `1620`（较上一快照 `2370` 下降 `750`）
+13. `rg -n "\\b(v1|v2|v3|v4|V1|V2|V3|V4)\\b" ... | wc -l` -> `769`（持平）
+14. `rg -n "\\blegacy\\w*|\\bcompat\\w*|fallback|alias" ... | wc -l` -> `370`（持平）
+
+### 6.11 Week 4 准入结论（2026-03-05）
+
+1. Week 4 Batch A/B/C 已完成并通过高风险门禁（`test:strict` + `e2e:smoke`）。
+2. 目录迁移导致的路径断裂风险（R-003）已从“潜在”转为“可控并已验证”。
+3. 当前可准入 Week 5（兼容清零与门禁升级），前提是继续按“分批门禁 + 日终全量门禁”执行。

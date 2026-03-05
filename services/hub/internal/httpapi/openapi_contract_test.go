@@ -248,7 +248,7 @@ func TestOpenAPIWorkspaceStatusResponseShape(t *testing.T) {
 	requiredMarkers := []string{
 		"WorkspaceStatusResponse:",
 		"session_status:",
-		"$ref: '#/components/schemas/ConversationStatus'",
+		"$ref: '#/components/schemas/SessionStatus'",
 		"connection_status:",
 		"user_display_name:",
 	}

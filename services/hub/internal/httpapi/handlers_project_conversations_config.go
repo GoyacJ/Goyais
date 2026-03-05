@@ -29,7 +29,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				state,
 				r,
 				workspaceID,
-				"conversation.read",
+				"session.read",
 				authorizationResource{WorkspaceID: workspaceID},
 				authorizationContext{OperationType: "read"},
 			)
@@ -43,7 +43,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
-			queryService, hasQueryService := newExecutionQueryService(state)
+			queryService, hasQueryService := newRunQueryService(state)
 			items := make([]Conversation, 0)
 			loadedFromRepository := false
 			if hasQueryService {
@@ -57,7 +57,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 					}
 					state.mu.Unlock()
 				} else {
-					log.Printf("runtime v1 project conversation list query failed, fallback to in-memory map: %v", err)
+					log.Printf("runtime project conversation list query failed, fallback to in-memory map: %v", err)
 				}
 			}
 			applyInMemoryConversationUsage := func() {
@@ -91,7 +91,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 						items[index].TokensTotal = totals.Total
 					}
 				} else {
-					log.Printf("runtime v1 project conversation usage query failed, fallback to in-memory map: %v", err)
+					log.Printf("runtime project conversation usage query failed, fallback to in-memory map: %v", err)
 					applyInMemoryConversationUsage()
 				}
 			}
@@ -113,7 +113,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				state,
 				r,
 				workspaceID,
-				"conversation.write",
+				"session.write",
 				authorizationResource{WorkspaceID: workspaceID},
 				authorizationContext{OperationType: "write", ABACRequired: true},
 			)
@@ -161,7 +161,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 
 			writeJSON(w, http.StatusCreated, conversation)
 			if state.authz != nil {
-				_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "conversation.write", "conversation", conversation.ID, "success", map[string]any{
+				_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "session.write", "conversation", conversation.ID, "success", map[string]any{
 					"operation": "create",
 				}, TraceIDFromContext(r.Context()))
 			}

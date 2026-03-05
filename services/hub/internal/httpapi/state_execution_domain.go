@@ -103,7 +103,7 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 		appendHookExecutionRecordLocked(s, record)
 	}
 	s.mu.Unlock()
-	syncRuntimeV1SnapshotBestEffort(s, snapshot)
+	syncRuntimeSnapshotBestEffort(s, snapshot)
 }
 
 func syncExecutionDomainBestEffort(state *AppState) {
@@ -114,14 +114,14 @@ func syncExecutionDomainBestEffort(state *AppState) {
 	if err := state.authz.replaceExecutionDomainSnapshot(snapshot); err != nil {
 		log.Printf("failed to persist execution domain snapshot: %v", err)
 	}
-	syncRuntimeV1SnapshotBestEffort(state, snapshot)
+	syncRuntimeSnapshotBestEffort(state, snapshot)
 }
 
-func syncRuntimeV1SnapshotBestEffort(state *AppState, snapshot executionDomainSnapshot) {
+func syncRuntimeSnapshotBestEffort(state *AppState, snapshot executionDomainSnapshot) {
 	if state == nil || state.authz == nil || state.authz.db == nil {
 		return
 	}
-	repositories := NewSQLiteRuntimeV1RepositorySet(state.authz.db)
+	repositories := NewSQLiteRuntimeRepositorySet(state.authz.db)
 	ctx := context.Background()
 
 	sessions := make([]RuntimeSessionRecord, 0, len(snapshot.Conversations))
@@ -142,7 +142,7 @@ func syncRuntimeV1SnapshotBestEffort(state *AppState, snapshot executionDomainSn
 		})
 	}
 	if err := repositories.Sessions.ReplaceAll(ctx, sessions); err != nil {
-		log.Printf("failed to persist runtime v1 sessions snapshot: %v", err)
+		log.Printf("failed to persist runtime sessions snapshot: %v", err)
 		return
 	}
 
@@ -165,7 +165,7 @@ func syncRuntimeV1SnapshotBestEffort(state *AppState, snapshot executionDomainSn
 		})
 	}
 	if err := repositories.Runs.ReplaceAll(ctx, runs); err != nil {
-		log.Printf("failed to persist runtime v1 runs snapshot: %v", err)
+		log.Printf("failed to persist runtime runs snapshot: %v", err)
 		return
 	}
 
@@ -183,16 +183,16 @@ func syncRuntimeV1SnapshotBestEffort(state *AppState, snapshot executionDomainSn
 		})
 	}
 	if err := repositories.RunEvents.ReplaceAll(ctx, events); err != nil {
-		log.Printf("failed to persist runtime v1 run events snapshot: %v", err)
+		log.Printf("failed to persist runtime run events snapshot: %v", err)
 		return
 	}
 
 	if err := repositories.RunTasks.ReplaceAll(ctx, []RuntimeRunTaskRecord{}); err != nil {
-		log.Printf("failed to persist runtime v1 run tasks snapshot: %v", err)
+		log.Printf("failed to persist runtime run tasks snapshot: %v", err)
 		return
 	}
 	if err := repositories.ChangeSets.ReplaceAll(ctx, []RuntimeChangeSetRecord{}); err != nil {
-		log.Printf("failed to persist runtime v1 change sets snapshot: %v", err)
+		log.Printf("failed to persist runtime change sets snapshot: %v", err)
 		return
 	}
 
@@ -211,7 +211,7 @@ func syncRuntimeV1SnapshotBestEffort(state *AppState, snapshot executionDomainSn
 		})
 	}
 	if err := repositories.HookRecords.ReplaceAll(ctx, hookRecords); err != nil {
-		log.Printf("failed to persist runtime v1 hook records snapshot: %v", err)
+		log.Printf("failed to persist runtime hook records snapshot: %v", err)
 	}
 }
 

@@ -52,7 +52,7 @@ export type Session = {
   skill_ids: string[];
   mcp_ids: string[];
   base_revision: number;
-  active_execution_id: string | null;
+  active_run_id: string | null;
   tokens_in_total?: number;
   tokens_out_total?: number;
   tokens_total?: number;
@@ -60,14 +60,9 @@ export type Session = {
   updated_at: string;
 };
 
-/**
- * @deprecated Use `Session` as the canonical v1 runtime term.
- */
-export type Conversation = Session;
-
 export type SessionMessage = {
   id: string;
-  conversation_id: string;
+  session_id: string;
   role: MessageRole;
   content: string;
   created_at: string;
@@ -75,21 +70,16 @@ export type SessionMessage = {
   can_rollback?: boolean;
 };
 
-/**
- * @deprecated Use `SessionMessage` as the canonical v1 runtime term.
- */
-export type ConversationMessage = SessionMessage;
-
 export type SessionSnapshot = {
   id: string;
-  conversation_id: string;
+  session_id: string;
   rollback_point_message_id: string;
   queue_state: QueueState;
   worktree_ref: string | null;
   inspector_state: {
     tab: InspectorTabKey;
   };
-  messages: ConversationMessage[];
+  messages: SessionMessage[];
   execution_snapshots?: Array<{
     id: string;
     state: RunState;
@@ -97,34 +87,21 @@ export type SessionSnapshot = {
     message_id: string;
     updated_at: string;
   }>;
-  execution_ids: string[];
+  run_ids: string[];
   created_at: string;
 };
-
-/**
- * @deprecated Use `SessionSnapshot` as the canonical v1 runtime term.
- */
-export type ConversationSnapshot = SessionSnapshot;
 
 export type SessionDetailResponse = {
   session: Session;
   messages: SessionMessage[];
   runs: Run[];
   snapshots: SessionSnapshot[];
-  // Deprecated compatibility mirrors server payload fields.
-  conversation?: Session;
-  executions?: Run[];
 };
-
-/**
- * @deprecated Use `SessionDetailResponse` as the canonical v1 runtime term.
- */
-export type ConversationDetailResponse = SessionDetailResponse;
 
 export type Run = {
   id: string;
   workspace_id: string;
-  conversation_id: string;
+  session_id: string;
   message_id: string;
   state: RunState;
   mode: PermissionMode;
@@ -163,11 +140,6 @@ export type Run = {
   updated_at: string;
 };
 
-/**
- * @deprecated Use `Run` as the canonical v1 runtime term.
- */
-export type Execution = Run;
-
 export type RunEventType =
   | "message_received"
   | "user_prompt_submit"
@@ -198,8 +170,8 @@ export type RunEventType =
 
 export type RunLifecycleEvent = {
   event_id: string;
-  execution_id: string;
-  conversation_id: string;
+  run_id: string;
+  session_id: string;
   trace_id: string;
   sequence: number;
   queue_index: number;
@@ -207,11 +179,6 @@ export type RunLifecycleEvent = {
   timestamp: string;
   payload: Record<string, unknown>;
 };
-
-/**
- * @deprecated Use `RunLifecycleEvent` as the canonical v1 runtime term.
- */
-export type ExecutionEvent = RunLifecycleEvent;
 
 export type StreamRunEventType =
   | "run_queued"
@@ -233,11 +200,6 @@ export type RunEvent = {
 };
 
 export type SessionStreamEvent = RunLifecycleEvent | RunEvent;
-
-/**
- * @deprecated Use `SessionStreamEvent` as the canonical v1 runtime term.
- */
-export type ConversationStreamEvent = SessionStreamEvent;
 
 export type RunControlRequest = {
   action: RunControlAction;
@@ -267,7 +229,7 @@ export type DiffItem = {
 export type ChangeEntry = {
   entry_id: string;
   message_id: string;
-  execution_id: string;
+  run_id: string;
   path: string;
   change_type: DiffChangeType;
   summary: string;
@@ -292,7 +254,7 @@ export type CheckpointSummary = {
 
 export type SessionChangeSet = {
   change_set_id: string;
-  conversation_id: string;
+  session_id: string;
   project_kind: ProjectKind;
   entries: ChangeEntry[];
   file_count: number;
@@ -302,11 +264,6 @@ export type SessionChangeSet = {
   suggested_message: CommitSuggestion;
   last_committed_checkpoint?: CheckpointSummary;
 };
-
-/**
- * @deprecated Use `SessionChangeSet` as the canonical v1 runtime term.
- */
-export type ConversationChangeSet = SessionChangeSet;
 
 export type ChangeSetCommitRequest = {
   message: string;
@@ -326,11 +283,6 @@ export type RunFilesExportResponse = {
   file_name: string;
   archive_base64: string;
 };
-
-/**
- * @deprecated Use `RunFilesExportResponse` as the canonical v1 runtime term.
- */
-export type ExecutionFilesExportResponse = RunFilesExportResponse;
 
 export type ComposerResourceType = "model" | "rule" | "skill" | "mcp" | "file";
 
@@ -396,7 +348,7 @@ export type ComposerSubmitResponse =
   }
   | {
     kind: "execution_enqueued";
-    execution: Execution;
+    execution: Run;
     queue_state: QueueState;
     queue_index: number;
   };
@@ -437,8 +389,4 @@ export type SessionRuntime = {
   changeSet?: SessionChangeSet | null;
   inspectorTab: InspectorTabKey;
   diffCapability: ChangeSetCapability;
-};
-
-export type ConversationRuntime = SessionRuntime & {
-  executions: Run[];
 };

@@ -24,7 +24,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			if !exists {
 				state.mu.RUnlock()
 				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
-					"conversation_id": conversationID,
+					"session_id": conversationID,
 				})
 				return
 			}
@@ -38,7 +38,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				state,
 				r,
 				conversation.WorkspaceID,
-				"conversation.read",
+				"session.read",
 				authorizationResource{WorkspaceID: conversation.WorkspaceID},
 				authorizationContext{OperationType: "read"},
 			)
@@ -46,13 +46,13 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				authErr.write(w, r)
 				return
 			}
-			if service, ok := newExecutionQueryService(state); ok {
+			if service, ok := newRunQueryService(state); ok {
 				repositoryExecutions, err := service.ListAllByConversation(r.Context(), conversationID)
 				if err == nil {
 					executions = repositoryExecutions
 					conversation = decorateConversationUsageFromExecutions(conversation, executions)
 				} else {
-					log.Printf("runtime v1 conversation execution query failed, fallback to in-memory map: %v", err)
+					log.Printf("runtime conversation execution query failed, fallback to in-memory map: %v", err)
 				}
 			}
 
@@ -69,7 +69,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 		case http.MethodPatch:
 			if !hasConversationSeed {
 				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
-					"conversation_id": conversationID,
+					"session_id": conversationID,
 				})
 				return
 			}
@@ -77,7 +77,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				state,
 				r,
 				conversationSeed.WorkspaceID,
-				"conversation.write",
+				"session.write",
 				authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
 				authorizationContext{OperationType: "write", ABACRequired: true},
 			)
@@ -234,9 +234,9 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 					matchedPolicyID,
 					decision,
 					map[string]any{
-						"conversation_id": conversationID,
-						"changed_fields":  append([]string{}, configChangedFields...),
-						"source":          "conversation_patch",
+						"session_id":     conversationID,
+						"changed_fields": append([]string{}, configChangedFields...),
+						"source":         "conversation_patch",
 					},
 				)
 			}
@@ -248,7 +248,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 		case http.MethodDelete:
 			if !hasConversationSeed {
 				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
-					"conversation_id": conversationID,
+					"session_id": conversationID,
 				})
 				return
 			}
@@ -256,7 +256,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				state,
 				r,
 				conversationSeed.WorkspaceID,
-				"conversation.write",
+				"session.write",
 				authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
 				authorizationContext{OperationType: "write", ABACRequired: true},
 			)
@@ -317,13 +317,13 @@ func loadConversationByIDSeed(ctx context.Context, state *AppState, conversation
 	if exists {
 		return conversation, true
 	}
-	service, ok := newExecutionQueryService(state)
+	service, ok := newRunQueryService(state)
 	if !ok {
 		return Conversation{}, false
 	}
 	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
 	if err != nil {
-		log.Printf("runtime v1 conversation detail lookup failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime conversation detail lookup failed, fallback to in-memory map: %v", err)
 		return Conversation{}, false
 	}
 	if !exists {

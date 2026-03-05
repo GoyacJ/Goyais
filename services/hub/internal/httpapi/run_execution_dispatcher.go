@@ -78,8 +78,8 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 		SessionID: sessionID,
 		Input:     submitCtx.Prompt,
 		Metadata: map[string]string{
-			"execution_id":    submitCtx.ExecutionID,
-			"conversation_id": submitCtx.ConversationID,
+			"run_id":    submitCtx.ExecutionID,
+			"session_id": submitCtx.ConversationID,
 			"workspace_id":    submitCtx.WorkspaceID,
 		},
 	})

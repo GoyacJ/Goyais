@@ -158,7 +158,7 @@ func localPermissionSnapshot() PermissionSnapshot {
 	}
 	actionVisibility := map[string]PermissionVisibility{}
 	for _, item := range []string{
-		"project.read", "project.write", "conversation.read", "conversation.write", "execution.control",
+		"project.read", "project.write", "session.read", "session.write", "run.control",
 		"resource.read", "resource.write", "resource_config.read", "resource_config.write", "resource_config.delete",
 		"project_config.read", "model.test", "mcp.connect", "catalog.update_root",
 		"share.request", "share.approve", "share.reject", "share.revoke",

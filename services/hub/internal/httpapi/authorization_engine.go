@@ -32,9 +32,9 @@ type authorizationContext struct {
 var actionSpecs = map[string]actionSpec{
 	"project.read":             {PermissionKey: "project.read", RiskLevel: "low", OperationType: "read"},
 	"project.write":            {PermissionKey: "project.write", RiskLevel: "medium", OperationType: "write", ABACRequired: true},
-	"conversation.read":        {PermissionKey: "conversation.read", RiskLevel: "low", OperationType: "read"},
-	"conversation.write":       {PermissionKey: "conversation.write", RiskLevel: "medium", OperationType: "write", ABACRequired: true},
-	"execution.control":        {PermissionKey: "execution.control", RiskLevel: "high", OperationType: "execute", ABACRequired: true},
+	"session.read":             {PermissionKey: "session.read", RiskLevel: "low", OperationType: "read"},
+	"session.write":            {PermissionKey: "session.write", RiskLevel: "medium", OperationType: "write", ABACRequired: true},
+	"run.control":              {PermissionKey: "run.control", RiskLevel: "high", OperationType: "execute", ABACRequired: true},
 	"resource.read":            {PermissionKey: "resource.read", RiskLevel: "low", OperationType: "read"},
 	"resource.write":           {PermissionKey: "resource.write", RiskLevel: "medium", OperationType: "write", ABACRequired: true},
 	"resource_config.read":     {PermissionKey: "resource_config.read", RiskLevel: "low", OperationType: "read"},

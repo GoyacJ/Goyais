@@ -83,7 +83,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			state,
 			r,
 			executionSeed.WorkspaceID,
-			"execution.control",
+			"run.control",
 			authorizationResource{WorkspaceID: executionSeed.WorkspaceID},
 			authorizationContext{OperationType: "write", ABACRequired: true},
 		)
@@ -115,7 +115,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 		if !exists {
 			state.mu.Unlock()
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
-				"conversation_id": execution.ConversationID,
+				"session_id": execution.ConversationID,
 			})
 			return
 		}
@@ -412,7 +412,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			_ = state.authz.appendAudit(
 				execution.WorkspaceID,
 				session.UserID,
-				"execution.control",
+				"run.control",
 				"execution",
 				execution.ID,
 				"success",
@@ -446,13 +446,13 @@ func loadRunControlExecutionSeed(ctx context.Context, state *AppState, runID str
 		return execution, true
 	}
 
-	service, ok := newExecutionQueryService(state)
+	service, ok := newRunQueryService(state)
 	if !ok {
 		return Execution{}, false
 	}
 	item, exists, err := service.repositories.Runs.GetByID(ctx, normalizedRunID)
 	if err != nil {
-		log.Printf("runtime v1 run control lookup failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime run control lookup failed, fallback to in-memory map: %v", err)
 		return Execution{}, false
 	}
 	if !exists {
@@ -474,13 +474,13 @@ func loadRunControlConversationSeed(ctx context.Context, state *AppState, conver
 		return conversation, true
 	}
 
-	service, ok := newExecutionQueryService(state)
+	service, ok := newRunQueryService(state)
 	if !ok {
 		return Conversation{}, false
 	}
 	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
 	if err != nil {
-		log.Printf("runtime v1 run control conversation lookup failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime run control conversation lookup failed, fallback to in-memory map: %v", err)
 		return Conversation{}, false
 	}
 	if !exists {

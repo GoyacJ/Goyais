@@ -308,7 +308,7 @@ function jsonResponse(payload: unknown, status = 200): Response {
 function buildPermissionSnapshot(role: "admin" | "developer") {
   return {
     role,
-    permissions: role === "admin" ? ["*"] : ["project.read", "project.write", "conversation.read", "conversation.write"],
+    permissions: role === "admin" ? ["*"] : ["project.read", "project.write", "session.read", "session.write"],
     menu_visibility: {
       main: "enabled",
       remote_account: "enabled",

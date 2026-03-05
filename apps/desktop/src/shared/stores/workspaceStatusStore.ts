@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, reactive, toValue, watch, type MaybeRefOrGetter } from "vue";
 
-import { streamSessionEvents } from "@/modules/conversation/services";
+import { streamSessionEvents } from "@/modules/session/services";
 import { getWorkspaceStatus } from "@/modules/workspace/services";
 import { ApiError } from "@/shared/services/http";
 import { authStore } from "@/shared/stores/authStore";

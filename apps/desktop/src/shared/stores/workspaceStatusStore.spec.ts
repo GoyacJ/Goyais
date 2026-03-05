@@ -14,7 +14,7 @@ vi.mock("@/modules/workspace/services", () => ({
   getWorkspaceStatus: (...args: unknown[]) => getWorkspaceStatusMock(...args)
 }));
 
-vi.mock("@/modules/conversation/services", () => ({
+vi.mock("@/modules/session/services", () => ({
   streamSessionEvents: (...args: unknown[]) => streamSessionEventsMock(...args)
 }));
 

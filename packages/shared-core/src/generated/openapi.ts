@@ -3326,9 +3326,9 @@ export type components = {
             created_at: string;
             deleted_lines?: number;
             entry_id: string;
-            execution_id: string;
             message_id: string;
             path: string;
+            run_id: string;
             summary: string;
         };
         ChangeSetCapability: {
@@ -3431,15 +3431,6 @@ export type components = {
             revision: string;
             suggestions: components["schemas"]["ComposerSuggestion"][];
         };
-        Conversation: components["schemas"]["Session"];
-        ConversationChangeSet: components["schemas"]["SessionChangeSet"];
-        ConversationDetailResponse: components["schemas"]["SessionDetailResponse"];
-        ConversationInspector: components["schemas"]["SessionInspector"];
-        ConversationMessage: components["schemas"]["SessionMessage"];
-        ConversationSnapshot: components["schemas"]["SessionSnapshot"];
-        /** @enum {string} */
-        ConversationStatus: "running" | "queued" | "stopped" | "done" | "error";
-        CreateConversationRequest: components["schemas"]["CreateSessionRequest"];
         CreateProjectRequest: {
             is_git?: boolean;
             name: string;
@@ -3472,26 +3463,7 @@ export type components = {
             path: string;
             summary: string;
         };
-        Execution: components["schemas"]["Run"];
         ExecutionAgentConfigSnapshot: components["schemas"]["RunAgentConfigSnapshot"];
-        ExecutionEvent: {
-            conversation_id: string;
-            event_id: string;
-            execution_id: string;
-            payload?: {
-                [key: string]: unknown;
-            };
-            queue_index: number;
-            sequence: number;
-            /** Format: date-time */
-            timestamp?: string;
-            trace_id?: string;
-            type: components["schemas"]["RunEventType"];
-        };
-        ExecutionEventBatchRequest: {
-            events: components["schemas"]["ExecutionEvent"][];
-        };
-        ExecutionFilesExportResponse: components["schemas"]["RunFilesExportResponse"];
         ExecutionResourceProfile: components["schemas"]["RunResourceProfile"];
         ExecutionUserAnswer: {
             question_id: string;
@@ -3890,7 +3862,6 @@ export type components = {
         };
         Run: {
             agent_config_snapshot?: components["schemas"]["RunAgentConfigSnapshot"];
-            conversation_id: string;
             /** Format: date-time */
             created_at: string;
             id: string;
@@ -3903,6 +3874,7 @@ export type components = {
             project_revision_snapshot: number;
             queue_index: number;
             resource_profile_snapshot?: components["schemas"]["RunResourceProfile"];
+            session_id: string;
             state: components["schemas"]["RunState"];
             tokens_in: number;
             tokens_out: number;
@@ -3940,6 +3912,23 @@ export type components = {
             from_task_id: string;
             to_task_id: string;
         };
+        RunLifecycleEvent: {
+            event_id: string;
+            payload?: {
+                [key: string]: unknown;
+            };
+            queue_index: number;
+            run_id: string;
+            sequence: number;
+            session_id: string;
+            /** Format: date-time */
+            timestamp?: string;
+            trace_id?: string;
+            type: components["schemas"]["RunEventType"];
+        };
+        RunLifecycleEventBatchRequest: {
+            events: components["schemas"]["RunLifecycleEvent"][];
+        };
         RunResourceProfile: {
             mcp_ids?: string[];
             model_config_id?: string;
@@ -3955,7 +3944,7 @@ export type components = {
             next_cursor: string | null;
         };
         Session: {
-            active_execution_id?: string | null;
+            active_run_id?: string | null;
             /** Format: int64 */
             base_revision: number;
             /** Format: date-time */
@@ -3981,13 +3970,13 @@ export type components = {
             added_lines: number;
             capability: components["schemas"]["ChangeSetCapability"];
             change_set_id: string;
-            conversation_id: string;
             deleted_lines: number;
             entries: components["schemas"]["ChangeEntry"][];
             file_count: number;
             last_committed_checkpoint?: components["schemas"]["CheckpointSummary"];
             /** @enum {string} */
             project_kind: "git" | "non_git";
+            session_id: string;
             suggested_message: components["schemas"]["CommitSuggestion"];
         };
         SessionDetailResponse: {
@@ -4003,27 +3992,29 @@ export type components = {
         SessionMessage: {
             can_rollback?: boolean;
             content: string;
-            conversation_id: string;
             /** Format: date-time */
             created_at: string;
             id: string;
             queue_index?: number;
             /** @enum {string} */
             role: "user" | "assistant" | "system";
+            session_id: string;
         };
         SessionSnapshot: {
-            conversation_id: string;
             /** Format: date-time */
             created_at: string;
-            execution_ids: string[];
             id: string;
             inspector_state: components["schemas"]["SessionInspector"];
             messages: components["schemas"]["SessionMessage"][];
             /** @enum {string} */
             queue_state: "idle" | "running" | "queued";
             rollback_point_message_id: string;
+            run_ids: string[];
+            session_id: string;
             worktree_ref?: string | null;
         };
+        /** @enum {string} */
+        SessionStatus: "running" | "queued" | "stopped" | "done" | "error";
         ShareRequest: {
             approver_user_id?: string;
             /** Format: date-time */
@@ -4094,7 +4085,6 @@ export type components = {
         };
         /** @enum {string} */
         TaskState: "queued" | "blocked" | "running" | "retrying" | "completed" | "failed" | "cancelled";
-        UpdateConversationRequest: components["schemas"]["UpdateSessionRequest"];
         UpdateSessionRequest: {
             mcp_ids?: string[];
             mode?: components["schemas"]["PermissionMode"];
@@ -4161,7 +4151,7 @@ export type components = {
             connection_status: "connected" | "reconnecting" | "disconnected";
             hub_url: string;
             session_id?: string;
-            session_status: components["schemas"]["ConversationStatus"];
+            session_status: components["schemas"]["SessionStatus"];
             /** Format: date-time */
             updated_at: string;
             user_display_name: string;
@@ -4182,7 +4172,6 @@ export type components = {
     parameters: {
         /** @description Opaque cursor; current implementation uses numeric offsets. */
         CursorParam: string;
-        ExecutionIdParam: string;
         /** @description Page size for cursor-based pagination. */
         LimitParam: number;
         ProjectIdParam: string;

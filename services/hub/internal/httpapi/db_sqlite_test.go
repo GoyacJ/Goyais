@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -403,5 +405,147 @@ func TestOpenAuthzStoreDoesNotAutoMigrateLegacyDBToDefaultPath(t *testing.T) {
 	}
 	if len(workspaces) != 0 {
 		t.Fatalf("expected default store to remain empty without legacy path migration, got %#v", workspaces)
+	}
+}
+
+func TestOpenAuthzStoreSupportsRuntimeSchemaAfterTwoColdStarts(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "hub-coldstart.sqlite3")
+	ctx := context.Background()
+
+	for round := 1; round <= 2; round++ {
+		_ = os.Remove(dbPath)
+		_ = os.Remove(dbPath + "-wal")
+		_ = os.Remove(dbPath + "-shm")
+
+		store, err := openAuthzStore(dbPath)
+		if err != nil {
+			t.Fatalf("open authz store failed in cold start round %d: %v", round, err)
+		}
+
+		repositories := NewSQLiteRuntimeRepositorySet(store.db)
+		now := time.Now().UTC().Format(time.RFC3339)
+		sessionID := fmt.Sprintf("sess_cold_%d", round)
+		runID := fmt.Sprintf("run_cold_%d", round)
+
+		if err := repositories.Sessions.ReplaceAll(ctx, []RuntimeSessionRecord{
+			{
+				ID:            sessionID,
+				WorkspaceID:   localWorkspaceID,
+				ProjectID:     fmt.Sprintf("proj_cold_%d", round),
+				Name:          fmt.Sprintf("Cold Start Session %d", round),
+				DefaultMode:   string(PermissionModeDefault),
+				ModelConfigID: "mcfg_cold",
+				RuleIDs:       []string{"rule_cold"},
+				SkillIDs:      []string{"skill_cold"},
+				MCPIDs:        []string{"mcp_cold"},
+				ActiveRunID:   &runID,
+				CreatedAt:     now,
+				UpdatedAt:     now,
+			},
+		}); err != nil {
+			_ = store.close()
+			t.Fatalf("replace sessions failed in round %d: %v", round, err)
+		}
+
+		if err := repositories.Runs.ReplaceAll(ctx, []RuntimeRunRecord{
+			{
+				ID:            runID,
+				SessionID:     sessionID,
+				WorkspaceID:   localWorkspaceID,
+				MessageID:     fmt.Sprintf("msg_cold_%d", round),
+				State:         string(RunStateExecuting),
+				Mode:          string(PermissionModeDefault),
+				ModelID:       "gpt-5.3",
+				ModelConfigID: "mcfg_cold",
+				TokensIn:      13,
+				TokensOut:     21,
+				TraceID:       fmt.Sprintf("trace_cold_%d", round),
+				CreatedAt:     now,
+				UpdatedAt:     now,
+			},
+		}); err != nil {
+			_ = store.close()
+			t.Fatalf("replace runs failed in round %d: %v", round, err)
+		}
+
+		if err := repositories.RunEvents.ReplaceAll(ctx, []RuntimeRunEventRecord{
+			{
+				EventID:    fmt.Sprintf("evt_cold_%d", round),
+				RunID:      runID,
+				SessionID:  sessionID,
+				Sequence:   1,
+				Type:       string(RunEventTypeExecutionStarted),
+				Timestamp:  now,
+				Payload:    map[string]any{"status": "started"},
+				OccurredAt: now,
+			},
+		}); err != nil {
+			_ = store.close()
+			t.Fatalf("replace run events failed in round %d: %v", round, err)
+		}
+
+		if err := repositories.ChangeSets.ReplaceAll(ctx, []RuntimeChangeSetRecord{
+			{
+				ChangeSetID: fmt.Sprintf("cs_cold_%d", round),
+				SessionID:   sessionID,
+				RunID:       &runID,
+				Payload:     map[string]any{"files": []any{}},
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			},
+		}); err != nil {
+			_ = store.close()
+			t.Fatalf("replace change sets failed in round %d: %v", round, err)
+		}
+
+		if err := repositories.HookRecords.ReplaceAll(ctx, []RuntimeHookRecord{
+			{
+				ID:        fmt.Sprintf("hook_cold_%d", round),
+				RunID:     runID,
+				SessionID: sessionID,
+				TaskID:    stringPtrOrNil(fmt.Sprintf("task_cold_%d", round)),
+				Event:     string(HookEventTypePreToolUse),
+				ToolName:  stringPtrOrNil("bash"),
+				PolicyID:  stringPtrOrNil(fmt.Sprintf("policy_cold_%d", round)),
+				Decision: HookDecision{
+					Action: HookDecisionActionAllow,
+					Reason: "cold-start-check",
+				},
+				Timestamp: now,
+			},
+		}); err != nil {
+			_ = store.close()
+			t.Fatalf("replace hook records failed in round %d: %v", round, err)
+		}
+
+		sessions, err := repositories.Sessions.ListByWorkspace(ctx, localWorkspaceID, RepositoryPage{Limit: 10, Offset: 0})
+		if err != nil || len(sessions) != 1 || sessions[0].ID != sessionID {
+			_ = store.close()
+			t.Fatalf("verify sessions failed in round %d: err=%v payload=%#v", round, err, sessions)
+		}
+		runs, err := repositories.Runs.ListBySession(ctx, sessionID, RepositoryPage{Limit: 10, Offset: 0})
+		if err != nil || len(runs) != 1 || runs[0].ID != runID {
+			_ = store.close()
+			t.Fatalf("verify runs failed in round %d: err=%v payload=%#v", round, err, runs)
+		}
+		events, err := repositories.RunEvents.ListBySession(ctx, sessionID, 0, 10)
+		if err != nil || len(events) != 1 {
+			_ = store.close()
+			t.Fatalf("verify events failed in round %d: err=%v payload=%#v", round, err, events)
+		}
+		changeSets, err := repositories.ChangeSets.ListBySession(ctx, sessionID, RepositoryPage{Limit: 10, Offset: 0})
+		if err != nil || len(changeSets) != 1 {
+			_ = store.close()
+			t.Fatalf("verify change sets failed in round %d: err=%v payload=%#v", round, err, changeSets)
+		}
+		hookRecords, err := repositories.HookRecords.ListByRun(ctx, runID, RepositoryPage{Limit: 10, Offset: 0})
+		if err != nil || len(hookRecords) != 1 {
+			_ = store.close()
+			t.Fatalf("verify hook records failed in round %d: err=%v payload=%#v", round, err, hookRecords)
+		}
+
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed in round %d: %v", round, closeErr)
+		}
 	}
 }

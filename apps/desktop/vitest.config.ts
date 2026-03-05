@@ -34,8 +34,8 @@ export default defineConfig({
         "src/modules/resource/schemas/**",
         "src/modules/workspace/schemas/settingsContent.ts",
         "src/modules/workspace/services/index.ts",
-        "src/modules/conversation/views/useMainScreen*.ts",
-        "src/modules/conversation/views/streamCoordinator.ts"
+        "src/modules/session/views/useMainScreen*.ts",
+        "src/modules/session/views/streamCoordinator.ts"
       ]
     }
   }

@@ -420,7 +420,7 @@ type Conversation struct {
 	SkillIDs          []string         `json:"skill_ids"`
 	MCPIDs            []string         `json:"mcp_ids"`
 	BaseRevision      int64            `json:"base_revision"`
-	ActiveExecutionID *string          `json:"active_execution_id"`
+	ActiveExecutionID *string          `json:"active_run_id"`
 	TokensInTotal     int              `json:"tokens_in_total"`
 	TokensOutTotal    int              `json:"tokens_out_total"`
 	TokensTotal       int              `json:"tokens_total"`
@@ -445,7 +445,7 @@ const (
 
 type ConversationMessage struct {
 	ID             string      `json:"id"`
-	ConversationID string      `json:"conversation_id"`
+	ConversationID string      `json:"session_id"`
 	Role           MessageRole `json:"role"`
 	Content        string      `json:"content"`
 	CreatedAt      string      `json:"created_at"`
@@ -455,13 +455,13 @@ type ConversationMessage struct {
 
 type ConversationSnapshot struct {
 	ID                     string                `json:"id"`
-	ConversationID         string                `json:"conversation_id"`
+	ConversationID         string                `json:"session_id"`
 	RollbackPointMessageID string                `json:"rollback_point_message_id"`
 	QueueState             QueueState            `json:"queue_state"`
 	WorktreeRef            *string               `json:"worktree_ref"`
 	InspectorState         ConversationInspector `json:"inspector_state"`
 	Messages               []ConversationMessage `json:"messages"`
-	ExecutionIDs           []string              `json:"execution_ids"`
+	ExecutionIDs           []string              `json:"run_ids"`
 	CreatedAt              string                `json:"created_at"`
 }
 
@@ -472,7 +472,7 @@ type ConversationInspector struct {
 type Execution struct {
 	ID                      string                        `json:"id"`
 	WorkspaceID             string                        `json:"workspace_id"`
-	ConversationID          string                        `json:"conversation_id"`
+	ConversationID          string                        `json:"session_id"`
 	MessageID               string                        `json:"message_id"`
 	State                   RunState                      `json:"state"`
 	Mode                    ConversationMode              `json:"mode"`
@@ -668,7 +668,7 @@ type ExecutionFilesExportResponse struct {
 type ChangeEntry struct {
 	EntryID      string `json:"entry_id"`
 	MessageID    string `json:"message_id"`
-	ExecutionID  string `json:"execution_id"`
+	ExecutionID  string `json:"run_id"`
 	Path         string `json:"path"`
 	ChangeType   string `json:"change_type"`
 	Summary      string `json:"summary"`
@@ -700,7 +700,7 @@ type CheckpointSummary struct {
 
 type ConversationChangeSet struct {
 	ChangeSetID             string              `json:"change_set_id"`
-	ConversationID          string              `json:"conversation_id"`
+	ConversationID          string              `json:"session_id"`
 	ProjectKind             string              `json:"project_kind"`
 	Entries                 []ChangeEntry       `json:"entries"`
 	FileCount               int                 `json:"file_count"`
@@ -770,8 +770,8 @@ const (
 
 type ExecutionEvent struct {
 	EventID        string         `json:"event_id"`
-	ExecutionID    string         `json:"execution_id"`
-	ConversationID string         `json:"conversation_id"`
+	ExecutionID    string         `json:"run_id"`
+	ConversationID string         `json:"session_id"`
 	TraceID        string         `json:"trace_id"`
 	Sequence       int            `json:"sequence"`
 	QueueIndex     int            `json:"queue_index"`

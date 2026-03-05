@@ -321,8 +321,8 @@ func TestConversationChangeSetHandlerUsesRepositoryAndProjectStoreSeeds(t *testi
 
 	payload := map[string]any{}
 	mustDecodeJSON(t, res.Body.Bytes(), &payload)
-	if got := strings.TrimSpace(asString(payload["conversation_id"])); got != conversationID {
-		t.Fatalf("expected conversation_id %q, got %q", conversationID, got)
+	if got := strings.TrimSpace(asString(payload["session_id"])); got != conversationID {
+		t.Fatalf("expected session_id %q, got %q", conversationID, got)
 	}
 
 	state.mu.RLock()
@@ -479,7 +479,7 @@ func TestBuildConversationChangeSetLockedUsesRepositoryAndProjectStoreSeeds(t *t
 		t.Fatalf("expected build changeset to use repository/project fallback, got err: %v", buildErr)
 	}
 	if got := strings.TrimSpace(changeSet.ConversationID); got != conversationID {
-		t.Fatalf("expected conversation_id %q, got %q", conversationID, got)
+		t.Fatalf("expected session_id %q, got %q", conversationID, got)
 	}
 	if !hasConversationSeed || !hasProjectSeed {
 		t.Fatalf("expected buildConversationChangeSetLocked to hydrate conversation/project seeds")

@@ -21,7 +21,7 @@ func ConversationEventsHandler(state *AppState) http.HandlerFunc {
 		conversation, exists := loadConversationByIDSeed(r.Context(), state, conversationID)
 		if !exists {
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
-				"conversation_id": conversationID,
+				"session_id": conversationID,
 			})
 			return
 		}
@@ -30,7 +30,7 @@ func ConversationEventsHandler(state *AppState) http.HandlerFunc {
 			state,
 			r,
 			conversation.WorkspaceID,
-			"conversation.read",
+			"session.read",
 			authorizationResource{WorkspaceID: conversation.WorkspaceID},
 			authorizationContext{OperationType: "read"},
 		)

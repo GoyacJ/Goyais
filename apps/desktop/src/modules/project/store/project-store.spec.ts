@@ -9,15 +9,10 @@ const serviceMocks = vi.hoisted(() => ({
   createProject: vi.fn(),
   importProjectDirectory: vi.fn(),
   removeProject: vi.fn(),
-  listConversations: vi.fn(),
   createSession: vi.fn(),
-  createConversation: vi.fn(),
   renameSession: vi.fn(),
-  renameConversation: vi.fn(),
   removeSession: vi.fn(),
-  removeConversation: vi.fn(),
   exportSessionMarkdown: vi.fn(),
-  exportConversationMarkdown: vi.fn(),
   patchSession: vi.fn(),
   updateProjectConfig: vi.fn(),
   getProjectConfig: vi.fn(),
@@ -43,15 +38,10 @@ vi.mock("@/modules/project/services", () => ({
   createProject: serviceMocks.createProject,
   importProjectDirectory: serviceMocks.importProjectDirectory,
   removeProject: serviceMocks.removeProject,
-  listConversations: serviceMocks.listConversations,
   createSession: serviceMocks.createSession,
-  createConversation: serviceMocks.createConversation,
   renameSession: serviceMocks.renameSession,
-  renameConversation: serviceMocks.renameConversation,
   removeSession: serviceMocks.removeSession,
-  removeConversation: serviceMocks.removeConversation,
   exportSessionMarkdown: serviceMocks.exportSessionMarkdown,
-  exportConversationMarkdown: serviceMocks.exportConversationMarkdown,
   patchSession: serviceMocks.patchSession,
   updateProjectConfig: serviceMocks.updateProjectConfig,
   getProjectConfig: serviceMocks.getProjectConfig,
@@ -66,7 +56,7 @@ vi.mock("@/shared/stores/authStore", () => ({
   getWorkspaceToken: storeMocks.getWorkspaceToken
 }));
 
-vi.mock("@/modules/conversation/store", () => ({
+vi.mock("@/modules/session/store", () => ({
   sessionStore: sessionStoreMocks.sessionStore,
   detachSessionStream: sessionStoreMocks.detachSessionStream,
   clearSessionTimer: sessionStoreMocks.clearSessionTimer,
@@ -183,7 +173,7 @@ describe("project store token forwarding", () => {
           default_mode: "default",
           model_config_id: "rc_model_1",
           base_revision: 0,
-          active_execution_id: null,
+          active_run_id: null,
           created_at: "2026-02-24T00:00:00Z",
           updated_at: "2026-02-24T00:00:00Z"
         }
@@ -210,7 +200,7 @@ describe("project store token forwarding", () => {
       skill_ids: [],
       mcp_ids: [],
       base_revision: 0,
-      active_execution_id: null,
+      active_run_id: null,
       created_at: "2026-02-24T00:00:00Z",
       updated_at: "2026-02-24T00:00:00Z"
     };

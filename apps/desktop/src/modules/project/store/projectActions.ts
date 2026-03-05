@@ -2,7 +2,7 @@ import {
   clearSessionTimer,
   sessionStore,
   detachSessionStream,
-} from "@/modules/conversation/store";
+} from "@/modules/session/store";
 import {
   refreshConversationsForActiveProject,
   refreshConversationsForProject,

@@ -69,7 +69,7 @@ func HookExecutionsHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		if service, ok := newHookExecutionQueryService(state); ok {
+		if service, ok := newHookRunQueryService(state); ok {
 			items, exists, err := service.ListByRun(r.Context(), runID)
 			if err == nil {
 				if !exists {
@@ -79,7 +79,7 @@ func HookExecutionsHandler(state *AppState) http.HandlerFunc {
 				writeJSON(w, http.StatusOK, HookExecutionListResponse{Items: items})
 				return
 			}
-			log.Printf("runtime v1 hook execution query failed, fallback to in-memory map: %v", err)
+			log.Printf("runtime hook execution query failed, fallback to in-memory map: %v", err)
 		}
 
 		state.mu.RLock()

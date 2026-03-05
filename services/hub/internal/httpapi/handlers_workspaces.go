@@ -197,7 +197,7 @@ func WorkspaceStatusHandler(state *AppState) http.HandlerFunc {
 			state,
 			r,
 			workspaceID,
-			"conversation.read",
+			"session.read",
 			authorizationResource{WorkspaceID: workspaceID},
 			authorizationContext{OperationType: "read"},
 		)
@@ -300,7 +300,7 @@ func selectWorkspaceConversationIDFromRepository(ctx context.Context, state *App
 	if state == nil || normalizedWorkspaceID == "" {
 		return ""
 	}
-	service, ok := newExecutionQueryService(state)
+	service, ok := newRunQueryService(state)
 	if !ok {
 		return ""
 	}
@@ -313,7 +313,7 @@ func selectWorkspaceConversationIDFromRepository(ctx context.Context, state *App
 			Offset: offset,
 		})
 		if err != nil {
-			log.Printf("runtime v1 workspace session list query failed, fallback to in-memory map: %v", err)
+			log.Printf("runtime workspace session list query failed, fallback to in-memory map: %v", err)
 			return ""
 		}
 		if len(page) == 0 {
@@ -355,13 +355,13 @@ func loadWorkspaceStatusConversationSeed(ctx context.Context, state *AppState, c
 		return conversation, true
 	}
 
-	service, ok := newExecutionQueryService(state)
+	service, ok := newRunQueryService(state)
 	if !ok {
 		return Conversation{}, false
 	}
 	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
 	if err != nil {
-		log.Printf("runtime v1 workspace status conversation lookup failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime workspace status conversation lookup failed, fallback to in-memory map: %v", err)
 		return Conversation{}, false
 	}
 	if !exists {
@@ -381,12 +381,12 @@ func deriveConversationStatusLocked(state *AppState, conversationID string) Conv
 }
 
 func deriveConversationStatus(ctx context.Context, state *AppState, conversationID string) ConversationStatus {
-	if service, ok := newExecutionQueryService(state); ok {
+	if service, ok := newRunQueryService(state); ok {
 		executions, err := service.ListAllByConversation(ctx, conversationID)
 		if err == nil {
 			return deriveConversationStatusFromExecutions(executions)
 		}
-		log.Printf("runtime v1 workspace status query failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime workspace status query failed, fallback to in-memory map: %v", err)
 	}
 
 	state.mu.RLock()

@@ -153,7 +153,7 @@ func ConversationChangeSetHandler(state *AppState) http.HandlerFunc {
 		conversationID := runtimeSessionIDFromPath(r)
 		conversationSeed, exists := loadChangeSetConversationSeed(r.Context(), state, conversationID)
 		if !exists {
-			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
+			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"session_id": conversationID})
 			return
 		}
 		projectSeed, projectExists, projectErr := getProjectFromStore(state, conversationSeed.ProjectID)
@@ -171,7 +171,7 @@ func ConversationChangeSetHandler(state *AppState) http.HandlerFunc {
 			state,
 			r,
 			conversationSeed.WorkspaceID,
-			"conversation.read",
+			"session.read",
 			authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
 			authorizationContext{OperationType: "read"},
 		)
@@ -190,8 +190,8 @@ func ConversationChangeSetHandler(state *AppState) http.HandlerFunc {
 		state.mu.Unlock()
 		if err != nil {
 			WriteStandardError(w, r, http.StatusInternalServerError, "CHANGESET_BUILD_FAILED", "Failed to build conversation changeset", map[string]any{
-				"conversation_id": conversationID,
-				"error":           err.Error(),
+				"session_id": conversationID,
+				"error":      err.Error(),
 			})
 			return
 		}
@@ -215,7 +215,7 @@ func ConversationChangeSetCommitHandler(state *AppState) http.HandlerFunc {
 		}
 		conversationSeed, exists := loadChangeSetConversationSeed(r.Context(), state, conversationID)
 		if !exists {
-			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
+			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"session_id": conversationID})
 			return
 		}
 		projectSeed, projectExists, projectErr := getProjectFromStore(state, conversationSeed.ProjectID)
@@ -233,7 +233,7 @@ func ConversationChangeSetCommitHandler(state *AppState) http.HandlerFunc {
 			state,
 			r,
 			conversationSeed.WorkspaceID,
-			"execution.control",
+			"run.control",
 			authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
 			authorizationContext{OperationType: "write", ABACRequired: true},
 		)
@@ -252,18 +252,18 @@ func ConversationChangeSetCommitHandler(state *AppState) http.HandlerFunc {
 		ledger := ensureConversationChangeLedgerLocked(state, conversationID)
 		if hasMutableExecutionsLocked(state, conversationID) {
 			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusConflict, "CHANGESET_BUSY", "Changeset mutation is disabled while executions are running", map[string]any{"conversation_id": conversationID})
+			WriteStandardError(w, r, http.StatusConflict, "CHANGESET_BUSY", "Changeset mutation is disabled while executions are running", map[string]any{"session_id": conversationID})
 			return
 		}
 		if strings.TrimSpace(input.ExpectedChangeSetID) == "" || strings.TrimSpace(input.ExpectedChangeSetID) != strings.TrimSpace(ledger.PendingChangeSetID) {
 			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusConflict, "CHANGESET_CONFLICT", "Expected change_set_id does not match current pending set", map[string]any{"conversation_id": conversationID})
+			WriteStandardError(w, r, http.StatusConflict, "CHANGESET_CONFLICT", "Expected change_set_id does not match current pending set", map[string]any{"session_id": conversationID})
 			return
 		}
 		entries := cloneChangeEntries(ledger.Entries)
 		if len(entries) == 0 {
 			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusConflict, "CHANGESET_EMPTY", "No pending changes to commit", map[string]any{"conversation_id": conversationID})
+			WriteStandardError(w, r, http.StatusConflict, "CHANGESET_EMPTY", "No pending changes to commit", map[string]any{"session_id": conversationID})
 			return
 		}
 		message := strings.TrimSpace(input.Message)
@@ -276,8 +276,8 @@ func ConversationChangeSetCommitHandler(state *AppState) http.HandlerFunc {
 		checkpoint, err := driver.Commit(project, entries, message)
 		if err != nil {
 			WriteStandardError(w, r, http.StatusInternalServerError, "CHANGESET_COMMIT_FAILED", "Failed to commit changeset", map[string]any{
-				"conversation_id": conversationID,
-				"error":           err.Error(),
+				"session_id": conversationID,
+				"error":      err.Error(),
 			})
 			return
 		}
@@ -342,7 +342,7 @@ func ConversationChangeSetDiscardHandler(state *AppState) http.HandlerFunc {
 		}
 		conversationSeed, exists := loadChangeSetConversationSeed(r.Context(), state, conversationID)
 		if !exists {
-			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
+			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"session_id": conversationID})
 			return
 		}
 		projectSeed, projectExists, projectErr := getProjectFromStore(state, conversationSeed.ProjectID)
@@ -366,12 +366,12 @@ func ConversationChangeSetDiscardHandler(state *AppState) http.HandlerFunc {
 		ledger := ensureConversationChangeLedgerLocked(state, conversationID)
 		if hasMutableExecutionsLocked(state, conversationID) {
 			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusConflict, "CHANGESET_BUSY", "Changeset mutation is disabled while executions are running", map[string]any{"conversation_id": conversationID})
+			WriteStandardError(w, r, http.StatusConflict, "CHANGESET_BUSY", "Changeset mutation is disabled while executions are running", map[string]any{"session_id": conversationID})
 			return
 		}
 		if strings.TrimSpace(input.ExpectedChangeSetID) == "" || strings.TrimSpace(input.ExpectedChangeSetID) != strings.TrimSpace(ledger.PendingChangeSetID) {
 			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusConflict, "CHANGESET_CONFLICT", "Expected change_set_id does not match current pending set", map[string]any{"conversation_id": conversationID})
+			WriteStandardError(w, r, http.StatusConflict, "CHANGESET_CONFLICT", "Expected change_set_id does not match current pending set", map[string]any{"session_id": conversationID})
 			return
 		}
 		entries := cloneChangeEntries(ledger.Entries)
@@ -384,8 +384,8 @@ func ConversationChangeSetDiscardHandler(state *AppState) http.HandlerFunc {
 		driver := changeDriverForProject(project)
 		if err := driver.Discard(project, entries); err != nil {
 			WriteStandardError(w, r, http.StatusInternalServerError, "CHANGESET_DISCARD_FAILED", "Failed to discard changeset", map[string]any{
-				"conversation_id": conversationID,
-				"error":           err.Error(),
+				"session_id": conversationID,
+				"error":      err.Error(),
 			})
 			return
 		}
@@ -423,7 +423,7 @@ func ConversationChangeSetExportHandler(state *AppState) http.HandlerFunc {
 		conversationID := runtimeSessionIDFromPath(r)
 		conversationSeed, exists := loadChangeSetConversationSeed(r.Context(), state, conversationID)
 		if !exists {
-			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
+			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"session_id": conversationID})
 			return
 		}
 		projectSeed, projectExists, projectErr := getProjectFromStore(state, conversationSeed.ProjectID)
@@ -450,7 +450,7 @@ func ConversationChangeSetExportHandler(state *AppState) http.HandlerFunc {
 			state,
 			r,
 			conversation.WorkspaceID,
-			"conversation.read",
+			"session.read",
 			authorizationResource{WorkspaceID: conversation.WorkspaceID},
 			authorizationContext{OperationType: "read"},
 		)
@@ -462,8 +462,8 @@ func ConversationChangeSetExportHandler(state *AppState) http.HandlerFunc {
 		payload, err := driver.Export(project, entries)
 		if err != nil {
 			WriteStandardError(w, r, http.StatusInternalServerError, "CHANGESET_EXPORT_FAILED", "Failed to export changeset files", map[string]any{
-				"conversation_id": conversationID,
-				"error":           err.Error(),
+				"session_id": conversationID,
+				"error":      err.Error(),
 			})
 			return
 		}
@@ -752,7 +752,7 @@ func loadChangeSetExecutionSeedLocked(state *AppState, executionID string) (Exec
 	if execution, exists := state.executions[normalizedExecutionID]; exists {
 		return execution, true
 	}
-	service, ok := newExecutionQueryService(state)
+	service, ok := newRunQueryService(state)
 	if !ok {
 		return Execution{}, false
 	}
@@ -779,13 +779,13 @@ func loadChangeSetConversationSeed(ctx context.Context, state *AppState, convers
 		return conversation, true
 	}
 
-	service, ok := newExecutionQueryService(state)
+	service, ok := newRunQueryService(state)
 	if !ok {
 		return Conversation{}, false
 	}
 	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
 	if err != nil {
-		log.Printf("runtime v1 changeset conversation lookup failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime changeset conversation lookup failed, fallback to in-memory map: %v", err)
 		return Conversation{}, false
 	}
 	if !exists {
@@ -802,7 +802,7 @@ func loadChangeSetConversationSeedLocked(state *AppState, conversationID string)
 	if conversation, exists := state.conversations[normalizedConversationID]; exists {
 		return conversation, true
 	}
-	service, ok := newExecutionQueryService(state)
+	service, ok := newRunQueryService(state)
 	if !ok {
 		return Conversation{}, false
 	}
@@ -897,7 +897,7 @@ func listChangeSetRuntimeRunsByConversationLocked(state *AppState, conversationI
 	if state == nil || normalizedConversationID == "" {
 		return []RuntimeRunRecord{}
 	}
-	service, ok := newExecutionQueryService(state)
+	service, ok := newRunQueryService(state)
 	if !ok {
 		return []RuntimeRunRecord{}
 	}

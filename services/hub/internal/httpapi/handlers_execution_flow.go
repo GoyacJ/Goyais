@@ -29,7 +29,7 @@ func ConversationsHandler(state *AppState) http.HandlerFunc {
 			state,
 			r,
 			workspaceID,
-			"conversation.read",
+			"session.read",
 			authorizationResource{WorkspaceID: workspaceID},
 			authorizationContext{OperationType: "read"},
 		)
@@ -40,7 +40,7 @@ func ConversationsHandler(state *AppState) http.HandlerFunc {
 		if workspaceID == "" {
 			workspaceID = session.WorkspaceID
 		}
-		queryService, hasQueryService := newExecutionQueryService(state)
+		queryService, hasQueryService := newRunQueryService(state)
 		items := make([]Conversation, 0)
 		loadedFromRepository := false
 		if hasQueryService {
@@ -54,7 +54,7 @@ func ConversationsHandler(state *AppState) http.HandlerFunc {
 				}
 				state.mu.Unlock()
 			} else {
-				log.Printf("runtime v1 conversation list query failed, fallback to in-memory map: %v", err)
+				log.Printf("runtime conversation list query failed, fallback to in-memory map: %v", err)
 			}
 		}
 		if !loadedFromRepository {
@@ -91,7 +91,7 @@ func ConversationsHandler(state *AppState) http.HandlerFunc {
 					items[index].TokensTotal = totals.Total
 				}
 			} else {
-				log.Printf("runtime v1 conversation usage query failed, fallback to in-memory map: %v", err)
+				log.Printf("runtime conversation usage query failed, fallback to in-memory map: %v", err)
 				applyInMemoryConversationUsage()
 			}
 		} else {
@@ -128,7 +128,7 @@ func ExecutionsHandler(state *AppState) http.HandlerFunc {
 			state,
 			r,
 			workspaceID,
-			"conversation.read",
+			"session.read",
 			authorizationResource{WorkspaceID: workspaceID},
 			authorizationContext{OperationType: "read"},
 		)
@@ -140,8 +140,8 @@ func ExecutionsHandler(state *AppState) http.HandlerFunc {
 			workspaceID = session.WorkspaceID
 		}
 		start, limit := parseCursorLimit(r)
-		if service, ok := newExecutionQueryService(state); ok {
-			items, next, err := service.ListExecutions(r.Context(), executionQueryFilter{
+		if service, ok := newRunQueryService(state); ok {
+			items, next, err := service.ListExecutions(r.Context(), runQueryFilter{
 				WorkspaceID:    workspaceID,
 				ConversationID: conversationID,
 				Offset:         start,
@@ -155,7 +155,7 @@ func ExecutionsHandler(state *AppState) http.HandlerFunc {
 				writeJSON(w, http.StatusOK, ListEnvelope{Items: raw, NextCursor: next})
 				return
 			}
-			log.Printf("runtime v1 execution query failed, fallback to in-memory map: %v", err)
+			log.Printf("runtime execution query failed, fallback to in-memory map: %v", err)
 		}
 		state.mu.RLock()
 		items := make([]Execution, 0)
@@ -191,14 +191,14 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 		conversationID := runtimeSessionIDFromPath(r)
 		conversationSeed, exists := loadExecutionFlowConversationSeed(r.Context(), state, conversationID)
 		if !exists {
-			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
+			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"session_id": conversationID})
 			return
 		}
 		session, authErr := authorizeAction(
 			state,
 			r,
 			conversationSeed.WorkspaceID,
-			"execution.control",
+			"run.control",
 			authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
 			authorizationContext{OperationType: "write", ABACRequired: true},
 		)
@@ -278,7 +278,7 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 			state.submitExecutionBestEffort(r.Context(), nextExecutionToSubmit)
 		}
 		if state.authz != nil {
-			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "execution.control", "conversation", conversationID, "success", map[string]any{"operation": "stop"}, TraceIDFromContext(r.Context()))
+			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "run.control", "conversation", conversationID, "success", map[string]any{"operation": "stop"}, TraceIDFromContext(r.Context()))
 		}
 
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -306,14 +306,14 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 		}
 		conversationSeed, exists := loadExecutionFlowConversationSeed(r.Context(), state, conversationID)
 		if !exists {
-			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
+			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"session_id": conversationID})
 			return
 		}
 		session, authErr := authorizeAction(
 			state,
 			r,
 			conversationSeed.WorkspaceID,
-			"execution.control",
+			"run.control",
 			authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
 			authorizationContext{OperationType: "write", ABACRequired: true},
 		)
@@ -387,8 +387,8 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 			if err := restoreGitWorkingTreePaths(project.RepoPath, rollbackDiffItems); err != nil {
 				state.mu.Unlock()
 				WriteStandardError(w, r, http.StatusInternalServerError, "ROLLBACK_RESTORE_FAILED", "Failed to restore project files during rollback", map[string]any{
-					"conversation_id": conversationID,
-					"error":           err.Error(),
+					"session_id": conversationID,
+					"error":      err.Error(),
 				})
 				return
 			}
@@ -397,8 +397,8 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 			if err := restoreNonGitWorkingTreePaths(project.RepoPath, rollbackEntries); err != nil {
 				state.mu.Unlock()
 				WriteStandardError(w, r, http.StatusInternalServerError, "ROLLBACK_RESTORE_FAILED", "Failed to restore non-git files during rollback", map[string]any{
-					"conversation_id": conversationID,
-					"error":           err.Error(),
+					"session_id": conversationID,
+					"error":      err.Error(),
 				})
 				return
 			}
@@ -488,7 +488,7 @@ func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
 			TraceID:  TraceIDFromContext(r.Context()),
 		})
 		if state.authz != nil {
-			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "execution.control", "conversation", conversationID, "success", map[string]any{"operation": "rollback"}, TraceIDFromContext(r.Context()))
+			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "run.control", "conversation", conversationID, "success", map[string]any{"operation": "rollback"}, TraceIDFromContext(r.Context()))
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	}
@@ -525,14 +525,14 @@ func ConversationExportHandler(state *AppState) http.HandlerFunc {
 		messages := append([]ConversationMessage{}, state.conversationMessages[conversationID]...)
 		state.mu.RUnlock()
 		if !exists {
-			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
+			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"session_id": conversationID})
 			return
 		}
 		_, authErr := authorizeAction(
 			state,
 			r,
 			conversation.WorkspaceID,
-			"conversation.read",
+			"session.read",
 			authorizationResource{WorkspaceID: conversation.WorkspaceID},
 			authorizationContext{OperationType: "read"},
 		)
@@ -560,13 +560,13 @@ func loadExecutionFlowConversationSeed(ctx context.Context, state *AppState, con
 		return conversation, true
 	}
 
-	service, ok := newExecutionQueryService(state)
+	service, ok := newRunQueryService(state)
 	if !ok {
 		return Conversation{}, false
 	}
 	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
 	if err != nil {
-		log.Printf("runtime v1 execution flow conversation lookup failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime execution flow conversation lookup failed, fallback to in-memory map: %v", err)
 		return Conversation{}, false
 	}
 	if !exists {
@@ -580,7 +580,7 @@ func loadExecutionFlowConversationSeed(ctx context.Context, state *AppState, con
 	return seed, true
 }
 
-func listExecutionFlowConversationsFromRepository(ctx context.Context, service *executionQueryService, workspaceID string, projectID string) ([]Conversation, error) {
+func listExecutionFlowConversationsFromRepository(ctx context.Context, service *runQueryService, workspaceID string, projectID string) ([]Conversation, error) {
 	if service == nil {
 		return []Conversation{}, nil
 	}
@@ -614,7 +614,7 @@ func loadExecutionFlowConversationSeedLocked(state *AppState, conversationID str
 	if conversation, exists := state.conversations[normalizedConversationID]; exists {
 		return conversation, true
 	}
-	service, ok := newExecutionQueryService(state)
+	service, ok := newRunQueryService(state)
 	if !ok {
 		return Conversation{}, false
 	}
@@ -635,7 +635,7 @@ func loadExecutionFlowExecutionSeedLocked(state *AppState, executionID string) (
 	if execution, exists := state.executions[normalizedExecutionID]; exists {
 		return execution, true
 	}
-	service, ok := newExecutionQueryService(state)
+	service, ok := newRunQueryService(state)
 	if !ok {
 		return Execution{}, false
 	}

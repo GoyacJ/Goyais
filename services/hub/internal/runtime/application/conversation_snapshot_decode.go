@@ -45,7 +45,7 @@ type ConversationSnapshotInspector struct {
 
 type ConversationSnapshotMessage struct {
 	ID             string `json:"id"`
-	ConversationID string `json:"conversation_id"`
+	ConversationID string `json:"session_id"`
 	Role           string `json:"role"`
 	Content        string `json:"content"`
 	CreatedAt      string `json:"created_at"`

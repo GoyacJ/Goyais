@@ -36,7 +36,7 @@ func ConversationInputCatalogHandler(state *AppState) http.HandlerFunc {
 		}
 
 		conversationID := runtimeSessionIDFromPath(r)
-		conversation, project, projectConfig, _, ok := loadConversationInputContext(state, w, r, conversationID, "conversation.read")
+		conversation, project, projectConfig, _, ok := loadConversationInputContext(state, w, r, conversationID, "session.read")
 		if !ok {
 			return
 		}
@@ -60,7 +60,7 @@ func ConversationInputSuggestHandler(state *AppState) http.HandlerFunc {
 		}
 
 		conversationID := runtimeSessionIDFromPath(r)
-		conversation, project, projectConfig, _, ok := loadConversationInputContext(state, w, r, conversationID, "conversation.read")
+		conversation, project, projectConfig, _, ok := loadConversationInputContext(state, w, r, conversationID, "session.read")
 		if !ok {
 			return
 		}
@@ -137,7 +137,7 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 		}
 
 		conversationID := runtimeSessionIDFromPath(r)
-		conversationSeed, project, projectConfig, session, ok := loadConversationInputContext(state, w, r, conversationID, "conversation.write")
+		conversationSeed, project, projectConfig, session, ok := loadConversationInputContext(state, w, r, conversationID, "session.write")
 		if !ok {
 			return
 		}
@@ -215,7 +215,7 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 					return
 				}
 				if state.authz != nil {
-					_ = state.authz.appendAudit(conversationSeed.WorkspaceID, session.UserID, "conversation.write", "conversation", conversationID, "success", map[string]any{"operation": "submit_command"}, TraceIDFromContext(r.Context()))
+					_ = state.authz.appendAudit(conversationSeed.WorkspaceID, session.UserID, "session.write", "conversation", conversationID, "success", map[string]any{"operation": "submit_command"}, TraceIDFromContext(r.Context()))
 				}
 				writeJSON(w, http.StatusOK, ComposerSubmitResponse{
 					Kind: "command_result",
@@ -338,7 +338,7 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 		conversation, exists := state.conversations[conversationID]
 		if !exists {
 			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
+			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"session_id": conversationID})
 			return
 		}
 		if thresholdErr := validateExecutionTokenThresholdsLocked(
@@ -510,7 +510,7 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			state.submitExecutionBestEffort(r.Context(), nextExecutionToSubmit)
 		}
 		if state.authz != nil {
-			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "conversation.write", "conversation", conversationID, "success", map[string]any{"operation": "submit_prompt"}, TraceIDFromContext(r.Context()))
+			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "session.write", "conversation", conversationID, "success", map[string]any{"operation": "submit_prompt"}, TraceIDFromContext(r.Context()))
 		}
 
 		queueIndexValue := createdExecution.QueueIndex
@@ -534,7 +534,7 @@ func loadConversationInputContext(
 	conversationSeed, exists := state.conversations[conversationID]
 	state.mu.RUnlock()
 	if !exists {
-		WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"conversation_id": conversationID})
+		WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"session_id": conversationID})
 		return Conversation{}, Project{}, ProjectConfig{}, Session{}, false
 	}
 
@@ -544,7 +544,7 @@ func loadConversationInputContext(
 		conversationSeed.WorkspaceID,
 		permission,
 		authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
-		authorizationContext{OperationType: permissionOperationType(permission), ABACRequired: permission != "conversation.read"},
+		authorizationContext{OperationType: permissionOperationType(permission), ABACRequired: permission != "session.read"},
 	)
 	if authErr != nil {
 		authErr.write(w, r)

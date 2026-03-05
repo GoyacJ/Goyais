@@ -201,7 +201,7 @@ async function addRole(): Promise<void> {
   await createOrUpdateRole({
     key: keyInput as Role,
     name,
-    permissions: ["project.read", "project.write", "conversation.read", "conversation.write"],
+    permissions: ["project.read", "project.write", "session.read", "session.write"],
     enabled: true
   });
 }

@@ -84,7 +84,7 @@ import { refreshAdminData } from "@/modules/admin/store";
 import { authStore } from "@/shared/stores/authStore";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
 import { projectStore, refreshConversationsForActiveProject } from "@/modules/project/store";
-import { conversationStore } from "@/modules/conversation/store";
+import { conversationStore } from "@/modules/session/store";
 import { useWorkspaceStatusSync } from "@/shared/stores/workspaceStatusStore";
 import AccountShell from "@/shared/shells/AccountShell.vue";
 

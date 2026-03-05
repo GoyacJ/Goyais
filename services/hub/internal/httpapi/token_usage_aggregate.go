@@ -19,12 +19,12 @@ type tokenUsageAggregate struct {
 }
 
 func computeTokenUsageAggregate(state *AppState, workspaceIDs ...string) tokenUsageAggregate {
-	if service, ok := newExecutionQueryService(state); ok {
+	if service, ok := newRunQueryService(state); ok {
 		aggregate, err := service.ComputeTokenUsageAggregate(context.Background(), workspaceIDs)
 		if err == nil {
 			return aggregate
 		}
-		log.Printf("runtime v1 token usage aggregate query failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime token usage aggregate query failed, fallback to in-memory map: %v", err)
 	}
 	state.mu.RLock()
 	defer state.mu.RUnlock()

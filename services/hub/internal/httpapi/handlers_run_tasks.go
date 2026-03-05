@@ -199,7 +199,7 @@ func buildRunTaskGraph(state *AppState, request *http.Request, runID string) (ru
 		if err == nil {
 			return graph, exists
 		}
-		log.Printf("runtime v1 run task graph query failed, fallback to in-memory map: %v", err)
+		log.Printf("runtime run task graph query failed, fallback to in-memory map: %v", err)
 	}
 	return buildRunTaskGraphFromState(state, runID)
 }

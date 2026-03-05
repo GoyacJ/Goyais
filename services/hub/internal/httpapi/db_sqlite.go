@@ -346,7 +346,7 @@ func (s *authzStore) migrate() error {
 			version TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
-		`CREATE TABLE IF NOT EXISTS runtime_sessions_v1 (
+		`CREATE TABLE IF NOT EXISTS runtime_sessions (
 			id TEXT PRIMARY KEY,
 			workspace_id TEXT NOT NULL,
 			project_id TEXT NOT NULL,
@@ -360,9 +360,9 @@ func (s *authzStore) migrate() error {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_runtime_sessions_v1_workspace_created ON runtime_sessions_v1(workspace_id, created_at, id)`,
-		`CREATE INDEX IF NOT EXISTS idx_runtime_sessions_v1_project_created ON runtime_sessions_v1(project_id, created_at, id)`,
-		`CREATE TABLE IF NOT EXISTS runtime_runs_v1 (
+		`CREATE INDEX IF NOT EXISTS idx_runtime_sessions_workspace_created ON runtime_sessions(workspace_id, created_at, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_sessions_project_created ON runtime_sessions(project_id, created_at, id)`,
+		`CREATE TABLE IF NOT EXISTS runtime_runs (
 			id TEXT PRIMARY KEY,
 			session_id TEXT NOT NULL,
 			workspace_id TEXT NOT NULL,
@@ -377,9 +377,9 @@ func (s *authzStore) migrate() error {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_runtime_runs_v1_session_created ON runtime_runs_v1(session_id, created_at, id)`,
-		`CREATE INDEX IF NOT EXISTS idx_runtime_runs_v1_workspace_created ON runtime_runs_v1(workspace_id, created_at, id)`,
-		`CREATE TABLE IF NOT EXISTS runtime_run_events_v1 (
+		`CREATE INDEX IF NOT EXISTS idx_runtime_runs_session_created ON runtime_runs(session_id, created_at, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_runs_workspace_created ON runtime_runs(workspace_id, created_at, id)`,
+		`CREATE TABLE IF NOT EXISTS runtime_run_events (
 			event_id TEXT PRIMARY KEY,
 			run_id TEXT NOT NULL,
 			session_id TEXT NOT NULL,
@@ -389,9 +389,9 @@ func (s *authzStore) migrate() error {
 			payload_json TEXT NOT NULL,
 			occurred_at TEXT NOT NULL
 		)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_runtime_run_events_v1_session_sequence ON runtime_run_events_v1(session_id, sequence)`,
-		`CREATE INDEX IF NOT EXISTS idx_runtime_run_events_v1_run_sequence ON runtime_run_events_v1(run_id, sequence)`,
-		`CREATE TABLE IF NOT EXISTS runtime_run_tasks_v1 (
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_runtime_run_events_session_sequence ON runtime_run_events(session_id, sequence)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_run_events_run_sequence ON runtime_run_events(run_id, sequence)`,
+		`CREATE TABLE IF NOT EXISTS runtime_run_tasks (
 			task_id TEXT PRIMARY KEY,
 			run_id TEXT NOT NULL,
 			parent_task_id TEXT,
@@ -402,8 +402,8 @@ func (s *authzStore) migrate() error {
 			updated_at TEXT NOT NULL,
 			finished_at TEXT
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_runtime_run_tasks_v1_run_created ON runtime_run_tasks_v1(run_id, created_at, task_id)`,
-		`CREATE TABLE IF NOT EXISTS runtime_change_sets_v1 (
+		`CREATE INDEX IF NOT EXISTS idx_runtime_run_tasks_run_created ON runtime_run_tasks(run_id, created_at, task_id)`,
+		`CREATE TABLE IF NOT EXISTS runtime_change_sets (
 			change_set_id TEXT PRIMARY KEY,
 			session_id TEXT NOT NULL,
 			run_id TEXT,
@@ -411,8 +411,8 @@ func (s *authzStore) migrate() error {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_runtime_change_sets_v1_session_created ON runtime_change_sets_v1(session_id, created_at, change_set_id)`,
-		`CREATE TABLE IF NOT EXISTS runtime_hook_records_v1 (
+		`CREATE INDEX IF NOT EXISTS idx_runtime_change_sets_session_created ON runtime_change_sets(session_id, created_at, change_set_id)`,
+		`CREATE TABLE IF NOT EXISTS runtime_hook_records (
 			id TEXT PRIMARY KEY,
 			run_id TEXT NOT NULL,
 			session_id TEXT NOT NULL,
@@ -423,8 +423,8 @@ func (s *authzStore) migrate() error {
 			decision_json TEXT NOT NULL,
 			timestamp TEXT NOT NULL
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_runtime_hook_records_v1_run_timestamp ON runtime_hook_records_v1(run_id, timestamp, id)`,
-		`CREATE INDEX IF NOT EXISTS idx_runtime_hook_records_v1_session_timestamp ON runtime_hook_records_v1(session_id, timestamp, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_hook_records_run_timestamp ON runtime_hook_records(run_id, timestamp, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_hook_records_session_timestamp ON runtime_hook_records(session_id, timestamp, id)`,
 	}
 
 	for _, statement := range statements {
@@ -438,14 +438,14 @@ func (s *authzStore) migrate() error {
 	if migrateErr := s.ensureProjectConfigTokenThresholdColumns(); migrateErr != nil {
 		return fmt.Errorf("ensure project config token threshold columns: %w", migrateErr)
 	}
-	if migrateErr := s.ensureRuntimeV1SchemaVersion(); migrateErr != nil {
-		return fmt.Errorf("ensure runtime v1 schema version: %w", migrateErr)
+	if migrateErr := s.ensureRuntimeSchemaVersion(); migrateErr != nil {
+		return fmt.Errorf("ensure runtime schema version: %w", migrateErr)
 	}
-	if migrateErr := s.ensureRuntimeV1HookTaskIDColumn(); migrateErr != nil {
-		return fmt.Errorf("ensure runtime v1 hook task_id column: %w", migrateErr)
+	if migrateErr := s.ensureRuntimeHookTaskIDColumn(); migrateErr != nil {
+		return fmt.Errorf("ensure runtime hook task_id column: %w", migrateErr)
 	}
-	if migrateErr := s.ensureRuntimeV1RunModelConfigIDColumn(); migrateErr != nil {
-		return fmt.Errorf("ensure runtime v1 run model_config_id column: %w", migrateErr)
+	if migrateErr := s.ensureRuntimeRunModelConfigIDColumn(); migrateErr != nil {
+		return fmt.Errorf("ensure runtime run model_config_id column: %w", migrateErr)
 	}
 	if validationErr := s.validateStrictSchema(); validationErr != nil {
 		backupPath := ""
@@ -533,7 +533,7 @@ func (s *authzStore) ensureProjectConfigTokenThresholdColumns() error {
 	return err
 }
 
-func (s *authzStore) ensureRuntimeV1SchemaVersion() error {
+func (s *authzStore) ensureRuntimeSchemaVersion() error {
 	if s == nil || s.db == nil {
 		return nil
 	}
@@ -542,40 +542,40 @@ func (s *authzStore) ensureRuntimeV1SchemaVersion() error {
 		`INSERT INTO hub_schema_versions(component, version, updated_at)
 		 VALUES(?,?,?)
 		 ON CONFLICT(component) DO UPDATE SET version=excluded.version, updated_at=excluded.updated_at`,
-		hubRuntimeV1SchemaComponent,
-		hubRuntimeV1SchemaVersion,
+		hubRuntimeSchemaComponent,
+		hubRuntimeSchemaVersion,
 		now,
 	)
 	return err
 }
 
-func (s *authzStore) ensureRuntimeV1HookTaskIDColumn() error {
+func (s *authzStore) ensureRuntimeHookTaskIDColumn() error {
 	if s == nil || s.db == nil {
 		return nil
 	}
-	hasTaskID, err := tableHasColumn(s.db, "runtime_hook_records_v1", "task_id")
+	hasTaskID, err := tableHasColumn(s.db, "runtime_hook_records", "task_id")
 	if err != nil {
 		return err
 	}
 	if hasTaskID {
 		return nil
 	}
-	_, err = s.db.Exec(`ALTER TABLE runtime_hook_records_v1 ADD COLUMN task_id TEXT`)
+	_, err = s.db.Exec(`ALTER TABLE runtime_hook_records ADD COLUMN task_id TEXT`)
 	return err
 }
 
-func (s *authzStore) ensureRuntimeV1RunModelConfigIDColumn() error {
+func (s *authzStore) ensureRuntimeRunModelConfigIDColumn() error {
 	if s == nil || s.db == nil {
 		return nil
 	}
-	hasModelConfigID, err := tableHasColumn(s.db, "runtime_runs_v1", "model_config_id")
+	hasModelConfigID, err := tableHasColumn(s.db, "runtime_runs", "model_config_id")
 	if err != nil {
 		return err
 	}
 	if hasModelConfigID {
 		return nil
 	}
-	_, err = s.db.Exec(`ALTER TABLE runtime_runs_v1 ADD COLUMN model_config_id TEXT NOT NULL DEFAULT ''`)
+	_, err = s.db.Exec(`ALTER TABLE runtime_runs ADD COLUMN model_config_id TEXT NOT NULL DEFAULT ''`)
 	return err
 }
 
@@ -642,12 +642,12 @@ func (s *authzStore) rebuildSchema(statements []string) error {
 		`DROP TABLE IF EXISTS execution_control_commands`,
 		`DROP TABLE IF EXISTS execution_leases`,
 		`DROP TABLE IF EXISTS workers`,
-		`DROP TABLE IF EXISTS runtime_hook_records_v1`,
-		`DROP TABLE IF EXISTS runtime_change_sets_v1`,
-		`DROP TABLE IF EXISTS runtime_run_tasks_v1`,
-		`DROP TABLE IF EXISTS runtime_run_events_v1`,
-		`DROP TABLE IF EXISTS runtime_runs_v1`,
-		`DROP TABLE IF EXISTS runtime_sessions_v1`,
+		`DROP TABLE IF EXISTS runtime_hook_records`,
+		`DROP TABLE IF EXISTS runtime_change_sets`,
+		`DROP TABLE IF EXISTS runtime_run_tasks`,
+		`DROP TABLE IF EXISTS runtime_run_events`,
+		`DROP TABLE IF EXISTS runtime_runs`,
+		`DROP TABLE IF EXISTS runtime_sessions`,
 		`DROP TABLE IF EXISTS hub_schema_versions`,
 		`DROP TABLE IF EXISTS resource_test_logs`,
 		`DROP TABLE IF EXISTS resource_configs`,
@@ -819,9 +819,9 @@ func (s *authzStore) ensureWorkspaceSeeds(workspaceID string) error {
 	}()
 
 	roles := []AdminRole{
-		{Key: RoleViewer, Name: "Viewer", Permissions: []string{"project.read", "conversation.read", "resource.read"}, Enabled: true},
-		{Key: RoleDeveloper, Name: "Developer", Permissions: []string{"project.read", "project.write", "project_config.read", "conversation.read", "conversation.write", "execution.control", "resource.read", "resource.write", "resource_config.read", "resource_config.write", "model.test", "mcp.connect", "share.request", "share.revoke", "catalog.update_root"}, Enabled: true},
-		{Key: RoleApprover, Name: "Approver", Permissions: []string{"project.read", "project.write", "project_config.read", "conversation.read", "conversation.write", "execution.control", "resource.read", "resource.write", "resource_config.read", "resource_config.write", "resource_config.delete", "model.test", "mcp.connect", "share.request", "share.approve", "share.reject", "share.revoke", "catalog.update_root", "admin.audit.read"}, Enabled: true},
+		{Key: RoleViewer, Name: "Viewer", Permissions: []string{"project.read", "session.read", "resource.read"}, Enabled: true},
+		{Key: RoleDeveloper, Name: "Developer", Permissions: []string{"project.read", "project.write", "project_config.read", "session.read", "session.write", "run.control", "resource.read", "resource.write", "resource_config.read", "resource_config.write", "model.test", "mcp.connect", "share.request", "share.revoke", "catalog.update_root"}, Enabled: true},
+		{Key: RoleApprover, Name: "Approver", Permissions: []string{"project.read", "project.write", "project_config.read", "session.read", "session.write", "run.control", "resource.read", "resource.write", "resource_config.read", "resource_config.write", "resource_config.delete", "model.test", "mcp.connect", "share.request", "share.approve", "share.reject", "share.revoke", "catalog.update_root", "admin.audit.read"}, Enabled: true},
 		{Key: RoleAdmin, Name: "Admin", Permissions: []string{"*"}, Enabled: true},
 	}
 	for _, role := range roles {
@@ -851,9 +851,9 @@ func (s *authzStore) ensureWorkspaceSeeds(workspaceID string) error {
 	defaultPermissions := []adminPermission{
 		{Key: "project.read", Label: "读取项目", Enabled: true},
 		{Key: "project.write", Label: "写入项目", Enabled: true},
-		{Key: "conversation.read", Label: "读取会话", Enabled: true},
-		{Key: "conversation.write", Label: "写入会话", Enabled: true},
-		{Key: "execution.control", Label: "执行控制", Enabled: true},
+		{Key: "session.read", Label: "读取会话", Enabled: true},
+		{Key: "session.write", Label: "写入会话", Enabled: true},
+		{Key: "run.control", Label: "执行控制", Enabled: true},
 		{Key: "resource.read", Label: "读取资源", Enabled: true},
 		{Key: "resource.write", Label: "写入资源", Enabled: true},
 		{Key: "resource_config.read", Label: "读取资源配置", Enabled: true},

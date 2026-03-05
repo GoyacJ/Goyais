@@ -65,10 +65,52 @@
 - 更新人：Codex
 - 周次：Week 1 / Week 2（执行中）
 - 风险变更：
-  - `R-002`: 保持 `Open`（已完成 hooks/workspace-status 的 payload 与 Hub 内部 `SessionID/SessionStatus` 字段收敛；并完成 Desktop conversation 核心层主类型迁移与兼容归一化，`pnpm lint` / `pnpm test` 通过）
-  - `R-001`: 保持 `Open`（contracts/hub/desktop 已联动验证通过；shared-core 已启动 `api-project.ts` 去别名收口，但主 schema alias 尚未清零）
-  - `R-005`: 保持 `Open`（本轮再次执行 `go test ./...` 与 `go vet ./...`，当前未出现新增回归）
+  - `R-001`: 保持 `Open`（OpenAPI 已删除 `Conversation/Execution` 及相关 alias schema，contracts/shared-core/desktop/hub 验证通过；仍需继续清理字段级旧语义与跨域调用残留）
+  - `R-002`: 保持 `Open`（Desktop 会话详情 hydration 输入已切换为 `session/runs`；尚有运行时字段 `conversation_id/execution_id` 残留待后续分批替换）
+  - `R-005`: 保持 `Open`（本轮执行 `pnpm lint` / `pnpm test` / `go test ./...` / `go vet ./...` / `scripts/refactor/gate-check.sh` 全通过，未出现新增回归）
 - 新增风险：无
 - 已关闭风险：无
 - 需要决策：
-  - 是否在下一批次直接执行 `api-project.ts` 去 alias（高收益但影响面大），还是继续按业务子域分批切换。
+  - 已决策：下一批次优先处理 Hub `internal/httpapi` 字段级旧语义清零，再推进 Desktop i18n 与视图文案收口。
+
+### 更新记录（2026-03-05，Week 3 Hub 先行批次）
+
+- 更新人：Codex
+- 周次：Week 3（执行中）
+- 风险变更：
+  - `R-001`: 保持 `Open`（`contracts:generate/check` 与 Hub/Desktop 关键验证通过；权限键与 runtime schema 命名已收敛，但全仓旧语义尚未清零）
+  - `R-004`: 保持 `Open`（runtime 表/索引去 `_v1` 已落地并通过 `go test ./...`；仍需按 Week 3 清单执行“删除本地 sqlite 后双冷启动”实机验证）
+  - `R-007`: `Open -> Mitigated`（Hub 权限模型、默认角色权限、权限字典、handler 审计键与 Desktop 权限消费断言已同步切到 `session.*`/`run.control`，本轮未出现 403 回归）
+  - `R-005`: 保持 `Open`（本轮新增执行 `scripts/refactor/gate-check.sh` 并通过，未出现新增回归）
+- 新增风险：无
+- 已关闭风险：无
+- 需要决策：
+  - 是否在下一批次将 `R-004` 的 DB 双冷启动验证纳入固定 CI preflight（当前仍为手工门禁）。
+
+### 更新记录（2026-03-05，Week 3 收口补充批次）
+
+- 更新人：Codex
+- 周次：Week 3（收口中）
+- 风险变更：
+  - `R-004`: `Open -> Mitigated`（新增并通过 `TestOpenAuthzStoreSupportsRuntimeSchemaAfterTwoColdStarts`，两轮均执行“删除 sqlite 文件 -> 冷启动重建 -> 校验 session/run/events/changeset/hooks”链路；并补充 router 重启持久化用例验证）
+  - `R-001`: 保持 `Open`（契约与跨栈校验持续通过，但全仓旧语义审计仍有存量）
+  - `R-005`: 保持 `Open`（本批次继续执行 `go test/go vet + contracts + lint/test + gate-check` 均通过）
+- 新增风险：无
+- 已关闭风险：无
+- 需要决策：
+  - Week 4 目录迁移前，是否将双冷启动验证脚本化接入 `scripts/refactor/gate-check.sh`，将 `R-004` 从 `Mitigated` 推进到可持续 `Closed`。
+
+### 更新记录（2026-03-05，Week 4 Batch A/B/C/D）
+
+- 更新人：Codex
+- 周次：Week 4（执行中）
+- 风险变更：
+  - `R-003`: `Open -> Mitigated`（目录迁移 `modules/conversation -> modules/session` 已落地；首轮 lint/test 失败由变量误替换触发，已同批修复并通过 `pnpm lint`、`pnpm test`、`pnpm test:strict`、`pnpm e2e:smoke`）
+  - `R-005`: 保持 `Open`（本批次采用“分批门禁 + 日终全量门禁”，完整链路通过；后续仍需 Week 5/6 连续验证）
+  - `R-001`: 保持 `Open`（contracts + hub + desktop 验证通过，但全仓旧语义仍有存量，审计命中 `1620`）
+- 新增风险：
+  - 无（Batch C 的变量误替换已在同批次闭环，不升格为新风险）
+- 已关闭风险：
+  - 无
+- 需要决策：
+  - Week 5 是否优先清理 `legacy/compat/fallback/alias` 存量（当前审计 `370` 持平）。
