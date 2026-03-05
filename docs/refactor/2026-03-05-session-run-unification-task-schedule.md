@@ -400,3 +400,33 @@ Week 6 收口标准：
    - `pnpm lint && pnpm test` ✅
    - `pnpm test:strict && pnpm e2e:smoke` ✅
    - `scripts/refactor/gate-check.sh` ✅
+
+### 6.16 Week 5-3 E1/E2/E3 收口结果（2026-03-05）
+
+1. Slice E1（生产代码）完成：`state.ts/stream.ts` 清理历史兼容壳命名，`db_sqlite.go` 将 legacy schema 语义统一为 previous schema 文案，`catalog_files.go` 局部 fallback 局部变量/函数命名收敛（不改业务行为）。
+2. Slice E2（测试/模板/文案）完成：`db_sqlite_test.go`、`router_test.go`、`catalog_files_test.go` 术语收敛；`templates/models.default.json` 旧别名文案改为 `Old ID`；Desktop i18n key `*Fallback` 收敛为 `*Default` 并同步调用点。
+3. Slice E3（白名单收敛）完成：`gate-whitelist` 删除已无必要的 `Alias` 规则，保留 provider 受限 `compatible-mode/v1` 规则并补充来源注释。
+4. 最新审计（after）：
+   - `conversation/execution`: `1588`（相对 Week 5-1 基线 `1592` 下降 `4`）
+   - `v1/v2/v3/v4`: `769`（持平）
+   - `legacy/compat/fallback/alias`: `221`（相对 Week 5-1 基线 `358` 下降 `137`）
+   - `fallback to in-memory map`（httpapi）: `0`（维持）
+5. 本批次门禁：
+   - `cd services/hub && go test ./internal/httpapi/...` ✅
+   - `pnpm --filter @goyais/desktop test` ✅
+   - `scripts/refactor/gate-check.sh` ✅
+   - `pnpm contracts:generate && pnpm contracts:check` ✅
+   - `cd services/hub && go test ./... && go vet ./...` ✅
+   - `pnpm lint && pnpm test` ✅
+   - `pnpm test:strict && pnpm e2e:smoke` ✅
+
+### 6.17 Week 5 末跨栈矩阵补齐（2026-03-05）
+
+1. `pnpm lint:mobile` ✅
+2. `pnpm test:mobile` ✅
+3. `pnpm build:mobile` ✅
+4. `pnpm --filter @goyais/mobile e2e:smoke` ✅
+5. `pnpm docs:build` ✅
+6. `pnpm slides:build` ✅
+7. `make health` ✅
+8. 准入判断：满足 Week 6 前置门槛（`fallback to in-memory map = 0`，审计总量不回升，跨栈矩阵通过）。

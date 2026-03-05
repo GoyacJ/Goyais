@@ -4,6 +4,7 @@
 
 # Regex patterns against `rg -n` output lines (<path>:<line>:<text>).
 # Keep this list minimal; only include externally constrained naming.
-services/hub/internal/httpapi/templates/models\.default\.json:.*Alias
+# DashScope endpoint path segment is provider-defined.
 services/hub/internal/httpapi/templates/models\.default\.json:.*compatible-mode/v1
+# Probe fixture keeps provider endpoint contract unchanged.
 services/hub/internal/httpapi/model_probe(_test)?\.go:.*compatible-mode/v1
