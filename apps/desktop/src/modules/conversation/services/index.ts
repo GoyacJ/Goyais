@@ -12,11 +12,7 @@ import type {
   ComposerSubmitResponse,
   ComposerSuggestRequest,
   ComposerSuggestResponse,
-  Conversation,
-  ConversationChangeSet,
-  ConversationDetailResponse,
-  ConversationStreamEvent,
-  ExecutionFilesExportResponse,
+  Run,
   RunControlAction,
   RunControlResponse,
   RunFilesExportResponse,
@@ -58,7 +54,7 @@ export function streamConversationEvents(
   options: {
     token?: string;
     initialLastEventId?: string;
-    onEvent: (event: ConversationStreamEvent) => void;
+    onEvent: (event: SessionStreamEvent) => void;
     onStatusChange: (status: "connected" | "reconnecting" | "disconnected") => void;
     onError: (error: Error) => void;
   }
@@ -109,33 +105,33 @@ export async function suggestSessionInput(
 }
 
 export async function submitComposerInput(
-  conversation: Conversation,
+  session: Session,
   input: ComposerSubmitRequest
-): Promise<ComposerSubmitResponse> {
-  return getControlClient().post<ComposerSubmitResponse>(`/v1/sessions/${conversation.id}/runs`, input);
+): Promise<SessionSubmitResponse> {
+  const response = await getControlClient().post<ComposerSubmitResponse>(`/v1/sessions/${session.id}/runs`, input);
+  return normalizeSessionSubmitResponse(response);
 }
 
 export async function submitSessionInput(
   session: Session,
   input: ComposerSubmitRequest
 ): Promise<SessionSubmitResponse> {
-  const response = await submitComposerInput(session, input);
-  return normalizeSessionSubmitResponse(response);
+  return submitComposerInput(session, input);
 }
 
 export async function getConversationDetail(
   conversationId: string,
   options: ConversationServiceOptions = {}
-): Promise<ConversationDetailResponse> {
-  return getControlClient().get<ConversationDetailResponse>(`/v1/sessions/${conversationId}`, { token: options.token });
+): Promise<SessionDetailResponse> {
+  const detail = await getControlClient().get<SessionDetailWirePayload>(`/v1/sessions/${conversationId}`, { token: options.token });
+  return normalizeSessionDetailResponse(detail);
 }
 
 export async function getSessionDetail(
   sessionId: string,
   options: SessionServiceOptions = {}
 ): Promise<SessionDetailResponse> {
-  const detail = await getConversationDetail(sessionId, options);
-  return normalizeSessionDetailResponse(detail);
+  return getConversationDetail(sessionId, options);
 }
 
 export async function cancelExecution(conversationId: string, executionId: string): Promise<void> {
@@ -227,8 +223,8 @@ export async function rollbackSessionToMessage(sessionId: string, messageId: str
   await rollbackExecution(sessionId, messageId);
 }
 
-export async function getConversationChangeSet(conversationId: string): Promise<ConversationChangeSet> {
-  return getControlClient().get<ConversationChangeSet>(`/v1/sessions/${conversationId}/changeset`);
+export async function getConversationChangeSet(conversationId: string): Promise<SessionChangeSet> {
+  return getControlClient().get<SessionChangeSet>(`/v1/sessions/${conversationId}/changeset`);
 }
 
 export async function getSessionChangeSet(sessionId: string): Promise<SessionChangeSet> {
@@ -263,8 +259,8 @@ export async function discardSessionChangeSet(
   await discardConversationChangeSet(sessionId, input);
 }
 
-export async function exportConversationChangeSet(conversationId: string): Promise<ExecutionFilesExportResponse> {
-  return getControlClient().post<ExecutionFilesExportResponse>(`/v1/sessions/${conversationId}/changeset/export`, {});
+export async function exportConversationChangeSet(conversationId: string): Promise<RunFilesExportResponse> {
+  return getControlClient().post<RunFilesExportResponse>(`/v1/sessions/${conversationId}/changeset/export`, {});
 }
 
 export async function exportSessionChangeSet(sessionId: string): Promise<RunFilesExportResponse> {
@@ -280,17 +276,34 @@ export function resolveDiffCapability(_isGitProject: boolean): ChangeSetCapabili
   };
 }
 
-function normalizeSessionDetailResponse(detail: ConversationDetailResponse): SessionDetailResponse {
+type SessionDetailWirePayload = {
+  session?: Session;
+  conversation?: Session;
+  messages: SessionDetailResponse["messages"];
+  runs?: Run[];
+  executions?: Run[];
+  snapshots: SessionDetailResponse["snapshots"];
+};
+
+function normalizeSessionDetailResponse(detail: SessionDetailWirePayload): SessionDetailResponse {
   const session = detail.session ?? detail.conversation;
-  const runs = detail.runs ?? detail.executions;
-  return {
+  if (!session) {
+    throw new Error("invalid session detail payload: session is required");
+  }
+  const runs = detail.runs ?? detail.executions ?? [];
+  const normalized: SessionDetailResponse = {
     session,
     messages: detail.messages,
     runs,
-    snapshots: detail.snapshots,
-    conversation: detail.conversation,
-    executions: detail.executions,
+    snapshots: detail.snapshots
   };
+  if (detail.conversation) {
+    normalized.conversation = detail.conversation;
+  }
+  if (detail.executions) {
+    normalized.executions = detail.executions;
+  }
+  return normalized;
 }
 
 function normalizeSessionSubmitResponse(response: ComposerSubmitResponse | SessionSubmitResponse): SessionSubmitResponse {

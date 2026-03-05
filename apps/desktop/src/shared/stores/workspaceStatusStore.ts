@@ -79,7 +79,7 @@ export function useWorkspaceStatusSync(options: WorkspaceStatusSyncOptions = {})
     state.loading = true;
     try {
       const response = await getWorkspaceStatus(context.workspaceID, {
-        conversationId: context.conversationID === "" ? undefined : context.conversationID,
+        sessionId: context.conversationID === "" ? undefined : context.conversationID,
         token: context.token === "" ? undefined : context.token
       });
       if (disposed || currentRequest !== refreshSequence) {
@@ -88,7 +88,7 @@ export function useWorkspaceStatusSync(options: WorkspaceStatusSyncOptions = {})
 
       state.snapshot = normalizeSnapshot(response);
       state.error = "";
-      rebindStream(state.snapshot.conversation_id ?? "", context.token);
+      rebindStream(state.snapshot.session_id ?? "", context.token);
     } catch (error) {
       if (disposed || currentRequest !== refreshSequence) {
         return;
@@ -160,8 +160,8 @@ export function useWorkspaceStatusSync(options: WorkspaceStatusSyncOptions = {})
 
   return {
     status: computed(() => state.snapshot),
-    conversationStatus: computed(() => state.snapshot.conversation_status),
-    conversationID: computed(() => state.snapshot.conversation_id ?? ""),
+    conversationStatus: computed(() => state.snapshot.session_status),
+    conversationID: computed(() => state.snapshot.session_id ?? ""),
     hubURL: computed(() => state.snapshot.hub_url),
     connectionStatus: computed(() => state.snapshot.connection_status),
     userDisplayName: computed(() => state.snapshot.user_display_name),
@@ -179,8 +179,8 @@ function buildDegradedSnapshot(workspaceID: string, conversationID: string): Wor
 
   return {
     workspace_id: workspaceID !== "" ? workspaceID : workspace?.id ?? "",
-    ...(normalizedConversationID === "" ? {} : { conversation_id: normalizedConversationID }),
-    conversation_status: "stopped",
+    ...(normalizedConversationID === "" ? {} : { session_id: normalizedConversationID }),
+    session_status: "stopped",
     hub_url: hubURL === "" ? DEFAULT_HUB_URL : hubURL,
     connection_status: "disconnected",
     user_display_name: resolveUserDisplayName(),
@@ -190,12 +190,12 @@ function buildDegradedSnapshot(workspaceID: string, conversationID: string): Wor
 
 function normalizeSnapshot(input: WorkspaceStatusResponse): WorkspaceStatusResponse {
   const workspace = getCurrentWorkspace();
-  const normalizedConversationID = normalizeID(input.conversation_id);
+  const normalizedConversationID = normalizeID(input.session_id);
 
   return {
     workspace_id: normalizeID(input.workspace_id) !== "" ? normalizeID(input.workspace_id) : workspace?.id ?? "",
-    ...(normalizedConversationID === "" ? {} : { conversation_id: normalizedConversationID }),
-    conversation_status: normalizeConversationStatus(input.conversation_status),
+    ...(normalizedConversationID === "" ? {} : { session_id: normalizedConversationID }),
+    session_status: normalizeConversationStatus(input.session_status),
     hub_url: firstNonEmpty(normalizeURL(input.hub_url), normalizeURL(workspace?.hub_url ?? ""), DEFAULT_HUB_URL),
     connection_status: normalizeConnectionStatus(input.connection_status),
     user_display_name: firstNonEmpty(normalizeID(input.user_display_name), resolveUserDisplayName(), DEFAULT_USER_DISPLAY_NAME),

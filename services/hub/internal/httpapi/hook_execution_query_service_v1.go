@@ -46,15 +46,15 @@ func (s *hookExecutionQueryService) ListByRun(ctx context.Context, runID string)
 		}
 		for _, item := range page {
 			items = append(items, HookExecutionRecord{
-				ID:             item.ID,
-				RunID:          item.RunID,
-				TaskID:         derefString(item.TaskID),
-				ConversationID: run.SessionID,
-				Event:          HookEventType(item.Event),
-				ToolName:       derefString(item.ToolName),
-				PolicyID:       derefString(item.PolicyID),
-				Decision:       item.Decision,
-				Timestamp:      item.Timestamp,
+				ID:        item.ID,
+				RunID:     item.RunID,
+				TaskID:    derefString(item.TaskID),
+				SessionID: run.SessionID,
+				Event:     HookEventType(item.Event),
+				ToolName:  derefString(item.ToolName),
+				PolicyID:  derefString(item.PolicyID),
+				Decision:  item.Decision,
+				Timestamp: item.Timestamp,
 			})
 		}
 		if len(page) < maxRepositoryPageLimit {

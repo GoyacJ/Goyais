@@ -25,8 +25,8 @@ func TestWorkspaceStatusHandlerLocalDefaults(t *testing.T) {
 	if payload.WorkspaceID != localWorkspaceID {
 		t.Fatalf("expected workspace_id=%s, got %s", localWorkspaceID, payload.WorkspaceID)
 	}
-	if payload.ConversationStatus != ConversationStatusStopped {
-		t.Fatalf("expected stopped conversation status, got %s", payload.ConversationStatus)
+	if payload.SessionStatus != ConversationStatusStopped {
+		t.Fatalf("expected stopped conversation status, got %s", payload.SessionStatus)
 	}
 	if payload.ConnectionStatus != "connected" {
 		t.Fatalf("expected connected, got %s", payload.ConnectionStatus)
@@ -116,11 +116,11 @@ func TestWorkspaceStatusHandlerUsesRepositoryWhenExecutionMapMissing(t *testing.
 
 	payload := WorkspaceStatusResponse{}
 	mustDecodeJSON(t, res.Body.Bytes(), &payload)
-	if payload.ConversationID != conversationID {
-		t.Fatalf("expected conversation_id %q, got %q", conversationID, payload.ConversationID)
+	if payload.SessionID != conversationID {
+		t.Fatalf("expected session_id %q, got %q", conversationID, payload.SessionID)
 	}
-	if payload.ConversationStatus != ConversationStatusRunning {
-		t.Fatalf("expected running status from repository, got %s", payload.ConversationStatus)
+	if payload.SessionStatus != ConversationStatusRunning {
+		t.Fatalf("expected running status from repository, got %s", payload.SessionStatus)
 	}
 }
 
@@ -191,11 +191,11 @@ func TestWorkspaceStatusHandlerSelectsConversationFromRepositoryWhenConversation
 
 	payload := WorkspaceStatusResponse{}
 	mustDecodeJSON(t, res.Body.Bytes(), &payload)
-	if payload.ConversationID != conversationID {
-		t.Fatalf("expected conversation_id %q, got %q", conversationID, payload.ConversationID)
+	if payload.SessionID != conversationID {
+		t.Fatalf("expected session_id %q, got %q", conversationID, payload.SessionID)
 	}
-	if payload.ConversationStatus != ConversationStatusRunning {
-		t.Fatalf("expected running status from repository-selected conversation, got %s", payload.ConversationStatus)
+	if payload.SessionStatus != ConversationStatusRunning {
+		t.Fatalf("expected running status from repository-selected conversation, got %s", payload.SessionStatus)
 	}
 }
 

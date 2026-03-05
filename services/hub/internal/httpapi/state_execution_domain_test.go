@@ -329,13 +329,13 @@ func TestHydrateExecutionDomainFromStoreRestoresHooks(t *testing.T) {
 		},
 		HookExecutionRecords: []HookExecutionRecord{
 			{
-				ID:             "hook_exec_1",
-				RunID:          "run_1",
-				TaskID:         "task_1",
-				ConversationID: "conv_1",
-				Event:          HookEventTypePreToolUse,
-				ToolName:       "Write",
-				PolicyID:       "policy_1",
+				ID:        "hook_exec_1",
+				RunID:     "run_1",
+				TaskID:    "task_1",
+				SessionID: "conv_1",
+				Event:     HookEventTypePreToolUse,
+				ToolName:  "Write",
+				PolicyID:  "policy_1",
 				Decision: HookDecision{
 					Action: HookDecisionActionDeny,
 					Reason: "blocked",
@@ -389,12 +389,12 @@ func TestCaptureExecutionDomainSnapshotIncludesHooks(t *testing.T) {
 	}
 	state.hookExecutionRecords["conv_1"] = []HookExecutionRecord{
 		{
-			ID:             "hook_exec_1",
-			RunID:          "run_1",
-			ConversationID: "conv_1",
-			Event:          HookEventTypePreToolUse,
-			ToolName:       "Write",
-			PolicyID:       "policy_1",
+			ID:        "hook_exec_1",
+			RunID:     "run_1",
+			SessionID: "conv_1",
+			Event:     HookEventTypePreToolUse,
+			ToolName:  "Write",
+			PolicyID:  "policy_1",
 			Decision: HookDecision{
 				Action: HookDecisionActionDeny,
 				Reason: "blocked",

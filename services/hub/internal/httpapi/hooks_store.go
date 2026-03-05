@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const maxHookExecutionHistoryPerConversation = 2000
+const maxHookExecutionHistoryPerSession = 2000
 
 func upsertHookPolicyLocked(state *AppState, input HookPolicyUpsertRequest) (HookPolicy, error) {
 	if state == nil {
@@ -35,8 +35,8 @@ func upsertHookPolicyLocked(state *AppState, input HookPolicyUpsertRequest) (Hoo
 	}
 	workspaceID := strings.TrimSpace(input.WorkspaceID)
 	projectID := strings.TrimSpace(input.ProjectID)
-	conversationID := strings.TrimSpace(input.ConversationID)
-	if err := validateHookScopeBindings(scope, projectID, conversationID); err != nil {
+	sessionID := strings.TrimSpace(input.SessionID)
+	if err := validateHookScopeBindings(scope, projectID, sessionID); err != nil {
 		return HookPolicy{}, err
 	}
 	enabled := true
@@ -44,15 +44,15 @@ func upsertHookPolicyLocked(state *AppState, input HookPolicyUpsertRequest) (Hoo
 		enabled = *input.Enabled
 	}
 	policy := HookPolicy{
-		ID:             id,
-		Scope:          scope,
-		Event:          eventType,
-		HandlerType:    handlerType,
-		ToolName:       strings.TrimSpace(input.ToolName),
-		WorkspaceID:    workspaceID,
-		ProjectID:      projectID,
-		ConversationID: conversationID,
-		Enabled:        enabled,
+		ID:          id,
+		Scope:       scope,
+		Event:       eventType,
+		HandlerType: handlerType,
+		ToolName:    strings.TrimSpace(input.ToolName),
+		WorkspaceID: workspaceID,
+		ProjectID:   projectID,
+		SessionID:   sessionID,
+		Enabled:     enabled,
 		Decision: HookDecision{
 			Action:            decisionAction,
 			Reason:            strings.TrimSpace(input.Decision.Reason),
@@ -91,8 +91,8 @@ func appendHookExecutionRecordLocked(state *AppState, record HookExecutionRecord
 	if state == nil {
 		return
 	}
-	conversationID := strings.TrimSpace(record.ConversationID)
-	if conversationID == "" {
+	sessionID := strings.TrimSpace(record.SessionID)
+	if sessionID == "" {
 		return
 	}
 	item := record
@@ -104,12 +104,12 @@ func appendHookExecutionRecordLocked(state *AppState, record HookExecutionRecord
 	}
 	item.Decision.UpdatedInput = cloneMapAny(item.Decision.UpdatedInput)
 	item.Decision.AdditionalContext = cloneMapAny(item.Decision.AdditionalContext)
-	items := append([]HookExecutionRecord{}, state.hookExecutionRecords[conversationID]...)
+	items := append([]HookExecutionRecord{}, state.hookExecutionRecords[sessionID]...)
 	items = append(items, item)
-	if len(items) > maxHookExecutionHistoryPerConversation {
-		items = items[len(items)-maxHookExecutionHistoryPerConversation:]
+	if len(items) > maxHookExecutionHistoryPerSession {
+		items = items[len(items)-maxHookExecutionHistoryPerSession:]
 	}
-	state.hookExecutionRecords[conversationID] = items
+	state.hookExecutionRecords[sessionID] = items
 }
 
 func listHookExecutionRecordsForRunLocked(state *AppState, runID string) ([]HookExecutionRecord, bool) {
@@ -120,7 +120,8 @@ func listHookExecutionRecordsForRunLocked(state *AppState, runID string) ([]Hook
 	if !ok {
 		return []HookExecutionRecord{}, false
 	}
-	items := append([]HookExecutionRecord{}, state.hookExecutionRecords[execution.ConversationID]...)
+	sessionID := strings.TrimSpace(execution.ConversationID)
+	items := append([]HookExecutionRecord{}, state.hookExecutionRecords[sessionID]...)
 	for idx := range items {
 		items[idx].Decision.UpdatedInput = cloneMapAny(items[idx].Decision.UpdatedInput)
 		items[idx].Decision.AdditionalContext = cloneMapAny(items[idx].Decision.AdditionalContext)
@@ -149,27 +150,27 @@ func normalizeHookScope(value HookScope) (HookScope, bool) {
 	}
 }
 
-func validateHookScopeBindings(scope HookScope, projectID string, conversationID string) error {
+func validateHookScopeBindings(scope HookScope, projectID string, sessionID string) error {
 	normalizedProjectID := strings.TrimSpace(projectID)
-	normalizedConversationID := strings.TrimSpace(conversationID)
+	normalizedSessionID := strings.TrimSpace(sessionID)
 	switch scope {
 	case HookScopeGlobal:
 		if normalizedProjectID != "" {
 			return fmt.Errorf("scope=global does not allow project_id")
 		}
-		if normalizedConversationID != "" {
-			return fmt.Errorf("scope=global does not allow conversation_id")
+		if normalizedSessionID != "" {
+			return fmt.Errorf("scope=global does not allow session_id")
 		}
 	case HookScopeProject:
 		if normalizedProjectID == "" {
 			return fmt.Errorf("scope=project requires project_id")
 		}
-		if normalizedConversationID != "" {
-			return fmt.Errorf("scope=project does not allow conversation_id")
+		if normalizedSessionID != "" {
+			return fmt.Errorf("scope=project does not allow session_id")
 		}
 	case HookScopeLocal:
-		if normalizedConversationID == "" {
-			return fmt.Errorf("scope=local requires conversation_id")
+		if normalizedSessionID == "" {
+			return fmt.Errorf("scope=local requires session_id")
 		}
 		if normalizedProjectID != "" {
 			return fmt.Errorf("scope=local does not allow project_id")
@@ -178,8 +179,8 @@ func validateHookScopeBindings(scope HookScope, projectID string, conversationID
 		if normalizedProjectID != "" {
 			return fmt.Errorf("scope=plugin does not allow project_id")
 		}
-		if normalizedConversationID != "" {
-			return fmt.Errorf("scope=plugin does not allow conversation_id")
+		if normalizedSessionID != "" {
+			return fmt.Errorf("scope=plugin does not allow session_id")
 		}
 	default:
 		return fmt.Errorf("invalid scope")

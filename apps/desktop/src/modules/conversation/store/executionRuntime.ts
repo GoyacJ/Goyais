@@ -1,5 +1,5 @@
 import { createMockId } from "@/shared/utils/id";
-import type { ConversationSnapshot, DiffItem, Execution, ExecutionEvent } from "@/shared/types/api";
+import type { DiffItem, Run, RunLifecycleEvent, SessionSnapshot } from "@/shared/types/api";
 
 import {
   cloneExecution,
@@ -9,7 +9,7 @@ import {
 } from "@/modules/conversation/store/executionMerge";
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
 
-export function ensureExecution(runtime: ConversationRuntime, conversationId: string, event: ExecutionEvent): Execution {
+export function ensureExecution(runtime: ConversationRuntime, conversationId: string, event: RunLifecycleEvent): Run {
   const executionId = event.execution_id.trim();
   let execution = runtime.executions.find((item) => item.id === executionId);
   if (execution) {
@@ -37,7 +37,7 @@ export function ensureExecution(runtime: ConversationRuntime, conversationId: st
   return execution;
 }
 
-export function applyRunState(execution: Execution, event: ExecutionEvent): void {
+export function applyRunState(execution: Run, event: RunLifecycleEvent): void {
   if (event.type === "thinking_delta") {
     const runState = asString(event.payload.run_state);
     if (runState === "waiting_approval") {
@@ -63,7 +63,7 @@ export function applyRunState(execution: Execution, event: ExecutionEvent): void
   execution.updated_at = event.timestamp;
 }
 
-const executionStateByEventType: Partial<Record<ExecutionEvent["type"], Execution["state"]>> = {
+const executionStateByEventType: Partial<Record<RunLifecycleEvent["type"], Run["state"]>> = {
   execution_started: "executing",
   execution_stopped: "cancelled",
   execution_done: "completed",
@@ -101,7 +101,7 @@ function toNonNegativeInteger(value: unknown): number | null {
   return Math.trunc(value);
 }
 
-export function upsertExecutionFromServer(runtime: ConversationRuntime, incoming: Execution): Execution {
+export function upsertExecutionFromServer(runtime: ConversationRuntime, incoming: Run): Run {
   const normalizedIncoming = cloneExecution(incoming);
   const index = runtime.executions.findIndex((item) => item.id === normalizedIncoming.id);
   if (index < 0) {
@@ -152,8 +152,8 @@ function toOptionalNonNegativeInteger(value: unknown): number | undefined {
 export function restoreExecutionsFromSnapshot(
   runtime: ConversationRuntime,
   conversationId: string,
-  snapshot: ConversationSnapshot
-): Execution[] {
+  snapshot: SessionSnapshot
+): Run[] {
   const existingById = new Map(runtime.executions.map((execution) => [execution.id, execution]));
   if (Array.isArray(snapshot.execution_snapshots) && snapshot.execution_snapshots.length > 0) {
     return snapshot.execution_snapshots.map((item) => {

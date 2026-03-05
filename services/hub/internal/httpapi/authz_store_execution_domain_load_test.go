@@ -271,15 +271,15 @@ func TestLoadExecutionDomainSnapshotHydratesHooks(t *testing.T) {
 	snapshot := executionDomainSnapshot{
 		HookPolicies: []HookPolicy{
 			{
-				ID:             "policy_deny_write",
-				Scope:          HookScopeLocal,
-				Event:          HookEventTypePreToolUse,
-				HandlerType:    HookHandlerTypeAgent,
-				ToolName:       "Write",
-				WorkspaceID:    "ws_local",
-				ProjectID:      "",
-				ConversationID: "conv_1",
-				Enabled:        true,
+				ID:          "policy_deny_write",
+				Scope:       HookScopeLocal,
+				Event:       HookEventTypePreToolUse,
+				HandlerType: HookHandlerTypeAgent,
+				ToolName:    "Write",
+				WorkspaceID: "ws_local",
+				ProjectID:   "",
+				SessionID:   "conv_1",
+				Enabled:     true,
 				Decision: HookDecision{
 					Action: HookDecisionActionDeny,
 					Reason: "blocked by policy",
@@ -295,13 +295,13 @@ func TestLoadExecutionDomainSnapshotHydratesHooks(t *testing.T) {
 		},
 		HookExecutionRecords: []HookExecutionRecord{
 			{
-				ID:             "hook_exec_1",
-				RunID:          "run_1",
-				TaskID:         "task_1",
-				ConversationID: "conv_1",
-				Event:          HookEventTypePreToolUse,
-				ToolName:       "Write",
-				PolicyID:       "policy_deny_write",
+				ID:        "hook_exec_1",
+				RunID:     "run_1",
+				TaskID:    "task_1",
+				SessionID: "conv_1",
+				Event:     HookEventTypePreToolUse,
+				ToolName:  "Write",
+				PolicyID:  "policy_deny_write",
 				Decision: HookDecision{
 					Action: HookDecisionActionDeny,
 					Reason: "blocked by policy",
@@ -324,7 +324,7 @@ func TestLoadExecutionDomainSnapshotHydratesHooks(t *testing.T) {
 	if loaded.HookPolicies[0].ID != "policy_deny_write" || loaded.HookPolicies[0].Decision.Action != HookDecisionActionDeny {
 		t.Fatalf("unexpected loaded hook policy: %#v", loaded.HookPolicies[0])
 	}
-	if loaded.HookPolicies[0].WorkspaceID != "ws_local" || loaded.HookPolicies[0].ProjectID != "" || loaded.HookPolicies[0].ConversationID != "conv_1" {
+	if loaded.HookPolicies[0].WorkspaceID != "ws_local" || loaded.HookPolicies[0].ProjectID != "" || loaded.HookPolicies[0].SessionID != "conv_1" {
 		t.Fatalf("expected explicit scope bindings to load, got %#v", loaded.HookPolicies[0])
 	}
 	if loaded.HookPolicies[0].Decision.UpdatedInput["path"] != "README.md" {

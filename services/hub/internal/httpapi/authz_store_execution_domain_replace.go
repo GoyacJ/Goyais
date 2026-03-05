@@ -265,7 +265,7 @@ func (s *authzStore) replaceExecutionDomainSnapshot(snapshot executionDomainSnap
 			ToolName:       normalizedPolicy.ToolName,
 			WorkspaceID:    normalizeOptionalString(stringPtrOrNil(normalizedPolicy.WorkspaceID)),
 			ProjectID:      normalizeOptionalString(stringPtrOrNil(normalizedPolicy.ProjectID)),
-			ConversationID: normalizeOptionalString(stringPtrOrNil(normalizedPolicy.ConversationID)),
+			ConversationID: normalizeOptionalString(stringPtrOrNil(normalizedPolicy.SessionID)),
 			Enabled:        normalizedPolicy.Enabled,
 			DecisionJSON:   decisionJSON,
 			UpdatedAt:      normalizedPolicy.UpdatedAt,
@@ -289,7 +289,7 @@ func (s *authzStore) replaceExecutionDomainSnapshot(snapshot executionDomainSnap
 			ID:             normalizedRecord.ID,
 			RunID:          normalizedRecord.RunID,
 			TaskID:         normalizeOptionalString(stringPtrOrNil(normalizedRecord.TaskID)),
-			ConversationID: normalizedRecord.ConversationID,
+			ConversationID: normalizedRecord.SessionID,
 			Event:          string(normalizedRecord.Event),
 			ToolName:       normalizeOptionalString(stringPtrOrNil(normalizedRecord.ToolName)),
 			PolicyID:       normalizeOptionalString(stringPtrOrNil(normalizedRecord.PolicyID)),
@@ -407,20 +407,20 @@ func normalizeHookPolicyForPersistence(input HookPolicy) (HookPolicy, error) {
 		return HookPolicy{}, fmt.Errorf("invalid hook policy action: %s", input.Decision.Action)
 	}
 	projectID := strings.TrimSpace(input.ProjectID)
-	conversationID := strings.TrimSpace(input.ConversationID)
-	if err := validateHookScopeBindings(scope, projectID, conversationID); err != nil {
+	sessionID := strings.TrimSpace(input.SessionID)
+	if err := validateHookScopeBindings(scope, projectID, sessionID); err != nil {
 		return HookPolicy{}, fmt.Errorf("invalid hook policy scope bindings: %w", err)
 	}
 	return HookPolicy{
-		ID:             policyID,
-		Scope:          scope,
-		Event:          eventType,
-		HandlerType:    handlerType,
-		ToolName:       strings.TrimSpace(input.ToolName),
-		WorkspaceID:    strings.TrimSpace(input.WorkspaceID),
-		ProjectID:      projectID,
-		ConversationID: conversationID,
-		Enabled:        input.Enabled,
+		ID:          policyID,
+		Scope:       scope,
+		Event:       eventType,
+		HandlerType: handlerType,
+		ToolName:    strings.TrimSpace(input.ToolName),
+		WorkspaceID: strings.TrimSpace(input.WorkspaceID),
+		ProjectID:   projectID,
+		SessionID:   sessionID,
+		Enabled:     input.Enabled,
 		Decision: HookDecision{
 			Action:            action,
 			Reason:            strings.TrimSpace(input.Decision.Reason),
@@ -440,9 +440,9 @@ func normalizeHookExecutionRecordForPersistence(input HookExecutionRecord) (Hook
 	if runID == "" {
 		return HookExecutionRecord{}, fmt.Errorf("hook execution run_id is required")
 	}
-	conversationID := strings.TrimSpace(input.ConversationID)
-	if conversationID == "" {
-		return HookExecutionRecord{}, fmt.Errorf("hook execution conversation_id is required")
+	sessionID := strings.TrimSpace(input.SessionID)
+	if sessionID == "" {
+		return HookExecutionRecord{}, fmt.Errorf("hook execution session_id is required")
 	}
 	eventType, ok := normalizeHookEventType(input.Event)
 	if !ok {
@@ -453,13 +453,13 @@ func normalizeHookExecutionRecordForPersistence(input HookExecutionRecord) (Hook
 		return HookExecutionRecord{}, fmt.Errorf("invalid hook execution action: %s", input.Decision.Action)
 	}
 	return HookExecutionRecord{
-		ID:             recordID,
-		RunID:          runID,
-		TaskID:         strings.TrimSpace(input.TaskID),
-		ConversationID: conversationID,
-		Event:          eventType,
-		ToolName:       strings.TrimSpace(input.ToolName),
-		PolicyID:       strings.TrimSpace(input.PolicyID),
+		ID:        recordID,
+		RunID:     runID,
+		TaskID:    strings.TrimSpace(input.TaskID),
+		SessionID: sessionID,
+		Event:     eventType,
+		ToolName:  strings.TrimSpace(input.ToolName),
+		PolicyID:  strings.TrimSpace(input.PolicyID),
 		Decision: HookDecision{
 			Action:            action,
 			Reason:            strings.TrimSpace(input.Decision.Reason),

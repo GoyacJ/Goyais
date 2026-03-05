@@ -144,30 +144,30 @@ type HookDecision struct {
 }
 
 type HookPolicy struct {
-	ID             string          `json:"id"`
-	Scope          HookScope       `json:"scope"`
-	Event          HookEventType   `json:"event"`
-	HandlerType    HookHandlerType `json:"handler_type"`
-	ToolName       string          `json:"tool_name,omitempty"`
-	WorkspaceID    string          `json:"workspace_id,omitempty"`
-	ProjectID      string          `json:"project_id,omitempty"`
-	ConversationID string          `json:"conversation_id,omitempty"`
-	Enabled        bool            `json:"enabled"`
-	Decision       HookDecision    `json:"decision"`
-	UpdatedAt      string          `json:"updated_at"`
+	ID          string          `json:"id"`
+	Scope       HookScope       `json:"scope"`
+	Event       HookEventType   `json:"event"`
+	HandlerType HookHandlerType `json:"handler_type"`
+	ToolName    string          `json:"tool_name,omitempty"`
+	WorkspaceID string          `json:"workspace_id,omitempty"`
+	ProjectID   string          `json:"project_id,omitempty"`
+	SessionID   string          `json:"session_id,omitempty"`
+	Enabled     bool            `json:"enabled"`
+	Decision    HookDecision    `json:"decision"`
+	UpdatedAt   string          `json:"updated_at"`
 }
 
 type HookPolicyUpsertRequest struct {
-	ID             string          `json:"id"`
-	Scope          HookScope       `json:"scope"`
-	Event          HookEventType   `json:"event"`
-	HandlerType    HookHandlerType `json:"handler_type"`
-	ToolName       string          `json:"tool_name,omitempty"`
-	WorkspaceID    string          `json:"workspace_id,omitempty"`
-	ProjectID      string          `json:"project_id,omitempty"`
-	ConversationID string          `json:"conversation_id,omitempty"`
-	Enabled        *bool           `json:"enabled,omitempty"`
-	Decision       HookDecision    `json:"decision"`
+	ID          string          `json:"id"`
+	Scope       HookScope       `json:"scope"`
+	Event       HookEventType   `json:"event"`
+	HandlerType HookHandlerType `json:"handler_type"`
+	ToolName    string          `json:"tool_name,omitempty"`
+	WorkspaceID string          `json:"workspace_id,omitempty"`
+	ProjectID   string          `json:"project_id,omitempty"`
+	SessionID   string          `json:"session_id,omitempty"`
+	Enabled     *bool           `json:"enabled,omitempty"`
+	Decision    HookDecision    `json:"decision"`
 }
 
 type HookPolicyListResponse struct {
@@ -175,15 +175,15 @@ type HookPolicyListResponse struct {
 }
 
 type HookExecutionRecord struct {
-	ID             string        `json:"id"`
-	RunID          string        `json:"run_id"`
-	TaskID         string        `json:"task_id,omitempty"`
-	ConversationID string        `json:"conversation_id"`
-	Event          HookEventType `json:"event"`
-	ToolName       string        `json:"tool_name,omitempty"`
-	PolicyID       string        `json:"policy_id,omitempty"`
-	Decision       HookDecision  `json:"decision"`
-	Timestamp      string        `json:"timestamp"`
+	ID        string        `json:"id"`
+	RunID     string        `json:"run_id"`
+	TaskID    string        `json:"task_id,omitempty"`
+	SessionID string        `json:"session_id"`
+	Event     HookEventType `json:"event"`
+	ToolName  string        `json:"tool_name,omitempty"`
+	PolicyID  string        `json:"policy_id,omitempty"`
+	Decision  HookDecision  `json:"decision"`
+	Timestamp string        `json:"timestamp"`
 }
 
 type HookExecutionListResponse struct {
@@ -252,13 +252,13 @@ const (
 )
 
 type WorkspaceStatusResponse struct {
-	WorkspaceID        string             `json:"workspace_id"`
-	ConversationID     string             `json:"conversation_id,omitempty"`
-	ConversationStatus ConversationStatus `json:"conversation_status"`
-	HubURL             string             `json:"hub_url"`
-	ConnectionStatus   string             `json:"connection_status"`
-	UserDisplayName    string             `json:"user_display_name"`
-	UpdatedAt          string             `json:"updated_at"`
+	WorkspaceID      string             `json:"workspace_id"`
+	SessionID        string             `json:"session_id,omitempty"`
+	SessionStatus    ConversationStatus `json:"session_status"`
+	HubURL           string             `json:"hub_url"`
+	ConnectionStatus string             `json:"connection_status"`
+	UserDisplayName  string             `json:"user_display_name"`
+	UpdatedAt        string             `json:"updated_at"`
 }
 
 type WorkspaceAgentExecutionConfig struct {

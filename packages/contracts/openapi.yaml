@@ -712,7 +712,7 @@ paths:
         '400':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/hooks/executions/{run_id}:
+  /v1/hooks/runs/{run_id}:
     get:
       summary: List hook execution records for run
       parameters:
@@ -1920,7 +1920,7 @@ components:
       type: object
       required:
         - workspace_id
-        - conversation_status
+        - session_status
         - hub_url
         - connection_status
         - user_display_name
@@ -1928,9 +1928,9 @@ components:
       properties:
         workspace_id:
           type: string
-        conversation_id:
+        session_id:
           type: string
-        conversation_status:
+        session_status:
           $ref: '#/components/schemas/ConversationStatus'
         hub_url:
           type: string
@@ -2270,7 +2270,7 @@ components:
           type: string
           format: date-time
 
-    Conversation:
+    Session:
       type: object
       required:
         - id
@@ -2335,11 +2335,11 @@ components:
           type: string
           format: date-time
 
-    Session:
+    Conversation:
       allOf:
-        - $ref: '#/components/schemas/Conversation'
+        - $ref: '#/components/schemas/Session'
 
-    ConversationMessage:
+    SessionMessage:
       type: object
       required: [id, conversation_id, role, content, created_at]
       properties:
@@ -2360,11 +2360,11 @@ components:
           type: string
           format: date-time
 
-    SessionMessage:
+    ConversationMessage:
       allOf:
-        - $ref: '#/components/schemas/ConversationMessage'
+        - $ref: '#/components/schemas/SessionMessage'
 
-    ConversationInspector:
+    SessionInspector:
       type: object
       required: [tab]
       properties:
@@ -2372,11 +2372,11 @@ components:
           type: string
           enum: [diff, run, trace, risk]
 
-    SessionInspector:
+    ConversationInspector:
       allOf:
-        - $ref: '#/components/schemas/ConversationInspector'
+        - $ref: '#/components/schemas/SessionInspector'
 
-    ConversationSnapshot:
+    SessionSnapshot:
       type: object
       required:
         - id
@@ -2400,11 +2400,11 @@ components:
         worktree_ref:
           type: [string, 'null']
         inspector_state:
-          $ref: '#/components/schemas/ConversationInspector'
+          $ref: '#/components/schemas/SessionInspector'
         messages:
           type: array
           items:
-            $ref: '#/components/schemas/ConversationMessage'
+            $ref: '#/components/schemas/SessionMessage'
         execution_ids:
           type: array
           items:
@@ -2413,34 +2413,34 @@ components:
           type: string
           format: date-time
 
-    SessionSnapshot:
+    ConversationSnapshot:
       allOf:
-        - $ref: '#/components/schemas/ConversationSnapshot'
+        - $ref: '#/components/schemas/SessionSnapshot'
 
-    ConversationDetailResponse:
+    SessionDetailResponse:
       type: object
-      required: [conversation, messages, executions, snapshots]
+      required: [session, messages, runs, snapshots]
       properties:
-        conversation:
-          $ref: '#/components/schemas/Conversation'
+        session:
+          $ref: '#/components/schemas/Session'
         messages:
           type: array
           items:
-            $ref: '#/components/schemas/ConversationMessage'
-        executions:
+            $ref: '#/components/schemas/SessionMessage'
+        runs:
           type: array
           items:
-            $ref: '#/components/schemas/Execution'
+            $ref: '#/components/schemas/Run'
         snapshots:
           type: array
           items:
-            $ref: '#/components/schemas/ConversationSnapshot'
+            $ref: '#/components/schemas/SessionSnapshot'
 
-    SessionDetailResponse:
+    ConversationDetailResponse:
       allOf:
-        - $ref: '#/components/schemas/ConversationDetailResponse'
+        - $ref: '#/components/schemas/SessionDetailResponse'
 
-    CreateConversationRequest:
+    CreateSessionRequest:
       type: object
       required: [workspace_id, name]
       properties:
@@ -2449,11 +2449,11 @@ components:
         name:
           type: string
 
-    CreateSessionRequest:
+    CreateConversationRequest:
       allOf:
-        - $ref: '#/components/schemas/CreateConversationRequest'
+        - $ref: '#/components/schemas/CreateSessionRequest'
 
-    UpdateConversationRequest:
+    UpdateSessionRequest:
       type: object
       properties:
         name:
@@ -2475,9 +2475,9 @@ components:
           items:
             type: string
 
-    UpdateSessionRequest:
+    UpdateConversationRequest:
       allOf:
-        - $ref: '#/components/schemas/UpdateConversationRequest'
+        - $ref: '#/components/schemas/UpdateSessionRequest'
 
     ModelSnapshot:
       type: object
@@ -2497,7 +2497,7 @@ components:
           type: object
           additionalProperties: true
 
-    ExecutionAgentConfigSnapshot:
+    RunAgentConfigSnapshot:
       type: object
       required: [max_model_turns, show_process_trace, trace_detail_level]
       properties:
@@ -2511,11 +2511,11 @@ components:
           type: string
           enum: [basic, verbose]
 
-    RunAgentConfigSnapshot:
+    ExecutionAgentConfigSnapshot:
       allOf:
-        - $ref: '#/components/schemas/ExecutionAgentConfigSnapshot'
+        - $ref: '#/components/schemas/RunAgentConfigSnapshot'
 
-    ExecutionResourceProfile:
+    RunResourceProfile:
       type: object
       required: [model_id]
       properties:
@@ -2540,11 +2540,11 @@ components:
           items:
             type: string
 
-    RunResourceProfile:
+    ExecutionResourceProfile:
       allOf:
-        - $ref: '#/components/schemas/ExecutionResourceProfile'
+        - $ref: '#/components/schemas/RunResourceProfile'
 
-    Execution:
+    Run:
       type: object
       required:
         - id
@@ -2583,9 +2583,9 @@ components:
         model_snapshot:
           $ref: '#/components/schemas/ModelSnapshot'
         resource_profile_snapshot:
-          $ref: '#/components/schemas/ExecutionResourceProfile'
+          $ref: '#/components/schemas/RunResourceProfile'
         agent_config_snapshot:
-          $ref: '#/components/schemas/ExecutionAgentConfigSnapshot'
+          $ref: '#/components/schemas/RunAgentConfigSnapshot'
         tokens_in:
           type: integer
           minimum: 0
@@ -2606,9 +2606,9 @@ components:
           type: string
           format: date-time
 
-    Run:
+    Execution:
       allOf:
-        - $ref: '#/components/schemas/Execution'
+        - $ref: '#/components/schemas/Run'
 
     ComposerSelectedResource:
       type: object
@@ -2748,7 +2748,7 @@ components:
               type: string
               enum: [execution_enqueued]
             execution:
-              $ref: '#/components/schemas/Execution'
+              $ref: '#/components/schemas/Run'
             queue_state:
               type: string
               enum: [idle, running, queued]
@@ -2868,7 +2868,7 @@ components:
         entries_digest:
           type: string
 
-    ConversationChangeSet:
+    SessionChangeSet:
       type: object
       required:
         - change_set_id
@@ -2908,9 +2908,9 @@ components:
         last_committed_checkpoint:
           $ref: '#/components/schemas/CheckpointSummary'
 
-    SessionChangeSet:
+    ConversationChangeSet:
       allOf:
-        - $ref: '#/components/schemas/ConversationChangeSet'
+        - $ref: '#/components/schemas/SessionChangeSet'
 
     ChangeSetCommitRequest:
       type: object
@@ -2937,7 +2937,7 @@ components:
         checkpoint:
           $ref: '#/components/schemas/CheckpointSummary'
 
-    ExecutionFilesExportResponse:
+    RunFilesExportResponse:
       type: object
       required: [file_name, archive_base64]
       properties:
@@ -2946,9 +2946,9 @@ components:
         archive_base64:
           type: string
 
-    RunFilesExportResponse:
+    ExecutionFilesExportResponse:
       allOf:
-        - $ref: '#/components/schemas/ExecutionFilesExportResponse'
+        - $ref: '#/components/schemas/RunFilesExportResponse'
 
     ProjectFileEntry:
       type: object
@@ -3798,7 +3798,7 @@ components:
           type: string
         project_id:
           type: string
-        conversation_id:
+        session_id:
           type: string
         enabled:
           type: boolean
@@ -3826,7 +3826,7 @@ components:
           type: string
         project_id:
           type: string
-        conversation_id:
+        session_id:
           type: string
         enabled:
           type: boolean
@@ -3839,17 +3839,17 @@ components:
           not:
             anyOf:
               - required: [project_id]
-              - required: [conversation_id]
+              - required: [session_id]
         - properties:
             scope:
               const: project
           required: [project_id]
           not:
-            required: [conversation_id]
+            required: [session_id]
         - properties:
             scope:
               const: local
-          required: [conversation_id]
+          required: [session_id]
           not:
             required: [project_id]
         - properties:
@@ -3858,7 +3858,7 @@ components:
           not:
             anyOf:
               - required: [project_id]
-              - required: [conversation_id]
+              - required: [session_id]
 
     HookPolicyListResponse:
       type: object
@@ -3871,7 +3871,7 @@ components:
 
     HookExecutionRecord:
       type: object
-      required: [id, run_id, conversation_id, event, decision, timestamp]
+      required: [id, run_id, session_id, event, decision, timestamp]
       properties:
         id:
           type: string
@@ -3879,7 +3879,7 @@ components:
           type: string
         task_id:
           type: string
-        conversation_id:
+        session_id:
           type: string
         event:
           $ref: '#/components/schemas/HookEventType'

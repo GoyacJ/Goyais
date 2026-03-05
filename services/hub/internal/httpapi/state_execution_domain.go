@@ -201,7 +201,7 @@ func syncRuntimeV1SnapshotBestEffort(state *AppState, snapshot executionDomainSn
 		hookRecords = append(hookRecords, RuntimeHookRecord{
 			ID:        record.ID,
 			RunID:     record.RunID,
-			SessionID: record.ConversationID,
+			SessionID: record.SessionID,
 			TaskID:    stringPtrOrNil(record.TaskID),
 			Event:     string(record.Event),
 			ToolName:  stringPtrOrNil(record.ToolName),

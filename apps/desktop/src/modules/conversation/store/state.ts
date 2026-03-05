@@ -10,20 +10,16 @@ import type {
   ChangeSetCapability,
   ConnectionStatus,
   Conversation,
-  ConversationChangeSet,
-  ConversationDetailResponse,
-  ConversationMessage,
   ConversationMode,
-  ConversationSnapshot,
   DiffItem,
-  Execution,
-  ExecutionEvent,
   InspectorTabKey,
   ProjectKind,
   Run,
+  RunLifecycleEvent,
   Session,
   SessionChangeSet,
   SessionDetailResponse,
+  SessionMessage,
   SessionSnapshot
 } from "@/shared/types/api";
 
@@ -35,12 +31,12 @@ export type StreamHandle = {
 };
 
 export type SessionRuntime = {
-  messages: ConversationMessage[];
-  events: ExecutionEvent[];
+  messages: SessionMessage[];
+  events: RunLifecycleEvent[];
   runs: Run[];
   // Backward-compatibility projection while callers migrate to `runs`.
   executions: Run[];
-  snapshots: ConversationSnapshot[];
+  snapshots: SessionSnapshot[];
   draft: string;
   mode: ConversationMode;
   modelId: string;
@@ -63,6 +59,15 @@ export type SessionRuntime = {
 };
 
 export type ConversationRuntime = SessionRuntime;
+
+type SessionDetailCompatibilityPayload = {
+  session?: Session;
+  conversation?: Session;
+  messages: SessionDetailResponse["messages"];
+  runs?: Run[];
+  executions?: Run[];
+  snapshots: SessionDetailResponse["snapshots"];
+};
 
 export const MAX_RUNTIME_EVENTS = 1000;
 
@@ -222,9 +227,9 @@ export function hydrateSessionRuntime(
 export function hydrateConversationRuntime(
   conversation: Conversation,
   isGitProject: boolean,
-  detail: ConversationDetailResponse
+  detail: SessionDetailCompatibilityPayload
 ): ConversationRuntime {
-  return hydrateSessionRuntime(conversation, isGitProject, toSessionDetailResponse(detail));
+  return hydrateSessionRuntime(conversation, isGitProject, normalizeSessionDetailResponse(detail));
 }
 
 export function setSessionChangeSet(sessionId: string, changeSet: SessionChangeSet | null): void {
@@ -258,7 +263,7 @@ export function setSessionChangeSet(sessionId: string, changeSet: SessionChangeS
   };
 }
 
-export function setConversationChangeSet(conversationId: string, changeSet: ConversationChangeSet | null): void {
+export function setConversationChangeSet(conversationId: string, changeSet: SessionChangeSet | null): void {
   setSessionChangeSet(conversationId, changeSet);
 }
 
@@ -274,7 +279,7 @@ export function getConversationRuntime(conversationId: string): ConversationRunt
   return getSessionRuntime(conversationId);
 }
 
-export function appendRuntimeEvent(runtime: SessionRuntime, event: ExecutionEvent): void {
+export function appendRuntimeEvent(runtime: SessionRuntime, event: RunLifecycleEvent): void {
   const eventID = event.event_id?.trim();
   if (eventID) {
     runtime.lastEventId = eventID;
@@ -349,7 +354,7 @@ export function createSessionSnapshot(runtime: SessionRuntime, sessionId: string
   return buildConversationSnapshot(runtime, sessionId, rollbackPointMessageId);
 }
 
-export function createConversationSnapshot(runtime: ConversationRuntime, conversationId: string, rollbackPointMessageId: string): ConversationSnapshot {
+export function createConversationSnapshot(runtime: ConversationRuntime, conversationId: string, rollbackPointMessageId: string): SessionSnapshot {
   return createSessionSnapshot(runtime, conversationId, rollbackPointMessageId);
 }
 
@@ -362,7 +367,7 @@ export function pushSessionSnapshot(sessionId: string, snapshot: SessionSnapshot
   runtime.snapshots.push(snapshot);
 }
 
-export function pushConversationSnapshot(conversationId: string, snapshot: ConversationSnapshot): void {
+export function pushConversationSnapshot(conversationId: string, snapshot: SessionSnapshot): void {
   pushSessionSnapshot(conversationId, snapshot);
 }
 
@@ -375,7 +380,7 @@ export function findSessionSnapshotForMessage(sessionId: string, messageId: stri
   return [...runtime.snapshots].reverse().find((snapshot) => snapshot.rollback_point_message_id === messageId);
 }
 
-export function findSnapshotForMessage(conversationId: string, messageId: string): ConversationSnapshot | undefined {
+export function findSnapshotForMessage(conversationId: string, messageId: string): SessionSnapshot | undefined {
   return findSessionSnapshotForMessage(conversationId, messageId);
 }
 
@@ -420,7 +425,7 @@ export function hasUnfinishedExecutions(runtime: ConversationRuntime): boolean {
   return hasUnfinishedRuns(runtime);
 }
 
-export function getLatestFinishedRun(sessionId: string): Execution | undefined {
+export function getLatestFinishedRun(sessionId: string): Run | undefined {
   const runtime = sessionStore.bySessionId[sessionId];
   if (!runtime) {
     return undefined;
@@ -432,24 +437,32 @@ export function getLatestFinishedRun(sessionId: string): Execution | undefined {
     .find((run) => run.state === "completed" || run.state === "failed" || run.state === "cancelled");
 }
 
-export function getLatestFinishedExecution(conversationId: string): Execution | undefined {
+export function getLatestFinishedExecution(conversationId: string): Run | undefined {
   return getLatestFinishedRun(conversationId);
-}
-
-function toSessionDetailResponse(detail: ConversationDetailResponse): SessionDetailResponse {
-  const session = detail.session ?? detail.conversation;
-  const runs = detail.runs ?? detail.executions;
-  return {
-    session,
-    messages: detail.messages,
-    runs,
-    snapshots: detail.snapshots,
-    conversation: detail.conversation,
-    executions: detail.executions
-  };
 }
 
 function ensureLegacyExecutionAlias(runtime: SessionRuntime): SessionRuntime {
   runtime.executions = runtime.runs;
   return runtime;
+}
+
+function normalizeSessionDetailResponse(detail: SessionDetailCompatibilityPayload): SessionDetailResponse {
+  const session = detail.session ?? detail.conversation;
+  if (!session) {
+    throw new Error("invalid session detail payload: session is required");
+  }
+  const runs = detail.runs ?? detail.executions ?? [];
+  const normalized: SessionDetailResponse = {
+    session,
+    messages: detail.messages,
+    runs,
+    snapshots: detail.snapshots
+  };
+  if (detail.conversation) {
+    normalized.conversation = detail.conversation;
+  }
+  if (detail.executions) {
+    normalized.executions = detail.executions;
+  }
+  return normalized;
 }

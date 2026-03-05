@@ -35,7 +35,7 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/runs/{run_id}/tasks/{task_id}:",
 		"/v1/runs/{run_id}/tasks/{task_id}/control:",
 		"/v1/hooks/policies:",
-		"/v1/hooks/executions/{run_id}:",
+		"/v1/hooks/runs/{run_id}:",
 		"/v1/sessions/{session_id}/changeset:",
 		"/v1/sessions/{session_id}/changeset/commit:",
 		"/v1/sessions/{session_id}/changeset/discard:",
@@ -143,45 +143,45 @@ func TestOpenAPIDoesNotContainInternalWorkerRoutes(t *testing.T) {
 	}
 }
 
-func TestOpenAPIConversationDetailResponseShape(t *testing.T) {
+func TestOpenAPISessionDetailResponseShape(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	requiredMarkers := []string{
-		"ConversationDetailResponse:",
-		"conversation:",
-		"$ref: '#/components/schemas/Conversation'",
+		"SessionDetailResponse:",
+		"session:",
+		"$ref: '#/components/schemas/Session'",
 		"messages:",
-		"$ref: '#/components/schemas/ConversationMessage'",
-		"executions:",
-		"$ref: '#/components/schemas/Execution'",
+		"$ref: '#/components/schemas/SessionMessage'",
+		"runs:",
+		"$ref: '#/components/schemas/Run'",
 		"snapshots:",
-		"$ref: '#/components/schemas/ConversationSnapshot'",
+		"$ref: '#/components/schemas/SessionSnapshot'",
 	}
 	for _, marker := range requiredMarkers {
 		if !strings.Contains(spec, marker) {
-			t.Fatalf("openapi missing conversation detail marker: %s", marker)
+			t.Fatalf("openapi missing session detail marker: %s", marker)
 		}
 	}
 }
 
-func TestOpenAPIConversationChangeSetSchemaShape(t *testing.T) {
+func TestOpenAPISessionChangeSetSchemaShape(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	requiredMarkers := []string{
 		"ChangeEntry:",
-		"ConversationChangeSet:",
+		"SessionChangeSet:",
 		"ChangeSetCapability:",
 		"CommitSuggestion:",
 		"CheckpointSummary:",
 		"ChangeSetCommitRequest:",
 		"ChangeSetDiscardRequest:",
 		"ChangeSetCommitResponse:",
-		"ExecutionFilesExportResponse:",
+		"RunFilesExportResponse:",
 		"file_name:",
 		"archive_base64:",
 		"/v1/sessions/{session_id}/changeset/export:",
 	}
 	for _, marker := range requiredMarkers {
 		if !strings.Contains(spec, marker) {
-			t.Fatalf("openapi missing conversation changeset marker: %s", marker)
+			t.Fatalf("openapi missing session changeset marker: %s", marker)
 		}
 	}
 }
@@ -211,7 +211,7 @@ func TestOpenAPIHookSchemaShape(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	requiredMarkers := []string{
 		"/v1/hooks/policies:",
-		"/v1/hooks/executions/{run_id}:",
+		"/v1/hooks/runs/{run_id}:",
 		"HookPolicy:",
 		"HookPolicyListResponse:",
 		"HookPolicyUpsertRequest:",
@@ -247,7 +247,7 @@ func TestOpenAPIWorkspaceStatusResponseShape(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	requiredMarkers := []string{
 		"WorkspaceStatusResponse:",
-		"conversation_status:",
+		"session_status:",
 		"$ref: '#/components/schemas/ConversationStatus'",
 		"connection_status:",
 		"user_display_name:",

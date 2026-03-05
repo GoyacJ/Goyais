@@ -111,19 +111,15 @@ export type SessionDetailResponse = {
   messages: SessionMessage[];
   runs: Run[];
   snapshots: SessionSnapshot[];
-  // Transitional compatibility mirrors server payload fields.
-  conversation: Conversation;
-  executions: Execution[];
+  // Deprecated compatibility mirrors server payload fields.
+  conversation?: Session;
+  executions?: Run[];
 };
 
-export type ConversationDetailResponse = {
-  conversation: Conversation;
-  messages: ConversationMessage[];
-  executions: Execution[];
-  snapshots: ConversationSnapshot[];
-  session?: Session;
-  runs?: Run[];
-};
+/**
+ * @deprecated Use `SessionDetailResponse` as the canonical v1 runtime term.
+ */
+export type ConversationDetailResponse = SessionDetailResponse;
 
 export type Run = {
   id: string;

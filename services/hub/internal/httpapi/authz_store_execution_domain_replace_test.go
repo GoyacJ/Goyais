@@ -281,15 +281,15 @@ func TestReplaceExecutionDomainSnapshotNormalizesHookFields(t *testing.T) {
 	snapshot := executionDomainSnapshot{
 		HookPolicies: []HookPolicy{
 			{
-				ID:             "policy_1",
-				Scope:          HookScope(" local "),
-				Event:          HookEventType(" pre_tool_use "),
-				HandlerType:    HookHandlerType(" agent "),
-				ToolName:       " Write ",
-				WorkspaceID:    " ws_local ",
-				ProjectID:      "",
-				ConversationID: " conv_1 ",
-				Enabled:        true,
+				ID:          "policy_1",
+				Scope:       HookScope(" local "),
+				Event:       HookEventType(" pre_tool_use "),
+				HandlerType: HookHandlerType(" agent "),
+				ToolName:    " Write ",
+				WorkspaceID: " ws_local ",
+				ProjectID:   "",
+				SessionID:   " conv_1 ",
+				Enabled:     true,
 				Decision: HookDecision{
 					Action: HookDecisionAction(" deny "),
 					Reason: " blocked by test ",
@@ -302,13 +302,13 @@ func TestReplaceExecutionDomainSnapshotNormalizesHookFields(t *testing.T) {
 		},
 		HookExecutionRecords: []HookExecutionRecord{
 			{
-				ID:             "hook_exec_1",
-				RunID:          " run_1 ",
-				TaskID:         " task_1 ",
-				ConversationID: " conv_1 ",
-				Event:          HookEventType(" pre_tool_use "),
-				ToolName:       " Write ",
-				PolicyID:       " policy_1 ",
+				ID:        "hook_exec_1",
+				RunID:     " run_1 ",
+				TaskID:    " task_1 ",
+				SessionID: " conv_1 ",
+				Event:     HookEventType(" pre_tool_use "),
+				ToolName:  " Write ",
+				PolicyID:  " policy_1 ",
 				Decision: HookDecision{
 					Action: HookDecisionAction(" deny "),
 					Reason: " blocked ",

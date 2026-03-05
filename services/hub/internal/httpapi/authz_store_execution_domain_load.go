@@ -338,17 +338,17 @@ func toHTTPAPIHookPolicy(row runtimeinfra.HookPolicyRow) (HookPolicy, error) {
 		return HookPolicy{}, fmt.Errorf("decode hook policy decision: %w", err)
 	}
 	return HookPolicy{
-		ID:             row.ID,
-		Scope:          scope,
-		Event:          eventType,
-		HandlerType:    handlerType,
-		ToolName:       row.ToolName,
-		WorkspaceID:    derefString(row.WorkspaceID),
-		ProjectID:      derefString(row.ProjectID),
-		ConversationID: derefString(row.ConversationID),
-		Enabled:        row.Enabled,
-		Decision:       decision,
-		UpdatedAt:      row.UpdatedAt,
+		ID:          row.ID,
+		Scope:       scope,
+		Event:       eventType,
+		HandlerType: handlerType,
+		ToolName:    row.ToolName,
+		WorkspaceID: derefString(row.WorkspaceID),
+		ProjectID:   derefString(row.ProjectID),
+		SessionID:   derefString(row.ConversationID),
+		Enabled:     row.Enabled,
+		Decision:    decision,
+		UpdatedAt:   row.UpdatedAt,
 	}, nil
 }
 
@@ -362,12 +362,12 @@ func toHTTPAPIHookExecutionRecord(row runtimeinfra.HookExecutionRecordRow) (Hook
 		return HookExecutionRecord{}, fmt.Errorf("decode hook execution decision: %w", err)
 	}
 	record := HookExecutionRecord{
-		ID:             row.ID,
-		RunID:          row.RunID,
-		ConversationID: row.ConversationID,
-		Event:          eventType,
-		Decision:       decision,
-		Timestamp:      row.Timestamp,
+		ID:        row.ID,
+		RunID:     row.RunID,
+		SessionID: row.ConversationID,
+		Event:     eventType,
+		Decision:  decision,
+		Timestamp: row.Timestamp,
 	}
 	if row.TaskID != nil {
 		record.TaskID = *row.TaskID

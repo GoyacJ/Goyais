@@ -1000,45 +1000,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/v1/hooks/executions/{run_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List hook execution records for run */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    run_id: components["parameters"]["RunIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Hook execution list */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["HookExecutionListResponse"];
-                    };
-                };
-                404: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/hooks/policies": {
         parameters: {
             query?: never;
@@ -1094,6 +1055,45 @@ export type paths = {
                 400: components["responses"]["StandardErrorResponse"];
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/hooks/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List hook execution records for run */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    run_id: components["parameters"]["RunIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Hook execution list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["HookExecutionListResponse"];
+                    };
+                };
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3398,7 +3398,7 @@ export type components = {
             /** @enum {string} */
             kind: "command_result";
         } | {
-            execution: components["schemas"]["Execution"];
+            execution: components["schemas"]["Run"];
             /** @enum {string} */
             kind: "execution_enqueued";
             queue_index: number;
@@ -3431,89 +3431,25 @@ export type components = {
             revision: string;
             suggestions: components["schemas"]["ComposerSuggestion"][];
         };
-        Conversation: {
-            active_execution_id?: string | null;
-            /** Format: int64 */
-            base_revision: number;
-            /** Format: date-time */
-            created_at: string;
-            default_mode: components["schemas"]["PermissionMode"];
-            id: string;
-            mcp_ids: string[];
-            model_config_id: string;
-            name: string;
-            project_id: string;
-            /** @enum {string} */
-            queue_state: "idle" | "running" | "queued";
-            rule_ids: string[];
-            skill_ids: string[];
-            tokens_in_total?: number;
-            tokens_out_total?: number;
-            tokens_total?: number;
-            /** Format: date-time */
-            updated_at: string;
-            workspace_id: string;
-        };
-        ConversationChangeSet: {
-            added_lines: number;
-            capability: components["schemas"]["ChangeSetCapability"];
-            change_set_id: string;
-            conversation_id: string;
-            deleted_lines: number;
-            entries: components["schemas"]["ChangeEntry"][];
-            file_count: number;
-            last_committed_checkpoint?: components["schemas"]["CheckpointSummary"];
-            /** @enum {string} */
-            project_kind: "git" | "non_git";
-            suggested_message: components["schemas"]["CommitSuggestion"];
-        };
-        ConversationDetailResponse: {
-            conversation: components["schemas"]["Conversation"];
-            executions: components["schemas"]["Execution"][];
-            messages: components["schemas"]["ConversationMessage"][];
-            snapshots: components["schemas"]["ConversationSnapshot"][];
-        };
-        ConversationInspector: {
-            /** @enum {string} */
-            tab: "diff" | "run" | "trace" | "risk";
-        };
-        ConversationMessage: {
-            can_rollback?: boolean;
-            content: string;
-            conversation_id: string;
-            /** Format: date-time */
-            created_at: string;
-            id: string;
-            queue_index?: number;
-            /** @enum {string} */
-            role: "user" | "assistant" | "system";
-        };
-        ConversationSnapshot: {
-            conversation_id: string;
-            /** Format: date-time */
-            created_at: string;
-            execution_ids: string[];
-            id: string;
-            inspector_state: components["schemas"]["ConversationInspector"];
-            messages: components["schemas"]["ConversationMessage"][];
-            /** @enum {string} */
-            queue_state: "idle" | "running" | "queued";
-            rollback_point_message_id: string;
-            worktree_ref?: string | null;
-        };
+        Conversation: components["schemas"]["Session"];
+        ConversationChangeSet: components["schemas"]["SessionChangeSet"];
+        ConversationDetailResponse: components["schemas"]["SessionDetailResponse"];
+        ConversationInspector: components["schemas"]["SessionInspector"];
+        ConversationMessage: components["schemas"]["SessionMessage"];
+        ConversationSnapshot: components["schemas"]["SessionSnapshot"];
         /** @enum {string} */
         ConversationStatus: "running" | "queued" | "stopped" | "done" | "error";
-        CreateConversationRequest: {
-            name: string;
-            workspace_id: string;
-        };
+        CreateConversationRequest: components["schemas"]["CreateSessionRequest"];
         CreateProjectRequest: {
             is_git?: boolean;
             name: string;
             repo_path: string;
             workspace_id: string;
         };
-        CreateSessionRequest: components["schemas"]["CreateConversationRequest"];
+        CreateSessionRequest: {
+            name: string;
+            workspace_id: string;
+        };
         CreateWorkspaceRequest: {
             /**
              * @default password_or_token
@@ -3536,35 +3472,8 @@ export type components = {
             path: string;
             summary: string;
         };
-        Execution: {
-            agent_config_snapshot?: components["schemas"]["ExecutionAgentConfigSnapshot"];
-            conversation_id: string;
-            /** Format: date-time */
-            created_at: string;
-            id: string;
-            message_id: string;
-            mode: components["schemas"]["PermissionMode"];
-            mode_snapshot: components["schemas"]["PermissionMode"];
-            model_id: string;
-            model_snapshot: components["schemas"]["ModelSnapshot"];
-            /** Format: int64 */
-            project_revision_snapshot: number;
-            queue_index: number;
-            resource_profile_snapshot?: components["schemas"]["ExecutionResourceProfile"];
-            state: components["schemas"]["RunState"];
-            tokens_in: number;
-            tokens_out: number;
-            trace_id: string;
-            /** Format: date-time */
-            updated_at: string;
-            workspace_id: string;
-        };
-        ExecutionAgentConfigSnapshot: {
-            max_model_turns: number;
-            show_process_trace: boolean;
-            /** @enum {string} */
-            trace_detail_level: "basic" | "verbose";
-        };
+        Execution: components["schemas"]["Run"];
+        ExecutionAgentConfigSnapshot: components["schemas"]["RunAgentConfigSnapshot"];
         ExecutionEvent: {
             conversation_id: string;
             event_id: string;
@@ -3582,18 +3491,8 @@ export type components = {
         ExecutionEventBatchRequest: {
             events: components["schemas"]["ExecutionEvent"][];
         };
-        ExecutionFilesExportResponse: {
-            archive_base64: string;
-            file_name: string;
-        };
-        ExecutionResourceProfile: {
-            mcp_ids?: string[];
-            model_config_id?: string;
-            model_id: string;
-            project_file_paths?: string[];
-            rule_ids?: string[];
-            skill_ids?: string[];
-        };
+        ExecutionFilesExportResponse: components["schemas"]["RunFilesExportResponse"];
+        ExecutionResourceProfile: components["schemas"]["RunResourceProfile"];
         ExecutionUserAnswer: {
             question_id: string;
             selected_option_id?: string;
@@ -3626,12 +3525,12 @@ export type components = {
             items: components["schemas"]["HookExecutionRecord"][];
         };
         HookExecutionRecord: {
-            conversation_id: string;
             decision: components["schemas"]["HookDecision"];
             event: components["schemas"]["HookEventType"];
             id: string;
             policy_id?: string;
             run_id: string;
+            session_id: string;
             task_id?: string;
             /** Format: date-time */
             timestamp: string;
@@ -3640,7 +3539,6 @@ export type components = {
         /** @enum {string} */
         HookHandlerType: "command" | "http" | "prompt" | "agent";
         HookPolicy: {
-            conversation_id?: string;
             decision: components["schemas"]["HookDecision"];
             enabled: boolean;
             event: components["schemas"]["HookEventType"];
@@ -3648,6 +3546,7 @@ export type components = {
             id: string;
             project_id?: string;
             scope: components["schemas"]["HookScope"];
+            session_id?: string;
             tool_name?: string;
             /** Format: date-time */
             updated_at: string;
@@ -3657,7 +3556,6 @@ export type components = {
             items: components["schemas"]["HookPolicy"][];
         };
         HookPolicyUpsertRequest: {
-            conversation_id?: string;
             decision: components["schemas"]["HookDecision"];
             enabled?: boolean;
             event: components["schemas"]["HookEventType"];
@@ -3665,6 +3563,7 @@ export type components = {
             id: string;
             project_id?: string;
             scope: components["schemas"]["HookScope"];
+            session_id?: string;
             tool_name?: string;
             workspace_id?: string;
         } & ({
@@ -3989,8 +3888,35 @@ export type components = {
         RuleSpec: {
             content: string;
         };
-        Run: components["schemas"]["Execution"];
-        RunAgentConfigSnapshot: components["schemas"]["ExecutionAgentConfigSnapshot"];
+        Run: {
+            agent_config_snapshot?: components["schemas"]["RunAgentConfigSnapshot"];
+            conversation_id: string;
+            /** Format: date-time */
+            created_at: string;
+            id: string;
+            message_id: string;
+            mode: components["schemas"]["PermissionMode"];
+            mode_snapshot: components["schemas"]["PermissionMode"];
+            model_id: string;
+            model_snapshot: components["schemas"]["ModelSnapshot"];
+            /** Format: int64 */
+            project_revision_snapshot: number;
+            queue_index: number;
+            resource_profile_snapshot?: components["schemas"]["RunResourceProfile"];
+            state: components["schemas"]["RunState"];
+            tokens_in: number;
+            tokens_out: number;
+            trace_id: string;
+            /** Format: date-time */
+            updated_at: string;
+            workspace_id: string;
+        };
+        RunAgentConfigSnapshot: {
+            max_model_turns: number;
+            show_process_trace: boolean;
+            /** @enum {string} */
+            trace_detail_level: "basic" | "verbose";
+        };
         /** @enum {string} */
         RunControlAction: "stop" | "approve" | "deny" | "resume" | "answer";
         RunControlRequest: {
@@ -4006,24 +3932,98 @@ export type components = {
         };
         /** @enum {string} */
         RunEventType: "message_received" | "user_prompt_submit" | "execution_started" | "thinking_delta" | "pre_tool_use" | "permission_request" | "tool_call" | "tool_result" | "post_tool_use" | "post_tool_use_failure" | "diff_generated" | "change_set_updated" | "change_set_committed" | "change_set_discarded" | "change_set_rolled_back" | "execution_stopped" | "execution_done" | "execution_error" | "task_graph_configured" | "task_dependencies_updated" | "task_retry_policy_updated" | "task_artifact_emitted" | "task_failed" | "task_started" | "task_completed" | "task_cancelled";
-        RunFilesExportResponse: components["schemas"]["ExecutionFilesExportResponse"];
+        RunFilesExportResponse: {
+            archive_base64: string;
+            file_name: string;
+        };
         RunGraphEdge: {
             from_task_id: string;
             to_task_id: string;
         };
-        RunResourceProfile: components["schemas"]["ExecutionResourceProfile"];
+        RunResourceProfile: {
+            mcp_ids?: string[];
+            model_config_id?: string;
+            model_id: string;
+            project_file_paths?: string[];
+            rule_ids?: string[];
+            skill_ids?: string[];
+        };
         /** @enum {string} */
         RunState: "queued" | "pending" | "executing" | "confirming" | "awaiting_input" | "completed" | "failed" | "cancelled";
         RunTaskListResponse: {
             items: components["schemas"]["TaskNode"][];
             next_cursor: string | null;
         };
-        Session: components["schemas"]["Conversation"];
-        SessionChangeSet: components["schemas"]["ConversationChangeSet"];
-        SessionDetailResponse: components["schemas"]["ConversationDetailResponse"];
-        SessionInspector: components["schemas"]["ConversationInspector"];
-        SessionMessage: components["schemas"]["ConversationMessage"];
-        SessionSnapshot: components["schemas"]["ConversationSnapshot"];
+        Session: {
+            active_execution_id?: string | null;
+            /** Format: int64 */
+            base_revision: number;
+            /** Format: date-time */
+            created_at: string;
+            default_mode: components["schemas"]["PermissionMode"];
+            id: string;
+            mcp_ids: string[];
+            model_config_id: string;
+            name: string;
+            project_id: string;
+            /** @enum {string} */
+            queue_state: "idle" | "running" | "queued";
+            rule_ids: string[];
+            skill_ids: string[];
+            tokens_in_total?: number;
+            tokens_out_total?: number;
+            tokens_total?: number;
+            /** Format: date-time */
+            updated_at: string;
+            workspace_id: string;
+        };
+        SessionChangeSet: {
+            added_lines: number;
+            capability: components["schemas"]["ChangeSetCapability"];
+            change_set_id: string;
+            conversation_id: string;
+            deleted_lines: number;
+            entries: components["schemas"]["ChangeEntry"][];
+            file_count: number;
+            last_committed_checkpoint?: components["schemas"]["CheckpointSummary"];
+            /** @enum {string} */
+            project_kind: "git" | "non_git";
+            suggested_message: components["schemas"]["CommitSuggestion"];
+        };
+        SessionDetailResponse: {
+            messages: components["schemas"]["SessionMessage"][];
+            runs: components["schemas"]["Run"][];
+            session: components["schemas"]["Session"];
+            snapshots: components["schemas"]["SessionSnapshot"][];
+        };
+        SessionInspector: {
+            /** @enum {string} */
+            tab: "diff" | "run" | "trace" | "risk";
+        };
+        SessionMessage: {
+            can_rollback?: boolean;
+            content: string;
+            conversation_id: string;
+            /** Format: date-time */
+            created_at: string;
+            id: string;
+            queue_index?: number;
+            /** @enum {string} */
+            role: "user" | "assistant" | "system";
+        };
+        SessionSnapshot: {
+            conversation_id: string;
+            /** Format: date-time */
+            created_at: string;
+            execution_ids: string[];
+            id: string;
+            inspector_state: components["schemas"]["SessionInspector"];
+            messages: components["schemas"]["SessionMessage"][];
+            /** @enum {string} */
+            queue_state: "idle" | "running" | "queued";
+            rollback_point_message_id: string;
+            worktree_ref?: string | null;
+        };
         ShareRequest: {
             approver_user_id?: string;
             /** Format: date-time */
@@ -4094,7 +4094,8 @@ export type components = {
         };
         /** @enum {string} */
         TaskState: "queued" | "blocked" | "running" | "retrying" | "completed" | "failed" | "cancelled";
-        UpdateConversationRequest: {
+        UpdateConversationRequest: components["schemas"]["UpdateSessionRequest"];
+        UpdateSessionRequest: {
             mcp_ids?: string[];
             mode?: components["schemas"]["PermissionMode"];
             model_config_id?: string;
@@ -4102,7 +4103,6 @@ export type components = {
             rule_ids?: string[];
             skill_ids?: string[];
         };
-        UpdateSessionRequest: components["schemas"]["UpdateConversationRequest"];
         Workspace: {
             /** @enum {string} */
             auth_mode: "disabled" | "password_or_token" | "token_only";
@@ -4159,9 +4159,9 @@ export type components = {
         WorkspaceStatusResponse: {
             /** @enum {string} */
             connection_status: "connected" | "reconnecting" | "disconnected";
-            conversation_id?: string;
-            conversation_status: components["schemas"]["ConversationStatus"];
             hub_url: string;
+            session_id?: string;
+            session_status: components["schemas"]["ConversationStatus"];
             /** Format: date-time */
             updated_at: string;
             user_display_name: string;

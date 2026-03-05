@@ -80,7 +80,7 @@ func toControlPlaneHookPolicies(policies []HookPolicy) []controlplanepolicy.Hook
 			ToolName:          item.ToolName,
 			WorkspaceID:       item.WorkspaceID,
 			ProjectID:         item.ProjectID,
-			ConversationID:    item.ConversationID,
+			ConversationID:    item.SessionID,
 			Action:            string(item.Decision.Action),
 			Reason:            item.Decision.Reason,
 			Enabled:           item.Enabled,
@@ -131,12 +131,12 @@ func appendHookExecutionRecordAndEventWithState(
 
 	state.mu.Lock()
 	appendHookExecutionRecordLocked(state, HookExecutionRecord{
-		RunID:          execution.ID,
-		TaskID:         execution.ID,
-		ConversationID: execution.ConversationID,
-		Event:          eventType,
-		ToolName:       strings.TrimSpace(toolName),
-		PolicyID:       strings.TrimSpace(policyID),
+		RunID:     execution.ID,
+		TaskID:    execution.ID,
+		SessionID: execution.ConversationID,
+		Event:     eventType,
+		ToolName:  strings.TrimSpace(toolName),
+		PolicyID:  strings.TrimSpace(policyID),
 		Decision: HookDecision{
 			Action:            decision.Action,
 			Reason:            strings.TrimSpace(decision.Reason),

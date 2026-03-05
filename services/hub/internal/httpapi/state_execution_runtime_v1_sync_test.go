@@ -71,13 +71,13 @@ func TestSyncExecutionDomainBestEffortPersistsRuntimeV1Snapshot(t *testing.T) {
 	}
 	state.hookExecutionRecords[conversationID] = []HookExecutionRecord{
 		{
-			ID:             "hook_runtime_v1_sync_1",
-			RunID:          executionID,
-			TaskID:         "task_runtime_v1_sync_1",
-			ConversationID: conversationID,
-			Event:          HookEventTypePreToolUse,
-			ToolName:       "bash",
-			PolicyID:       "policy_runtime_v1_sync",
+			ID:        "hook_runtime_v1_sync_1",
+			RunID:     executionID,
+			TaskID:    "task_runtime_v1_sync_1",
+			SessionID: conversationID,
+			Event:     HookEventTypePreToolUse,
+			ToolName:  "bash",
+			PolicyID:  "policy_runtime_v1_sync",
 			Decision: HookDecision{
 				Action: HookDecisionActionAllow,
 				Reason: "ok",

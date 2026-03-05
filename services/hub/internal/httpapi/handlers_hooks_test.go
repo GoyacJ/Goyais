@@ -38,7 +38,7 @@ func TestHookRoutesAreRegistered(t *testing.T) {
 		t.Fatalf("expected at least one hook policy, got %#v", listPayload)
 	}
 
-	executionRes := performJSONRequest(t, router, http.MethodGet, "/v1/hooks/executions/missing_run", nil, nil)
+	executionRes := performJSONRequest(t, router, http.MethodGet, "/v1/hooks/runs/missing_run", nil, nil)
 	if executionRes.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for missing run hook executions, got %d (%s)", executionRes.Code, executionRes.Body.String())
 	}
@@ -78,13 +78,13 @@ func TestHookExecutionsHandlerListsRecordsForRunConversation(t *testing.T) {
 		UpdatedAt:      now,
 	}
 	appendHookExecutionRecordLocked(state, HookExecutionRecord{
-		ID:             "hook_exec_1",
-		RunID:          runID,
-		TaskID:         runID,
-		ConversationID: conversationID,
-		Event:          HookEventTypePreToolUse,
-		ToolName:       "Write",
-		PolicyID:       "policy_deny_write",
+		ID:        "hook_exec_1",
+		RunID:     runID,
+		TaskID:    runID,
+		SessionID: conversationID,
+		Event:     HookEventTypePreToolUse,
+		ToolName:  "Write",
+		PolicyID:  "policy_deny_write",
 		Decision: HookDecision{
 			Action: HookDecisionActionDeny,
 			Reason: "blocked by test",
@@ -94,7 +94,7 @@ func TestHookExecutionsHandlerListsRecordsForRunConversation(t *testing.T) {
 	state.mu.Unlock()
 
 	handler := HookExecutionsHandler(state)
-	req := httptest.NewRequest(http.MethodGet, "/v1/hooks/executions/"+runID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/hooks/runs/"+runID, nil)
 	req.SetPathValue("run_id", runID)
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
@@ -156,13 +156,13 @@ func TestHookExecutionsHandlerUsesRepositoryWhenStateMapMissing(t *testing.T) {
 		UpdatedAt:      now,
 	}
 	appendHookExecutionRecordLocked(state, HookExecutionRecord{
-		ID:             "hook_exec_repo_1",
-		RunID:          runID,
-		TaskID:         runID,
-		ConversationID: conversationID,
-		Event:          HookEventTypePreToolUse,
-		ToolName:       "Write",
-		PolicyID:       "policy_repo",
+		ID:        "hook_exec_repo_1",
+		RunID:     runID,
+		TaskID:    runID,
+		SessionID: conversationID,
+		Event:     HookEventTypePreToolUse,
+		ToolName:  "Write",
+		PolicyID:  "policy_repo",
 		Decision: HookDecision{
 			Action: HookDecisionActionDeny,
 			Reason: "blocked by test",
@@ -179,7 +179,7 @@ func TestHookExecutionsHandlerUsesRepositoryWhenStateMapMissing(t *testing.T) {
 	state.mu.Unlock()
 
 	handler := HookExecutionsHandler(state)
-	req := httptest.NewRequest(http.MethodGet, "/v1/hooks/executions/"+runID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/hooks/runs/"+runID, nil)
 	req.SetPathValue("run_id", runID)
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
@@ -247,7 +247,7 @@ func TestHooksPoliciesHandlerPostPersistsToStore(t *testing.T) {
 	if loaded.HookPolicies[0].ID != "policy_persist" || loaded.HookPolicies[0].Decision.Action != HookDecisionActionDeny {
 		t.Fatalf("unexpected persisted hook policy: %#v", loaded.HookPolicies[0])
 	}
-	if loaded.HookPolicies[0].WorkspaceID != "ws_local" || loaded.HookPolicies[0].ProjectID != "proj_persist" || loaded.HookPolicies[0].ConversationID != "" {
+	if loaded.HookPolicies[0].WorkspaceID != "ws_local" || loaded.HookPolicies[0].ProjectID != "proj_persist" || loaded.HookPolicies[0].SessionID != "" {
 		t.Fatalf("expected explicit scope binding fields persisted, got %#v", loaded.HookPolicies[0])
 	}
 }
@@ -285,7 +285,7 @@ func TestHooksPoliciesHandlerRejectsProjectScopeWithoutProjectID(t *testing.T) {
 	}
 }
 
-func TestHooksPoliciesHandlerRejectsLocalScopeWithoutConversationID(t *testing.T) {
+func TestHooksPoliciesHandlerRejectsLocalScopeWithoutSessionID(t *testing.T) {
 	router := NewRouter()
 	res := performJSONRequest(t, router, http.MethodPost, "/v1/hooks/policies", map[string]any{
 		"id":           "policy_local_missing_binding",
@@ -300,7 +300,7 @@ func TestHooksPoliciesHandlerRejectsLocalScopeWithoutConversationID(t *testing.T
 		},
 	}, nil)
 	if res.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for local scope without conversation_id, got %d (%s)", res.Code, res.Body.String())
+		t.Fatalf("expected 400 for local scope without session_id, got %d (%s)", res.Code, res.Body.String())
 	}
 	errPayload := StandardError{}
 	mustDecodeJSON(t, res.Body.Bytes(), &errPayload)
@@ -310,10 +310,10 @@ func TestHooksPoliciesHandlerRejectsLocalScopeWithoutConversationID(t *testing.T
 	if scopeValue, ok := errPayload.Details["scope"].(string); !ok || scopeValue != "local" {
 		t.Fatalf("expected scope detail local, got %#v", errPayload.Details)
 	}
-	if conversationValue, ok := errPayload.Details["conversation_id"].(string); !ok || conversationValue != "" {
-		t.Fatalf("expected empty conversation_id detail, got %#v", errPayload.Details)
+	if conversationValue, ok := errPayload.Details["session_id"].(string); !ok || conversationValue != "" {
+		t.Fatalf("expected empty session_id detail, got %#v", errPayload.Details)
 	}
-	if validationError, ok := errPayload.Details["validation_error"].(string); !ok || validationError != "scope=local requires conversation_id" {
+	if validationError, ok := errPayload.Details["validation_error"].(string); !ok || validationError != "scope=local requires session_id" {
 		t.Fatalf("expected local validation_error detail, got %#v", errPayload.Details)
 	}
 }
@@ -346,14 +346,14 @@ func TestHooksPoliciesHandlerRejectsGlobalScopeWithProjectBinding(t *testing.T) 
 func TestHooksPoliciesHandlerRejectsLocalScopeWithProjectBinding(t *testing.T) {
 	router := NewRouter()
 	res := performJSONRequest(t, router, http.MethodPost, "/v1/hooks/policies", map[string]any{
-		"id":              "policy_local_invalid_project_binding",
-		"scope":           "local",
-		"event":           "pre_tool_use",
-		"handler_type":    "agent",
-		"tool_name":       "Write",
-		"project_id":      "proj_should_not_exist",
-		"conversation_id": "conv_valid",
-		"enabled":         true,
+		"id":           "policy_local_invalid_project_binding",
+		"scope":        "local",
+		"event":        "pre_tool_use",
+		"handler_type": "agent",
+		"tool_name":    "Write",
+		"project_id":   "proj_should_not_exist",
+		"session_id":   "conv_valid",
+		"enabled":      true,
 		"decision": map[string]any{
 			"action": "deny",
 			"reason": "local should not bind project",

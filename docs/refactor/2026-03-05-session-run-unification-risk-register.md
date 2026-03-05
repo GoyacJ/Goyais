@@ -60,3 +60,15 @@
 - 已关闭风险：
 - 需要决策：
 
+### 更新记录（2026-03-05）
+
+- 更新人：Codex
+- 周次：Week 1 / Week 2（执行中）
+- 风险变更：
+  - `R-002`: 保持 `Open`（已完成 hooks/workspace-status 的 payload 与 Hub 内部 `SessionID/SessionStatus` 字段收敛；并完成 Desktop conversation 核心层主类型迁移与兼容归一化，`pnpm lint` / `pnpm test` 通过）
+  - `R-001`: 保持 `Open`（contracts/hub/desktop 已联动验证通过；shared-core 已启动 `api-project.ts` 去别名收口，但主 schema alias 尚未清零）
+  - `R-005`: 保持 `Open`（本轮再次执行 `go test ./...` 与 `go vet ./...`，当前未出现新增回归）
+- 新增风险：无
+- 已关闭风险：无
+- 需要决策：
+  - 是否在下一批次直接执行 `api-project.ts` 去 alias（高收益但影响面大），还是继续按业务子域分批切换。

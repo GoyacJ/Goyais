@@ -140,3 +140,50 @@ Week 6 收口标准：
 - 下周计划：
 - 验收命令与结果摘要：
 
+---
+
+## 6. 当前实施进度（2026-03-05）
+
+### 6.1 任务状态总览
+
+| 任务 ID | 当前状态 | 进展说明 | 关键证据 |
+|---|---|---|---|
+| W1-T1 | In Progress | OpenAPI 已将主 schema 反转为 `Session/Run` 主定义，`Conversation/Execution` 退为 alias；字段级旧语义仍有存量 | `Session/Run/SessionDetailResponse/SessionChangeSet/RunFilesExportResponse` 已为主定义 |
+| W1-T2 | In Progress | 已完成 `hooks` 与 `workspace-status` 的 `session_id/run_id` 及 `session_status` 子域切换；并完成 Hub 对应结构体字段名收敛（`SessionID/SessionStatus`）；核心会话/执行链路尚未全量切换 | hooks payload/模型字段、workspace status payload/模型字段均已切到 session 语义 |
+| W1-T3 | In Progress | 已启动 shared-core/desktop 类型去别名收口：`SessionDetailResponse` 改为主结构 + 旧字段可选兼容，Desktop conversation 核心服务/状态层改用 `Session/Run` 主类型并保留入参兼容归一化 | `api-project.ts`、`modules/conversation/services/index.ts`、`store/{state,executionMerge,executionRuntime}.ts` 已落地主类型改造 |
+| W1-T4 | Not Started | 契约未冻结，仍处于持续切换阶段 | 本文件状态为执行中 |
+| W2-T1 | In Progress | controlplane hooks 路由已切换为 run 语义，其他入口仍需继续收口 | `/v1/hooks/runs/{run_id}` 已注册 |
+| W2-T2 | In Progress | 已移除 runtime session path/query 对 `conversation_id` 的回退解析，并同步清理 hooks/workspace-status 子域内部字段名混用 | `runtime_session_path.go` 仅接受 `session_id`；hooks/workspace-status Hub 模型字段已收敛到 `SessionID/SessionStatus` |
+| W2-T3 | Done | hooks 路径由 `hooks/executions` 完成切换到 `hooks/runs`，并联动 OpenAPI/Hub/shared-core/tests | 全仓 grep `hooks/executions` 命中 0 |
+| W2-T4 | In Progress | 本轮改动已完成 Hub hooks/workspace-status 子域回归，且全 Hub 回归门禁持续通过；全域收口仍未完成 | `go test ./internal/httpapi -run 'Hooks|WorkspaceStatus'`、`go test ./...`、`go vet ./...` 通过 |
+
+### 6.2 本轮已完成增量（2026-03-05）
+
+1. hooks 路径收敛：`/v1/hooks/executions/{run_id}` -> `/v1/hooks/runs/{run_id}`（contracts + hub + shared-core + tests）。
+2. hooks 字段收敛：`conversation_id` -> `session_id`（policy/upsert/error-details/records 对外契约）。
+3. workspace-status 字段收敛：响应字段与 desktop 消费方统一使用 `session_id`。
+4. Hub 入参回退收敛：runtime session 解析已移除 `conversation_id` fallback，仅保留 `session_id`。
+5. workspace-status 状态字段收敛：`conversation_status` -> `session_status`（contracts + hub + shared-core + desktop）。
+6. OpenAPI 主 schema 收敛：`Session/Run` 成为主定义，`Conversation/Execution` 改为 alias（并联动 contract tests 与 generated types）。
+7. Hub 内部命名收敛：hooks/workspace-status 结构体字段由旧语义映射名进一步收敛为 `SessionID/SessionStatus`，并联动快照持久化与测试夹具同步。
+8. W1-T3 启动：shared-core `api-project.ts` 将 `SessionDetailResponse` 设为主结构并将旧字段降级为可选兼容，`ConversationDetailResponse` 收敛为别名；Desktop conversation 核心类型注解迁移到 `Session/Run` 主类型并保留旧 payload 兼容归一化。
+
+### 6.3 最新审计快照（2026-03-05）
+
+1. `rg -n "\\b(conversation|execution|Conversation|Execution)\\b" services/hub apps/desktop/src packages/shared-core/src packages/contracts` -> `2498`（较上一轮 `2517` 下降 `19`）。
+2. `rg -n "\\b(v1|v2|v3|v4|V1|V2|V3|V4)\\b" services/hub apps/desktop/src packages/shared-core/src packages/contracts` -> `821`（含 `/v1` 路径与允许白名单）。
+3. `rg -n "\\blegacy\\w*|\\bcompat\\w*|fallback|alias" services/hub apps/desktop/src packages/shared-core/src packages/contracts` -> `371`。
+4. `rg -n "hooks/executions" services/hub apps/desktop/src packages/shared-core/src packages/contracts` -> `0`（代码子域已清零，文档中保留历史描述不计入）。
+
+### 6.4 验收命令与结果摘要（本轮）
+
+1. `pnpm contracts:generate` ✅
+2. `pnpm contracts:check` ✅
+3. `cd services/hub && go test ./...` ✅
+4. `cd services/hub && go vet ./...` ✅
+5. `pnpm lint` ✅
+6. `pnpm test` ✅
+7. `cd services/hub && go test ./internal/httpapi -run 'Hooks|WorkspaceStatus' -count=1` ✅
+8. `pnpm --filter @goyais/desktop exec vitest run src/shared/stores/workspaceStatusStore.spec.ts` ✅
+9. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/execution-merge.spec.ts src/modules/conversation/tests/conversation-hydration.spec.ts src/modules/conversation/tests/conversation-run-tasks-service.spec.ts` ✅
+10. `pnpm --filter @goyais/shared-core build` ✅

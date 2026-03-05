@@ -45,14 +45,14 @@ describe("workspace status sync", () => {
     });
 
     getWorkspaceStatusMock
-      .mockResolvedValueOnce(buildStatusResponse({ conversation_status: "queued", conversation_id: "conv_sync" }))
-      .mockResolvedValueOnce(buildStatusResponse({ conversation_status: "running", conversation_id: "conv_sync" }));
+      .mockResolvedValueOnce(buildStatusResponse({ session_status: "queued", session_id: "conv_sync" }))
+      .mockResolvedValueOnce(buildStatusResponse({ session_status: "running", session_id: "conv_sync" }));
 
     const harness = mountHarness("conv_sync");
     await flushPromises();
 
     expect(getWorkspaceStatusMock).toHaveBeenNthCalledWith(1, "ws_remote", {
-      conversationId: "conv_sync",
+      sessionId: "conv_sync",
       token: "at_remote"
     });
     expect(streamSessionEventsMock).toHaveBeenCalledWith(
@@ -87,8 +87,8 @@ describe("workspace status sync", () => {
       }));
 
     getWorkspaceStatusMock
-      .mockResolvedValueOnce(buildStatusResponse({ conversation_id: "conv_a", conversation_status: "queued" }))
-      .mockResolvedValueOnce(buildStatusResponse({ conversation_id: "conv_b", conversation_status: "done" }));
+      .mockResolvedValueOnce(buildStatusResponse({ session_id: "conv_a", session_status: "queued" }))
+      .mockResolvedValueOnce(buildStatusResponse({ session_id: "conv_b", session_status: "done" }));
 
     const harness = mountHarness("conv_a");
     await flushPromises();
@@ -97,7 +97,7 @@ describe("workspace status sync", () => {
     await flushPromises();
 
     expect(getWorkspaceStatusMock).toHaveBeenCalledWith("ws_remote", {
-      conversationId: "conv_b",
+      sessionId: "conv_b",
       token: "at_remote"
     });
     expect(closeFirst).toHaveBeenCalledTimes(1);
@@ -187,8 +187,8 @@ function mountHarness(conversationId: string) {
 function buildStatusResponse(partial: Partial<WorkspaceStatusResponse>): WorkspaceStatusResponse {
   return {
     workspace_id: "ws_remote",
-    conversation_id: "conv_sync",
-    conversation_status: "stopped",
+    session_id: "conv_sync",
+    session_status: "stopped",
     hub_url: "https://hub.example.com",
     connection_status: "connected",
     user_display_name: "Remote User",

@@ -1,6 +1,6 @@
-import type { Execution } from "@/shared/types/api";
+import type { Run } from "@/shared/types/api";
 
-const executionStateRank: Record<Execution["state"], number> = {
+const executionStateRank: Record<Run["state"], number> = {
   queued: 0,
   pending: 1,
   executing: 2,
@@ -11,7 +11,7 @@ const executionStateRank: Record<Execution["state"], number> = {
   completed: 7
 };
 
-export function cloneExecution(execution: Execution): Execution {
+export function cloneExecution(execution: Run): Run {
   return {
     ...execution,
     id: execution.id.trim(),
@@ -24,14 +24,14 @@ export function cloneExecution(execution: Execution): Execution {
   };
 }
 
-export function isTerminalRunState(state: Execution["state"]): boolean {
+export function isTerminalRunState(state: Run["state"]): boolean {
   return state === "completed" || state === "failed" || state === "cancelled";
 }
 
 export function resolveMergedRunState(
-  current: Execution["state"],
-  incoming: Execution["state"]
-): Execution["state"] {
+  current: Run["state"],
+  incoming: Run["state"]
+): Run["state"] {
   if (current === incoming) {
     return current;
   }
@@ -55,7 +55,7 @@ export function resolveMergedRunState(
   return executionStateRank[incoming] >= executionStateRank[current] ? incoming : current;
 }
 
-export function mergeExecution(current: Execution, incoming: Execution): Execution {
+export function mergeExecution(current: Run, incoming: Run): Run {
   return {
     ...current,
     ...incoming,
@@ -79,12 +79,12 @@ export function mergeExecution(current: Execution, incoming: Execution): Executi
   };
 }
 
-export function normalizeExecutionList(executions: Execution[]): Execution[] {
+export function normalizeExecutionList(executions: Run[]): Run[] {
   if (executions.length <= 1) {
     return executions;
   }
 
-  const executionByID = new Map<string, Execution>();
+  const executionByID = new Map<string, Run>();
   const order: string[] = [];
   for (const execution of executions) {
     const normalized = cloneExecution(execution);
@@ -99,7 +99,7 @@ export function normalizeExecutionList(executions: Execution[]): Execution[] {
 
   return order
     .map((executionID) => executionByID.get(executionID))
-    .filter((execution): execution is Execution => Boolean(execution));
+    .filter((execution): execution is Run => Boolean(execution));
 }
 
 function preferNonEmpty(current: string, incoming: string): string {

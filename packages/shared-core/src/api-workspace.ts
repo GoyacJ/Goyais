@@ -28,8 +28,8 @@ export type WorkspaceConnectionResult = {
 
 export type WorkspaceStatusResponse = {
   workspace_id: string;
-  conversation_id?: string;
-  conversation_status: ConversationStatus;
+  session_id?: string;
+  session_status: ConversationStatus;
   hub_url: string;
   connection_status: ConnectionStatus;
   user_display_name: string;

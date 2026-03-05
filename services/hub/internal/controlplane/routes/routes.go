@@ -51,7 +51,7 @@ func Register(mux *http.ServeMux, handlers Handlers) {
 	mustHandle(mux, "/v1/admin/abac-policies/{policy_id}", handlers.AdminABACPolicyByID)
 	mustHandle(mux, "/v1/admin/audit", handlers.AdminAudit)
 	mustHandle(mux, "/v1/hooks/policies", handlers.HooksPolicies)
-	mustHandle(mux, "/v1/hooks/executions/{run_id}", handlers.HookExecutions)
+	mustHandle(mux, "/v1/hooks/runs/{run_id}", handlers.HookExecutions)
 }
 
 func mustHandle(mux *http.ServeMux, pattern string, handler http.HandlerFunc) {

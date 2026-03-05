@@ -36,7 +36,7 @@ func HooksPoliciesHandler(state *AppState) http.HandlerFunc {
 					"handler_type":     strings.TrimSpace(string(input.HandlerType)),
 					"workspace_id":     strings.TrimSpace(input.WorkspaceID),
 					"project_id":       strings.TrimSpace(input.ProjectID),
-					"conversation_id":  strings.TrimSpace(input.ConversationID),
+					"session_id":       strings.TrimSpace(input.SessionID),
 					"validation_error": strings.TrimSpace(upsertErr.Error()),
 				})
 				return

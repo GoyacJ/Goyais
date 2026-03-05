@@ -215,11 +215,11 @@ func WorkspaceStatusHandler(state *AppState) http.HandlerFunc {
 
 		hubURL, connectionStatus := resolveWorkspaceConnectionStatus(state, workspace)
 		response := WorkspaceStatusResponse{
-			WorkspaceID:        workspaceID,
-			ConversationID:     conversationID,
-			ConversationStatus: conversationStatus,
-			HubURL:             hubURL,
-			ConnectionStatus:   connectionStatus,
+			WorkspaceID:      workspaceID,
+			SessionID:        conversationID,
+			SessionStatus:    conversationStatus,
+			HubURL:           hubURL,
+			ConnectionStatus: connectionStatus,
 			UserDisplayName: firstNonEmpty(
 				strings.TrimSpace(session.DisplayName),
 				strings.TrimSpace(session.UserID),
@@ -241,8 +241,8 @@ func resolveWorkspaceConversationStatus(ctx context.Context, state *AppState, wo
 				code:    "CONVERSATION_NOT_FOUND",
 				message: "Conversation does not exist",
 				details: map[string]any{
-					"workspace_id":    workspaceID,
-					"conversation_id": requestedConversationID,
+					"workspace_id": workspaceID,
+					"session_id":   requestedConversationID,
 				},
 			}
 		}
