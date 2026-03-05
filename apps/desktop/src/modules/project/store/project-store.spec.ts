@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/shared/services/http";
-import type { Conversation } from "@/shared/types/api";
+import type { Session } from "@/shared/types/api";
 
 const serviceMocks = vi.hoisted(() => ({
   listProjects: vi.fn(),
@@ -186,7 +186,7 @@ describe("project store token forwarding", () => {
   });
 
   it("refreshes conversations and clears stale runtime after project binding update", async () => {
-    const retainedConversation: Conversation = {
+    const retainedConversation: Session = {
       id: "conv_keep",
       workspace_id: "ws_remote_1",
       project_id: "proj_alpha",

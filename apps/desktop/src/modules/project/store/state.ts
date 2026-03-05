@@ -3,7 +3,7 @@ import { defineStore } from "pinia";
 import { getWorkspaceToken } from "@/shared/stores/authStore";
 import { pinia } from "@/shared/stores/pinia";
 import { getCurrentWorkspace } from "@/shared/stores/workspaceStore";
-import type { Conversation, Project, ProjectConfig } from "@/shared/types/api";
+import type { Project, ProjectConfig, Session } from "@/shared/types/api";
 
 export type CursorPageState = {
   limit: number;
@@ -15,7 +15,7 @@ export type CursorPageState = {
 
 export type ProjectState = {
   projects: Project[];
-  conversationsByProjectId: Record<string, Conversation[]>;
+  conversationsByProjectId: Record<string, Session[]>;
   conversationPagesByProjectId: Record<string, CursorPageState>;
   projectConfigsByProjectId: Record<string, ProjectConfig>;
   projectsPage: CursorPageState;

@@ -167,6 +167,7 @@ Week 6 收口标准：
 6. OpenAPI 主 schema 收敛：`Session/Run` 成为主定义，`Conversation/Execution` 改为 alias（并联动 contract tests 与 generated types）。
 7. Hub 内部命名收敛：hooks/workspace-status 结构体字段由旧语义映射名进一步收敛为 `SessionID/SessionStatus`，并联动快照持久化与测试夹具同步。
 8. W1-T3 启动：shared-core `api-project.ts` 将 `SessionDetailResponse` 设为主结构并将旧字段降级为可选兼容，`ConversationDetailResponse` 收敛为别名；Desktop conversation 核心类型注解迁移到 `Session/Run` 主类型并保留旧 payload 兼容归一化。
+9. W1-T3 持续推进：Desktop `modules/project` 子域服务层与 store 层类型注解收敛到 `Session` 主类型，减少 `Conversation` 类型别名扩散。
 
 ### 6.3 最新审计快照（2026-03-05）
 
@@ -187,3 +188,4 @@ Week 6 收口标准：
 8. `pnpm --filter @goyais/desktop exec vitest run src/shared/stores/workspaceStatusStore.spec.ts` ✅
 9. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/execution-merge.spec.ts src/modules/conversation/tests/conversation-hydration.spec.ts src/modules/conversation/tests/conversation-run-tasks-service.spec.ts` ✅
 10. `pnpm --filter @goyais/shared-core build` ✅
+11. `pnpm --filter @goyais/desktop exec vitest run src/modules/project/store/project-store.spec.ts` ✅

@@ -22,7 +22,7 @@ import {
 import { projectStore, resolveCurrentWorkspaceToken, resolveWorkspaceToken } from "@/modules/project/store/state";
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { getCurrentWorkspace } from "@/shared/stores/workspaceStore";
-import type { Conversation, Project, ProjectConfig } from "@/shared/types/api";
+import type { Project, ProjectConfig, Session } from "@/shared/types/api";
 
 export async function addProject(input: { name: string; repo_path: string; is_git: boolean }): Promise<void> {
   const workspace = getCurrentWorkspace();
@@ -82,7 +82,7 @@ export async function deleteProject(projectId: string): Promise<void> {
   }
 }
 
-export async function addConversation(project: Project, name: string): Promise<Conversation | null> {
+export async function addConversation(project: Project, name: string): Promise<Session | null> {
   const token = resolveWorkspaceToken(project.workspace_id);
   try {
     const created = await createConversation(project, name, { token });
@@ -111,7 +111,7 @@ export async function renameConversationById(projectId: string, conversationId: 
 export async function updateConversationModeById(
   projectId: string,
   conversationId: string,
-  mode: Conversation["default_mode"]
+  mode: Session["default_mode"]
 ): Promise<boolean> {
   const token = resolveCurrentWorkspaceToken();
   try {

@@ -1,6 +1,5 @@
 import { getControlClient } from "@/shared/services/clients";
 import type {
-  Conversation,
   ConversationMode,
   ListEnvelope,
   PaginationQuery,
@@ -63,9 +62,9 @@ export async function listConversations(
   projectId: string,
   query: PaginationQuery = {},
   options: ProjectServiceOptions = {}
-): Promise<ListEnvelope<Conversation>> {
+): Promise<ListEnvelope<Session>> {
   const search = buildPaginationSearch(query);
-  return getControlClient().get<ListEnvelope<Conversation>>(`/v1/projects/${projectId}/sessions${search}`, {
+  return getControlClient().get<ListEnvelope<Session>>(`/v1/projects/${projectId}/sessions${search}`, {
     token: options.token
   });
 }
@@ -78,8 +77,8 @@ export async function listSessions(
   return listConversations(projectId, query, options);
 }
 
-export async function createConversation(project: Project, name: string, options: ProjectServiceOptions = {}): Promise<Conversation> {
-  return getControlClient().post<Conversation>(
+export async function createConversation(project: Project, name: string, options: ProjectServiceOptions = {}): Promise<Session> {
+  return getControlClient().post<Session>(
     `/v1/projects/${project.id}/sessions`,
     {
       workspace_id: project.workspace_id,
@@ -97,7 +96,7 @@ export async function renameConversation(
   conversationId: string,
   name: string,
   options: ProjectServiceOptions = {}
-): Promise<Conversation> {
+): Promise<Session> {
   return patchConversation(conversationId, { name }, options);
 }
 
@@ -120,8 +119,8 @@ export async function patchConversation(
     mcp_ids?: string[];
   },
   options: ProjectServiceOptions = {}
-): Promise<Conversation> {
-  return getControlClient().request<Conversation>(`/v1/sessions/${conversationId}`, {
+): Promise<Session> {
+  return getControlClient().request<Session>(`/v1/sessions/${conversationId}`, {
     method: "PATCH",
     body: patch,
     token: options.token
