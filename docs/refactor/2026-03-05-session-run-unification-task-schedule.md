@@ -1,0 +1,142 @@
+# Session/Run 语义统一重构任务排期（6 周）
+
+- 日期：2026-03-05
+- 周期：6 周
+- 关联主计划：`./2026-03-05-session-run-unification-master-plan.md`
+- 关联风险台账：`./2026-03-05-session-run-unification-risk-register.md`
+
+---
+
+## 1. 排期总览
+
+| Week | 主题 | 关键目标 | 依赖 |
+|---|---|---|---|
+| Week 1 | 契约冻结与类型先行 | OpenAPI + shared-core 收敛为 session/run | 无 |
+| Week 2 | Hub 入口与路由语义收口 | 路由/handler 参数与 hooks 路径完成切换 | Week 1 |
+| Week 3 | Hub 存储与权限语义收口 | 去版本后缀 + DB 命名收口 + 权限键切换 | Week 2 |
+| Week 4 | Desktop 全量重命名 | 目录/符号/i18n 全量切换为 session/run | Week 1-3 |
+| Week 5 | 兼容清零与门禁升级 | legacy/compat/fallback 清零 + 新门禁启用 | Week 2-4 |
+| Week 6 | 全链路回归与发布收口 | 跨栈验证、风险清零、closure 报告 | Week 1-5 |
+
+---
+
+## 2. 周任务明细（编号、依赖、交付物、验收、阻塞条件）
+
+### Week 1：契约冻结与类型先行
+
+| 任务 ID | 任务 | 依赖 | 交付物 | 验收命令 | 阻塞条件 |
+|---|---|---|---|---|---|
+| W1-T1 | OpenAPI 切换为 Session/Run 主语义 | 无 | `packages/contracts/openapi.yaml`（移除 Conversation/Execution alias schema） | `pnpm contracts:generate && pnpm contracts:check` | 旧路径与旧 schema 仍被依赖 |
+| W1-T2 | 字段名统一为 `session_id/run_id/active_run_id` | W1-T1 | OpenAPI schema 字段、示例与注释 | 同上 | Hub/Desktop 尚未准备字段切换 |
+| W1-T3 | shared-core 移除 deprecated/transitional alias | W1-T1,W1-T2 | `packages/shared-core/src/api-*` + regenerated types | 同上 | 仍有上游代码依赖旧类型别名 |
+| W1-T4 | 合约冻结基线发布 | W1-T1~T3 | 契约冻结记录（本文件周更） | `pnpm contracts:check` | 合约未形成唯一版本 |
+
+Week 1 收口标准：
+1. OpenAPI 与 generated types 不再以 Conversation/Execution 作为主模型。
+2. shared-core 不再保留旧语义兼容别名。
+3. 契约字段命名统一，无双字段并存。
+
+### Week 2：Hub 入口与路由语义收口
+
+| 任务 ID | 任务 | 依赖 | 交付物 | 验收命令 | 阻塞条件 |
+|---|---|---|---|---|---|
+| W2-T1 | runtime/controlplane/integration 路由参数统一 session/run | Week 1 | `services/hub/internal/*/routes/*.go` | `cd services/hub && go test ./... && go vet ./...` | 仍存在旧 path/query 参数 |
+| W2-T2 | 删除 `conversation_id/execution_id` 入参回退逻辑 | W2-T1 | handler/path/query 解析实现 | 同上 | 旧客户端仍强依赖旧参数 |
+| W2-T3 | hooks 路径语义切换到 run | W2-T1 | hooks 路径、handler、测试 | 同上 | hooks 调用链未同步 |
+| W2-T4 | Hub 入口语义收口回归 | W2-T1~T3 | 路由/handler 回归测试通过 | 同上 | 非 runtime handler 行为漂移 |
+
+Week 2 收口标准：
+1. Hub 入参不再接受旧语义字段回退。
+2. hooks 接口与 payload 全部 run 语义。
+3. Hub 编译、测试、vet 全通过。
+
+### Week 3：Hub 存储层与权限语义收口
+
+| 任务 ID | 任务 | 依赖 | 交付物 | 验收命令 | 阻塞条件 |
+|---|---|---|---|---|---|
+| W3-T1 | 去除内部 `*_v1` 文件名与符号命名 | Week 2 | `services/hub/internal/httpapi/*` 重命名与引用更新 | `cd services/hub && go test ./... && go vet ./...` | 大规模重命名引发引用断裂 |
+| W3-T2 | DB 表/索引去版本后缀（破坏式重建） | W3-T1 | sqlite schema 与仓储层命名更新 | 同上 | 本地旧库文件干扰初始化 |
+| W3-T3 | 权限键切换到 `session.*`/`run.control` | W3-T1 | authz defaults/engine/audit 键名统一 | 同上 | 上游 UI 权限显示未同步 |
+| W3-T4 | 语义 grep 清零（Hub 范围） | W3-T1~T3 | 审计脚本与结果记录 | `rg -n` 审计命令（见 Week 5） | 白名单边界不清导致误判 |
+
+Week 3 收口标准：
+1. Hub 主链路无内部版本后缀命名。
+2. 权限与审计键名无旧语义残留。
+3. DB schema 仅新命名，且可稳定初始化。
+
+### Week 4：Desktop 全量重命名（目录 + 符号 + i18n）
+
+| 任务 ID | 任务 | 依赖 | 交付物 | 验收命令 | 阻塞条件 |
+|---|---|---|---|---|---|
+| W4-T1 | `modules/conversation` 迁移到 `modules/session` | Week 1-3 | 目录重命名与引用修复 | `pnpm lint && pnpm test` | 导入路径大面积失效 |
+| W4-T2 | `execution*` 文件与符号迁移到 `run*` | W4-T1 | store/service/view/test 命名统一 | `pnpm test:strict` | 事件映射与状态机不一致 |
+| W4-T3 | i18n key `conversation.*` -> `session.*` | W4-T1 | `messages.*` 与调用点同步 | `pnpm test` | 翻译 key 漏改导致运行时缺词 |
+| W4-T4 | 前端 E2E 与主链路回归 | W4-T1~T3 | 会话核心交互回归通过 | `pnpm e2e:smoke` | SSE 与界面状态不一致 |
+
+Week 4 收口标准：
+1. Desktop 无旧目录与旧主符号命名。
+2. i18n key 与代码引用全部对齐。
+3. lint/test/strict/e2e 全通过。
+
+### Week 5：兼容实现清零与门禁脚本升级
+
+| 任务 ID | 任务 | 依赖 | 交付物 | 验收命令 | 阻塞条件 |
+|---|---|---|---|---|---|
+| W5-T1 | 清理 legacy/compat/fallback 运行时路径 | Week 2-4 | 首方主链路兼容代码删除 | `cd services/hub && go test ./...` + `pnpm test` | 误删必要分支引发行为回归 |
+| W5-T2 | 重写并启用语义门禁脚本 | W5-T1 | 新门禁规则与 CI 接入 | 门禁脚本执行通过 | 白名单策略缺失导致误拦截 |
+| W5-T3 | 更新 docs/slides/README 术语 | W5-T1 | 文档统一到新语义 | `pnpm docs:build && pnpm slides:build` | 文档构建链断裂 |
+| W5-T4 | 全仓 grep 审计收口 | W5-T1~T3 | 审计报告（本文件周更） | 见下方“统一审计命令” | 审计词表不完整 |
+
+Week 5 收口标准：
+1. 兼容路径清零，无双轨行为。
+2. 门禁脚本具备防回流能力并在 CI 生效。
+3. 文档与演示材料术语一致。
+
+### Week 6：全链路回归与发布收口
+
+| 任务 ID | 任务 | 依赖 | 交付物 | 验收命令 | 阻塞条件 |
+|---|---|---|---|---|---|
+| W6-T1 | 跨栈验证矩阵执行 | Week 1-5 | 全命令结果记录 | 全矩阵命令（见主计划） | 某栈仍存在语义残留 |
+| W6-T2 | 风险复盘与遗留项清零 | W6-T1 | `risk-register` 状态归档 | 周更检查通过 | 高风险未闭环 |
+| W6-T3 | 最终 closure 报告（新文档体系） | W6-T1,W6-T2 | `docs/refactor` closure 文档（新命名） | `make health` | 发布敏感检查未通过 |
+
+Week 6 收口标准：
+1. 全命令矩阵通过。
+2. 风险台账高风险项全部关闭或有可执行回滚预案。
+3. 形成可复审 closure 报告并归档。
+
+---
+
+## 3. 测试场景（强制覆盖）
+
+1. 会话创建、提交、控制、事件流、回滚、changeset 全流程。
+2. OpenAPI 与 generated types 一致性。
+3. 权限与审计键名全量切换验证。
+4. 前端核心交互回归（发送、停止、审批、trace、inspector、导出）。
+5. 语义清零审计：旧词汇、兼容关键词、内部版本后缀。
+
+---
+
+## 4. 统一审计命令（Week 5+）
+
+1. `rg -n "\\b(conversation|execution|Conversation|Execution)\\b" services/hub apps/desktop/src packages/shared-core/src packages/contracts`
+2. `rg -n "\\b(v1|v2|v3|v4|V1|V2|V3|V4)\\b" services/hub apps/desktop/src packages/shared-core/src packages/contracts`
+3. `rg -n "\\blegacy\\w*|\\bcompat\\w*|fallback|alias" services/hub apps/desktop/src packages/shared-core/src packages/contracts`
+
+说明：
+1. 审计结果必须结合白名单（第三方/平台强制命名）解释。
+2. 审计输出与处理结论需写入本文件“每周状态”。
+
+---
+
+## 5. 每周状态维护模板（固定使用）
+
+### Week N 状态
+
+- 完成任务：`Wn-Tx`
+- 未完成任务：`Wn-Tx`
+- 阻塞项与责任人：
+- 本周风险变化：
+- 下周计划：
+- 验收命令与结果摘要：
+
