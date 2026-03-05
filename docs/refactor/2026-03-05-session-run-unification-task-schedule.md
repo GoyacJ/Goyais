@@ -168,6 +168,7 @@ Week 6 收口标准：
 7. Hub 内部命名收敛：hooks/workspace-status 结构体字段由旧语义映射名进一步收敛为 `SessionID/SessionStatus`，并联动快照持久化与测试夹具同步。
 8. W1-T3 启动：shared-core `api-project.ts` 将 `SessionDetailResponse` 设为主结构并将旧字段降级为可选兼容，`ConversationDetailResponse` 收敛为别名；Desktop conversation 核心类型注解迁移到 `Session/Run` 主类型并保留旧 payload 兼容归一化。
 9. W1-T3 持续推进：Desktop `modules/project` 子域服务层与 store 层类型注解收敛到 `Session` 主类型，减少 `Conversation` 类型别名扩散。
+10. W1-T3 持续推进：Desktop `modules/project` 子域内部调用链切换到 `listSessions/createSession/patchSession/removeSession/exportSessionMarkdown`，并保留 conversation 命名服务函数作为兼容壳。
 
 ### 6.3 最新审计快照（2026-03-05）
 

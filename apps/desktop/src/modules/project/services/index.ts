@@ -58,7 +58,7 @@ export async function removeProject(projectId: string, options: ProjectServiceOp
   await getControlClient().request<void>(`/v1/projects/${projectId}`, { method: "DELETE", token: options.token });
 }
 
-export async function listConversations(
+export async function listSessions(
   projectId: string,
   query: PaginationQuery = {},
   options: ProjectServiceOptions = {}
@@ -69,15 +69,15 @@ export async function listConversations(
   });
 }
 
-export async function listSessions(
+export async function listConversations(
   projectId: string,
   query: PaginationQuery = {},
   options: ProjectServiceOptions = {}
 ): Promise<ListEnvelope<Session>> {
-  return listConversations(projectId, query, options);
+  return listSessions(projectId, query, options);
 }
 
-export async function createConversation(project: Project, name: string, options: ProjectServiceOptions = {}): Promise<Session> {
+export async function createSession(project: Project, name: string, options: ProjectServiceOptions = {}): Promise<Session> {
   return getControlClient().post<Session>(
     `/v1/projects/${project.id}/sessions`,
     {
@@ -88,43 +88,8 @@ export async function createConversation(project: Project, name: string, options
   );
 }
 
-export async function createSession(project: Project, name: string, options: ProjectServiceOptions = {}): Promise<Session> {
-  return createConversation(project, name, options);
-}
-
-export async function renameConversation(
-  conversationId: string,
-  name: string,
-  options: ProjectServiceOptions = {}
-): Promise<Session> {
-  return patchConversation(conversationId, { name }, options);
-}
-
-export async function renameSession(
-  sessionId: string,
-  name: string,
-  options: ProjectServiceOptions = {}
-): Promise<Session> {
-  return renameConversation(sessionId, name, options);
-}
-
-export async function patchConversation(
-  conversationId: string,
-  patch: {
-    name?: string;
-    mode?: ConversationMode;
-    model_config_id?: string;
-    rule_ids?: string[];
-    skill_ids?: string[];
-    mcp_ids?: string[];
-  },
-  options: ProjectServiceOptions = {}
-): Promise<Session> {
-  return getControlClient().request<Session>(`/v1/sessions/${conversationId}`, {
-    method: "PATCH",
-    body: patch,
-    token: options.token
-  });
+export async function createConversation(project: Project, name: string, options: ProjectServiceOptions = {}): Promise<Session> {
+  return createSession(project, name, options);
 }
 
 export async function patchSession(
@@ -139,28 +104,63 @@ export async function patchSession(
   },
   options: ProjectServiceOptions = {}
 ): Promise<Session> {
-  return patchConversation(sessionId, patch, options);
+  return getControlClient().request<Session>(`/v1/sessions/${sessionId}`, {
+    method: "PATCH",
+    body: patch,
+    token: options.token
+  });
 }
 
-export async function removeConversation(conversationId: string, options: ProjectServiceOptions = {}): Promise<void> {
-  await getControlClient().request<void>(`/v1/sessions/${conversationId}`, {
+export async function patchConversation(
+  conversationId: string,
+  patch: {
+    name?: string;
+    mode?: ConversationMode;
+    model_config_id?: string;
+    rule_ids?: string[];
+    skill_ids?: string[];
+    mcp_ids?: string[];
+  },
+  options: ProjectServiceOptions = {}
+): Promise<Session> {
+  return patchSession(conversationId, patch, options);
+}
+
+export async function renameSession(
+  sessionId: string,
+  name: string,
+  options: ProjectServiceOptions = {}
+): Promise<Session> {
+  return patchSession(sessionId, { name }, options);
+}
+
+export async function renameConversation(
+  conversationId: string,
+  name: string,
+  options: ProjectServiceOptions = {}
+): Promise<Session> {
+  return renameSession(conversationId, name, options);
+}
+
+export async function removeSession(sessionId: string, options: ProjectServiceOptions = {}): Promise<void> {
+  await getControlClient().request<void>(`/v1/sessions/${sessionId}`, {
     method: "DELETE",
     token: options.token
   });
 }
 
-export async function removeSession(sessionId: string, options: ProjectServiceOptions = {}): Promise<void> {
-  await removeConversation(sessionId, options);
+export async function removeConversation(conversationId: string, options: ProjectServiceOptions = {}): Promise<void> {
+  await removeSession(conversationId, options);
 }
 
-export async function exportConversationMarkdown(conversationId: string, options: ProjectServiceOptions = {}): Promise<string> {
-  return getControlClient().get<string>(`/v1/sessions/${conversationId}/export?format=markdown`, {
+export async function exportSessionMarkdown(sessionId: string, options: ProjectServiceOptions = {}): Promise<string> {
+  return getControlClient().get<string>(`/v1/sessions/${sessionId}/export?format=markdown`, {
     token: options.token
   });
 }
 
-export async function exportSessionMarkdown(sessionId: string, options: ProjectServiceOptions = {}): Promise<string> {
-  return exportConversationMarkdown(sessionId, options);
+export async function exportConversationMarkdown(conversationId: string, options: ProjectServiceOptions = {}): Promise<string> {
+  return exportSessionMarkdown(conversationId, options);
 }
 
 export async function updateProjectConfig(

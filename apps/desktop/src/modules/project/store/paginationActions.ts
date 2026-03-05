@@ -1,6 +1,6 @@
 import {
   getProjectConfig,
-  listConversations,
+  listSessions,
   listProjects,
   listWorkspaceProjectConfigs
 } from "@/modules/project/services";
@@ -146,7 +146,7 @@ async function loadConversationsPage(projectId: string, input: { cursor: string 
   const page = ensureConversationPageState(projectId);
   page.loading = true;
   try {
-    const response = await listConversations(
+    const response = await listSessions(
       projectId,
       {
         cursor: input.cursor ?? undefined,

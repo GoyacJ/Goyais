@@ -9,14 +9,14 @@ import {
   refreshProjects
 } from "@/modules/project/store/paginationActions";
 import {
-  createConversation,
+  createSession,
   createProject,
-  exportConversationMarkdown,
+  exportSessionMarkdown,
   importProjectDirectory,
-  patchConversation,
-  removeConversation,
+  patchSession,
+  removeSession,
   removeProject,
-  renameConversation,
+  renameSession,
   updateProjectConfig
 } from "@/modules/project/services";
 import { projectStore, resolveCurrentWorkspaceToken, resolveWorkspaceToken } from "@/modules/project/store/state";
@@ -85,7 +85,7 @@ export async function deleteProject(projectId: string): Promise<void> {
 export async function addConversation(project: Project, name: string): Promise<Session | null> {
   const token = resolveWorkspaceToken(project.workspace_id);
   try {
-    const created = await createConversation(project, name, { token });
+    const created = await createSession(project, name, { token });
     await refreshConversationsForActiveProject();
     projectStore.activeConversationId = created.id;
     return created;
@@ -98,7 +98,7 @@ export async function addConversation(project: Project, name: string): Promise<S
 export async function renameConversationById(projectId: string, conversationId: string, name: string): Promise<void> {
   const token = resolveCurrentWorkspaceToken();
   try {
-    const updated = await renameConversation(conversationId, name, { token });
+    const updated = await renameSession(conversationId, name, { token });
     const list = projectStore.conversationsByProjectId[projectId] ?? [];
     projectStore.conversationsByProjectId[projectId] = list.map((conversation) =>
       conversation.id === conversationId ? updated : conversation
@@ -115,7 +115,7 @@ export async function updateConversationModeById(
 ): Promise<boolean> {
   const token = resolveCurrentWorkspaceToken();
   try {
-    const updated = await patchConversation(conversationId, { mode }, { token });
+    const updated = await patchSession(conversationId, { mode }, { token });
     const list = projectStore.conversationsByProjectId[projectId] ?? [];
     projectStore.conversationsByProjectId[projectId] = list.map((conversation) =>
       conversation.id === conversationId ? updated : conversation
@@ -134,7 +134,7 @@ export async function updateConversationModelById(
 ): Promise<boolean> {
   const token = resolveCurrentWorkspaceToken();
   try {
-    const updated = await patchConversation(conversationId, { model_config_id: modelConfigId }, { token });
+    const updated = await patchSession(conversationId, { model_config_id: modelConfigId }, { token });
     const list = projectStore.conversationsByProjectId[projectId] ?? [];
     projectStore.conversationsByProjectId[projectId] = list.map((conversation) =>
       conversation.id === conversationId ? updated : conversation
@@ -150,7 +150,7 @@ export async function deleteConversation(projectId: string, conversationId: stri
   void projectId;
   const token = resolveCurrentWorkspaceToken();
   try {
-    await removeConversation(conversationId, { token });
+    await removeSession(conversationId, { token });
     await refreshConversationsForActiveProject();
     if (projectStore.activeConversationId === conversationId || projectStore.activeConversationId === "") {
       projectStore.activeConversationId = "";
@@ -163,7 +163,7 @@ export async function deleteConversation(projectId: string, conversationId: stri
 export async function exportConversationById(conversationId: string): Promise<string | null> {
   const token = resolveCurrentWorkspaceToken();
   try {
-    return await exportConversationMarkdown(conversationId, { token });
+    return await exportSessionMarkdown(conversationId, { token });
   } catch (error) {
     projectStore.error = toDisplayError(error);
     return null;

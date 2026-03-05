@@ -5,14 +5,20 @@ import type { Session } from "@/shared/types/api";
 
 const serviceMocks = vi.hoisted(() => ({
   listProjects: vi.fn(),
+  listSessions: vi.fn(),
   createProject: vi.fn(),
   importProjectDirectory: vi.fn(),
   removeProject: vi.fn(),
   listConversations: vi.fn(),
+  createSession: vi.fn(),
   createConversation: vi.fn(),
+  renameSession: vi.fn(),
   renameConversation: vi.fn(),
+  removeSession: vi.fn(),
   removeConversation: vi.fn(),
+  exportSessionMarkdown: vi.fn(),
   exportConversationMarkdown: vi.fn(),
+  patchSession: vi.fn(),
   updateProjectConfig: vi.fn(),
   getProjectConfig: vi.fn(),
   listWorkspaceProjectConfigs: vi.fn()
@@ -33,14 +39,20 @@ const sessionStoreMocks = vi.hoisted(() => ({
 
 vi.mock("@/modules/project/services", () => ({
   listProjects: serviceMocks.listProjects,
+  listSessions: serviceMocks.listSessions,
   createProject: serviceMocks.createProject,
   importProjectDirectory: serviceMocks.importProjectDirectory,
   removeProject: serviceMocks.removeProject,
   listConversations: serviceMocks.listConversations,
+  createSession: serviceMocks.createSession,
   createConversation: serviceMocks.createConversation,
+  renameSession: serviceMocks.renameSession,
   renameConversation: serviceMocks.renameConversation,
+  removeSession: serviceMocks.removeSession,
   removeConversation: serviceMocks.removeConversation,
+  exportSessionMarkdown: serviceMocks.exportSessionMarkdown,
   exportConversationMarkdown: serviceMocks.exportConversationMarkdown,
+  patchSession: serviceMocks.patchSession,
   updateProjectConfig: serviceMocks.updateProjectConfig,
   getProjectConfig: serviceMocks.getProjectConfig,
   listWorkspaceProjectConfigs: serviceMocks.listWorkspaceProjectConfigs
@@ -82,7 +94,7 @@ describe("project store token forwarding", () => {
       next_cursor: null
     });
     serviceMocks.listWorkspaceProjectConfigs.mockResolvedValue([]);
-    serviceMocks.listConversations.mockResolvedValue({
+    serviceMocks.listSessions.mockResolvedValue({
       items: [],
       next_cursor: null
     });
@@ -160,7 +172,7 @@ describe("project store token forwarding", () => {
       ],
       next_cursor: null
     });
-    serviceMocks.listConversations.mockResolvedValue({
+    serviceMocks.listSessions.mockResolvedValue({
       items: [
         {
           id: "conv_alpha_1",
@@ -226,7 +238,7 @@ describe("project store token forwarding", () => {
       mcp_ids: [],
       updated_at: "2026-02-24T01:00:00Z"
     });
-    serviceMocks.listConversations.mockResolvedValue({
+    serviceMocks.listSessions.mockResolvedValue({
       items: [retainedConversation],
       next_cursor: null
     });
@@ -241,7 +253,7 @@ describe("project store token forwarding", () => {
 
     expect(updated).toBe(true);
     expect(serviceMocks.updateProjectConfig).toHaveBeenCalledTimes(1);
-    expect(serviceMocks.listConversations).toHaveBeenCalledTimes(1);
+    expect(serviceMocks.listSessions).toHaveBeenCalledTimes(1);
     expect(sessionStoreMocks.detachSessionStream).toHaveBeenCalledWith("conv_remove");
     expect(sessionStoreMocks.clearSessionTimer).toHaveBeenCalledWith("conv_remove");
     expect(sessionStoreMocks.sessionStore.bySessionId).not.toHaveProperty("conv_remove");
@@ -282,6 +294,6 @@ describe("project store token forwarding", () => {
     expect(projectStore.projectConfigsByProjectId.proj_alpha?.updated_at).toBe("2026-02-24T00:00:00Z");
     expect(projectStore.error).toContain("VALIDATION_ERROR");
     expect(projectStore.error).toContain("tr_bind_invalid");
-    expect(serviceMocks.listConversations).not.toHaveBeenCalled();
+    expect(serviceMocks.listSessions).not.toHaveBeenCalled();
   });
 });
