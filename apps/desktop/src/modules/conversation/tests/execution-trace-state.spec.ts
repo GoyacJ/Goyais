@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { useExecutionTraceState } from "@/modules/conversation/views/useExecutionTraceState";
 import type { ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
-import type { ConversationMessage } from "@/shared/types/api";
+import type { SessionMessage } from "@/shared/types/api";
 
 function createTrace(overrides?: Partial<ExecutionTraceViewModel>): ExecutionTraceViewModel {
   return {
@@ -26,7 +26,7 @@ describe("execution trace selection state", () => {
       createTrace({ executionId: "exec_trace_state_1" }),
       createTrace({ executionId: "exec_trace_state_2", queueIndex: 1 })
     ]);
-    const baseMessages = ref<ConversationMessage[]>([
+    const baseMessages = ref<SessionMessage[]>([
       createUserMessage("msg_trace_state_1", 0),
       createUserMessage("msg_trace_state_2", 1)
     ]);
@@ -42,7 +42,7 @@ describe("execution trace selection state", () => {
       createTrace({ executionId: "exec_trace_state_1" }),
       createTrace({ executionId: "exec_trace_state_2", queueIndex: 1 })
     ]);
-    const baseMessages = ref<ConversationMessage[]>([
+    const baseMessages = ref<SessionMessage[]>([
       createUserMessage("msg_trace_state_1", 0),
       createUserMessage("msg_trace_state_2", 1)
     ]);
@@ -66,7 +66,7 @@ describe("execution trace selection state", () => {
       createTrace({ executionId: "exec_trace_state_1" }),
       createTrace({ executionId: "exec_trace_state_2", queueIndex: 1 })
     ]);
-    const baseMessages = ref<ConversationMessage[]>([
+    const baseMessages = ref<SessionMessage[]>([
       createUserMessage("msg_trace_state_1", 0),
       createUserMessage("msg_trace_state_2", 1)
     ]);
@@ -82,7 +82,7 @@ describe("execution trace selection state", () => {
   });
 });
 
-function createUserMessage(id: string, queueIndex: number): ConversationMessage {
+function createUserMessage(id: string, queueIndex: number): SessionMessage {
   return {
     id,
     conversation_id: "conv_trace_state_1",

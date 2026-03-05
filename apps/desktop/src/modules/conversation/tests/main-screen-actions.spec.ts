@@ -4,7 +4,7 @@ import type { Router } from "vue-router";
 
 import type { ConversationRuntime } from "@/modules/conversation/store/state";
 import { useMainScreenActions } from "@/modules/conversation/views/useMainScreenActions";
-import type { Conversation, ConversationMessage, Execution, Project } from "@/shared/types/api";
+import type { Project, Run, Session, SessionMessage } from "@/shared/types/api";
 
 const conversationStoreMocks = vi.hoisted(() => ({
   approveConversationExecution: vi.fn(),
@@ -41,7 +41,7 @@ const projectStoreMocks = vi.hoisted(() => ({
   refreshProjects: vi.fn(),
   projectStore: {
     projects: [] as Project[],
-    conversationsByProjectId: {} as Record<string, Conversation[]>,
+    conversationsByProjectId: {} as Record<string, Session[]>,
     error: ""
   }
 }));
@@ -140,7 +140,7 @@ describe("main screen actions - auto conversation naming", () => {
 
   it("does not rename when a user message already exists", async () => {
     conversationStoreMocks.submitConversationMessage.mockResolvedValue(undefined);
-    const existingUserMessage: ConversationMessage = {
+    const existingUserMessage: SessionMessage = {
       id: "msg_existing",
       conversation_id: "conv_1",
       role: "user",
@@ -332,8 +332,8 @@ describe("main screen actions - auto conversation naming", () => {
 function createActionsContext(input: {
   conversationName: string;
   draft: string;
-  runtimeMessages?: ConversationMessage[];
-  runtimeExecutions?: Execution[];
+  runtimeMessages?: SessionMessage[];
+  runtimeExecutions?: Run[];
 }) {
   const conversation = createConversation(input.conversationName);
   const project = createProject();
@@ -343,7 +343,7 @@ function createActionsContext(input: {
     executions: input.runtimeExecutions ?? []
   });
 
-  const activeConversationRef = ref<Conversation | undefined>(conversation);
+  const activeConversationRef = ref<Session | undefined>(conversation);
   const activeProjectRef = ref<Project | undefined>(project);
   const runtimeRef = ref<ConversationRuntime | undefined>(runtimeValue);
 
@@ -380,7 +380,7 @@ function createActionsContext(input: {
   };
 }
 
-function createConversation(name: string): Conversation {
+function createConversation(name: string): Session {
   return {
     id: "conv_1",
     workspace_id: "ws_1",
@@ -414,7 +414,7 @@ function createProject(): Project {
   };
 }
 
-function createExecution(id: string, state: Execution["state"]): Execution {
+function createExecution(id: string, state: Run["state"]): Run {
   return {
     id,
     workspace_id: "ws_1",

@@ -1,7 +1,7 @@
 import { computed, ref, watch, type Ref } from "vue";
 
 import type { ExecutionTraceViewModel } from "@/modules/conversation/views/processTrace";
-import type { ConversationMessage } from "@/shared/types/api";
+import type { SessionMessage } from "@/shared/types/api";
 
 type TraceMessageItem = {
   id: string;
@@ -10,7 +10,7 @@ type TraceMessageItem = {
 
 export function useExecutionTraceState(
   baseExecutionTraces: Ref<ExecutionTraceViewModel[]>,
-  baseMessages: Ref<ConversationMessage[]>
+  baseMessages: Ref<SessionMessage[]>
 ) {
   const selectedTraceMessageId = ref("");
   const selectedTraceExecutionId = ref("");

@@ -174,6 +174,7 @@ Week 6 收口标准：
 13. W1-T3 持续推进：Desktop `modules/conversation/trace + store/stream` 子域完成类型注解收敛（`Execution/ExecutionEvent` -> `Run/RunLifecycleEvent`），保留 normalize/build 系列函数命名以避免调用面震荡。
 14. W1-T3 持续推进：Desktop `modules/conversation/store/state` 与 `views/useMainScreenController` 补齐类型收敛（`Conversation` 参数类型改 `Session`，`ExecutionEvent` 注解改 `RunLifecycleEvent`），保持函数命名与数据字段兼容。
 15. W1-T3 持续推进：Desktop `modules/conversation/components` 组件层类型注解收敛（`MainInspectorPanel/MainSidebarPanel` 由 `Conversation/Execution/ExecutionEvent` 切换至 `Session/Run/RunLifecycleEvent`），仅调整类型签名不改交互行为。
+16. W1-T3 持续推进：Desktop 测试与辅助视图类型注解继续收敛（`useExecutionTraceState` 与 `main-screen-actions/execution-merge/execution-trace-state` 测试由 `Conversation/Execution/ConversationMessage` 切换至 `Session/Run/SessionMessage`），断言逻辑不变。
 
 ### 6.3 最新审计快照（2026-03-05）
 
@@ -201,3 +202,4 @@ Week 6 收口标准：
 15. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/trace/normalize.spec.ts src/modules/conversation/tests/trace/present.spec.ts src/modules/conversation/tests/process-trace.spec.ts src/modules/conversation/tests/running-actions.spec.ts src/modules/conversation/tests/conversation-token-usage.spec.ts src/modules/conversation/tests/conversation-stream.spec.ts` ✅
 16. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/main-screen-controller.spec.ts src/modules/conversation/tests/conversation.spec.ts` ✅
 17. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/components/main-sidebar-panel.spec.ts src/modules/conversation/tests/main-inspector-run-tasks.spec.ts src/modules/conversation/tests/conversation.spec.ts` ✅
+18. `pnpm --filter @goyais/desktop exec vitest run src/modules/conversation/tests/main-screen-actions.spec.ts src/modules/conversation/tests/execution-merge.spec.ts src/modules/conversation/tests/execution-trace-state.spec.ts` ✅

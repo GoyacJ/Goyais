@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizeExecutionList } from "@/modules/conversation/store/executionMerge";
-import type { Execution } from "@/shared/types/api";
+import type { Run } from "@/shared/types/api";
 
 describe("execution merge", () => {
   it("dedupes same execution id and keeps terminal state", () => {
-    const duplicated: Execution[] = [
+    const duplicated: Run[] = [
       buildExecution({
         id: "exec_1",
         state: "completed"
@@ -23,7 +23,7 @@ describe("execution merge", () => {
   });
 
   it("allows execution state to move between executing and confirming", () => {
-    const duplicated: Execution[] = [
+    const duplicated: Run[] = [
       buildExecution({
         id: "exec_2",
         state: "confirming"
@@ -41,8 +41,8 @@ describe("execution merge", () => {
 });
 
 function buildExecution(
-  partial: Partial<Execution> & Pick<Execution, "id" | "state">
-): Execution {
+  partial: Partial<Run> & Pick<Run, "id" | "state">
+): Run {
   const now = new Date().toISOString();
   return {
     id: partial.id,
