@@ -9,6 +9,9 @@ import type { Project, Run, Session, SessionMessage } from "@/shared/types/api";
 const conversationStoreMocks = vi.hoisted(() => ({
   approveConversationExecution: vi.fn(),
   commitConversationChangeset: vi.fn(),
+  conversationStore: {
+    error: ""
+  },
   denyConversationExecution: vi.fn(),
   discardConversationChangeset: vi.fn(),
   getLatestFinishedExecution: vi.fn(),
@@ -71,6 +74,10 @@ const workspaceStoreMocks = vi.hoisted(() => ({
   upsertWorkspace: vi.fn()
 }));
 
+const toastStoreMocks = vi.hoisted(() => ({
+  showToast: vi.fn()
+}));
+
 vi.mock("@/modules/session/store", () => conversationStoreMocks);
 vi.mock("@/modules/project/store", () => projectStoreMocks);
 vi.mock("@/modules/session/services", () => conversationServiceMocks);
@@ -89,6 +96,9 @@ vi.mock("@/shared/services/errorMapper", () => ({
 vi.mock("@/shared/stores/workspaceStore", () => ({
   workspaceStore: workspaceStoreMocks.workspaceStore
 }));
+vi.mock("@/shared/stores/toastStore", () => ({
+  showToast: toastStoreMocks.showToast
+}));
 vi.mock("@/modules/workspace/store", () => ({
   setWorkspaceConnection: workspaceStoreMocks.setWorkspaceConnection,
   switchWorkspaceContext: workspaceStoreMocks.switchWorkspaceContext,
@@ -98,6 +108,7 @@ vi.mock("@/modules/workspace/store", () => ({
 describe("main screen actions - auto conversation naming", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    conversationStoreMocks.conversationStore.error = "";
     projectStoreMocks.projectStore.projects = [];
     projectStoreMocks.projectStore.conversationsByProjectId = {};
     projectStoreMocks.projectStore.error = "";
@@ -241,6 +252,42 @@ describe("main screen actions - auto conversation naming", () => {
     expect(conversationStoreMocks.removeQueuedConversationExecution).toHaveBeenCalledWith(conversation, "exec_queued_1");
   });
 
+  it("shows a toast when commit diff fails", async () => {
+    conversationStoreMocks.commitConversationChangeset.mockResolvedValue(false);
+    conversationStoreMocks.conversationStore.error = "commit failed";
+    const { actions } = createActionsContext({
+      conversationName: "已有名称",
+      draft: ""
+    });
+
+    await expect(actions.commitDiff("chore: test")).resolves.toBe(false);
+
+    expect(toastStoreMocks.showToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tone: "error",
+        message: "commit failed"
+      })
+    );
+  });
+
+  it("shows a toast when discard diff fails", async () => {
+    conversationStoreMocks.discardConversationChangeset.mockResolvedValue(false);
+    conversationStoreMocks.conversationStore.error = "discard failed";
+    const { actions } = createActionsContext({
+      conversationName: "已有名称",
+      draft: ""
+    });
+
+    await expect(actions.discardDiff()).resolves.toBe(false);
+
+    expect(toastStoreMocks.showToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tone: "error",
+        message: "discard failed"
+      })
+    );
+  });
+
   it("exports files using active conversation changeset export", async () => {
     conversationServiceMocks.exportConversationChangeSet.mockResolvedValue({
       file_name: "conv_1-changeset.zip",
@@ -359,6 +406,23 @@ describe("main screen actions - auto conversation naming", () => {
     } else {
       Reflect.deleteProperty(URL, "revokeObjectURL");
     }
+  });
+
+  it("shows a toast when exporting files fails", async () => {
+    conversationServiceMocks.exportConversationChangeSet.mockRejectedValue(new Error("archive failed"));
+    const { actions } = createActionsContext({
+      conversationName: "已有名称",
+      draft: ""
+    });
+
+    await expect(actions.exportPatch()).resolves.toBe(false);
+
+    expect(toastStoreMocks.showToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tone: "error",
+        message: "archive failed"
+      })
+    );
   });
 });
 

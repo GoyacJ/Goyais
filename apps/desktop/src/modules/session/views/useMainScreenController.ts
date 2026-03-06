@@ -42,6 +42,7 @@ import {
 } from "@/modules/workspace/store";
 import { useI18n } from "@/shared/i18n";
 import { authStore } from "@/shared/stores/authStore";
+import { showToast } from "@/shared/stores/toastStore";
 import { useWorkspaceStatusSync } from "@/shared/stores/workspaceStatusStore";
 import { setConversationError, setConversationModel } from "@/modules/session/store";
 import type {
@@ -73,6 +74,8 @@ type PendingExecutionQuestionViewModel = {
 
 type RunTaskNode = OpenAPIContractComponents["schemas"]["TaskNode"];
 type RunTaskState = OpenAPIContractComponents["schemas"]["TaskState"];
+
+const INSPECTOR_ERROR_TOAST_KEY = "session-inspector-error";
 
 export function isSameConversationResponseTarget(expectedConversationId: string, activeConversationId: string): boolean {
   return expectedConversationId.trim() !== "" && expectedConversationId.trim() === activeConversationId.trim();
@@ -319,24 +322,72 @@ export function useMainScreenController() {
     inspectorCollapsed.value = false;
   }
 
+  function showInspectorErrorToast(message: string): void {
+    const normalized = message.trim();
+    if (normalized === "") {
+      return;
+    }
+    showToast({
+      key: INSPECTOR_ERROR_TOAST_KEY,
+      tone: "error",
+      message: normalized
+    });
+  }
+
+  function resolveInspectorError(previousError: string, fallback = ""): string {
+    const nextError = conversationStore.error.trim();
+    if (nextError !== "") {
+      return nextError;
+    }
+    void previousError;
+    return fallback.trim();
+  }
+
+  function clearRunTaskDisplayState(): void {
+    runTaskGraph.value = null;
+    runTaskListItems.value = [];
+    runTaskListNextCursor.value = null;
+    runTaskDetail.value = null;
+    runTaskDetailLoading.value = false;
+    selectedRunTaskId.value = "";
+  }
+
+  function hasRunTaskExecutionContext(): boolean {
+    return (runtime.value?.executions ?? []).length > 0;
+  }
+
   function selectTraceExecution(executionId: string): void {
     selectRunTrace(executionId);
   }
 
-  async function refreshRunTaskGraphForActiveConversation(): Promise<void> {
+  async function refreshRunTaskGraphForActiveConversation(): Promise<boolean> {
     const conversationId = activeConversation.value?.id?.trim() ?? "";
     if (conversationId === "") {
       runTaskGraph.value = null;
       runTaskGraphLoading.value = false;
-      return;
+      return true;
+    }
+    if (!hasRunTaskExecutionContext()) {
+      runTaskGraph.value = null;
+      runTaskGraphLoading.value = false;
+      return true;
     }
     runTaskGraphLoading.value = true;
+    const previousError = conversationStore.error;
     try {
       const graph = await loadConversationRunTaskGraph(conversationId);
       if (!isSameConversationResponseTarget(conversationId, activeConversation.value?.id ?? "")) {
-        return;
+        return false;
+      }
+      if (graph === null) {
+        const errorMessage = resolveInspectorError(previousError);
+        if (errorMessage !== "") {
+          showInspectorErrorToast(errorMessage);
+        }
+        return false;
       }
       runTaskGraph.value = graph;
+      return true;
     } finally {
       if (isSameConversationResponseTarget(conversationId, activeConversation.value?.id ?? "")) {
         runTaskGraphLoading.value = false;
@@ -344,23 +395,33 @@ export function useMainScreenController() {
     }
   }
 
-  async function refreshRunTaskListForActiveConversation(): Promise<void> {
+  async function refreshRunTaskListForActiveConversation(): Promise<boolean> {
     const conversationId = activeConversation.value?.id?.trim() ?? "";
     if (conversationId === "") {
       clearRunTaskState();
-      return;
+      return true;
+    }
+    if (!hasRunTaskExecutionContext()) {
+      clearRunTaskDisplayState();
+      runTaskListLoading.value = false;
+      return true;
     }
     runTaskListLoading.value = true;
+    const previousError = conversationStore.error;
     try {
       const response = await loadConversationRunTasks(conversationId, {
         state: runTaskStateFilter.value === "" ? undefined : runTaskStateFilter.value,
         limit: 20
       });
       if (!isSameConversationResponseTarget(conversationId, activeConversation.value?.id ?? "")) {
-        return;
+        return false;
       }
       if (!response) {
-        return;
+        const errorMessage = resolveInspectorError(previousError);
+        if (errorMessage !== "") {
+          showInspectorErrorToast(errorMessage);
+        }
+        return false;
       }
       runTaskListItems.value = response?.items ?? [];
       runTaskListNextCursor.value = response?.next_cursor ?? null;
@@ -369,6 +430,7 @@ export function useMainScreenController() {
         selectedRunTaskId.value = runTaskListItems.value[0]?.task_id ?? "";
       }
       await refreshRunTaskDetailForActiveConversation();
+      return true;
     } finally {
       if (isSameConversationResponseTarget(conversationId, activeConversation.value?.id ?? "")) {
         runTaskListLoading.value = false;
@@ -383,6 +445,7 @@ export function useMainScreenController() {
       return;
     }
     runTaskListLoading.value = true;
+    const previousError = conversationStore.error;
     try {
       const response = await loadConversationRunTasks(conversationId, {
         state: runTaskStateFilter.value === "" ? undefined : runTaskStateFilter.value,
@@ -393,6 +456,10 @@ export function useMainScreenController() {
         return;
       }
       if (!response) {
+        const errorMessage = resolveInspectorError(previousError);
+        if (errorMessage !== "") {
+          showInspectorErrorToast(errorMessage);
+        }
         return;
       }
       const merged = new Map<string, RunTaskNode>();
@@ -419,21 +486,37 @@ export function useMainScreenController() {
   }
 
   async function changeRunTaskStateFilterForActiveConversation(state: RunTaskState | ""): Promise<void> {
+    const previousState = runTaskStateFilter.value;
+    const previousItems = [...runTaskListItems.value];
+    const previousCursor = runTaskListNextCursor.value;
+    const previousSelectedTaskId = selectedRunTaskId.value;
+    const previousTaskDetail = runTaskDetail.value;
     runTaskStateFilter.value = state;
-    runTaskListItems.value = [];
-    runTaskListNextCursor.value = null;
-    await refreshRunTaskListForActiveConversation();
+    const refreshed = await refreshRunTaskListForActiveConversation();
+    if (!refreshed) {
+      runTaskStateFilter.value = previousState;
+      runTaskListItems.value = previousItems;
+      runTaskListNextCursor.value = previousCursor;
+      selectedRunTaskId.value = previousSelectedTaskId;
+      runTaskDetail.value = previousTaskDetail;
+    }
   }
 
-  async function refreshRunTaskDetailForActiveConversation(): Promise<void> {
+  async function refreshRunTaskDetailForActiveConversation(): Promise<boolean> {
     const conversationId = activeConversation.value?.id?.trim() ?? "";
     const taskId = selectedRunTaskId.value.trim();
     if (conversationId === "" || taskId === "") {
       runTaskDetail.value = null;
       runTaskDetailLoading.value = false;
-      return;
+      return true;
+    }
+    if (!hasRunTaskExecutionContext()) {
+      runTaskDetail.value = null;
+      runTaskDetailLoading.value = false;
+      return true;
     }
     runTaskDetailLoading.value = true;
+    const previousError = conversationStore.error;
     try {
       const detail = await loadConversationRunTaskById(conversationId, taskId);
       if (!shouldApplyRunTaskDetailResponse(
@@ -442,9 +525,17 @@ export function useMainScreenController() {
         taskId,
         selectedRunTaskId.value
       )) {
-        return;
+        return false;
+      }
+      if (!detail) {
+        const errorMessage = resolveInspectorError(previousError);
+        if (errorMessage !== "") {
+          showInspectorErrorToast(errorMessage);
+        }
+        return false;
       }
       runTaskDetail.value = detail;
+      return true;
     } finally {
       if (shouldApplyRunTaskDetailResponse(
         conversationId,
@@ -462,8 +553,12 @@ export function useMainScreenController() {
     if (normalizedTaskId === "") {
       return;
     }
+    const previousTaskId = selectedRunTaskId.value;
     selectedRunTaskId.value = normalizedTaskId;
-    await refreshRunTaskDetailForActiveConversation();
+    const refreshed = await refreshRunTaskDetailForActiveConversation();
+    if (!refreshed) {
+      selectedRunTaskId.value = previousTaskId;
+    }
   }
 
   async function controlRunTaskForActiveConversation(input: {
@@ -478,7 +573,15 @@ export function useMainScreenController() {
     if (taskId === "") {
       return;
     }
-    await controlConversationRunTask(conversation, taskId, input.action, `inspector_${input.action}`);
+    const previousError = conversationStore.error;
+    const controlled = await controlConversationRunTask(conversation, taskId, input.action, `inspector_${input.action}`);
+    if (!controlled) {
+      const errorMessage = resolveInspectorError(previousError);
+      if (errorMessage !== "") {
+        showInspectorErrorToast(errorMessage);
+      }
+      return;
+    }
     await refreshRunTasksForActiveConversation();
   }
 

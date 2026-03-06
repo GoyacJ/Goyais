@@ -4,6 +4,7 @@ import {
   answerConversationExecutionQuestion,
   approveConversationExecution,
   commitConversationChangeset,
+  conversationStore,
   denyConversationExecution,
   discardConversationChangeset,
   removeQueuedConversationExecution,
@@ -42,9 +43,13 @@ import { refreshProjects } from "@/modules/project/store";
 import { createRemoteConnection, loginWorkspace as loginWorkspaceRequest } from "@/modules/workspace/services";
 import { refreshMeForCurrentWorkspace, setWorkspaceToken } from "@/shared/stores/authStore";
 import { toDisplayError } from "@/shared/services/errorMapper";
+import { showToast } from "@/shared/stores/toastStore";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
 import type { InspectorTabKey, PermissionMode, Project, Session } from "@/shared/types/api";
 import { setWorkspaceConnection, switchWorkspaceContext, upsertWorkspace } from "@/modules/workspace/store";
+
+const INSPECTOR_ERROR_TOAST_KEY = "session-inspector-error";
+
 type MainScreenActionsInput = {
   router: Router;
   activeConversation: ComputedRef<Session | undefined>;
@@ -136,6 +141,28 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     input.inspectorCollapsed.value = false;
     changeInspectorTab(tab);
   }
+
+  function showInspectorErrorToast(message: string): void {
+    const normalized = message.trim();
+    if (normalized === "") {
+      return;
+    }
+    showToast({
+      key: INSPECTOR_ERROR_TOAST_KEY,
+      tone: "error",
+      message: normalized
+    });
+  }
+
+  function resolveConversationError(previousError: string, fallback: string): string {
+    const nextError = conversationStore.error.trim();
+    if (nextError !== "") {
+      return nextError;
+    }
+    void previousError;
+    return fallback.trim();
+  }
+
   async function sendMessage(): Promise<void> {
     if (!input.activeConversation.value || !input.activeProject.value) {
       return;
@@ -362,36 +389,54 @@ export function useMainScreenActions(input: MainScreenActionsInput) {
     }
     await renameConversationById(input.activeProject.value.id, input.activeConversation.value.id, name);
   }
-  async function commitDiff(message = ""): Promise<void> {
+  async function commitDiff(message = ""): Promise<boolean> {
     if (!input.activeConversation.value) {
-      return;
+      return false;
     }
-    await commitConversationChangeset(input.activeConversation.value.id, message);
+    const previousError = conversationStore.error;
+    const committed = await commitConversationChangeset(input.activeConversation.value.id, message);
+    if (!committed) {
+      showInspectorErrorToast(resolveConversationError(previousError, "CHANGESET_COMMIT_FAILED"));
+    }
+    return committed;
   }
-  async function discardDiff(): Promise<void> {
+  async function discardDiff(): Promise<boolean> {
     if (!input.activeConversation.value) {
-      return;
+      return false;
     }
-    await discardConversationChangeset(input.activeConversation.value.id);
+    const previousError = conversationStore.error;
+    const discarded = await discardConversationChangeset(input.activeConversation.value.id);
+    if (!discarded) {
+      showInspectorErrorToast(resolveConversationError(previousError, "CHANGESET_DISCARD_FAILED"));
+    }
+    return discarded;
   }
-  async function exportPatch(): Promise<void> {
+  async function exportPatch(): Promise<boolean> {
     const conversationId = input.activeConversation.value?.id?.trim() ?? "";
     if (conversationId === "") {
-      setConversationError("CONVERSATION_NOT_FOUND: no active conversation");
-      return;
+      const message = "CONVERSATION_NOT_FOUND: no active conversation";
+      setConversationError(message);
+      showInspectorErrorToast(message);
+      return false;
     }
     const canExport = input.runtime.value?.changeSet?.capability.can_export ?? true;
     if (!canExport) {
-      setConversationError(input.runtime.value?.changeSet?.capability.reason ?? "CHANGESET_EXPORT_DISABLED");
-      return;
+      const message = input.runtime.value?.changeSet?.capability.reason ?? "CHANGESET_EXPORT_DISABLED";
+      setConversationError(message);
+      showInspectorErrorToast(message);
+      return false;
     }
     try {
       const filesArchive = await exportConversationChangeSet(conversationId);
       const bytesBuffer = decodeBase64(filesArchive.archive_base64);
       const blob = new Blob([bytesBuffer], { type: "application/zip" });
       triggerBlobDownload(blob, filesArchive.file_name.trim() || `${conversationId}-changeset.zip`);
+      return true;
     } catch (error) {
-      setConversationError(toDisplayError(error));
+      const message = toDisplayError(error);
+      setConversationError(message);
+      showInspectorErrorToast(message);
+      return false;
     }
   }
 

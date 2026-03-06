@@ -67,31 +67,41 @@
       <p v-if="latestRunLabel" class="normal">{{ latestRunLabel }}</p>
       <p v-if="latestRunMetrics" class="normal">{{ latestRunMetrics }}</p>
       <p v-if="graphRunTaskItems.length > 0" class="normal">
-        Tasks: {{ graphRunTaskItems.length }} · running {{ runTaskStateCounts.running }} · queued {{ runTaskStateCounts.queued }} · blocked {{ runTaskStateCounts.blocked }}
+        {{
+          tf("session.inspector.run.summary.tasks", {
+            total: graphRunTaskItems.length,
+            runningLabel: resolveRunTaskStateLabel("running"),
+            running: runTaskStateCounts.running,
+            queuedLabel: resolveRunTaskStateLabel("queued"),
+            queued: runTaskStateCounts.queued,
+            blockedLabel: resolveRunTaskStateLabel("blocked"),
+            blocked: runTaskStateCounts.blocked
+          })
+        }}
       </p>
-      <p v-if="runTaskGraphLoading" class="normal">Loading task graph...</p>
+      <p v-if="runTaskGraphLoading" class="normal">{{ t("session.inspector.run.loading.graph") }}</p>
       <div class="actions">
-        <button class="action" type="button" @click="$emit('refreshRunTasks')">Refresh tasks</button>
+        <button class="action" type="button" @click="$emit('refreshRunTasks')">{{ t("session.inspector.run.action.refresh") }}</button>
         <select class="action" :value="runTaskStateFilter" @change="onRunTaskStateFilterChange">
-          <option value="">All tasks</option>
-          <option value="queued">Queued</option>
-          <option value="blocked">Blocked</option>
-          <option value="running">Running</option>
-          <option value="retrying">Retrying</option>
-          <option value="completed">Completed</option>
-          <option value="failed">Failed</option>
-          <option value="cancelled">Cancelled</option>
+          <option value="">{{ t("session.inspector.run.filter.all") }}</option>
+          <option value="queued">{{ resolveRunTaskStateLabel("queued") }}</option>
+          <option value="blocked">{{ resolveRunTaskStateLabel("blocked") }}</option>
+          <option value="running">{{ resolveRunTaskStateLabel("running") }}</option>
+          <option value="retrying">{{ resolveRunTaskStateLabel("retrying") }}</option>
+          <option value="completed">{{ resolveRunTaskStateLabel("completed") }}</option>
+          <option value="failed">{{ resolveRunTaskStateLabel("failed") }}</option>
+          <option value="cancelled">{{ resolveRunTaskStateLabel("cancelled") }}</option>
         </select>
       </div>
-      <p v-if="runTaskListLoading" class="normal">Loading task list...</p>
-      <p v-if="!runTaskListLoading && displayRunTaskItems.length === 0" class="normal">No task graph data.</p>
+      <p v-if="runTaskListLoading" class="normal">{{ t("session.inspector.run.loading.list") }}</p>
+      <p v-if="!runTaskListLoading && displayRunTaskItems.length === 0" class="normal">{{ t("session.inspector.run.empty") }}</p>
       <div v-else-if="displayRunTaskItems.length > 0" class="diff-list">
         <div v-for="task in displayRunTaskItems" :key="task.task_id" class="diff-row">
           <button class="action" type="button" @click="$emit('selectRunTask', task.task_id)">
             {{ task.title || task.task_id }}
           </button>
           <div class="actions">
-            <span class="stat">{{ task.state }}</span>
+            <span class="stat">{{ resolveRunTaskStateLabel(task.state) }}</span>
             <button
               v-for="action in resolveRunTaskControlActions(task)"
               :key="`${task.task_id}:${action}`"
@@ -106,20 +116,24 @@
         </div>
       </div>
       <div v-if="runTaskListNextCursor !== null" class="actions">
-        <button class="action" type="button" :disabled="runTaskListLoading" @click="$emit('loadMoreRunTasks')">Load more tasks</button>
+        <button class="action" type="button" :disabled="runTaskListLoading" @click="$emit('loadMoreRunTasks')">{{ t("session.inspector.run.action.loadMore") }}</button>
       </div>
-      <p v-if="runTaskDetailLoading" class="normal">Loading task detail...</p>
+      <p v-if="runTaskDetailLoading" class="normal">{{ t("session.inspector.run.loading.detail") }}</p>
       <template v-else-if="selectedRunTask">
-        <p class="normal">Task: {{ selectedRunTask.title || selectedRunTask.task_id }}</p>
-        <p class="normal">Task ID: {{ selectedRunTask.task_id }}</p>
-        <p class="normal">State: {{ selectedRunTask.state }}</p>
+        <p class="normal">{{ tf("session.inspector.run.detail.task", { title: selectedRunTask.title || selectedRunTask.task_id }) }}</p>
+        <p class="normal">{{ tf("session.inspector.run.detail.taskId", { id: selectedRunTask.task_id }) }}</p>
+        <p class="normal">{{ tf("session.inspector.run.detail.state", { state: resolveRunTaskStateLabel(selectedRunTask.state) }) }}</p>
         <p class="normal">
-          Depends on: {{ selectedRunTask.depends_on.length > 0 ? selectedRunTask.depends_on.join(", ") : "None" }}
+          {{
+            tf("session.inspector.run.detail.dependsOn", {
+              tasks: selectedRunTask.depends_on.length > 0 ? selectedRunTask.depends_on.join(", ") : t("session.inspector.run.detail.none")
+            })
+          }}
         </p>
-        <p class="normal">Retry: {{ selectedRunTask.retry_count }} / {{ selectedRunTask.max_retries }}</p>
+        <p class="normal">{{ tf("session.inspector.run.detail.retry", { count: selectedRunTask.retry_count, max: selectedRunTask.max_retries }) }}</p>
         <p v-if="selectedRunTask.last_error" class="warning">{{ selectedRunTask.last_error }}</p>
         <template v-if="selectedRunTask.artifact">
-          <p class="normal">Artifact: {{ selectedRunTask.artifact.kind }}</p>
+          <p class="normal">{{ tf("session.inspector.run.detail.artifact", { kind: selectedRunTask.artifact.kind }) }}</p>
           <p v-if="selectedRunTask.artifact.summary" class="normal">{{ selectedRunTask.artifact.summary }}</p>
           <p v-if="selectedRunTask.artifact.uri" class="normal">{{ selectedRunTask.artifact.uri }}</p>
         </template>
@@ -361,7 +375,7 @@ const latestRunLabel = computed(() => {
   }
   return tf("session.inspector.run.latestRun", {
     id: latestRun.value.id,
-    state: latestRun.value.state
+    state: resolveRunTaskStateLabel(latestRun.value.state)
   });
 });
 
@@ -444,16 +458,29 @@ function resolveRunTaskControlActions(task: RunTaskNode): RunTaskControlAction[]
 function resolveRunTaskControlLabel(action: RunTaskControlAction): string {
   switch (action) {
     case "cancel":
-      return "Cancel";
+      return t("session.inspector.run.action.cancel");
     case "retry":
-      return "Retry";
+      return t("session.inspector.run.action.retry");
     case "pause":
-      return "Pause";
+      return t("session.inspector.run.action.pause");
     case "resume":
-      return "Resume";
+      return t("session.inspector.run.action.resume");
     default:
       return action;
   }
+}
+
+function resolveRunTaskStateLabel(state: string): string {
+  const normalizedState = state.trim().toLowerCase();
+  if (normalizedState === "") {
+    return state;
+  }
+  const key = `session.inspector.run.state.${normalizedState}`;
+  const label = t(key);
+  if (label === key) {
+    return state;
+  }
+  return label;
 }
 
 const traceMessageItems = computed<Array<{

@@ -343,12 +343,20 @@ function closeCommitDialog(): void {
 async function confirmCommitDialog(message: string): Promise<void> {
   commitDialogPending.value = true;
   try {
-    await commitDiff(message);
-    commitDialogVisible.value = false;
+    const committed = await commitDiff(message);
+    if (committed) {
+      commitDialogVisible.value = false;
+    }
   } finally {
     commitDialogPending.value = false;
   }
 }
+
+defineExpose({
+  openCommitDialog,
+  confirmCommitDialog,
+  commitDialogVisible
+});
 
 </script>
 

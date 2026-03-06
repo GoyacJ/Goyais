@@ -361,29 +361,29 @@ export async function rollbackConversationToMessage(conversationId: string, mess
   void refreshConversationChangeSet(conversationId);
 }
 
-export async function commitConversationChangeset(conversationId: string, message = ""): Promise<void> {
+export async function commitConversationChangeset(conversationId: string, message = ""): Promise<boolean> {
   const runtime = sessionStore.bySessionId[conversationId];
   if (!runtime) {
-    return;
+    return false;
   }
   const current = runtime.changeSet;
   if (!current) {
     sessionStore.error = "CHANGESET_NOT_FOUND: no changeset found for current conversation";
-    return;
+    return false;
   }
   if (!current.capability.can_commit) {
     sessionStore.error = current.capability.reason || "CHANGESET_COMMIT_DISABLED: changeset cannot be committed currently";
-    return;
+    return false;
   }
   const changeSetID = current.change_set_id.trim();
   if (changeSetID === "") {
     sessionStore.error = "CHANGESET_ID_MISSING: changeset id is required";
-    return;
+    return false;
   }
   const finalMessage = message.trim() || current.suggested_message.message.trim();
   if (finalMessage === "") {
     sessionStore.error = "CHANGESET_MESSAGE_REQUIRED: commit message is required";
-    return;
+    return false;
   }
 
   try {
@@ -392,29 +392,31 @@ export async function commitConversationChangeset(conversationId: string, messag
       expected_change_set_id: changeSetID
     });
     await refreshConversationChangeSet(conversationId);
+    return true;
   } catch (error) {
     sessionStore.error = toDisplayError(error);
+    return false;
   }
 }
 
-export async function discardConversationChangeset(conversationId: string): Promise<void> {
+export async function discardConversationChangeset(conversationId: string): Promise<boolean> {
   const runtime = sessionStore.bySessionId[conversationId];
   if (!runtime) {
-    return;
+    return false;
   }
   const current = runtime.changeSet;
   if (!current) {
     sessionStore.error = "CHANGESET_NOT_FOUND: no changeset found for current conversation";
-    return;
+    return false;
   }
   if (!current.capability.can_discard) {
     sessionStore.error = current.capability.reason || "CHANGESET_DISCARD_DISABLED: changeset cannot be discarded currently";
-    return;
+    return false;
   }
   const changeSetID = current.change_set_id.trim();
   if (changeSetID === "") {
     sessionStore.error = "CHANGESET_ID_MISSING: changeset id is required";
-    return;
+    return false;
   }
 
   try {
@@ -422,8 +424,10 @@ export async function discardConversationChangeset(conversationId: string): Prom
       expected_change_set_id: changeSetID
     });
     await refreshConversationChangeSet(conversationId);
+    return true;
   } catch (error) {
     sessionStore.error = toDisplayError(error);
+    return false;
   }
 }
 
@@ -560,7 +564,11 @@ function isCatalogStaleError(error: unknown): boolean {
   return error instanceof ApiError && error.code === "CATALOG_STALE";
 }
 
-function resolveRunContextExecutionID(runtime: { executions: Array<{ id: string; state: string; queue_index: number; created_at: string }> }): string {
+function resolveRunContextExecutionID(
+  runtime: {
+    executions: Array<{ id: string; state: string; queue_index: number; created_at: string; updated_at: string }>;
+  }
+): string {
   const active = runtime.executions.find((execution) =>
     execution.state === "executing" ||
     execution.state === "pending" ||
@@ -572,13 +580,16 @@ function resolveRunContextExecutionID(runtime: { executions: Array<{ id: string;
   }
 
   const ordered = [...runtime.executions].sort((left, right) => {
-    if (left.queue_index !== right.queue_index) {
-      return left.queue_index - right.queue_index;
+    if (left.updated_at !== right.updated_at) {
+      return right.updated_at.localeCompare(left.updated_at);
     }
     if (left.created_at !== right.created_at) {
-      return left.created_at.localeCompare(right.created_at);
+      return right.created_at.localeCompare(left.created_at);
     }
-    return left.id.localeCompare(right.id);
+    if (left.queue_index !== right.queue_index) {
+      return right.queue_index - left.queue_index;
+    }
+    return right.id.localeCompare(left.id);
   });
   const seed = ordered[0];
   return seed?.id.trim() ?? "";

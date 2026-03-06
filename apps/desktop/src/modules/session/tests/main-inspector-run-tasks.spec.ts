@@ -1,9 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { mount } from "@vue/test-utils";
 
 import MainInspectorPanel from "@/modules/session/components/MainInspectorPanel.vue";
+import { setLocale } from "@/shared/i18n";
 
 describe("main inspector panel run tasks", () => {
+  beforeEach(() => {
+    setLocale("zh-CN");
+  });
+
   it("renders run task graph summary and emits refresh event", async () => {
     const wrapper = mount(MainInspectorPanel, {
       props: {
@@ -99,12 +104,14 @@ describe("main inspector panel run tasks", () => {
       }
     });
 
-    expect(wrapper.text()).toContain("Tasks: 2");
+    expect(wrapper.text()).toContain("任务: 2");
+    expect(wrapper.text()).toContain("运行中 1");
+    expect(wrapper.text()).toContain("已失败");
     expect(wrapper.text()).toContain("Execution task_1");
     expect(wrapper.text()).toContain("Execution task_2");
 
-    const refreshButton = wrapper.findAll("button").find((item) => item.text().includes("Refresh tasks"));
-    const loadMoreButton = wrapper.findAll("button").find((item) => item.text().includes("Load more tasks"));
+    const refreshButton = wrapper.findAll("button").find((item) => item.text().includes("刷新任务"));
+    const loadMoreButton = wrapper.findAll("button").find((item) => item.text().includes("加载更多任务"));
     expect(refreshButton).toBeDefined();
     expect(loadMoreButton).toBeDefined();
     await refreshButton?.trigger("click");
@@ -114,11 +121,12 @@ describe("main inspector panel run tasks", () => {
 
     const filterSelect = wrapper.find("select");
     expect(filterSelect.exists()).toBe(true);
+    expect(filterSelect.text()).toContain("全部任务");
     await filterSelect.setValue("failed");
     expect(wrapper.emitted("changeRunTaskStateFilter")).toEqual([["failed"]]);
 
-    const cancelButton = wrapper.findAll("button").find((item) => item.text().includes("Cancel"));
-    const retryButton = wrapper.findAll("button").find((item) => item.text().includes("Retry"));
+    const cancelButton = wrapper.findAll("button").find((item) => item.text().includes("取消"));
+    const retryButton = wrapper.findAll("button").find((item) => item.text().includes("重试"));
     const taskSelectButton = wrapper.findAll("button").find((item) => item.text().includes("Execution task_2"));
     expect(cancelButton).toBeDefined();
     expect(retryButton).toBeUndefined();
@@ -127,7 +135,7 @@ describe("main inspector panel run tasks", () => {
     await taskSelectButton?.trigger("click");
 
     await cancelButton?.trigger("click");
-    expect(wrapper.text()).toContain("Task ID: task_2");
+    expect(wrapper.text()).toContain("任务 ID: task_2");
     expect(wrapper.text()).toContain("tool timeout");
     expect(wrapper.text()).toContain("failed summary");
 

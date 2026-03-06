@@ -138,6 +138,56 @@ describe("conversation run task actions", () => {
     expect(payload).toEqual({ action: "cancel", reason: "user_requested" });
   });
 
+  it("loads run task graph using the latest finished execution when no run is active", async () => {
+    const runtime = ensureConversationRuntime(conversation, true);
+    runtime.executions.push(
+      {
+        ...createExecution("exec_old", "queued", 0),
+        state: "completed",
+        created_at: "2026-03-01T00:00:00Z",
+        updated_at: "2026-03-01T00:01:00Z"
+      },
+      {
+        ...createExecution("exec_latest", "executing", 1),
+        state: "failed",
+        created_at: "2026-03-02T00:00:00Z",
+        updated_at: "2026-03-02T00:03:00Z"
+      }
+    );
+
+    fetchMock.mockImplementationOnce(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.endsWith("/v1/runs/exec_latest/graph") && method === "GET") {
+        return jsonResponse({
+          run_id: "exec_latest",
+          max_parallelism: 1,
+          tasks: [],
+          edges: []
+        });
+      }
+
+      return jsonResponse(
+        {
+          code: "ROUTE_NOT_FOUND",
+          message: "Not found",
+          details: {},
+          trace_id: "tr_latest_missing"
+        },
+        404
+      );
+    });
+
+    const graph = await loadConversationRunTaskGraph(conversation.id);
+
+    expect(graph?.run_id).toBe("exec_latest");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/v1/runs/exec_latest/graph"),
+      expect.objectContaining({ method: "GET" })
+    );
+  });
+
   it("returns null when runtime is missing", async () => {
     const graph = await loadConversationRunTaskGraph("missing");
     const tasks = await loadConversationRunTasks("missing");
