@@ -83,7 +83,26 @@ describe("run trace present", () => {
       agent_config_snapshot: {
         max_model_turns: 24,
         show_process_trace: true,
-        trace_detail_level: "basic"
+        trace_detail_level: "basic",
+        default_mode: "default",
+        builtin_tools: ["Read"],
+        capability_budgets: {
+          prompt_budget_chars: 16000,
+          search_threshold_percent: 10
+        },
+        mcp_search: {
+          enabled: true,
+          result_limit: 20
+        },
+        output_style: "default",
+        subagent_defaults: {
+          max_turns: 8,
+          allowed_tools: ["Read"]
+        },
+        feature_flags: {
+          enable_tool_search: true,
+          enable_capability_graph: true
+        }
       }
     };
     const localizedEvents = events.map((event) => ({ ...event, run_id: "exec_present_basic" }));

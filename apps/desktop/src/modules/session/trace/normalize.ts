@@ -96,6 +96,10 @@ function normalizeExecutionEvent(event: RunLifecycleEvent, index: number): Norma
     resultSummary,
     riskLevel: asString(payload.risk_level).toLowerCase(),
     toolName,
+    resolvedName: asString(payload.resolved_name),
+    capabilityKind: asString(payload.capability_kind),
+    capabilitySource: asString(payload.capability_source),
+    capabilityScope: asString(payload.capability_scope),
     callId,
     isSuccess
   };

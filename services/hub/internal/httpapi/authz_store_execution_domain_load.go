@@ -261,12 +261,16 @@ func toHTTPAPIExecutionResourceProfile(input *runtimeapplication.ExecutionResour
 		return nil
 	}
 	return &ExecutionResourceProfile{
-		ModelConfigID:    input.ModelConfigID,
-		ModelID:          input.ModelID,
-		RuleIDs:          append([]string{}, input.RuleIDs...),
-		SkillIDs:         append([]string{}, input.SkillIDs...),
-		MCPIDs:           append([]string{}, input.MCPIDs...),
-		ProjectFilePaths: append([]string{}, input.ProjectFilePaths...),
+		ModelConfigID:            input.ModelConfigID,
+		ModelID:                  input.ModelID,
+		RuleIDs:                  append([]string{}, input.RuleIDs...),
+		SkillIDs:                 append([]string{}, input.SkillIDs...),
+		MCPIDs:                   append([]string{}, input.MCPIDs...),
+		ProjectFilePaths:         append([]string{}, input.ProjectFilePaths...),
+		RulesDSL:                 input.RulesDSL,
+		MCPServers:               toHTTPAPIExecutionMCPServerSnapshots(input.MCPServers),
+		AlwaysLoadedCapabilities: toHTTPAPIExecutionCapabilityDescriptorSnapshots(input.AlwaysLoadedCapabilities),
+		SearchableCapabilities:   toHTTPAPIExecutionCapabilityDescriptorSnapshots(input.SearchableCapabilities),
 	}
 }
 
@@ -278,7 +282,70 @@ func toHTTPAPIExecutionAgentConfigSnapshot(input *runtimeapplication.ExecutionAg
 		MaxModelTurns:    input.MaxModelTurns,
 		ShowProcessTrace: input.ShowProcessTrace,
 		TraceDetailLevel: WorkspaceAgentConfigTraceDetailLevel(input.TraceDetailLevel),
+		DefaultMode:      PermissionMode(input.DefaultMode),
+		BuiltinTools:     append([]string{}, input.BuiltinTools...),
+		CapabilityBudgets: WorkspaceAgentCapabilityBudgets{
+			PromptBudgetChars:      input.CapabilityBudgets.PromptBudgetChars,
+			SearchThresholdPercent: input.CapabilityBudgets.SearchThresholdPercent,
+		},
+		MCPSearch: WorkspaceAgentMCPSearchConfig{
+			Enabled:     input.MCPSearch.Enabled,
+			ResultLimit: input.MCPSearch.ResultLimit,
+		},
+		OutputStyle: input.OutputStyle,
+		SubagentDefaults: WorkspaceAgentSubagentDefaults{
+			MaxTurns:     input.SubagentDefaults.MaxTurns,
+			AllowedTools: append([]string{}, input.SubagentDefaults.AllowedTools...),
+		},
+		FeatureFlags: WorkspaceAgentFeatureFlags{
+			EnableToolSearch:      input.FeatureFlags.EnableToolSearch,
+			EnableCapabilityGraph: input.FeatureFlags.EnableCapabilityGraph,
+		},
 	}
+}
+
+func toHTTPAPIExecutionMCPServerSnapshots(input []runtimeapplication.ExecutionMCPServerSnapshot) []ExecutionMCPServerSnapshot {
+	if len(input) == 0 {
+		return nil
+	}
+	result := make([]ExecutionMCPServerSnapshot, 0, len(input))
+	for _, item := range input {
+		result = append(result, ExecutionMCPServerSnapshot{
+			Name:      item.Name,
+			Transport: item.Transport,
+			Endpoint:  item.Endpoint,
+			Command:   item.Command,
+			Env:       cloneStringMapForRuntime(item.Env),
+			Tools:     append([]string{}, item.Tools...),
+		})
+	}
+	return result
+}
+
+func toHTTPAPIExecutionCapabilityDescriptorSnapshots(input []runtimeapplication.ExecutionCapabilityDescriptorSnapshot) []ExecutionCapabilityDescriptorSnapshot {
+	if len(input) == 0 {
+		return nil
+	}
+	result := make([]ExecutionCapabilityDescriptorSnapshot, 0, len(input))
+	for _, item := range input {
+		result = append(result, ExecutionCapabilityDescriptorSnapshot{
+			ID:                  item.ID,
+			Kind:                item.Kind,
+			Name:                item.Name,
+			Description:         item.Description,
+			Source:              item.Source,
+			Scope:               item.Scope,
+			Version:             item.Version,
+			InputSchema:         cloneMapAny(item.InputSchema),
+			RiskLevel:           item.RiskLevel,
+			ReadOnly:            item.ReadOnly,
+			ConcurrencySafe:     item.ConcurrencySafe,
+			RequiresPermissions: item.RequiresPermissions,
+			VisibilityPolicy:    item.VisibilityPolicy,
+			PromptBudgetCost:    item.PromptBudgetCost,
+		})
+	}
+	return result
 }
 
 func toHTTPAPIConversationInspector(input runtimeapplication.ConversationSnapshotInspector) ConversationInspector {

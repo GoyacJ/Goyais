@@ -422,8 +422,9 @@ function toTraceStep(
   }
 
   if (event.type === "tool_call") {
-    const toolName = resolveToolName(locale, event.toolName);
+    const toolName = resolveToolName(locale, event.toolName, event.resolvedName);
     const riskLabel = toRiskLabel(locale, event.riskLevel);
+    const capabilityMeta = formatCapabilityMeta(event);
     const toolMeta = riskLabel === ""
       ? tr(locale, "session.trace.step.detail.toolMeta", { tool: toolName })
       : tr(locale, "session.trace.step.detail.toolMetaWithRisk", { tool: toolName, risk: riskLabel });
@@ -437,14 +438,14 @@ function toTraceStep(
       kind: "tool_call",
       title: tr(locale, "session.trace.step.title.toolCall"),
       summary: formatIntentLabel(locale, event.operationIntentKind, event.operationIntentValue, toolName),
-      detail: `${toolMeta} · ${operationDetail}`,
+      detail: capabilityMeta === "" ? `${toolMeta} · ${operationDetail}` : `${toolMeta} · ${capabilityMeta} · ${operationDetail}`,
       timestampLabel,
       statusTone: event.riskLevel === "high" || event.riskLevel === "critical" ? "warning" : "neutral",
       rawPayload
     };
   }
 
-  const toolName = resolveToolName(locale, event.toolName);
+  const toolName = resolveToolName(locale, event.toolName, event.resolvedName);
   const success = event.isSuccess !== false;
   return {
     id: stepId,
@@ -642,12 +643,21 @@ function composeSecondary(locale: TraceLocale, reasoning: string, operation: str
   return tr(locale, "session.running.secondary.pending");
 }
 
-function resolveToolName(locale: TraceLocale, toolName: string): string {
-  const normalized = toolName.trim();
+function resolveToolName(locale: TraceLocale, toolName: string, resolvedName = ""): string {
+  const normalized = toolName.trim() || resolvedName.trim();
   if (normalized === "") {
     return tr(locale, "session.trace.toolDefault");
   }
   return normalized;
+}
+
+function formatCapabilityMeta(event: NormalizedTraceEvent): string {
+  const parts = [
+    event.capabilityKind.trim(),
+    event.capabilitySource.trim(),
+    event.capabilityScope.trim()
+  ].filter((item) => item !== "");
+  return parts.join(" / ");
 }
 
 function resolveToolNameForComparison(toolName: string): string {

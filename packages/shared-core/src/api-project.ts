@@ -98,6 +98,32 @@ export type SessionDetailResponse = {
   snapshots: SessionSnapshot[];
 };
 
+export type RunCapabilityDescriptorSnapshot = {
+  id: string;
+  kind: "builtin_tool" | "mcp_tool" | "mcp_prompt" | "skill" | "slash_command" | "subagent" | "output_style";
+  name: string;
+  description: string;
+  source: string;
+  scope: "system" | "workspace" | "project" | "user" | "local" | "plugin" | "managed";
+  version: string;
+  input_schema?: Record<string, unknown>;
+  risk_level: string;
+  read_only: boolean;
+  concurrency_safe: boolean;
+  requires_permissions: boolean;
+  visibility_policy: "always_loaded" | "searchable";
+  prompt_budget_cost: number;
+};
+
+export type RunMCPServerSnapshot = {
+  name: string;
+  transport: string;
+  endpoint?: string;
+  command?: string;
+  env?: Record<string, string>;
+  tools?: string[];
+};
+
 export type Run = {
   id: string;
   workspace_id: string;
@@ -125,11 +151,34 @@ export type Run = {
     skill_ids?: string[];
     mcp_ids?: string[];
     project_file_paths?: string[];
+    rules_dsl?: string;
+    mcp_servers?: RunMCPServerSnapshot[];
+    always_loaded_capabilities?: RunCapabilityDescriptorSnapshot[];
+    searchable_capabilities?: RunCapabilityDescriptorSnapshot[];
   };
   agent_config_snapshot?: {
     max_model_turns: number;
     show_process_trace: boolean;
     trace_detail_level: TraceDetailLevel;
+    default_mode: PermissionMode;
+    builtin_tools?: string[];
+    capability_budgets: {
+      prompt_budget_chars: number;
+      search_threshold_percent: number;
+    };
+    mcp_search: {
+      enabled: boolean;
+      result_limit: number;
+    };
+    output_style?: string;
+    subagent_defaults: {
+      max_turns: number;
+      allowed_tools?: string[];
+    };
+    feature_flags: {
+      enable_tool_search: boolean;
+      enable_capability_graph: boolean;
+    };
   };
   tokens_in?: number;
   tokens_out?: number;
@@ -284,12 +333,7 @@ export type RunFilesExportResponse = {
   archive_base64: string;
 };
 
-export type ComposerResourceType = "model" | "rule" | "skill" | "mcp" | "file";
-
-export type ComposerResourceSelection = {
-  type: ComposerResourceType;
-  id: string;
-};
+export type ComposerCapabilityKind = "model" | "rule" | "skill" | "mcp" | "file";
 
 export type ComposerCommandCatalogItem = {
   name: string;
@@ -297,16 +341,19 @@ export type ComposerCommandCatalogItem = {
   kind: "control" | "prompt";
 };
 
-export type ComposerResourceCatalogItem = {
-  type: ComposerResourceType;
+export type ComposerCapabilityCatalogItem = {
   id: string;
+  kind: ComposerCapabilityKind;
   name: string;
+  description?: string;
+  source?: string;
+  scope?: string;
 };
 
 export type ComposerCatalog = {
   revision: string;
   commands: ComposerCommandCatalogItem[];
-  resources: ComposerResourceCatalogItem[];
+  capabilities: ComposerCapabilityCatalogItem[];
 };
 
 export type ComposerSuggestion = {
@@ -334,7 +381,7 @@ export type ComposerSubmitRequest = {
   raw_input: string;
   mode: PermissionMode;
   model_config_id?: string;
-  selected_resources?: ComposerResourceSelection[];
+  selected_capabilities?: string[];
   catalog_revision?: string;
 };
 

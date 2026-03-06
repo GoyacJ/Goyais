@@ -8,16 +8,17 @@ package catalog
 import "goyais/services/hub/internal/agent/tools/spec"
 
 const (
-	ToolRead  = "Read"
-	ToolWrite = "Write"
-	ToolEdit  = "Edit"
-	ToolBash  = "Bash"
-	ToolList  = "List"
+	ToolRead       = "Read"
+	ToolWrite      = "Write"
+	ToolEdit       = "Edit"
+	ToolBash       = "Bash"
+	ToolList       = "List"
+	ToolToolSearch = "ToolSearch"
 )
 
 // BuiltinToolNames returns the stable built-in tool list for runtime sessions.
 func BuiltinToolNames() []string {
-	return []string{ToolRead, ToolWrite, ToolEdit, ToolBash, ToolList}
+	return []string{ToolRead, ToolWrite, ToolEdit, ToolBash, ToolList, ToolToolSearch}
 }
 
 // BuiltinToolSpecs returns normalized specs for all built-in tools.
@@ -63,6 +64,15 @@ func BuiltinToolSpecs() []spec.ToolSpec {
 			Name:             ToolList,
 			Description:      "List files and directories within workspace boundary",
 			InputSchema:      map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
+			RiskLevel:        "low",
+			ReadOnly:         true,
+			ConcurrencySafe:  true,
+			NeedsPermissions: false,
+		},
+		{
+			Name:             ToolToolSearch,
+			Description:      "Search deferred capability descriptors exposed by the runtime",
+			InputSchema:      map[string]any{"type": "object", "properties": map[string]any{"query": map[string]any{"type": "string"}, "limit": map[string]any{"type": "integer"}}},
 			RiskLevel:        "low",
 			ReadOnly:         true,
 			ConcurrencySafe:  true,

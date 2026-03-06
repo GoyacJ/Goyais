@@ -117,15 +117,6 @@ func DiscoverPromptCommands(ctx context.Context, workingDir string) ([]PromptCom
 	return commands, nil
 }
 
-// ShouldEnableToolSearch returns true when MCP tool-description size exceeds
-// 10% of the available context window budget.
-func ShouldEnableToolSearch(totalDescriptionChars int, contextWindowChars int) bool {
-	if totalDescriptionChars <= 0 || contextWindowChars <= 0 {
-		return false
-	}
-	return float64(totalDescriptionChars) > float64(contextWindowChars)*0.10
-}
-
 func loadServerStore(workingDir string) (serverStore, error) {
 	path := filepath.Join(workingDirOrDot(workingDir), ".goyais", "mcp-servers.json")
 	raw, err := os.ReadFile(path)

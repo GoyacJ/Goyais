@@ -14,6 +14,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	pluginsext "goyais/services/hub/internal/agent/extensions/plugins"
 )
 
 // ErrStyleNotFound indicates requested output style does not exist.
@@ -39,11 +41,18 @@ type LoaderOptions struct {
 type Loader struct {
 	workingDir string
 	homeDir    string
+	pluginDirs []pluginStyleDirectory
 }
 
 type styleRecord struct {
 	style    Style
 	priority int
+}
+
+type pluginStyleDirectory struct {
+	dir      string
+	pluginID string
+	allowed  map[string]struct{}
 }
 
 var builtins = []Style{
@@ -82,6 +91,7 @@ func NewLoader(options LoaderOptions) *Loader {
 	return &Loader{
 		workingDir: strings.TrimSpace(options.WorkingDir),
 		homeDir:    homeDir,
+		pluginDirs: discoverPluginStyleDirs(strings.TrimSpace(options.WorkingDir), homeDir),
 	}
 }
 
@@ -147,9 +157,24 @@ func (l *Loader) discoverRecords(ctx context.Context) (map[string]styleRecord, e
 	sources := []struct {
 		dir      string
 		priority int
+		pluginID string
+		allowed  map[string]struct{}
 	}{
 		{dir: filepath.Join(strings.TrimSpace(l.homeDir), ".claude", "output-styles"), priority: 20},
-		{dir: filepath.Join(strings.TrimSpace(l.workingDir), ".claude", "output-styles"), priority: 30},
+		{dir: filepath.Join(strings.TrimSpace(l.workingDir), ".claude", "output-styles"), priority: 40},
+	}
+	for _, pluginDir := range l.pluginDirs {
+		sources = append(sources, struct {
+			dir      string
+			priority int
+			pluginID string
+			allowed  map[string]struct{}
+		}{
+			dir:      pluginDir.dir,
+			priority: 30,
+			pluginID: pluginDir.pluginID,
+			allowed:  cloneStyleStringSet(pluginDir.allowed),
+		})
 	}
 
 	for _, source := range sources {
@@ -196,11 +221,16 @@ func (l *Loader) discoverRecords(ctx context.Context) (map[string]styleRecord, e
 			if name == "" {
 				continue
 			}
+			if len(source.allowed) > 0 {
+				if _, ok := source.allowed[name]; !ok {
+					continue
+				}
+			}
 			style := Style{
 				Name:                   name,
 				Description:            firstNonEmpty(strings.TrimSpace(toString(frontmatter["description"])), firstMarkdownLine(body)),
 				Content:                body,
-				Source:                 path,
+				Source:                 firstNonEmpty(strings.TrimSpace(source.pluginID), path),
 				KeepCodingInstructions: parseBool(toString(frontmatter["keep-coding-instructions"])),
 				BuiltIn:                false,
 			}
@@ -212,6 +242,39 @@ func (l *Loader) discoverRecords(ctx context.Context) (map[string]styleRecord, e
 		}
 	}
 	return selected, nil
+}
+
+func discoverPluginStyleDirs(workingDir string, homeDir string) []pluginStyleDirectory {
+	roots, err := pluginsext.DiscoverAssetRoots(context.Background(), pluginsext.ManagerOptions{
+		WorkingDir: workingDir,
+		HomeDir:    homeDir,
+	}, pluginsext.AssetKindOutputStyle)
+	if err != nil || len(roots) == 0 {
+		return nil
+	}
+	out := make([]pluginStyleDirectory, 0, len(roots))
+	for _, root := range roots {
+		if strings.TrimSpace(root.PluginID) == "" || strings.TrimSpace(root.Dir) == "" {
+			continue
+		}
+		out = append(out, pluginStyleDirectory{
+			dir:      root.Dir,
+			pluginID: root.PluginID,
+			allowed:  cloneStyleStringSet(root.AllowedSet()),
+		})
+	}
+	return out
+}
+
+func cloneStyleStringSet(input map[string]struct{}) map[string]struct{} {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make(map[string]struct{}, len(input))
+	for key := range input {
+		out[key] = struct{}{}
+	}
+	return out
 }
 
 func parseDocument(raw string) (map[string]any, string) {

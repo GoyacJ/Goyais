@@ -144,6 +144,7 @@ type BuildContextRequest struct {
 	WorkingDir            string
 	AdditionalDirectories []string
 	UserInput             string
+	Capabilities          []CapabilityDescriptor
 }
 
 // PromptSection is one attributable segment of the final prompt context.

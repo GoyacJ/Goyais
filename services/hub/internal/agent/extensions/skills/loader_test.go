@@ -14,7 +14,7 @@ import (
 	"goyais/services/hub/internal/agent/core"
 )
 
-func TestLoaderDiscover_AppliesEnterprisePersonalProjectPriority(t *testing.T) {
+func TestLoaderDiscover_AppliesProjectPersonalEnterprisePriority(t *testing.T) {
 	root := t.TempDir()
 	enterprise := filepath.Join(root, "enterprise")
 	personal := filepath.Join(root, "personal")
@@ -42,11 +42,11 @@ func TestLoaderDiscover_AppliesEnterprisePersonalProjectPriority(t *testing.T) {
 	if items[0].Name != "deploy" {
 		t.Fatalf("expected deploy first, got %#v", items)
 	}
-	if !strings.Contains(items[0].Description, "enterprise") {
-		t.Fatalf("expected enterprise deploy description, got %#v", items[0])
+	if !strings.Contains(items[0].Description, "project") {
+		t.Fatalf("expected project deploy description, got %#v", items[0])
 	}
-	if !strings.HasSuffix(items[0].Source, filepath.Join("enterprise", "deploy", "SKILL.md")) {
-		t.Fatalf("expected deploy source from enterprise dir, got %q", items[0].Source)
+	if !strings.HasSuffix(items[0].Source, filepath.Join("project", "deploy", "SKILL.md")) {
+		t.Fatalf("expected deploy source from project dir, got %q", items[0].Source)
 	}
 }
 

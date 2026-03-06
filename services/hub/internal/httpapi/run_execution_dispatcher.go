@@ -13,6 +13,7 @@ import (
 	"time"
 
 	agenthttpapi "goyais/services/hub/internal/agent/adapters/httpapi"
+	agentcore "goyais/services/hub/internal/agent/core"
 )
 
 var (
@@ -35,23 +36,13 @@ type executionSubmitContext struct {
 	SessionID      string
 	RuntimeModel   runtimeModelConfig
 	RuntimeTooling runtimeToolingConfig
+	RuntimeConfig  agentcore.RuntimeConfig
 }
 
 const (
-	runtimeMetadataRunID            = "run_id"
-	runtimeMetadataSessionID        = "session_id"
-	runtimeMetadataWorkspaceID      = "workspace_id"
-	runtimeMetadataModelProvider    = "model_provider"
-	runtimeMetadataModelEndpoint    = "model_endpoint"
-	runtimeMetadataModelName        = "model_name"
-	runtimeMetadataModelAPIKey      = "model_api_key"
-	runtimeMetadataModelParams      = "model_params_json"
-	runtimeMetadataModelTimeout     = "model_timeout_ms"
-	runtimeMetadataMaxModelTurns    = "max_model_turns"
-	runtimeMetadataPermissionMode   = "permission_mode"
-	runtimeMetadataRulesDSL         = "rules_dsl"
-	runtimeMetadataMCPServersJSON   = "mcp_servers_json"
-	runtimeMetadataBuiltinToolsJSON = "builtin_tools_json"
+	runtimeMetadataRunID       = "run_id"
+	runtimeMetadataSessionID   = "session_id"
+	runtimeMetadataWorkspaceID = "workspace_id"
 )
 
 func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID string) {
@@ -100,9 +91,10 @@ func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID st
 	}
 
 	submitResp, submitErr := service.Submit(ctx, agenthttpapi.SubmitRequest{
-		SessionID: sessionID,
-		Input:     submitCtx.Prompt,
-		Metadata:  buildRuntimeSubmitMetadata(submitCtx),
+		SessionID:     sessionID,
+		Input:         submitCtx.Prompt,
+		Metadata:      buildRuntimeSubmitMetadata(submitCtx),
+		RuntimeConfig: &submitCtx.RuntimeConfig,
 	})
 	if submitErr != nil {
 		s.failExecutionAndAdvanceQueue(normalizedExecutionID, "submit_failed", "runtime_submit", submitErr)
@@ -309,43 +301,86 @@ func (s *AppState) loadExecutionSubmitContext(executionID string) (executionSubm
 		SessionID:      sessionID,
 		RuntimeModel:   runtimeModel,
 		RuntimeTooling: runtimeTooling,
+		RuntimeConfig:  buildExecutionRuntimeConfig(runtimeModel, runtimeTooling),
 	}, nil
 }
 
 func buildRuntimeSubmitMetadata(submitCtx executionSubmitContext) map[string]string {
 	metadata := map[string]string{
-		runtimeMetadataRunID:          strings.TrimSpace(submitCtx.ExecutionID),
-		runtimeMetadataSessionID:      strings.TrimSpace(submitCtx.ConversationID),
-		runtimeMetadataWorkspaceID:    strings.TrimSpace(submitCtx.WorkspaceID),
-		runtimeMetadataModelProvider:  strings.TrimSpace(submitCtx.RuntimeModel.Provider),
-		runtimeMetadataModelEndpoint:  strings.TrimSpace(submitCtx.RuntimeModel.Endpoint),
-		runtimeMetadataModelName:      strings.TrimSpace(submitCtx.RuntimeModel.ModelName),
-		runtimeMetadataModelAPIKey:    strings.TrimSpace(submitCtx.RuntimeModel.APIKey),
-		runtimeMetadataPermissionMode: strings.TrimSpace(submitCtx.RuntimeTooling.PermissionMode),
-	}
-	if paramsJSON := strings.TrimSpace(submitCtx.RuntimeModel.ParamsJSON); paramsJSON != "" {
-		metadata[runtimeMetadataModelParams] = paramsJSON
-	}
-	if submitCtx.RuntimeModel.TimeoutMS > 0 {
-		metadata[runtimeMetadataModelTimeout] = fmt.Sprintf("%d", submitCtx.RuntimeModel.TimeoutMS)
-	}
-	if submitCtx.RuntimeModel.MaxModelTurns > 0 {
-		metadata[runtimeMetadataMaxModelTurns] = fmt.Sprintf("%d", submitCtx.RuntimeModel.MaxModelTurns)
-	}
-	if rulesDSL := strings.TrimSpace(submitCtx.RuntimeTooling.RulesDSL); rulesDSL != "" {
-		metadata[runtimeMetadataRulesDSL] = rulesDSL
-	}
-	if len(submitCtx.RuntimeTooling.MCPServers) > 0 {
-		if encoded, err := json.Marshal(submitCtx.RuntimeTooling.MCPServers); err == nil {
-			metadata[runtimeMetadataMCPServersJSON] = strings.TrimSpace(string(encoded))
-		}
-	}
-	if len(submitCtx.RuntimeTooling.BuiltinTools) > 0 {
-		if encoded, err := json.Marshal(submitCtx.RuntimeTooling.BuiltinTools); err == nil {
-			metadata[runtimeMetadataBuiltinToolsJSON] = strings.TrimSpace(string(encoded))
-		}
+		runtimeMetadataRunID:       strings.TrimSpace(submitCtx.ExecutionID),
+		runtimeMetadataSessionID:   strings.TrimSpace(submitCtx.ConversationID),
+		runtimeMetadataWorkspaceID: strings.TrimSpace(submitCtx.WorkspaceID),
 	}
 	return metadata
+}
+
+func buildExecutionRuntimeConfig(model runtimeModelConfig, tooling runtimeToolingConfig) agentcore.RuntimeConfig {
+	return agentcore.RuntimeConfig{
+		Model: agentcore.RuntimeModelConfig{
+			ProviderName:  strings.TrimSpace(model.Provider),
+			Endpoint:      strings.TrimSpace(model.Endpoint),
+			ModelName:     strings.TrimSpace(model.ModelName),
+			APIKey:        strings.TrimSpace(model.APIKey),
+			Params:        decodeRuntimeParamsJSON(model.ParamsJSON),
+			TimeoutMS:     model.TimeoutMS,
+			MaxModelTurns: model.MaxModelTurns,
+		},
+		Tooling: agentcore.RuntimeToolingConfig{
+			PermissionMode:           agentcore.PermissionMode(strings.TrimSpace(tooling.PermissionMode)),
+			RulesDSL:                 strings.TrimSpace(tooling.RulesDSL),
+			MCPServers:               cloneRuntimeMCPServers(tooling.MCPServers),
+			AlwaysLoadedCapabilities: cloneRuntimeCapabilities(tooling.AlwaysLoadedCapabilities),
+			SearchableCapabilities:   cloneRuntimeCapabilities(tooling.SearchableCapabilities),
+			PromptBudgetChars:        tooling.PromptBudgetChars,
+			MCPSearchEnabled:         tooling.MCPSearchEnabled,
+			SearchThresholdRatio:     tooling.SearchThresholdRatio,
+		},
+	}
+}
+
+func decodeRuntimeParamsJSON(raw string) map[string]any {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return map[string]any{}
+	}
+	decoded := map[string]any{}
+	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
+		return map[string]any{}
+	}
+	return decoded
+}
+
+func cloneRuntimeMCPServers(input []agentcore.MCPServerConfig) []agentcore.MCPServerConfig {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make([]agentcore.MCPServerConfig, 0, len(input))
+	for _, item := range input {
+		out = append(out, agentcore.MCPServerConfig{
+			Name:      strings.TrimSpace(item.Name),
+			Transport: strings.TrimSpace(item.Transport),
+			Endpoint:  strings.TrimSpace(item.Endpoint),
+			Command:   strings.TrimSpace(item.Command),
+			Env:       cloneStringMapForRuntime(item.Env),
+			Tools:     append([]string{}, item.Tools...),
+		})
+	}
+	return out
+}
+
+func cloneRuntimeCapabilities(input []agentcore.CapabilityDescriptor) []agentcore.CapabilityDescriptor {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make([]agentcore.CapabilityDescriptor, 0, len(input))
+	for _, item := range input {
+		copyItem := item
+		if len(item.InputSchema) > 0 {
+			copyItem.InputSchema = cloneMapAny(item.InputSchema)
+		}
+		out = append(out, copyItem)
+	}
+	return out
 }
 
 func (s *AppState) appendExecutionRuntimeAudit(executionID string, action string, result string) {

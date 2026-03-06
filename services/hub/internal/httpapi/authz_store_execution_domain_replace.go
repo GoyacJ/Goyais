@@ -365,12 +365,16 @@ func toRuntimeApplicationExecutionResourceProfileSnapshot(input *ExecutionResour
 		return nil
 	}
 	return &runtimeapplication.ExecutionResourceProfileSnapshot{
-		ModelConfigID:    input.ModelConfigID,
-		ModelID:          input.ModelID,
-		RuleIDs:          append([]string{}, input.RuleIDs...),
-		SkillIDs:         append([]string{}, input.SkillIDs...),
-		MCPIDs:           append([]string{}, input.MCPIDs...),
-		ProjectFilePaths: append([]string{}, input.ProjectFilePaths...),
+		ModelConfigID:            input.ModelConfigID,
+		ModelID:                  input.ModelID,
+		RuleIDs:                  append([]string{}, input.RuleIDs...),
+		SkillIDs:                 append([]string{}, input.SkillIDs...),
+		MCPIDs:                   append([]string{}, input.MCPIDs...),
+		ProjectFilePaths:         append([]string{}, input.ProjectFilePaths...),
+		RulesDSL:                 input.RulesDSL,
+		MCPServers:               toRuntimeApplicationExecutionMCPServerSnapshots(input.MCPServers),
+		AlwaysLoadedCapabilities: toRuntimeApplicationExecutionCapabilityDescriptorSnapshots(input.AlwaysLoadedCapabilities),
+		SearchableCapabilities:   toRuntimeApplicationExecutionCapabilityDescriptorSnapshots(input.SearchableCapabilities),
 	}
 }
 
@@ -382,7 +386,70 @@ func toRuntimeApplicationExecutionAgentConfigSnapshot(input *ExecutionAgentConfi
 		MaxModelTurns:    input.MaxModelTurns,
 		ShowProcessTrace: input.ShowProcessTrace,
 		TraceDetailLevel: string(input.TraceDetailLevel),
+		DefaultMode:      string(input.DefaultMode),
+		BuiltinTools:     append([]string{}, input.BuiltinTools...),
+		CapabilityBudgets: runtimeapplication.ExecutionCapabilityBudgetsSnapshot{
+			PromptBudgetChars:      input.CapabilityBudgets.PromptBudgetChars,
+			SearchThresholdPercent: input.CapabilityBudgets.SearchThresholdPercent,
+		},
+		MCPSearch: runtimeapplication.ExecutionMCPSearchConfigSnapshot{
+			Enabled:     input.MCPSearch.Enabled,
+			ResultLimit: input.MCPSearch.ResultLimit,
+		},
+		OutputStyle: input.OutputStyle,
+		SubagentDefaults: runtimeapplication.ExecutionSubagentDefaultsSnapshot{
+			MaxTurns:     input.SubagentDefaults.MaxTurns,
+			AllowedTools: append([]string{}, input.SubagentDefaults.AllowedTools...),
+		},
+		FeatureFlags: runtimeapplication.ExecutionFeatureFlagsSnapshot{
+			EnableToolSearch:      input.FeatureFlags.EnableToolSearch,
+			EnableCapabilityGraph: input.FeatureFlags.EnableCapabilityGraph,
+		},
 	}
+}
+
+func toRuntimeApplicationExecutionMCPServerSnapshots(input []ExecutionMCPServerSnapshot) []runtimeapplication.ExecutionMCPServerSnapshot {
+	if len(input) == 0 {
+		return nil
+	}
+	output := make([]runtimeapplication.ExecutionMCPServerSnapshot, 0, len(input))
+	for _, item := range input {
+		output = append(output, runtimeapplication.ExecutionMCPServerSnapshot{
+			Name:      item.Name,
+			Transport: item.Transport,
+			Endpoint:  item.Endpoint,
+			Command:   item.Command,
+			Env:       cloneStringMapForRuntime(item.Env),
+			Tools:     append([]string{}, item.Tools...),
+		})
+	}
+	return output
+}
+
+func toRuntimeApplicationExecutionCapabilityDescriptorSnapshots(input []ExecutionCapabilityDescriptorSnapshot) []runtimeapplication.ExecutionCapabilityDescriptorSnapshot {
+	if len(input) == 0 {
+		return nil
+	}
+	output := make([]runtimeapplication.ExecutionCapabilityDescriptorSnapshot, 0, len(input))
+	for _, item := range input {
+		output = append(output, runtimeapplication.ExecutionCapabilityDescriptorSnapshot{
+			ID:                  item.ID,
+			Kind:                item.Kind,
+			Name:                item.Name,
+			Description:         item.Description,
+			Source:              item.Source,
+			Scope:               item.Scope,
+			Version:             item.Version,
+			InputSchema:         cloneMapAny(item.InputSchema),
+			RiskLevel:           item.RiskLevel,
+			ReadOnly:            item.ReadOnly,
+			ConcurrencySafe:     item.ConcurrencySafe,
+			RequiresPermissions: item.RequiresPermissions,
+			VisibilityPolicy:    item.VisibilityPolicy,
+			PromptBudgetCost:    item.PromptBudgetCost,
+		})
+	}
+	return output
 }
 
 func normalizeHookPolicyForPersistence(input HookPolicy) (HookPolicy, error) {

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	composerctx "goyais/services/hub/internal/agent/context/composer"
+	"goyais/services/hub/internal/agent/core"
 	composercommands "goyais/services/hub/internal/legacybridge/composercommands"
 )
 
@@ -77,15 +78,19 @@ func ConversationInputSuggestHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		resources := make([]composerctx.ResourceCatalogItem, 0, len(catalog.Resources))
-		for _, item := range catalog.Resources {
-			resourceType, ok := composerctx.ParseResourceType(string(item.Type))
+		resources := make([]composerctx.ResourceCatalogItem, 0, len(catalog.Capabilities))
+		for _, item := range catalog.Capabilities {
+			resourceType, ok := composerctx.ParseResourceType(string(item.Kind))
+			if !ok {
+				continue
+			}
+			_, resourceID, ok := splitComposerCapabilityID(item.ID)
 			if !ok {
 				continue
 			}
 			resources = append(resources, composerctx.ResourceCatalogItem{
 				Type: resourceType,
-				ID:   item.ID,
+				ID:   resourceID,
 				Name: item.Name,
 			})
 		}
@@ -173,12 +178,12 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 		}
 
 		parsed := composerctx.Parse(rawInput)
-		selectionByType, err := validateSelectedResourcesAgainstMentions(parsed.MentionedRefs, input.SelectedResources)
+		selectionByType, err := validateSelectedCapabilitiesAgainstMentions(parsed.MentionedRefs, input.SelectedCapabilities)
 		if err != nil {
 			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
 			return
 		}
-		projectFilePaths, err := validateComposerProjectFileSelections(project.RepoPath, selectionByType[ComposerResourceTypeFile])
+		projectFilePaths, err := validateComposerProjectFileSelections(project.RepoPath, selectionByType[ComposerCapabilityKindFile])
 		if err != nil {
 			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
 			return
@@ -228,12 +233,12 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			}
 
 			parsed = composerctx.ParsePrompt(dispatch.ExpandedPrompt)
-			selectionByType, err = validateSelectedResourcesAgainstMentions(parsed.MentionedRefs, input.SelectedResources)
+			selectionByType, err = validateSelectedCapabilitiesAgainstMentions(parsed.MentionedRefs, input.SelectedCapabilities)
 			if err != nil {
 				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
 				return
 			}
-			projectFilePaths, err = validateComposerProjectFileSelections(project.RepoPath, selectionByType[ComposerResourceTypeFile])
+			projectFilePaths, err = validateComposerProjectFileSelections(project.RepoPath, selectionByType[ComposerCapabilityKindFile])
 			if err != nil {
 				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
 				return
@@ -256,7 +261,7 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 		resolvedMode = NormalizePermissionMode(string(resolvedMode))
 
 		resolvedModelConfigID := strings.TrimSpace(input.ModelConfigID)
-		if explicitModels := selectionByType[ComposerResourceTypeModel]; len(explicitModels) > 0 {
+		if explicitModels := selectionByType[ComposerCapabilityKindModel]; len(explicitModels) > 0 {
 			if len(explicitModels) != 1 {
 				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "@model mention must select exactly one model", map[string]any{})
 				return
@@ -275,15 +280,15 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 		}
 
 		resolvedRuleIDs := append([]string{}, conversationSeed.RuleIDs...)
-		if explicitRules := selectionByType[ComposerResourceTypeRule]; len(explicitRules) > 0 {
+		if explicitRules := selectionByType[ComposerCapabilityKindRule]; len(explicitRules) > 0 {
 			resolvedRuleIDs = explicitRules
 		}
 		resolvedSkillIDs := append([]string{}, conversationSeed.SkillIDs...)
-		if explicitSkills := selectionByType[ComposerResourceTypeSkill]; len(explicitSkills) > 0 {
+		if explicitSkills := selectionByType[ComposerCapabilityKindSkill]; len(explicitSkills) > 0 {
 			resolvedSkillIDs = explicitSkills
 		}
 		resolvedMCPIDs := append([]string{}, conversationSeed.MCPIDs...)
-		if explicitMCPs := selectionByType[ComposerResourceTypeMCP]; len(explicitMCPs) > 0 {
+		if explicitMCPs := selectionByType[ComposerCapabilityKindMCP]; len(explicitMCPs) > 0 {
 			resolvedMCPIDs = explicitMCPs
 		}
 
@@ -327,6 +332,20 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 		workspaceAgentConfig, workspaceAgentConfigErr := loadWorkspaceAgentConfigFromStore(state, conversationSeed.WorkspaceID)
 		if workspaceAgentConfigErr != nil {
 			WriteStandardError(w, r, http.StatusInternalServerError, "WORKSPACE_AGENT_CONFIG_READ_FAILED", "Failed to read workspace agent config", map[string]any{})
+			return
+		}
+		runtimeToolingSnapshot, runtimeToolingErr := resolveRuntimeToolingConfig(
+			state,
+			conversationSeed.WorkspaceID,
+			PermissionMode(resolvedMode),
+			resolvedRuleIDs,
+			resolvedSkillIDs,
+			resolvedMCPIDs,
+			project.RepoPath,
+			workspaceAgentConfig,
+		)
+		if runtimeToolingErr != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "WORKSPACE_AGENT_CONFIG_READ_FAILED", "Failed to resolve execution tooling snapshot", map[string]any{})
 			return
 		}
 
@@ -382,14 +401,15 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			ModelID:        resolvedModelID,
 			ModeSnapshot:   resolvedMode,
 			ModelSnapshot:  resolvedModelSnapshot,
-			ResourceProfileSnapshot: &ExecutionResourceProfile{
-				ModelConfigID:    resolvedModelConfigID,
-				ModelID:          resolvedModelID,
-				RuleIDs:          append([]string{}, resolvedRuleIDs...),
-				SkillIDs:         append([]string{}, resolvedSkillIDs...),
-				MCPIDs:           append([]string{}, resolvedMCPIDs...),
-				ProjectFilePaths: append([]string{}, projectFilePaths...),
-			},
+			ResourceProfileSnapshot: buildExecutionResourceProfileSnapshot(
+				resolvedModelConfigID,
+				resolvedModelID,
+				resolvedRuleIDs,
+				resolvedSkillIDs,
+				resolvedMCPIDs,
+				projectFilePaths,
+				runtimeToolingSnapshot,
+			),
 			AgentConfigSnapshot:     toExecutionAgentConfigSnapshot(workspaceAgentConfig),
 			TokensIn:                0,
 			TokensOut:               0,
@@ -641,60 +661,63 @@ func buildComposerCatalog(state *AppState, workspaceID string, projectConfig Pro
 		})
 	}
 
-	resourceMap := map[string]ComposerResourceCatalogItem{}
-	appendComposerCatalogResourcesByIDs(state, workspaceID, ResourceTypeModel, projectConfig.ModelConfigIDs, resourceMap)
-	appendComposerCatalogResourcesByIDs(state, workspaceID, ResourceTypeRule, projectConfig.RuleIDs, resourceMap)
-	appendComposerCatalogResourcesByIDs(state, workspaceID, ResourceTypeSkill, projectConfig.SkillIDs, resourceMap)
-	appendComposerCatalogResourcesByIDs(state, workspaceID, ResourceTypeMCP, projectConfig.MCPIDs, resourceMap)
+	capabilityMap := map[string]ComposerCapabilityCatalogItem{}
+	appendComposerCatalogCapabilitiesByIDs(state, workspaceID, ResourceTypeModel, projectConfig.ModelConfigIDs, capabilityMap)
+	appendComposerCatalogCapabilitiesByIDs(state, workspaceID, ResourceTypeRule, projectConfig.RuleIDs, capabilityMap)
+	appendComposerCatalogCapabilitiesByIDs(state, workspaceID, ResourceTypeSkill, projectConfig.SkillIDs, capabilityMap)
+	appendComposerCatalogCapabilitiesByIDs(state, workspaceID, ResourceTypeMCP, projectConfig.MCPIDs, capabilityMap)
 	projectFiles := listComposerProjectFiles(projectRepoPath, composerMaxCatalogFiles)
 	for _, filePath := range projectFiles {
 		normalizedPath := strings.TrimSpace(filepath.ToSlash(filePath))
 		if normalizedPath == "" {
 			continue
 		}
-		key := strings.ToLower(string(ComposerResourceTypeFile) + ":" + normalizedPath)
-		resourceMap[key] = ComposerResourceCatalogItem{
-			Type: ComposerResourceTypeFile,
-			ID:   normalizedPath,
-			Name: path.Base(normalizedPath),
+		key := strings.ToLower(buildComposerCapabilityID(ComposerCapabilityKindFile, normalizedPath))
+		capabilityMap[key] = ComposerCapabilityCatalogItem{
+			ID:          buildComposerCapabilityID(ComposerCapabilityKindFile, normalizedPath),
+			Kind:        ComposerCapabilityKindFile,
+			Name:        path.Base(normalizedPath),
+			Description: normalizedPath,
+			Source:      "project_file",
+			Scope:       string(core.CapabilityScopeProject),
 		}
 	}
 
-	resources := make([]ComposerResourceCatalogItem, 0, len(resourceMap))
-	for _, item := range resourceMap {
-		resources = append(resources, item)
+	capabilities := make([]ComposerCapabilityCatalogItem, 0, len(capabilityMap))
+	for _, item := range capabilityMap {
+		capabilities = append(capabilities, item)
 	}
-	sort.SliceStable(resources, func(i, j int) bool {
-		if resources[i].Type != resources[j].Type {
-			return resources[i].Type < resources[j].Type
+	sort.SliceStable(capabilities, func(i, j int) bool {
+		if capabilities[i].Kind != capabilities[j].Kind {
+			return capabilities[i].Kind < capabilities[j].Kind
 		}
-		return resources[i].ID < resources[j].ID
+		return capabilities[i].ID < capabilities[j].ID
 	})
 
 	revisionPayload := struct {
-		Commands  []ComposerCommandCatalogItem  `json:"commands"`
-		Resources []ComposerResourceCatalogItem `json:"resources"`
+		Commands     []ComposerCommandCatalogItem    `json:"commands"`
+		Capabilities []ComposerCapabilityCatalogItem `json:"capabilities"`
 	}{
-		Commands:  commands,
-		Resources: resources,
+		Commands:     commands,
+		Capabilities: capabilities,
 	}
 	raw, _ := json.Marshal(revisionPayload)
 	sum := sha1.Sum(raw)
 	revision := hex.EncodeToString(sum[:])
 
 	return ComposerCatalogResponse{
-		Revision:  revision,
-		Commands:  commands,
-		Resources: resources,
+		Revision:     revision,
+		Commands:     commands,
+		Capabilities: capabilities,
 	}, nil
 }
 
-func appendComposerCatalogResourcesByIDs(
+func appendComposerCatalogCapabilitiesByIDs(
 	state *AppState,
 	workspaceID string,
 	expectedType ResourceType,
 	ids []string,
-	output map[string]ComposerResourceCatalogItem,
+	output map[string]ComposerCapabilityCatalogItem,
 ) {
 	for _, rawID := range ids {
 		id := strings.TrimSpace(rawID)
@@ -709,47 +732,49 @@ func appendComposerCatalogResourcesByIDs(
 		if name == "" {
 			name = id
 		}
-		key := strings.ToLower(string(expectedType) + ":" + id)
-		composerType, ok := toComposerResourceType(expectedType)
+		capabilityKind, ok := toComposerCapabilityKind(expectedType)
 		if !ok {
 			continue
 		}
-		output[key] = ComposerResourceCatalogItem{
-			Type: composerType,
-			ID:   id,
-			Name: name,
+		key := strings.ToLower(buildComposerCapabilityID(capabilityKind, id))
+		output[key] = ComposerCapabilityCatalogItem{
+			ID:          buildComposerCapabilityID(capabilityKind, id),
+			Kind:        capabilityKind,
+			Name:        name,
+			Description: composerCatalogItemDescription(item),
+			Source:      firstNonEmpty(strings.TrimSpace(item.ID), "workspace_resource"),
+			Scope:       string(core.CapabilityScopeWorkspace),
 		}
 	}
 }
 
-func validateSelectedResourcesAgainstMentions(
+func validateSelectedCapabilitiesAgainstMentions(
 	mentions []composerctx.ResourceRef,
-	selected []ComposerSelectedResource,
-) (map[ComposerResourceType][]string, error) {
-	mentionByType := map[ComposerResourceType][]string{}
+	selected []string,
+) (map[ComposerCapabilityKind][]string, error) {
+	mentionByType := map[ComposerCapabilityKind][]string{}
 	for _, mention := range mentions {
-		typeValue, ok := composerResourceTypeFromCore(mention.Type)
+		typeValue, ok := composerCapabilityKindFromCore(mention.Type)
 		if !ok {
 			continue
 		}
 		mentionByType[typeValue] = appendUnique(mentionByType[typeValue], mention.ID)
 	}
-	selectedByType := map[ComposerResourceType][]string{}
-	for _, resource := range selected {
-		typeValue, ok := parseComposerResourceType(string(resource.Type))
-		id := strings.TrimSpace(resource.ID)
+	selectedByType := map[ComposerCapabilityKind][]string{}
+	for _, capabilityID := range selected {
+		kind, id, ok := splitComposerCapabilityID(capabilityID)
 		if !ok || id == "" {
-			return nil, errors.New("selected_resources entries require both type and id")
+			return nil, errors.New("selected_capabilities entries must be capability ids")
 		}
-		selectedByType[typeValue] = appendUnique(selectedByType[typeValue], id)
+		selectedByType[kind] = appendUnique(selectedByType[kind], id)
 	}
 
-	for _, resourceType := range []ComposerResourceType{
-		ComposerResourceTypeModel,
-		ComposerResourceTypeRule,
-		ComposerResourceTypeSkill,
-		ComposerResourceTypeMCP,
-		ComposerResourceTypeFile,
+	for _, resourceType := range []ComposerCapabilityKind{
+		ComposerCapabilityKindModel,
+		ComposerCapabilityKindRule,
+		ComposerCapabilityKindSkill,
+		ComposerCapabilityKindMCP,
+		ComposerCapabilityKindFile,
 	} {
 		mentionsForType := sortUniqueStrings(mentionByType[resourceType])
 		selectedForType := sortUniqueStrings(selectedByType[resourceType])
@@ -757,17 +782,17 @@ func validateSelectedResourcesAgainstMentions(
 			continue
 		}
 		if !sameStringSet(mentionsForType, selectedForType) {
-			return nil, errors.New("selected_resources must exactly match @resource/@file mentions")
+			return nil, errors.New("selected_capabilities must exactly match @resource/@file mentions")
 		}
 	}
 
-	result := map[ComposerResourceType][]string{}
-	for _, resourceType := range []ComposerResourceType{
-		ComposerResourceTypeModel,
-		ComposerResourceTypeRule,
-		ComposerResourceTypeSkill,
-		ComposerResourceTypeMCP,
-		ComposerResourceTypeFile,
+	result := map[ComposerCapabilityKind][]string{}
+	for _, resourceType := range []ComposerCapabilityKind{
+		ComposerCapabilityKindModel,
+		ComposerCapabilityKindRule,
+		ComposerCapabilityKindSkill,
+		ComposerCapabilityKindMCP,
+		ComposerCapabilityKindFile,
 	} {
 		result[resourceType] = sortUniqueStrings(mentionByType[resourceType])
 	}
@@ -820,53 +845,105 @@ func sameStringSet(left []string, right []string) bool {
 	return true
 }
 
-func parseComposerResourceType(raw string) (ComposerResourceType, bool) {
-	switch ComposerResourceType(strings.ToLower(strings.TrimSpace(raw))) {
-	case ComposerResourceTypeModel:
-		return ComposerResourceTypeModel, true
-	case ComposerResourceTypeRule:
-		return ComposerResourceTypeRule, true
-	case ComposerResourceTypeSkill:
-		return ComposerResourceTypeSkill, true
-	case ComposerResourceTypeMCP:
-		return ComposerResourceTypeMCP, true
-	case ComposerResourceTypeFile:
-		return ComposerResourceTypeFile, true
+func parseComposerCapabilityKind(raw string) (ComposerCapabilityKind, bool) {
+	switch ComposerCapabilityKind(strings.ToLower(strings.TrimSpace(raw))) {
+	case ComposerCapabilityKindModel:
+		return ComposerCapabilityKindModel, true
+	case ComposerCapabilityKindRule:
+		return ComposerCapabilityKindRule, true
+	case ComposerCapabilityKindSkill:
+		return ComposerCapabilityKindSkill, true
+	case ComposerCapabilityKindMCP:
+		return ComposerCapabilityKindMCP, true
+	case ComposerCapabilityKindFile:
+		return ComposerCapabilityKindFile, true
 	default:
 		return "", false
 	}
 }
 
-func toComposerResourceType(resourceType ResourceType) (ComposerResourceType, bool) {
+func toComposerCapabilityKind(resourceType ResourceType) (ComposerCapabilityKind, bool) {
 	switch resourceType {
 	case ResourceTypeModel:
-		return ComposerResourceTypeModel, true
+		return ComposerCapabilityKindModel, true
 	case ResourceTypeRule:
-		return ComposerResourceTypeRule, true
+		return ComposerCapabilityKindRule, true
 	case ResourceTypeSkill:
-		return ComposerResourceTypeSkill, true
+		return ComposerCapabilityKindSkill, true
 	case ResourceTypeMCP:
-		return ComposerResourceTypeMCP, true
+		return ComposerCapabilityKindMCP, true
 	default:
 		return "", false
 	}
 }
 
-func composerResourceTypeFromCore(resourceType composerctx.ResourceType) (ComposerResourceType, bool) {
+func composerCapabilityKindFromCore(resourceType composerctx.ResourceType) (ComposerCapabilityKind, bool) {
 	switch resourceType {
 	case composerctx.ResourceTypeModel:
-		return ComposerResourceTypeModel, true
+		return ComposerCapabilityKindModel, true
 	case composerctx.ResourceTypeRule:
-		return ComposerResourceTypeRule, true
+		return ComposerCapabilityKindRule, true
 	case composerctx.ResourceTypeSkill:
-		return ComposerResourceTypeSkill, true
+		return ComposerCapabilityKindSkill, true
 	case composerctx.ResourceTypeMCP:
-		return ComposerResourceTypeMCP, true
+		return ComposerCapabilityKindMCP, true
 	case composerctx.ResourceTypeFile:
-		return ComposerResourceTypeFile, true
+		return ComposerCapabilityKindFile, true
 	default:
 		return "", false
 	}
+}
+
+func buildComposerCapabilityID(kind ComposerCapabilityKind, rawID string) string {
+	normalizedID := strings.TrimSpace(rawID)
+	if normalizedID == "" {
+		return ""
+	}
+	return string(kind) + ":" + normalizedID
+}
+
+func splitComposerCapabilityID(raw string) (ComposerCapabilityKind, string, bool) {
+	kindRaw, id, ok := strings.Cut(strings.TrimSpace(raw), ":")
+	if !ok {
+		return "", "", false
+	}
+	kind, valid := parseComposerCapabilityKind(kindRaw)
+	if !valid || strings.TrimSpace(id) == "" {
+		return "", "", false
+	}
+	return kind, strings.TrimSpace(id), true
+}
+
+func composerCatalogItemDescription(item ResourceConfig) string {
+	switch item.Type {
+	case ResourceTypeModel:
+		if item.Model != nil {
+			return firstNonEmpty(strings.TrimSpace(item.Model.ModelID), "Model configuration")
+		}
+	case ResourceTypeRule:
+		if item.Rule != nil {
+			return firstNonEmpty(firstContentLine(item.Rule.Content), "Rule resource")
+		}
+	case ResourceTypeSkill:
+		if item.Skill != nil {
+			return firstNonEmpty(firstContentLine(item.Skill.Content), "Skill resource")
+		}
+	case ResourceTypeMCP:
+		if item.MCP != nil {
+			return firstNonEmpty(strings.TrimSpace(item.MCP.Command), strings.TrimSpace(item.MCP.Endpoint), "MCP server")
+		}
+	}
+	return ""
+}
+
+func firstContentLine(raw string) string {
+	for _, line := range strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func listComposerProjectFiles(projectRoot string, limit int) []string {
@@ -976,7 +1053,7 @@ func validateComposerProjectFileSelections(projectRoot string, selected []string
 	for _, rawPath := range selected {
 		candidate := strings.TrimSpace(rawPath)
 		if candidate == "" {
-			return nil, errors.New("selected_resources entries require both type and id")
+			return nil, errors.New("selected_capabilities entries must be capability ids")
 		}
 		resolvedPath, normalizedRelPath, err := resolveProjectPath(projectRoot, candidate)
 		if err != nil {

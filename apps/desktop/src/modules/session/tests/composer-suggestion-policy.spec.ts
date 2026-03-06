@@ -16,7 +16,7 @@ describe("composerSuggestionPolicy", () => {
       { name: "clear", description: "Clear state", kind: "control" },
       { name: "cost", description: "Show cost", kind: "control" }
     ],
-    resources: []
+    capabilities: []
   };
 
   it("treats slash token as slash context and returns full command limit", () => {

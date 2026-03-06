@@ -2250,9 +2250,64 @@ components:
           type: string
           enum: [basic, verbose]
 
+    WorkspaceAgentCapabilityBudgets:
+      type: object
+      required: [prompt_budget_chars, search_threshold_percent]
+      properties:
+        prompt_budget_chars:
+          type: integer
+          minimum: 256
+        search_threshold_percent:
+          type: integer
+          minimum: 1
+          maximum: 100
+
+    WorkspaceAgentMCPSearchConfig:
+      type: object
+      required: [enabled, result_limit]
+      properties:
+        enabled:
+          type: boolean
+        result_limit:
+          type: integer
+          minimum: 1
+
+    WorkspaceAgentSubagentDefaults:
+      type: object
+      required: [max_turns]
+      properties:
+        max_turns:
+          type: integer
+          minimum: 1
+          maximum: 64
+        allowed_tools:
+          type: array
+          items:
+            type: string
+
+    WorkspaceAgentFeatureFlags:
+      type: object
+      required: [enable_tool_search, enable_capability_graph]
+      properties:
+        enable_tool_search:
+          type: boolean
+        enable_capability_graph:
+          type: boolean
+
     WorkspaceAgentConfig:
       type: object
-      required: [workspace_id, execution, display, updated_at]
+      required:
+        - workspace_id
+        - execution
+        - display
+        - default_mode
+        - builtin_tools
+        - capability_budgets
+        - mcp_search
+        - output_style
+        - subagent_defaults
+        - feature_flags
+        - updated_at
       properties:
         workspace_id:
           type: string
@@ -2260,6 +2315,22 @@ components:
           $ref: '#/components/schemas/WorkspaceAgentExecutionConfig'
         display:
           $ref: '#/components/schemas/WorkspaceAgentDisplayConfig'
+        default_mode:
+          $ref: '#/components/schemas/PermissionMode'
+        builtin_tools:
+          type: array
+          items:
+            type: string
+        capability_budgets:
+          $ref: '#/components/schemas/WorkspaceAgentCapabilityBudgets'
+        mcp_search:
+          $ref: '#/components/schemas/WorkspaceAgentMCPSearchConfig'
+        output_style:
+          type: string
+        subagent_defaults:
+          $ref: '#/components/schemas/WorkspaceAgentSubagentDefaults'
+        feature_flags:
+          $ref: '#/components/schemas/WorkspaceAgentFeatureFlags'
         updated_at:
           type: string
           format: date-time
@@ -2465,7 +2536,15 @@ components:
 
     RunAgentConfigSnapshot:
       type: object
-      required: [max_model_turns, show_process_trace, trace_detail_level]
+      required:
+        - max_model_turns
+        - show_process_trace
+        - trace_detail_level
+        - default_mode
+        - capability_budgets
+        - mcp_search
+        - subagent_defaults
+        - feature_flags
       properties:
         max_model_turns:
           type: integer
@@ -2476,10 +2555,97 @@ components:
         trace_detail_level:
           type: string
           enum: [basic, verbose]
+        default_mode:
+          $ref: '#/components/schemas/PermissionMode'
+        builtin_tools:
+          type: array
+          items:
+            type: string
+        capability_budgets:
+          $ref: '#/components/schemas/WorkspaceAgentCapabilityBudgets'
+        mcp_search:
+          $ref: '#/components/schemas/WorkspaceAgentMCPSearchConfig'
+        output_style:
+          type: string
+        subagent_defaults:
+          $ref: '#/components/schemas/WorkspaceAgentSubagentDefaults'
+        feature_flags:
+          $ref: '#/components/schemas/WorkspaceAgentFeatureFlags'
 
     ExecutionAgentConfigSnapshot:
       allOf:
         - $ref: '#/components/schemas/RunAgentConfigSnapshot'
+
+    ExecutionMCPServerSnapshot:
+      type: object
+      required: [name, transport]
+      properties:
+        name:
+          type: string
+        transport:
+          type: string
+        endpoint:
+          type: string
+        command:
+          type: string
+        env:
+          type: object
+          additionalProperties:
+            type: string
+        tools:
+          type: array
+          items:
+            type: string
+
+    ExecutionCapabilityDescriptorSnapshot:
+      type: object
+      required:
+        - id
+        - kind
+        - name
+        - description
+        - source
+        - scope
+        - version
+        - risk_level
+        - read_only
+        - concurrency_safe
+        - requires_permissions
+        - visibility_policy
+        - prompt_budget_cost
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [builtin_tool, mcp_tool, mcp_prompt, skill, slash_command, subagent, output_style]
+        name:
+          type: string
+        description:
+          type: string
+        source:
+          type: string
+        scope:
+          type: string
+          enum: [system, workspace, project, user, local, plugin, managed]
+        version:
+          type: string
+        input_schema:
+          type: object
+          additionalProperties: true
+        risk_level:
+          type: string
+        read_only:
+          type: boolean
+        concurrency_safe:
+          type: boolean
+        requires_permissions:
+          type: boolean
+        visibility_policy:
+          type: string
+          enum: [always_loaded, searchable]
+        prompt_budget_cost:
+          type: integer
 
     RunResourceProfile:
       type: object
@@ -2505,6 +2671,20 @@ components:
           type: array
           items:
             type: string
+        rules_dsl:
+          type: string
+        mcp_servers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutionMCPServerSnapshot'
+        always_loaded_capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutionCapabilityDescriptorSnapshot'
+        searchable_capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutionCapabilityDescriptorSnapshot'
 
     ExecutionResourceProfile:
       allOf:
@@ -2572,16 +2752,6 @@ components:
           type: string
           format: date-time
 
-    ComposerSelectedResource:
-      type: object
-      required: [type, id]
-      properties:
-        type:
-          type: string
-          enum: [model, rule, skill, mcp, file]
-        id:
-          type: string
-
     ComposerCommandCatalogItem:
       type: object
       required: [name, description, kind]
@@ -2594,21 +2764,27 @@ components:
           type: string
           enum: [control, prompt]
 
-    ComposerResourceCatalogItem:
+    ComposerCapabilityCatalogItem:
       type: object
-      required: [type, id, name]
+      required: [id, kind, name]
       properties:
-        type:
-          type: string
-          enum: [model, rule, skill, mcp, file]
         id:
           type: string
+        kind:
+          type: string
+          enum: [model, rule, skill, mcp, file]
         name:
+          type: string
+        description:
+          type: string
+        source:
+          type: string
+        scope:
           type: string
 
     ComposerCatalogResponse:
       type: object
-      required: [revision, commands, resources]
+      required: [revision, commands, capabilities]
       properties:
         revision:
           type: string
@@ -2616,10 +2792,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ComposerCommandCatalogItem'
-        resources:
+        capabilities:
           type: array
           items:
-            $ref: '#/components/schemas/ComposerResourceCatalogItem'
+            $ref: '#/components/schemas/ComposerCapabilityCatalogItem'
 
     ComposerSuggestRequest:
       type: object
@@ -2677,10 +2853,10 @@ components:
           $ref: '#/components/schemas/PermissionMode'
         model_config_id:
           type: string
-        selected_resources:
+        selected_capabilities:
           type: array
           items:
-            $ref: '#/components/schemas/ComposerSelectedResource'
+            type: string
         catalog_revision:
           type: string
 

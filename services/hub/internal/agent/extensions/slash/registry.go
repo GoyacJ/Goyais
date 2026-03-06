@@ -23,6 +23,7 @@ import (
 	"goyais/services/hub/internal/agent/core"
 	mcpsext "goyais/services/hub/internal/agent/extensions/mcp"
 	outputstylesext "goyais/services/hub/internal/agent/extensions/outputstyles"
+	pluginsext "goyais/services/hub/internal/agent/extensions/plugins"
 	skillsext "goyais/services/hub/internal/agent/extensions/skills"
 )
 
@@ -35,8 +36,54 @@ type BuildOptions struct {
 	Env        map[string]string
 }
 
+// CatalogCommand is one discovered slash command plus source metadata.
+type CatalogCommand struct {
+	Name           string
+	Description    string
+	Source         string
+	Scope          core.CapabilityScope
+	PromptResolver composerctx.PromptResolver
+	Handler        composerctx.CommandHandler
+}
+
+type pluginCommandSource struct {
+	dir     string
+	scope   core.CapabilityScope
+	source  string
+	allowed map[string]struct{}
+}
+
 // BuildComposerRegistry builds a command registry for composer handlers.
 func BuildComposerRegistry(ctx context.Context, options BuildOptions) (composerctx.CommandRegistry, error) {
+	discovered, err := DiscoverCatalogCommands(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+	commands := make([]composerctx.Command, 0, len(discovered)+1)
+	for _, item := range discovered {
+		commands = append(commands, composerctx.Command{
+			Name:           item.Name,
+			Description:    item.Description,
+			PromptResolver: item.PromptResolver,
+			Handler:        item.Handler,
+		})
+	}
+
+	var registry composerctx.CommandRegistry
+	help := composerctx.Command{
+		Name:        "help",
+		Description: "Show slash command help.",
+		Handler: func(_ context.Context, _ composerctx.DispatchRequest, _ []string) (string, error) {
+			return renderHelp(registry), nil
+		},
+	}
+	commands = append(commands, help)
+	registry = composerctx.NewStaticRegistry(commands)
+	return registry, nil
+}
+
+// DiscoverCatalogCommands returns the discovered slash commands with source metadata.
+func DiscoverCatalogCommands(ctx context.Context, options BuildOptions) ([]CatalogCommand, error) {
 	workingDir := strings.TrimSpace(options.WorkingDir)
 	homeDir := strings.TrimSpace(options.HomeDir)
 	if homeDir == "" {
@@ -46,7 +93,7 @@ func BuildComposerRegistry(ctx context.Context, options BuildOptions) (composerc
 		}
 	}
 
-	commands := make([]composerctx.Command, 0, 64)
+	commands := make([]CatalogCommand, 0, 64)
 
 	customCommands, err := loadCustomPromptCommands(workingDir, homeDir)
 	if err != nil {
@@ -66,9 +113,11 @@ func BuildComposerRegistry(ctx context.Context, options BuildOptions) (composerc
 	}
 	commands = append(commands, mcpCommands...)
 
-	outputStyleCommand := composerctx.Command{
+	outputStyleCommand := CatalogCommand{
 		Name:        "output-style",
 		Description: "Show or set output style.",
+		Source:      "slash",
+		Scope:       core.CapabilityScopeSystem,
 		Handler: func(callCtx context.Context, req composerctx.DispatchRequest, args []string) (string, error) {
 			return handleOutputStyleCommand(callCtx, outputstylesext.NewLoader(outputstylesext.LoaderOptions{
 				WorkingDir: firstNonEmpty(strings.TrimSpace(req.WorkingDir), workingDir),
@@ -78,77 +127,92 @@ func BuildComposerRegistry(ctx context.Context, options BuildOptions) (composerc
 	}
 	commands = append(commands, outputStyleCommand)
 
-	var registry composerctx.CommandRegistry
-	help := composerctx.Command{
-		Name:        "help",
-		Description: "Show slash command help.",
-		Handler: func(_ context.Context, _ composerctx.DispatchRequest, _ []string) (string, error) {
-			return renderHelp(registry), nil
-		},
-	}
-	commands = append(commands, help)
-	registry = composerctx.NewStaticRegistry(commands)
-	return registry, nil
+	return commands, nil
 }
 
-func loadCustomPromptCommands(workingDir string, homeDir string) ([]composerctx.Command, error) {
-	directories := make([]string, 0, 2)
+func loadCustomPromptCommands(workingDir string, homeDir string) ([]CatalogCommand, error) {
+	sources := make([]pluginCommandSource, 0, 4)
 	if workingDir != "" {
-		directories = append(directories, filepath.Join(workingDir, ".claude", "commands"))
+		sources = append(sources, pluginCommandSource{
+			dir:   filepath.Join(workingDir, ".claude", "commands"),
+			scope: core.CapabilityScopeProject,
+		})
+	}
+	pluginRoots, err := pluginsext.DiscoverAssetRoots(context.Background(), pluginsext.ManagerOptions{
+		WorkingDir: workingDir,
+		HomeDir:    homeDir,
+	}, pluginsext.AssetKindCommand)
+	if err == nil {
+		for _, root := range pluginRoots {
+			sources = append(sources, pluginCommandSource{
+				dir:     root.Dir,
+				scope:   core.CapabilityScopePlugin,
+				source:  root.PluginID,
+				allowed: cloneSlashStringSet(root.AllowedSet()),
+			})
+		}
 	}
 	if homeDir != "" {
-		directories = append(directories, filepath.Join(homeDir, ".claude", "commands"))
-	}
-
-	files := make([]string, 0, 32)
-	for _, directory := range directories {
-		files = append(files, loadMarkdownFiles(directory)...)
-	}
-	sort.Strings(files)
-
-	seen := make(map[string]struct{}, len(files))
-	commands := make([]composerctx.Command, 0, len(files))
-	for _, path := range files {
-		name := sanitizeSlashToken(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
-		if name == "" {
-			continue
-		}
-		if _, exists := seen[name]; exists {
-			continue
-		}
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		frontmatter, body := parseDocument(string(raw))
-		if strings.TrimSpace(body) == "" {
-			continue
-		}
-		description := strings.TrimSpace(toString(frontmatter["description"]))
-		if description == "" {
-			description = firstMarkdownLine(body)
-		}
-		if description == "" {
-			description = "Custom prompt command"
-		}
-		promptBody := body
-		commands = append(commands, composerctx.Command{
-			Name:        name,
-			Description: description,
-			PromptResolver: func(_ context.Context, req composerctx.DispatchRequest, args []string) ([]string, error) {
-				expanded := strings.TrimSpace(expandPromptArguments(promptBody, args, req.Env["CLAUDE_SESSION_ID"]))
-				if expanded == "" {
-					return nil, errors.New("expanded prompt is empty")
-				}
-				return []string{expanded}, nil
-			},
+		sources = append(sources, pluginCommandSource{
+			dir:   filepath.Join(homeDir, ".claude", "commands"),
+			scope: core.CapabilityScopeUser,
 		})
-		seen[name] = struct{}{}
+	}
+
+	seen := make(map[string]struct{}, 32)
+	commands := make([]CatalogCommand, 0, 32)
+	for _, source := range sources {
+		files := loadMarkdownFiles(source.dir)
+		sort.Strings(files)
+		for _, path := range files {
+			name := sanitizeSlashToken(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
+			if name == "" {
+				continue
+			}
+			if len(source.allowed) > 0 {
+				if _, ok := source.allowed[name]; !ok {
+					continue
+				}
+			}
+			if _, exists := seen[name]; exists {
+				continue
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				continue
+			}
+			frontmatter, body := parseDocument(string(raw))
+			if strings.TrimSpace(body) == "" {
+				continue
+			}
+			description := strings.TrimSpace(toString(frontmatter["description"]))
+			if description == "" {
+				description = firstMarkdownLine(body)
+			}
+			if description == "" {
+				description = "Custom prompt command"
+			}
+			promptBody := body
+			commands = append(commands, CatalogCommand{
+				Name:        name,
+				Description: description,
+				Source:      firstNonEmpty(strings.TrimSpace(source.source), path),
+				Scope:       source.scope,
+				PromptResolver: func(_ context.Context, req composerctx.DispatchRequest, args []string) ([]string, error) {
+					expanded := strings.TrimSpace(expandPromptArguments(promptBody, args, req.Env["CLAUDE_SESSION_ID"]))
+					if expanded == "" {
+						return nil, errors.New("expanded prompt is empty")
+					}
+					return []string{expanded}, nil
+				},
+			})
+			seen[name] = struct{}{}
+		}
 	}
 	return commands, nil
 }
 
-func loadSkillPromptCommands(ctx context.Context, workingDir string, homeDir string, env map[string]string) ([]composerctx.Command, error) {
+func loadSkillPromptCommands(ctx context.Context, workingDir string, homeDir string, env map[string]string) ([]CatalogCommand, error) {
 	loader := skillsext.NewLoader(skillsext.LoaderOptions{
 		WorkingDir: workingDir,
 		HomeDir:    homeDir,
@@ -159,7 +223,7 @@ func loadSkillPromptCommands(ctx context.Context, workingDir string, homeDir str
 		return nil, err
 	}
 	seen := make(map[string]struct{}, len(items))
-	commands := make([]composerctx.Command, 0, len(items))
+	commands := make([]CatalogCommand, 0, len(items))
 	for _, item := range items {
 		name := sanitizeSlashToken(item.Name)
 		if name == "" {
@@ -173,9 +237,11 @@ func loadSkillPromptCommands(ctx context.Context, workingDir string, homeDir str
 			description = "Custom skill command"
 		}
 		skillName := item.Name
-		commands = append(commands, composerctx.Command{
+		commands = append(commands, CatalogCommand{
 			Name:        name,
 			Description: description,
+			Source:      strings.TrimSpace(item.Source),
+			Scope:       scopeFromSkillSource(workingDir, homeDir, item.Source),
 			PromptResolver: func(callCtx context.Context, req composerctx.DispatchRequest, args []string) ([]string, error) {
 				definition, resolveErr := loader.Resolve(callCtx, core.SkillRef{Name: skillName})
 				if resolveErr != nil {
@@ -202,7 +268,7 @@ func loadSkillPromptCommands(ctx context.Context, workingDir string, homeDir str
 	return commands, nil
 }
 
-func loadMCPPromptCommands(ctx context.Context, workingDir string) ([]composerctx.Command, error) {
+func loadMCPPromptCommands(ctx context.Context, workingDir string) ([]CatalogCommand, error) {
 	items, err := mcpsext.DiscoverPromptCommands(ctx, workingDir)
 	if err != nil {
 		return nil, err
@@ -211,12 +277,14 @@ func loadMCPPromptCommands(ctx context.Context, workingDir string) ([]composerct
 		return nil, nil
 	}
 
-	commands := make([]composerctx.Command, 0, len(items))
+	commands := make([]CatalogCommand, 0, len(items))
 	for _, item := range items {
 		item := item
-		commands = append(commands, composerctx.Command{
+		commands = append(commands, CatalogCommand{
 			Name:        item.Name,
 			Description: strings.TrimSpace(item.Description),
+			Source:      "mcp",
+			Scope:       core.CapabilityScopeProject,
 			PromptResolver: func(callCtx context.Context, _ composerctx.DispatchRequest, args []string) ([]string, error) {
 				return item.Resolve(callCtx, args)
 			},
@@ -226,9 +294,11 @@ func loadMCPPromptCommands(ctx context.Context, workingDir string) ([]composerct
 			if normalizedAlias == "" {
 				continue
 			}
-			commands = append(commands, composerctx.Command{
+			commands = append(commands, CatalogCommand{
 				Name:        normalizedAlias,
 				Description: strings.TrimSpace(item.Description),
+				Source:      "mcp",
+				Scope:       core.CapabilityScopeProject,
 				PromptResolver: func(callCtx context.Context, _ composerctx.DispatchRequest, args []string) ([]string, error) {
 					return item.Resolve(callCtx, args)
 				},
@@ -251,6 +321,53 @@ func renderHelp(registry composerctx.CommandRegistry) string {
 		lines = append(lines, fmt.Sprintf("  /%s - %s", meta.Name, description))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func scopeFromSkillSource(workingDir string, homeDir string, source string) core.CapabilityScope {
+	normalizedSource := strings.TrimSpace(source)
+	if normalizedSource == "" {
+		return core.CapabilityScopeSystem
+	}
+	if !looksLikePath(normalizedSource) {
+		return core.CapabilityScopePlugin
+	}
+	if workingDir != "" {
+		projectCommands := filepath.Clean(strings.TrimSpace(workingDir))
+		sourcePath := filepath.Clean(normalizedSource)
+		if sourcePath == projectCommands || strings.HasPrefix(sourcePath, projectCommands+string(filepath.Separator)) {
+			return core.CapabilityScopeProject
+		}
+	}
+	if homeDir != "" {
+		userRoot := filepath.Clean(strings.TrimSpace(homeDir))
+		sourcePath := filepath.Clean(normalizedSource)
+		if sourcePath == userRoot || strings.HasPrefix(sourcePath, userRoot+string(filepath.Separator)) {
+			return core.CapabilityScopeUser
+		}
+	}
+	return core.CapabilityScopeSystem
+}
+
+func looksLikePath(raw string) bool {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return false
+	}
+	if filepath.IsAbs(trimmed) {
+		return true
+	}
+	return strings.Contains(trimmed, string(filepath.Separator)) || strings.HasPrefix(trimmed, ".")
+}
+
+func cloneSlashStringSet(input map[string]struct{}) map[string]struct{} {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make(map[string]struct{}, len(input))
+	for key := range input {
+		out[key] = struct{}{}
+	}
+	return out
 }
 
 func parseDocument(raw string) (map[string]any, string) {

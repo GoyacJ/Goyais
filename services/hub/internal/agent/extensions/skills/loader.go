@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"goyais/services/hub/internal/agent/core"
+	pluginsext "goyais/services/hub/internal/agent/extensions/plugins"
 )
 
 const defaultSkillBudgetChars = 16000
@@ -72,6 +73,7 @@ type RenderRequest struct {
 type Loader struct {
 	enterpriseDirs []string
 	personalDirs   []string
+	pluginDirs     []pluginDirectory
 	projectDirs    []string
 	budgetChars    int
 	defaultEnv     map[string]string
@@ -79,8 +81,15 @@ type Loader struct {
 }
 
 type scopedDirectories struct {
-	scope core.SkillScope
-	dirs  []string
+	scope      core.SkillScope
+	dirs       []string
+	pluginDirs []pluginDirectory
+}
+
+type pluginDirectory struct {
+	dir      string
+	pluginID string
+	allowed  map[string]struct{}
 }
 
 type discoveredSkill struct {
@@ -92,8 +101,8 @@ type discoveredSkill struct {
 
 var _ core.SkillLoader = (*Loader)(nil)
 
-// NewLoader constructs a skill loader with deterministic scope priorities:
-// enterprise > personal > project.
+// NewLoader constructs a skill loader with deterministic discovery priorities:
+// project > plugin > personal > enterprise.
 func NewLoader(options LoaderOptions) *Loader {
 	workingDir := strings.TrimSpace(options.WorkingDir)
 	codexHome := strings.TrimSpace(options.CodexHome)
@@ -127,6 +136,7 @@ func NewLoader(options LoaderOptions) *Loader {
 	if len(projectDirs) == 0 && workingDir != "" {
 		projectDirs = append(projectDirs, filepath.Join(workingDir, ".claude", "skills"))
 	}
+	pluginDirs := discoverPluginSkillDirs(workingDir, homeDir)
 
 	runner := options.CommandRunner
 	if runner == nil {
@@ -136,6 +146,7 @@ func NewLoader(options LoaderOptions) *Loader {
 	return &Loader{
 		enterpriseDirs: enterpriseDirs,
 		personalDirs:   personalDirs,
+		pluginDirs:     pluginDirs,
 		projectDirs:    projectDirs,
 		budgetChars:    resolveBudgetChars(options.BudgetChars, options.Env),
 		defaultEnv:     cloneMap(options.Env),
@@ -144,7 +155,7 @@ func NewLoader(options LoaderOptions) *Loader {
 }
 
 // Discover returns visible skills with collision handling based on
-// enterprise > personal > project priority.
+// project > plugin > personal > enterprise priority.
 func (l *Loader) Discover(ctx context.Context, scope core.SkillScope) ([]core.SkillMeta, error) {
 	records, err := l.discover(ctx, scope)
 	if err != nil {
@@ -212,46 +223,13 @@ func (l *Loader) discover(ctx context.Context, scope core.SkillScope) ([]discove
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			entries, err := os.ReadDir(root)
-			if err != nil {
-				if errors.Is(err, os.ErrNotExist) {
-					continue
-				}
-				continue
+			records = appendDiscoveredSkills(ctx, source.scope, root, "", nil, seen, records)
+		}
+		for _, pluginRoot := range source.pluginDirs {
+			if err := ctx.Err(); err != nil {
+				return nil, err
 			}
-			sort.SliceStable(entries, func(i, j int) bool {
-				return entries[i].Name() < entries[j].Name()
-			})
-			for _, entry := range entries {
-				if err := ctx.Err(); err != nil {
-					return nil, err
-				}
-				if !entry.IsDir() {
-					continue
-				}
-				name := normalizeSkillName(entry.Name())
-				if name == "" {
-					continue
-				}
-				if _, exists := seen[name]; exists {
-					continue
-				}
-				skillPath, ok := locateSkillFile(filepath.Join(root, entry.Name()))
-				if !ok {
-					continue
-				}
-				meta, err := loadMeta(skillPath, name)
-				if err != nil {
-					continue
-				}
-				records = append(records, discoveredSkill{
-					name:  name,
-					scope: source.scope,
-					path:  skillPath,
-					meta:  meta,
-				})
-				seen[name] = struct{}{}
-			}
+			records = appendDiscoveredSkills(ctx, source.scope, pluginRoot.dir, pluginRoot.pluginID, pluginRoot.allowed, seen, records)
 		}
 	}
 
@@ -285,7 +263,7 @@ func (l *Loader) loadDefinition(record discoveredSkill) (core.SkillDefinition, e
 		Meta: core.SkillMeta{
 			Name:        name,
 			Description: description,
-			Source:      record.path,
+			Source:      record.meta.Source,
 		},
 		Frontmatter: frontmatter,
 		Body:        body,
@@ -333,15 +311,15 @@ func (l *Loader) injectCommandOutput(ctx context.Context, body string, req Rende
 }
 
 func (l *Loader) scopeDirectories(scope core.SkillScope) []scopedDirectories {
-	scopeOrder := []scopedDirectories{
-		{scope: core.SkillScopeEnterprise, dirs: cloneStrings(l.enterpriseDirs)},
-		{scope: core.SkillScopePersonal, dirs: cloneStrings(l.personalDirs)},
-		{scope: core.SkillScopeProject, dirs: cloneStrings(l.projectDirs)},
-	}
-
 	normalized := normalizeScope(scope)
 	switch normalized {
 	case "":
+		scopeOrder := []scopedDirectories{
+			{scope: core.SkillScopeProject, dirs: cloneStrings(l.projectDirs)},
+			{scope: core.SkillScopeProject, pluginDirs: clonePluginDirectories(l.pluginDirs)},
+			{scope: core.SkillScopePersonal, dirs: cloneStrings(l.personalDirs)},
+			{scope: core.SkillScopeEnterprise, dirs: cloneStrings(l.enterpriseDirs)},
+		}
 		return scopeOrder
 	case core.SkillScopeEnterprise:
 		return []scopedDirectories{{scope: core.SkillScopeEnterprise, dirs: cloneStrings(l.enterpriseDirs)}}
@@ -350,8 +328,120 @@ func (l *Loader) scopeDirectories(scope core.SkillScope) []scopedDirectories {
 	case core.SkillScopeProject:
 		return []scopedDirectories{{scope: core.SkillScopeProject, dirs: cloneStrings(l.projectDirs)}}
 	default:
-		return scopeOrder
+		return []scopedDirectories{
+			{scope: core.SkillScopeProject, dirs: cloneStrings(l.projectDirs)},
+			{scope: core.SkillScopePersonal, dirs: cloneStrings(l.personalDirs)},
+			{scope: core.SkillScopeEnterprise, dirs: cloneStrings(l.enterpriseDirs)},
+		}
 	}
+}
+
+func discoverPluginSkillDirs(workingDir string, homeDir string) []pluginDirectory {
+	roots, err := pluginsext.DiscoverAssetRoots(context.Background(), pluginsext.ManagerOptions{
+		WorkingDir: workingDir,
+		HomeDir:    homeDir,
+	}, pluginsext.AssetKindSkill)
+	if err != nil || len(roots) == 0 {
+		return nil
+	}
+	out := make([]pluginDirectory, 0, len(roots))
+	for _, root := range roots {
+		if strings.TrimSpace(root.PluginID) == "" || strings.TrimSpace(root.Dir) == "" {
+			continue
+		}
+		out = append(out, pluginDirectory{
+			dir:      root.Dir,
+			pluginID: root.PluginID,
+			allowed:  cloneStringSet(root.AllowedSet()),
+		})
+	}
+	return out
+}
+
+func appendDiscoveredSkills(
+	ctx context.Context,
+	scope core.SkillScope,
+	root string,
+	pluginID string,
+	allowed map[string]struct{},
+	seen map[string]struct{},
+	records []discoveredSkill,
+) []discoveredSkill {
+	if strings.TrimSpace(root) == "" {
+		return records
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return records
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		return entries[i].Name() < entries[j].Name()
+	})
+	for _, entry := range entries {
+		if ctx.Err() != nil {
+			return records
+		}
+		if !entry.IsDir() {
+			continue
+		}
+		name := normalizeSkillName(entry.Name())
+		if name == "" {
+			continue
+		}
+		if len(allowed) > 0 {
+			if _, ok := allowed[name]; !ok {
+				continue
+			}
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		skillPath, ok := locateSkillFile(filepath.Join(root, entry.Name()))
+		if !ok {
+			continue
+		}
+		meta, err := loadMeta(skillPath, name)
+		if err != nil {
+			continue
+		}
+		if pluginID != "" {
+			meta.Source = pluginID
+		}
+		records = append(records, discoveredSkill{
+			name:  name,
+			scope: scope,
+			path:  skillPath,
+			meta:  meta,
+		})
+		seen[name] = struct{}{}
+	}
+	return records
+}
+
+func clonePluginDirectories(input []pluginDirectory) []pluginDirectory {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make([]pluginDirectory, 0, len(input))
+	for _, item := range input {
+		out = append(out, pluginDirectory{
+			dir:      item.dir,
+			pluginID: item.pluginID,
+			allowed:  cloneStringSet(item.allowed),
+		})
+	}
+	return out
+}
+
+func cloneStringSet(input map[string]struct{}) map[string]struct{} {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make(map[string]struct{}, len(input))
+	for key := range input {
+		out[key] = struct{}{}
+	}
+	return out
 }
 
 func normalizeScope(scope core.SkillScope) core.SkillScope {

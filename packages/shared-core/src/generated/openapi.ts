@@ -3360,9 +3360,18 @@ export type components = {
         CommitSuggestion: {
             message: string;
         };
+        ComposerCapabilityCatalogItem: {
+            description?: string;
+            id: string;
+            /** @enum {string} */
+            kind: "model" | "rule" | "skill" | "mcp" | "file";
+            name: string;
+            scope?: string;
+            source?: string;
+        };
         ComposerCatalogResponse: {
+            capabilities: components["schemas"]["ComposerCapabilityCatalogItem"][];
             commands: components["schemas"]["ComposerCommandCatalogItem"][];
-            resources: components["schemas"]["ComposerResourceCatalogItem"][];
             revision: string;
         };
         ComposerCommandCatalogItem: {
@@ -3375,23 +3384,12 @@ export type components = {
             command: string;
             output: string;
         };
-        ComposerResourceCatalogItem: {
-            id: string;
-            name: string;
-            /** @enum {string} */
-            type: "model" | "rule" | "skill" | "mcp" | "file";
-        };
-        ComposerSelectedResource: {
-            id: string;
-            /** @enum {string} */
-            type: "model" | "rule" | "skill" | "mcp" | "file";
-        };
         ComposerSubmitRequest: {
             catalog_revision?: string;
             mode?: components["schemas"]["PermissionMode"];
             model_config_id?: string;
             raw_input: string;
-            selected_resources?: components["schemas"]["ComposerSelectedResource"][];
+            selected_capabilities?: string[];
         };
         ComposerSubmitResponse: {
             command_result: components["schemas"]["ComposerCommandResult"];
@@ -3457,6 +3455,37 @@ export type components = {
             summary: string;
         };
         ExecutionAgentConfigSnapshot: components["schemas"]["RunAgentConfigSnapshot"];
+        ExecutionCapabilityDescriptorSnapshot: {
+            concurrency_safe: boolean;
+            description: string;
+            id: string;
+            input_schema?: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            kind: "builtin_tool" | "mcp_tool" | "mcp_prompt" | "skill" | "slash_command" | "subagent" | "output_style";
+            name: string;
+            prompt_budget_cost: number;
+            read_only: boolean;
+            requires_permissions: boolean;
+            risk_level: string;
+            /** @enum {string} */
+            scope: "system" | "workspace" | "project" | "user" | "local" | "plugin" | "managed";
+            source: string;
+            version: string;
+            /** @enum {string} */
+            visibility_policy: "always_loaded" | "searchable";
+        };
+        ExecutionMCPServerSnapshot: {
+            command?: string;
+            endpoint?: string;
+            env?: {
+                [key: string]: string;
+            };
+            name: string;
+            tools?: string[];
+            transport: string;
+        };
         ExecutionResourceProfile: components["schemas"]["RunResourceProfile"];
         ExecutionUserAnswer: {
             question_id: string;
@@ -3877,8 +3906,15 @@ export type components = {
             workspace_id: string;
         };
         RunAgentConfigSnapshot: {
+            builtin_tools?: string[];
+            capability_budgets: components["schemas"]["WorkspaceAgentCapabilityBudgets"];
+            default_mode: components["schemas"]["PermissionMode"];
+            feature_flags: components["schemas"]["WorkspaceAgentFeatureFlags"];
             max_model_turns: number;
+            mcp_search: components["schemas"]["WorkspaceAgentMCPSearchConfig"];
+            output_style?: string;
             show_process_trace: boolean;
+            subagent_defaults: components["schemas"]["WorkspaceAgentSubagentDefaults"];
             /** @enum {string} */
             trace_detail_level: "basic" | "verbose";
         };
@@ -3923,11 +3959,15 @@ export type components = {
             events: components["schemas"]["RunLifecycleEvent"][];
         };
         RunResourceProfile: {
+            always_loaded_capabilities?: components["schemas"]["ExecutionCapabilityDescriptorSnapshot"][];
             mcp_ids?: string[];
+            mcp_servers?: components["schemas"]["ExecutionMCPServerSnapshot"][];
             model_config_id?: string;
             model_id: string;
             project_file_paths?: string[];
             rule_ids?: string[];
+            rules_dsl?: string;
+            searchable_capabilities?: components["schemas"]["ExecutionCapabilityDescriptorSnapshot"][];
             skill_ids?: string[];
         };
         /** @enum {string} */
@@ -4099,9 +4139,20 @@ export type components = {
             mode: "local" | "remote";
             name: string;
         };
+        WorkspaceAgentCapabilityBudgets: {
+            prompt_budget_chars: number;
+            search_threshold_percent: number;
+        };
         WorkspaceAgentConfig: {
+            builtin_tools: string[];
+            capability_budgets: components["schemas"]["WorkspaceAgentCapabilityBudgets"];
+            default_mode: components["schemas"]["PermissionMode"];
             display: components["schemas"]["WorkspaceAgentDisplayConfig"];
             execution: components["schemas"]["WorkspaceAgentExecutionConfig"];
+            feature_flags: components["schemas"]["WorkspaceAgentFeatureFlags"];
+            mcp_search: components["schemas"]["WorkspaceAgentMCPSearchConfig"];
+            output_style: string;
+            subagent_defaults: components["schemas"]["WorkspaceAgentSubagentDefaults"];
             /** Format: date-time */
             updated_at: string;
             workspace_id: string;
@@ -4113,6 +4164,18 @@ export type components = {
         };
         WorkspaceAgentExecutionConfig: {
             max_model_turns: number;
+        };
+        WorkspaceAgentFeatureFlags: {
+            enable_capability_graph: boolean;
+            enable_tool_search: boolean;
+        };
+        WorkspaceAgentMCPSearchConfig: {
+            enabled: boolean;
+            result_limit: number;
+        };
+        WorkspaceAgentSubagentDefaults: {
+            allowed_tools?: string[];
+            max_turns: number;
         };
         WorkspaceConnection: {
             access_token?: string;

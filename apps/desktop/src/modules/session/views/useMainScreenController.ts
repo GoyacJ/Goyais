@@ -112,7 +112,7 @@ export function useMainScreenController() {
   const composerCatalog = ref<ComposerCatalog>({
     revision: "",
     commands: [],
-    resources: []
+    capabilities: []
   });
   const runTaskGraph = ref<OpenAPIContractComponents["schemas"]["AgentGraph"] | null>(null);
   const runTaskGraphLoading = ref(false);
@@ -604,7 +604,7 @@ export function useMainScreenController() {
       composerCatalog.value = {
         revision: "",
         commands: [],
-        resources: []
+        capabilities: []
       };
       composerSuggestions.value = [];
       return;
@@ -615,7 +615,7 @@ export function useMainScreenController() {
       composerCatalog.value = {
         revision: "",
         commands: [],
-        resources: []
+        capabilities: []
       };
       composerSuggestions.value = [];
       setConversationError(String((error as Error)?.message ?? "加载输入目录失败"));
@@ -732,20 +732,25 @@ export function useMainScreenController() {
     }
 
     const resourceQuery = (resourceQueryRaw ?? "").trim().toLowerCase();
-    return catalog.resources
-      .filter((resource) => resource.type === resourceType)
+    return catalog.capabilities
+      .filter((resource) => resource.kind === resourceType)
+      .map((resource) => ({
+        ...resource,
+        mentionId: resolveCapabilityMentionId(resource.id)
+      }))
+      .filter((resource) => resource.mentionId !== "")
       .filter((resource) => {
         if (resourceQuery === "") {
           return true;
         }
-        return resource.id.toLowerCase().includes(resourceQuery) || resource.name.toLowerCase().includes(resourceQuery);
+        return resource.mentionId.toLowerCase().includes(resourceQuery) || resource.name.toLowerCase().includes(resourceQuery);
       })
       .slice(0, limit)
       .map((resource) => ({
         kind: "resource",
-        label: `@${resource.type}:${resource.id}`,
+        label: `@${resource.kind}:${resource.mentionId}`,
         detail: resolveResourceSuggestionDetail(resource),
-        insert_text: `@${resource.type}:${resource.id}`,
+        insert_text: `@${resource.kind}:${resource.mentionId}`,
         replace_start: tokenStart,
         replace_end: tokenEnd
       }));
@@ -766,16 +771,25 @@ export function useMainScreenController() {
     }
   }
 
-  function resolveResourceSuggestionDetail(resource: { type: string; id: string; name: string }): string {
-    if (resource.type === "file") {
+  function resolveResourceSuggestionDetail(resource: { kind: string; id: string; mentionId: string; name: string; description?: string }): string {
+    if (resource.kind === "file") {
       return "";
     }
     const normalizedName = stringsOrEmpty(resource.name);
-    const normalizedID = stringsOrEmpty(resource.id);
+    const normalizedID = stringsOrEmpty(resource.mentionId);
     if (normalizedName === "" || normalizedName.toLowerCase() === normalizedID.toLowerCase()) {
-      return "";
+      return stringsOrEmpty(resource.description);
     }
     return normalizedName;
+  }
+
+  function resolveCapabilityMentionId(capabilityId: string): string {
+    const normalized = stringsOrEmpty(capabilityId);
+    const separatorIndex = normalized.indexOf(":");
+    if (separatorIndex < 0) {
+      return normalized;
+    }
+    return normalized.slice(separatorIndex + 1);
   }
 
   function stringsOrEmpty(value: string | undefined): string {

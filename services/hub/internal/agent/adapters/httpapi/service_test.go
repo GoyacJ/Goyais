@@ -197,6 +197,71 @@ func TestServiceSubmitDelegatesToEngine(t *testing.T) {
 	}
 }
 
+func TestServiceSubmitForwardsExplicitRuntimeConfig(t *testing.T) {
+	engine := &engineStub{runID: "run_typed"}
+	svc := NewService(engine)
+	runtimeConfig := &core.RuntimeConfig{
+		Model: core.RuntimeModelConfig{
+			ProviderName:  "openai-compatible",
+			Endpoint:      "https://example.invalid/v1",
+			ModelName:     "gpt-test",
+			MaxModelTurns: 6,
+		},
+		Tooling: core.RuntimeToolingConfig{
+			PermissionMode: core.PermissionModePlan,
+		},
+	}
+
+	resp, err := svc.Submit(context.Background(), SubmitRequest{
+		SessionID:     "sess_2",
+		Input:         "hello",
+		Metadata:      map[string]string{"source": "http"},
+		RuntimeConfig: runtimeConfig,
+	})
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+	if resp.RunID != "run_typed" {
+		t.Fatalf("run id = %q, want run_typed", resp.RunID)
+	}
+	if engine.submit.input.RuntimeConfig == nil {
+		t.Fatal("expected typed runtime config to be populated")
+	}
+	if engine.submit.input.RuntimeConfig.Model.ProviderName != "openai-compatible" {
+		t.Fatalf("provider = %q", engine.submit.input.RuntimeConfig.Model.ProviderName)
+	}
+	if engine.submit.input.RuntimeConfig.Tooling.PermissionMode != core.PermissionModePlan {
+		t.Fatalf("permission mode = %q", engine.submit.input.RuntimeConfig.Tooling.PermissionMode)
+	}
+	if engine.submit.input.Metadata["source"] != "http" {
+		t.Fatalf("metadata source = %q", engine.submit.input.Metadata["source"])
+	}
+}
+
+func TestServiceSubmitDoesNotDeriveRuntimeConfigFromMetadata(t *testing.T) {
+	engine := &engineStub{runID: "run_plain"}
+	svc := NewService(engine)
+
+	resp, err := svc.Submit(context.Background(), SubmitRequest{
+		SessionID: "sess_3",
+		Input:     "hello",
+		Metadata: map[string]string{
+			"model_provider": "openai-compatible",
+			"model_endpoint": "https://example.invalid/v1",
+			"model_name":     "gpt-test",
+		},
+	})
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+	if resp.RunID != "run_plain" {
+		t.Fatalf("run id = %q, want run_plain", resp.RunID)
+	}
+	if engine.submit.input.RuntimeConfig != nil {
+		t.Fatalf("expected runtime config to remain nil, got %#v", engine.submit.input.RuntimeConfig)
+	}
+}
+
 func TestServiceControlParsesAction(t *testing.T) {
 	engine := &engineStub{}
 	svc := NewService(engine)

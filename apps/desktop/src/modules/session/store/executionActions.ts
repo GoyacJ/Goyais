@@ -38,7 +38,7 @@ import {
 import { toDisplayError } from "@/shared/services/errorMapper";
 import { ApiError } from "@/shared/services/http";
 import { createMockId } from "@/shared/utils/id";
-import type { ComposerResourceSelection, RunLifecycleEvent, Session, SessionMessage } from "@/shared/types/api";
+import type { RunLifecycleEvent, Session, SessionMessage } from "@/shared/types/api";
 import type {
   ConversationRunTaskControlAction,
   ConversationRunTaskControlResponse,
@@ -88,7 +88,7 @@ export async function submitConversationMessage(
       raw_input: content,
       mode: runtime.mode,
       model_config_id: runtime.modelId.trim() || undefined,
-      selected_resources: extractSelectedResources(content),
+      selected_capabilities: extractSelectedCapabilities(content),
       catalog_revision: options.catalogRevision
     };
     let response;
@@ -139,27 +139,26 @@ export async function submitConversationMessage(
   }
 }
 
-function extractSelectedResources(rawInput: string): ComposerResourceSelection[] {
+function extractSelectedCapabilities(rawInput: string): string[] {
   const normalized = rawInput.trim();
   if (normalized === "") {
     return [];
   }
   const mentionPattern = /@(?<type>model|rule|skill|mcp|file):(?<id>[\w./-]+)/g;
   const seen = new Set<string>();
-  const selections: ComposerResourceSelection[] = [];
+  const selections: string[] = [];
   for (const match of normalized.matchAll(mentionPattern)) {
     const typeRaw = (match.groups?.type ?? "").trim();
     const id = (match.groups?.id ?? "").trim();
     if (typeRaw === "" || id === "") {
       continue;
     }
-    const type = typeRaw as ComposerResourceSelection["type"];
-    const key = `${type}:${id}`;
+    const key = `${typeRaw}:${id}`;
     if (seen.has(key)) {
       continue;
     }
     seen.add(key);
-    selections.push({ type, id });
+    selections.push(key);
   }
   return selections;
 }

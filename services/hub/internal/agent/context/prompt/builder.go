@@ -188,17 +188,24 @@ func (b *Builder) Build(ctx context.Context, req core.BuildContextRequest) (core
 
 	skills := cloneSkillDescriptors(b.options.Skills)
 	if len(skills) == 0 {
-		skills = b.loadDefaultSkills(ctx, workingDir)
+		skills = b.skillsFromCapabilities(req.Capabilities)
+		if len(skills) == 0 {
+			skills = b.loadDefaultSkills(ctx, workingDir)
+		}
 	}
 	skillsSection, _ := BuildSkillsSection(skills, skillsBudgetChars)
 
 	mcpSection := strings.TrimSpace(b.options.MCPSection)
 	if mcpSection == "" {
-		resolvedMCP, mcpErr := b.loadDefaultMCPSection(ctx, workingDir)
-		if mcpErr != nil {
-			return core.PromptContext{}, mcpErr
+		if resolvedMCP := buildMCPSectionFromCapabilities(req.Capabilities); resolvedMCP != "" {
+			mcpSection = resolvedMCP
+		} else {
+			resolvedMCP, mcpErr := b.loadDefaultMCPSection(ctx, workingDir)
+			if mcpErr != nil {
+				return core.PromptContext{}, mcpErr
+			}
+			mcpSection = resolvedMCP
 		}
-		mcpSection = resolvedMCP
 	}
 
 	importedContent := strings.TrimSpace(b.options.ImportedContent)
@@ -453,6 +460,31 @@ func (b *Builder) loadDefaultSkills(ctx context.Context, workingDir string) []Sk
 	return skills
 }
 
+func (b *Builder) skillsFromCapabilities(items []core.CapabilityDescriptor) []SkillDescriptor {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]SkillDescriptor, 0, len(items))
+	for _, item := range items {
+		if item.Kind != core.CapabilityKindSkill {
+			continue
+		}
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			continue
+		}
+		out = append(out, SkillDescriptor{
+			Name:        name,
+			Description: strings.TrimSpace(item.Description),
+		})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
 func (b *Builder) loadDefaultMCPSection(ctx context.Context, workingDir string) (string, error) {
 	discover := b.options.MCPPromptDiscoverer
 	if discover == nil {
@@ -511,6 +543,31 @@ func defaultMCPPromptDiscoverer(ctx context.Context, workingDir string) ([]MCPPr
 		return nil, nil
 	}
 	return out, nil
+}
+
+func buildMCPSectionFromCapabilities(items []core.CapabilityDescriptor) string {
+	if len(items) == 0 {
+		return ""
+	}
+	lines := []string{"# MCP Prompts"}
+	for _, item := range items {
+		if item.Kind != core.CapabilityKindMCPPrompt {
+			continue
+		}
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			continue
+		}
+		description := strings.TrimSpace(item.Description)
+		if description == "" {
+			description = "MCP prompt"
+		}
+		lines = append(lines, "- /"+name+": "+description)
+	}
+	if len(lines) == 1 {
+		return ""
+	}
+	return strings.Join(lines, "\n")
 }
 
 func readMemorySnippet(path string, maxLines int) string {

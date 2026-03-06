@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	capabilitygraph "goyais/services/hub/internal/agent/capability"
 	"goyais/services/hub/internal/agent/core"
 	mcpext "goyais/services/hub/internal/agent/extensions/mcp"
 	"goyais/services/hub/internal/agent/policy"
@@ -31,17 +32,8 @@ import (
 )
 
 const (
-	runtimeMetadataModelProvider    = "model_provider"
-	runtimeMetadataModelEndpoint    = "model_endpoint"
-	runtimeMetadataModelName        = "model_name"
-	runtimeMetadataModelAPIKey      = "model_api_key"
-	runtimeMetadataModelParams      = "model_params_json"
-	runtimeMetadataModelTimeout     = "model_timeout_ms"
-	runtimeMetadataMaxModelTurns    = "max_model_turns"
-	runtimeMetadataPermissionMode   = "permission_mode"
-	runtimeMetadataRulesDSL         = "rules_dsl"
-	runtimeMetadataMCPServersJSON   = "mcp_servers_json"
-	runtimeMetadataBuiltinToolsJSON = "builtin_tools_json"
+	defaultModelTimeoutMS = 30000
+	defaultModelMaxTurns  = 8
 )
 
 type resolvedModelConfig struct {
@@ -55,34 +47,28 @@ type resolvedModelConfig struct {
 }
 
 type resolvedToolingConfig struct {
-	PermissionMode string
-	RulesDSL       string
-	MCPServers     []mcpext.ServerConfig
-	BuiltinTools   []string
+	PermissionMode           string
+	RulesDSL                 string
+	MCPServers               []core.MCPServerConfig
+	AlwaysLoadedCapabilities []core.CapabilityDescriptor
+	SearchableCapabilities   []core.CapabilityDescriptor
 }
 
 func executeWithConfiguredModel(ctx context.Context, req ExecuteRequest) (ExecuteResult, bool, error) {
-	config, configured := resolveModelConfigFromMetadata(req.Input.Metadata)
-	if !configured {
-		config, configured = resolveModelConfigFromEnv()
-	}
+	config, configured := resolveModelConfig(req.Input)
 	if !configured {
 		return ExecuteResult{}, true, model.ErrProviderMissing
 	}
 
-	tooling := resolveToolingConfigFromMetadata(req.Input.Metadata)
-	builtinSpecs := selectBuiltinToolSpecs(tooling.BuiltinTools)
+	tooling := resolveToolingConfig(req.Input)
 
 	var mcpManager *mcpext.ClientManager
 	if len(tooling.MCPServers) > 0 {
-		mcpManager = mcpext.NewClientManager(tooling.MCPServers, time.Duration(config.TimeoutMS)*time.Millisecond)
+		mcpManager = mcpext.NewClientManager(convertToMCPExtServers(tooling.MCPServers), time.Duration(config.TimeoutMS)*time.Millisecond)
 	}
 
-	mcpSpecs := []spec.ToolSpec{}
-	if mcpManager != nil {
-		mcpSpecs = mcpManager.ToolSpecs()
-	}
-	toolRegistry, err := buildToolRegistry(builtinSpecs, mcpSpecs)
+	toolSpecs := capabilitygraph.ToToolSpecs(tooling.AlwaysLoadedCapabilities)
+	toolRegistry, err := buildToolRegistry(toolSpecs)
 	if err != nil {
 		return ExecuteResult{}, true, err
 	}
@@ -96,23 +82,25 @@ func executeWithConfiguredModel(ctx context.Context, req ExecuteRequest) (Execut
 		RunID:              req.RunID,
 		Router:             req.ApprovalRouter,
 		Specs:              toolRegistry,
+		Capabilities:       indexCapabilities(append(tooling.AlwaysLoadedCapabilities, tooling.SearchableCapabilities...)),
 		EmitOutputDelta:    req.EmitOutputDelta,
 		EmitApprovalNeeded: req.EmitApprovalNeeded,
 		SetRunState:        req.SetRunState,
 	}
 	pipeline := executor.NewPipeline(executor.Dependencies{
-		Runner:           runnertools.New(mcpManager),
+		Runner:           runnertools.NewWithSearchable(mcpManager, tooling.SearchableCapabilities),
 		Specs:            toolRegistry,
 		SandboxGate:      runtimeSandboxGate{Evaluator: sandboxpolicy.NewEvaluator(nil)},
 		PermissionGate:   permissionGate,
 		ApprovalWaiter:   waiters,
 		UserAnswerWaiter: waiters,
 	})
-	toolSpecs := toolRegistry.ListOrdered()
-	codecToolSpecs := convertToCodecToolSpecs(toolSpecs)
+	orderedToolSpecs := toolRegistry.ListOrdered()
+	codecToolSpecs := convertToCodecToolSpecs(orderedToolSpecs)
 	toolInvoker := runtimePipelineToolInvoker{
 		Pipeline:        pipeline,
 		Specs:           toolRegistry,
+		Capabilities:    indexCapabilities(append(tooling.AlwaysLoadedCapabilities, tooling.SearchableCapabilities...)),
 		SessionMode:     tooling.PermissionMode,
 		SafeMode:        false,
 		ToolContext:     executor.ToolContext{WorkingDir: strings.TrimSpace(req.WorkingDir)},
@@ -161,25 +149,37 @@ func executeWithConfiguredModel(ctx context.Context, req ExecuteRequest) (Execut
 	}, true, nil
 }
 
-func resolveModelConfigFromMetadata(metadata map[string]string) (resolvedModelConfig, bool) {
-	if len(metadata) == 0 {
-		return resolvedModelConfig{}, false
+func resolveModelConfig(input core.UserInput) (resolvedModelConfig, bool) {
+	if input.RuntimeConfig != nil {
+		return resolveModelConfigFromRuntimeConfig(*input.RuntimeConfig)
 	}
-	providerName := strings.ToLower(strings.TrimSpace(metadata[runtimeMetadataModelProvider]))
-	endpoint := strings.TrimSpace(metadata[runtimeMetadataModelEndpoint])
+	return resolveModelConfigFromEnv()
+}
+
+func resolveModelConfigFromRuntimeConfig(config core.RuntimeConfig) (resolvedModelConfig, bool) {
+	providerName := strings.ToLower(strings.TrimSpace(config.Model.ProviderName))
+	endpoint := strings.TrimSpace(config.Model.Endpoint)
 	if providerName == "" || endpoint == "" {
 		return resolvedModelConfig{}, false
 	}
 
-	params := decodeModelParamsJSON(metadata[runtimeMetadataModelParams])
+	timeoutMS := config.Model.TimeoutMS
+	if timeoutMS <= 0 {
+		timeoutMS = defaultModelTimeoutMS
+	}
+	maxModelTurns := config.Model.MaxModelTurns
+	if maxModelTurns <= 0 {
+		maxModelTurns = defaultModelMaxTurns
+	}
+
 	return resolvedModelConfig{
 		ProviderName:  providerName,
 		Endpoint:      endpoint,
-		ModelName:     strings.TrimSpace(metadata[runtimeMetadataModelName]),
-		APIKey:        strings.TrimSpace(metadata[runtimeMetadataModelAPIKey]),
-		Params:        params,
-		TimeoutMS:     readMapInt(metadata, runtimeMetadataModelTimeout, 30000),
-		MaxModelTurns: readMapInt(metadata, runtimeMetadataMaxModelTurns, 8),
+		ModelName:     strings.TrimSpace(config.Model.ModelName),
+		APIKey:        strings.TrimSpace(config.Model.APIKey),
+		Params:        cloneMapAny(config.Model.Params),
+		TimeoutMS:     timeoutMS,
+		MaxModelTurns: maxModelTurns,
 	}, true
 }
 
@@ -195,33 +195,9 @@ func resolveModelConfigFromEnv() (resolvedModelConfig, bool) {
 		ModelName:     strings.TrimSpace(os.Getenv("GOYAIS_AGENT_MODEL_NAME")),
 		APIKey:        strings.TrimSpace(os.Getenv("GOYAIS_AGENT_MODEL_API_KEY")),
 		Params:        map[string]any{},
-		TimeoutMS:     readEnvInt("GOYAIS_AGENT_MODEL_TIMEOUT_MS", 30000),
-		MaxModelTurns: readEnvInt("GOYAIS_AGENT_MAX_MODEL_TURNS", 8),
+		TimeoutMS:     readEnvInt("GOYAIS_AGENT_MODEL_TIMEOUT_MS", defaultModelTimeoutMS),
+		MaxModelTurns: readEnvInt("GOYAIS_AGENT_MAX_MODEL_TURNS", defaultModelMaxTurns),
 	}, true
-}
-
-func decodeModelParamsJSON(raw string) map[string]any {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return map[string]any{}
-	}
-	decoded := map[string]any{}
-	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
-		return map[string]any{}
-	}
-	return decoded
-}
-
-func readMapInt(source map[string]string, key string, fallback int) int {
-	value := strings.TrimSpace(source[key])
-	if value == "" {
-		return fallback
-	}
-	parsed, err := strconv.Atoi(value)
-	if err != nil || parsed <= 0 {
-		return fallback
-	}
-	return parsed
 }
 
 func readEnvInt(key string, fallback int) int {
@@ -239,7 +215,7 @@ func readEnvInt(key string, fallback int) int {
 func defaultModelHTTPClient(timeoutMS int) *http.Client {
 	effectiveTimeoutMS := timeoutMS
 	if effectiveTimeoutMS <= 0 {
-		effectiveTimeoutMS = 30000
+		effectiveTimeoutMS = defaultModelTimeoutMS
 	}
 	return &http.Client{
 		Timeout: time.Duration(effectiveTimeoutMS) * time.Millisecond,
@@ -290,105 +266,32 @@ func parseInt(value any) (int, bool) {
 	}
 }
 
-func resolveToolingConfigFromMetadata(metadata map[string]string) resolvedToolingConfig {
-	config := resolvedToolingConfig{
-		PermissionMode: string(core.PermissionModeDefault),
-		RulesDSL:       "",
-		MCPServers:     nil,
-		BuiltinTools:   catalog.BuiltinToolNames(),
+func resolveToolingConfig(input core.UserInput) resolvedToolingConfig {
+	if input.RuntimeConfig != nil {
+		return resolveToolingConfigFromRuntimeConfig(*input.RuntimeConfig)
 	}
-	if len(metadata) == 0 {
-		return config
+	return resolvedToolingConfig{
+		PermissionMode:           string(core.PermissionModeDefault),
+		RulesDSL:                 "",
+		MCPServers:               nil,
+		AlwaysLoadedCapabilities: capabilitygraph.BuildBuiltinToolDescriptors(catalog.BuiltinToolSpecs()),
+		SearchableCapabilities:   nil,
 	}
-	if mode := strings.TrimSpace(metadata[runtimeMetadataPermissionMode]); mode != "" {
-		config.PermissionMode = mode
-	}
-	config.RulesDSL = strings.TrimSpace(metadata[runtimeMetadataRulesDSL])
-	if servers := decodeMCPServersJSON(metadata[runtimeMetadataMCPServersJSON]); len(servers) > 0 {
-		config.MCPServers = servers
-	}
-	if tools := decodeStringSliceJSON(metadata[runtimeMetadataBuiltinToolsJSON]); len(tools) > 0 {
-		config.BuiltinTools = tools
-	}
-	return config
 }
 
-func decodeMCPServersJSON(raw string) []mcpext.ServerConfig {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return nil
+func resolveToolingConfigFromRuntimeConfig(config core.RuntimeConfig) resolvedToolingConfig {
+	return resolvedToolingConfig{
+		PermissionMode:           string(config.Tooling.PermissionMode),
+		RulesDSL:                 strings.TrimSpace(config.Tooling.RulesDSL),
+		MCPServers:               cloneCoreMCPServers(config.Tooling.MCPServers),
+		AlwaysLoadedCapabilities: cloneCapabilityDescriptors(config.Tooling.AlwaysLoadedCapabilities),
+		SearchableCapabilities:   cloneCapabilityDescriptors(config.Tooling.SearchableCapabilities),
 	}
-	decoded := []struct {
-		Name      string            `json:"name"`
-		Transport string            `json:"transport"`
-		Endpoint  string            `json:"endpoint"`
-		Command   string            `json:"command"`
-		Env       map[string]string `json:"env"`
-		Tools     []string          `json:"tools"`
-	}{}
-	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
-		return nil
-	}
-	servers := make([]mcpext.ServerConfig, 0, len(decoded))
-	for _, item := range decoded {
-		name := strings.TrimSpace(item.Name)
-		if name == "" {
-			continue
-		}
-		servers = append(servers, mcpext.ServerConfig{
-			Name:      name,
-			Transport: strings.TrimSpace(item.Transport),
-			Endpoint:  strings.TrimSpace(item.Endpoint),
-			Command:   strings.TrimSpace(item.Command),
-			Env:       cloneStringMap(item.Env),
-			Tools:     dedupeNonEmpty(item.Tools),
-		})
-	}
-	return servers
 }
 
-func decodeStringSliceJSON(raw string) []string {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return nil
-	}
-	decoded := []string{}
-	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
-		return nil
-	}
-	return dedupeNonEmpty(decoded)
-}
-
-func selectBuiltinToolSpecs(enabled []string) []spec.ToolSpec {
-	all := catalog.BuiltinToolSpecs()
-	if len(enabled) == 0 {
-		return all
-	}
-	enabledSet := map[string]struct{}{}
-	for _, item := range dedupeNonEmpty(enabled) {
-		enabledSet[item] = struct{}{}
-	}
-	out := make([]spec.ToolSpec, 0, len(all))
-	for _, item := range all {
-		if _, ok := enabledSet[strings.TrimSpace(item.Name)]; !ok {
-			continue
-		}
-		out = append(out, item)
-	}
-	return out
-}
-
-func buildToolRegistry(builtin []spec.ToolSpec, mcp []spec.ToolSpec) (*registry.Registry, error) {
+func buildToolRegistry(items []spec.ToolSpec) (*registry.Registry, error) {
 	result := registry.New()
-	for _, item := range builtin {
-		if err := result.Register(item); err != nil {
-			return nil, err
-		}
-	}
-	for _, item := range mcp {
-		if _, exists := result.Lookup(item.Name); exists {
-			return nil, fmt.Errorf("mcp tool %q conflicts with existing tool name", strings.TrimSpace(item.Name))
-		}
+	for _, item := range items {
 		if err := result.Register(item); err != nil {
 			return nil, err
 		}
@@ -435,6 +338,7 @@ func splitDSLLines(content string) []string {
 type runtimePipelineToolInvoker struct {
 	Pipeline        *executor.Pipeline
 	Specs           spec.Resolver
+	Capabilities    map[string]core.CapabilityDescriptor
 	SessionMode     string
 	SafeMode        bool
 	ToolContext     executor.ToolContext
@@ -481,11 +385,15 @@ func (i runtimePipelineToolInvoker) emitToolCallDelta(call executor.ToolCall) {
 		return
 	}
 	i.EmitOutputDelta(core.OutputDeltaPayload{
-		Stage:     "tool_call",
-		CallID:    strings.TrimSpace(call.CallID),
-		Name:      strings.TrimSpace(call.Name),
-		RiskLevel: i.lookupRiskLevel(call.Name),
-		Input:     cloneMapAny(call.Input),
+		Stage:            "tool_call",
+		CallID:           strings.TrimSpace(call.CallID),
+		Name:             strings.TrimSpace(call.Name),
+		ResolvedName:     i.lookupResolvedName(call.Name),
+		CapabilityKind:   i.lookupCapabilityKind(call.Name),
+		CapabilitySource: i.lookupCapabilitySource(call.Name),
+		CapabilityScope:  i.lookupCapabilityScope(call.Name),
+		RiskLevel:        i.lookupRiskLevel(call.Name),
+		Input:            cloneMapAny(call.Input),
 	})
 }
 
@@ -495,18 +403,25 @@ func (i runtimePipelineToolInvoker) emitToolResultDelta(result executor.ExecuteS
 	}
 	ok := result.OK()
 	payload := core.OutputDeltaPayload{
-		Stage:     "tool_result",
-		CallID:    strings.TrimSpace(result.CallID),
-		Name:      strings.TrimSpace(result.ToolName),
-		Output:    cloneMapAny(result.Output),
-		Error:     strings.TrimSpace(result.ErrorText),
-		RiskLevel: i.lookupRiskLevel(result.ToolName),
-		OK:        &ok,
+		Stage:            "tool_result",
+		CallID:           strings.TrimSpace(result.CallID),
+		Name:             strings.TrimSpace(result.ToolName),
+		ResolvedName:     i.lookupResolvedName(result.ToolName),
+		CapabilityKind:   i.lookupCapabilityKind(result.ToolName),
+		CapabilitySource: i.lookupCapabilitySource(result.ToolName),
+		CapabilityScope:  i.lookupCapabilityScope(result.ToolName),
+		Output:           cloneMapAny(result.Output),
+		Error:            strings.TrimSpace(result.ErrorText),
+		RiskLevel:        i.lookupRiskLevel(result.ToolName),
+		OK:               &ok,
 	}
 	i.EmitOutputDelta(payload)
 }
 
 func (i runtimePipelineToolInvoker) lookupRiskLevel(toolName string) string {
+	if item, exists := i.lookupCapability(toolName); exists && strings.TrimSpace(item.RiskLevel) != "" {
+		return strings.TrimSpace(item.RiskLevel)
+	}
 	if i.Specs == nil {
 		return ""
 	}
@@ -515,6 +430,46 @@ func (i runtimePipelineToolInvoker) lookupRiskLevel(toolName string) string {
 		return ""
 	}
 	return strings.TrimSpace(item.RiskLevel)
+}
+
+func (i runtimePipelineToolInvoker) lookupCapabilityKind(toolName string) string {
+	item, exists := i.lookupCapability(toolName)
+	if !exists {
+		return ""
+	}
+	return string(item.Kind)
+}
+
+func (i runtimePipelineToolInvoker) lookupCapabilitySource(toolName string) string {
+	item, exists := i.lookupCapability(toolName)
+	if !exists {
+		return ""
+	}
+	return strings.TrimSpace(item.Source)
+}
+
+func (i runtimePipelineToolInvoker) lookupCapabilityScope(toolName string) string {
+	item, exists := i.lookupCapability(toolName)
+	if !exists {
+		return ""
+	}
+	return string(item.Scope)
+}
+
+func (i runtimePipelineToolInvoker) lookupResolvedName(toolName string) string {
+	item, exists := i.lookupCapability(toolName)
+	if !exists {
+		return strings.TrimSpace(toolName)
+	}
+	return resolvedCapabilityName(item)
+}
+
+func (i runtimePipelineToolInvoker) lookupCapability(toolName string) (core.CapabilityDescriptor, bool) {
+	if len(i.Capabilities) == 0 {
+		return core.CapabilityDescriptor{}, false
+	}
+	item, exists := i.Capabilities[strings.TrimSpace(toolName)]
+	return item, exists
 }
 
 func encodeToolResultForNextTurn(result executor.ExecuteSingleResult) string {
@@ -540,6 +495,7 @@ type runtimeApprovalWaiters struct {
 	RunID              core.RunID
 	Router             *approval.Router
 	Specs              spec.Resolver
+	Capabilities       map[string]core.CapabilityDescriptor
 	EmitOutputDelta    func(payload core.OutputDeltaPayload)
 	EmitApprovalNeeded func(payload core.ApprovalNeededPayload)
 	SetRunState        func(state core.RunState)
@@ -554,10 +510,15 @@ func (w runtimeApprovalWaiters) WaitForApproval(ctx context.Context, req executo
 		w.SetRunState(core.RunStateWaitingApproval)
 	}
 	if w.EmitApprovalNeeded != nil {
+		resolvedName, kind, source, scope := w.lookupCapabilityMetadata(req.ToolName)
 		w.EmitApprovalNeeded(core.ApprovalNeededPayload{
-			ToolName:  strings.TrimSpace(req.ToolName),
-			Input:     map[string]any{},
-			RiskLevel: riskLevel,
+			ToolName:         strings.TrimSpace(req.ToolName),
+			ResolvedName:     resolvedName,
+			CapabilityKind:   kind,
+			CapabilitySource: source,
+			CapabilityScope:  scope,
+			Input:            map[string]any{},
+			RiskLevel:        riskLevel,
 		})
 	}
 
@@ -566,11 +527,16 @@ func (w runtimeApprovalWaiters) WaitForApproval(ctx context.Context, req executo
 		return "", err
 	}
 	if w.EmitOutputDelta != nil {
+		resolvedName, kind, source, scope := w.lookupCapabilityMetadata(req.ToolName)
 		w.EmitOutputDelta(core.OutputDeltaPayload{
-			Stage:  "approval_resolved",
-			CallID: strings.TrimSpace(req.CallID),
-			Name:   strings.TrimSpace(req.ToolName),
-			Delta:  string(action),
+			Stage:            "approval_resolved",
+			CallID:           strings.TrimSpace(req.CallID),
+			Name:             strings.TrimSpace(req.ToolName),
+			ResolvedName:     resolvedName,
+			CapabilityKind:   kind,
+			CapabilitySource: source,
+			CapabilityScope:  scope,
+			Delta:            string(action),
 		})
 	}
 	switch action {
@@ -633,6 +599,9 @@ func (w runtimeApprovalWaiters) WaitForAnswer(ctx context.Context, question inte
 }
 
 func (w runtimeApprovalWaiters) lookupRiskLevel(toolName string) string {
+	if item, exists := w.lookupCapability(toolName); exists && strings.TrimSpace(item.RiskLevel) != "" {
+		return strings.TrimSpace(item.RiskLevel)
+	}
 	if w.Specs == nil {
 		return ""
 	}
@@ -641,6 +610,117 @@ func (w runtimeApprovalWaiters) lookupRiskLevel(toolName string) string {
 		return ""
 	}
 	return strings.TrimSpace(item.RiskLevel)
+}
+
+func (w runtimeApprovalWaiters) lookupCapabilityMetadata(toolName string) (string, string, string, string) {
+	item, exists := w.lookupCapability(toolName)
+	if !exists {
+		return strings.TrimSpace(toolName), "", "", ""
+	}
+	return resolvedCapabilityName(item), string(item.Kind), strings.TrimSpace(item.Source), string(item.Scope)
+}
+
+func (w runtimeApprovalWaiters) lookupCapability(toolName string) (core.CapabilityDescriptor, bool) {
+	if len(w.Capabilities) == 0 {
+		return core.CapabilityDescriptor{}, false
+	}
+	item, exists := w.Capabilities[strings.TrimSpace(toolName)]
+	return item, exists
+}
+
+func resolvedCapabilityName(item core.CapabilityDescriptor) string {
+	name := strings.TrimSpace(item.Name)
+	if item.Kind == core.CapabilityKindMCPTool && strings.HasPrefix(strings.ToLower(name), "mcp__") {
+		parts := strings.SplitN(name, "__", 3)
+		if len(parts) == 3 {
+			return strings.TrimSpace(parts[2])
+		}
+	}
+	return name
+}
+
+func indexCapabilities(items []core.CapabilityDescriptor) map[string]core.CapabilityDescriptor {
+	if len(items) == 0 {
+		return nil
+	}
+	index := make(map[string]core.CapabilityDescriptor, len(items))
+	for _, item := range items {
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			continue
+		}
+		copyItem := item
+		copyItem.InputSchema = cloneMapAny(item.InputSchema)
+		index[name] = copyItem
+	}
+	return index
+}
+
+func convertToMCPExtServers(items []core.MCPServerConfig) []mcpext.ServerConfig {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]mcpext.ServerConfig, 0, len(items))
+	for _, item := range items {
+		out = append(out, mcpext.ServerConfig{
+			Name:      strings.TrimSpace(item.Name),
+			Transport: strings.TrimSpace(item.Transport),
+			Endpoint:  strings.TrimSpace(item.Endpoint),
+			Command:   strings.TrimSpace(item.Command),
+			Env:       cloneStringMap(item.Env),
+			Tools:     dedupeNonEmpty(item.Tools),
+		})
+	}
+	return out
+}
+
+func convertToCoreMCPServers(items []mcpext.ServerConfig) []core.MCPServerConfig {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]core.MCPServerConfig, 0, len(items))
+	for _, item := range items {
+		out = append(out, core.MCPServerConfig{
+			Name:      strings.TrimSpace(item.Name),
+			Transport: strings.TrimSpace(item.Transport),
+			Endpoint:  strings.TrimSpace(item.Endpoint),
+			Command:   strings.TrimSpace(item.Command),
+			Env:       cloneStringMap(item.Env),
+			Tools:     dedupeNonEmpty(item.Tools),
+		})
+	}
+	return out
+}
+
+func cloneCoreMCPServers(items []core.MCPServerConfig) []core.MCPServerConfig {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]core.MCPServerConfig, 0, len(items))
+	for _, item := range items {
+		out = append(out, core.MCPServerConfig{
+			Name:      strings.TrimSpace(item.Name),
+			Transport: strings.TrimSpace(item.Transport),
+			Endpoint:  strings.TrimSpace(item.Endpoint),
+			Command:   strings.TrimSpace(item.Command),
+			Env:       cloneStringMap(item.Env),
+			Tools:     dedupeNonEmpty(item.Tools),
+		})
+	}
+	return out
+}
+
+func cloneCapabilityDescriptors(items []core.CapabilityDescriptor) []core.CapabilityDescriptor {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]core.CapabilityDescriptor, 0, len(items))
+	for _, item := range items {
+		copyItem := item
+		copyItem.InputSchema = cloneMapAny(item.InputSchema)
+		out = append(out, copyItem)
+	}
+	return out
 }
 
 type runtimeSandboxGate struct {

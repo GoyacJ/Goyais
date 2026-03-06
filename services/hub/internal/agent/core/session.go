@@ -60,8 +60,9 @@ func (h SessionHandle) Validate() error {
 
 // UserInput represents one user turn submitted to the runtime.
 type UserInput struct {
-	Text     string
-	Metadata map[string]string
+	Text          string
+	Metadata      map[string]string
+	RuntimeConfig *RuntimeConfig
 }
 
 // Validate ensures each turn has meaningful prompt content.

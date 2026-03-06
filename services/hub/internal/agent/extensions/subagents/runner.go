@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"goyais/services/hub/internal/agent/core"
+	pluginsext "goyais/services/hub/internal/agent/extensions/plugins"
 )
 
 const (
@@ -93,12 +94,19 @@ type BatchResult struct {
 type Runner struct {
 	workingDir   string
 	homeDir      string
+	pluginDirs   []pluginAgentDirectory
 	worktreeRoot string
 	now          func() time.Time
 	executor     Executor
 
 	mu       sync.Mutex
 	sequence uint64
+}
+
+type pluginAgentDirectory struct {
+	dir      string
+	pluginID string
+	allowed  map[string]struct{}
 }
 
 var _ core.SubagentRunner = (*Runner)(nil)
@@ -129,10 +137,53 @@ func NewRunner(options RunnerOptions) *Runner {
 	return &Runner{
 		workingDir:   workingDir,
 		homeDir:      homeDir,
+		pluginDirs:   discoverPluginAgentDirs(workingDir, homeDir),
 		worktreeRoot: worktreeRoot,
 		now:          now,
 		executor:     executor,
 	}
+}
+
+// Discover returns the visible subagent definitions, preferring project-local
+// definitions over plugin, user, and built-in defaults for the same normalized name.
+func (r *Runner) Discover(ctx context.Context) ([]AgentDefinition, error) {
+	selected := builtinDefinitions()
+	userDefs, err := r.discoverUserDefinitions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for name, definition := range userDefs {
+		selected[name] = definition
+	}
+	pluginDefs, err := r.discoverPluginDefinitions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for name, definition := range pluginDefs {
+		selected[name] = definition
+	}
+	projectDefs, err := r.discoverProjectDefinitions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for name, definition := range projectDefs {
+		selected[name] = definition
+	}
+
+	if len(selected) == 0 {
+		return nil, nil
+	}
+	keys := make([]string, 0, len(selected))
+	for key := range selected {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	out := make([]AgentDefinition, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, selected[key])
+	}
+	return out, nil
 }
 
 // Run executes one subagent request with depth and isolation guarantees.
@@ -241,7 +292,7 @@ func (r *Runner) RunBatch(ctx context.Context, requests []core.SubagentRequest) 
 }
 
 // Resolve resolves one agent definition, preferring project definitions over
-// built-in defaults.
+// plugin, user, and built-in defaults.
 func (r *Runner) Resolve(ctx context.Context, name string) (AgentDefinition, error) {
 	target := normalizeAgentName(name)
 	if target == "" {
@@ -255,6 +306,20 @@ func (r *Runner) Resolve(ctx context.Context, name string) (AgentDefinition, err
 	if definition, ok := projectDefs[target]; ok {
 		return definition, nil
 	}
+	pluginDefs, err := r.discoverPluginDefinitions(ctx)
+	if err != nil {
+		return AgentDefinition{}, err
+	}
+	if definition, ok := pluginDefs[target]; ok {
+		return definition, nil
+	}
+	userDefs, err := r.discoverUserDefinitions(ctx)
+	if err != nil {
+		return AgentDefinition{}, err
+	}
+	if definition, ok := userDefs[target]; ok {
+		return definition, nil
+	}
 
 	if definition, ok := builtinDefinitions()[target]; ok {
 		return definition, nil
@@ -264,12 +329,46 @@ func (r *Runner) Resolve(ctx context.Context, name string) (AgentDefinition, err
 }
 
 func (r *Runner) discoverProjectDefinitions(ctx context.Context) (map[string]AgentDefinition, error) {
-	out := make(map[string]AgentDefinition, 8)
 	if strings.TrimSpace(r.workingDir) == "" {
-		return out, nil
+		return map[string]AgentDefinition{}, nil
 	}
+	return discoverAgentDefinitionsInDir(ctx, filepath.Join(r.workingDir, ".claude", "agents"), "", nil)
+}
 
-	agentsDir := filepath.Join(r.workingDir, ".claude", "agents")
+func (r *Runner) discoverUserDefinitions(ctx context.Context) (map[string]AgentDefinition, error) {
+	if strings.TrimSpace(r.homeDir) == "" {
+		return map[string]AgentDefinition{}, nil
+	}
+	return discoverAgentDefinitionsInDir(ctx, filepath.Join(r.homeDir, ".claude", "agents"), "", nil)
+}
+
+func (r *Runner) discoverPluginDefinitions(ctx context.Context) (map[string]AgentDefinition, error) {
+	out := make(map[string]AgentDefinition, len(r.pluginDirs))
+	for _, pluginDir := range r.pluginDirs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		definitions, err := discoverAgentDefinitionsInDir(ctx, pluginDir.dir, pluginDir.pluginID, pluginDir.allowed)
+		if err != nil {
+			return nil, err
+		}
+		for name, definition := range definitions {
+			if _, exists := out[name]; exists {
+				continue
+			}
+			out[name] = definition
+		}
+	}
+	return out, nil
+}
+
+func discoverAgentDefinitionsInDir(
+	ctx context.Context,
+	agentsDir string,
+	pluginID string,
+	allowed map[string]struct{},
+) (map[string]AgentDefinition, error) {
+	out := make(map[string]AgentDefinition, 8)
 	entries, err := os.ReadDir(agentsDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -290,6 +389,12 @@ func (r *Runner) discoverProjectDefinitions(ctx context.Context) (map[string]Age
 		if ext != ".md" {
 			continue
 		}
+		name := normalizeAgentName(strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name())))
+		if len(allowed) > 0 {
+			if _, ok := allowed[name]; !ok {
+				continue
+			}
+		}
 		path := filepath.Join(agentsDir, entry.Name())
 		raw, err := os.ReadFile(path)
 		if err != nil {
@@ -299,20 +404,63 @@ func (r *Runner) discoverProjectDefinitions(ctx context.Context) (map[string]Age
 		if definition.Name == "" {
 			continue
 		}
+		if pluginID != "" {
+			definition.Source = pluginID
+		}
 		out[normalizeAgentName(definition.Name)] = definition
 	}
 	return out, nil
 }
 
+func discoverPluginAgentDirs(workingDir string, homeDir string) []pluginAgentDirectory {
+	roots, err := pluginsext.DiscoverAssetRoots(context.Background(), pluginsext.ManagerOptions{
+		WorkingDir: workingDir,
+		HomeDir:    homeDir,
+	}, pluginsext.AssetKindAgent)
+	if err != nil || len(roots) == 0 {
+		return nil
+	}
+	out := make([]pluginAgentDirectory, 0, len(roots))
+	for _, root := range roots {
+		if strings.TrimSpace(root.PluginID) == "" || strings.TrimSpace(root.Dir) == "" {
+			continue
+		}
+		out = append(out, pluginAgentDirectory{
+			dir:      root.Dir,
+			pluginID: root.PluginID,
+			allowed:  cloneAgentStringSet(root.AllowedSet()),
+		})
+	}
+	return out
+}
+
+func cloneAgentStringSet(input map[string]struct{}) map[string]struct{} {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make(map[string]struct{}, len(input))
+	for key := range input {
+		out[key] = struct{}{}
+	}
+	return out
+}
+
 func parseAgentDefinition(path string, fileName string, raw string) AgentDefinition {
 	frontmatter, body := parseDocument(raw)
-	name := normalizeAgentName(toString(frontmatter["name"]))
+	name := ""
+	if rawName, ok := frontmatter["name"]; ok {
+		name = normalizeAgentName(toString(rawName))
+	}
 	if name == "" {
 		name = normalizeAgentName(strings.TrimSuffix(fileName, filepath.Ext(fileName)))
 	}
+	description := ""
+	if rawDescription, ok := frontmatter["description"]; ok {
+		description = strings.TrimSpace(toString(rawDescription))
+	}
 	return AgentDefinition{
 		Name:            name,
-		Description:     firstNonEmpty(strings.TrimSpace(toString(frontmatter["description"])), firstMarkdownLine(body)),
+		Description:     firstNonEmpty(description, firstMarkdownLine(body)),
 		Model:           strings.TrimSpace(toString(frontmatter["model"])),
 		AllowedTools:    parseStringList(frontmatterValue(frontmatter, "allowedtools", "allowed-tools")),
 		DisallowedTools: parseStringList(frontmatterValue(frontmatter, "disallowedtools", "disallowed-tools")),

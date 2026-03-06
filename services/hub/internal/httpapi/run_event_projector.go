@@ -443,6 +443,18 @@ func mapRuntimeEnvelopeToExecutionEvent(event agentcore.EventEnvelope) (RunEvent
 			if name := strings.TrimSpace(typed.Name); name != "" {
 				payload["name"] = name
 			}
+			if resolvedName := strings.TrimSpace(typed.ResolvedName); resolvedName != "" {
+				payload["resolved_name"] = resolvedName
+			}
+			if capabilityKind := strings.TrimSpace(typed.CapabilityKind); capabilityKind != "" {
+				payload["capability_kind"] = capabilityKind
+			}
+			if capabilitySource := strings.TrimSpace(typed.CapabilitySource); capabilitySource != "" {
+				payload["capability_source"] = capabilitySource
+			}
+			if capabilityScope := strings.TrimSpace(typed.CapabilityScope); capabilityScope != "" {
+				payload["capability_scope"] = capabilityScope
+			}
 			if riskLevel := strings.TrimSpace(typed.RiskLevel); riskLevel != "" {
 				payload["risk_level"] = riskLevel
 			}

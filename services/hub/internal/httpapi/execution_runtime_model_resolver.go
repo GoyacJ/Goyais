@@ -9,7 +9,10 @@ import (
 	"fmt"
 	"strings"
 
+	capabilitygraph "goyais/services/hub/internal/agent/capability"
+	"goyais/services/hub/internal/agent/core"
 	"goyais/services/hub/internal/agent/tools/catalog"
+	toolspec "goyais/services/hub/internal/agent/tools/spec"
 )
 
 type runtimeModelConfig struct {
@@ -32,10 +35,15 @@ type runtimeMCPServerConfig struct {
 }
 
 type runtimeToolingConfig struct {
-	PermissionMode string
-	RulesDSL       string
-	MCPServers     []runtimeMCPServerConfig
-	BuiltinTools   []string
+	PermissionMode           string
+	RulesDSL                 string
+	MCPServers               []core.MCPServerConfig
+	BuiltinTools             []string
+	AlwaysLoadedCapabilities []core.CapabilityDescriptor
+	SearchableCapabilities   []core.CapabilityDescriptor
+	PromptBudgetChars        int
+	MCPSearchEnabled         bool
+	SearchThresholdRatio     float64
 }
 
 func resolveRuntimeModelConfigForExecution(state *AppState, execution Execution) (runtimeModelConfig, error) {
@@ -129,7 +137,38 @@ func resolveRuntimeToolingConfigForExecution(state *AppState, execution Executio
 		return runtimeToolingConfig{}, fmt.Errorf("workspace_id is required")
 	}
 
-	ruleIDs, mcpIDs := resolveExecutionToolResourceIDs(state, execution)
+	ruleIDs, skillIDs, mcpIDs, projectRepoPath := resolveExecutionToolResourceIDs(state, execution)
+	workspaceAgentConfig, workspaceAgentConfigErr := loadWorkspaceAgentConfigFromStore(state, workspaceID)
+	if workspaceAgentConfigErr != nil {
+		return runtimeToolingConfig{}, fmt.Errorf("load workspace agent config failed: %w", workspaceAgentConfigErr)
+	}
+	return resolveRuntimeToolingConfig(
+		state,
+		workspaceID,
+		resolveExecutionPermissionModeForRuntime(state, execution),
+		ruleIDs,
+		skillIDs,
+		mcpIDs,
+		projectRepoPath,
+		workspaceAgentConfig,
+	)
+}
+
+func resolveRuntimeToolingConfig(
+	state *AppState,
+	workspaceID string,
+	permissionMode PermissionMode,
+	ruleIDs []string,
+	skillIDs []string,
+	mcpIDs []string,
+	projectRepoPath string,
+	workspaceAgentConfig WorkspaceAgentConfig,
+) (runtimeToolingConfig, error) {
+	normalizedWorkspaceID := strings.TrimSpace(workspaceID)
+	if normalizedWorkspaceID == "" {
+		return runtimeToolingConfig{}, fmt.Errorf("workspace_id is required")
+	}
+
 	rulesDSL, err := resolveMergedRuleDSLForRuntime(state, workspaceID, ruleIDs)
 	if err != nil {
 		return runtimeToolingConfig{}, err
@@ -138,12 +177,34 @@ func resolveRuntimeToolingConfigForExecution(state *AppState, execution Executio
 	if err != nil {
 		return runtimeToolingConfig{}, err
 	}
+	normalizedAgentConfig := normalizeWorkspaceAgentConfig(normalizedWorkspaceID, workspaceAgentConfig, workspaceAgentConfig.UpdatedAt)
+	builtinSpecs := selectRuntimeBuiltinToolSpecs(normalizedAgentConfig.BuiltinTools)
+	capabilities := make([]core.CapabilityDescriptor, 0, 32)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, capabilitygraph.BuildBuiltinToolDescriptors(builtinSpecs)...)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, capabilitygraph.BuildMCPToolDescriptors(mcpServers)...)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, resolveWorkspaceSkillCapabilities(state, normalizedWorkspaceID, skillIDs)...)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, discoverFilesystemSkillCapabilities(projectRepoPath)...)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, discoverSlashCapabilities(projectRepoPath)...)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, discoverOutputStyleCapabilities(projectRepoPath)...)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, discoverSubagentCapabilities(projectRepoPath)...)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, discoverMCPPromptCapabilities(projectRepoPath)...)
+	resolvedCapabilities := capabilitygraph.ResolveTooling(capabilitygraph.ResolveRequest{
+		Capabilities:         capabilities,
+		PromptBudgetChars:    normalizedAgentConfig.CapabilityBudgets.PromptBudgetChars,
+		EnableMCPSearch:      normalizedAgentConfig.MCPSearch.Enabled && normalizedAgentConfig.FeatureFlags.EnableToolSearch,
+		SearchThresholdRatio: float64(normalizedAgentConfig.CapabilityBudgets.SearchThresholdPercent) / 100,
+	})
 
 	return runtimeToolingConfig{
-		PermissionMode: string(resolveExecutionPermissionModeForRuntime(state, execution)),
-		RulesDSL:       rulesDSL,
-		MCPServers:     mcpServers,
-		BuiltinTools:   catalog.BuiltinToolNames(),
+		PermissionMode:           string(permissionMode),
+		RulesDSL:                 rulesDSL,
+		MCPServers:               mcpServers,
+		BuiltinTools:             append([]string{}, normalizedAgentConfig.BuiltinTools...),
+		AlwaysLoadedCapabilities: resolvedCapabilities.AlwaysLoaded,
+		SearchableCapabilities:   resolvedCapabilities.Searchable,
+		PromptBudgetChars:        normalizedAgentConfig.CapabilityBudgets.PromptBudgetChars,
+		MCPSearchEnabled:         normalizedAgentConfig.MCPSearch.Enabled && normalizedAgentConfig.FeatureFlags.EnableToolSearch,
+		SearchThresholdRatio:     float64(normalizedAgentConfig.CapabilityBudgets.SearchThresholdPercent) / 100,
 	}, nil
 }
 
@@ -167,21 +228,58 @@ func resolveExecutionPermissionModeForRuntime(state *AppState, execution Executi
 	return NormalizePermissionMode(string(conversation.DefaultMode))
 }
 
-func resolveExecutionToolResourceIDs(state *AppState, execution Execution) ([]string, []string) {
+func resolveExecutionToolResourceIDs(state *AppState, execution Execution) ([]string, []string, []string, string) {
 	if execution.ResourceProfileSnapshot != nil {
-		return sanitizeIDList(execution.ResourceProfileSnapshot.RuleIDs), sanitizeIDList(execution.ResourceProfileSnapshot.MCPIDs)
+		return sanitizeIDList(execution.ResourceProfileSnapshot.RuleIDs),
+			sanitizeIDList(execution.ResourceProfileSnapshot.SkillIDs),
+			sanitizeIDList(execution.ResourceProfileSnapshot.MCPIDs),
+			resolveExecutionProjectRepoPath(state, execution)
 	}
 	conversationID := strings.TrimSpace(execution.ConversationID)
 	if conversationID == "" || state == nil {
-		return nil, nil
+		return nil, nil, nil, ""
 	}
 	state.mu.RLock()
 	conversation, exists := state.conversations[conversationID]
 	state.mu.RUnlock()
 	if !exists {
-		return nil, nil
+		return nil, nil, nil, ""
 	}
-	return sanitizeIDList(conversation.RuleIDs), sanitizeIDList(conversation.MCPIDs)
+	return sanitizeIDList(conversation.RuleIDs),
+		sanitizeIDList(conversation.SkillIDs),
+		sanitizeIDList(conversation.MCPIDs),
+		resolveProjectRepoPathFromConversation(state, conversation)
+}
+
+func resolveExecutionProjectRepoPath(state *AppState, execution Execution) string {
+	conversationID := strings.TrimSpace(execution.ConversationID)
+	if conversationID == "" || state == nil {
+		return ""
+	}
+	state.mu.RLock()
+	conversation, exists := state.conversations[conversationID]
+	state.mu.RUnlock()
+	if !exists {
+		return ""
+	}
+	return resolveProjectRepoPathFromConversation(state, conversation)
+}
+
+func resolveProjectRepoPathFromConversation(state *AppState, conversation Conversation) string {
+	if state == nil {
+		return ""
+	}
+	projectID := strings.TrimSpace(conversation.ProjectID)
+	if projectID == "" {
+		return ""
+	}
+	state.mu.RLock()
+	project, exists := state.projects[projectID]
+	state.mu.RUnlock()
+	if !exists {
+		return ""
+	}
+	return strings.TrimSpace(project.RepoPath)
 }
 
 func resolveMergedRuleDSLForRuntime(state *AppState, workspaceID string, ruleIDs []string) (string, error) {
@@ -211,7 +309,7 @@ func resolveMergedRuleDSLForRuntime(state *AppState, workspaceID string, ruleIDs
 	return strings.TrimSpace(strings.Join(segments, "\n")), nil
 }
 
-func resolveMCPServersForRuntime(state *AppState, workspaceID string, mcpIDs []string) ([]runtimeMCPServerConfig, error) {
+func resolveMCPServersForRuntime(state *AppState, workspaceID string, mcpIDs []string) ([]core.MCPServerConfig, error) {
 	normalizedWorkspaceID := strings.TrimSpace(workspaceID)
 	if normalizedWorkspaceID == "" {
 		return nil, fmt.Errorf("workspace_id is required")
@@ -220,7 +318,7 @@ func resolveMCPServersForRuntime(state *AppState, workspaceID string, mcpIDs []s
 		return nil, nil
 	}
 
-	servers := make([]runtimeMCPServerConfig, 0, len(mcpIDs))
+	servers := make([]core.MCPServerConfig, 0, len(mcpIDs))
 	for _, mcpID := range sanitizeIDList(mcpIDs) {
 		item, exists, err := loadWorkspaceResourceConfigRaw(state, normalizedWorkspaceID, mcpID)
 		if err != nil {
@@ -236,7 +334,7 @@ func resolveMCPServersForRuntime(state *AppState, workspaceID string, mcpIDs []s
 		if name == "" {
 			continue
 		}
-		servers = append(servers, runtimeMCPServerConfig{
+		servers = append(servers, core.MCPServerConfig{
 			Name:      name,
 			Transport: strings.TrimSpace(item.MCP.Transport),
 			Endpoint:  strings.TrimSpace(item.MCP.Endpoint),
@@ -255,6 +353,51 @@ func cloneStringMapForRuntime(input map[string]string) map[string]string {
 	out := make(map[string]string, len(input))
 	for key, value := range input {
 		out[key] = value
+	}
+	return out
+}
+
+func appendUniqueRuntimeCapabilities(target []core.CapabilityDescriptor, items ...core.CapabilityDescriptor) []core.CapabilityDescriptor {
+	if len(items) == 0 {
+		return target
+	}
+	seen := make(map[string]struct{}, len(target))
+	for _, item := range target {
+		key := strings.ToLower(strings.TrimSpace(string(item.Kind)) + ":" + strings.TrimSpace(item.Name))
+		if key == ":" {
+			continue
+		}
+		seen[key] = struct{}{}
+	}
+	for _, item := range items {
+		key := strings.ToLower(strings.TrimSpace(string(item.Kind)) + ":" + strings.TrimSpace(item.Name))
+		if key == ":" {
+			continue
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		target = append(target, item)
+	}
+	return target
+}
+
+func selectRuntimeBuiltinToolSpecs(enabled []string) []toolspec.ToolSpec {
+	all := catalog.BuiltinToolSpecs()
+	if len(enabled) == 0 {
+		return all
+	}
+	enabledSet := map[string]struct{}{}
+	for _, item := range sanitizeIDList(enabled) {
+		enabledSet[item] = struct{}{}
+	}
+	out := make([]toolspec.ToolSpec, 0, len(all))
+	for _, item := range all {
+		if _, ok := enabledSet[strings.TrimSpace(item.Name)]; !ok {
+			continue
+		}
+		out = append(out, item)
 	}
 	return out
 }

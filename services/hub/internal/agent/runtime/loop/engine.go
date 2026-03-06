@@ -436,6 +436,7 @@ func (e *Engine) executeRun(ctx context.Context, run *runRuntime) {
 			WorkingDir:            run.workingDir,
 			AdditionalDirectories: append([]string(nil), run.additionalDirectories...),
 			UserInput:             run.input.Text,
+			Capabilities:          promptCapabilities(run.input.RuntimeConfig),
 		})
 		if buildErr != nil {
 			if errors.Is(buildErr, context.Canceled) || errors.Is(buildErr, context.DeadlineExceeded) || ctx.Err() != nil {
@@ -747,6 +748,39 @@ func sanitizeDirectories(input []string) []string {
 	}
 	if len(out) == 0 {
 		return nil
+	}
+	return out
+}
+
+func promptCapabilities(config *core.RuntimeConfig) []core.CapabilityDescriptor {
+	if config == nil {
+		return nil
+	}
+	total := len(config.Tooling.AlwaysLoadedCapabilities) + len(config.Tooling.SearchableCapabilities)
+	if total == 0 {
+		return nil
+	}
+	out := make([]core.CapabilityDescriptor, 0, total)
+	for _, item := range config.Tooling.AlwaysLoadedCapabilities {
+		copyItem := item
+		copyItem.InputSchema = cloneCapabilityInputSchema(item.InputSchema)
+		out = append(out, copyItem)
+	}
+	for _, item := range config.Tooling.SearchableCapabilities {
+		copyItem := item
+		copyItem.InputSchema = cloneCapabilityInputSchema(item.InputSchema)
+		out = append(out, copyItem)
+	}
+	return out
+}
+
+func cloneCapabilityInputSchema(input map[string]any) map[string]any {
+	if len(input) == 0 {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(input))
+	for key, value := range input {
+		out[key] = value
 	}
 	return out
 }

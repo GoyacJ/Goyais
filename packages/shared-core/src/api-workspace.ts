@@ -1,4 +1,4 @@
-import type { AuthMode, ConnectionStatus, ConversationStatus, Role, TraceDetailLevel, WorkspaceMode } from "./api-common";
+import type { AuthMode, ConnectionStatus, ConversationStatus, PermissionMode, Role, TraceDetailLevel, WorkspaceMode } from "./api-common";
 
 export type Workspace = {
   id: string;
@@ -44,6 +44,25 @@ export type WorkspaceAgentConfig = {
   display: {
     show_process_trace: boolean;
     trace_detail_level: TraceDetailLevel;
+  };
+  default_mode: PermissionMode;
+  builtin_tools: string[];
+  capability_budgets: {
+    prompt_budget_chars: number;
+    search_threshold_percent: number;
+  };
+  mcp_search: {
+    enabled: boolean;
+    result_limit: number;
+  };
+  output_style: string;
+  subagent_defaults: {
+    max_turns: number;
+    allowed_tools?: string[];
+  };
+  feature_flags: {
+    enable_tool_search: boolean;
+    enable_capability_graph: boolean;
   };
   updated_at: string;
 };

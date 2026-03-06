@@ -294,6 +294,10 @@ func cloneExecutionResourceProfile(input *ExecutionResourceProfile) *ExecutionRe
 	output.RuleIDs = append([]string{}, input.RuleIDs...)
 	output.SkillIDs = append([]string{}, input.SkillIDs...)
 	output.MCPIDs = append([]string{}, input.MCPIDs...)
+	output.ProjectFilePaths = append([]string{}, input.ProjectFilePaths...)
+	output.MCPServers = cloneExecutionMCPServerSnapshots(input.MCPServers)
+	output.AlwaysLoadedCapabilities = cloneExecutionCapabilityDescriptorSnapshots(input.AlwaysLoadedCapabilities)
+	output.SearchableCapabilities = cloneExecutionCapabilityDescriptorSnapshots(input.SearchableCapabilities)
 	return &output
 }
 

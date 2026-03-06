@@ -56,14 +56,18 @@ type OutputDeltaPayload struct {
 	Delta     string
 	ToolUseID string
 
-	Stage     string
-	CallID    string
-	Name      string
-	RiskLevel string
-	Input     map[string]any
-	Output    map[string]any
-	Error     string
-	OK        *bool
+	Stage            string
+	CallID           string
+	Name             string
+	ResolvedName     string
+	CapabilityKind   string
+	CapabilitySource string
+	CapabilityScope  string
+	RiskLevel        string
+	Input            map[string]any
+	Output           map[string]any
+	Error            string
+	OK               *bool
 
 	QuestionID          string
 	Question            string
@@ -80,9 +84,13 @@ func (OutputDeltaPayload) isEventPayload() {}
 
 // ApprovalNeededPayload describes a permission checkpoint before tool use.
 type ApprovalNeededPayload struct {
-	ToolName  string
-	Input     map[string]any
-	RiskLevel string
+	ToolName         string
+	ResolvedName     string
+	CapabilityKind   string
+	CapabilitySource string
+	CapabilityScope  string
+	Input            map[string]any
+	RiskLevel        string
 }
 
 func (ApprovalNeededPayload) isEventPayload() {}

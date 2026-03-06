@@ -270,11 +270,38 @@ type WorkspaceAgentDisplayConfig struct {
 	TraceDetailLevel WorkspaceAgentConfigTraceDetailLevel `json:"trace_detail_level"`
 }
 
+type WorkspaceAgentCapabilityBudgets struct {
+	PromptBudgetChars     int `json:"prompt_budget_chars"`
+	SearchThresholdPercent int `json:"search_threshold_percent"`
+}
+
+type WorkspaceAgentMCPSearchConfig struct {
+	Enabled    bool `json:"enabled"`
+	ResultLimit int `json:"result_limit"`
+}
+
+type WorkspaceAgentSubagentDefaults struct {
+	MaxTurns     int      `json:"max_turns"`
+	AllowedTools []string `json:"allowed_tools,omitempty"`
+}
+
+type WorkspaceAgentFeatureFlags struct {
+	EnableToolSearch      bool `json:"enable_tool_search"`
+	EnableCapabilityGraph bool `json:"enable_capability_graph"`
+}
+
 type WorkspaceAgentConfig struct {
-	WorkspaceID string                        `json:"workspace_id"`
-	Execution   WorkspaceAgentExecutionConfig `json:"execution"`
-	Display     WorkspaceAgentDisplayConfig   `json:"display"`
-	UpdatedAt   string                        `json:"updated_at"`
+	WorkspaceID       string                         `json:"workspace_id"`
+	Execution         WorkspaceAgentExecutionConfig  `json:"execution"`
+	Display           WorkspaceAgentDisplayConfig    `json:"display"`
+	DefaultMode       PermissionMode                 `json:"default_mode"`
+	BuiltinTools      []string                       `json:"builtin_tools"`
+	CapabilityBudgets WorkspaceAgentCapabilityBudgets `json:"capability_budgets"`
+	MCPSearch         WorkspaceAgentMCPSearchConfig  `json:"mcp_search"`
+	OutputStyle       string                         `json:"output_style"`
+	SubagentDefaults  WorkspaceAgentSubagentDefaults `json:"subagent_defaults"`
+	FeatureFlags      WorkspaceAgentFeatureFlags     `json:"feature_flags"`
+	UpdatedAt         string                         `json:"updated_at"`
 }
 
 type CreateWorkspaceRequest struct {
@@ -546,18 +573,55 @@ type TaskControlResponse struct {
 }
 
 type ExecutionAgentConfigSnapshot struct {
-	MaxModelTurns    int                                  `json:"max_model_turns"`
-	ShowProcessTrace bool                                 `json:"show_process_trace"`
-	TraceDetailLevel WorkspaceAgentConfigTraceDetailLevel `json:"trace_detail_level"`
+	MaxModelTurns     int                                  `json:"max_model_turns"`
+	ShowProcessTrace  bool                                 `json:"show_process_trace"`
+	TraceDetailLevel  WorkspaceAgentConfigTraceDetailLevel `json:"trace_detail_level"`
+	DefaultMode       PermissionMode                       `json:"default_mode"`
+	BuiltinTools      []string                             `json:"builtin_tools,omitempty"`
+	CapabilityBudgets WorkspaceAgentCapabilityBudgets      `json:"capability_budgets"`
+	MCPSearch         WorkspaceAgentMCPSearchConfig        `json:"mcp_search"`
+	OutputStyle       string                               `json:"output_style,omitempty"`
+	SubagentDefaults  WorkspaceAgentSubagentDefaults       `json:"subagent_defaults"`
+	FeatureFlags      WorkspaceAgentFeatureFlags           `json:"feature_flags"`
+}
+
+type ExecutionMCPServerSnapshot struct {
+	Name      string            `json:"name"`
+	Transport string            `json:"transport"`
+	Endpoint  string            `json:"endpoint,omitempty"`
+	Command   string            `json:"command,omitempty"`
+	Env       map[string]string `json:"env,omitempty"`
+	Tools     []string          `json:"tools,omitempty"`
+}
+
+type ExecutionCapabilityDescriptorSnapshot struct {
+	ID                  string         `json:"id"`
+	Kind                string         `json:"kind"`
+	Name                string         `json:"name"`
+	Description         string         `json:"description"`
+	Source              string         `json:"source"`
+	Scope               string         `json:"scope"`
+	Version             string         `json:"version"`
+	InputSchema         map[string]any `json:"input_schema,omitempty"`
+	RiskLevel           string         `json:"risk_level"`
+	ReadOnly            bool           `json:"read_only"`
+	ConcurrencySafe     bool           `json:"concurrency_safe"`
+	RequiresPermissions bool           `json:"requires_permissions"`
+	VisibilityPolicy    string         `json:"visibility_policy"`
+	PromptBudgetCost    int            `json:"prompt_budget_cost"`
 }
 
 type ExecutionResourceProfile struct {
-	ModelConfigID    string   `json:"model_config_id,omitempty"`
-	ModelID          string   `json:"model_id"`
-	RuleIDs          []string `json:"rule_ids,omitempty"`
-	SkillIDs         []string `json:"skill_ids,omitempty"`
-	MCPIDs           []string `json:"mcp_ids,omitempty"`
-	ProjectFilePaths []string `json:"project_file_paths,omitempty"`
+	ModelConfigID           string                                `json:"model_config_id,omitempty"`
+	ModelID                 string                                `json:"model_id"`
+	RuleIDs                 []string                              `json:"rule_ids,omitempty"`
+	SkillIDs                []string                              `json:"skill_ids,omitempty"`
+	MCPIDs                  []string                              `json:"mcp_ids,omitempty"`
+	ProjectFilePaths        []string                              `json:"project_file_paths,omitempty"`
+	RulesDSL                string                                `json:"rules_dsl,omitempty"`
+	MCPServers              []ExecutionMCPServerSnapshot          `json:"mcp_servers,omitempty"`
+	AlwaysLoadedCapabilities []ExecutionCapabilityDescriptorSnapshot `json:"always_loaded_capabilities,omitempty"`
+	SearchableCapabilities  []ExecutionCapabilityDescriptorSnapshot `json:"searchable_capabilities,omitempty"`
 }
 
 type ModelSnapshot struct {
@@ -570,27 +634,22 @@ type ModelSnapshot struct {
 	Params     map[string]any    `json:"params,omitempty"`
 }
 
-type ComposerResourceType string
+type ComposerCapabilityKind string
 
 const (
-	ComposerResourceTypeModel ComposerResourceType = "model"
-	ComposerResourceTypeRule  ComposerResourceType = "rule"
-	ComposerResourceTypeSkill ComposerResourceType = "skill"
-	ComposerResourceTypeMCP   ComposerResourceType = "mcp"
-	ComposerResourceTypeFile  ComposerResourceType = "file"
+	ComposerCapabilityKindModel ComposerCapabilityKind = "model"
+	ComposerCapabilityKindRule  ComposerCapabilityKind = "rule"
+	ComposerCapabilityKindSkill ComposerCapabilityKind = "skill"
+	ComposerCapabilityKindMCP   ComposerCapabilityKind = "mcp"
+	ComposerCapabilityKindFile  ComposerCapabilityKind = "file"
 )
 
-type ComposerSelectedResource struct {
-	Type ComposerResourceType `json:"type"`
-	ID   string               `json:"id"`
-}
-
 type ComposerSubmitRequest struct {
-	RawInput          string                     `json:"raw_input"`
-	Mode              ConversationMode           `json:"mode"`
-	ModelConfigID     string                     `json:"model_config_id,omitempty"`
-	SelectedResources []ComposerSelectedResource `json:"selected_resources,omitempty"`
-	CatalogRevision   string                     `json:"catalog_revision,omitempty"`
+	RawInput             string             `json:"raw_input"`
+	Mode                 ConversationMode   `json:"mode"`
+	ModelConfigID        string             `json:"model_config_id,omitempty"`
+	SelectedCapabilities []string           `json:"selected_capabilities,omitempty"`
+	CatalogRevision      string             `json:"catalog_revision,omitempty"`
 }
 
 type ComposerCommandCatalogItem struct {
@@ -599,16 +658,19 @@ type ComposerCommandCatalogItem struct {
 	Kind        string `json:"kind"`
 }
 
-type ComposerResourceCatalogItem struct {
-	Type ComposerResourceType `json:"type"`
-	ID   string               `json:"id"`
-	Name string               `json:"name"`
+type ComposerCapabilityCatalogItem struct {
+	ID          string                 `json:"id"`
+	Kind        ComposerCapabilityKind `json:"kind"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	Source      string                 `json:"source,omitempty"`
+	Scope       string                 `json:"scope,omitempty"`
 }
 
 type ComposerCatalogResponse struct {
-	Revision  string                        `json:"revision"`
-	Commands  []ComposerCommandCatalogItem  `json:"commands"`
-	Resources []ComposerResourceCatalogItem `json:"resources"`
+	Revision     string                          `json:"revision"`
+	Commands     []ComposerCommandCatalogItem    `json:"commands"`
+	Capabilities []ComposerCapabilityCatalogItem `json:"capabilities"`
 }
 
 type ComposerSuggestRequest struct {

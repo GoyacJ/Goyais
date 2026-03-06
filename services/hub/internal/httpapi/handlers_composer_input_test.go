@@ -34,12 +34,7 @@ func TestConversationInputSubmit_AppliesExplicitRuleSelectionPerMessage(t *testi
 	router := composerInputTestMux(state)
 	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "@rule:" + overrideRuleID + " please apply override",
-		"selected_resources": []map[string]any{
-			{
-				"type": "rule",
-				"id":   overrideRuleID,
-			},
-		},
+		"selected_capabilities": []string{"rule:" + overrideRuleID},
 	}, nil)
 	if res.Code != http.StatusCreated {
 		t.Fatalf("expected submit 201, got %d (%s)", res.Code, res.Body.String())
@@ -76,12 +71,7 @@ func TestConversationInputSubmit_RejectsUnknownRuleSelection(t *testing.T) {
 
 	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "@rule:rc_rule_blocked check this",
-		"selected_resources": []map[string]any{
-			{
-				"type": "rule",
-				"id":   "rc_rule_blocked",
-			},
-		},
+		"selected_capabilities": []string{"rule:rc_rule_blocked"},
 	}, nil)
 	if res.Code != http.StatusBadRequest {
 		t.Fatalf("expected submit 400, got %d (%s)", res.Code, res.Body.String())
@@ -334,6 +324,67 @@ func TestConversationInputSubmit_RejectsStaleCatalogRevision(t *testing.T) {
 	}
 }
 
+func TestConversationInputCatalog_ReturnsCapabilities(t *testing.T) {
+	state, conversationID := seedConversationMessageValidationState(t)
+	router := composerInputTestMux(state)
+
+	res := performJSONRequest(t, router, http.MethodGet, "/v1/sessions/"+conversationID+"/input/catalog", nil, nil)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected catalog 200, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	items, ok := payload["capabilities"].([]any)
+	if !ok || len(items) == 0 {
+		t.Fatalf("expected non-empty capabilities list, got %#v", payload["capabilities"])
+	}
+	first, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected capability item map, got %#v", items[0])
+	}
+	if strings.TrimSpace(asString(first["id"])) == "" {
+		t.Fatalf("expected capability id, got %#v", first)
+	}
+	if strings.TrimSpace(asString(first["kind"])) == "" {
+		t.Fatalf("expected capability kind, got %#v", first)
+	}
+}
+
+func TestConversationInputSubmit_AcceptsSelectedCapabilities(t *testing.T) {
+	state, conversationID := seedConversationMessageValidationState(t)
+	conversation := state.conversations[conversationID]
+	projectID := conversation.ProjectID
+	workspaceID := conversation.WorkspaceID
+	overrideRuleID := "rc_rule_override_capability"
+	now := conversation.UpdatedAt
+
+	projectConfig := state.projectConfigs[projectID]
+	projectConfig.RuleIDs = append(projectConfig.RuleIDs, overrideRuleID)
+	state.projectConfigs[projectID] = projectConfig
+
+	mustSaveTestResourceConfig(t, state, ResourceConfig{
+		ID:          overrideRuleID,
+		WorkspaceID: workspaceID,
+		Type:        ResourceTypeRule,
+		Enabled:     true,
+		Rule:        &RuleSpec{Content: "override rule"},
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
+
+	router := composerInputTestMux(state)
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
+		"raw_input": "@rule:" + overrideRuleID + " please apply override",
+		"selected_capabilities": []string{
+			"rule:" + overrideRuleID,
+		},
+	}, nil)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("expected submit 201, got %d (%s)", res.Code, res.Body.String())
+	}
+}
+
 func TestConversationInputSubmit_RejectsDisabledReferencedResource(t *testing.T) {
 	state, conversationID := seedConversationMessageValidationState(t)
 	conversation := state.conversations[conversationID]
@@ -353,12 +404,7 @@ func TestConversationInputSubmit_RejectsDisabledReferencedResource(t *testing.T)
 	router := composerInputTestMux(state)
 	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "@rule:" + disabledRuleID + " check this",
-		"selected_resources": []map[string]any{
-			{
-				"type": "rule",
-				"id":   disabledRuleID,
-			},
-		},
+		"selected_capabilities": []string{"rule:" + disabledRuleID},
 	}, nil)
 	if res.Code != http.StatusBadRequest {
 		t.Fatalf("expected submit 400, got %d (%s)", res.Code, res.Body.String())
@@ -386,12 +432,7 @@ func TestConversationInputSubmit_AllowsFileSelectionAndSnapshotsPaths(t *testing
 	router := composerInputTestMux(state)
 	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "@file:src/main.ts explain this file",
-		"selected_resources": []map[string]any{
-			{
-				"type": "file",
-				"id":   "src/main.ts",
-			},
-		},
+		"selected_capabilities": []string{"file:src/main.ts"},
 	}, nil)
 	if res.Code != http.StatusCreated {
 		t.Fatalf("expected submit 201, got %d (%s)", res.Code, res.Body.String())
@@ -427,12 +468,7 @@ func TestConversationInputSubmit_RejectsFileOutsideProject(t *testing.T) {
 	router := composerInputTestMux(state)
 	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input": "@file:../secret.txt check this",
-		"selected_resources": []map[string]any{
-			{
-				"type": "file",
-				"id":   "../secret.txt",
-			},
-		},
+		"selected_capabilities": []string{"file:../secret.txt"},
 	}, nil)
 	if res.Code != http.StatusBadRequest {
 		t.Fatalf("expected submit 400, got %d (%s)", res.Code, res.Body.String())
@@ -506,8 +542,8 @@ func TestConversationInputSubmit_RejectsSelectedResourcesMismatchForFileMention(
 	payload := map[string]any{}
 	mustDecodeJSON(t, res.Body.Bytes(), &payload)
 	message := strings.TrimSpace(asString(payload["message"]))
-	if !strings.Contains(message, "selected_resources must exactly match @resource/@file mentions") {
-		t.Fatalf("expected selected_resources mismatch error, got %q", message)
+	if !strings.Contains(message, "selected_capabilities must exactly match @resource/@file mentions") {
+		t.Fatalf("expected selected_capabilities mismatch error, got %q", message)
 	}
 }
 

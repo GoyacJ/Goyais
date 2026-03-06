@@ -121,9 +121,10 @@ type HandoffSessionResponse struct {
 
 // SubmitRequest is the transport-facing submit input.
 type SubmitRequest struct {
-	SessionID string
-	Input     string
-	Metadata  map[string]string
+	SessionID     string
+	Input         string
+	Metadata      map[string]string
+	RuntimeConfig *core.RuntimeConfig
 }
 
 // SubmitResponse is the transport-facing submit output.
@@ -204,8 +205,9 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (SubmitResponse
 		return SubmitResponse{}, core.ErrEngineNotConfigured
 	}
 	runID, err := s.engine.Submit(ctx, strings.TrimSpace(req.SessionID), core.UserInput{
-		Text:     strings.TrimSpace(req.Input),
-		Metadata: cloneStringMap(req.Metadata),
+		Text:          strings.TrimSpace(req.Input),
+		Metadata:      cloneStringMap(req.Metadata),
+		RuntimeConfig: resolveSubmitRuntimeConfig(req.RuntimeConfig, req.Metadata),
 	})
 	if err != nil {
 		return SubmitResponse{}, err

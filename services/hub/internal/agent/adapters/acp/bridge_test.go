@@ -126,7 +126,14 @@ func TestBridgeNewSessionDelegatesToEngine(t *testing.T) {
 func TestBridgePromptStreamsUpdates(t *testing.T) {
 	engine := &engineStub{sub: newEventSubStub(4)}
 	bridge := NewBridge(engine, nil)
-	resp, err := bridge.Prompt(context.Background(), PromptRequest{SessionID: "sess_1", Prompt: "hello"})
+	resp, err := bridge.Prompt(context.Background(), PromptRequest{
+		SessionID: "sess_1",
+		Prompt:    "hello",
+		Metadata: map[string]string{
+			"model_provider": "openai-compatible",
+			"model_endpoint": "https://example.invalid/v1",
+		},
+	})
 	if err != nil {
 		t.Fatalf("prompt failed: %v", err)
 	}
@@ -144,6 +151,9 @@ func TestBridgePromptStreamsUpdates(t *testing.T) {
 	}
 	if resp.Updates[0].Payload["event_type"] != string(core.RunEventTypeRunOutputDelta) {
 		t.Fatalf("unexpected payload event_type %#v", resp.Updates[0].Payload["event_type"])
+	}
+	if engine.submitInput.RuntimeConfig != nil {
+		t.Fatalf("expected ACP submit to forward metadata without typed runtime config, got %#v", engine.submitInput.RuntimeConfig)
 	}
 }
 

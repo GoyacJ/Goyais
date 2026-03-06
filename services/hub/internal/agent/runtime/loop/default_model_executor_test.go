@@ -128,36 +128,48 @@ func TestDefaultExecutorOpenAIHandlesToolCallsWithoutHardFailure(t *testing.T) {
 	}
 }
 
-func TestDefaultExecutorUsesMetadataBeforeEnv(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestDefaultExecutorUsesRuntimeConfigBeforeEnv(t *testing.T) {
+	runtimeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
-			"choices":[{"message":{"content":"metadata model output"}}],
+			"choices":[{"message":{"content":"runtime config model output"}}],
 			"usage":{"prompt_tokens":1,"completion_tokens":2}
 		}`))
 	}))
-	defer server.Close()
+	defer runtimeServer.Close()
 
-	t.Setenv("GOYAIS_AGENT_MODEL_PROVIDER", "")
-	t.Setenv("GOYAIS_AGENT_MODEL_ENDPOINT", "")
+	envServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"choices":[{"message":{"content":"env model output"}}],
+			"usage":{"prompt_tokens":2,"completion_tokens":3}
+		}`))
+	}))
+	defer envServer.Close()
+
+	t.Setenv("GOYAIS_AGENT_MODEL_PROVIDER", "openai")
+	t.Setenv("GOYAIS_AGENT_MODEL_ENDPOINT", envServer.URL)
+	t.Setenv("GOYAIS_AGENT_MODEL_NAME", "gpt-env")
 
 	executor := defaultExecutor{}
 	result, err := executor.Execute(context.Background(), ExecuteRequest{
 		Input: core.UserInput{
-			Text: "hello from metadata",
-			Metadata: map[string]string{
-				runtimeMetadataModelProvider: "openai-compatible",
-				runtimeMetadataModelEndpoint: server.URL,
-				runtimeMetadataModelName:     "gpt-metadata",
-				runtimeMetadataModelTimeout:  "45000",
-				runtimeMetadataMaxModelTurns: "6",
+			Text: "hello from runtime config",
+			RuntimeConfig: &core.RuntimeConfig{
+				Model: core.RuntimeModelConfig{
+					ProviderName:  "openai-compatible",
+					Endpoint:      runtimeServer.URL,
+					ModelName:     "gpt-runtime",
+					TimeoutMS:     45000,
+					MaxModelTurns: 6,
+				},
 			},
 		},
 	})
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
 	}
-	if result.Output != "metadata model output" {
+	if result.Output != "runtime config model output" {
 		t.Fatalf("unexpected model output %q", result.Output)
 	}
 	if result.UsageTokens != 3 {
@@ -165,7 +177,7 @@ func TestDefaultExecutorUsesMetadataBeforeEnv(t *testing.T) {
 	}
 }
 
-func TestDefaultExecutorMetadataParamsApplied(t *testing.T) {
+func TestDefaultExecutorRuntimeConfigParamsApplied(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 		var body map[string]any
@@ -187,16 +199,41 @@ func TestDefaultExecutorMetadataParamsApplied(t *testing.T) {
 	_, err := executor.Execute(context.Background(), ExecuteRequest{
 		Input: core.UserInput{
 			Text: "hello params",
-			Metadata: map[string]string{
-				runtimeMetadataModelProvider: "openai-compatible",
-				runtimeMetadataModelEndpoint: server.URL,
-				runtimeMetadataModelName:     "gpt-metadata",
-				runtimeMetadataModelParams:   `{"temperature":0.6}`,
+			RuntimeConfig: &core.RuntimeConfig{
+				Model: core.RuntimeModelConfig{
+					ProviderName: "openai-compatible",
+					Endpoint:     server.URL,
+					ModelName:    "gpt-runtime",
+					Params:       map[string]any{"temperature": 0.6},
+				},
 			},
 		},
 	})
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
+	}
+}
+
+func TestDefaultExecutorIgnoresMetadataModelConfigWithoutRuntimeConfig(t *testing.T) {
+	t.Setenv("GOYAIS_AGENT_MODEL_PROVIDER", "")
+	t.Setenv("GOYAIS_AGENT_MODEL_ENDPOINT", "")
+	executor := defaultExecutor{}
+
+	_, err := executor.Execute(context.Background(), ExecuteRequest{
+		Input: core.UserInput{
+			Text: "hello from metadata only",
+			Metadata: map[string]string{
+				"model_provider": "openai-compatible",
+				"model_endpoint": "https://example.invalid/v1",
+				"model_name":     "gpt-metadata",
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected execute to fail without runtime config or env")
+	}
+	if !errors.Is(err, model.ErrProviderMissing) {
+		t.Fatalf("expected ErrProviderMissing, got %v", err)
 	}
 }
 

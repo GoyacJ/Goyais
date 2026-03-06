@@ -143,7 +143,7 @@ describe("conversation store", () => {
       jsonResponse({
         revision: "rev_fresh_1",
         commands: [],
-        resources: []
+        capabilities: []
       })
     );
 

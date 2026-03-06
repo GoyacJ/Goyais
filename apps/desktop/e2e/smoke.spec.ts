@@ -283,7 +283,7 @@ async function mockInspectorHubApi(page: Page): Promise<void> {
       return;
     }
     if (path === "/v1/sessions/conv_1/input/catalog") {
-      await route.fulfill(jsonResponse({ revision: "rev_1", commands: [], resources: [] }));
+      await route.fulfill(jsonResponse({ revision: "rev_1", commands: [], capabilities: [] }));
       return;
     }
     if (path === "/v1/sessions/conv_1") {

@@ -36,6 +36,10 @@ export type NormalizedTraceEvent = {
   resultSummary: string;
   riskLevel: string;
   toolName: string;
+  resolvedName: string;
+  capabilityKind: string;
+  capabilitySource: string;
+  capabilityScope: string;
   callId: string;
   isSuccess: boolean | null;
 };

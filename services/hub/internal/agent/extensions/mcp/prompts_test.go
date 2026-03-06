@@ -141,15 +141,3 @@ func TestDiscoverPromptCommands_HTTPTransport(t *testing.T) {
 		t.Fatalf("unexpected prompt messages %#v", messages)
 	}
 }
-
-func TestShouldEnableToolSearch_UsesTenPercentThreshold(t *testing.T) {
-	if ShouldEnableToolSearch(100, 0) {
-		t.Fatal("expected false when context budget is zero")
-	}
-	if ShouldEnableToolSearch(10, 100) {
-		t.Fatal("expected false when usage equals threshold")
-	}
-	if !ShouldEnableToolSearch(11, 100) {
-		t.Fatal("expected true when usage exceeds threshold")
-	}
-}

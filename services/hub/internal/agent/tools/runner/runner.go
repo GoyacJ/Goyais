@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"goyais/services/hub/internal/agent/capability"
+	"goyais/services/hub/internal/agent/core"
 	mcpext "goyais/services/hub/internal/agent/extensions/mcp"
 	"goyais/services/hub/internal/agent/tools/catalog"
 	"goyais/services/hub/internal/agent/tools/executor"
@@ -33,19 +35,27 @@ const (
 
 // Runner executes built-in tools and MCP proxied tools.
 type Runner struct {
-	mcpCaller      *mcpext.ClientManager
-	readMaxBytes   int
-	bashMaxBytes   int
-	bashTimeoutSec int
+	mcpCaller             *mcpext.ClientManager
+	readMaxBytes          int
+	bashMaxBytes          int
+	bashTimeoutSec        int
+	searchableCapabilities []core.CapabilityDescriptor
 }
 
 // New constructs a tool runner with optional MCP caller.
 func New(mcpCaller *mcpext.ClientManager) *Runner {
+	return NewWithSearchable(mcpCaller, nil)
+}
+
+// NewWithSearchable constructs a tool runner with deferred searchable
+// capability descriptors available to ToolSearch.
+func NewWithSearchable(mcpCaller *mcpext.ClientManager, searchable []core.CapabilityDescriptor) *Runner {
 	return &Runner{
-		mcpCaller:      mcpCaller,
-		readMaxBytes:   defaultReadMaxBytes,
-		bashMaxBytes:   defaultBashMaxBytes,
-		bashTimeoutSec: defaultBashTimeoutSec,
+		mcpCaller:             mcpCaller,
+		readMaxBytes:          defaultReadMaxBytes,
+		bashMaxBytes:          defaultBashMaxBytes,
+		bashTimeoutSec:        defaultBashTimeoutSec,
+		searchableCapabilities: cloneCapabilities(searchable),
 	}
 }
 
@@ -73,6 +83,8 @@ func (r *Runner) Execute(ctx context.Context, req executor.RunRequest) (map[stri
 		return r.runBash(ctx, root, call.Input)
 	case catalog.ToolList:
 		return r.runList(root, call.Input)
+	case catalog.ToolToolSearch:
+		return r.runToolSearch(call.Input), nil
 	default:
 		if strings.HasPrefix(strings.ToLower(toolName), "mcp__") {
 			if r.mcpCaller == nil {
@@ -81,6 +93,18 @@ func (r *Runner) Execute(ctx context.Context, req executor.RunRequest) (map[stri
 			return r.mcpCaller.Call(ctx, toolName, call.Input)
 		}
 		return nil, fmt.Errorf("unsupported tool %q", toolName)
+	}
+}
+
+func (r *Runner) runToolSearch(input map[string]any) map[string]any {
+	query := asString(input["query"])
+	limit := asInt(input["limit"], 20)
+	matches := capability.BuildSearchResultItems(r.searchableCapabilities, query, limit)
+	return map[string]any{
+		"ok":      true,
+		"query":   strings.TrimSpace(query),
+		"matches": matches,
+		"count":   len(matches),
 	}
 }
 
@@ -321,6 +345,11 @@ func normalizeToolCall(name string, input map[string]any) (string, map[string]an
 			"content": asString(input["content"]),
 			"append":  asBool(input["append"]),
 		}
+	case "tool_search":
+		return catalog.ToolToolSearch, map[string]any{
+			"query": asString(input["query"]),
+			"limit": asInt(input["limit"], 20),
+		}
 	default:
 		return normalizedName, input
 	}
@@ -440,6 +469,19 @@ func cloneMapAny(input map[string]any) map[string]any {
 	out := make(map[string]any, len(input))
 	for key, value := range input {
 		out[key] = value
+	}
+	return out
+}
+
+func cloneCapabilities(input []core.CapabilityDescriptor) []core.CapabilityDescriptor {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make([]core.CapabilityDescriptor, 0, len(input))
+	for _, item := range input {
+		copyItem := item
+		copyItem.InputSchema = cloneMapAny(item.InputSchema)
+		out = append(out, copyItem)
 	}
 	return out
 }
