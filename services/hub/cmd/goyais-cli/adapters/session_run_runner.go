@@ -209,7 +209,10 @@ func (r *SessionRunRunner) ControlRun(ctx context.Context, req RunControlRequest
 	if err != nil {
 		return err
 	}
-	return r.engine.Control(ctx, strings.TrimSpace(req.RunID), action)
+	return r.engine.Control(ctx, core.ControlRequest{
+		RunID:  strings.TrimSpace(req.RunID),
+		Action: action,
+	})
 }
 
 // StreamSession replays run events from one session cursor.

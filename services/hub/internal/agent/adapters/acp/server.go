@@ -414,9 +414,29 @@ func (s *Server) handleRunControl(params any) (any, error) {
 		return nil, JsonRPCError{Code: -32602, Message: fmt.Sprintf("unsupported action: %s", actionRaw)}
 	}
 
+	var answer *core.ControlAnswer
+	if action == core.ControlActionAnswer {
+		answerPayload := asMap(p["answer"])
+		questionID := strings.TrimSpace(asString(answerPayload["question_id"]))
+		if questionID == "" {
+			return nil, JsonRPCError{Code: -32602, Message: "answer.question_id is required for action=answer"}
+		}
+		selectedOptionID := strings.TrimSpace(asString(answerPayload["selected_option_id"]))
+		text := strings.TrimSpace(asString(answerPayload["text"]))
+		if selectedOptionID == "" && text == "" {
+			return nil, JsonRPCError{Code: -32602, Message: "answer.selected_option_id or answer.text is required for action=answer"}
+		}
+		answer = &core.ControlAnswer{
+			QuestionID:       questionID,
+			SelectedOptionID: selectedOptionID,
+			Text:             text,
+		}
+	}
+
 	if err := s.bridge.Control(context.Background(), ControlRequest{
 		RunID:  runID,
 		Action: action,
+		Answer: answer,
 	}); err != nil {
 		return nil, toRPCError(err)
 	}

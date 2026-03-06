@@ -35,7 +35,7 @@ type Engine interface {
 
 	// Control applies an external control action (stop, approve, deny,
 	// resume, answer) to an active run.
-	Control(ctx context.Context, runID string, action ControlAction) error
+	Control(ctx context.Context, req ControlRequest) error
 
 	// Subscribe returns an event subscription for the given session.
 	// Events are delivered from the given cursor position onward.

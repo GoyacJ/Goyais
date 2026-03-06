@@ -22,8 +22,7 @@ type engineStub struct {
 		input     core.UserInput
 	}
 	control struct {
-		runID  string
-		action core.ControlAction
+		req core.ControlRequest
 	}
 	subscribe struct {
 		sessionID string
@@ -64,9 +63,8 @@ func (s *engineStub) Submit(_ context.Context, sessionID string, input core.User
 	return s.runID, nil
 }
 
-func (s *engineStub) Control(_ context.Context, runID string, action core.ControlAction) error {
-	s.control.runID = runID
-	s.control.action = action
+func (s *engineStub) Control(_ context.Context, req core.ControlRequest) error {
+	s.control.req = req
 	return s.controlErr
 }
 
@@ -205,8 +203,22 @@ func TestServiceControlParsesAction(t *testing.T) {
 	if err := svc.Control(context.Background(), ControlRequest{RunID: "run_1", Action: "approve"}); err != nil {
 		t.Fatalf("control failed: %v", err)
 	}
-	if engine.control.action != core.ControlActionApprove {
-		t.Fatalf("action = %q, want approve", engine.control.action)
+	if engine.control.req.Action != core.ControlActionApprove {
+		t.Fatalf("action = %q, want approve", engine.control.req.Action)
+	}
+
+	if err := svc.Control(context.Background(), ControlRequest{
+		RunID:  "run_1",
+		Action: "answer",
+		Answer: &ControlAnswer{
+			QuestionID:       "q1",
+			SelectedOptionID: "o1",
+		},
+	}); err != nil {
+		t.Fatalf("control answer failed: %v", err)
+	}
+	if engine.control.req.Answer == nil || engine.control.req.Answer.QuestionID != "q1" {
+		t.Fatalf("expected answer payload to be forwarded, got %#v", engine.control.req.Answer)
 	}
 	if err := svc.Control(context.Background(), ControlRequest{RunID: "run_1", Action: "invalid"}); err == nil {
 		t.Fatal("expected invalid action error")

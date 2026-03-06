@@ -29,10 +29,16 @@ import (
 // ExecuteRequest is the normalized request passed from the runtime loop to the
 // execution layer (model/tools/policy pipeline).
 type ExecuteRequest struct {
-	SessionID     core.SessionID
-	RunID         core.RunID
-	Input         core.UserInput
-	PromptContext core.PromptContext
+	SessionID             core.SessionID
+	RunID                 core.RunID
+	Input                 core.UserInput
+	PromptContext         core.PromptContext
+	WorkingDir            string
+	AdditionalDirectories []string
+	ApprovalRouter        *approval.Router
+	EmitOutputDelta       func(payload core.OutputDeltaPayload)
+	EmitApprovalNeeded    func(payload core.ApprovalNeededPayload)
+	SetRunState           func(state core.RunState)
 }
 
 // ExecuteResult is the normalized output returned from one run execution.
@@ -253,11 +259,15 @@ func (e *Engine) Submit(_ context.Context, sessionID string, input core.UserInpu
 }
 
 // Control applies an external control action to one run.
-func (e *Engine) Control(_ context.Context, runID string, action core.ControlAction) error {
-	normalizedRunID := core.RunID(strings.TrimSpace(runID))
+func (e *Engine) Control(_ context.Context, req core.ControlRequest) error {
+	if err := req.Validate(); err != nil {
+		return err
+	}
+	normalizedRunID := core.RunID(strings.TrimSpace(req.RunID))
 	if normalizedRunID == "" {
 		return core.ErrRunNotFound
 	}
+	action := core.ControlAction(strings.TrimSpace(string(req.Action)))
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -271,7 +281,16 @@ func (e *Engine) Control(_ context.Context, runID string, action core.ControlAct
 		return core.ErrSessionNotFound
 	}
 	if e.approvalRouter != nil {
-		_ = e.approvalRouter.Send(normalizedRunID, approval.ControlSignal{Action: action})
+		var answer *approval.UserAnswer
+		if req.Answer != nil {
+			normalizedAnswer := req.Answer.Normalize()
+			answer = &approval.UserAnswer{
+				QuestionID:       normalizedAnswer.QuestionID,
+				SelectedOptionID: normalizedAnswer.SelectedOptionID,
+				Text:             normalizedAnswer.Text,
+			}
+		}
+		_ = e.approvalRouter.Send(normalizedRunID, approval.ControlSignal{Action: action, Answer: answer})
 	}
 
 	switch action {
@@ -439,10 +458,22 @@ func (e *Engine) executeRun(ctx context.Context, run *runRuntime) {
 	}
 
 	result, runErr := e.executor.Execute(ctx, ExecuteRequest{
-		SessionID:     run.sessionID,
-		RunID:         run.id,
-		Input:         run.input,
-		PromptContext: run.promptContext,
+		SessionID:             run.sessionID,
+		RunID:                 run.id,
+		Input:                 run.input,
+		PromptContext:         run.promptContext,
+		WorkingDir:            run.workingDir,
+		AdditionalDirectories: append([]string(nil), run.additionalDirectories...),
+		ApprovalRouter:        e.approvalRouter,
+		EmitOutputDelta: func(payload core.OutputDeltaPayload) {
+			e.emitRunOutputDelta(run.id, payload)
+		},
+		EmitApprovalNeeded: func(payload core.ApprovalNeededPayload) {
+			e.emitRunApprovalNeeded(run.id, payload)
+		},
+		SetRunState: func(state core.RunState) {
+			e.setRunMachineState(run.id, state)
+		},
 	})
 	if runErr == nil && e.compactor != nil {
 		e.compactor.AppendMessage(run.sessionID, "assistant", result.Output, result.UsageTokens)
@@ -594,6 +625,60 @@ func (e *Engine) emitEventLocked(session *sessionRuntime, event core.EventEnvelo
 	if session.subscriberManager != nil {
 		_ = session.subscriberManager.Publish(context.Background(), event)
 	}
+}
+
+func (e *Engine) emitRunOutputDelta(runID core.RunID, payload core.OutputDeltaPayload) {
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	run, exists := e.runs[runID]
+	if !exists {
+		return
+	}
+	session := e.sessions[run.sessionID]
+	if session == nil {
+		return
+	}
+	e.emitEventLocked(session, newSequencedEvent(session, run.id, eventscore.RunOutputDeltaEventSpec, payload))
+}
+
+func (e *Engine) emitRunApprovalNeeded(runID core.RunID, payload core.ApprovalNeededPayload) {
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	run, exists := e.runs[runID]
+	if !exists {
+		return
+	}
+	session := e.sessions[run.sessionID]
+	if session == nil {
+		return
+	}
+	e.emitEventLocked(session, newSequencedEvent(session, run.id, eventscore.RunApprovalNeededEventSpec, payload))
+}
+
+func (e *Engine) setRunMachineState(runID core.RunID, next core.RunState) {
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	run, exists := e.runs[runID]
+	if !exists || run.machine == nil {
+		return
+	}
+	current := run.machine.State()
+	if current == statemachine.RunState(next) {
+		return
+	}
+	_ = run.machine.Transition(statemachine.RunState(next))
 }
 
 func newSequencedEvent[P eventscore.EventPayload](

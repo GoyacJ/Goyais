@@ -51,7 +51,7 @@ func (s *engineStub) Submit(_ context.Context, sessionID string, input core.User
 	return runID, nil
 }
 
-func (s *engineStub) Control(_ context.Context, _ string, _ core.ControlAction) error { return nil }
+func (s *engineStub) Control(_ context.Context, _ core.ControlRequest) error { return nil }
 
 func (s *engineStub) Subscribe(_ context.Context, _ string, _ string) (core.EventSubscription, error) {
 	if s.sub == nil {

@@ -208,6 +208,41 @@ describe("conversation stream routing", () => {
     );
   });
 
+  it("classifies structured stage tool_result as tool_result event", () => {
+    attachSessionStream(conversationA);
+    expect(typeof onEvent).toBe("function");
+
+    onEvent?.({
+      type: "run_output_delta",
+      event_id: "evt_stream_stage_tool_result",
+      session_id: conversationA.id,
+      run_id: "exec_stream_stage_tool_result",
+      sequence: 5,
+      timestamp: "2026-02-24T00:00:00Z",
+      payload: {
+        event_type: "run_output_delta",
+        source: "runtime_projection",
+        stage: "tool_result",
+        name: "Read",
+        ok: true,
+        output: {
+          content: "README"
+        },
+        queue_index: 0,
+        trace_id: "tr_stream_stage_tool_result"
+      }
+    });
+
+    expect(applyIncomingExecutionEventMock).toHaveBeenCalledTimes(1);
+    expect(applyIncomingExecutionEventMock).toHaveBeenCalledWith(
+      conversationA.id,
+      expect.objectContaining({
+        run_id: "exec_stream_stage_tool_result",
+        type: "tool_result"
+      })
+    );
+  });
+
   it("detaches stream handle", () => {
     attachSessionStream(conversationA);
     expect(sessionStore.sessionStreams[conversationA.id]).toBeTruthy();

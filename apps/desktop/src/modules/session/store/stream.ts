@@ -241,6 +241,22 @@ function resolveExecutionTypeForRunOutputDelta(payload: Record<string, unknown>)
     return "thinking_delta";
   }
 
+  const stage = asString(payload.stage).toLowerCase();
+  if (stage === "tool_call") {
+    return "tool_call";
+  }
+  if (stage === "tool_result") {
+    return "tool_result";
+  }
+  if (
+    stage === "run_approval_needed" ||
+    stage === "run_user_question_needed" ||
+    stage === "run_user_question_resolved" ||
+    stage === "approval_resolved"
+  ) {
+    return "thinking_delta";
+  }
+
   const explicitEventType = asString(payload.event_type);
   if (
     explicitEventType === "change_set_updated" ||

@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"goyais/services/hub/internal/agent/tools/catalog"
 )
 
 type runtimeModelConfig struct {
@@ -18,6 +20,22 @@ type runtimeModelConfig struct {
 	ParamsJSON    string
 	TimeoutMS     int
 	MaxModelTurns int
+}
+
+type runtimeMCPServerConfig struct {
+	Name      string            `json:"name"`
+	Transport string            `json:"transport"`
+	Endpoint  string            `json:"endpoint,omitempty"`
+	Command   string            `json:"command,omitempty"`
+	Env       map[string]string `json:"env,omitempty"`
+	Tools     []string          `json:"tools,omitempty"`
+}
+
+type runtimeToolingConfig struct {
+	PermissionMode string
+	RulesDSL       string
+	MCPServers     []runtimeMCPServerConfig
+	BuiltinTools   []string
 }
 
 func resolveRuntimeModelConfigForExecution(state *AppState, execution Execution) (runtimeModelConfig, error) {
@@ -103,4 +121,140 @@ func mapModelVendorToRuntimeProvider(vendor ModelVendorName) string {
 	default:
 		return ""
 	}
+}
+
+func resolveRuntimeToolingConfigForExecution(state *AppState, execution Execution) (runtimeToolingConfig, error) {
+	workspaceID := strings.TrimSpace(execution.WorkspaceID)
+	if workspaceID == "" {
+		return runtimeToolingConfig{}, fmt.Errorf("workspace_id is required")
+	}
+
+	ruleIDs, mcpIDs := resolveExecutionToolResourceIDs(state, execution)
+	rulesDSL, err := resolveMergedRuleDSLForRuntime(state, workspaceID, ruleIDs)
+	if err != nil {
+		return runtimeToolingConfig{}, err
+	}
+	mcpServers, err := resolveMCPServersForRuntime(state, workspaceID, mcpIDs)
+	if err != nil {
+		return runtimeToolingConfig{}, err
+	}
+
+	return runtimeToolingConfig{
+		PermissionMode: string(resolveExecutionPermissionModeForRuntime(state, execution)),
+		RulesDSL:       rulesDSL,
+		MCPServers:     mcpServers,
+		BuiltinTools:   catalog.BuiltinToolNames(),
+	}, nil
+}
+
+func resolveExecutionPermissionModeForRuntime(state *AppState, execution Execution) PermissionMode {
+	if mode := strings.TrimSpace(string(execution.Mode)); mode != "" {
+		return NormalizePermissionMode(mode)
+	}
+	if mode := strings.TrimSpace(string(execution.ModeSnapshot)); mode != "" {
+		return NormalizePermissionMode(mode)
+	}
+	conversationID := strings.TrimSpace(execution.ConversationID)
+	if conversationID == "" || state == nil {
+		return PermissionModeDefault
+	}
+	state.mu.RLock()
+	conversation, exists := state.conversations[conversationID]
+	state.mu.RUnlock()
+	if !exists {
+		return PermissionModeDefault
+	}
+	return NormalizePermissionMode(string(conversation.DefaultMode))
+}
+
+func resolveExecutionToolResourceIDs(state *AppState, execution Execution) ([]string, []string) {
+	if execution.ResourceProfileSnapshot != nil {
+		return sanitizeIDList(execution.ResourceProfileSnapshot.RuleIDs), sanitizeIDList(execution.ResourceProfileSnapshot.MCPIDs)
+	}
+	conversationID := strings.TrimSpace(execution.ConversationID)
+	if conversationID == "" || state == nil {
+		return nil, nil
+	}
+	state.mu.RLock()
+	conversation, exists := state.conversations[conversationID]
+	state.mu.RUnlock()
+	if !exists {
+		return nil, nil
+	}
+	return sanitizeIDList(conversation.RuleIDs), sanitizeIDList(conversation.MCPIDs)
+}
+
+func resolveMergedRuleDSLForRuntime(state *AppState, workspaceID string, ruleIDs []string) (string, error) {
+	normalizedWorkspaceID := strings.TrimSpace(workspaceID)
+	if normalizedWorkspaceID == "" {
+		return "", fmt.Errorf("workspace_id is required")
+	}
+	if len(ruleIDs) == 0 {
+		return "", nil
+	}
+
+	segments := make([]string, 0, len(ruleIDs))
+	for _, ruleID := range sanitizeIDList(ruleIDs) {
+		item, exists, err := loadWorkspaceResourceConfigRaw(state, normalizedWorkspaceID, ruleID)
+		if err != nil {
+			return "", fmt.Errorf("load rule config %s failed: %w", ruleID, err)
+		}
+		if !exists || item.Type != ResourceTypeRule || !item.Enabled || item.Rule == nil {
+			continue
+		}
+		content := strings.TrimSpace(item.Rule.Content)
+		if content == "" {
+			continue
+		}
+		segments = append(segments, content)
+	}
+	return strings.TrimSpace(strings.Join(segments, "\n")), nil
+}
+
+func resolveMCPServersForRuntime(state *AppState, workspaceID string, mcpIDs []string) ([]runtimeMCPServerConfig, error) {
+	normalizedWorkspaceID := strings.TrimSpace(workspaceID)
+	if normalizedWorkspaceID == "" {
+		return nil, fmt.Errorf("workspace_id is required")
+	}
+	if len(mcpIDs) == 0 {
+		return nil, nil
+	}
+
+	servers := make([]runtimeMCPServerConfig, 0, len(mcpIDs))
+	for _, mcpID := range sanitizeIDList(mcpIDs) {
+		item, exists, err := loadWorkspaceResourceConfigRaw(state, normalizedWorkspaceID, mcpID)
+		if err != nil {
+			return nil, fmt.Errorf("load mcp config %s failed: %w", mcpID, err)
+		}
+		if !exists || item.Type != ResourceTypeMCP || !item.Enabled || item.MCP == nil {
+			continue
+		}
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			name = strings.TrimSpace(item.ID)
+		}
+		if name == "" {
+			continue
+		}
+		servers = append(servers, runtimeMCPServerConfig{
+			Name:      name,
+			Transport: strings.TrimSpace(item.MCP.Transport),
+			Endpoint:  strings.TrimSpace(item.MCP.Endpoint),
+			Command:   strings.TrimSpace(item.MCP.Command),
+			Env:       cloneStringMapForRuntime(item.MCP.Env),
+			Tools:     sanitizeIDList(item.MCP.Tools),
+		})
+	}
+	return servers, nil
+}
+
+func cloneStringMapForRuntime(input map[string]string) map[string]string {
+	if len(input) == 0 {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
 }

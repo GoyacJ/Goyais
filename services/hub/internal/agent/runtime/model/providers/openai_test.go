@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"goyais/services/hub/internal/agent/runtime/model"
@@ -124,4 +125,84 @@ func TestOpenAITurnAppendsToolResultsOnNextTurn(t *testing.T) {
 	if secondTurn.AssistantText != "final" {
 		t.Fatalf("unexpected second turn text %q", secondTurn.AssistantText)
 	}
+}
+
+func TestOpenAITurnParsesMiniMaxTextToolCall(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		defer r.Body.Close()
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+
+		w.Header().Set("Content-Type", "application/json")
+		if callCount == 1 {
+			_, _ = w.Write([]byte(`{
+				"choices":[{"message":{"content":"<think>analyze</think>\n开始查看。\n<minimax:tool_call><invoke name=\"cli-mcp-server_run_command\"><parameter name=\"command\">ls -la</parameter></invoke></minimax:tool_call>"}}],
+				"usage":{"prompt_tokens":1,"completion_tokens":1}
+			}`))
+			return
+		}
+
+		messages, _ := body["messages"].([]any)
+		foundToolResult := false
+		for _, item := range messages {
+			message, _ := item.(map[string]any)
+			if message["role"] != "tool" {
+				continue
+			}
+			if strings.TrimSpace(asString(message["tool_call_id"])) == "" {
+				continue
+			}
+			if strings.TrimSpace(asString(message["content"])) != `{"ok":true}` {
+				continue
+			}
+			foundToolResult = true
+			break
+		}
+		if !foundToolResult {
+			t.Fatalf("expected tool result message in second turn payload=%#v", messages)
+		}
+		_, _ = w.Write([]byte(`{
+			"choices":[{"message":{"content":"完成"}}],
+			"usage":{"prompt_tokens":2,"completion_tokens":2}
+		}`))
+	}))
+	defer server.Close()
+
+	provider := NewOpenAI(OpenAIConfig{
+		Endpoint: server.URL,
+		Model:    "gpt-test",
+	})
+
+	firstTurn, err := provider.Turn(context.Background(), model.TurnRequest{
+		UserInput: "start",
+	})
+	if err != nil {
+		t.Fatalf("first turn failed: %v", err)
+	}
+	if len(firstTurn.ToolCalls) != 1 {
+		t.Fatalf("expected first turn to produce one tool call, got %#v", firstTurn.ToolCalls)
+	}
+	if firstTurn.AssistantText != "开始查看。" {
+		t.Fatalf("expected cleaned assistant text, got %q", firstTurn.AssistantText)
+	}
+
+	secondTurn, err := provider.Turn(context.Background(), model.TurnRequest{
+		PriorToolCalls: firstTurn.ToolCalls,
+		PriorToolResults: []codec.ToolResultForNextTurn{
+			{CallID: firstTurn.ToolCalls[0].CallID, Text: `{"ok":true}`},
+		},
+	})
+	if err != nil {
+		t.Fatalf("second turn failed: %v", err)
+	}
+	if secondTurn.AssistantText != "完成" {
+		t.Fatalf("unexpected second turn text %q", secondTurn.AssistantText)
+	}
+}
+
+func asString(value any) string {
+	text, _ := value.(string)
+	return text
 }

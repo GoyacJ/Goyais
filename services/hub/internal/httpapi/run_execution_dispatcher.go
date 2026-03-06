@@ -6,6 +6,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -33,19 +34,24 @@ type executionSubmitContext struct {
 	Prompt         string
 	SessionID      string
 	RuntimeModel   runtimeModelConfig
+	RuntimeTooling runtimeToolingConfig
 }
 
 const (
-	runtimeMetadataRunID         = "run_id"
-	runtimeMetadataSessionID     = "session_id"
-	runtimeMetadataWorkspaceID   = "workspace_id"
-	runtimeMetadataModelProvider = "model_provider"
-	runtimeMetadataModelEndpoint = "model_endpoint"
-	runtimeMetadataModelName     = "model_name"
-	runtimeMetadataModelAPIKey   = "model_api_key"
-	runtimeMetadataModelParams   = "model_params_json"
-	runtimeMetadataModelTimeout  = "model_timeout_ms"
-	runtimeMetadataMaxModelTurns = "max_model_turns"
+	runtimeMetadataRunID            = "run_id"
+	runtimeMetadataSessionID        = "session_id"
+	runtimeMetadataWorkspaceID      = "workspace_id"
+	runtimeMetadataModelProvider    = "model_provider"
+	runtimeMetadataModelEndpoint    = "model_endpoint"
+	runtimeMetadataModelName        = "model_name"
+	runtimeMetadataModelAPIKey      = "model_api_key"
+	runtimeMetadataModelParams      = "model_params_json"
+	runtimeMetadataModelTimeout     = "model_timeout_ms"
+	runtimeMetadataMaxModelTurns    = "max_model_turns"
+	runtimeMetadataPermissionMode   = "permission_mode"
+	runtimeMetadataRulesDSL         = "rules_dsl"
+	runtimeMetadataMCPServersJSON   = "mcp_servers_json"
+	runtimeMetadataBuiltinToolsJSON = "builtin_tools_json"
 )
 
 func (s *AppState) submitExecutionBestEffort(ctx context.Context, executionID string) {
@@ -147,10 +153,6 @@ func (s *AppState) controlExecutionBestEffort(ctx context.Context, executionID s
 	if s == nil || normalizedExecutionID == "" {
 		return
 	}
-	if signal.Answer != nil {
-		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.control", "error")
-		return
-	}
 
 	service := s.runtimeRunService()
 	if service == nil {
@@ -167,7 +169,19 @@ func (s *AppState) controlExecutionBestEffort(ctx context.Context, executionID s
 		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.control", "error")
 		return
 	}
-	if err := service.Control(ctx, agenthttpapi.ControlRequest{RunID: runID, Action: action}); err != nil {
+	var answer *agenthttpapi.ControlAnswer
+	if signal.Answer != nil {
+		answer = &agenthttpapi.ControlAnswer{
+			QuestionID:       strings.TrimSpace(signal.Answer.QuestionID),
+			SelectedOptionID: strings.TrimSpace(signal.Answer.SelectedOptionID),
+			Text:             strings.TrimSpace(signal.Answer.Text),
+		}
+	}
+	if err := service.Control(ctx, agenthttpapi.ControlRequest{
+		RunID:  runID,
+		Action: action,
+		Answer: answer,
+	}); err != nil {
 		s.appendExecutionRuntimeAudit(normalizedExecutionID, "execution.runtime.control", "error")
 		return
 	}
@@ -281,6 +295,10 @@ func (s *AppState) loadExecutionSubmitContext(executionID string) (executionSubm
 	if runtimeModelErr != nil {
 		return executionSubmitContext{}, runtimeModelErr
 	}
+	runtimeTooling, runtimeToolingErr := resolveRuntimeToolingConfigForExecution(s, execution)
+	if runtimeToolingErr != nil {
+		return executionSubmitContext{}, runtimeToolingErr
+	}
 
 	return executionSubmitContext{
 		ExecutionID:    normalizedExecutionID,
@@ -290,18 +308,20 @@ func (s *AppState) loadExecutionSubmitContext(executionID string) (executionSubm
 		Prompt:         prompt,
 		SessionID:      sessionID,
 		RuntimeModel:   runtimeModel,
+		RuntimeTooling: runtimeTooling,
 	}, nil
 }
 
 func buildRuntimeSubmitMetadata(submitCtx executionSubmitContext) map[string]string {
 	metadata := map[string]string{
-		runtimeMetadataRunID:         strings.TrimSpace(submitCtx.ExecutionID),
-		runtimeMetadataSessionID:     strings.TrimSpace(submitCtx.ConversationID),
-		runtimeMetadataWorkspaceID:   strings.TrimSpace(submitCtx.WorkspaceID),
-		runtimeMetadataModelProvider: strings.TrimSpace(submitCtx.RuntimeModel.Provider),
-		runtimeMetadataModelEndpoint: strings.TrimSpace(submitCtx.RuntimeModel.Endpoint),
-		runtimeMetadataModelName:     strings.TrimSpace(submitCtx.RuntimeModel.ModelName),
-		runtimeMetadataModelAPIKey:   strings.TrimSpace(submitCtx.RuntimeModel.APIKey),
+		runtimeMetadataRunID:          strings.TrimSpace(submitCtx.ExecutionID),
+		runtimeMetadataSessionID:      strings.TrimSpace(submitCtx.ConversationID),
+		runtimeMetadataWorkspaceID:    strings.TrimSpace(submitCtx.WorkspaceID),
+		runtimeMetadataModelProvider:  strings.TrimSpace(submitCtx.RuntimeModel.Provider),
+		runtimeMetadataModelEndpoint:  strings.TrimSpace(submitCtx.RuntimeModel.Endpoint),
+		runtimeMetadataModelName:      strings.TrimSpace(submitCtx.RuntimeModel.ModelName),
+		runtimeMetadataModelAPIKey:    strings.TrimSpace(submitCtx.RuntimeModel.APIKey),
+		runtimeMetadataPermissionMode: strings.TrimSpace(submitCtx.RuntimeTooling.PermissionMode),
 	}
 	if paramsJSON := strings.TrimSpace(submitCtx.RuntimeModel.ParamsJSON); paramsJSON != "" {
 		metadata[runtimeMetadataModelParams] = paramsJSON
@@ -311,6 +331,19 @@ func buildRuntimeSubmitMetadata(submitCtx executionSubmitContext) map[string]str
 	}
 	if submitCtx.RuntimeModel.MaxModelTurns > 0 {
 		metadata[runtimeMetadataMaxModelTurns] = fmt.Sprintf("%d", submitCtx.RuntimeModel.MaxModelTurns)
+	}
+	if rulesDSL := strings.TrimSpace(submitCtx.RuntimeTooling.RulesDSL); rulesDSL != "" {
+		metadata[runtimeMetadataRulesDSL] = rulesDSL
+	}
+	if len(submitCtx.RuntimeTooling.MCPServers) > 0 {
+		if encoded, err := json.Marshal(submitCtx.RuntimeTooling.MCPServers); err == nil {
+			metadata[runtimeMetadataMCPServersJSON] = strings.TrimSpace(string(encoded))
+		}
+	}
+	if len(submitCtx.RuntimeTooling.BuiltinTools) > 0 {
+		if encoded, err := json.Marshal(submitCtx.RuntimeTooling.BuiltinTools); err == nil {
+			metadata[runtimeMetadataBuiltinToolsJSON] = strings.TrimSpace(string(encoded))
+		}
 	}
 	return metadata
 }

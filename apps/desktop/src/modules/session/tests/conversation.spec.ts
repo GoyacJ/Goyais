@@ -400,6 +400,54 @@ describe("conversation store", () => {
     expect(assistantMessages).toHaveLength(0);
   });
 
+  it("sanitizes control tags from execution_done assistant content", () => {
+    const runtime = ensureConversationRuntime(mockConversation, true);
+    runtime.messages.push({
+      id: "msg_user_sanitize",
+      session_id: mockConversation.id,
+      role: "user",
+      content: "查看当前项目",
+      queue_index: 0,
+      created_at: new Date().toISOString()
+    });
+    runtime.executions.push({
+      id: "exec_done_sanitize",
+      workspace_id: "ws_local",
+      session_id: mockConversation.id,
+      message_id: "msg_user_sanitize",
+      state: "executing",
+      mode: "default",
+      model_id: "gpt-5.3",
+      mode_snapshot: "default",
+      model_snapshot: {
+        model_id: "gpt-5.3"
+      },
+      project_revision_snapshot: 0,
+      queue_index: 0,
+      trace_id: "tr_done_sanitize",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+
+    applyIncomingExecutionEvent(mockConversation.id, {
+      event_id: "evt_done_sanitize",
+      run_id: "exec_done_sanitize",
+      session_id: mockConversation.id,
+      trace_id: "tr_done_sanitize",
+      sequence: 11,
+      queue_index: 0,
+      type: "execution_done",
+      timestamp: new Date().toISOString(),
+      payload: {
+        content: "<think>分析中</think>\n我来查看当前项目。\n<minimax:tool_call><invoke name=\"cli-mcp-server_run_command\"><parameter name=\"command\">ls -la</parameter></invoke></minimax:tool_call>"
+      }
+    });
+
+    const assistantMessages = runtime.messages.filter((message) => message.role === "assistant");
+    expect(assistantMessages).toHaveLength(1);
+    expect(assistantMessages[0]?.content).toBe("我来查看当前项目。");
+  });
+
   it("inserts terminal message by queue_index to keep message order stable", () => {
     const runtime = ensureConversationRuntime(mockConversation, true);
     runtime.messages.push(

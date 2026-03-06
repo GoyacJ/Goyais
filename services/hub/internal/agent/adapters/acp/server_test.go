@@ -177,9 +177,9 @@ func (s *acpEngineStub) Submit(_ context.Context, _ string, _ core.UserInput) (s
 	return runID, nil
 }
 
-func (s *acpEngineStub) Control(_ context.Context, runID string, action core.ControlAction) error {
-	s.controlRunID = runID
-	s.controlAction = action
+func (s *acpEngineStub) Control(_ context.Context, req core.ControlRequest) error {
+	s.controlRunID = req.RunID
+	s.controlAction = req.Action
 	return nil
 }
 

@@ -10,8 +10,18 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
+	"regexp"
 	"strconv"
 	"strings"
+)
+
+var (
+	minimaxToolCallBlockRegex = regexp.MustCompile(`(?is)<minimax:tool_call>\s*(.*?)\s*</minimax:tool_call>`)
+	minimaxInvokeRegex        = regexp.MustCompile(`(?is)<invoke\s+name=["']([^"']+)["']\s*>(.*?)</invoke>`)
+	minimaxParameterRegex     = regexp.MustCompile(`(?is)<parameter\s+name=["']([^"']+)["']\s*>(.*?)</parameter>`)
+	thinkTagRegex             = regexp.MustCompile(`(?is)<think>.*?</think>`)
+	controlTagRegex           = regexp.MustCompile(`(?is)</?(?:minimax:tool_call|invoke|parameter)(?:\s+[^>]*)?>`)
 )
 
 // ToolCall represents one model-emitted tool call invocation.
@@ -78,8 +88,10 @@ func ParseOpenAITurn(raw []byte) (TurnResult, error) {
 	}
 
 	firstChoice := payload.Choices[0]
+	rawAssistantText := RenderProviderContent(firstChoice.Message.Content)
+	minimaxToolCalls, cleanedAssistantText := parseMiniMaxToolCallsFromText(rawAssistantText)
 	result := TurnResult{
-		AssistantText: RenderProviderContent(firstChoice.Message.Content),
+		AssistantText: cleanedAssistantText,
 		ToolCalls:     make([]ToolCall, 0, len(firstChoice.Message.ToolCalls)),
 		Usage: map[string]any{
 			"input_tokens":  payload.Usage.PromptTokens,
@@ -107,6 +119,9 @@ func ParseOpenAITurn(raw []byte) (TurnResult, error) {
 			RawArguments:  arguments,
 			ArgumentError: argumentErr,
 		})
+	}
+	if len(result.ToolCalls) == 0 && len(minimaxToolCalls) > 0 {
+		result.ToolCalls = append(result.ToolCalls, minimaxToolCalls...)
 	}
 	return result, nil
 }
@@ -507,4 +522,56 @@ func randomHex(bytesLen int) string {
 		return "fallback"
 	}
 	return strings.ToLower(hex.EncodeToString(buf))
+}
+
+func parseMiniMaxToolCallsFromText(raw string) ([]ToolCall, string) {
+	assistantText := strings.TrimSpace(raw)
+	if assistantText == "" {
+		return nil, ""
+	}
+
+	blocks := minimaxToolCallBlockRegex.FindAllStringSubmatch(assistantText, -1)
+	calls := make([]ToolCall, 0, len(blocks))
+	for _, block := range blocks {
+		if len(block) < 2 {
+			continue
+		}
+		invokes := minimaxInvokeRegex.FindAllStringSubmatch(block[1], -1)
+		for _, invoke := range invokes {
+			if len(invoke) < 3 {
+				continue
+			}
+			name := strings.TrimSpace(html.UnescapeString(invoke[1]))
+			if name == "" {
+				continue
+			}
+			input := map[string]any{}
+			parameters := minimaxParameterRegex.FindAllStringSubmatch(invoke[2], -1)
+			for _, parameter := range parameters {
+				if len(parameter) < 3 {
+					continue
+				}
+				key := strings.TrimSpace(html.UnescapeString(parameter[1]))
+				if key == "" {
+					continue
+				}
+				value := strings.TrimSpace(html.UnescapeString(parameter[2]))
+				input[key] = value
+			}
+			rawArgumentsBytes, _ := json.Marshal(input)
+			calls = append(calls, ToolCall{
+				CallID:        "call_" + randomHex(6),
+				Name:          name,
+				Input:         input,
+				RawArguments:  string(rawArgumentsBytes),
+				ArgumentError: "",
+			})
+		}
+	}
+
+	cleaned := thinkTagRegex.ReplaceAllString(assistantText, "")
+	cleaned = minimaxToolCallBlockRegex.ReplaceAllString(cleaned, "")
+	cleaned = controlTagRegex.ReplaceAllString(cleaned, "")
+	cleaned = strings.TrimSpace(cleaned)
+	return calls, cleaned
 }

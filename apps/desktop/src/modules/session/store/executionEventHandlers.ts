@@ -80,7 +80,7 @@ function appendExecutionDoneMessage(
   if (!shouldAppendTerminalMessage(runtime, event, transition.previousState, transition.nextState, transition.messageID, "assistant")) {
     return;
   }
-  const content = asNonEmptyString(event.payload.content);
+  const content = sanitizeAssistantTerminalContent(asNonEmptyString(event.payload.content));
   if (content === "") {
     return;
   }
@@ -158,6 +158,16 @@ function appendUserAnswerMessage(
 
 function asNonEmptyString(value: unknown): string {
   return typeof value === "string" && value.trim() !== "" ? value : "";
+}
+
+function sanitizeAssistantTerminalContent(content: string): string {
+  if (content.trim() === "") {
+    return "";
+  }
+  const withoutThink = content.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  const withoutMiniMaxBlock = withoutThink.replace(/<minimax:tool_call>[\s\S]*?<\/minimax:tool_call>/gi, "");
+  const withoutResidualTags = withoutMiniMaxBlock.replace(/<\/?(?:minimax:tool_call|invoke|parameter)(?:\s+[^>]*)?>/gi, "");
+  return withoutResidualTags.trim();
 }
 
 function appendTerminalMessage(runtime: SessionRuntime, message: SessionMessage): void {

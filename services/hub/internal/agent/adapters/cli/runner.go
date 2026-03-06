@@ -261,6 +261,61 @@ func payloadToMap(payload core.EventPayload) (map[string]any, error) {
 		if trimmed := strings.TrimSpace(typed.ToolUseID); trimmed != "" {
 			out["tool_use_id"] = trimmed
 		}
+		if stage := strings.TrimSpace(typed.Stage); stage != "" {
+			out["stage"] = stage
+		}
+		if callID := strings.TrimSpace(typed.CallID); callID != "" {
+			out["call_id"] = callID
+		}
+		if name := strings.TrimSpace(typed.Name); name != "" {
+			out["name"] = name
+		}
+		if riskLevel := strings.TrimSpace(typed.RiskLevel); riskLevel != "" {
+			out["risk_level"] = riskLevel
+		}
+		if len(typed.Input) > 0 {
+			out["input"] = cloneMapAny(typed.Input)
+		}
+		if len(typed.Output) > 0 {
+			out["output"] = cloneMapAny(typed.Output)
+		}
+		if errText := strings.TrimSpace(typed.Error); errText != "" {
+			out["error"] = errText
+		}
+		if typed.OK != nil {
+			out["ok"] = *typed.OK
+		}
+		if questionID := strings.TrimSpace(typed.QuestionID); questionID != "" {
+			out["question_id"] = questionID
+		}
+		if question := strings.TrimSpace(typed.Question); question != "" {
+			out["question"] = question
+		}
+		if len(typed.Options) > 0 {
+			options := make([]map[string]any, 0, len(typed.Options))
+			for _, option := range typed.Options {
+				options = append(options, cloneMapAny(option))
+			}
+			out["options"] = options
+		}
+		if recommended := strings.TrimSpace(typed.RecommendedOptionID); recommended != "" {
+			out["recommended_option_id"] = recommended
+		}
+		if typed.AllowText != nil {
+			out["allow_text"] = *typed.AllowText
+		}
+		if typed.Required != nil {
+			out["required"] = *typed.Required
+		}
+		if selectedID := strings.TrimSpace(typed.SelectedOptionID); selectedID != "" {
+			out["selected_option_id"] = selectedID
+		}
+		if selectedLabel := strings.TrimSpace(typed.SelectedOptionLabel); selectedLabel != "" {
+			out["selected_option_label"] = selectedLabel
+		}
+		if text := strings.TrimSpace(typed.Text); text != "" {
+			out["text"] = text
+		}
 		return out, nil
 	case core.ApprovalNeededPayload:
 		return map[string]any{

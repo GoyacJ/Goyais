@@ -55,6 +55,25 @@ func (RunStartedPayload) isEventPayload() {}
 type OutputDeltaPayload struct {
 	Delta     string
 	ToolUseID string
+
+	Stage     string
+	CallID    string
+	Name      string
+	RiskLevel string
+	Input     map[string]any
+	Output    map[string]any
+	Error     string
+	OK        *bool
+
+	QuestionID          string
+	Question            string
+	Options             []map[string]any
+	RecommendedOptionID string
+	AllowText           *bool
+	Required            *bool
+	SelectedOptionID    string
+	SelectedOptionLabel string
+	Text                string
 }
 
 func (OutputDeltaPayload) isEventPayload() {}

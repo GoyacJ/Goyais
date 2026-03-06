@@ -124,7 +124,7 @@ func TestEngineControlStopCancelsActiveRun(t *testing.T) {
 
 	_ = waitForRunEvent(t, sub.Events(), runID, core.RunEventTypeRunStarted, 2*time.Second)
 
-	if err := engine.Control(context.Background(), runID, core.ControlActionStop); err != nil {
+	if err := engine.Control(context.Background(), core.ControlRequest{RunID: runID, Action: core.ControlActionStop}); err != nil {
 		t.Fatalf("control stop: %v", err)
 	}
 
@@ -465,7 +465,7 @@ func TestEngineControlRoutesApprovalSignal(t *testing.T) {
 		}
 	}()
 
-	if err := engine.Control(context.Background(), runID, core.ControlActionApprove); err != nil {
+	if err := engine.Control(context.Background(), core.ControlRequest{RunID: runID, Action: core.ControlActionApprove}); err != nil {
 		t.Fatalf("control approve failed: %v", err)
 	}
 

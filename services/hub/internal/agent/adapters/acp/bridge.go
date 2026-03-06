@@ -58,6 +58,7 @@ type Update struct {
 type ControlRequest struct {
 	RunID  string
 	Action core.ControlAction
+	Answer *core.ControlAnswer
 }
 
 // BridgeOptions configures optional ACP bridge integrations.
@@ -223,9 +224,19 @@ func (b *Bridge) Control(ctx context.Context, req ControlRequest) error {
 	if service == nil {
 		return core.ErrEngineNotConfigured
 	}
+	var answer *agenthttpapi.ControlAnswer
+	if req.Answer != nil {
+		normalized := req.Answer.Normalize()
+		answer = &agenthttpapi.ControlAnswer{
+			QuestionID:       normalized.QuestionID,
+			SelectedOptionID: normalized.SelectedOptionID,
+			Text:             normalized.Text,
+		}
+	}
 	return service.Control(ctx, agenthttpapi.ControlRequest{
 		RunID:  strings.TrimSpace(req.RunID),
 		Action: strings.TrimSpace(string(req.Action)),
+		Answer: answer,
 	})
 }
 

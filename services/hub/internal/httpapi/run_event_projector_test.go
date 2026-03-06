@@ -287,6 +287,153 @@ func TestEnsureConversationProjectionDeduplicatesWorker(t *testing.T) {
 	}
 }
 
+func TestProjectRuntimeEvent_UserQuestionNeededUpdatesAwaitingInputState(t *testing.T) {
+	state := NewAppState(nil)
+	conversationID := "conv_projector_question_needed"
+	executionID := "exec_projector_question_needed"
+	runID := "run_projector_question_needed"
+	now := "2026-03-05T12:00:00Z"
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:                conversationID,
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_projector_question_needed",
+		Name:              "Projection Question Needed",
+		QueueState:        QueueStateRunning,
+		ActiveExecutionID: stringPtrOrNil(executionID),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	state.executions[executionID] = Execution{
+		ID:             executionID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_projector_question_needed",
+		State:          RunStateExecuting,
+		QueueIndex:     0,
+		TraceID:        "trace_projector_question_needed",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	state.executionRunIDs[executionID] = runID
+	state.conversationExecutionOrder[conversationID] = []string{executionID}
+	state.mu.Unlock()
+
+	_, mappedType, projected := state.projectRuntimeEvent(conversationID, agentcore.EventEnvelope{
+		Type:      agentcore.RunEventTypeRunOutputDelta,
+		SessionID: "sess_projector_question_needed",
+		RunID:     agentcore.RunID(runID),
+		Sequence:  2,
+		Timestamp: time.Date(2026, 3, 5, 12, 0, 1, 0, time.UTC),
+		Payload: agentcore.OutputDeltaPayload{
+			Stage:      "run_user_question_needed",
+			CallID:     "call_question_needed",
+			Name:       "Bash",
+			QuestionID: "q_projector",
+			Question:   "Continue with command?",
+			Options: []map[string]any{
+				{"id": "opt_yes", "label": "Yes"},
+				{"id": "opt_no", "label": "No"},
+			},
+			AllowText: boolPtr(true),
+			Required:  boolPtr(true),
+		},
+	})
+	if !projected {
+		t.Fatalf("expected question-needed event to be projected")
+	}
+	if mappedType != RunEventTypeThinkingDelta {
+		t.Fatalf("expected mapped type thinking_delta, got %s", mappedType)
+	}
+
+	state.mu.RLock()
+	execution := state.executions[executionID]
+	pendingQuestion, exists := state.pendingUserQuestions[executionID]
+	state.mu.RUnlock()
+	if execution.State != RunStateAwaitingInput {
+		t.Fatalf("expected execution state awaiting_input, got %s", execution.State)
+	}
+	if !exists {
+		t.Fatalf("expected pending user question to be tracked")
+	}
+	if pendingQuestion.QuestionID != "q_projector" {
+		t.Fatalf("expected pending question id q_projector, got %q", pendingQuestion.QuestionID)
+	}
+	if len(pendingQuestion.Options) != 2 {
+		t.Fatalf("expected pending question options to be preserved, got %#v", pendingQuestion.Options)
+	}
+}
+
+func TestProjectRuntimeEvent_ToolCallStageMapsToToolCallEvent(t *testing.T) {
+	state := NewAppState(nil)
+	conversationID := "conv_projector_tool_call"
+	executionID := "exec_projector_tool_call"
+	runID := "run_projector_tool_call"
+	now := "2026-03-05T12:10:00Z"
+
+	state.mu.Lock()
+	state.conversations[conversationID] = Conversation{
+		ID:                conversationID,
+		WorkspaceID:       localWorkspaceID,
+		ProjectID:         "proj_projector_tool_call",
+		Name:              "Projection Tool Call",
+		QueueState:        QueueStateRunning,
+		ActiveExecutionID: stringPtrOrNil(executionID),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	state.executions[executionID] = Execution{
+		ID:             executionID,
+		WorkspaceID:    localWorkspaceID,
+		ConversationID: conversationID,
+		MessageID:      "msg_projector_tool_call",
+		State:          RunStateExecuting,
+		QueueIndex:     0,
+		TraceID:        "trace_projector_tool_call",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	state.executionRunIDs[executionID] = runID
+	state.conversationExecutionOrder[conversationID] = []string{executionID}
+	state.mu.Unlock()
+
+	_, mappedType, projected := state.projectRuntimeEvent(conversationID, agentcore.EventEnvelope{
+		Type:      agentcore.RunEventTypeRunOutputDelta,
+		SessionID: "sess_projector_tool_call",
+		RunID:     agentcore.RunID(runID),
+		Sequence:  3,
+		Timestamp: time.Date(2026, 3, 5, 12, 10, 1, 0, time.UTC),
+		Payload: agentcore.OutputDeltaPayload{
+			Stage:  "tool_call",
+			CallID: "call_projector_tool_call",
+			Name:   "Read",
+			Input:  map[string]any{"path": "README.md"},
+		},
+	})
+	if !projected {
+		t.Fatalf("expected tool_call stage event to be projected")
+	}
+	if mappedType != RunEventTypeToolCall {
+		t.Fatalf("expected mapped type tool_call, got %s", mappedType)
+	}
+
+	state.mu.RLock()
+	buffered := strings.TrimSpace(state.executionOutputBuffers[executionID])
+	events := append([]ExecutionEvent{}, state.executionEvents[conversationID]...)
+	state.mu.RUnlock()
+	if buffered != "" {
+		t.Fatalf("expected tool_call stage not to be buffered as assistant output, got %q", buffered)
+	}
+	if len(events) == 0 || events[len(events)-1].Type != RunEventTypeToolCall {
+		t.Fatalf("expected latest projected event to be tool_call, got %#v", events)
+	}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
+}
+
 type runtimeBridgeServiceStub struct {
 	runID       string
 	startCalls  int
@@ -329,7 +476,7 @@ func (s *runtimeEngineSubscribeStub) Submit(_ context.Context, _ string, _ agent
 	return "", nil
 }
 
-func (s *runtimeEngineSubscribeStub) Control(_ context.Context, _ string, _ agentcore.ControlAction) error {
+func (s *runtimeEngineSubscribeStub) Control(_ context.Context, _ agentcore.ControlRequest) error {
 	return nil
 }
 

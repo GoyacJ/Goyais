@@ -159,7 +159,8 @@ func (s *AppState) projectRuntimeEvent(
 		}
 	}
 
-	applyProjectedExecutionStateLocked(s, executionID, mappedType, now)
+	syncPendingUserQuestionFromProjectedPayloadLocked(s, executionID, mappedPayload)
+	applyProjectedExecutionStateLocked(s, executionID, mappedType, mappedPayload, now)
 	stateChanged = true
 	appendExecutionEventLocked(s, ExecutionEvent{
 		ExecutionID:    executionID,
@@ -223,7 +224,44 @@ func hasExecutionEventTypeLocked(
 	return false
 }
 
-func applyProjectedExecutionStateLocked(state *AppState, executionID string, eventType RunEventType, timestamp string) {
+func syncPendingUserQuestionFromProjectedPayloadLocked(state *AppState, executionID string, payload map[string]any) {
+	if state == nil {
+		return
+	}
+	normalizedExecutionID := strings.TrimSpace(executionID)
+	if normalizedExecutionID == "" {
+		return
+	}
+	stage := strings.TrimSpace(asStringValue(payload["stage"]))
+	switch stage {
+	case "run_user_question_needed":
+		questionID := strings.TrimSpace(asStringValue(payload["question_id"]))
+		if questionID == "" {
+			return
+		}
+		options := normalizeQuestionOptionsPayload(payload["options"])
+		state.pendingUserQuestions[normalizedExecutionID] = pendingUserQuestion{
+			QuestionID:          questionID,
+			Question:            strings.TrimSpace(asStringValue(payload["question"])),
+			Options:             options,
+			RecommendedOptionID: strings.TrimSpace(asStringValue(payload["recommended_option_id"])),
+			AllowText:           asBoolValue(payload["allow_text"], true),
+			Required:            asBoolValue(payload["required"], true),
+			CallID:              strings.TrimSpace(asStringValue(payload["call_id"])),
+			ToolName:            strings.TrimSpace(asStringValue(payload["name"])),
+		}
+	case "run_user_question_resolved":
+		delete(state.pendingUserQuestions, normalizedExecutionID)
+	}
+}
+
+func applyProjectedExecutionStateLocked(
+	state *AppState,
+	executionID string,
+	eventType RunEventType,
+	payload map[string]any,
+	timestamp string,
+) {
 	if state == nil {
 		return
 	}
@@ -234,6 +272,15 @@ func applyProjectedExecutionStateLocked(state *AppState, executionID string, eve
 	switch eventType {
 	case RunEventTypeExecutionStarted:
 		execution.State = RunStateExecuting
+	case RunEventTypeThinkingDelta:
+		switch strings.TrimSpace(asStringValue(payload["run_state"])) {
+		case "waiting_approval":
+			execution.State = RunStateConfirming
+		case "waiting_user_input":
+			execution.State = RunStateAwaitingInput
+		case "running":
+			execution.State = RunStateExecuting
+		}
 	case RunEventTypeExecutionDone:
 		execution.State = RunStateCompleted
 	case RunEventTypeExecutionError:
@@ -245,6 +292,7 @@ func applyProjectedExecutionStateLocked(state *AppState, executionID string, eve
 	state.executions[execution.ID] = execution
 	if isRuntimeTerminalExecutionEvent(eventType) {
 		delete(state.executionOutputBuffers, execution.ID)
+		delete(state.pendingUserQuestions, execution.ID)
 	}
 }
 
@@ -257,6 +305,13 @@ func shouldBufferRuntimeOutputDelta(
 		return false
 	}
 	if mappedType != RunEventTypeThinkingDelta {
+		return false
+	}
+	stage := strings.TrimSpace(asStringValue(mappedPayload["stage"]))
+	switch stage {
+	case "", "assistant_output", "model_output", "final_output":
+		// Buffer plain assistant text deltas only.
+	default:
 		return false
 	}
 	if strings.TrimSpace(asStringValue(mappedPayload["call_id"])) != "" {
@@ -376,13 +431,88 @@ func mapRuntimeEnvelopeToExecutionEvent(event agentcore.EventEnvelope) (RunEvent
 			if delta := strings.TrimSpace(typed.Delta); delta != "" {
 				payload["delta"] = delta
 			}
+			if stage := strings.TrimSpace(typed.Stage); stage != "" {
+				payload["stage"] = stage
+			}
 			if toolUseID := strings.TrimSpace(typed.ToolUseID); toolUseID != "" {
 				payload["call_id"] = toolUseID
-				payload["name"] = "tool"
+			}
+			if callID := strings.TrimSpace(typed.CallID); callID != "" {
+				payload["call_id"] = callID
+			}
+			if name := strings.TrimSpace(typed.Name); name != "" {
+				payload["name"] = name
+			}
+			if riskLevel := strings.TrimSpace(typed.RiskLevel); riskLevel != "" {
+				payload["risk_level"] = riskLevel
+			}
+			if len(typed.Input) > 0 {
+				payload["input"] = cloneMapAny(typed.Input)
+			}
+			if len(typed.Output) > 0 {
+				payload["output"] = cloneMapAny(typed.Output)
+			}
+			if errText := strings.TrimSpace(typed.Error); errText != "" {
+				payload["error"] = errText
+			}
+			if typed.OK != nil {
+				payload["ok"] = *typed.OK
+			}
+			if questionID := strings.TrimSpace(typed.QuestionID); questionID != "" {
+				payload["question_id"] = questionID
+			}
+			if question := strings.TrimSpace(typed.Question); question != "" {
+				payload["question"] = question
+			}
+			if len(typed.Options) > 0 {
+				options := make([]map[string]any, 0, len(typed.Options))
+				for _, option := range typed.Options {
+					options = append(options, cloneMapAny(option))
+				}
+				payload["options"] = options
+			}
+			if recommended := strings.TrimSpace(typed.RecommendedOptionID); recommended != "" {
+				payload["recommended_option_id"] = recommended
+			}
+			if typed.AllowText != nil {
+				payload["allow_text"] = *typed.AllowText
+			}
+			if typed.Required != nil {
+				payload["required"] = *typed.Required
+			}
+			if selectedID := strings.TrimSpace(typed.SelectedOptionID); selectedID != "" {
+				payload["selected_option_id"] = selectedID
+			}
+			if selectedLabel := strings.TrimSpace(typed.SelectedOptionLabel); selectedLabel != "" {
+				payload["selected_option_label"] = selectedLabel
+			}
+			if text := strings.TrimSpace(typed.Text); text != "" {
+				payload["text"] = text
 			}
 		}
-		if payload["call_id"] != nil {
+		stage := strings.TrimSpace(asStringValue(payload["stage"]))
+		switch stage {
+		case "tool_call":
 			return RunEventTypeToolCall, payload
+		case "tool_result":
+			return RunEventTypeToolResult, payload
+		case "run_approval_needed":
+			payload["run_state"] = "waiting_approval"
+			return RunEventTypeThinkingDelta, payload
+		case "run_user_question_needed":
+			payload["run_state"] = "waiting_user_input"
+			return RunEventTypeThinkingDelta, payload
+		case "run_user_question_resolved", "approval_resolved":
+			payload["run_state"] = "running"
+			return RunEventTypeThinkingDelta, payload
+		}
+		if strings.TrimSpace(asStringValue(payload["call_id"])) != "" {
+			if payload["output"] != nil || payload["ok"] != nil || strings.TrimSpace(asStringValue(payload["error"])) != "" {
+				return RunEventTypeToolResult, payload
+			}
+			if payload["input"] != nil || strings.TrimSpace(asStringValue(payload["name"])) != "" {
+				return RunEventTypeToolCall, payload
+			}
 		}
 		return RunEventTypeThinkingDelta, payload
 	case agentcore.RunEventTypeRunCompleted:
@@ -428,6 +558,38 @@ func mapRuntimeEnvelopeToExecutionEvent(event agentcore.EventEnvelope) (RunEvent
 	default:
 		return "", map[string]any{}
 	}
+}
+
+func normalizeQuestionOptionsPayload(value any) []map[string]any {
+	items, ok := value.([]map[string]any)
+	if ok {
+		out := make([]map[string]any, 0, len(items))
+		for _, item := range items {
+			out = append(out, cloneMapAny(item))
+		}
+		return out
+	}
+	rawItems, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(rawItems))
+	for _, item := range rawItems {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		out = append(out, cloneMapAny(entry))
+	}
+	return out
+}
+
+func asBoolValue(value any, fallback bool) bool {
+	typed, ok := value.(bool)
+	if !ok {
+		return fallback
+	}
+	return typed
 }
 
 func isRuntimeTerminalExecutionEvent(eventType RunEventType) bool {

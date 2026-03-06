@@ -53,6 +53,40 @@ func TestParseOpenAITurn_ParsesToolCalls(t *testing.T) {
 	}
 }
 
+func TestParseOpenAITurn_ParsesMiniMaxToolCallAndCleansTags(t *testing.T) {
+	raw := []byte(`{
+		"choices": [
+			{
+				"message": {
+					"content": "<think>先分析项目结构</think>\n我来查看当前项目的结构信息。\n<minimax:tool_call><invoke name=\"cli-mcp-server_run_command\"><parameter name=\"command\">ls -la</parameter></invoke></minimax:tool_call>"
+				}
+			}
+		],
+		"usage": {
+			"prompt_tokens": 8,
+			"completion_tokens": 5
+		}
+	}`)
+
+	result, err := ParseOpenAITurn(raw)
+	if err != nil {
+		t.Fatalf("expected parse success, got %v", err)
+	}
+	if got := len(result.ToolCalls); got != 1 {
+		t.Fatalf("expected exactly one parsed minimax tool call, got %d", got)
+	}
+	call := result.ToolCalls[0]
+	if call.Name != "cli-mcp-server_run_command" {
+		t.Fatalf("unexpected tool name %q", call.Name)
+	}
+	if got := asString(call.Input["command"]); got != "ls -la" {
+		t.Fatalf("expected command ls -la, got %q", got)
+	}
+	if result.AssistantText != "我来查看当前项目的结构信息。" {
+		t.Fatalf("unexpected cleaned assistant text %q", result.AssistantText)
+	}
+}
+
 func TestParseGoogleTurn_ParsesFunctionCall(t *testing.T) {
 	raw := []byte(`{
 		"candidates": [
