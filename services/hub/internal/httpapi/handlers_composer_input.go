@@ -1,0 +1,1101 @@
+package httpapi
+
+import (
+	"context"
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"net/http"
+	"os"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	composerctx "goyais/services/hub/internal/agent/context/composer"
+	"goyais/services/hub/internal/agent/core"
+	composercommands "goyais/services/hub/internal/legacybridge/composercommands"
+)
+
+const composerMaxCatalogFiles = 2000
+
+var errComposerFileCatalogLimitReached = errors.New("composer file catalog limit reached")
+
+func ConversationInputCatalogHandler(state *AppState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
+				"method": r.Method,
+				"path":   r.URL.Path,
+			})
+			return
+		}
+
+		conversationID := runtimeSessionIDFromPath(r)
+		conversation, project, projectConfig, _, ok := loadConversationInputContext(state, w, r, conversationID, "session.read")
+		if !ok {
+			return
+		}
+		catalog, err := buildComposerCatalog(state, conversation.WorkspaceID, projectConfig, project.RepoPath)
+		if err != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "COMPOSER_CATALOG_FAILED", "Failed to build composer catalog", map[string]any{})
+			return
+		}
+		writeJSON(w, http.StatusOK, catalog)
+	}
+}
+
+func ConversationInputSuggestHandler(state *AppState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
+				"method": r.Method,
+				"path":   r.URL.Path,
+			})
+			return
+		}
+
+		conversationID := runtimeSessionIDFromPath(r)
+		conversation, project, projectConfig, _, ok := loadConversationInputContext(state, w, r, conversationID, "session.read")
+		if !ok {
+			return
+		}
+
+		input := ComposerSuggestRequest{}
+		if err := decodeJSONBody(r, &input); err != nil {
+			err.write(w, r)
+			return
+		}
+
+		catalog, err := buildComposerCatalog(state, conversation.WorkspaceID, projectConfig, project.RepoPath)
+		if err != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "COMPOSER_CATALOG_FAILED", "Failed to build composer catalog", map[string]any{})
+			return
+		}
+
+		resources := make([]composerctx.ResourceCatalogItem, 0, len(catalog.Capabilities))
+		for _, item := range catalog.Capabilities {
+			resourceType, ok := composerctx.ParseResourceType(string(item.Kind))
+			if !ok {
+				continue
+			}
+			_, resourceID, ok := splitComposerCapabilityID(item.ID)
+			if !ok {
+				continue
+			}
+			resources = append(resources, composerctx.ResourceCatalogItem{
+				Type: resourceType,
+				ID:   resourceID,
+				Name: item.Name,
+			})
+		}
+		commands := make([]composerctx.CommandMeta, 0, len(catalog.Commands))
+		for _, item := range catalog.Commands {
+			kind := composerctx.CommandKindControl
+			if strings.TrimSpace(item.Kind) == string(composerctx.CommandKindPrompt) {
+				kind = composerctx.CommandKindPrompt
+			}
+			commands = append(commands, composerctx.CommandMeta{
+				Name:        item.Name,
+				Description: item.Description,
+				Kind:        kind,
+			})
+		}
+		suggestions := composerctx.Suggest(composerctx.SuggestRequest{
+			Draft:     input.Draft,
+			Cursor:    input.Cursor,
+			Limit:     input.Limit,
+			Commands:  commands,
+			Resources: resources,
+		})
+		response := ComposerSuggestResponse{
+			Revision:    catalog.Revision,
+			Suggestions: make([]ComposerSuggestion, 0, len(suggestions)),
+		}
+		for _, item := range suggestions {
+			response.Suggestions = append(response.Suggestions, ComposerSuggestion{
+				Kind:         string(item.Kind),
+				Label:        item.Label,
+				Detail:       strings.TrimSpace(item.Detail),
+				InsertText:   item.InsertText,
+				ReplaceStart: item.ReplaceStart,
+				ReplaceEnd:   item.ReplaceEnd,
+			})
+		}
+		writeJSON(w, http.StatusOK, response)
+	}
+}
+
+func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
+				"method": r.Method,
+				"path":   r.URL.Path,
+			})
+			return
+		}
+
+		conversationID := runtimeSessionIDFromPath(r)
+		conversationSeed, project, projectConfig, session, ok := loadConversationInputContext(state, w, r, conversationID, "session.write")
+		if !ok {
+			return
+		}
+
+		input := ComposerSubmitRequest{}
+		if err := decodeJSONBody(r, &input); err != nil {
+			err.write(w, r)
+			return
+		}
+
+		rawInput := strings.TrimSpace(input.RawInput)
+		if rawInput == "" {
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "raw_input is required", map[string]any{})
+			return
+		}
+		if input.Mode != "" {
+			if _, ok := ParsePermissionMode(string(input.Mode)); !ok {
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "mode must be default, acceptEdits, plan, dontAsk, or bypassPermissions", map[string]any{})
+				return
+			}
+		}
+
+		catalog, err := buildComposerCatalog(state, conversationSeed.WorkspaceID, projectConfig, project.RepoPath)
+		if err != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "COMPOSER_CATALOG_FAILED", "Failed to build composer catalog", map[string]any{})
+			return
+		}
+		if requestedRevision := strings.TrimSpace(input.CatalogRevision); requestedRevision != "" && requestedRevision != catalog.Revision {
+			WriteStandardError(w, r, http.StatusConflict, "CATALOG_STALE", "Composer catalog revision is stale; refresh catalog and retry", map[string]any{
+				"current_revision": catalog.Revision,
+			})
+			return
+		}
+
+		parsed := composerctx.Parse(rawInput)
+		selectionByType, err := validateSelectedCapabilitiesAgainstMentions(parsed.MentionedRefs, input.SelectedCapabilities)
+		if err != nil {
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+			return
+		}
+		projectFilePaths, err := validateComposerProjectFileSelections(project.RepoPath, selectionByType[ComposerCapabilityKindFile])
+		if err != nil {
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+			return
+		}
+
+		if parsed.IsCommand {
+			composerEnv := envFromSystem()
+			commandRegistry, registryErr := composercommands.NewComposerCommandRegistry(context.Background(), project.RepoPath, composerEnv)
+			if registryErr != nil {
+				WriteStandardError(w, r, http.StatusBadRequest, "COMMAND_DISPATCH_FAILED", registryErr.Error(), map[string]any{})
+				return
+			}
+			dispatch, dispatchErr := composerctx.DispatchCommand(
+				context.Background(),
+				parsed.CommandText,
+				commandRegistry,
+				composerctx.DispatchRequest{
+					WorkingDir: project.RepoPath,
+					Env:        composerEnv,
+				},
+			)
+			if dispatchErr != nil {
+				if errors.Is(dispatchErr, composerctx.ErrUnknownCommand) {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", dispatchErr.Error(), map[string]any{})
+					return
+				}
+				WriteStandardError(w, r, http.StatusBadRequest, "COMMAND_DISPATCH_FAILED", dispatchErr.Error(), map[string]any{})
+				return
+			}
+
+			if dispatch.Kind == composerctx.CommandKindControl {
+				if err := appendCommandResultMessages(state, conversationID, rawInput, dispatch.Output); err != nil {
+					WriteStandardError(w, r, http.StatusInternalServerError, "COMMAND_RESULT_PERSIST_FAILED", "Failed to persist command result", map[string]any{})
+					return
+				}
+				if state.authz != nil {
+					_ = state.authz.appendAudit(conversationSeed.WorkspaceID, session.UserID, "session.write", "conversation", conversationID, "success", map[string]any{"operation": "submit_command"}, TraceIDFromContext(r.Context()))
+				}
+				writeJSON(w, http.StatusOK, ComposerSubmitResponse{
+					Kind: "command_result",
+					CommandResult: &ComposerCommandResult{
+						Command: dispatch.Name,
+						Output:  dispatch.Output,
+					},
+				})
+				return
+			}
+
+			parsed = composerctx.ParsePrompt(dispatch.ExpandedPrompt)
+			selectionByType, err = validateSelectedCapabilitiesAgainstMentions(parsed.MentionedRefs, input.SelectedCapabilities)
+			if err != nil {
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+				return
+			}
+			projectFilePaths, err = validateComposerProjectFileSelections(project.RepoPath, selectionByType[ComposerCapabilityKindFile])
+			if err != nil {
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+				return
+			}
+		}
+
+		promptText := strings.TrimSpace(parsed.PromptText)
+		if promptText == "" {
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "raw_input does not contain executable prompt after removing resource mentions", map[string]any{})
+			return
+		}
+
+		resolvedMode := input.Mode
+		if resolvedMode == "" {
+			resolvedMode = conversationSeed.DefaultMode
+		}
+		if resolvedMode == "" {
+			resolvedMode = firstNonEmptyMode(project.DefaultMode, PermissionModeDefault)
+		}
+		resolvedMode = NormalizePermissionMode(string(resolvedMode))
+
+		resolvedModelConfigID := strings.TrimSpace(input.ModelConfigID)
+		if explicitModels := selectionByType[ComposerCapabilityKindModel]; len(explicitModels) > 0 {
+			if len(explicitModels) != 1 {
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "@model mention must select exactly one model", map[string]any{})
+				return
+			}
+			resolvedModelConfigID = explicitModels[0]
+		}
+		if resolvedModelConfigID == "" {
+			resolvedModelConfigID = strings.TrimSpace(conversationSeed.ModelConfigID)
+		}
+		if resolvedModelConfigID == "" {
+			resolvedModelConfigID = strings.TrimSpace(derefString(projectConfig.DefaultModelConfigID))
+		}
+		if resolvedModelConfigID == "" {
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "model_config_id is required and must be configured by project", map[string]any{})
+			return
+		}
+
+		resolvedRuleIDs := append([]string{}, conversationSeed.RuleIDs...)
+		if explicitRules := selectionByType[ComposerCapabilityKindRule]; len(explicitRules) > 0 {
+			resolvedRuleIDs = explicitRules
+		}
+		resolvedSkillIDs := append([]string{}, conversationSeed.SkillIDs...)
+		if explicitSkills := selectionByType[ComposerCapabilityKindSkill]; len(explicitSkills) > 0 {
+			resolvedSkillIDs = explicitSkills
+		}
+		resolvedMCPIDs := append([]string{}, conversationSeed.MCPIDs...)
+		if explicitMCPs := selectionByType[ComposerCapabilityKindMCP]; len(explicitMCPs) > 0 {
+			resolvedMCPIDs = explicitMCPs
+		}
+
+		if err := validateConversationResourceSelection(
+			state,
+			conversationSeed.WorkspaceID,
+			projectConfig,
+			resolvedModelConfigID,
+			resolvedRuleIDs,
+			resolvedSkillIDs,
+			resolvedMCPIDs,
+		); err != nil {
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+			return
+		}
+
+		selectedModelConfig, modelConfigExists, modelConfigErr := getWorkspaceEnabledModelConfigByID(
+			state,
+			conversationSeed.WorkspaceID,
+			resolvedModelConfigID,
+		)
+		if modelConfigErr != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "RESOURCE_CONFIG_LOAD_FAILED", "Failed to load model config", map[string]any{})
+			return
+		}
+		if !modelConfigExists {
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "model_config_id is not resolvable from project config", map[string]any{})
+			return
+		}
+
+		resolvedModelID, resolvedModelSnapshot := resolveExecutionModelSnapshot(
+			state,
+			conversationSeed.WorkspaceID,
+			selectedModelConfig,
+		)
+		if strings.TrimSpace(resolvedModelID) == "" || strings.TrimSpace(resolvedModelSnapshot.ModelID) == "" {
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "model_config_id is not resolvable from project config", map[string]any{})
+			return
+		}
+
+		workspaceAgentConfig, workspaceAgentConfigErr := loadWorkspaceAgentConfigFromStore(state, conversationSeed.WorkspaceID)
+		if workspaceAgentConfigErr != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "WORKSPACE_AGENT_CONFIG_READ_FAILED", "Failed to read workspace agent config", map[string]any{})
+			return
+		}
+		runtimeToolingSnapshot, runtimeToolingErr := resolveRuntimeToolingConfig(
+			state,
+			conversationSeed.WorkspaceID,
+			PermissionMode(resolvedMode),
+			resolvedRuleIDs,
+			resolvedSkillIDs,
+			resolvedMCPIDs,
+			project.RepoPath,
+			workspaceAgentConfig,
+		)
+		if runtimeToolingErr != nil {
+			WriteStandardError(w, r, http.StatusInternalServerError, "WORKSPACE_AGENT_CONFIG_READ_FAILED", "Failed to resolve execution tooling snapshot", map[string]any{})
+			return
+		}
+
+		now := time.Now().UTC().Format(time.RFC3339)
+		var createdExecution Execution
+		var queueState QueueState
+		nextExecutionToSubmit := ""
+		state.mu.Lock()
+		conversation, exists := state.conversations[conversationID]
+		if !exists {
+			state.mu.Unlock()
+			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"session_id": conversationID})
+			return
+		}
+		if thresholdErr := validateExecutionTokenThresholdsLocked(
+			state,
+			conversation,
+			projectConfig,
+			selectedModelConfig,
+			resolvedModelConfigID,
+		); thresholdErr != nil {
+			state.mu.Unlock()
+			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", thresholdErr.Error(), map[string]any{})
+			return
+		}
+
+		queueIndex := deriveNextQueueIndexLocked(state, conversationID)
+		msgID := "msg_" + randomHex(6)
+		userRole := MessageRoleUser
+		canRollback := true
+		message := ConversationMessage{
+			ID:             msgID,
+			ConversationID: conversationID,
+			Role:           userRole,
+			Content:        promptText,
+			CreatedAt:      now,
+			QueueIndex:     &queueIndex,
+			CanRollback:    &canRollback,
+		}
+		state.conversationMessages[conversationID] = append(state.conversationMessages[conversationID], message)
+
+		executionState := RunStateQueued
+		if conversation.ActiveExecutionID == nil {
+			executionState = RunStatePending
+		}
+		execution := Execution{
+			ID:             "exec_" + randomHex(6),
+			WorkspaceID:    conversation.WorkspaceID,
+			ConversationID: conversationID,
+			MessageID:      msgID,
+			State:          executionState,
+			Mode:           resolvedMode,
+			ModelID:        resolvedModelID,
+			ModeSnapshot:   resolvedMode,
+			ModelSnapshot:  resolvedModelSnapshot,
+			ResourceProfileSnapshot: buildExecutionResourceProfileSnapshot(
+				resolvedModelConfigID,
+				resolvedModelID,
+				resolvedRuleIDs,
+				resolvedSkillIDs,
+				resolvedMCPIDs,
+				projectFilePaths,
+				runtimeToolingSnapshot,
+			),
+			AgentConfigSnapshot:     toExecutionAgentConfigSnapshot(workspaceAgentConfig),
+			TokensIn:                0,
+			TokensOut:               0,
+			ProjectRevisionSnapshot: project.CurrentRevision,
+			QueueIndex:              queueIndex,
+			TraceID:                 TraceIDFromContext(r.Context()),
+			CreatedAt:               now,
+			UpdatedAt:               now,
+		}
+		state.executions[execution.ID] = execution
+		state.conversationExecutionOrder[conversationID] = append(state.conversationExecutionOrder[conversationID], execution.ID)
+
+		snapshot := ConversationSnapshot{
+			ID:                     "snap_" + randomHex(6),
+			ConversationID:         conversationID,
+			RollbackPointMessageID: msgID,
+			QueueState:             deriveQueueStateLocked(state, conversationID, conversation.ActiveExecutionID),
+			WorktreeRef:            nil,
+			InspectorState:         ConversationInspector{Tab: "diff"},
+			Messages:               cloneMessages(state.conversationMessages[conversationID]),
+			ExecutionIDs:           append([]string{}, state.conversationExecutionOrder[conversationID]...),
+			CreatedAt:              now,
+		}
+		state.conversationSnapshots[conversationID] = append(state.conversationSnapshots[conversationID], snapshot)
+
+		if conversation.ActiveExecutionID == nil {
+			conversation.ActiveExecutionID = &execution.ID
+			conversation.QueueState = QueueStateRunning
+			nextExecutionToSubmit = execution.ID
+		} else {
+			conversation.QueueState = QueueStateQueued
+		}
+		conversation.UpdatedAt = now
+		state.conversations[conversationID] = conversation
+		createdExecution = execution
+		queueState = conversation.QueueState
+		appendExecutionEventLocked(state, ExecutionEvent{
+			ExecutionID:    execution.ID,
+			ConversationID: conversationID,
+			TraceID:        execution.TraceID,
+			QueueIndex:     execution.QueueIndex,
+			Type:           RunEventTypeMessageReceived,
+			Timestamp:      now,
+			Payload: map[string]any{
+				"message_id":      msgID,
+				"mode":            string(resolvedMode),
+				"model_config_id": resolvedModelConfigID,
+				"model_name":      buildModelDisplayName(selectedModelConfig),
+				"model_id":        resolvedModelID,
+			},
+		})
+		appendExecutionEventLocked(state, ExecutionEvent{
+			ExecutionID:    execution.ID,
+			ConversationID: conversationID,
+			TraceID:        execution.TraceID,
+			QueueIndex:     execution.QueueIndex,
+			Type:           RunEventTypeTaskGraphConfigured,
+			Timestamp:      now,
+			Payload: map[string]any{
+				"task_id":         execution.ID,
+				"max_parallelism": 1,
+				"source":          "composer_input",
+			},
+		})
+		dependsOn := []string{}
+		if order := state.conversationExecutionOrder[conversationID]; len(order) >= 2 {
+			previousID := strings.TrimSpace(order[len(order)-2])
+			if previousID != "" && previousID != execution.ID {
+				dependsOn = append(dependsOn, previousID)
+			}
+		}
+		appendExecutionEventLocked(state, ExecutionEvent{
+			ExecutionID:    execution.ID,
+			ConversationID: conversationID,
+			TraceID:        execution.TraceID,
+			QueueIndex:     execution.QueueIndex,
+			Type:           RunEventTypeTaskDependenciesUpdated,
+			Timestamp:      now,
+			Payload: map[string]any{
+				"task_id":    execution.ID,
+				"depends_on": dependsOn,
+				"source":     "composer_input",
+			},
+		})
+		appendExecutionEventLocked(state, ExecutionEvent{
+			ExecutionID:    execution.ID,
+			ConversationID: conversationID,
+			TraceID:        execution.TraceID,
+			QueueIndex:     execution.QueueIndex,
+			Type:           RunEventTypeTaskRetryPolicyUpdated,
+			Timestamp:      now,
+			Payload: map[string]any{
+				"task_id":     execution.ID,
+				"retry_count": 0,
+				"max_retries": 0,
+				"source":      "composer_input",
+			},
+		})
+		state.mu.Unlock()
+
+		decision, matchedPolicyID := evaluateHookDecisionWithState(state, createdExecution, HookEventTypeUserPromptSubmit, "")
+		appendHookExecutionRecordAndEventWithState(
+			state,
+			createdExecution,
+			createdExecution.ID,
+			HookEventTypeUserPromptSubmit,
+			"",
+			matchedPolicyID,
+			decision,
+			map[string]any{
+				"message_id": createdExecution.MessageID,
+				"source":     "composer_input",
+			},
+		)
+
+		syncExecutionDomainBestEffort(state)
+		if nextExecutionToSubmit != "" {
+			state.submitExecutionBestEffort(r.Context(), nextExecutionToSubmit)
+		}
+		if state.authz != nil {
+			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "session.write", "conversation", conversationID, "success", map[string]any{"operation": "submit_prompt"}, TraceIDFromContext(r.Context()))
+		}
+
+		queueIndexValue := createdExecution.QueueIndex
+		writeJSON(w, http.StatusCreated, ComposerSubmitResponse{
+			Kind:       "run_enqueued",
+			Run:        &createdExecution,
+			QueueState: queueState,
+			QueueIndex: &queueIndexValue,
+		})
+	}
+}
+
+func loadConversationInputContext(
+	state *AppState,
+	w http.ResponseWriter,
+	r *http.Request,
+	conversationID string,
+	permission string,
+) (Conversation, Project, ProjectConfig, Session, bool) {
+	state.mu.RLock()
+	conversationSeed, exists := state.conversations[conversationID]
+	state.mu.RUnlock()
+	if !exists {
+		WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"session_id": conversationID})
+		return Conversation{}, Project{}, ProjectConfig{}, Session{}, false
+	}
+
+	session, authErr := authorizeAction(
+		state,
+		r,
+		conversationSeed.WorkspaceID,
+		permission,
+		authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
+		authorizationContext{OperationType: permissionOperationType(permission), ABACRequired: permission != "session.read"},
+	)
+	if authErr != nil {
+		authErr.write(w, r)
+		return Conversation{}, Project{}, ProjectConfig{}, Session{}, false
+	}
+
+	project, projectExists, projectErr := getProjectFromStore(state, conversationSeed.ProjectID)
+	if projectErr != nil {
+		WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_READ_FAILED", "Failed to read project", map[string]any{
+			"project_id": conversationSeed.ProjectID,
+		})
+		return Conversation{}, Project{}, ProjectConfig{}, Session{}, false
+	}
+	if !projectExists {
+		WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{
+			"project_id": conversationSeed.ProjectID,
+		})
+		return Conversation{}, Project{}, ProjectConfig{}, Session{}, false
+	}
+	projectConfig, configErr := getProjectConfigFromStore(state, project)
+	if configErr != nil {
+		WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_CONFIG_READ_FAILED", "Failed to read project config", map[string]any{
+			"project_id": conversationSeed.ProjectID,
+		})
+		return Conversation{}, Project{}, ProjectConfig{}, Session{}, false
+	}
+	return conversationSeed, project, projectConfig, session, true
+}
+
+func permissionOperationType(permission string) string {
+	if strings.HasSuffix(permission, ".read") {
+		return "read"
+	}
+	return "write"
+}
+
+func appendCommandResultMessages(state *AppState, conversationID string, commandInput string, output string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	conversation, exists := state.conversations[conversationID]
+	if !exists {
+		return errors.New("conversation not found")
+	}
+	canRollback := true
+	userMessageID := "msg_" + randomHex(6)
+	state.conversationMessages[conversationID] = append(state.conversationMessages[conversationID], ConversationMessage{
+		ID:             userMessageID,
+		ConversationID: conversationID,
+		Role:           MessageRoleUser,
+		Content:        strings.TrimSpace(commandInput),
+		CreatedAt:      now,
+		CanRollback:    &canRollback,
+	})
+	state.conversationMessages[conversationID] = append(state.conversationMessages[conversationID], ConversationMessage{
+		ID:             "msg_" + randomHex(6),
+		ConversationID: conversationID,
+		Role:           MessageRoleSystem,
+		Content:        strings.TrimSpace(output),
+		CreatedAt:      now,
+	})
+
+	snapshot := ConversationSnapshot{
+		ID:                     "snap_" + randomHex(6),
+		ConversationID:         conversationID,
+		RollbackPointMessageID: userMessageID,
+		QueueState:             deriveQueueStateLocked(state, conversationID, conversation.ActiveExecutionID),
+		WorktreeRef:            nil,
+		InspectorState:         ConversationInspector{Tab: "diff"},
+		Messages:               cloneMessages(state.conversationMessages[conversationID]),
+		ExecutionIDs:           append([]string{}, state.conversationExecutionOrder[conversationID]...),
+		CreatedAt:              now,
+	}
+	state.conversationSnapshots[conversationID] = append(state.conversationSnapshots[conversationID], snapshot)
+
+	conversation.UpdatedAt = now
+	state.conversations[conversationID] = conversation
+	return nil
+}
+
+func buildComposerCatalog(state *AppState, workspaceID string, projectConfig ProjectConfig, projectRepoPath string) (ComposerCatalogResponse, error) {
+	commandRegistry, err := composercommands.NewComposerCommandRegistry(context.Background(), projectRepoPath, envFromSystem())
+	if err != nil {
+		return ComposerCatalogResponse{}, err
+	}
+	commandCatalog := composerctx.ListCommands(commandRegistry)
+	commands := make([]ComposerCommandCatalogItem, 0, len(commandCatalog))
+	for _, item := range commandCatalog {
+		commands = append(commands, ComposerCommandCatalogItem{
+			Name:        item.Name,
+			Description: item.Description,
+			Kind:        string(item.Kind),
+		})
+	}
+
+	capabilityMap := map[string]ComposerCapabilityCatalogItem{}
+	appendComposerCatalogCapabilitiesByIDs(state, workspaceID, ResourceTypeModel, projectConfig.ModelConfigIDs, capabilityMap)
+	appendComposerCatalogCapabilitiesByIDs(state, workspaceID, ResourceTypeRule, projectConfig.RuleIDs, capabilityMap)
+	appendComposerCatalogCapabilitiesByIDs(state, workspaceID, ResourceTypeSkill, projectConfig.SkillIDs, capabilityMap)
+	appendComposerCatalogCapabilitiesByIDs(state, workspaceID, ResourceTypeMCP, projectConfig.MCPIDs, capabilityMap)
+	projectFiles := listComposerProjectFiles(projectRepoPath, composerMaxCatalogFiles)
+	for _, filePath := range projectFiles {
+		normalizedPath := strings.TrimSpace(filepath.ToSlash(filePath))
+		if normalizedPath == "" {
+			continue
+		}
+		key := strings.ToLower(buildComposerCapabilityID(ComposerCapabilityKindFile, normalizedPath))
+		capabilityMap[key] = ComposerCapabilityCatalogItem{
+			ID:          buildComposerCapabilityID(ComposerCapabilityKindFile, normalizedPath),
+			Kind:        ComposerCapabilityKindFile,
+			Name:        path.Base(normalizedPath),
+			Description: normalizedPath,
+			Source:      "project_file",
+			Scope:       string(core.CapabilityScopeProject),
+		}
+	}
+
+	capabilities := make([]ComposerCapabilityCatalogItem, 0, len(capabilityMap))
+	for _, item := range capabilityMap {
+		capabilities = append(capabilities, item)
+	}
+	sort.SliceStable(capabilities, func(i, j int) bool {
+		if capabilities[i].Kind != capabilities[j].Kind {
+			return capabilities[i].Kind < capabilities[j].Kind
+		}
+		return capabilities[i].ID < capabilities[j].ID
+	})
+
+	revisionPayload := struct {
+		Commands     []ComposerCommandCatalogItem    `json:"commands"`
+		Capabilities []ComposerCapabilityCatalogItem `json:"capabilities"`
+	}{
+		Commands:     commands,
+		Capabilities: capabilities,
+	}
+	raw, _ := json.Marshal(revisionPayload)
+	sum := sha1.Sum(raw)
+	revision := hex.EncodeToString(sum[:])
+
+	return ComposerCatalogResponse{
+		Revision:     revision,
+		Commands:     commands,
+		Capabilities: capabilities,
+	}, nil
+}
+
+func appendComposerCatalogCapabilitiesByIDs(
+	state *AppState,
+	workspaceID string,
+	expectedType ResourceType,
+	ids []string,
+	output map[string]ComposerCapabilityCatalogItem,
+) {
+	for _, rawID := range ids {
+		id := strings.TrimSpace(rawID)
+		if id == "" {
+			continue
+		}
+		item, exists, err := loadWorkspaceResourceConfigRaw(state, workspaceID, id)
+		if err != nil || !exists || item.Type != expectedType || !item.Enabled {
+			continue
+		}
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			name = id
+		}
+		capabilityKind, ok := toComposerCapabilityKind(expectedType)
+		if !ok {
+			continue
+		}
+		key := strings.ToLower(buildComposerCapabilityID(capabilityKind, id))
+		output[key] = ComposerCapabilityCatalogItem{
+			ID:          buildComposerCapabilityID(capabilityKind, id),
+			Kind:        capabilityKind,
+			Name:        name,
+			Description: composerCatalogItemDescription(item),
+			Source:      firstNonEmpty(strings.TrimSpace(item.ID), "workspace_resource"),
+			Scope:       string(core.CapabilityScopeWorkspace),
+		}
+	}
+}
+
+func validateSelectedCapabilitiesAgainstMentions(
+	mentions []composerctx.ResourceRef,
+	selected []string,
+) (map[ComposerCapabilityKind][]string, error) {
+	mentionByType := map[ComposerCapabilityKind][]string{}
+	for _, mention := range mentions {
+		typeValue, ok := composerCapabilityKindFromCore(mention.Type)
+		if !ok {
+			continue
+		}
+		mentionByType[typeValue] = appendUnique(mentionByType[typeValue], mention.ID)
+	}
+	selectedByType := map[ComposerCapabilityKind][]string{}
+	for _, capabilityID := range selected {
+		kind, id, ok := splitComposerCapabilityID(capabilityID)
+		if !ok || id == "" {
+			return nil, errors.New("selected_capabilities entries must be capability ids")
+		}
+		selectedByType[kind] = appendUnique(selectedByType[kind], id)
+	}
+
+	for _, resourceType := range []ComposerCapabilityKind{
+		ComposerCapabilityKindModel,
+		ComposerCapabilityKindRule,
+		ComposerCapabilityKindSkill,
+		ComposerCapabilityKindMCP,
+		ComposerCapabilityKindFile,
+	} {
+		mentionsForType := sortUniqueStrings(mentionByType[resourceType])
+		selectedForType := sortUniqueStrings(selectedByType[resourceType])
+		if len(mentionsForType) == 0 && len(selectedForType) == 0 {
+			continue
+		}
+		if !sameStringSet(mentionsForType, selectedForType) {
+			return nil, errors.New("selected_capabilities must exactly match @resource/@file mentions")
+		}
+	}
+
+	result := map[ComposerCapabilityKind][]string{}
+	for _, resourceType := range []ComposerCapabilityKind{
+		ComposerCapabilityKindModel,
+		ComposerCapabilityKindRule,
+		ComposerCapabilityKindSkill,
+		ComposerCapabilityKindMCP,
+		ComposerCapabilityKindFile,
+	} {
+		result[resourceType] = sortUniqueStrings(mentionByType[resourceType])
+	}
+	return result, nil
+}
+
+func appendUnique(values []string, raw string) []string {
+	candidate := strings.TrimSpace(raw)
+	if candidate == "" {
+		return values
+	}
+	for _, item := range values {
+		if item == candidate {
+			return values
+		}
+	}
+	return append(values, candidate)
+}
+
+func sortUniqueStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		normalized := strings.TrimSpace(value)
+		if normalized == "" {
+			continue
+		}
+		if _, exists := seen[normalized]; exists {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func sameStringSet(left []string, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func parseComposerCapabilityKind(raw string) (ComposerCapabilityKind, bool) {
+	switch ComposerCapabilityKind(strings.ToLower(strings.TrimSpace(raw))) {
+	case ComposerCapabilityKindModel:
+		return ComposerCapabilityKindModel, true
+	case ComposerCapabilityKindRule:
+		return ComposerCapabilityKindRule, true
+	case ComposerCapabilityKindSkill:
+		return ComposerCapabilityKindSkill, true
+	case ComposerCapabilityKindMCP:
+		return ComposerCapabilityKindMCP, true
+	case ComposerCapabilityKindFile:
+		return ComposerCapabilityKindFile, true
+	default:
+		return "", false
+	}
+}
+
+func toComposerCapabilityKind(resourceType ResourceType) (ComposerCapabilityKind, bool) {
+	switch resourceType {
+	case ResourceTypeModel:
+		return ComposerCapabilityKindModel, true
+	case ResourceTypeRule:
+		return ComposerCapabilityKindRule, true
+	case ResourceTypeSkill:
+		return ComposerCapabilityKindSkill, true
+	case ResourceTypeMCP:
+		return ComposerCapabilityKindMCP, true
+	default:
+		return "", false
+	}
+}
+
+func composerCapabilityKindFromCore(resourceType composerctx.ResourceType) (ComposerCapabilityKind, bool) {
+	switch resourceType {
+	case composerctx.ResourceTypeModel:
+		return ComposerCapabilityKindModel, true
+	case composerctx.ResourceTypeRule:
+		return ComposerCapabilityKindRule, true
+	case composerctx.ResourceTypeSkill:
+		return ComposerCapabilityKindSkill, true
+	case composerctx.ResourceTypeMCP:
+		return ComposerCapabilityKindMCP, true
+	case composerctx.ResourceTypeFile:
+		return ComposerCapabilityKindFile, true
+	default:
+		return "", false
+	}
+}
+
+func buildComposerCapabilityID(kind ComposerCapabilityKind, rawID string) string {
+	normalizedID := strings.TrimSpace(rawID)
+	if normalizedID == "" {
+		return ""
+	}
+	return string(kind) + ":" + normalizedID
+}
+
+func splitComposerCapabilityID(raw string) (ComposerCapabilityKind, string, bool) {
+	kindRaw, id, ok := strings.Cut(strings.TrimSpace(raw), ":")
+	if !ok {
+		return "", "", false
+	}
+	kind, valid := parseComposerCapabilityKind(kindRaw)
+	if !valid || strings.TrimSpace(id) == "" {
+		return "", "", false
+	}
+	return kind, strings.TrimSpace(id), true
+}
+
+func composerCatalogItemDescription(item ResourceConfig) string {
+	switch item.Type {
+	case ResourceTypeModel:
+		if item.Model != nil {
+			return firstNonEmpty(strings.TrimSpace(item.Model.ModelID), "Model configuration")
+		}
+	case ResourceTypeRule:
+		if item.Rule != nil {
+			return firstNonEmpty(firstContentLine(item.Rule.Content), "Rule resource")
+		}
+	case ResourceTypeSkill:
+		if item.Skill != nil {
+			return firstNonEmpty(firstContentLine(item.Skill.Content), "Skill resource")
+		}
+	case ResourceTypeMCP:
+		if item.MCP != nil {
+			return firstNonEmpty(strings.TrimSpace(item.MCP.Command), strings.TrimSpace(item.MCP.Endpoint), "MCP server")
+		}
+	}
+	return ""
+}
+
+func firstContentLine(raw string) string {
+	for _, line := range strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func listComposerProjectFiles(projectRoot string, limit int) []string {
+	if limit <= 0 {
+		return nil
+	}
+	if files, err := listComposerGitTrackedFiles(projectRoot, limit); err == nil {
+		return files
+	}
+	return listComposerScannedFiles(projectRoot, limit)
+}
+
+func listComposerGitTrackedFiles(projectRoot string, limit int) ([]string, error) {
+	root := strings.TrimSpace(projectRoot)
+	if root == "" {
+		return nil, errors.New("project root is required")
+	}
+	cmd := exec.Command("git", "-C", root, "ls-files")
+	raw, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(raw), "\n")
+	files := make([]string, 0, len(lines))
+	for _, line := range lines {
+		normalized := strings.TrimSpace(filepath.ToSlash(line))
+		if normalized == "" {
+			continue
+		}
+		files = append(files, normalized)
+	}
+	sort.Strings(files)
+	if len(files) > limit {
+		files = files[:limit]
+	}
+	return files, nil
+}
+
+func listComposerScannedFiles(projectRoot string, limit int) []string {
+	root := strings.TrimSpace(projectRoot)
+	if root == "" {
+		return nil
+	}
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return nil
+	}
+	initialCapacity := limit
+	if initialCapacity > 256 {
+		initialCapacity = 256
+	}
+	files := make([]string, 0, initialCapacity)
+	scanErr := filepath.WalkDir(rootAbs, func(currentPath string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		name := d.Name()
+		if d.IsDir() {
+			if currentPath != rootAbs && isComposerIgnoredDir(name) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if len(files) >= limit {
+			return errComposerFileCatalogLimitReached
+		}
+		info, infoErr := d.Info()
+		if infoErr != nil || !info.Mode().IsRegular() {
+			return nil
+		}
+		rel, relErr := filepath.Rel(rootAbs, currentPath)
+		if relErr != nil || strings.HasPrefix(rel, "..") {
+			return nil
+		}
+		normalized := strings.TrimSpace(filepath.ToSlash(rel))
+		if normalized == "" {
+			return nil
+		}
+		files = append(files, normalized)
+		return nil
+	})
+	if scanErr != nil && !errors.Is(scanErr, errComposerFileCatalogLimitReached) {
+		return nil
+	}
+	sort.Strings(files)
+	if len(files) > limit {
+		return files[:limit]
+	}
+	return files
+}
+
+func isComposerIgnoredDir(name string) bool {
+	switch strings.TrimSpace(name) {
+	case ".git", "node_modules", "dist", "build", ".turbo", ".cache", "target":
+		return true
+	default:
+		return false
+	}
+}
+
+func validateComposerProjectFileSelections(projectRoot string, selected []string) ([]string, error) {
+	if len(selected) == 0 {
+		return nil, nil
+	}
+	seen := map[string]struct{}{}
+	normalized := make([]string, 0, len(selected))
+	for _, rawPath := range selected {
+		candidate := strings.TrimSpace(rawPath)
+		if candidate == "" {
+			return nil, errors.New("selected_capabilities entries must be capability ids")
+		}
+		resolvedPath, normalizedRelPath, err := resolveProjectPath(projectRoot, candidate)
+		if err != nil {
+			return nil, fmt.Errorf("file %q must stay within project root", candidate)
+		}
+		if normalizedRelPath == "" {
+			return nil, fmt.Errorf("file %q must point to a file path", candidate)
+		}
+		info, statErr := os.Stat(resolvedPath)
+		if statErr != nil {
+			if os.IsNotExist(statErr) {
+				return nil, fmt.Errorf("file %q does not exist", candidate)
+			}
+			return nil, fmt.Errorf("file %q is not accessible", candidate)
+		}
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("file %q must reference a regular file", candidate)
+		}
+		file, openErr := os.Open(resolvedPath)
+		if openErr != nil {
+			return nil, fmt.Errorf("file %q is not readable", candidate)
+		}
+		_ = file.Close()
+		normalizedPath := strings.TrimSpace(filepath.ToSlash(normalizedRelPath))
+		if _, exists := seen[normalizedPath]; exists {
+			continue
+		}
+		seen[normalizedPath] = struct{}{}
+		normalized = append(normalized, normalizedPath)
+	}
+	sort.Strings(normalized)
+	return normalized, nil
+}
+
+func envFromSystem() map[string]string {
+	env := map[string]string{}
+	for _, pair := range os.Environ() {
+		key, value, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+		env[key] = value
+	}
+	return env
+}

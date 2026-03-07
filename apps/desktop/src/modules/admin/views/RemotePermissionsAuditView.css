@@ -38,6 +38,12 @@
 .table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 760px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .table th,
@@ -91,4 +97,11 @@
 .error {
   margin: 0;
   color: var(--semantic-danger);
+}
+
+@media (max-width: 768px) {
+  .actions button {
+    width: 44px;
+    height: 44px;
+  }
 }

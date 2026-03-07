@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"context"
+	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -9,40 +11,53 @@ import (
 
 func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
-		workspaceID := ""
-		state.mu.RLock()
-		if conversation, exists := state.conversations[conversationID]; exists {
-			workspaceID = conversation.WorkspaceID
-		}
-		state.mu.RUnlock()
+		conversationID := runtimeSessionIDFromPath(r)
+		conversationSeed, hasConversationSeed := loadConversationByIDSeed(r.Context(), state, conversationID)
 		switch r.Method {
 		case http.MethodGet:
 			state.mu.RLock()
 			conversation, exists := state.conversations[conversationID]
 			if !exists {
+				conversation = conversationSeed
+				exists = hasConversationSeed
+			}
+			if !exists {
 				state.mu.RUnlock()
 				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
-					"conversation_id": conversationID,
+					"session_id": conversationID,
 				})
 				return
 			}
 			messages := append([]ConversationMessage{}, state.conversationMessages[conversationID]...)
 			snapshots := cloneConversationSnapshots(state.conversationSnapshots[conversationID])
 			executions := append([]Execution{}, listConversationExecutionsLocked(state, conversationID)...)
+			conversation = decorateConversationUsageFromExecutions(conversation, executions)
 			state.mu.RUnlock()
 
 			_, authErr := authorizeAction(
 				state,
 				r,
 				conversation.WorkspaceID,
-				"conversation.read",
+				"session.read",
 				authorizationResource{WorkspaceID: conversation.WorkspaceID},
 				authorizationContext{OperationType: "read"},
 			)
 			if authErr != nil {
 				authErr.write(w, r)
 				return
+			}
+			if service, ok := newRunQueryService(state); ok {
+				repositoryExecutions, err := service.ListAllByConversation(r.Context(), conversationID)
+				if err == nil {
+					executions = repositoryExecutions
+					conversation = decorateConversationUsageFromExecutions(conversation, executions)
+				} else {
+					WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to load session runs", map[string]any{
+						"session_id": conversationID,
+						"error":      err.Error(),
+					})
+					return
+				}
 			}
 
 			sortConversationMessages(messages)
@@ -56,12 +71,18 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				Snapshots:    snapshots,
 			})
 		case http.MethodPatch:
+			if !hasConversationSeed {
+				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
+					"session_id": conversationID,
+				})
+				return
+			}
 			_, authErr := authorizeAction(
 				state,
 				r,
-				workspaceID,
-				"conversation.write",
-				authorizationResource{WorkspaceID: workspaceID},
+				conversationSeed.WorkspaceID,
+				"session.write",
+				authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
 				authorizationContext{OperationType: "write", ABACRequired: true},
 			)
 			if authErr != nil {
@@ -73,16 +94,68 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				err.write(w, r)
 				return
 			}
-			state.mu.Lock()
-			conversation, exists := state.conversations[conversationID]
-			if !exists {
-				state.mu.Unlock()
-				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
-					"conversation_id": conversationID,
+			project, projectExists, projectErr := getProjectFromStore(state, conversationSeed.ProjectID)
+			if projectErr != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_READ_FAILED", "Failed to read project", map[string]any{
+					"project_id": conversationSeed.ProjectID,
 				})
 				return
 			}
+			if !projectExists {
+				WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{
+					"project_id": conversationSeed.ProjectID,
+				})
+				return
+			}
+			projectConfig, configErr := getProjectConfigFromStore(state, project)
+			if configErr != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_CONFIG_READ_FAILED", "Failed to read project config", map[string]any{
+					"project_id": conversationSeed.ProjectID,
+				})
+				return
+			}
+
+			resourceSelectionChanged := input.ModelConfigID != nil || input.RuleIDs != nil || input.SkillIDs != nil || input.MCPIDs != nil
+			if resourceSelectionChanged {
+				nextModelConfigID := strings.TrimSpace(conversationSeed.ModelConfigID)
+				if input.ModelConfigID != nil {
+					nextModelConfigID = strings.TrimSpace(*input.ModelConfigID)
+				}
+				nextRuleIDs := append([]string{}, conversationSeed.RuleIDs...)
+				if input.RuleIDs != nil {
+					nextRuleIDs = sanitizeIDList(input.RuleIDs)
+				}
+				nextSkillIDs := append([]string{}, conversationSeed.SkillIDs...)
+				if input.SkillIDs != nil {
+					nextSkillIDs = sanitizeIDList(input.SkillIDs)
+				}
+				nextMCPIDs := append([]string{}, conversationSeed.MCPIDs...)
+				if input.MCPIDs != nil {
+					nextMCPIDs = sanitizeIDList(input.MCPIDs)
+				}
+				if err := validateConversationResourceSelection(
+					state,
+					conversationSeed.WorkspaceID,
+					projectConfig,
+					nextModelConfigID,
+					nextRuleIDs,
+					nextSkillIDs,
+					nextMCPIDs,
+				); err != nil {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
+			}
+
+			state.mu.Lock()
+			conversation, exists := state.conversations[conversationID]
+			if !exists {
+				conversation = conversationSeed
+				state.conversations[conversationID] = conversation
+			}
 			changed := false
+			configChanged := false
+			configChangedFields := make([]string, 0, 5)
 			if input.Name != nil {
 				name := strings.TrimSpace(*input.Name)
 				if name == "" {
@@ -94,55 +167,111 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				changed = true
 			}
 			if input.Mode != nil {
-				mode := strings.TrimSpace(string(*input.Mode))
-				if mode != string(ConversationModeAgent) && mode != string(ConversationModePlan) {
+				mode, ok := ParsePermissionMode(string(*input.Mode))
+				if !ok {
 					state.mu.Unlock()
-					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "mode must be agent or plan", map[string]any{})
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "mode must be default, acceptEdits, plan, dontAsk, or bypassPermissions", map[string]any{})
 					return
 				}
-				conversation.DefaultMode = *input.Mode
+				conversation.DefaultMode = mode
 				changed = true
+				configChanged = true
+				configChangedFields = append(configChangedFields, "mode")
 			}
-			if input.ModelID != nil {
-				modelID := strings.TrimSpace(*input.ModelID)
-				if modelID == "" {
+			if input.ModelConfigID != nil {
+				modelConfigID := strings.TrimSpace(*input.ModelConfigID)
+				if modelConfigID == "" {
 					state.mu.Unlock()
-					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "model_id cannot be empty", map[string]any{})
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "model_config_id cannot be empty", map[string]any{})
 					return
 				}
-				conversation.ModelID = modelID
+				conversation.ModelConfigID = modelConfigID
 				changed = true
+				configChanged = true
+				configChangedFields = append(configChangedFields, "model_config_id")
+			}
+			if input.RuleIDs != nil {
+				conversation.RuleIDs = sanitizeIDList(input.RuleIDs)
+				changed = true
+				configChanged = true
+				configChangedFields = append(configChangedFields, "rule_ids")
+			}
+			if input.SkillIDs != nil {
+				conversation.SkillIDs = sanitizeIDList(input.SkillIDs)
+				changed = true
+				configChanged = true
+				configChangedFields = append(configChangedFields, "skill_ids")
+			}
+			if input.MCPIDs != nil {
+				conversation.MCPIDs = sanitizeIDList(input.MCPIDs)
+				changed = true
+				configChanged = true
+				configChangedFields = append(configChangedFields, "mcp_ids")
 			}
 			if !changed {
 				state.mu.Unlock()
-				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "at least one of name/mode/model_id is required", map[string]any{})
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "at least one conversation field must be updated", map[string]any{})
 				return
 			}
 			conversation.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 			state.conversations[conversationID] = conversation
+			configChangeExecution := Execution{}
+			hasConfigChangeExecution := false
+			if configChanged && conversation.ActiveExecutionID != nil {
+				activeExecutionID := strings.TrimSpace(*conversation.ActiveExecutionID)
+				if activeExecutionID != "" {
+					if activeExecution, ok := state.executions[activeExecutionID]; ok {
+						configChangeExecution = activeExecution
+						hasConfigChangeExecution = true
+					}
+				}
+			}
 			state.mu.Unlock()
+			if configChanged && hasConfigChangeExecution {
+				decision, matchedPolicyID := evaluateHookDecisionWithState(state, configChangeExecution, HookEventTypeConfigChange, "")
+				appendHookExecutionRecordAndEventWithState(
+					state,
+					configChangeExecution,
+					configChangeExecution.ID,
+					HookEventTypeConfigChange,
+					"",
+					matchedPolicyID,
+					decision,
+					map[string]any{
+						"session_id":     conversationID,
+						"changed_fields": append([]string{}, configChangedFields...),
+						"source":         "conversation_patch",
+					},
+				)
+			}
 			syncExecutionDomainBestEffort(state)
-			writeJSON(w, http.StatusOK, conversation)
+			state.mu.RLock()
+			responseConversation := decorateConversationUsageLocked(state, conversation)
+			state.mu.RUnlock()
+			writeJSON(w, http.StatusOK, responseConversation)
 		case http.MethodDelete:
+			if !hasConversationSeed {
+				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
+					"session_id": conversationID,
+				})
+				return
+			}
 			_, authErr := authorizeAction(
 				state,
 				r,
-				workspaceID,
-				"conversation.write",
-				authorizationResource{WorkspaceID: workspaceID},
+				conversationSeed.WorkspaceID,
+				"session.write",
+				authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
 				authorizationContext{OperationType: "write", ABACRequired: true},
 			)
 			if authErr != nil {
 				authErr.write(w, r)
 				return
 			}
+			executionIDsToCancel := make([]string, 0, 8)
 			state.mu.Lock()
 			if _, exists := state.conversations[conversationID]; !exists {
-				state.mu.Unlock()
-				WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
-					"conversation_id": conversationID,
-				})
-				return
+				state.conversations[conversationID] = conversationSeed
 			}
 			for executionID, execution := range state.executions {
 				if execution.ConversationID != conversationID {
@@ -150,9 +279,8 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				}
 				delete(state.executions, executionID)
 				delete(state.executionDiffs, executionID)
-				delete(state.executionLeases, executionID)
-				delete(state.executionControlQueues, executionID)
-				delete(state.executionControlSeq, executionID)
+				delete(state.executionRunIDs, executionID)
+				executionIDsToCancel = append(executionIDsToCancel, executionID)
 			}
 			delete(state.conversations, conversationID)
 			delete(state.conversationMessages, conversationID)
@@ -160,12 +288,17 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			delete(state.conversationExecutionOrder, conversationID)
 			delete(state.executionEvents, conversationID)
 			delete(state.conversationEventSeq, conversationID)
+			delete(state.conversationSessionIDs, conversationID)
 			if subscribers, ok := state.conversationEventSubs[conversationID]; ok {
 				for id := range subscribers {
 					unregisterConversationEventSubscriberLocked(state, conversationID, id)
 				}
 			}
 			state.mu.Unlock()
+			for _, executionID := range executionIDsToCancel {
+				state.cancelExecutionBestEffort(r.Context(), executionID)
+				state.clearExecutionRuntimeMapping(executionID)
+			}
 			syncExecutionDomainBestEffort(state)
 			writeJSON(w, http.StatusNoContent, map[string]any{})
 		default:
@@ -175,6 +308,36 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			})
 		}
 	}
+}
+
+func loadConversationByIDSeed(ctx context.Context, state *AppState, conversationID string) (Conversation, bool) {
+	normalizedConversationID := strings.TrimSpace(conversationID)
+	if state == nil || normalizedConversationID == "" {
+		return Conversation{}, false
+	}
+	state.mu.RLock()
+	conversation, exists := state.conversations[normalizedConversationID]
+	state.mu.RUnlock()
+	if exists {
+		return conversation, true
+	}
+	service, ok := newRunQueryService(state)
+	if !ok {
+		return Conversation{}, false
+	}
+	item, exists, err := service.repositories.Sessions.GetByID(ctx, normalizedConversationID)
+	if err != nil {
+		log.Printf("runtime session detail lookup failed: %v", err)
+		return Conversation{}, false
+	}
+	if !exists {
+		return Conversation{}, false
+	}
+	seed := toConversationFromRuntimeSessionRecord(item)
+	state.mu.Lock()
+	state.conversations[seed.ID] = seed
+	state.mu.Unlock()
+	return seed, true
 }
 
 func cloneConversationSnapshots(items []ConversationSnapshot) []ConversationSnapshot {

@@ -46,3 +46,28 @@ func TestDecodeResourceConfigPayload_ModelAPIKeyRedactionModes(t *testing.T) {
 		t.Fatalf("expected masked key for raw payload")
 	}
 }
+
+func TestDecodeResourceConfigPayload_LegacyTimeoutMigratesToRuntime(t *testing.T) {
+	payload := `{
+		"id": "rc_legacy",
+		"workspace_id": "ws_test",
+		"type": "model",
+		"enabled": true,
+		"model": {
+			"vendor": "MiniMax",
+			"model_id": "MiniMax-M2.5",
+			"timeout_ms": 5000
+		}
+	}`
+
+	decoded, err := decodeResourceConfigPayload(payload, true)
+	if err != nil {
+		t.Fatalf("decode payload failed: %v", err)
+	}
+	if decoded.Model == nil || decoded.Model.Runtime == nil || decoded.Model.Runtime.RequestTimeoutMS == nil {
+		t.Fatalf("expected runtime timeout migrated from legacy payload, got %#v", decoded.Model)
+	}
+	if got := *decoded.Model.Runtime.RequestTimeoutMS; got != 5000 {
+		t.Fatalf("expected migrated runtime timeout 5000, got %d", got)
+	}
+}

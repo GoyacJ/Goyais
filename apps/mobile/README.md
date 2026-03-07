@@ -38,4 +38,5 @@ pnpm dev:android
 cd apps/mobile
 pnpm lint
 pnpm test
+pnpm e2e:smoke
 ```

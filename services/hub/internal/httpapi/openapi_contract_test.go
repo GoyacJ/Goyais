@@ -17,16 +17,30 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/auth/logout:",
 		"/v1/me/permissions:",
 		"/v1/projects/import:",
-		"/v1/projects/{project_id}/conversations:",
+		"/v1/projects/{project_id}/sessions:",
+		"/v1/sessions:",
 		"/v1/projects/{project_id}/files:",
 		"/v1/projects/{project_id}/files/content:",
-		"/v1/conversations/{conversation_id}:",
-		"/v1/conversations/{conversation_id}/messages:",
-		"/v1/conversations/{conversation_id}/events:",
-		"/v1/conversations/{conversation_id}/stop:",
-		"/v1/conversations/{conversation_id}/rollback:",
-		"/v1/conversations/{conversation_id}/export:",
-		"/v1/executions/{execution_id}/patch:",
+		"/v1/sessions/{session_id}:",
+		"/v1/sessions/{session_id}/input/catalog:",
+		"/v1/sessions/{session_id}/input/suggest:",
+		"/v1/sessions/{session_id}/runs:",
+		"/v1/sessions/{session_id}/events:",
+		"/v1/sessions/{session_id}/stop:",
+		"/v1/sessions/{session_id}/export:",
+		"/v1/runs:",
+		"/v1/runs/{run_id}/control:",
+		"/v1/runs/{run_id}/graph:",
+		"/v1/runs/{run_id}/tasks:",
+		"/v1/runs/{run_id}/tasks/{task_id}:",
+		"/v1/runs/{run_id}/tasks/{task_id}/control:",
+		"/v1/hooks/policies:",
+		"/v1/hooks/runs/{run_id}:",
+		"/v1/sessions/{session_id}/changeset:",
+		"/v1/sessions/{session_id}/changeset/commit:",
+		"/v1/sessions/{session_id}/changeset/discard:",
+		"/v1/sessions/{session_id}/changeset/export:",
+		"/v1/sessions/{session_id}/rollback:",
 		"/v1/workspaces/{workspace_id}/model-catalog:",
 		"/v1/workspaces/{workspace_id}/catalog-root:",
 		"/v1/workspaces/{workspace_id}/resource-configs:",
@@ -45,11 +59,6 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/admin/menu-visibility/{role_key}:",
 		"/v1/admin/abac-policies:",
 		"/v1/admin/audit:",
-		"/internal/workers/register:",
-		"/internal/workers/{worker_id}/heartbeat:",
-		"/internal/executions/claim:",
-		"/internal/executions/{execution_id}/events/batch:",
-		"/internal/executions/{execution_id}/control:",
 	}
 
 	for _, marker := range requiredMarkers {
@@ -66,6 +75,21 @@ func TestOpenAPIDoesNotContainRemovedConfirmRoute(t *testing.T) {
 	}
 }
 
+func TestOpenAPIDoesNotContainLegacyExecutionDiffRoutes(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	disallowedMarkers := []string{
+		"/v1/executions/{execution_id}/diff:",
+		"/v1/executions/{execution_id}/patch:",
+		"/v1/executions/{execution_id}/files:",
+		"/v1/executions/{execution_id}/{action}:",
+	}
+	for _, marker := range disallowedMarkers {
+		if strings.Contains(spec, marker) {
+			t.Fatalf("openapi still contains legacy execution diff route: %s", marker)
+		}
+	}
+}
+
 func TestOpenAPIDoesNotContainRemovedAliasRoutes(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	if strings.Contains(spec, "/v1/workspaces/remote/connect:") {
@@ -74,24 +98,130 @@ func TestOpenAPIDoesNotContainRemovedAliasRoutes(t *testing.T) {
 	if strings.Contains(spec, "/v1/workspaces/{workspace_id}/model-catalog/sync:") {
 		t.Fatalf("openapi still contains removed route alias /v1/workspaces/{workspace_id}/model-catalog/sync")
 	}
+
+	removedConversationAliases := []string{
+		"/v1/conversations:",
+		"/v1/conversations/{conversation_id}:",
+		"/v1/conversations/{conversation_id}/input/catalog:",
+		"/v1/conversations/{conversation_id}/input/suggest:",
+		"/v1/conversations/{conversation_id}/input/submit:",
+		"/v1/conversations/{conversation_id}/events:",
+		"/v1/conversations/{conversation_id}/stop:",
+		"/v1/conversations/{conversation_id}/export:",
+		"/v1/conversations/{conversation_id}/changeset:",
+		"/v1/conversations/{conversation_id}/changeset/commit:",
+		"/v1/conversations/{conversation_id}/changeset/discard:",
+		"/v1/conversations/{conversation_id}/changeset/export:",
+		"/v1/conversations/{conversation_id}/rollback:",
+		"/v1/executions:",
+		"/v2/conversations/{conversation_id}/changeset:",
+		"/v2/conversations/{conversation_id}/changeset/commit:",
+		"/v2/conversations/{conversation_id}/changeset/discard:",
+		"/v2/conversations/{conversation_id}/changeset/export:",
+		"/v2/conversations/{conversation_id}/rollback:",
+	}
+	for _, marker := range removedConversationAliases {
+		if strings.Contains(spec, marker) {
+			t.Fatalf("openapi still contains removed v2 conversation route: %s", marker)
+		}
+	}
 }
 
-func TestOpenAPIConversationDetailResponseShape(t *testing.T) {
+func TestOpenAPIDoesNotContainInternalWorkerRoutes(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	disallowedMarkers := []string{
+		"/internal/workers/register:",
+		"/internal/workers/{worker_id}/heartbeat:",
+		"/internal/executions/claim:",
+		"/internal/executions/{execution_id}/events/batch:",
+		"/internal/executions/{execution_id}/control:",
+	}
+	for _, marker := range disallowedMarkers {
+		if strings.Contains(spec, marker) {
+			t.Fatalf("openapi still contains removed internal route marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPISessionDetailResponseShape(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	requiredMarkers := []string{
-		"ConversationDetailResponse:",
-		"conversation:",
-		"$ref: '#/components/schemas/Conversation'",
+		"SessionDetailResponse:",
+		"session:",
+		"$ref: '#/components/schemas/Session'",
 		"messages:",
-		"$ref: '#/components/schemas/ConversationMessage'",
-		"executions:",
-		"$ref: '#/components/schemas/Execution'",
+		"$ref: '#/components/schemas/SessionMessage'",
+		"runs:",
+		"$ref: '#/components/schemas/Run'",
 		"snapshots:",
-		"$ref: '#/components/schemas/ConversationSnapshot'",
+		"$ref: '#/components/schemas/SessionSnapshot'",
 	}
 	for _, marker := range requiredMarkers {
 		if !strings.Contains(spec, marker) {
-			t.Fatalf("openapi missing conversation detail marker: %s", marker)
+			t.Fatalf("openapi missing session detail marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPISessionChangeSetSchemaShape(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"ChangeEntry:",
+		"SessionChangeSet:",
+		"ChangeSetCapability:",
+		"CommitSuggestion:",
+		"CheckpointSummary:",
+		"ChangeSetCommitRequest:",
+		"ChangeSetDiscardRequest:",
+		"ChangeSetCommitResponse:",
+		"RunFilesExportResponse:",
+		"file_name:",
+		"archive_base64:",
+		"/v1/sessions/{session_id}/changeset/export:",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing session changeset marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPIRunTaskGraphSchemaShape(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"AgentGraph:",
+		"TaskNode:",
+		"TaskArtifact:",
+		"TaskControlRequest:",
+		"TaskControlResponse:",
+		"RunTaskListResponse:",
+		"/v1/runs/{run_id}/graph:",
+		"/v1/runs/{run_id}/tasks:",
+		"/v1/runs/{run_id}/tasks/{task_id}:",
+		"/v1/runs/{run_id}/tasks/{task_id}/control:",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing run/task graph marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPIHookSchemaShape(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"/v1/hooks/policies:",
+		"/v1/hooks/runs/{run_id}:",
+		"HookPolicy:",
+		"HookPolicyListResponse:",
+		"HookPolicyUpsertRequest:",
+		"HookDecision:",
+		"HookExecutionRecord:",
+		"HookExecutionListResponse:",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing hook marker: %s", marker)
 		}
 	}
 }
@@ -117,8 +247,8 @@ func TestOpenAPIWorkspaceStatusResponseShape(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	requiredMarkers := []string{
 		"WorkspaceStatusResponse:",
-		"conversation_status:",
-		"$ref: '#/components/schemas/ConversationStatus'",
+		"session_status:",
+		"$ref: '#/components/schemas/SessionStatus'",
 		"connection_status:",
 		"user_display_name:",
 	}
@@ -143,6 +273,122 @@ func TestOpenAPIWorkspaceAgentConfigShape(t *testing.T) {
 	for _, marker := range requiredMarkers {
 		if !strings.Contains(spec, marker) {
 			t.Fatalf("openapi missing workspace agent config marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPIComposerInputSchemaShape(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"ComposerCatalogResponse:",
+		"ComposerSuggestRequest:",
+		"ComposerSuggestResponse:",
+		"ComposerSubmitRequest:",
+		"ComposerSubmitResponse:",
+		"ComposerCommandResult:",
+		"selected_capabilities:",
+		"capabilities:",
+		"catalog_revision:",
+		"enum: [model, rule, skill, mcp, file]",
+		"project_file_paths:",
+		"ComposerSuggestion:",
+		"detail:",
+		"required: [kind, label, insert_text, replace_start, replace_end]",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing composer marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPIExecutionAndPermissionEnumsAreSynced(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"PermissionMode:",
+		"enum: [default, acceptEdits, plan, dontAsk, bypassPermissions]",
+		"RunState:",
+		"enum: [queued, pending, executing, confirming, awaiting_input, completed, failed, cancelled]",
+		"default_mode:",
+		"$ref: '#/components/schemas/PermissionMode'",
+		"mode_snapshot:",
+		"state:",
+		"$ref: '#/components/schemas/RunState'",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing execution/permission enum marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPIRunControlAndExecutionEventEnumsAreSynced(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"RunControlAction:",
+		"enum: [stop, approve, deny, resume, answer]",
+		"ExecutionUserAnswer:",
+		"question_id:",
+		"RunControlRequest:",
+		"answer:",
+		"RunEventType:",
+		"user_prompt_submit",
+		"task_graph_configured",
+		"task_dependencies_updated",
+		"task_retry_policy_updated",
+		"task_artifact_emitted",
+		"task_failed",
+		"task_started",
+		"task_completed",
+		"task_cancelled",
+		"$ref: '#/components/schemas/RunEventType'",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing run-control/event enum marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPIResourceConfigTypeEnumDoesNotIncludeFile(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	start := strings.Index(spec, "ResourceConfigCreateRequest:")
+	if start < 0 {
+		t.Fatalf("openapi missing ResourceConfigCreateRequest schema")
+	}
+	remaining := spec[start:]
+	end := strings.Index(remaining, "ResourceConfigPatchRequest:")
+	if end < 0 {
+		t.Fatalf("openapi missing ResourceConfigPatchRequest schema")
+	}
+	section := remaining[:end]
+	if strings.Contains(section, "enum: [model, rule, skill, mcp, file]") {
+		t.Fatalf("resource config type enum must not include file")
+	}
+}
+
+func TestOpenAPIUsesModelConfigNamingInConversationDomain(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"default_model_config_id:",
+		"model_config_ids:",
+		"model_config_id:",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing model config marker: %s", marker)
+		}
+	}
+	disallowedMarkers := []string{
+		"default_model_id:",
+		"model_ids:",
+		"ExecutionCreateRequest:",
+		"ExecutionCreateResponse:",
+		"/v1/sessions/{session_id}/messages:",
+	}
+	for _, marker := range disallowedMarkers {
+		if strings.Contains(spec, marker) {
+			t.Fatalf("openapi still contains deprecated marker: %s", marker)
 		}
 	}
 }

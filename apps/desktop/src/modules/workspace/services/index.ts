@@ -28,7 +28,7 @@ export async function createRemoteConnection(input: CreateWorkspaceRequest): Pro
 export async function getWorkspaceStatus(
   workspaceId: string,
   options: {
-    conversationId?: string;
+    sessionId?: string;
     token?: string;
   } = {}
 ): Promise<WorkspaceStatusResponse> {
@@ -38,9 +38,9 @@ export async function getWorkspaceStatus(
   }
 
   const params = new URLSearchParams();
-  const conversationID = options.conversationId?.trim() ?? "";
-  if (conversationID !== "") {
-    params.set("conversation_id", conversationID);
+  const sessionID = options.sessionId?.trim() ?? "";
+  if (sessionID !== "") {
+    params.set("session_id", sessionID);
   }
   const query = params.toString() === "" ? "" : `?${params.toString()}`;
 

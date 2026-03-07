@@ -76,7 +76,10 @@ export type ModelSpec = {
   base_url_key?: string;
   api_key?: string;
   api_key_masked?: string;
-  timeout_ms?: number;
+  token_threshold?: number;
+  runtime?: {
+    request_timeout_ms?: number;
+  };
   params?: Record<string, unknown>;
 };
 
@@ -109,6 +112,9 @@ export type ResourceConfig = {
   rule?: RuleSpec;
   skill?: SkillSpec;
   mcp?: McpSpec;
+  tokens_in_total?: number;
+  tokens_out_total?: number;
+  tokens_total?: number;
   created_at: string;
   updated_at: string;
 };
@@ -170,10 +176,23 @@ export type ShareRequest = {
 export type WorkspaceProjectConfigItem = {
   project_id: string;
   project_name: string;
+  tokens_in_total?: number;
+  tokens_out_total?: number;
+  tokens_total?: number;
+  model_token_usage_by_config_id?: Record<
+    string,
+    {
+      tokens_in_total?: number;
+      tokens_out_total?: number;
+      tokens_total?: number;
+    }
+  >;
   config: {
     project_id: string;
-    model_ids: string[];
-    default_model_id: string | null;
+    model_config_ids: string[];
+    default_model_config_id: string | null;
+    token_threshold?: number;
+    model_token_thresholds?: Record<string, number>;
     rule_ids: string[];
     skill_ids: string[];
     mcp_ids: string[];

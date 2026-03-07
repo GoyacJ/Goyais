@@ -1,17 +1,18 @@
 import { getControlClient } from "@/shared/services/clients";
 import type {
-  Conversation,
-  ConversationMode,
   ListEnvelope,
   PaginationQuery,
   Project,
   ProjectConfig,
+  Session,
   WorkspaceProjectConfigItem
 } from "@/shared/types/api";
 
 type ProjectServiceOptions = {
   token?: string;
 };
+
+export type SessionMode = Session["default_mode"];
 
 export async function listProjects(
   workspaceId: string,
@@ -56,20 +57,20 @@ export async function removeProject(projectId: string, options: ProjectServiceOp
   await getControlClient().request<void>(`/v1/projects/${projectId}`, { method: "DELETE", token: options.token });
 }
 
-export async function listConversations(
+export async function listSessions(
   projectId: string,
   query: PaginationQuery = {},
   options: ProjectServiceOptions = {}
-): Promise<ListEnvelope<Conversation>> {
+): Promise<ListEnvelope<Session>> {
   const search = buildPaginationSearch(query);
-  return getControlClient().get<ListEnvelope<Conversation>>(`/v1/projects/${projectId}/conversations${search}`, {
+  return getControlClient().get<ListEnvelope<Session>>(`/v1/projects/${projectId}/sessions${search}`, {
     token: options.token
   });
 }
 
-export async function createConversation(project: Project, name: string, options: ProjectServiceOptions = {}): Promise<Conversation> {
-  return getControlClient().post<Conversation>(
-    `/v1/projects/${project.id}/conversations`,
+export async function createSession(project: Project, name: string, options: ProjectServiceOptions = {}): Promise<Session> {
+  return getControlClient().post<Session>(
+    `/v1/projects/${project.id}/sessions`,
     {
       workspace_id: project.workspace_id,
       name
@@ -78,35 +79,42 @@ export async function createConversation(project: Project, name: string, options
   );
 }
 
-export async function renameConversation(
-  conversationId: string,
-  name: string,
+export async function patchSession(
+  sessionId: string,
+  patch: {
+    name?: string;
+    mode?: SessionMode;
+    model_config_id?: string;
+    rule_ids?: string[];
+    skill_ids?: string[];
+    mcp_ids?: string[];
+  },
   options: ProjectServiceOptions = {}
-): Promise<Conversation> {
-  return patchConversation(conversationId, { name }, options);
-}
-
-export async function patchConversation(
-  conversationId: string,
-  patch: { name?: string; mode?: ConversationMode; model_id?: string },
-  options: ProjectServiceOptions = {}
-): Promise<Conversation> {
-  return getControlClient().request<Conversation>(`/v1/conversations/${conversationId}`, {
+): Promise<Session> {
+  return getControlClient().request<Session>(`/v1/sessions/${sessionId}`, {
     method: "PATCH",
     body: patch,
     token: options.token
   });
 }
 
-export async function removeConversation(conversationId: string, options: ProjectServiceOptions = {}): Promise<void> {
-  await getControlClient().request<void>(`/v1/conversations/${conversationId}`, {
+export async function renameSession(
+  sessionId: string,
+  name: string,
+  options: ProjectServiceOptions = {}
+): Promise<Session> {
+  return patchSession(sessionId, { name }, options);
+}
+
+export async function removeSession(sessionId: string, options: ProjectServiceOptions = {}): Promise<void> {
+  await getControlClient().request<void>(`/v1/sessions/${sessionId}`, {
     method: "DELETE",
     token: options.token
   });
 }
 
-export async function exportConversationMarkdown(conversationId: string, options: ProjectServiceOptions = {}): Promise<string> {
-  return getControlClient().get<string>(`/v1/conversations/${conversationId}/export?format=markdown`, {
+export async function exportSessionMarkdown(sessionId: string, options: ProjectServiceOptions = {}): Promise<string> {
+  return getControlClient().get<string>(`/v1/sessions/${sessionId}/export?format=markdown`, {
     token: options.token
   });
 }

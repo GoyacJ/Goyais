@@ -37,10 +37,7 @@ const props = withDefaults(
   {
     menuEntries: undefined,
     runtimeStatusMode: false,
-    runtimeConversationStatus: "stopped",
-    runtimeConnectionStatus: "disconnected",
-    runtimeUserDisplayName: "",
-    runtimeHubUrl: ""
+    runtimeConversationStatus: "stopped"
   }
 );
 

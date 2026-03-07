@@ -21,4 +21,14 @@ describe("main shell", () => {
     expect(wrapper.find(".slot-main").exists()).toBe(true);
     expect(wrapper.find(".slot-footer").exists()).toBe(true);
   });
+
+  it("wraps sidebar slot with a stretch container to preserve full-height desktop sidebar", () => {
+    const wrapper = mount(MainShell, {
+      slots: {
+        sidebar: '<aside class="slot-sidebar">sidebar</aside>'
+      }
+    });
+
+    expect(wrapper.find(".sidebar-slot-fill").exists()).toBe(true);
+  });
 });

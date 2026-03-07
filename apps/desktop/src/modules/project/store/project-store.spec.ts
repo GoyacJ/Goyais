@@ -1,17 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/shared/services/http";
+import type { Session } from "@/shared/types/api";
 
 const serviceMocks = vi.hoisted(() => ({
   listProjects: vi.fn(),
+  listSessions: vi.fn(),
   createProject: vi.fn(),
   importProjectDirectory: vi.fn(),
   removeProject: vi.fn(),
-  listConversations: vi.fn(),
-  createConversation: vi.fn(),
-  renameConversation: vi.fn(),
-  removeConversation: vi.fn(),
-  exportConversationMarkdown: vi.fn(),
+  createSession: vi.fn(),
+  renameSession: vi.fn(),
+  removeSession: vi.fn(),
+  exportSessionMarkdown: vi.fn(),
+  patchSession: vi.fn(),
   updateProjectConfig: vi.fn(),
   getProjectConfig: vi.fn(),
   listWorkspaceProjectConfigs: vi.fn()
@@ -22,16 +24,25 @@ const storeMocks = vi.hoisted(() => ({
   getWorkspaceToken: vi.fn()
 }));
 
+const sessionStoreMocks = vi.hoisted(() => ({
+  sessionStore: {
+    bySessionId: {} as Record<string, unknown>
+  },
+  detachSessionStream: vi.fn(),
+  clearSessionTimer: vi.fn()
+}));
+
 vi.mock("@/modules/project/services", () => ({
   listProjects: serviceMocks.listProjects,
+  listSessions: serviceMocks.listSessions,
   createProject: serviceMocks.createProject,
   importProjectDirectory: serviceMocks.importProjectDirectory,
   removeProject: serviceMocks.removeProject,
-  listConversations: serviceMocks.listConversations,
-  createConversation: serviceMocks.createConversation,
-  renameConversation: serviceMocks.renameConversation,
-  removeConversation: serviceMocks.removeConversation,
-  exportConversationMarkdown: serviceMocks.exportConversationMarkdown,
+  createSession: serviceMocks.createSession,
+  renameSession: serviceMocks.renameSession,
+  removeSession: serviceMocks.removeSession,
+  exportSessionMarkdown: serviceMocks.exportSessionMarkdown,
+  patchSession: serviceMocks.patchSession,
   updateProjectConfig: serviceMocks.updateProjectConfig,
   getProjectConfig: serviceMocks.getProjectConfig,
   listWorkspaceProjectConfigs: serviceMocks.listWorkspaceProjectConfigs
@@ -45,12 +56,22 @@ vi.mock("@/shared/stores/authStore", () => ({
   getWorkspaceToken: storeMocks.getWorkspaceToken
 }));
 
-import { importProjectByDirectory, projectStore, refreshProjects, resetProjectStore } from "@/modules/project/store";
+vi.mock("@/modules/session/store", () => ({
+  sessionStore: sessionStoreMocks.sessionStore,
+  detachSessionStream: sessionStoreMocks.detachSessionStream,
+  clearSessionTimer: sessionStoreMocks.clearSessionTimer,
+  conversationStore: sessionStoreMocks.sessionStore,
+  detachConversationStream: sessionStoreMocks.detachSessionStream,
+  clearConversationTimer: sessionStoreMocks.clearSessionTimer
+}));
+
+import { importProjectByDirectory, projectStore, refreshProjects, resetProjectStore, updateProjectBinding } from "@/modules/project/store";
 
 describe("project store token forwarding", () => {
   beforeEach(() => {
     resetProjectStore();
     vi.clearAllMocks();
+    sessionStoreMocks.sessionStore.bySessionId = {};
 
     storeMocks.getCurrentWorkspace.mockReturnValue({
       id: "ws_remote_1",
@@ -63,7 +84,7 @@ describe("project store token forwarding", () => {
       next_cursor: null
     });
     serviceMocks.listWorkspaceProjectConfigs.mockResolvedValue([]);
-    serviceMocks.listConversations.mockResolvedValue({
+    serviceMocks.listSessions.mockResolvedValue({
       items: [],
       next_cursor: null
     });
@@ -132,8 +153,8 @@ describe("project store token forwarding", () => {
           name: "alpha",
           repo_path: "/tmp/repo-alpha",
           is_git: true,
-          default_model_id: "gpt-5.3",
-          default_mode: "agent",
+          default_model_config_id: "rc_model_1",
+          default_mode: "default",
           current_revision: 0,
           created_at: "2026-02-24T00:00:00Z",
           updated_at: "2026-02-24T00:00:00Z"
@@ -141,7 +162,7 @@ describe("project store token forwarding", () => {
       ],
       next_cursor: null
     });
-    serviceMocks.listConversations.mockResolvedValue({
+    serviceMocks.listSessions.mockResolvedValue({
       items: [
         {
           id: "conv_alpha_1",
@@ -149,10 +170,10 @@ describe("project store token forwarding", () => {
           project_id: "proj_alpha",
           name: "Conversation 1",
           queue_state: "idle",
-          default_mode: "agent",
-          model_id: "gpt-5.3",
+          default_mode: "default",
+          model_config_id: "rc_model_1",
           base_revision: 0,
-          active_execution_id: null,
+          active_run_id: null,
           created_at: "2026-02-24T00:00:00Z",
           updated_at: "2026-02-24T00:00:00Z"
         }
@@ -164,5 +185,105 @@ describe("project store token forwarding", () => {
 
     expect(projectStore.activeProjectId).toBe("proj_alpha");
     expect(projectStore.activeConversationId).toBe("");
+  });
+
+  it("refreshes conversations and clears stale runtime after project binding update", async () => {
+    const retainedConversation: Session = {
+      id: "conv_keep",
+      workspace_id: "ws_remote_1",
+      project_id: "proj_alpha",
+      name: "keep",
+      queue_state: "idle",
+      default_mode: "default",
+      model_config_id: "rc_model_1",
+      rule_ids: [],
+      skill_ids: [],
+      mcp_ids: [],
+      base_revision: 0,
+      active_run_id: null,
+      created_at: "2026-02-24T00:00:00Z",
+      updated_at: "2026-02-24T00:00:00Z"
+    };
+
+    projectStore.conversationsByProjectId.proj_alpha = [
+      {
+        ...retainedConversation,
+        id: "conv_remove",
+        name: "remove"
+      },
+      retainedConversation
+    ];
+    projectStore.activeConversationId = "conv_remove";
+    sessionStoreMocks.sessionStore.bySessionId = {
+      conv_remove: { hydrated: true },
+      conv_keep: { hydrated: true }
+    };
+
+    serviceMocks.updateProjectConfig.mockResolvedValue({
+      project_id: "proj_alpha",
+      model_config_ids: ["rc_model_1"],
+      default_model_config_id: "rc_model_1",
+      rule_ids: [],
+      skill_ids: [],
+      mcp_ids: [],
+      updated_at: "2026-02-24T01:00:00Z"
+    });
+    serviceMocks.listSessions.mockResolvedValue({
+      items: [retainedConversation],
+      next_cursor: null
+    });
+
+    const updated = await updateProjectBinding("proj_alpha", {
+      model_config_ids: ["rc_model_1"],
+      default_model_config_id: "rc_model_1",
+      rule_ids: [],
+      skill_ids: [],
+      mcp_ids: []
+    });
+
+    expect(updated).toBe(true);
+    expect(serviceMocks.updateProjectConfig).toHaveBeenCalledTimes(1);
+    expect(serviceMocks.listSessions).toHaveBeenCalledTimes(1);
+    expect(sessionStoreMocks.detachSessionStream).toHaveBeenCalledWith("conv_remove");
+    expect(sessionStoreMocks.clearSessionTimer).toHaveBeenCalledWith("conv_remove");
+    expect(sessionStoreMocks.sessionStore.bySessionId).not.toHaveProperty("conv_remove");
+    expect(projectStore.activeConversationId).toBe("");
+    expect(projectStore.conversationsByProjectId.proj_alpha).toHaveLength(1);
+    expect(projectStore.conversationsByProjectId.proj_alpha[0]?.id).toBe("conv_keep");
+  });
+
+  it("keeps modal state clean when project binding update fails", async () => {
+    projectStore.projectConfigsByProjectId.proj_alpha = {
+      project_id: "proj_alpha",
+      model_config_ids: ["rc_model_1"],
+      default_model_config_id: "rc_model_1",
+      rule_ids: [],
+      skill_ids: [],
+      mcp_ids: [],
+      updated_at: "2026-02-24T00:00:00Z"
+    };
+
+    serviceMocks.updateProjectConfig.mockRejectedValue(
+      new ApiError({
+        status: 400,
+        code: "VALIDATION_ERROR",
+        message: "model_config_id must be included in project model_config_ids",
+        traceId: "tr_bind_invalid"
+      })
+    );
+
+    const updated = await updateProjectBinding("proj_alpha", {
+      model_config_ids: ["rc_model_1"],
+      default_model_config_id: "rc_model_1",
+      rule_ids: [],
+      skill_ids: [],
+      mcp_ids: []
+    });
+
+    expect(updated).toBe(false);
+    expect(projectStore.projectConfigsByProjectId.proj_alpha?.updated_at).toBe("2026-02-24T00:00:00Z");
+    expect(projectStore.error).toContain("VALIDATION_ERROR");
+    expect(projectStore.error).toContain("tr_bind_invalid");
+    expect(serviceMocks.listSessions).not.toHaveBeenCalled();
   });
 });

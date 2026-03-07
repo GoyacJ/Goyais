@@ -30,6 +30,12 @@
 .table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 720px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .table th,
@@ -92,4 +98,11 @@
 
 .disabled {
   color: var(--semantic-danger);
+}
+
+@media (max-width: 768px) {
+  .actions button {
+    width: 44px;
+    height: 44px;
+  }
 }

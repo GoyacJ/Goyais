@@ -9,7 +9,7 @@ import (
 )
 
 func TestParseModelCatalogPayload_StrictRequiresAuth(t *testing.T) {
-	legacyPayload := []byte(`{
+	previousPayload := []byte(`{
   "version": "1",
   "vendors": [
     {
@@ -22,12 +22,41 @@ func TestParseModelCatalogPayload_StrictRequiresAuth(t *testing.T) {
   ]
 }`)
 
-	_, _, err := parseModelCatalogPayload(legacyPayload, "legacy.json", false)
+	_, _, err := parseModelCatalogPayload(previousPayload, "previous.json", false)
 	if err == nil {
 		t.Fatalf("expected strict parser to reject catalog without auth block")
 	}
 	if !strings.Contains(err.Error(), "auth is required") {
 		t.Fatalf("expected auth required error, got %v", err)
+	}
+}
+
+func TestParseModelCatalogPayload_SupportsDeepSeekVendor(t *testing.T) {
+	payload := []byte(`{
+  "version": "1",
+  "vendors": [
+    {
+      "name": "DeepSeek",
+      "base_url": "https://api.deepseek.com/v1",
+      "auth": {
+        "type": "http_bearer",
+        "header": "Authorization",
+        "scheme": "Bearer",
+        "api_key_env": "DEEPSEEK_API_KEY"
+      },
+      "models": [
+        { "id": "deepseek-chat", "label": "DeepSeek Chat", "enabled": true }
+      ]
+    }
+  ]
+}`)
+
+	parsed, _, err := parseModelCatalogPayload(payload, "deepseek.json", false)
+	if err != nil {
+		t.Fatalf("expected deepseek vendor to be accepted, got %v", err)
+	}
+	if len(parsed.Vendors) != 1 || parsed.Vendors[0].Name != ModelVendorDeepSeek {
+		t.Fatalf("expected deepseek vendor in parsed result, got %#v", parsed.Vendors)
 	}
 }
 
@@ -51,14 +80,14 @@ func TestLoadModelCatalogDetailed_LegacyAutoFillWriteback(t *testing.T) {
     {
       "name": "OpenAI",
       "base_url": "https://api.openai.com/v1",
-      "legacy_field": "cleanup_me",
+      "previous_field": "cleanup_me",
       "models": [
         { "id": "gpt-5.3", "label": "GPT-5.3", "enabled": true }
       ]
     }
   ]
 }`), 0o644); err != nil {
-		t.Fatalf("write legacy catalog failed: %v", err)
+		t.Fatalf("write previous catalog failed: %v", err)
 	}
 
 	response, meta, err := state.loadModelCatalogDetailed(workspaceID, true)
@@ -72,7 +101,7 @@ func TestLoadModelCatalogDetailed_LegacyAutoFillWriteback(t *testing.T) {
 		t.Fatalf("expected autofill writeback to succeed, got %#v", meta)
 	}
 	if meta.FallbackUsed {
-		t.Fatalf("expected no fallback on autofill success, got %#v", meta)
+		t.Fatalf("expected no recovery on autofill success, got %#v", meta)
 	}
 	if response.Source != catalogFilePath {
 		t.Fatalf("expected source to be workspace file, got %q", response.Source)
@@ -86,7 +115,7 @@ func TestLoadModelCatalogDetailed_LegacyAutoFillWriteback(t *testing.T) {
 	if !strings.Contains(rewritten, `"auth"`) {
 		t.Fatalf("expected rewritten catalog to contain auth block")
 	}
-	if strings.Contains(rewritten, `"legacy_field"`) {
+	if strings.Contains(rewritten, `"previous_field"`) {
 		t.Fatalf("expected rewritten catalog to remove unknown fields")
 	}
 	if _, _, err := parseModelCatalogPayload(rewrittenRaw, catalogFilePath, false); err != nil {
@@ -96,7 +125,7 @@ func TestLoadModelCatalogDetailed_LegacyAutoFillWriteback(t *testing.T) {
 
 func TestLoadModelCatalogDetailed_AutoFillWriteFailedFallsBackToEmbedded(t *testing.T) {
 	state := NewAppState(nil)
-	workspaceID := "ws_catalog_fallback"
+	workspaceID := "ws_catalog_recovery"
 	catalogRoot := t.TempDir()
 
 	if _, err := state.SetCatalogRoot(workspaceID, catalogRoot); err != nil {
@@ -119,7 +148,7 @@ func TestLoadModelCatalogDetailed_AutoFillWriteFailedFallsBackToEmbedded(t *test
     }
   ]
 }`), 0o644); err != nil {
-		t.Fatalf("write legacy catalog failed: %v", err)
+		t.Fatalf("write previous catalog failed: %v", err)
 	}
 	if err := os.Chmod(catalogFilePath, 0o444); err != nil {
 		t.Fatalf("chmod catalog file failed: %v", err)
@@ -133,20 +162,20 @@ func TestLoadModelCatalogDetailed_AutoFillWriteFailedFallsBackToEmbedded(t *test
 		t.Fatalf("load model catalog failed: %v", err)
 	}
 	if !meta.FallbackUsed {
-		t.Fatalf("expected fallback when writeback fails, got %#v", meta)
+		t.Fatalf("expected recovery when writeback fails, got %#v", meta)
 	}
 	if meta.FallbackReason != "autofill_write_failed" {
-		t.Fatalf("expected fallback reason autofill_write_failed, got %#v", meta)
+		t.Fatalf("expected recovery reason autofill_write_failed, got %#v", meta)
 	}
 	if strings.TrimSpace(meta.AutoFillWriteErr) == "" {
 		t.Fatalf("expected autofill write error details, got %#v", meta)
 	}
 	if response.Source != defaultModelCatalogSource {
-		t.Fatalf("expected embedded fallback source, got %q", response.Source)
+		t.Fatalf("expected embedded recovery source, got %q", response.Source)
 	}
 }
 
-func TestRecordModelCatalogReloadAudit_FailureIncludesFallbackStage(t *testing.T) {
+func TestRecordModelCatalogReloadAudit_FailureIncludesRecoveryStage(t *testing.T) {
 	state := NewAppState(nil)
 	workspaceID := "ws_catalog_audit"
 	traceID := "tr_catalog_audit"
@@ -170,11 +199,11 @@ func TestRecordModelCatalogReloadAudit_FailureIncludesFallbackStage(t *testing.T
 		if item.Action == "model_catalog.reload.requested" && item.Result == "success" && item.TraceID == traceID {
 			foundRequested = true
 		}
-		if item.Action == "model_catalog.reload.fallback_or_failed" && item.Result == "failed" && item.TraceID == traceID {
+		if item.Action == "model_catalog.reload.recovery_or_failed" && item.Result == "failed" && item.TraceID == traceID {
 			foundFailed = true
 		}
 	}
 	if !foundRequested || !foundFailed {
-		t.Fatalf("expected requested+fallback_or_failed audit entries, got %#v", state.adminAudit)
+		t.Fatalf("expected requested+recovery_or_failed audit entries, got %#v", state.adminAudit)
 	}
 }

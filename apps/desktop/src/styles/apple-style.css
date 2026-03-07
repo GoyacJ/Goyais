@@ -1,0 +1,79 @@
+/* --- Apple Vibe & Modern UI Overrides --- */
+
+:root {
+  /* 1. 更饱满且平滑的圆角 (Radius) */
+  --global-radius-16: 12px; /* 提升全局外框圆角，符合现代 Mac/iOS 质感 */
+  --component-button-radius: 12px;
+  --component-input-radius: 12px;
+  --component-card-radius: 16px;
+
+  /* 2. Apple 典型的多层级柔和高斯模糊阴影 */
+  --apple-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --apple-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --apple-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
+
+  /* 3. 毛玻璃材质 (配合 backdrop-filter 使用) */
+  --apple-glass-bg: rgba(255, 255, 255, 0.7);
+  --apple-glass-border: rgba(0, 0, 0, 0.05);
+  
+  /* 4. 轻量的边框和底部填充 */
+  --component-input-border: rgba(0,0,0,0.06); 
+  --component-input-bg: rgba(0,0,0,0.02);
+  --component-card-border: rgba(0,0,0,0.04);
+}
+
+:root[data-theme="dark"] {
+  /* 暗色模式下更克制的阴影、带高光的弥散 */
+  --apple-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
+  --apple-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2);
+  --apple-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.2);
+
+  --apple-glass-bg: rgba(30, 30, 30, 0.65);
+  --apple-glass-border: rgba(255, 255, 255, 0.1);
+
+  --component-input-border: rgba(255, 255, 255, 0.08); 
+  --component-input-bg: rgba(255, 255, 255, 0.04);
+  --component-card-border: rgba(255, 255, 255, 0.08); 
+}
+
+/* 5. 字体排版优化，收紧字距，更纤细的渲染 */
+body {
+  letter-spacing: -0.012em; 
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 强制覆盖字体体系为紧凑的原生体系 */
+:root[data-font-style="neutral"],
+:root[data-font-style="reading"],
+:root[data-font-style="coding"] {
+  --global-font-family-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Helvetica Neue", Arial, sans-serif !important;
+}
+
+/* 6. 全局组件微动效增强 (微缩放、回弹曲线) */
+button, 
+input, 
+a, 
+.card, 
+.sidebar-item {
+  transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* 按压下去时的下陷反馈，极具原生 App 特征 */
+button:active:not(:disabled), 
+.sidebar-item:active {
+  transform: scale(0.97);
+  opacity: 0.85;
+}
+
+/* 输入框获取焦点时的原生发光感补足 */
+input:focus, textarea:focus {
+  box-shadow: 0 0 0 3px var(--semantic-focus-ring) !important;
+  border-color: var(--semantic-primary) !important;
+}
+
+/* 替换生硬的外阴影为更柔和的高斯模糊阴影 */
+#app .app-frame {
+  box-shadow: var(--apple-shadow-lg);
+  border: 1px solid var(--apple-glass-border);
+}

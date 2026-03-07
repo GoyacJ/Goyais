@@ -1,0 +1,131 @@
+// Copyright (c) 2026 Ysmjjsy
+// Author: Goya
+// SPDX-License-Identifier: MIT
+
+package httpapi
+
+import (
+	"testing"
+	"time"
+
+	runtimecore "goyais/services/hub/internal/agent/core"
+)
+
+func TestMapExecutionEventToRunEvent_MessageReceivedMapsToRunQueued(t *testing.T) {
+	event := ExecutionEvent{
+		EventID:        "evt_map_1",
+		ExecutionID:    "exec_map_1",
+		ConversationID: "conv_map_1",
+		Sequence:       7,
+		QueueIndex:     1,
+		Type:           RunEventTypeMessageReceived,
+		Timestamp:      "2026-02-25T10:20:30Z",
+		Payload: map[string]any{
+			"content": "hello",
+		},
+	}
+
+	runEvent := mapExecutionEventToRunEvent(event)
+	if runEvent.Type != "run_queued" {
+		t.Fatalf("expected run_queued, got %q", runEvent.Type)
+	}
+	payload := runEvent.Payload
+	if payload["event_type"] != "run_queued" {
+		t.Fatalf("expected payload event_type run_queued, got %#v", payload["event_type"])
+	}
+	if _, exists := payload["legacy_event_type"]; exists {
+		t.Fatalf("expected no payload legacy_event_type, got %#v", payload["legacy_event_type"])
+	}
+	if runEvent.SessionID != event.ConversationID {
+		t.Fatalf("expected session_id=%s, got %s", event.ConversationID, runEvent.SessionID)
+	}
+	if runEvent.RunID != event.ExecutionID {
+		t.Fatalf("expected run_id=%s, got %s", event.ExecutionID, runEvent.RunID)
+	}
+	if runEvent.Sequence != int64(event.Sequence) {
+		t.Fatalf("expected sequence=%d, got %d", event.Sequence, runEvent.Sequence)
+	}
+	if runEvent.Timestamp.Format(time.RFC3339) != event.Timestamp {
+		t.Fatalf("expected timestamp=%s, got %s", event.Timestamp, runEvent.Timestamp.Format(time.RFC3339))
+	}
+}
+
+func TestMapRunStateToCoreState_SupportsLegacyConfirming(t *testing.T) {
+	runState, err := mapRunStateToCoreState(RunState("confirming"))
+	if err != nil {
+		t.Fatalf("expected confirming to be supported, got %v", err)
+	}
+	if runState != runtimecore.RunStateWaitingApproval {
+		t.Fatalf("expected waiting_approval, got %q", runState)
+	}
+}
+
+func TestMapExecutionEventToRunEvent_MapsApprovalDeltaToRunApprovalNeeded(t *testing.T) {
+	event := ExecutionEvent{
+		EventID:        "evt_map_approval",
+		ExecutionID:    "exec_map_approval",
+		ConversationID: "conv_map_approval",
+		Sequence:       1,
+		QueueIndex:     0,
+		Type:           RunEventTypeThinkingDelta,
+		Timestamp:      "2026-02-25T10:20:30Z",
+		Payload: map[string]any{
+			"stage":     "run_approval_needed",
+			"run_state": "waiting_approval",
+		},
+	}
+
+	runEvent := mapExecutionEventToRunEvent(event)
+	if runEvent.Type != "run_approval_needed" {
+		t.Fatalf("expected run_approval_needed, got %q", runEvent.Type)
+	}
+	if runEvent.Payload["event_type"] != "run_approval_needed" {
+		t.Fatalf("expected payload event_type run_approval_needed, got %#v", runEvent.Payload["event_type"])
+	}
+}
+
+func TestMapExecutionEventToRunEvent_PreservesRunVocabularyFromPayload(t *testing.T) {
+	event := ExecutionEvent{
+		EventID:        "evt_map_payload",
+		ExecutionID:    "exec_map_payload",
+		ConversationID: "conv_map_payload",
+		Sequence:       1,
+		QueueIndex:     0,
+		Type:           RunEventTypeThinkingDelta,
+		Timestamp:      "2026-02-25T10:20:30Z",
+		Payload: map[string]any{
+			"event_type": "run_started",
+		},
+	}
+
+	runEvent := mapExecutionEventToRunEvent(event)
+	if runEvent.Payload["event_type"] != "run_started" {
+		t.Fatalf("expected payload event_type run_started, got %#v", runEvent.Payload["event_type"])
+	}
+	if _, exists := runEvent.Payload["legacy_event_type"]; exists {
+		t.Fatalf("expected no legacy_event_type when payload already uses run vocabulary, got %#v", runEvent.Payload["legacy_event_type"])
+	}
+}
+
+func TestMapExecutionEventToRunEvent_UserPromptSubmitMapsToRunQueued(t *testing.T) {
+	event := ExecutionEvent{
+		EventID:        "evt_map_user_prompt_submit",
+		ExecutionID:    "exec_map_user_prompt_submit",
+		ConversationID: "conv_map_user_prompt_submit",
+		Sequence:       1,
+		QueueIndex:     0,
+		Type:           RunEventTypeUserPromptSubmit,
+		Timestamp:      "2026-02-25T10:20:30Z",
+		Payload: map[string]any{
+			"event": "user_prompt_submit",
+		},
+	}
+
+	runEvent := mapExecutionEventToRunEvent(event)
+	if runEvent.Type != runtimecore.RunEventTypeRunQueued {
+		t.Fatalf("expected run_queued for user_prompt_submit, got %q", runEvent.Type)
+	}
+	if runEvent.Payload["event_type"] != "run_queued" {
+		t.Fatalf("expected normalized event_type run_queued, got %#v", runEvent.Payload["event_type"])
+	}
+}

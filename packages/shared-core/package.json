@@ -17,6 +17,8 @@
     "dist"
   ],
   "scripts": {
+    "contracts:generate": "pnpm dlx openapi-typescript@7.10.1 ../contracts/openapi.yaml -o src/generated/openapi.ts --export-type --alphabetize",
+    "contracts:check": "pnpm dlx openapi-typescript@7.10.1 ../contracts/openapi.yaml -o src/generated/openapi.ts --export-type --alphabetize --check",
     "build": "tsdown src/index.ts --format esm,cjs --dts",
     "clean": "rm -rf dist"
   },

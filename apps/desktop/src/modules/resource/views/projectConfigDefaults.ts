@@ -8,8 +8,10 @@ export function getProjectConfig(projectId: string): ProjectConfig {
   }
   return {
     project_id: projectId,
-    model_ids: [],
-    default_model_id: null,
+    model_config_ids: [],
+    default_model_config_id: null,
+    token_threshold: undefined,
+    model_token_thresholds: {},
     rule_ids: [],
     skill_ids: [],
     mcp_ids: [],

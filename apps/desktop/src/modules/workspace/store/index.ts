@@ -1,5 +1,5 @@
 import { resetAdminStore, refreshAdminData } from "@/modules/admin/store";
-import { resetConversationStore } from "@/modules/conversation/store";
+import { resetConversationStore } from "@/modules/session/store";
 import { refreshProjects, resetProjectStore } from "@/modules/project/store";
 import { refreshModelCatalog, refreshResources, resetResourceStore } from "@/modules/resource/store";
 import { listWorkspaces } from "@/modules/workspace/services";

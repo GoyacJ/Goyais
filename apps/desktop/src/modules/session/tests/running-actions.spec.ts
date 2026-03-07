@@ -1,0 +1,189 @@
+import { describe, expect, it } from "vitest";
+
+import { buildRunningActionViewModels } from "@/modules/session/views/runningActions";
+import type { Run, RunLifecycleEvent } from "@/shared/types/api";
+
+const baseExecution: Run = {
+  id: "exec_running_1",
+  workspace_id: "ws_local",
+  session_id: "conv_running_1",
+  message_id: "msg_running_1",
+  state: "executing",
+  mode: "default",
+  model_id: "gpt-5.3",
+  mode_snapshot: "default",
+  model_snapshot: {
+    model_id: "gpt-5.3"
+  },
+  queue_index: 0,
+  trace_id: "tr_running_1",
+  project_revision_snapshot: 0,
+  created_at: "2026-02-24T00:00:00Z",
+  updated_at: "2026-02-24T00:00:00Z"
+};
+
+const baseEvent: RunLifecycleEvent = {
+  event_id: "evt_running_1",
+  run_id: "exec_running_1",
+  session_id: "conv_running_1",
+  trace_id: "tr_running_1",
+  sequence: 1,
+  queue_index: 0,
+  type: "execution_started",
+  timestamp: "2026-02-24T00:00:00Z",
+  payload: {}
+};
+
+describe("running actions view", () => {
+  it("shows concurrent running actions with elapsed time", () => {
+    const events: RunLifecycleEvent[] = [
+      {
+        ...baseEvent,
+        event_id: "evt_model_call",
+        type: "thinking_delta",
+        sequence: 1,
+        timestamp: "2026-02-24T00:00:00Z",
+        payload: {
+          stage: "model_call"
+        }
+      },
+      {
+        ...baseEvent,
+        event_id: "evt_tool_call_a",
+        type: "tool_call",
+        sequence: 2,
+        timestamp: "2026-02-24T00:00:01Z",
+        payload: {
+          call_id: "call_a",
+          name: "run_command"
+        }
+      },
+      {
+        ...baseEvent,
+        event_id: "evt_tool_call_b",
+        type: "tool_call",
+        sequence: 3,
+        timestamp: "2026-02-24T00:00:02Z",
+        payload: {
+          call_id: "call_b",
+          name: "read_file",
+          input: {
+            path: "README.md"
+          }
+        }
+      },
+      {
+        ...baseEvent,
+        event_id: "evt_tool_result_a",
+        type: "tool_result",
+        sequence: 4,
+        timestamp: "2026-02-24T00:00:03Z",
+        payload: {
+          call_id: "call_a",
+          name: "run_command",
+          ok: true
+        }
+      }
+    ];
+
+    const actions = buildRunningActionViewModels(events, [baseExecution], "zh-CN", new Date("2026-02-24T00:00:05Z"));
+    expect(actions).toHaveLength(2);
+    expect(actions.map((item) => item.primary)).toContain("正在分析用户请求");
+    expect(actions.map((item) => item.primary)).toContain("读取 README.md");
+    expect(actions.find((item) => item.primary === "读取 README.md")?.elapsedLabel).toBe("3s");
+    expect(actions.find((item) => item.primary === "读取 README.md")?.secondary).toContain("path");
+    expect(actions.some((item) => item.secondary.includes("model_call"))).toBe(false);
+  });
+
+  it("falls back to name+sequence matching when call_id is missing", () => {
+    const events: RunLifecycleEvent[] = [
+      {
+        ...baseEvent,
+        event_id: "evt_tool_call_old",
+        type: "tool_call",
+        sequence: 1,
+        timestamp: "2026-02-24T00:01:00Z",
+        payload: {
+          name: "read_file"
+        }
+      },
+      {
+        ...baseEvent,
+        event_id: "evt_tool_result_old",
+        type: "tool_result",
+        sequence: 2,
+        timestamp: "2026-02-24T00:01:01Z",
+        payload: {
+          name: "read_file",
+          ok: true
+        }
+      },
+      {
+        ...baseEvent,
+        event_id: "evt_tool_call_new",
+        type: "tool_call",
+        sequence: 3,
+        timestamp: "2026-02-24T00:01:02Z",
+        payload: {
+          name: "read_file"
+        }
+      }
+    ];
+
+    const actions = buildRunningActionViewModels(events, [baseExecution], "zh-CN", new Date("2026-02-24T00:01:05Z"));
+    expect(actions).toHaveLength(1);
+    expect(actions[0]?.primary).toBe("调用 read_file");
+    expect(actions[0]?.elapsedLabel).toBe("3s");
+  });
+
+  it("shows approval action while execution is confirming", () => {
+    const confirmingExecution: Run = {
+      ...baseExecution,
+      id: "exec_confirming_1",
+      state: "confirming"
+    };
+    const events: RunLifecycleEvent[] = [
+      {
+        ...baseEvent,
+        run_id: "exec_confirming_1",
+        event_id: "evt_approval_needed",
+        type: "thinking_delta",
+        sequence: 1,
+        timestamp: "2026-02-24T00:02:00Z",
+        payload: {
+          stage: "run_approval_needed",
+          call_id: "call_approval_1",
+          name: "Bash",
+          reason: "requires high-risk permission"
+        }
+      }
+    ];
+
+    const actions = buildRunningActionViewModels(events, [confirmingExecution], "zh-CN", new Date("2026-02-24T00:02:04Z"));
+    expect(actions).toHaveLength(1);
+    expect(actions[0]?.type).toBe("approval");
+    expect(actions[0]?.primary).toBe("等待授权 Bash");
+    expect(actions[0]?.elapsedLabel).toBe("4s");
+  });
+
+  it("localizes primary labels in english locale", () => {
+    const events: RunLifecycleEvent[] = [
+      {
+        ...baseEvent,
+        event_id: "evt_tool_call_en",
+        type: "tool_call",
+        sequence: 1,
+        timestamp: "2026-02-24T00:03:00Z",
+        payload: {
+          call_id: "call_en",
+          name: "read_file"
+        }
+      }
+    ];
+
+    const actions = buildRunningActionViewModels(events, [baseExecution], "en-US", new Date("2026-02-24T00:03:03Z"));
+    expect(actions).toHaveLength(1);
+    expect(actions[0]?.primary).toBe("Call read_file");
+    expect(actions[0]?.elapsedLabel).toBe("3s");
+  });
+});

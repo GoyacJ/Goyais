@@ -20,7 +20,7 @@
       >
         <template #cell-actions="{ row }">
           <div class="table-actions">
-            <BaseButton :disabled="!canWrite" variant="ghost" @click="openProjectBinding((row as { id: string }).id)">配置</BaseButton>
+            <BaseButton :disabled="!canWrite" variant="ghost" @click="openProjectBinding((row as { id: string }).id)">详情</BaseButton>
             <BaseButton
               :disabled="!canWrite"
               variant="ghost"
@@ -36,7 +36,7 @@
     <BaseModal :open="form.open" class="project-binding-modal" @close="closeProjectBinding">
       <template #title>
         <div class="modal-header">
-          <h3 class="modal-title">项目绑定配置</h3>
+          <h3 class="modal-title">项目详情与配置</h3>
           <p class="modal-subtitle">{{ form.projectName }}</p>
         </div>
       </template>
@@ -45,6 +45,21 @@
         <section class="binding-intro">
           <p class="intro-title">绑定说明</p>
           <p class="intro-description">ProjectConfig 仅定义默认绑定；Conversation 可覆盖但不反写项目配置。</p>
+        </section>
+
+        <section class="token-status-panel">
+          <div class="token-status-head">
+            <h4>Token 状态</h4>
+            <span>{{ projectUsageSummary }}</span>
+          </div>
+          <p class="token-breakdown">
+            输入 {{ projectUsageBreakdown.input }} · 输出 {{ projectUsageBreakdown.output }} · 合计 {{ projectUsageBreakdown.total }}
+          </p>
+          <label class="token-threshold-input">
+            项目 Token 阀值
+            <BaseInput v-model="form.tokenThresholdInput" placeholder="留空表示不限" />
+            <span class="default-model-hint">仅允许正整数，留空表示不限。</span>
+          </label>
         </section>
 
         <section class="default-model-panel">
@@ -82,6 +97,15 @@
                 <span class="checkbox-label">{{ item.name }}</span>
               </label>
               <span v-if="modelOptions.length === 0" class="empty-item">暂无模型配置</span>
+            </div>
+            <div v-if="projectModelUsageRows.length > 0" class="model-threshold-list">
+              <div v-for="item in projectModelUsageRows" :key="item.id" class="model-threshold-item">
+                <div class="model-threshold-head">
+                  <span class="checkbox-label">{{ item.name }}</span>
+                  <span class="group-meta">{{ item.usageText }}</span>
+                </div>
+                <BaseInput v-model="form.modelTokenThresholdInputs[item.id]" placeholder="模型 Token 阀值（留空表示不限）" />
+              </div>
             </div>
           </section>
 
@@ -168,7 +192,7 @@
           </p>
           <div class="footer-buttons">
             <BaseButton variant="ghost" @click="closeProjectBinding">取消</BaseButton>
-            <BaseButton :disabled="!canWrite" variant="primary" @click="saveProjectBinding">保存</BaseButton>
+            <BaseButton :disabled="!canWrite" variant="primary" @click="saveProjectBindingWithConfirm">保存</BaseButton>
           </div>
         </div>
       </template>
@@ -183,6 +207,7 @@ import { isRuntimeCapabilitySupported } from "@/shared/runtime";
 import { pickDirectoryPath } from "@/shared/services/directoryPicker";
 import WorkspaceSharedShell from "@/shared/shells/WorkspaceSharedShell.vue";
 import BaseButton from "@/shared/ui/BaseButton.vue";
+import BaseInput from "@/shared/ui/BaseInput.vue";
 import BaseModal from "@/shared/ui/BaseModal.vue";
 import BaseSelect from "@/shared/ui/BaseSelect.vue";
 
@@ -197,6 +222,9 @@ const {
   mcpOptions,
   modelOptions,
   openProjectBinding,
+  projectModelUsageRows,
+  projectUsageBreakdown,
+  projectUsageSummary,
   projectRows,
   tableEmptyText,
   removeProjectById,
@@ -208,6 +236,7 @@ const {
 const supportsDirectoryImport = isRuntimeCapabilitySupported("supportsDirectoryImport");
 
 type BindingField = "modelIds" | "ruleIds" | "skillIds" | "mcpIds";
+const PROJECT_BINDING_PURGE_CONFIRM_MESSAGE = "保存后将清空当前项目下所有历史会话与运行记录，是否继续？";
 
 async function addProject(): Promise<void> {
   if (!supportsDirectoryImport) {
@@ -218,6 +247,16 @@ async function addProject(): Promise<void> {
     return;
   }
   await importDirectoryProject(directoryPath);
+}
+
+async function saveProjectBindingWithConfirm(): Promise<void> {
+  if (typeof window !== "undefined") {
+    const confirmed = window.confirm(PROJECT_BINDING_PURGE_CONFIRM_MESSAGE);
+    if (!confirmed) {
+      return;
+    }
+  }
+  await saveProjectBinding();
 }
 
 function setGroupSelection(field: BindingField, mode: "all" | "none"): void {

@@ -1,0 +1,206 @@
+import {
+  applyRunState,
+  dedupeExecutions,
+  ensureExecution,
+  parseDiff
+} from "@/modules/session/store/executionRuntime";
+import { shouldAppendTerminalMessage } from "@/modules/session/store/executionEventIdempotency";
+import type { SessionRuntime } from "@/modules/session/store/state";
+import { createMockId } from "@/shared/utils/id";
+import type { RunLifecycleEvent, SessionMessage } from "@/shared/types/api";
+
+export type ExecutionTransition = {
+  previousState: string | undefined;
+  nextState: string | undefined;
+  messageID: string;
+};
+
+export function updateExecutionTransition(
+  runtime: SessionRuntime,
+  conversationId: string,
+  event: RunLifecycleEvent
+): ExecutionTransition {
+  if (!event.run_id) {
+    return { previousState: undefined, nextState: undefined, messageID: "" };
+  }
+
+  const previousState = runtime.executions.find((item) => item.id === event.run_id)?.state;
+  const execution = ensureExecution(runtime, conversationId, event);
+  applyRunState(execution, event);
+  dedupeExecutions(runtime);
+  const nextState = runtime.executions.find((item) => item.id === event.run_id)?.state;
+  return { previousState, nextState, messageID: execution.message_id };
+}
+
+export function applyDiffUpdate(runtime: SessionRuntime, event: RunLifecycleEvent): void {
+  if (event.type === "diff_generated") {
+    const incoming = parseDiff(event.payload);
+    if (incoming.length > 0) {
+      runtime.diff = mergeDiffByPath(runtime.diff, incoming);
+    }
+    return;
+  }
+
+  if (
+    event.type === "change_set_committed" ||
+    event.type === "change_set_discarded" ||
+    event.type === "change_set_rolled_back"
+  ) {
+    runtime.diff = [];
+  }
+}
+
+export function appendTerminalMessageFromEvent(
+  runtime: SessionRuntime,
+  conversationId: string,
+  event: RunLifecycleEvent,
+  transition: ExecutionTransition
+): void {
+  switch (event.type) {
+    case "execution_done":
+      appendExecutionDoneMessage(runtime, conversationId, event, transition);
+      break;
+    case "execution_error":
+      appendExecutionErrorMessage(runtime, conversationId, event, transition);
+      break;
+    case "thinking_delta":
+      appendUserAnswerMessage(runtime, conversationId, event);
+      break;
+    default:
+      break;
+  }
+}
+
+function appendExecutionDoneMessage(
+  runtime: SessionRuntime,
+  conversationId: string,
+  event: RunLifecycleEvent,
+  transition: ExecutionTransition
+): void {
+  if (!shouldAppendTerminalMessage(runtime, event, transition.previousState, transition.nextState, transition.messageID, "assistant")) {
+    return;
+  }
+  const content = sanitizeAssistantTerminalContent(asNonEmptyString(event.payload.content));
+  if (content === "") {
+    return;
+  }
+  appendTerminalMessage(runtime, {
+    id: createMockId("msg"),
+    session_id: conversationId,
+    role: "assistant",
+    content,
+    queue_index: event.queue_index,
+    created_at: new Date().toISOString()
+  });
+}
+
+function appendExecutionErrorMessage(
+  runtime: SessionRuntime,
+  conversationId: string,
+  event: RunLifecycleEvent,
+  transition: ExecutionTransition
+): void {
+  if (!shouldAppendTerminalMessage(runtime, event, transition.previousState, transition.nextState, transition.messageID, "system")) {
+    return;
+  }
+  const content = asNonEmptyString(event.payload.message) || "Run failed.";
+  appendTerminalMessage(runtime, {
+    id: createMockId("msg"),
+    session_id: conversationId,
+    role: "system",
+    content,
+    queue_index: event.queue_index,
+    created_at: new Date().toISOString()
+  });
+}
+
+function appendUserAnswerMessage(
+  runtime: SessionRuntime,
+  conversationId: string,
+  event: RunLifecycleEvent
+): void {
+  const stage = asNonEmptyString(event.payload.stage);
+  if (stage !== "run_user_question_resolved") {
+    return;
+  }
+  const selectedOptionLabel = asNonEmptyString(event.payload.selected_option_label);
+  const selectedOptionID = asNonEmptyString(event.payload.selected_option_id);
+  const text = asNonEmptyString(event.payload.text);
+  const question = asNonEmptyString(event.payload.question);
+  const answerLine = selectedOptionLabel || selectedOptionID;
+  const lines = [
+    question ? `Question: ${question}` : "",
+    answerLine ? `Answer: ${answerLine}` : "",
+    text ? `Note: ${text}` : ""
+  ].filter((item) => item !== "");
+  if (lines.length === 0) {
+    return;
+  }
+  const content = lines.join("\n");
+  const duplicated = runtime.messages.some((message) =>
+    message.role === "user" &&
+    typeof message.queue_index === "number" &&
+    message.queue_index === event.queue_index &&
+    message.content.trim() === content
+  );
+  if (duplicated) {
+    return;
+  }
+  appendTerminalMessage(runtime, {
+    id: createMockId("msg"),
+    session_id: conversationId,
+    role: "user",
+    content,
+    queue_index: event.queue_index,
+    created_at: new Date().toISOString()
+  });
+}
+
+function asNonEmptyString(value: unknown): string {
+  return typeof value === "string" && value.trim() !== "" ? value : "";
+}
+
+function sanitizeAssistantTerminalContent(content: string): string {
+  if (content.trim() === "") {
+    return "";
+  }
+  const withoutThink = content.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  const withoutMiniMaxBlock = withoutThink.replace(/<minimax:tool_call>[\s\S]*?<\/minimax:tool_call>/gi, "");
+  const withoutResidualTags = withoutMiniMaxBlock.replace(/<\/?(?:minimax:tool_call|invoke|parameter)(?:\s+[^>]*)?>/gi, "");
+  return withoutResidualTags.trim();
+}
+
+function appendTerminalMessage(runtime: SessionRuntime, message: SessionMessage): void {
+  if (typeof message.queue_index !== "number") {
+    runtime.messages.push(message);
+    return;
+  }
+
+  let insertAfter = -1;
+  for (let index = 0; index < runtime.messages.length; index += 1) {
+    const current = runtime.messages[index];
+    if (typeof current.queue_index !== "number") {
+      continue;
+    }
+    if (current.queue_index <= message.queue_index) {
+      insertAfter = index;
+    }
+  }
+
+  if (insertAfter < 0) {
+    runtime.messages.push(message);
+    return;
+  }
+  runtime.messages.splice(insertAfter + 1, 0, message);
+}
+
+function mergeDiffByPath(existing: SessionRuntime["diff"], incoming: SessionRuntime["diff"]): SessionRuntime["diff"] {
+  const mergedByPath = new Map<string, SessionRuntime["diff"][number]>();
+  for (const item of existing) {
+    mergedByPath.set(item.path, item);
+  }
+  for (const item of incoming) {
+    mergedByPath.set(item.path, item);
+  }
+  return [...mergedByPath.values()];
+}

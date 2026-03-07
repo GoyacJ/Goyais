@@ -3,7 +3,7 @@
     class="user-panel relative grid gap-[var(--global-space-8)] rounded-[var(--global-radius-8)] bg-[var(--semantic-surface-2)] p-[var(--global-space-8)]"
   >
     <button
-      class="user-trigger flex min-h-[34px] w-full items-center justify-between border-0 rounded-[var(--global-radius-8)] bg-transparent px-[var(--global-space-4)] text-[var(--semantic-text)]"
+      class="user-trigger flex min-h-[44px] w-full items-center justify-between border-0 rounded-[var(--global-radius-8)] bg-transparent px-[var(--global-space-4)] text-[var(--semantic-text)]"
       type="button"
       @click="menuOpen = !menuOpen"
     >
@@ -28,7 +28,7 @@
       <button
         v-for="item in items"
         :key="item.key"
-        class="menu-item inline-flex min-h-[32px] items-center gap-[var(--global-space-8)] border-0 rounded-[var(--global-radius-8)] bg-transparent px-[var(--global-space-8)] text-left text-[var(--semantic-text)]"
+        class="menu-item inline-flex min-h-[44px] items-center gap-[var(--global-space-8)] border-0 rounded-[var(--global-radius-8)] bg-transparent px-[var(--global-space-8)] text-left text-[var(--semantic-text)]"
         type="button"
         @click="onSelect(item.key)"
       >

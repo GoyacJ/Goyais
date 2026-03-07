@@ -9,6 +9,8 @@ import "virtual:uno.css";
 import "./styles/tokens.css";
 import "./styles/theme-profiles.css";
 import "./styles/base.css";
+import "./styles/apple-style.css";
+
 
 initializeTheme();
 void initializeGeneralSettings();

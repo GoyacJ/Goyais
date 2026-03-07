@@ -1,2 +1,0 @@
-"""Worktree helpers."""
-

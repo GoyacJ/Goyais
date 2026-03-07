@@ -62,7 +62,7 @@ pnpm test
 pnpm coverage:gate
 pnpm e2e:smoke
 go test ./...            # services/hub
-uv run pytest            # services/worker
+go vet ./...             # services/hub
 pnpm docs:build
 pnpm slides:build
 ```

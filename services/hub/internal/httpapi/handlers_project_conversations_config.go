@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"sort"
 	"strings"
@@ -28,7 +29,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				state,
 				r,
 				workspaceID,
-				"conversation.read",
+				"session.read",
 				authorizationResource{WorkspaceID: workspaceID},
 				authorizationContext{OperationType: "read"},
 			)
@@ -42,14 +43,67 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
-			state.mu.RLock()
+			queryService, hasQueryService := newRunQueryService(state)
 			items := make([]Conversation, 0)
-			for _, conv := range state.conversations {
-				if conv.ProjectID == projectID {
-					items = append(items, conv)
+			loadedFromRepository := false
+			if hasQueryService {
+				repositoryItems, err := listExecutionFlowConversationsFromRepository(r.Context(), queryService, workspaceID, projectID)
+				if err == nil {
+					items = repositoryItems
+					loadedFromRepository = true
+					state.mu.Lock()
+					for _, item := range repositoryItems {
+						state.conversations[item.ID] = item
+					}
+					state.mu.Unlock()
+				} else {
+					WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to load project sessions", map[string]any{
+						"project_id":   projectID,
+						"workspace_id": workspaceID,
+						"error":        err.Error(),
+					})
+					return
 				}
 			}
-			state.mu.RUnlock()
+			applyInMemoryConversationUsage := func() {
+				state.mu.RLock()
+				for index := range items {
+					items[index] = decorateConversationUsageLocked(state, items[index])
+				}
+				state.mu.RUnlock()
+			}
+			if !loadedFromRepository {
+				state.mu.RLock()
+				for _, conv := range state.conversations {
+					if conv.ProjectID != projectID {
+						continue
+					}
+					items = append(items, conv)
+				}
+				state.mu.RUnlock()
+				applyInMemoryConversationUsage()
+			} else {
+				conversationIDs := make([]string, 0, len(items))
+				for _, item := range items {
+					conversationIDs = append(conversationIDs, item.ID)
+				}
+				totalsByConversation, err := queryService.ComputeConversationTokenUsage(r.Context(), conversationIDs)
+				if err == nil {
+					for index := range items {
+						totals := totalsByConversation[items[index].ID]
+						items[index].TokensInTotal = totals.Input
+						items[index].TokensOutTotal = totals.Output
+						items[index].TokensTotal = totals.Total
+					}
+				} else {
+					WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to load project session usage", map[string]any{
+						"project_id":   projectID,
+						"workspace_id": workspaceID,
+						"error":        err.Error(),
+					})
+					return
+				}
+			}
 			sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt < items[j].CreatedAt })
 			raw := make([]any, 0, len(items))
 			for _, item := range items {
@@ -68,7 +122,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				state,
 				r,
 				workspaceID,
-				"conversation.write",
+				"session.write",
 				authorizationResource{WorkspaceID: workspaceID},
 				authorizationContext{OperationType: "write", ABACRequired: true},
 			)
@@ -91,10 +145,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 			}
 
 			now := time.Now().UTC().Format(time.RFC3339)
-			defaultModelID := firstNonEmpty(derefString(config.DefaultModelID), project.DefaultModelID)
-			if strings.TrimSpace(defaultModelID) == "" {
-				defaultModelID = state.resolveWorkspaceDefaultModelID(project.WorkspaceID)
-			}
+			defaultModelConfigID := firstNonEmpty(derefString(config.DefaultModelConfigID), project.DefaultModelConfigID)
 			conversation := Conversation{
 				ID:                "conv_" + randomHex(6),
 				WorkspaceID:       project.WorkspaceID,
@@ -102,7 +153,10 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				Name:              firstNonEmpty(strings.TrimSpace(input.Name), "Conversation"),
 				QueueState:        QueueStateIdle,
 				DefaultMode:       project.DefaultMode,
-				ModelID:           defaultModelID,
+				ModelConfigID:     defaultModelConfigID,
+				RuleIDs:           append([]string{}, sanitizeIDList(config.RuleIDs)...),
+				SkillIDs:          append([]string{}, sanitizeIDList(config.SkillIDs)...),
+				MCPIDs:            append([]string{}, sanitizeIDList(config.MCPIDs)...),
 				BaseRevision:      project.CurrentRevision,
 				ActiveExecutionID: nil,
 				CreatedAt:         now,
@@ -116,7 +170,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 
 			writeJSON(w, http.StatusCreated, conversation)
 			if state.authz != nil {
-				_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "conversation.write", "conversation", conversation.ID, "success", map[string]any{
+				_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "session.write", "conversation", conversation.ID, "success", map[string]any{
 					"operation": "create",
 				}, TraceIDFromContext(r.Context()))
 			}
@@ -178,7 +232,7 @@ func ProjectConfigHandler(state *AppState) http.HandlerFunc {
 				err.write(w, r)
 				return
 			}
-			_, authErr := authorizeAction(
+			session, authErr := authorizeAction(
 				state,
 				r,
 				workspaceID,
@@ -196,8 +250,8 @@ func ProjectConfigHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
-			if input.DefaultModelID != nil && !containsString(input.ModelIDs, *input.DefaultModelID) {
-				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "default_model_id must be included in model_ids", map[string]any{})
+			if err := validateProjectConfigResourceReferences(state, workspaceID, input); err != nil {
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
 				return
 			}
 
@@ -211,7 +265,7 @@ func ProjectConfigHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
-			project.DefaultModelID = firstNonEmpty(derefString(updatedConfig.DefaultModelID), project.DefaultModelID)
+			project.DefaultModelConfigID = strings.TrimSpace(derefString(updatedConfig.DefaultModelConfigID))
 			project.UpdatedAt = now
 			if _, err := saveProjectToStore(state, project); err != nil {
 				WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_UPDATE_FAILED", "Failed to update project", map[string]any{
@@ -219,7 +273,17 @@ func ProjectConfigHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
+			syncResult := syncProjectConversationsModelConfig(state, projectID, project.WorkspaceID, project.DefaultModelConfigID)
+			syncExecutionDomainBestEffort(state)
 			writeJSON(w, http.StatusOK, updatedConfig)
+			if state.authz != nil {
+				_ = state.authz.appendAudit(workspaceID, session.UserID, "project.write", "project_config", projectID, "success", map[string]any{
+					"operation":                  "update",
+					"updated_conversation_count": syncResult.UpdatedConversations,
+					"restarted_execution_count":  syncResult.RestartedExecutions,
+					"updated_execution_count":    syncResult.UpdatedExecutions,
+				}, TraceIDFromContext(r.Context()))
+			}
 		default:
 			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
 				"method": r.Method,
@@ -227,6 +291,149 @@ func ProjectConfigHandler(state *AppState) http.HandlerFunc {
 			})
 		}
 	}
+}
+
+type projectConversationModelSyncResult struct {
+	UpdatedConversations int
+	UpdatedExecutions    int
+	RestartedExecutions  int
+}
+
+func syncProjectConversationsModelConfig(
+	state *AppState,
+	projectID string,
+	workspaceID string,
+	defaultModelConfigID string,
+) projectConversationModelSyncResult {
+	normalizedProjectID := strings.TrimSpace(projectID)
+	normalizedWorkspaceID := strings.TrimSpace(workspaceID)
+	normalizedModelConfigID := strings.TrimSpace(defaultModelConfigID)
+	if state == nil || normalizedProjectID == "" || normalizedWorkspaceID == "" {
+		return projectConversationModelSyncResult{}
+	}
+
+	now := nowUTC()
+	result := projectConversationModelSyncResult{}
+	restartExecutionIDs := make([]string, 0, 4)
+
+	var selectedModelConfig ResourceConfig
+	hasSelectedModelConfig := false
+	if normalizedModelConfigID != "" {
+		item, exists, err := getWorkspaceEnabledModelConfigByID(state, normalizedWorkspaceID, normalizedModelConfigID)
+		if err == nil && exists && item.Model != nil {
+			selectedModelConfig = item
+			hasSelectedModelConfig = true
+		}
+	}
+
+	state.mu.Lock()
+	for conversationID, conversation := range state.conversations {
+		if conversation.ProjectID != normalizedProjectID {
+			continue
+		}
+		if conversation.ModelConfigID != normalizedModelConfigID {
+			conversation.ModelConfigID = normalizedModelConfigID
+			conversation.UpdatedAt = now
+			state.conversations[conversationID] = conversation
+			result.UpdatedConversations++
+		}
+
+		for executionID, execution := range state.executions {
+			if execution.ConversationID != conversationID {
+				continue
+			}
+			if execution.State == RunStateCompleted || execution.State == RunStateFailed || execution.State == RunStateCancelled {
+				continue
+			}
+			updated := applyLatestModelConfigToExecutionLocked(
+				state,
+				&execution,
+				normalizedWorkspaceID,
+				normalizedModelConfigID,
+				selectedModelConfig,
+				hasSelectedModelConfig,
+			)
+			if !updated {
+				continue
+			}
+			execution.UpdatedAt = now
+			state.executions[executionID] = execution
+			result.UpdatedExecutions++
+
+			if conversation.ActiveExecutionID != nil && strings.TrimSpace(*conversation.ActiveExecutionID) == executionID {
+				appendExecutionEventLocked(state, ExecutionEvent{
+					ExecutionID:    execution.ID,
+					ConversationID: execution.ConversationID,
+					TraceID:        execution.TraceID,
+					QueueIndex:     execution.QueueIndex,
+					Type:           RunEventTypeThinkingDelta,
+					Timestamp:      now,
+					Payload: map[string]any{
+						"stage":            "model_config_changed",
+						"source":           "project_config_update",
+						"model_config_id":  normalizedModelConfigID,
+						"restart_strategy": "cancel_and_resubmit",
+					},
+				})
+				if execution.State != RunStatePending {
+					execution.State = RunStatePending
+					execution.UpdatedAt = now
+					state.executions[executionID] = execution
+				}
+				restartExecutionIDs = append(restartExecutionIDs, executionID)
+			}
+		}
+	}
+	state.mu.Unlock()
+
+	for _, executionID := range restartExecutionIDs {
+		state.cancelExecutionBestEffort(context.Background(), executionID)
+		state.clearExecutionRuntimeMapping(executionID)
+		state.submitExecutionBestEffort(context.Background(), executionID)
+	}
+
+	result.RestartedExecutions = len(restartExecutionIDs)
+	return result
+}
+
+func applyLatestModelConfigToExecutionLocked(
+	state *AppState,
+	execution *Execution,
+	workspaceID string,
+	modelConfigID string,
+	selectedModelConfig ResourceConfig,
+	hasSelectedModelConfig bool,
+) bool {
+	if state == nil || execution == nil {
+		return false
+	}
+	normalizedModelConfigID := strings.TrimSpace(modelConfigID)
+	if normalizedModelConfigID == "" {
+		return false
+	}
+
+	modelConfig := selectedModelConfig
+	if !hasSelectedModelConfig {
+		item, exists, err := getWorkspaceEnabledModelConfigByID(state, workspaceID, normalizedModelConfigID)
+		if err != nil || !exists || item.Model == nil {
+			return false
+		}
+		modelConfig = item
+	}
+
+	resolvedModelID, resolvedSnapshot := resolveExecutionModelSnapshot(state, workspaceID, modelConfig)
+	if strings.TrimSpace(resolvedModelID) == "" {
+		return false
+	}
+
+	execution.ModelID = resolvedModelID
+	execution.ModelSnapshot = resolvedSnapshot
+	if execution.ResourceProfileSnapshot == nil {
+		execution.ResourceProfileSnapshot = &ExecutionResourceProfile{}
+	}
+	execution.ResourceProfileSnapshot.ModelConfigID = normalizedModelConfigID
+	execution.ResourceProfileSnapshot.ModelID = resolvedModelID
+	return true
 }
 
 func containsString(items []string, target string) bool {

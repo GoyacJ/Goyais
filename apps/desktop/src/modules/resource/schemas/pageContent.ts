@@ -24,7 +24,7 @@ export const workspaceModelCards = [
   {
     title: "厂商配置 Vendor",
     lines: [
-      "OpenAI · Google · Qwen · Doubao · Zhipu · MiniMax · Local",
+      "OpenAI · DeepSeek · Google · Qwen · Doubao · Zhipu · MiniMax · Local",
       "操作: 新增厂商 · 编辑密钥 · 删除厂商"
     ],
     tone: "default" as const
@@ -111,14 +111,14 @@ export const workspaceProjectConfigCards = [
     lines: [
       "绑定维度: 模型 / 规则 / 技能 / MCP",
       "作用域: project_id",
-      "Conversation 创建时自动继承"
+      "Session 创建时自动继承"
     ],
     tone: "default" as const
   },
   {
     title: "覆盖语义",
     lines: [
-      "Conversation 可临时覆盖模型、规则、技能、MCP",
+      "Session 可临时覆盖模型、规则、技能、MCP",
       "覆盖不会反写 ProjectConfig"
     ],
     tone: "info" as const

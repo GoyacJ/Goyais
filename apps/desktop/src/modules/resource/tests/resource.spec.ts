@@ -54,6 +54,8 @@ describe("resource module views", () => {
     expect(String(catalogReloadCall?.[1]?.body ?? "")).toContain(`"source":"page_open"`);
 
     expect(wrapper.text()).toContain("模型列表");
+    expect(wrapper.text()).toContain("Token 用量");
+    expect(wrapper.text()).toContain("15.6K / 200K");
     expect(wrapper.text()).not.toContain("测试诊断");
     expect(wrapper.text()).not.toContain("Catalog Root");
     expect(wrapper.text()).not.toContain("Catalog Source");
@@ -66,9 +68,37 @@ describe("resource module views", () => {
     expect(wrapper.text()).not.toContain("认证：http_bearer");
     expect(wrapper.text()).not.toContain("Homepage");
     expect(wrapper.text()).not.toContain("Docs");
-    expect(wrapper.text()).not.toContain("名称");
+    expect(wrapper.text()).toContain("模型名称（可选）");
+    expect(wrapper.text()).toContain("Token 阀值");
     expect(wrapper.text()).not.toContain("模型 ID（可手输）");
     expect(wrapper.text()).not.toContain("Params(JSON)");
+  });
+
+  it("includes model token_threshold in save payload", async () => {
+    const wrapper = mountView(WorkspaceModelView);
+    await flushPromises();
+
+    const addButton = wrapper.findAll("button").find((item) => item.text() === "新增模型");
+    expect(addButton).toBeTruthy();
+    await addButton?.trigger("click");
+    await flushPromises();
+
+    const thresholdInput = wrapper
+      .findAll("input")
+      .find((item) => item.attributes("placeholder") === "留空表示不限");
+    expect(thresholdInput).toBeTruthy();
+    await thresholdInput?.setValue("4096");
+
+    const saveButton = wrapper.findAll("button").find((item) => item.text() === "保存");
+    expect(saveButton).toBeTruthy();
+    await saveButton?.trigger("click");
+    await flushPromises();
+
+    const createCalls = findFetchCalls("POST", "/v1/workspaces/ws_local/resource-configs");
+    expect(createCalls).toHaveLength(1);
+    const [, createInit] = createCalls[0] ?? [];
+    const payload = JSON.parse(String(createInit?.body ?? "{}"));
+    expect(payload.model?.token_threshold).toBe(4096);
   });
 
   it("loads and updates workspace agent config", async () => {
@@ -124,6 +154,14 @@ describe("resource module views", () => {
 
     expect(wrapper.text()).toContain("项目导入与绑定");
     expect(wrapper.text()).toContain("添加项目");
+    expect(wrapper.text()).toContain("Token 用量");
+    expect(wrapper.text()).toContain("15.6K / 200K");
+    expect(wrapper.text()).toContain("模型绑定");
+    const modelCountCell = wrapper.find("tbody tr td:nth-child(4)");
+    expect(modelCountCell.exists()).toBe(true);
+    expect(modelCountCell.text()).toBe("1");
+    const detailButton = wrapper.findAll("button").find((item) => item.text() === "详情");
+    expect(detailButton).toBeTruthy();
     const removeButton = wrapper.findAll("button").find((item) => item.text() === "移除");
     expect(removeButton?.classes()).toContain("variant-ghost");
   });
@@ -172,12 +210,14 @@ describe("resource module views", () => {
     expect(findFetchCalls("DELETE", "/v1/workspaces/ws_local/resource-configs/rc_mcp_1")).toHaveLength(1);
   });
 
-  it("normalizes legacy project model ids to config ids when saving binding", async () => {
+  it("keeps model_config_ids unchanged when project binding returns non-config identifiers", async () => {
+    const confirmSpy = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmSpy);
     vi.stubGlobal("fetch", createApiFetchMock({ legacyProjectConfigModelIDs: true }));
     const wrapper = mountView(WorkspaceProjectConfigView);
     await flushPromises();
 
-    const configButton = wrapper.findAll("button").find((item) => item.text() === "配置");
+    const configButton = wrapper.findAll("button").find((item) => item.text() === "详情");
     expect(configButton).toBeTruthy();
     await configButton?.trigger("click");
     await flushPromises();
@@ -187,12 +227,98 @@ describe("resource module views", () => {
     await saveButton?.trigger("click");
     await flushPromises();
 
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
     const updateCalls = findFetchCalls("PUT", "/v1/projects/proj_alpha/config");
     expect(updateCalls).toHaveLength(1);
     const [, updateInit] = updateCalls[0] ?? [];
     const body = JSON.parse(String(updateInit?.body ?? "{}"));
-    expect(body.model_ids).toEqual(["rc_model_1"]);
-    expect(body.default_model_id).toBe("rc_model_1");
+    expect(body.model_config_ids).toEqual(["gpt-5.3"]);
+    expect(body.default_model_config_id).toBe("gpt-5.3");
+    expect(body.token_threshold).toBe(1000);
+    expect(body.model_token_thresholds).toEqual({ "gpt-5.3": 700 });
+  });
+
+  it("does not save project binding when confirm is cancelled", async () => {
+    const confirmSpy = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirmSpy);
+
+    const wrapper = mountView(WorkspaceProjectConfigView);
+    await flushPromises();
+
+    const configButton = wrapper.findAll("button").find((item) => item.text() === "详情");
+    expect(configButton).toBeTruthy();
+    await configButton?.trigger("click");
+    await flushPromises();
+
+    const saveButton = wrapper.findAll("button").find((item) => item.text() === "保存");
+    expect(saveButton).toBeTruthy();
+    await saveButton?.trigger("click");
+    await flushPromises();
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    const updateCalls = findFetchCalls("PUT", "/v1/projects/proj_alpha/config");
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it("shows validation error when project binding update is rejected", async () => {
+    const confirmSpy = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmSpy);
+    vi.stubGlobal("fetch", createApiFetchMock({ rejectProjectConfigUpdate: true }));
+
+    const wrapper = mountView(WorkspaceProjectConfigView);
+    await flushPromises();
+    const initialProjectBindingLoads = findFetchCalls("GET", "/v1/workspaces/ws_local/project-configs").length;
+
+    const configButton = wrapper.findAll("button").find((item) => item.text() === "详情");
+    expect(configButton).toBeTruthy();
+    await configButton?.trigger("click");
+    await flushPromises();
+
+    const saveButton = wrapper.findAll("button").find((item) => item.text() === "保存");
+    expect(saveButton).toBeTruthy();
+    await saveButton?.trigger("click");
+    await flushPromises();
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(wrapper.text()).toContain("VALIDATION_ERROR");
+    expect(wrapper.text()).toContain("详情与配置");
+    expect(findFetchCalls("PUT", "/v1/projects/proj_alpha/config")).toHaveLength(1);
+    expect(findFetchCalls("GET", "/v1/workspaces/ws_local/project-configs")).toHaveLength(initialProjectBindingLoads);
+  });
+
+  it("includes project token thresholds in project binding save payload", async () => {
+    const confirmSpy = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmSpy);
+
+    const wrapper = mountView(WorkspaceProjectConfigView);
+    await flushPromises();
+
+    const detailButton = wrapper.findAll("button").find((item) => item.text() === "详情");
+    expect(detailButton).toBeTruthy();
+    await detailButton?.trigger("click");
+    await flushPromises();
+
+    const projectThresholdInput = wrapper.findAll("input").find((item) => item.attributes("placeholder") === "留空表示不限");
+    expect(projectThresholdInput).toBeTruthy();
+    await projectThresholdInput?.setValue("888");
+    const modelThresholdInput = wrapper
+      .findAll("input")
+      .find((item) => (item.attributes("placeholder") ?? "").includes("模型 Token 阀值"));
+    expect(modelThresholdInput).toBeTruthy();
+    await modelThresholdInput?.setValue("666");
+
+    const saveButton = wrapper.findAll("button").find((item) => item.text() === "保存");
+    expect(saveButton).toBeTruthy();
+    await saveButton?.trigger("click");
+    await flushPromises();
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    const updateCalls = findFetchCalls("PUT", "/v1/projects/proj_alpha/config");
+    expect(updateCalls).toHaveLength(1);
+    const [, updateInit] = updateCalls[0] ?? [];
+    const body = JSON.parse(String(updateInit?.body ?? "{}"));
+    expect(body.token_threshold).toBe(888);
+    expect(body.model_token_thresholds).toEqual({ rc_model_1: 666 });
   });
 });
 
@@ -208,7 +334,7 @@ function mountView(component: unknown) {
   });
 }
 
-function createApiFetchMock(options: { legacyProjectConfigModelIDs?: boolean } = {}) {
+function createApiFetchMock(options: { legacyProjectConfigModelIDs?: boolean; rejectProjectConfigUpdate?: boolean } = {}) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const urlValue =
       typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
@@ -262,8 +388,12 @@ function createApiFetchMock(options: { legacyProjectConfigModelIDs?: boolean } =
             name: "Alpha",
             repo_path: "/tmp/alpha",
             is_git: true,
-            default_model_id: "gpt-5.3",
-            default_mode: "agent",
+            default_model_config_id: "rc_model_1",
+            token_threshold: 200000,
+            tokens_in_total: 200,
+            tokens_out_total: 300,
+            tokens_total: 15603,
+            default_mode: "default",
             current_revision: 0,
             created_at: "2026-02-24T00:00:00Z",
             updated_at: "2026-02-24T00:00:00Z"
@@ -279,10 +409,24 @@ function createApiFetchMock(options: { legacyProjectConfigModelIDs?: boolean } =
         {
           project_id: "proj_alpha",
           project_name: "Alpha",
+          tokens_in_total: 200,
+          tokens_out_total: 300,
+          tokens_total: 15603,
+          model_token_usage_by_config_id: {
+            [modelBindingID]: {
+              tokens_in_total: 80,
+              tokens_out_total: 40,
+              tokens_total: 15603
+            }
+          },
           config: {
             project_id: "proj_alpha",
-            model_ids: [modelBindingID],
-            default_model_id: modelBindingID,
+            model_config_ids: [modelBindingID],
+            default_model_config_id: modelBindingID,
+            token_threshold: 1000,
+            model_token_thresholds: {
+              [modelBindingID]: 700
+            },
             rule_ids: ["rc_rule_1"],
             skill_ids: ["rc_skill_1"],
             mcp_ids: ["rc_mcp_1"],
@@ -327,11 +471,25 @@ function createApiFetchMock(options: { legacyProjectConfigModelIDs?: boolean } =
         updated_at: "2026-02-24T00:00:00Z"
       });
     }
+    if (method === "PUT" && path === "/v1/projects/proj_alpha/config" && options.rejectProjectConfigUpdate) {
+      return jsonResponse(
+        {
+          code: "VALIDATION_ERROR",
+          message: "model_config_id must be included in project model_config_ids",
+          trace_id: "tr_bind_invalid"
+        },
+        400
+      );
+    }
     if (method === "PUT") {
       return jsonResponse({
         project_id: "proj_alpha",
-        model_ids: ["rc_model_1"],
-        default_model_id: "rc_model_1",
+        model_config_ids: ["rc_model_1"],
+        default_model_config_id: "rc_model_1",
+        token_threshold: 888,
+        model_token_thresholds: {
+          rc_model_1: 666
+        },
         rule_ids: ["rc_rule_1"],
         skill_ids: ["rc_skill_1"],
         mcp_ids: ["rc_mcp_1"],
@@ -364,11 +522,16 @@ function buildResourceConfigItems(type: string | null) {
         id: "rc_model_1",
         workspace_id: "ws_local",
         type: "model",
+        name: "OpenAI / gpt-5.3",
         enabled: true,
         model: {
           vendor: "OpenAI",
-          model_id: "gpt-5.3"
+          model_id: "gpt-5.3",
+          token_threshold: 200000
         },
+        tokens_in_total: 8000,
+        tokens_out_total: 7603,
+        tokens_total: 15603,
         created_at: "2026-02-24T00:00:00Z",
         updated_at: "2026-02-24T00:00:00Z"
       }

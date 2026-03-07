@@ -72,30 +72,59 @@ func TestCORSPreflightForModelCatalog(t *testing.T) {
 	}
 }
 
-func TestRemovedAliasRoutesReturn404(t *testing.T) {
+func TestRemovedDeprecatedRoutesReturn404(t *testing.T) {
 	router := NewRouter()
 
-	legacyRemoteConnect := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/remote/connect", map[string]any{
-		"name":     "Legacy Alias",
+	removedRemoteConnect := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/remote/connect", map[string]any{
+		"name":     "Removed Route",
 		"hub_url":  "http://127.0.0.1:9999",
-		"username": "legacy",
-		"password": "legacy",
+		"username": "removed",
+		"password": "removed",
 	}, nil)
-	if legacyRemoteConnect.Code != http.StatusNotFound {
-		t.Fatalf("expected legacy remote alias route to return 404, got %d", legacyRemoteConnect.Code)
+	if removedRemoteConnect.Code != http.StatusNotFound {
+		t.Fatalf("expected removed remote route to return 404, got %d", removedRemoteConnect.Code)
 	}
 
-	legacyCatalogSync := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/ws_local/model-catalog/sync", map[string]any{
+	removedCatalogSync := performJSONRequest(t, router, http.MethodPost, "/v1/workspaces/ws_local/model-catalog/sync", map[string]any{
 		"source": "manual",
 	}, nil)
-	if legacyCatalogSync.Code != http.StatusNotFound {
-		t.Fatalf("expected legacy model catalog alias route to return 404, got %d", legacyCatalogSync.Code)
+	if removedCatalogSync.Code != http.StatusNotFound {
+		t.Fatalf("expected removed model catalog route to return 404, got %d", removedCatalogSync.Code)
+	}
+
+	removedConversationChangeSet := performJSONRequest(t, router, http.MethodGet, "/v2/conversations/conv_removed/changeset", nil, nil)
+	if removedConversationChangeSet.Code != http.StatusNotFound {
+		t.Fatalf("expected removed conversation changeset route to return 404, got %d", removedConversationChangeSet.Code)
+	}
+
+	removedConversationRollback := performJSONRequest(t, router, http.MethodPost, "/v2/conversations/conv_removed/rollback", map[string]any{
+		"message_id": "msg_removed",
+	}, nil)
+	if removedConversationRollback.Code != http.StatusNotFound {
+		t.Fatalf("expected removed conversation rollback route to return 404, got %d", removedConversationRollback.Code)
+	}
+
+	removedConversationList := performJSONRequest(t, router, http.MethodGet, "/v1/conversations", nil, nil)
+	if removedConversationList.Code != http.StatusNotFound {
+		t.Fatalf("expected removed conversation list route to return 404, got %d", removedConversationList.Code)
+	}
+
+	removedConversationSubmit := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/conv_removed/input/submit", map[string]any{
+		"raw_input": "removed",
+	}, nil)
+	if removedConversationSubmit.Code != http.StatusNotFound {
+		t.Fatalf("expected removed conversation submit route to return 404, got %d", removedConversationSubmit.Code)
+	}
+
+	removedExecutionList := performJSONRequest(t, router, http.MethodGet, "/v1/executions", nil, nil)
+	if removedExecutionList.Code != http.StatusNotFound {
+		t.Fatalf("expected removed execution list route to return 404, got %d", removedExecutionList.Code)
 	}
 }
 
 func TestPlaceholderListEndpoints(t *testing.T) {
 	router := NewRouter()
-	paths := []string{"/v1/projects", "/v1/conversations", "/v1/executions"}
+	paths := []string{"/v1/projects", "/v1/sessions", "/v1/runs"}
 	for _, path := range paths {
 		res := performJSONRequest(t, router, http.MethodGet, path, nil, nil)
 		if res.Code != http.StatusOK {
@@ -110,6 +139,22 @@ func TestPlaceholderListEndpoints(t *testing.T) {
 		if payload["next_cursor"] != nil {
 			t.Fatalf("%s expected next_cursor=nil, got %#v", path, payload["next_cursor"])
 		}
+	}
+}
+
+func TestRuntimeSessionRunSubmitRoute(t *testing.T) {
+	router := NewRouter()
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/conv_missing/runs", map[string]any{
+		"raw_input": "hello",
+	}, nil)
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for missing session on removed route, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := StandardError{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	if payload.Code != "CONVERSATION_NOT_FOUND" {
+		t.Fatalf("expected CONVERSATION_NOT_FOUND, got %s", payload.Code)
 	}
 }
 
@@ -190,22 +235,22 @@ func TestRemoteSessionWorkspaceListIsScoped(t *testing.T) {
 	}
 }
 
-func TestLegacyXAuthTokenHeaderIsRejected(t *testing.T) {
+func TestRemovedXAuthTokenHeaderIsRejected(t *testing.T) {
 	router := NewRouter()
 	remoteID := createRemoteWorkspace(t, router, "Remote Auth Header", "http://127.0.0.1:9885", false)
 	token := loginRemoteWorkspace(t, router, remoteID, "header-user", "pw", RoleDeveloper, true)
 
-	legacyHeaderRes := performJSONRequest(t, router, http.MethodGet, "/v1/workspaces/"+remoteID+"/status", nil, map[string]string{
+	removedHeaderRes := performJSONRequest(t, router, http.MethodGet, "/v1/workspaces/"+remoteID+"/status", nil, map[string]string{
 		"X-Auth-Token": token,
 	})
-	if legacyHeaderRes.Code != http.StatusUnauthorized {
-		t.Fatalf("expected legacy X-Auth-Token request to be rejected with 401, got %d (%s)", legacyHeaderRes.Code, legacyHeaderRes.Body.String())
+	if removedHeaderRes.Code != http.StatusUnauthorized {
+		t.Fatalf("expected removed X-Auth-Token request to be rejected with 401, got %d (%s)", removedHeaderRes.Code, removedHeaderRes.Body.String())
 	}
 
-	legacyPayload := StandardError{}
-	mustDecodeJSON(t, legacyHeaderRes.Body.Bytes(), &legacyPayload)
-	if legacyPayload.Code != "AUTH_TOKEN_REQUIRED" {
-		t.Fatalf("expected AUTH_TOKEN_REQUIRED for legacy header auth, got %s", legacyPayload.Code)
+	removedPayload := StandardError{}
+	mustDecodeJSON(t, removedHeaderRes.Body.Bytes(), &removedPayload)
+	if removedPayload.Code != "AUTH_TOKEN_REQUIRED" {
+		t.Fatalf("expected AUTH_TOKEN_REQUIRED for removed header auth, got %s", removedPayload.Code)
 	}
 
 	bearerRes := performJSONRequest(t, router, http.MethodGet, "/v1/workspaces/"+remoteID+"/status", nil, map[string]string{
@@ -257,8 +302,10 @@ func TestLocalAnonymousListEndpointsAreScopedToLocalWorkspace(t *testing.T) {
 	projectPayload := map[string]any{}
 	mustDecodeJSON(t, projectRes.Body.Bytes(), &projectPayload)
 	projectID := projectPayload["id"].(string)
+	modelConfigID := createModelResourceConfigForTest(t, router, remoteID, authHeaders, "OpenAI", "gpt-5.3")
+	bindProjectConfigWithModelForTest(t, router, projectID, modelConfigID, authHeaders)
 
-	conversationRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/conversations", map[string]any{
+	conversationRes := performJSONRequest(t, router, http.MethodPost, "/v1/projects/"+projectID+"/sessions", map[string]any{
 		"workspace_id": remoteID,
 		"name":         "ScopedConversation",
 	}, authHeaders)
@@ -269,14 +316,14 @@ func TestLocalAnonymousListEndpointsAreScopedToLocalWorkspace(t *testing.T) {
 	mustDecodeJSON(t, conversationRes.Body.Bytes(), &conversationPayload)
 	conversationID := conversationPayload["id"].(string)
 
-	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/conversations/"+conversationID+"/messages", map[string]any{
-		"content": "scoped message",
+	messageRes := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
+		"raw_input": "scoped message",
 	}, authHeaders)
 	if messageRes.Code != http.StatusCreated {
 		t.Fatalf("expected create execution 201, got %d (%s)", messageRes.Code, messageRes.Body.String())
 	}
 
-	for _, path := range []string{"/v1/projects", "/v1/conversations", "/v1/executions"} {
+	for _, path := range []string{"/v1/projects", "/v1/sessions", "/v1/runs"} {
 		res := performJSONRequest(t, router, http.MethodGet, path, nil, nil)
 		if res.Code != http.StatusOK {
 			t.Fatalf("%s expected 200, got %d (%s)", path, res.Code, res.Body.String())

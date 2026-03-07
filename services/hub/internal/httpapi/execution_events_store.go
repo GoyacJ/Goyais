@@ -1,6 +1,11 @@
 package httpapi
 
-import "time"
+import (
+	runtimeapplication "goyais/services/hub/internal/runtime/application"
+	runtimedomain "goyais/services/hub/internal/runtime/domain"
+	"strings"
+	"time"
+)
 
 const maxConversationEventHistory = 2000
 
@@ -8,34 +13,38 @@ func appendExecutionEventLocked(state *AppState, event ExecutionEvent) Execution
 	if state == nil {
 		return event
 	}
-	normalized := event
-	if normalized.EventID == "" {
-		normalized.EventID = "evt_" + randomHex(8)
+	appendResult := runtimeapplication.NormalizeAppendedEvent(runtimeapplication.AppendOptions{
+		Event:           toRuntimeDomainEvent(event),
+		CurrentSequence: state.conversationEventSeq[event.ConversationID],
+		ExistingDiffs:   toRuntimeDomainDiffItems(state.executionDiffs[strings.TrimSpace(event.ExecutionID)]),
+		Now:             time.Now().UTC(),
+		GenerateEventID: func() string { return "evt_" + randomHex(8) },
+		GenerateTraceID: GenerateTraceID,
+		ParseDiff: func(payload map[string]any) []runtimedomain.DiffItem {
+			return toRuntimeDomainDiffItems(parseDiffItemsFromPayload(payload))
+		},
+		MergeDiff: func(existing []runtimedomain.DiffItem, incoming []runtimedomain.DiffItem) []runtimedomain.DiffItem {
+			return toRuntimeDomainDiffItems(mergeDiffItems(
+				toHTTPAPIDiffItems(existing),
+				toHTTPAPIDiffItems(incoming),
+			))
+		},
+	})
+	normalized := toHTTPAPIExecutionEvent(appendResult.Event)
+
+	executionID := strings.TrimSpace(normalized.ExecutionID)
+	if executionID != "" && len(appendResult.UpdatedDiff) > 0 {
+		state.executionDiffs[executionID] = toHTTPAPIDiffItems(appendResult.UpdatedDiff)
 	}
-	if normalized.TraceID == "" {
-		normalized.TraceID = GenerateTraceID()
-	}
-	if normalized.Timestamp == "" {
-		normalized.Timestamp = time.Now().UTC().Format(time.RFC3339)
-	}
-	if normalized.Sequence <= 0 {
-		normalized.Sequence = state.conversationEventSeq[normalized.ConversationID] + 1
-	}
-	if normalized.Payload == nil {
-		normalized.Payload = map[string]any{}
-	}
+	applyExecutionEventToChangeLedgerLocked(state, normalized)
 	state.conversationEventSeq[normalized.ConversationID] = normalized.Sequence
-	state.executionEvents[normalized.ConversationID] = append(
-		state.executionEvents[normalized.ConversationID],
-		normalized,
+	currentEvents := toRuntimeDomainEvents(state.executionEvents[normalized.ConversationID])
+	updatedEvents := runtimeapplication.AppendEventWithHistoryLimit(
+		currentEvents,
+		toRuntimeDomainEvent(normalized),
+		maxConversationEventHistory,
 	)
-	if len(state.executionEvents[normalized.ConversationID]) > maxConversationEventHistory {
-		start := len(state.executionEvents[normalized.ConversationID]) - maxConversationEventHistory
-		state.executionEvents[normalized.ConversationID] = append(
-			[]ExecutionEvent{},
-			state.executionEvents[normalized.ConversationID][start:]...,
-		)
-	}
+	state.executionEvents[normalized.ConversationID] = toHTTPAPIExecutionEvents(updatedEvents)
 
 	for _, subscriber := range state.conversationEventSubs[normalized.ConversationID] {
 		select {
@@ -47,36 +56,9 @@ func appendExecutionEventLocked(state *AppState, event ExecutionEvent) Execution
 }
 
 func listExecutionEventsSinceLocked(state *AppState, conversationID string, lastEventID string) ([]ExecutionEvent, bool) {
-	items := state.executionEvents[conversationID]
-	if len(items) == 0 {
-		return []ExecutionEvent{}, lastEventID != ""
-	}
-	if lastEventID == "" {
-		result := make([]ExecutionEvent, len(items))
-		copy(result, items)
-		return result, false
-	}
-
-	start := 0
-	found := false
-	for index := len(items) - 1; index >= 0; index-- {
-		if items[index].EventID == lastEventID {
-			start = index + 1
-			found = true
-			break
-		}
-	}
-	if !found {
-		result := make([]ExecutionEvent, len(items))
-		copy(result, items)
-		return result, true
-	}
-	if start >= len(items) {
-		return []ExecutionEvent{}, false
-	}
-	result := make([]ExecutionEvent, len(items)-start)
-	copy(result, items[start:])
-	return result, false
+	items := toRuntimeDomainEvents(state.executionEvents[conversationID])
+	result, resyncRequired := runtimeapplication.ListEventsSince(items, lastEventID)
+	return toHTTPAPIExecutionEvents(result), resyncRequired
 }
 
 func registerConversationEventSubscriberLocked(state *AppState, conversationID string) (string, chan ExecutionEvent) {
@@ -103,4 +85,26 @@ func unregisterConversationEventSubscriberLocked(state *AppState, conversationID
 	if len(subscribers) == 0 {
 		delete(state.conversationEventSubs, conversationID)
 	}
+}
+
+func toRuntimeDomainEvents(items []ExecutionEvent) []runtimedomain.Event {
+	if len(items) == 0 {
+		return []runtimedomain.Event{}
+	}
+	result := make([]runtimedomain.Event, 0, len(items))
+	for _, item := range items {
+		result = append(result, toRuntimeDomainEvent(item))
+	}
+	return result
+}
+
+func toHTTPAPIExecutionEvents(items []runtimedomain.Event) []ExecutionEvent {
+	if len(items) == 0 {
+		return []ExecutionEvent{}
+	}
+	result := make([]ExecutionEvent, 0, len(items))
+	for _, item := range items {
+		result = append(result, toHTTPAPIExecutionEvent(item))
+	}
+	return result
 }

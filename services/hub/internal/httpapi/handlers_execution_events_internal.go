@@ -9,9 +9,9 @@ import (
 
 const defaultHubInternalToken = "goyais-internal-token"
 
-func shouldFinalizeExecution(eventType ExecutionEventType, payload map[string]any) bool {
+func shouldFinalizeExecution(eventType RunEventType, payload map[string]any) bool {
 	switch eventType {
-	case ExecutionEventTypeExecutionDone, ExecutionEventTypeExecutionError, ExecutionEventTypeExecutionStopped:
+	case RunEventTypeExecutionDone, RunEventTypeExecutionError, RunEventTypeExecutionStopped:
 		return true
 	default:
 		return false
@@ -38,44 +38,173 @@ func renderExecutionErrorMessage(payload map[string]any) string {
 }
 
 func parseDiffItemsFromPayload(payload map[string]any) []DiffItem {
+	if payload == nil {
+		return []DiffItem{}
+	}
 	raw, ok := payload["diff"]
 	if !ok {
 		return []DiffItem{}
 	}
-	array, ok := raw.([]any)
-	if !ok {
+	switch typed := raw.(type) {
+	case []DiffItem:
+		result := make([]DiffItem, 0, len(typed))
+		for _, item := range typed {
+			if normalized, ok := normalizeDiffItem(item); ok {
+				result = append(result, normalized)
+			}
+		}
+		return result
+	case []map[string]any:
+		result := make([]DiffItem, 0, len(typed))
+		for _, item := range typed {
+			if normalized, ok := parseDiffItemRecord(item); ok {
+				result = append(result, normalized)
+			}
+		}
+		return result
+	case []any:
+		result := make([]DiffItem, 0, len(typed))
+		for _, item := range typed {
+			record, recordOK := item.(map[string]any)
+			if !recordOK {
+				continue
+			}
+			if normalized, ok := parseDiffItemRecord(record); ok {
+				result = append(result, normalized)
+			}
+		}
+		return result
+	default:
 		return []DiffItem{}
 	}
-	result := make([]DiffItem, 0, len(array))
-	for _, item := range array {
-		typed, ok := item.(map[string]any)
+}
+
+func parseDiffItemRecord(record map[string]any) (DiffItem, bool) {
+	if record == nil {
+		return DiffItem{}, false
+	}
+	addedLines := normalizeOptionalDiffLineCount(record["added_lines"])
+	deletedLines := normalizeOptionalDiffLineCount(record["deleted_lines"])
+	return normalizeDiffItem(DiffItem{
+		ID:           asStringValue(record["id"]),
+		Path:         asStringValue(record["path"]),
+		ChangeType:   asStringValue(record["change_type"]),
+		Summary:      asStringValue(record["summary"]),
+		AddedLines:   addedLines,
+		DeletedLines: deletedLines,
+		BeforeBlob:   asStringValue(record["before_blob"]),
+		AfterBlob:    asStringValue(record["after_blob"]),
+	})
+}
+
+func normalizeDiffItem(item DiffItem) (DiffItem, bool) {
+	path := strings.TrimSpace(item.Path)
+	if path == "" {
+		return DiffItem{}, false
+	}
+	id := strings.TrimSpace(item.ID)
+	if id == "" {
+		id = "diff_" + randomHex(4)
+	}
+	summary := strings.TrimSpace(item.Summary)
+	if summary == "" {
+		summary = "File changed"
+	}
+	return DiffItem{
+		ID:           id,
+		Path:         path,
+		ChangeType:   normalizeDiffChangeType(item.ChangeType),
+		Summary:      summary,
+		AddedLines:   normalizeOptionalDiffLineCount(item.AddedLines),
+		DeletedLines: normalizeOptionalDiffLineCount(item.DeletedLines),
+		BeforeBlob:   strings.TrimSpace(item.BeforeBlob),
+		AfterBlob:    strings.TrimSpace(item.AfterBlob),
+	}, true
+}
+
+func normalizeDiffChangeType(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "added":
+		return "added"
+	case "deleted":
+		return "deleted"
+	default:
+		return "modified"
+	}
+}
+
+func mergeDiffItems(existing []DiffItem, incoming []DiffItem) []DiffItem {
+	result := make([]DiffItem, 0, len(existing)+len(incoming))
+	indexByPath := map[string]int{}
+
+	apply := func(item DiffItem) {
+		normalized, ok := normalizeDiffItem(item)
+		if !ok {
+			return
+		}
+		if index, exists := indexByPath[normalized.Path]; exists {
+			result[index].ChangeType = normalized.ChangeType
+			result[index].Summary = normalized.Summary
+			if strings.TrimSpace(result[index].ID) == "" {
+				result[index].ID = normalized.ID
+			}
+			result[index].AddedLines = normalized.AddedLines
+			result[index].DeletedLines = normalized.DeletedLines
+			if normalized.BeforeBlob != "" {
+				result[index].BeforeBlob = normalized.BeforeBlob
+			}
+			if normalized.AfterBlob != "" {
+				result[index].AfterBlob = normalized.AfterBlob
+			}
+			return
+		}
+		indexByPath[normalized.Path] = len(result)
+		result = append(result, normalized)
+	}
+
+	for _, item := range existing {
+		apply(item)
+	}
+	for _, item := range incoming {
+		apply(item)
+	}
+	return result
+}
+
+func diffItemsToPayload(items []DiffItem) []map[string]any {
+	if len(items) == 0 {
+		return []map[string]any{}
+	}
+	payload := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		normalized, ok := normalizeDiffItem(item)
 		if !ok {
 			continue
 		}
-		path := strings.TrimSpace(asStringValue(typed["path"]))
-		if path == "" {
-			continue
-		}
-		changeType := strings.TrimSpace(asStringValue(typed["change_type"]))
-		if changeType == "" {
-			changeType = "modified"
-		}
-		summary := strings.TrimSpace(asStringValue(typed["summary"]))
-		if summary == "" {
-			summary = "File changed"
-		}
-		id := strings.TrimSpace(asStringValue(typed["id"]))
-		if id == "" {
-			id = "diff_" + randomHex(4)
-		}
-		result = append(result, DiffItem{
-			ID:         id,
-			Path:       path,
-			ChangeType: changeType,
-			Summary:    summary,
+		payload = append(payload, map[string]any{
+			"id":            normalized.ID,
+			"path":          normalized.Path,
+			"change_type":   normalized.ChangeType,
+			"summary":       normalized.Summary,
+			"added_lines":   normalized.AddedLines,
+			"deleted_lines": normalized.DeletedLines,
+			"before_blob":   normalized.BeforeBlob,
+			"after_blob":    normalized.AfterBlob,
 		})
 	}
-	return result
+	return payload
+}
+
+func normalizeOptionalDiffLineCount(value any) *int {
+	parsed, ok := parseTokenInt(value)
+	if !ok {
+		return nil
+	}
+	if parsed < 0 {
+		parsed = 0
+	}
+	result := parsed
+	return &result
 }
 
 func asStringValue(value any) string {
@@ -114,6 +243,21 @@ func parseTokenUsageFromPayload(payload map[string]any) (int, int, bool) {
 
 func parseTokenInt(value any) (int, bool) {
 	switch typed := value.(type) {
+	case *int:
+		if typed == nil {
+			return 0, false
+		}
+		return *typed, true
+	case *int32:
+		if typed == nil {
+			return 0, false
+		}
+		return int(*typed), true
+	case *int64:
+		if typed == nil {
+			return 0, false
+		}
+		return int(*typed), true
 	case int:
 		return typed, true
 	case int32:

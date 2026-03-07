@@ -17,6 +17,8 @@ import {
 import { modelViewColumns, modelEnabledOptions } from "@/modules/resource/views/workspaceModelView.constants";
 import { resolveDefaultEndpointKey } from "@/modules/resource/views/workspaceModelView.vendor";
 import { authStore } from "@/shared/stores/authStore";
+import { showToast, type ToastTone } from "@/shared/stores/toastStore";
+import { formatTokenUsageWithThreshold } from "@/shared/utils/tokenDisplay";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
 import type { ModelVendorName, ResourceConfig } from "@/shared/types/api";
 
@@ -29,6 +31,7 @@ export function useWorkspaceModelView() {
     open: false,
     mode: "create" as "create" | "edit",
     configId: "",
+    name: "",
     vendor: "" as ModelVendorName | "",
     selectedCatalogModel: "",
     baseUrl: "",
@@ -36,6 +39,7 @@ export function useWorkspaceModelView() {
     apiKey: "",
     apiKeyHint: "",
     timeoutMs: "",
+    tokenThreshold: "",
     enabled: true,
     testMessage: ""
   });
@@ -74,17 +78,11 @@ export function useWorkspaceModelView() {
     return "暂无数据";
   });
 
-  const testNotice = reactive({
-    open: false,
-    tone: "info" as "error" | "warning" | "info" | "403" | "disconnected" | "retrying",
-    message: ""
-  });
   const deleteConfirm = reactive({
     open: false,
     configId: "",
     modelText: ""
   });
-  let testNoticeTimer: ReturnType<typeof setTimeout> | null = null;
 
   watch(
     () => workspaceStore.currentWorkspaceId,
@@ -135,6 +133,7 @@ export function useWorkspaceModelView() {
       open: true,
       mode: "create",
       configId: "",
+      name: "",
       vendor: (firstVendor?.name ?? "") as ModelVendorName | "",
       selectedCatalogModel: firstModel,
       baseUrl: firstVendor?.name === "Local" ? firstVendor.base_url : "",
@@ -142,6 +141,7 @@ export function useWorkspaceModelView() {
       apiKey: "",
       apiKeyHint: "",
       timeoutMs: "",
+      tokenThreshold: "",
       enabled: true
     });
   }
@@ -153,13 +153,15 @@ export function useWorkspaceModelView() {
       open: true,
       mode: "edit",
       configId: item.id,
+      name: (item.name?.trim() || item.model?.model_id || "").trim(),
       vendor,
       selectedCatalogModel: item.model?.model_id ?? "",
       baseUrl: item.model?.base_url ?? "",
       baseUrlKey: item.model?.base_url_key ?? "",
       apiKey: "",
       apiKeyHint: item.model?.api_key_masked ? `当前: ${item.model.api_key_masked}（不填写将保留旧值）` : "",
-      timeoutMs: item.model?.timeout_ms ? String(item.model.timeout_ms) : "",
+      timeoutMs: item.model?.runtime?.request_timeout_ms ? String(item.model.runtime.request_timeout_ms) : "",
+      tokenThreshold: item.model?.token_threshold ? String(item.model.token_threshold) : "",
       enabled: item.enabled
     });
   }
@@ -176,20 +178,37 @@ export function useWorkspaceModelView() {
       return;
     }
 
-    const timeout = Number.parseInt(form.timeoutMs, 10);
+    const timeoutInput = form.timeoutMs.trim();
+    const hasTimeoutInput = timeoutInput !== "";
+    const timeout = hasTimeoutInput ? Number.parseInt(timeoutInput, 10) : Number.NaN;
+    if (hasTimeoutInput && Number.isNaN(timeout)) {
+      showTestNotice("error", "Timeout 必须是整数毫秒值");
+      return;
+    }
+    if (!Number.isNaN(timeout) && (timeout < 1000 || timeout > 120000)) {
+      showTestNotice("error", "Timeout 范围必须在 1000-120000ms");
+      return;
+    }
+    const normalizedTokenThreshold = parseOptionalThreshold(form.tokenThreshold);
+    if (normalizedTokenThreshold === "invalid") {
+      showTestNotice("error", "Token 阀值必须为正整数，留空表示不限");
+      return;
+    }
+    const name = form.name.trim() || modelID;
     const model = {
       vendor,
       model_id: modelID,
       base_url: vendor === "Local" ? form.baseUrl.trim() || undefined : undefined,
       base_url_key: vendor === "Local" ? undefined : form.baseUrlKey.trim() || undefined,
       api_key: form.apiKey.trim() || undefined,
-      timeout_ms: Number.isNaN(timeout) ? undefined : timeout
+      token_threshold: normalizedTokenThreshold ?? undefined,
+      runtime: Number.isNaN(timeout) ? undefined : { request_timeout_ms: timeout }
     };
 
     if (form.mode === "create") {
-      await createWorkspaceResourceConfig({ type: "model", enabled: form.enabled, model });
+      await createWorkspaceResourceConfig({ type: "model", name, enabled: form.enabled, model });
     } else {
-      await patchWorkspaceResourceConfig("model", form.configId, { enabled: form.enabled, model });
+      await patchWorkspaceResourceConfig("model", form.configId, { name, enabled: form.enabled, model });
     }
     form.open = false;
   }
@@ -204,29 +223,25 @@ export function useWorkspaceModelView() {
       showTestNotice("error", resourceStore.error || "模型测试失败");
       return;
     }
-    const modelText = `${item.model?.vendor ?? "-"} / ${item.model?.model_id ?? "-"}`;
+    const modelText = item.name?.trim() || `${item.model?.vendor ?? "-"} / ${item.model?.model_id ?? "-"}`;
     const statusText = result.status === "success" ? "成功" : "失败";
     const tone = result.status === "success" ? "info" : "error";
     const detail = result.error_code ? ` / ${result.error_code}` : "";
     showTestNotice(tone, `${modelText} 测试${statusText}，${result.latency_ms}ms${detail}：${result.message}`);
   }
 
-  function showTestNotice(tone: "error" | "warning" | "info" | "403" | "disconnected" | "retrying", message: string): void {
-    testNotice.tone = tone;
-    testNotice.message = message;
-    testNotice.open = true;
-    if (testNoticeTimer) {
-      clearTimeout(testNoticeTimer);
-    }
-    testNoticeTimer = setTimeout(() => {
-      testNotice.open = false;
-    }, 3200);
+  function showTestNotice(tone: ToastTone, message: string): void {
+    showToast({
+      key: "workspace-model-test",
+      tone,
+      message
+    });
   }
 
   function removeConfig(item: ResourceConfig): void {
     deleteConfirm.open = true;
     deleteConfirm.configId = item.id;
-    deleteConfirm.modelText = `${item.model?.vendor ?? "-"} / ${item.model?.model_id ?? "-"}`;
+    deleteConfirm.modelText = item.name?.trim() || `${item.model?.vendor ?? "-"} / ${item.model?.model_id ?? "-"}`;
   }
 
   function closeDeleteConfirm(): void {
@@ -254,6 +269,25 @@ export function useWorkspaceModelView() {
     return new Date(value).toLocaleString();
   }
 
+  function formatTokenUsage(item: ResourceConfig): string {
+    return formatTokenUsageWithThreshold(item.tokens_total, item.model?.token_threshold);
+  }
+
+  function parseOptionalThreshold(input: string): number | null | "invalid" {
+    const trimmed = input.trim();
+    if (trimmed === "") {
+      return null;
+    }
+    if (!/^[0-9]+$/.test(trimmed)) {
+      return "invalid";
+    }
+    const parsed = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return "invalid";
+    }
+    return parsed;
+  }
+
   return {
     canWrite,
     columns: modelViewColumns,
@@ -261,7 +295,6 @@ export function useWorkspaceModelView() {
     enabledOptions: modelEnabledOptions,
     form,
     tableEmptyText,
-    testNotice,
     deleteConfirm,
     onSearch,
     openCreate,
@@ -274,6 +307,7 @@ export function useWorkspaceModelView() {
     closeDeleteConfirm,
     confirmRemoveConfig,
     formatTime,
+    formatTokenUsage,
     loadNextResourceConfigsPage,
     loadPreviousResourceConfigsPage,
     resourceStore,

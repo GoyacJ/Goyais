@@ -72,10 +72,14 @@ func WorkspaceAgentConfigHandler(state *AppState) http.HandlerFunc {
 					workspaceID,
 					"success",
 					map[string]any{
-						"operation":          "workspace_agent_config.update",
-						"max_model_turns":    saved.Execution.MaxModelTurns,
-						"show_process_trace": saved.Display.ShowProcessTrace,
-						"trace_detail_level": saved.Display.TraceDetailLevel,
+						"operation":                "workspace_agent_config.update",
+						"max_model_turns":          saved.Execution.MaxModelTurns,
+						"show_process_trace":       saved.Display.ShowProcessTrace,
+						"trace_detail_level":       saved.Display.TraceDetailLevel,
+						"default_mode":             saved.DefaultMode,
+						"builtin_tools":            append([]string{}, saved.BuiltinTools...),
+						"mcp_search_enabled":       saved.MCPSearch.Enabled,
+						"capability_graph_enabled": saved.FeatureFlags.EnableCapabilityGraph,
 					},
 					TraceIDFromContext(r.Context()),
 				)

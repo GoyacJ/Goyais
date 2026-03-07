@@ -102,6 +102,46 @@
   font-size: var(--global-font-size-12);
 }
 
+.token-status-panel {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-12);
+  background: var(--semantic-bg);
+  padding: var(--global-space-12);
+  display: grid;
+  gap: var(--global-space-8);
+}
+
+.token-status-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--global-space-8);
+}
+
+.token-status-head h4 {
+  margin: 0;
+  color: var(--semantic-text);
+  font-size: var(--global-font-size-12);
+}
+
+.token-status-head span {
+  color: var(--semantic-text-subtle);
+  font-size: var(--global-font-size-12);
+}
+
+.token-breakdown {
+  margin: 0;
+  color: var(--semantic-text-subtle);
+  font-size: var(--global-font-size-12);
+}
+
+.token-threshold-input {
+  display: grid;
+  gap: var(--global-space-4);
+  color: var(--semantic-text-muted);
+  font-size: var(--global-font-size-12);
+}
+
 .group-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -205,6 +245,28 @@
   color: var(--semantic-text-subtle);
   font-size: var(--global-font-size-12);
   padding: var(--global-space-8);
+}
+
+.model-threshold-list {
+  margin-top: var(--global-space-8);
+  display: grid;
+  gap: var(--global-space-8);
+}
+
+.model-threshold-item {
+  border: 1px solid var(--semantic-border);
+  border-radius: var(--global-radius-8);
+  background: var(--component-shell-content-bg-elevated);
+  padding: var(--global-space-8);
+  display: grid;
+  gap: var(--global-space-6);
+}
+
+.model-threshold-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--global-space-8);
 }
 
 .message {

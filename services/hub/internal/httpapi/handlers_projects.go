@@ -36,6 +36,17 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
+			projectConfigItems, configErr := listWorkspaceProjectConfigItemsFromStore(state, workspaceID)
+			if configErr != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_CONFIG_LIST_FAILED", "Failed to list project configs", map[string]any{
+					"workspace_id": workspaceID,
+				})
+				return
+			}
+			projectConfigsByID := map[string]ProjectConfig{}
+			for _, item := range projectConfigItems {
+				projectConfigsByID[item.ProjectID] = item.Config
+			}
 			sort.Slice(items, func(i, j int) bool {
 				if items[i].CreatedAt == items[j].CreatedAt {
 					if items[i].UpdatedAt == items[j].UpdatedAt {
@@ -45,6 +56,24 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 				}
 				return items[i].CreatedAt > items[j].CreatedAt
 			})
+			aggregate, aggregateErr := computeTokenUsageAggregate(state, workspaceID)
+			if aggregateErr != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to compute project token usage", map[string]any{
+					"workspace_id": workspaceID,
+					"error":        aggregateErr.Error(),
+				})
+				return
+			}
+			for index := range items {
+				projectID := strings.TrimSpace(items[index].ID)
+				if config, exists := projectConfigsByID[projectID]; exists {
+					items[index].TokenThreshold = config.TokenThreshold
+				}
+				projectTotals := aggregate.projectTotals[projectID]
+				items[index].TokensInTotal = projectTotals.Input
+				items[index].TokensOutTotal = projectTotals.Output
+				items[index].TokensTotal = projectTotals.Total
+			}
 
 			raw := make([]any, 0, len(items))
 			for _, item := range items {
@@ -77,25 +106,24 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 			}
 
 			now := time.Now().UTC().Format(time.RFC3339)
-			defaultModelID := state.resolveWorkspaceDefaultModelID(strings.TrimSpace(input.WorkspaceID))
 			project := Project{
-				ID:              "proj_" + randomHex(6),
-				WorkspaceID:     strings.TrimSpace(input.WorkspaceID),
-				Name:            strings.TrimSpace(input.Name),
-				RepoPath:        strings.TrimSpace(input.RepoPath),
-				IsGit:           input.IsGit,
-				DefaultModelID:  defaultModelID,
-				DefaultMode:     ConversationModeAgent,
-				CurrentRevision: 0,
-				CreatedAt:       now,
-				UpdatedAt:       now,
+				ID:                   "proj_" + randomHex(6),
+				WorkspaceID:          strings.TrimSpace(input.WorkspaceID),
+				Name:                 strings.TrimSpace(input.Name),
+				RepoPath:             strings.TrimSpace(input.RepoPath),
+				IsGit:                input.IsGit,
+				DefaultModelConfigID: "",
+				DefaultMode:          PermissionModeDefault,
+				CurrentRevision:      0,
+				CreatedAt:            now,
+				UpdatedAt:            now,
 			}
 			savedProject, err := saveProjectToStore(state, project)
 			if err != nil {
 				WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_CREATE_FAILED", "Failed to create project", map[string]any{})
 				return
 			}
-			defaultConfig := defaultProjectConfig(savedProject.ID, savedProject.DefaultModelID, now)
+			defaultConfig := defaultProjectConfig(savedProject.ID, savedProject.DefaultModelConfigID, now)
 			if _, err := saveProjectConfigToStore(state, savedProject.WorkspaceID, defaultConfig); err != nil {
 				_, _ = deleteProjectFromStore(state, savedProject.ID)
 				WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_CONFIG_CREATE_FAILED", "Failed to initialize project config", map[string]any{})
@@ -157,25 +185,25 @@ func ProjectsImportHandler(state *AppState) http.HandlerFunc {
 		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
-		defaultModelID := state.resolveWorkspaceDefaultModelID(strings.TrimSpace(input.WorkspaceID))
+		repoPath := strings.TrimSpace(input.DirectoryPath)
 		project := Project{
-			ID:              "proj_" + randomHex(6),
-			WorkspaceID:     strings.TrimSpace(input.WorkspaceID),
-			Name:            deriveProjectName(input.DirectoryPath),
-			RepoPath:        strings.TrimSpace(input.DirectoryPath),
-			IsGit:           true,
-			DefaultModelID:  defaultModelID,
-			DefaultMode:     ConversationModeAgent,
-			CurrentRevision: 0,
-			CreatedAt:       now,
-			UpdatedAt:       now,
+			ID:                   "proj_" + randomHex(6),
+			WorkspaceID:          strings.TrimSpace(input.WorkspaceID),
+			Name:                 deriveProjectName(input.DirectoryPath),
+			RepoPath:             repoPath,
+			IsGit:                isGitRepositoryPath(repoPath),
+			DefaultModelConfigID: "",
+			DefaultMode:          PermissionModeDefault,
+			CurrentRevision:      0,
+			CreatedAt:            now,
+			UpdatedAt:            now,
 		}
 		savedProject, err := saveProjectToStore(state, project)
 		if err != nil {
 			WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_IMPORT_FAILED", "Failed to import project", map[string]any{})
 			return
 		}
-		defaultConfig := defaultProjectConfig(savedProject.ID, savedProject.DefaultModelID, now)
+		defaultConfig := defaultProjectConfig(savedProject.ID, savedProject.DefaultModelConfigID, now)
 		if _, err := saveProjectConfigToStore(state, savedProject.WorkspaceID, defaultConfig); err != nil {
 			_, _ = deleteProjectFromStore(state, savedProject.ID)
 			WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_CONFIG_CREATE_FAILED", "Failed to initialize project config", map[string]any{})

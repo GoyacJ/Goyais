@@ -179,7 +179,7 @@ func encodeResourceConfigPayload(input ResourceConfig) (string, error) {
 	safe := input
 	if safe.Model != nil {
 		model := *safe.Model
-		if strings.TrimSpace(model.APIKey) != "" && strings.TrimSpace(model.APIKeyMasked) == "" {
+		if strings.TrimSpace(model.APIKey) != "" {
 			encrypted, err := encryptSecret(model.APIKey)
 			if err != nil {
 				return "", err
@@ -202,8 +202,20 @@ func decodeResourceConfigPayload(payload string, redactSecret bool) (ResourceCon
 	if err := json.Unmarshal([]byte(payload), &item); err != nil {
 		return ResourceConfig{}, err
 	}
+	legacy := struct {
+		Model *struct {
+			TimeoutMS *int `json:"timeout_ms"`
+		} `json:"model"`
+	}{}
+	if err := json.Unmarshal([]byte(payload), &legacy); err != nil {
+		return ResourceConfig{}, err
+	}
 	if item.Model != nil {
 		model := *item.Model
+		if (model.Runtime == nil || model.Runtime.RequestTimeoutMS == nil) && legacy.Model != nil && legacy.Model.TimeoutMS != nil {
+			value := *legacy.Model.TimeoutMS
+			model.Runtime = &ModelRuntimeSpec{RequestTimeoutMS: &value}
+		}
 		if strings.TrimSpace(model.APIKey) != "" {
 			secret, err := decryptSecret(model.APIKey)
 			if err != nil {

@@ -42,6 +42,14 @@ func ResourceConfigsHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
+			items, decorateErr := decorateModelResourceConfigUsage(state, items)
+			if decorateErr != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to compute model token usage", map[string]any{
+					"workspace_id": workspaceID,
+					"error":        decorateErr.Error(),
+				})
+				return
+			}
 			raw := make([]any, 0, len(items))
 			for _, item := range items {
 				raw = append(raw, item)
@@ -78,17 +86,29 @@ func ResourceConfigsHandler(state *AppState) http.HandlerFunc {
 			}
 			if input.Model != nil {
 				input.Model = normalizeModelSpecForStorage(input.Model)
+				if err := validateModelRuntimeSpec(input.Model.Runtime); err != nil {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
+				if err := validateOptionalPositiveThreshold("model token_threshold", input.Model.TokenThreshold); err != nil {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
 				if err := validateModelSpecAgainstCatalog(state, workspaceID, nil, input.Model); err != nil {
 					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
 					return
 				}
 			}
 			now := nowUTC()
+			name := strings.TrimSpace(input.Name)
+			if input.Type == ResourceTypeModel {
+				name = defaultModelResourceConfigName(name, input.Model)
+			}
 			config := ResourceConfig{
 				ID:          "rc_" + randomHex(6),
 				WorkspaceID: workspaceID,
 				Type:        input.Type,
-				Name:        strings.TrimSpace(input.Name),
+				Name:        name,
 				Enabled:     enabled,
 				Model:       input.Model,
 				Rule:        input.Rule,
@@ -146,6 +166,14 @@ func ResourceConfigByIDHandler(state *AppState) http.HandlerFunc {
 			currentModel := origin.Model
 			applyPatchToResourceConfig(&origin, patch)
 			if origin.Type == ResourceTypeModel && origin.Model != nil {
+				if err := validateModelRuntimeSpec(origin.Model.Runtime); err != nil {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
+				if err := validateOptionalPositiveThreshold("model token_threshold", origin.Model.TokenThreshold); err != nil {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
 				if err := validateModelSpecAgainstCatalog(state, workspaceID, currentModel, origin.Model); err != nil {
 					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
 					return
@@ -210,7 +238,7 @@ func validateCreateResourceConfig(input ResourceConfigCreateRequest) error {
 }
 
 func applyPatchToResourceConfig(target *ResourceConfig, patch ResourceConfigPatchRequest) {
-	if patch.Name != nil && target.Type != ResourceTypeModel {
+	if patch.Name != nil {
 		target.Name = strings.TrimSpace(*patch.Name)
 	}
 	if patch.Enabled != nil {
@@ -232,6 +260,9 @@ func applyPatchToResourceConfig(target *ResourceConfig, patch ResourceConfigPatc
 	}
 	if patch.MCP != nil {
 		target.MCP = patch.MCP
+	}
+	if target.Type == ResourceTypeModel {
+		target.Name = defaultModelResourceConfigName(target.Name, target.Model)
 	}
 }
 
@@ -321,7 +352,7 @@ func matchesResourceConfigQuery(item ResourceConfig, query string) bool {
 
 func resourceConfigSearchText(item ResourceConfig) string {
 	if item.Type == ResourceTypeModel && item.Model != nil {
-		return strings.TrimSpace(string(item.Model.Vendor) + " " + item.Model.ModelID)
+		return strings.TrimSpace(item.Name + " " + string(item.Model.Vendor) + " " + item.Model.ModelID)
 	}
 	return strings.TrimSpace(item.Name)
 }
@@ -335,6 +366,8 @@ func normalizeModelSpecForStorage(spec *ModelSpec) *ModelSpec {
 	next.ModelID = strings.TrimSpace(next.ModelID)
 	next.BaseURL = strings.TrimSpace(next.BaseURL)
 	next.BaseURLKey = strings.TrimSpace(next.BaseURLKey)
+	next.TokenThreshold = normalizeOptionalPositiveThreshold(next.TokenThreshold)
+	next.Runtime = normalizeModelRuntimeSpec(next.Runtime)
 	if next.Vendor != ModelVendorLocal {
 		next.BaseURL = ""
 	}
@@ -345,12 +378,26 @@ func normalizeResourceConfigForStorage(item *ResourceConfig) {
 	if item == nil {
 		return
 	}
-	if item.Type == ResourceTypeModel {
-		item.Name = ""
-	}
+	item.Name = strings.TrimSpace(item.Name)
 	if item.Model != nil {
 		item.Model = normalizeModelSpecForStorage(item.Model)
 	}
+	if item.Type == ResourceTypeModel {
+		item.Name = defaultModelResourceConfigName(item.Name, item.Model)
+	}
+}
+
+func defaultModelResourceConfigName(name string, model *ModelSpec) string {
+	normalizedName := strings.TrimSpace(name)
+	if normalizedName != "" {
+		return normalizedName
+	}
+	if model != nil {
+		if modelID := strings.TrimSpace(model.ModelID); modelID != "" {
+			return modelID
+		}
+	}
+	return ""
 }
 
 func validateModelSpecAgainstCatalog(state *AppState, workspaceID string, current *ModelSpec, next *ModelSpec) error {
@@ -392,4 +439,36 @@ func validateModelSpecAgainstCatalog(state *AppState, workspaceID string, curren
 		return fmt.Errorf("model %s/%s does not exist in catalog", vendor, modelID)
 	}
 	return fmt.Errorf("vendor %s does not exist in catalog", vendor)
+}
+
+func decorateModelResourceConfigUsage(state *AppState, items []ResourceConfig) ([]ResourceConfig, error) {
+	if len(items) == 0 {
+		return items, nil
+	}
+	workspaceIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.Type != ResourceTypeModel {
+			continue
+		}
+		workspaceIDs = append(workspaceIDs, strings.TrimSpace(item.WorkspaceID))
+	}
+	aggregate, aggregateErr := computeTokenUsageAggregate(state, workspaceIDs...)
+	if aggregateErr != nil {
+		return nil, aggregateErr
+	}
+
+	decorated := make([]ResourceConfig, 0, len(items))
+	for _, item := range items {
+		if item.Type == ResourceTypeModel {
+			workspaceID := strings.TrimSpace(item.WorkspaceID)
+			configID := strings.TrimSpace(item.ID)
+			usageByConfig := aggregate.workspaceModelTotals[workspaceID]
+			usage := usageByConfig[configID]
+			item.TokensInTotal = usage.Input
+			item.TokensOutTotal = usage.Output
+			item.TokensTotal = usage.Total
+		}
+		decorated = append(decorated, item)
+	}
+	return decorated, nil
 }

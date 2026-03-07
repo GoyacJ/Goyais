@@ -19,7 +19,7 @@ export const routes: RouteRecordRaw[] = [
   {
     path: "/main",
     name: "main",
-    component: () => import("@/modules/conversation/views/MainScreenView.vue"),
+    component: () => import("@/modules/session/views/MainScreenView.vue"),
     meta: { menuKey: "main" } as RouteMeta
   },
   {

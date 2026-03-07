@@ -134,15 +134,15 @@ func (s *AppState) GetCatalogRoot(workspaceID string) (CatalogRootResponse, erro
 	}
 
 	root := s.defaultCatalogRoot(workspaceID)
-	fallback := CatalogRootResponse{
+	defaultRoot := CatalogRootResponse{
 		WorkspaceID: workspaceID,
 		CatalogRoot: root,
 		UpdatedAt:   nowUTC(),
 	}
 	s.mu.Lock()
-	s.workspaceCatalogRoots[workspaceID] = fallback
+	s.workspaceCatalogRoots[workspaceID] = defaultRoot
 	s.mu.Unlock()
-	return fallback, nil
+	return defaultRoot, nil
 }
 
 func (s *AppState) LoadModelCatalog(workspaceID string, force bool) (ModelCatalogResponse, error) {
@@ -185,7 +185,7 @@ func (s *AppState) loadModelCatalogDetailed(workspaceID string, force bool) (Mod
 		meta.FallbackUsed = true
 		meta.FallbackReason = "parse_failed"
 		meta.FallbackError = parseErr.Error()
-		resolved, payload, err = fallbackToEmbeddedCatalog("parse_failed")
+		resolved, payload, err = loadEmbeddedCatalogForRecovery("parse_failed")
 		if err != nil {
 			return ModelCatalogResponse{}, meta, err
 		}
@@ -198,7 +198,7 @@ func (s *AppState) loadModelCatalogDetailed(workspaceID string, force bool) (Mod
 			meta.FallbackUsed = true
 			meta.FallbackReason = "autofill_marshal_failed"
 			meta.FallbackError = marshalErr.Error()
-			resolved, payload, err = fallbackToEmbeddedCatalog("autofill_marshal_failed")
+			resolved, payload, err = loadEmbeddedCatalogForRecovery("autofill_marshal_failed")
 			if err != nil {
 				return ModelCatalogResponse{}, meta, err
 			}
@@ -209,7 +209,7 @@ func (s *AppState) loadModelCatalogDetailed(workspaceID string, force bool) (Mod
 				meta.FallbackUsed = true
 				meta.FallbackReason = "autofill_write_failed"
 				meta.FallbackError = writeErr.Error()
-				resolved, payload, err = fallbackToEmbeddedCatalog("autofill_write_failed")
+				resolved, payload, err = loadEmbeddedCatalogForRecovery("autofill_write_failed")
 				if err != nil {
 					return ModelCatalogResponse{}, meta, err
 				}
@@ -250,7 +250,7 @@ func (s *AppState) loadModelCatalogDetailed(workspaceID string, force bool) (Mod
 	return response, meta, nil
 }
 
-func fallbackToEmbeddedCatalog(reason string) (resolvedCatalogSource, modelCatalogFile, error) {
+func loadEmbeddedCatalogForRecovery(reason string) (resolvedCatalogSource, modelCatalogFile, error) {
 	resolved, err := loadEmbeddedModelCatalogData()
 	if err != nil {
 		return resolvedCatalogSource{}, modelCatalogFile{}, fmt.Errorf("fallback to embedded catalog failed (%s): %w", reason, err)
@@ -545,6 +545,8 @@ func normalizeVendorAuth(vendor ModelVendorName, input ModelCatalogVendorAuth, a
 
 func defaultVendorAuth(vendor ModelVendorName) ModelCatalogVendorAuth {
 	switch vendor {
+	case ModelVendorDeepSeek:
+		return ModelCatalogVendorAuth{Type: "http_bearer", Header: "Authorization", Scheme: "Bearer", APIKeyEnv: "DEEPSEEK_API_KEY"}
 	case ModelVendorGoogle:
 		return ModelCatalogVendorAuth{Type: "api_key_header", Header: "x-goog-api-key", APIKeyEnv: "GEMINI_API_KEY"}
 	case ModelVendorQwen:
@@ -610,19 +612,19 @@ func (s *AppState) recordModelCatalogReloadAudit(workspaceID string, trigger str
 	if loadErr != nil {
 		details["error"] = loadErr.Error()
 		details["reason"] = firstNonEmpty(meta.FallbackReason, "load_failed")
-		s.appendModelCatalogAudit(workspaceID, actor, traceID, "fallback_or_failed", "failed", details)
+		s.appendModelCatalogAudit(workspaceID, actor, traceID, "recovery_or_failed", "failed", details)
 		return
 	}
 
-	details["fallback_used"] = meta.FallbackUsed
-	details["fallback_reason"] = meta.FallbackReason
-	details["fallback_error"] = meta.FallbackError
+	details["recovery_used"] = meta.FallbackUsed
+	details["recovery_reason"] = meta.FallbackReason
+	details["recovery_error"] = meta.FallbackError
 	details["autofilled"] = meta.AutoFilled
 	details["autofill_writeback"] = meta.AutoFillWriteback
 	details["autofill_write_error"] = meta.AutoFillWriteErr
 	s.appendModelCatalogAudit(workspaceID, actor, traceID, "apply", "success", details)
 	if meta.FallbackUsed {
-		s.appendModelCatalogAudit(workspaceID, actor, traceID, "fallback_or_failed", "success", details)
+		s.appendModelCatalogAudit(workspaceID, actor, traceID, "recovery_or_failed", "success", details)
 	}
 }
 

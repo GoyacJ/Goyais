@@ -1,0 +1,763 @@
+// Copyright (c) 2026 Ysmjjsy
+// Author: Goya
+// SPDX-License-Identifier: MIT
+
+package executor
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"testing"
+	"time"
+
+	"goyais/services/hub/internal/agent/core"
+	"goyais/services/hub/internal/agent/tools/interaction"
+	"goyais/services/hub/internal/agent/tools/spec"
+)
+
+type stubRunner struct {
+	mu        sync.Mutex
+	calls     []RunRequest
+	run       func(req RunRequest) (map[string]any, error)
+	active    int
+	maxActive int
+}
+
+func (s *stubRunner) Execute(_ context.Context, req RunRequest) (map[string]any, error) {
+	s.mu.Lock()
+	s.calls = append(s.calls, req)
+	s.active++
+	if s.active > s.maxActive {
+		s.maxActive = s.active
+	}
+	s.mu.Unlock()
+
+	defer func() {
+		s.mu.Lock()
+		s.active--
+		s.mu.Unlock()
+	}()
+
+	if s.run == nil {
+		return map[string]any{"ok": true}, nil
+	}
+	return s.run(req)
+}
+
+type stubSpecs struct {
+	byName map[string]spec.ToolSpec
+}
+
+func (s stubSpecs) Lookup(name string) (spec.ToolSpec, bool) {
+	item, ok := s.byName[name]
+	return item, ok
+}
+
+type stubApprovalWaiter struct {
+	mu      sync.Mutex
+	request []ApprovalRequest
+	action  ApprovalAction
+	err     error
+}
+
+func (s *stubApprovalWaiter) WaitForApproval(_ context.Context, req ApprovalRequest) (ApprovalAction, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.request = append(s.request, req)
+	if s.err != nil {
+		return "", s.err
+	}
+	return s.action, nil
+}
+
+type stubAnswerWaiter struct {
+	answer UserAnswer
+	err    error
+	called int
+}
+
+func (s *stubAnswerWaiter) WaitForAnswer(_ context.Context, _ interaction.PendingUserQuestion) (UserAnswer, error) {
+	s.called++
+	if s.err != nil {
+		return UserAnswer{}, s.err
+	}
+	return s.answer, nil
+}
+
+type stubPermissionGate struct {
+	decision core.PermissionDecision
+	err      error
+	requests []core.PermissionRequest
+}
+
+func (s *stubPermissionGate) Evaluate(_ context.Context, req core.PermissionRequest) (core.PermissionDecision, error) {
+	s.requests = append(s.requests, req)
+	if s.err != nil {
+		return core.PermissionDecision{}, s.err
+	}
+	return s.decision, nil
+}
+
+type stubHookDispatcher struct {
+	decision core.HookDecision
+	err      error
+	events   []core.HookEvent
+}
+
+func (s *stubHookDispatcher) Dispatch(_ context.Context, event core.HookEvent) (core.HookDecision, error) {
+	s.events = append(s.events, core.HookEvent{
+		Type:      event.Type,
+		SessionID: event.SessionID,
+		RunID:     event.RunID,
+		Payload:   cloneMapAny(event.Payload),
+	})
+	if s.err != nil {
+		return core.HookDecision{}, s.err
+	}
+	return s.decision, nil
+}
+
+type stubSandboxGate struct {
+	decision SandboxDecision
+	err      error
+	requests []SandboxRequest
+}
+
+func (s *stubSandboxGate) Evaluate(_ context.Context, req SandboxRequest) (SandboxDecision, error) {
+	s.requests = append(s.requests, SandboxRequest{
+		ToolName:   req.ToolName,
+		Input:      cloneMapAny(req.Input),
+		WorkingDir: req.WorkingDir,
+	})
+	if s.err != nil {
+		return SandboxDecision{}, s.err
+	}
+	return s.decision, nil
+}
+
+func TestExecuteSingle_RetryAfterApproval(t *testing.T) {
+	var attempts int
+	runner := &stubRunner{
+		run: func(req RunRequest) (map[string]any, error) {
+			attempts++
+			if attempts == 1 {
+				return nil, &ApprovalRequiredError{
+					ToolName: req.Call.Name,
+					Reason:   "needs approval",
+				}
+			}
+			return map[string]any{"result": "ok"}, nil
+		},
+	}
+	waiter := &stubApprovalWaiter{action: ApprovalActionApprove}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         runner,
+		ApprovalWaiter: waiter,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_1",
+			Name:   "run_command",
+			Input:  map[string]any{"command": "echo hi"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single failed: %v", err)
+	}
+	if result.ErrorText != "" {
+		t.Fatalf("expected successful execution, got error text %q", result.ErrorText)
+	}
+	if attempts != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts)
+	}
+	if len(waiter.request) != 1 {
+		t.Fatalf("expected one approval wait, got %d", len(waiter.request))
+	}
+	if len(runner.calls) != 2 {
+		t.Fatalf("expected two runner calls, got %d", len(runner.calls))
+	}
+	if runner.calls[0].Approved {
+		t.Fatal("first attempt should not be approved")
+	}
+	if !runner.calls[1].Approved {
+		t.Fatal("second attempt should be approved")
+	}
+}
+
+func TestExecuteSingle_DeniedWhenApprovalActionIsDeny(t *testing.T) {
+	runner := &stubRunner{
+		run: func(req RunRequest) (map[string]any, error) {
+			return nil, &ApprovalRequiredError{
+				ToolName: req.Call.Name,
+				Reason:   "tool denied",
+			}
+		},
+	}
+	waiter := &stubApprovalWaiter{action: ApprovalActionDeny}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         runner,
+		ApprovalWaiter: waiter,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_2",
+			Name:   "edit",
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single should not fail on deny action, got %v", err)
+	}
+	if result.ErrorText != "tool denied" {
+		t.Fatalf("expected deny reason as result error, got %q", result.ErrorText)
+	}
+}
+
+func TestExecuteSingle_NormalizeQuestionAndCollectAnswer(t *testing.T) {
+	runner := &stubRunner{
+		run: func(req RunRequest) (map[string]any, error) {
+			return map[string]any{
+				"requires_user_input": true,
+				"question_id":         "q-1",
+				"question":            "pick one",
+				"options": []any{
+					map[string]any{"id": "o-1", "label": "one"},
+					map[string]any{"id": "o-2", "label": "two"},
+				},
+				"recommended_option_id": "o-2",
+			}, nil
+		},
+	}
+	answerWaiter := &stubAnswerWaiter{
+		answer: UserAnswer{
+			QuestionID:       "q-1",
+			SelectedOptionID: "o-2",
+		},
+	}
+	pipeline := NewPipeline(Dependencies{
+		Runner:           runner,
+		UserAnswerWaiter: answerWaiter,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_3",
+			Name:   "ask_user",
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single failed: %v", err)
+	}
+	if answerWaiter.called != 1 {
+		t.Fatalf("expected waiter called once, got %d", answerWaiter.called)
+	}
+	if result.PendingQuestion == nil {
+		t.Fatal("expected pending question in result")
+	}
+	if value, _ := result.Output["requires_user_input"].(bool); value {
+		t.Fatal("requires_user_input should be reset to false after answer")
+	}
+	answerMap, ok := result.Output["answer"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected output answer map, got %#v", result.Output["answer"])
+	}
+	if answerMap["selected_option_id"] != "o-2" {
+		t.Fatalf("unexpected selected option %#v", answerMap)
+	}
+}
+
+func TestExecuteBatch_FanOutsConcurrencySafeGroup(t *testing.T) {
+	runner := &stubRunner{
+		run: func(req RunRequest) (map[string]any, error) {
+			if req.Call.Name == "safe_tool" {
+				time.Sleep(40 * time.Millisecond)
+			}
+			return map[string]any{"tool": req.Call.Name}, nil
+		},
+	}
+	specs := stubSpecs{
+		byName: map[string]spec.ToolSpec{
+			"safe_tool": {
+				Name:            "safe_tool",
+				ConcurrencySafe: true,
+			},
+			"unsafe_tool": {
+				Name:            "unsafe_tool",
+				ConcurrencySafe: false,
+			},
+		},
+	}
+	pipeline := NewPipeline(Dependencies{
+		Runner: runner,
+		Specs:  specs,
+	})
+
+	results, err := pipeline.ExecuteBatch(context.Background(), ExecuteBatchRequest{
+		Calls: []ToolCall{
+			{CallID: "c1", Name: "safe_tool"},
+			{CallID: "c2", Name: "safe_tool"},
+			{CallID: "c3", Name: "safe_tool"},
+			{CallID: "c4", Name: "unsafe_tool"},
+			{CallID: "c5", Name: "safe_tool"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute batch failed: %v", err)
+	}
+	if len(results) != 5 {
+		t.Fatalf("expected 5 results, got %d", len(results))
+	}
+	if runner.maxActive < 2 {
+		t.Fatalf("expected fan-out concurrency, max active=%d", runner.maxActive)
+	}
+	for idx, want := range []string{"c1", "c2", "c3", "c4", "c5"} {
+		if results[idx].CallID != want {
+			t.Fatalf("result order mismatch at index %d: got %q want %q", idx, results[idx].CallID, want)
+		}
+	}
+}
+
+func TestExecuteBatch_EncodesSingleErrorIntoResult(t *testing.T) {
+	runner := &stubRunner{
+		run: func(req RunRequest) (map[string]any, error) {
+			if req.Call.CallID == "bad" {
+				return nil, errors.New("boom")
+			}
+			return map[string]any{"ok": true}, nil
+		},
+	}
+	pipeline := NewPipeline(Dependencies{
+		Runner: runner,
+	})
+
+	results, err := pipeline.ExecuteBatch(context.Background(), ExecuteBatchRequest{
+		Calls: []ToolCall{
+			{CallID: "ok", Name: "safe_tool"},
+			{CallID: "bad", Name: "safe_tool"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute batch should not fail on ordinary tool errors: %v", err)
+	}
+	if results[0].ErrorText != "" {
+		t.Fatalf("first call should succeed, got %q", results[0].ErrorText)
+	}
+	if results[1].ErrorText != "boom" {
+		t.Fatalf("expected second call to capture error text, got %q", results[1].ErrorText)
+	}
+}
+
+func TestExecute_ValidatesCoreCall(t *testing.T) {
+	pipeline := NewPipeline(Dependencies{Runner: &stubRunner{}})
+	_, err := pipeline.Execute(context.Background(), core.ToolCall{
+		ToolName: "read_file",
+	})
+	if err == nil {
+		t.Fatal("expected validate error when run/session IDs are missing")
+	}
+}
+
+func TestExecute_MapsSingleResultToCoreResult(t *testing.T) {
+	pipeline := NewPipeline(Dependencies{
+		Runner: &stubRunner{
+			run: func(req RunRequest) (map[string]any, error) {
+				return map[string]any{
+					"path": req.Call.Input["path"],
+				}, nil
+			},
+		},
+	})
+	result, err := pipeline.Execute(context.Background(), core.ToolCall{
+		RunID:     core.RunID("run_1"),
+		SessionID: core.SessionID("sess_1"),
+		ToolName:  "read_file",
+		Input: map[string]any{
+			"path": "README.md",
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if result.ToolName != "read_file" {
+		t.Fatalf("unexpected tool name %q", result.ToolName)
+	}
+	if result.Error != nil {
+		t.Fatalf("unexpected tool result error: %v", result.Error)
+	}
+	if result.Output["path"] != "README.md" {
+		t.Fatalf("unexpected output %#v", result.Output)
+	}
+}
+
+func TestExecute_MapsSingleErrorTextToCoreRunError(t *testing.T) {
+	pipeline := NewPipeline(Dependencies{
+		Runner: &stubRunner{
+			run: func(req RunRequest) (map[string]any, error) {
+				return nil, errors.New("io unavailable")
+			},
+		},
+	})
+	result, err := pipeline.Execute(context.Background(), core.ToolCall{
+		RunID:     core.RunID("run_2"),
+		SessionID: core.SessionID("sess_2"),
+		ToolName:  "read_file",
+	})
+	if err != nil {
+		t.Fatalf("execute returned unexpected error: %v", err)
+	}
+	if result.Error == nil {
+		t.Fatal("expected mapped run error")
+	}
+	if result.Error.Code != "tool_execution_failed" {
+		t.Fatalf("unexpected error code %q", result.Error.Code)
+	}
+	if result.Error.Message != "io unavailable" {
+		t.Fatalf("unexpected error message %q", result.Error.Message)
+	}
+}
+
+func TestExecuteSingle_PermissionGateDenySkipsRunner(t *testing.T) {
+	runner := &stubRunner{}
+	gate := &stubPermissionGate{
+		decision: core.PermissionDecision{
+			Kind:   core.PermissionDecisionDeny,
+			Reason: "blocked by policy",
+		},
+	}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         runner,
+		PermissionGate: gate,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		SessionMode: "plan",
+		Call: ToolCall{
+			CallID: "call_deny",
+			Name:   "delete_file",
+			Input:  map[string]any{"path": "./danger.txt"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single should not fail on permission deny, got %v", err)
+	}
+	if result.ErrorText != "blocked by policy" {
+		t.Fatalf("unexpected deny error text %q", result.ErrorText)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("runner should not execute when gate denies, got %d calls", len(runner.calls))
+	}
+}
+
+func TestExecuteSingle_SandboxDenySkipsRunner(t *testing.T) {
+	runner := &stubRunner{}
+	sandboxGate := &stubSandboxGate{
+		decision: SandboxDecision{
+			Kind:   core.PermissionDecisionDeny,
+			Reason: "blocked by sandbox",
+		},
+	}
+	pipeline := NewPipeline(Dependencies{
+		Runner:      runner,
+		SandboxGate: sandboxGate,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_sandbox_deny",
+			Name:   "write_file",
+			Input: map[string]any{
+				"path": "../../etc/passwd",
+			},
+		},
+		ToolContext: ToolContext{WorkingDir: "/repo"},
+	})
+	if err != nil {
+		t.Fatalf("execute single failed: %v", err)
+	}
+	if result.ErrorText != "blocked by sandbox" {
+		t.Fatalf("unexpected error text %q", result.ErrorText)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("runner should be skipped when sandbox denies, got %d calls", len(runner.calls))
+	}
+	if len(sandboxGate.requests) != 1 {
+		t.Fatalf("expected one sandbox request, got %d", len(sandboxGate.requests))
+	}
+}
+
+func TestExecuteSingle_SandboxAskWaitsApprovalAndPropagatesAudit(t *testing.T) {
+	runner := &stubRunner{
+		run: func(req RunRequest) (map[string]any, error) {
+			return map[string]any{"ok": true}, nil
+		},
+	}
+	sandboxGate := &stubSandboxGate{
+		decision: SandboxDecision{
+			Kind:   core.PermissionDecisionAsk,
+			Reason: "sandbox requires approval",
+			Metadata: map[string]any{
+				"tool":         "write_file",
+				"path":         "/repo/file.txt",
+				"reason":       "sandbox requires approval",
+				"matched_rule": "sandbox-rule-1",
+			},
+		},
+	}
+	waiter := &stubApprovalWaiter{action: ApprovalActionApprove}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         runner,
+		SandboxGate:    sandboxGate,
+		ApprovalWaiter: waiter,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_sandbox_ask",
+			Name:   "write_file",
+			Input: map[string]any{
+				"path": "/repo/file.txt",
+			},
+		},
+		ToolContext: ToolContext{WorkingDir: "/repo"},
+	})
+	if err != nil {
+		t.Fatalf("execute single failed: %v", err)
+	}
+	if result.ErrorText != "" {
+		t.Fatalf("unexpected error text %q", result.ErrorText)
+	}
+	if len(waiter.request) != 1 {
+		t.Fatalf("expected one approval wait request, got %d", len(waiter.request))
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("expected runner to execute once, got %d", len(runner.calls))
+	}
+	if !runner.calls[0].Approved {
+		t.Fatal("runner call should be marked approved after sandbox ask")
+	}
+	if runner.calls[0].Audit["matched_rule"] != "sandbox-rule-1" {
+		t.Fatalf("expected sandbox audit to propagate, got %#v", runner.calls[0].Audit)
+	}
+}
+
+func TestExecuteSingle_PermissionGateAskWaitsBeforeFirstExecution(t *testing.T) {
+	runner := &stubRunner{}
+	gate := &stubPermissionGate{
+		decision: core.PermissionDecision{
+			Kind:   core.PermissionDecisionAsk,
+			Reason: "needs approval",
+		},
+	}
+	waiter := &stubApprovalWaiter{action: ApprovalActionApprove}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         runner,
+		ApprovalWaiter: waiter,
+		PermissionGate: gate,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		SessionMode: "acceptEdits",
+		Call: ToolCall{
+			CallID: "call_ask",
+			Name:   "write_file",
+			Input:  map[string]any{"path": "./note.txt"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single failed: %v", err)
+	}
+	if result.ErrorText != "" {
+		t.Fatalf("expected success result, got error %q", result.ErrorText)
+	}
+	if len(waiter.request) != 1 {
+		t.Fatalf("expected one approval wait, got %d", len(waiter.request))
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("expected one runner call, got %d", len(runner.calls))
+	}
+	if !runner.calls[0].Approved {
+		t.Fatal("runner call should be marked approved after permission ask")
+	}
+}
+
+func TestExecuteSingle_PermissionGateAskWithoutWaiterReturnsApprovalError(t *testing.T) {
+	pipeline := NewPipeline(Dependencies{
+		Runner: &stubRunner{},
+		PermissionGate: &stubPermissionGate{
+			decision: core.PermissionDecision{
+				Kind:   core.PermissionDecisionAsk,
+				Reason: "requires explicit approval",
+			},
+		},
+	})
+
+	_, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_missing_waiter",
+			Name:   "write_file",
+		},
+	})
+	var approvalErr *ApprovalRequiredError
+	if !errors.As(err, &approvalErr) {
+		t.Fatalf("expected approval required error, got %v", err)
+	}
+}
+
+func TestExecuteSingle_PermissionGateReceivesModeAndArguments(t *testing.T) {
+	gate := &stubPermissionGate{
+		decision: core.PermissionDecision{Kind: core.PermissionDecisionAllow},
+	}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         &stubRunner{},
+		PermissionGate: gate,
+	})
+
+	_, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		SessionMode: "plan",
+		ToolContext: ToolContext{
+			WorkingDir: "/tmp/project",
+		},
+		Call: ToolCall{
+			CallID: "call_ctx",
+			Name:   "read_file",
+			Input: map[string]any{
+				"path": "./README.md",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single failed: %v", err)
+	}
+	if len(gate.requests) != 1 {
+		t.Fatalf("expected one gate request, got %d", len(gate.requests))
+	}
+	request := gate.requests[0]
+	if request.Mode != core.PermissionModePlan {
+		t.Fatalf("unexpected mode %q", request.Mode)
+	}
+	if request.ToolName != "read_file" {
+		t.Fatalf("unexpected tool name %q", request.ToolName)
+	}
+	if request.WorkingDir != "/tmp/project" {
+		t.Fatalf("unexpected working dir %q", request.WorkingDir)
+	}
+	if request.Arguments == "" {
+		t.Fatal("expected serialized arguments passed to gate")
+	}
+}
+
+func TestExecuteSingle_HookDenySkipsRunner(t *testing.T) {
+	runner := &stubRunner{}
+	hooks := &stubHookDispatcher{
+		decision: core.HookDecision{
+			Decision: "deny",
+			Metadata: map[string]any{"reason": "blocked by pre_tool_use hook"},
+		},
+	}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         runner,
+		HookDispatcher: hooks,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_hook_deny",
+			Name:   "write_file",
+			Input:  map[string]any{"path": "./a.txt"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single should not fail on hook deny, got %v", err)
+	}
+	if result.ErrorText != "blocked by pre_tool_use hook" {
+		t.Fatalf("unexpected error text %q", result.ErrorText)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("runner should not execute on hook deny, got %d calls", len(runner.calls))
+	}
+	if len(hooks.events) != 1 {
+		t.Fatalf("expected one pre-tool hook event, got %d", len(hooks.events))
+	}
+	if hooks.events[0].Type != "PreToolUse" {
+		t.Fatalf("unexpected hook event type %q", hooks.events[0].Type)
+	}
+}
+
+func TestExecuteSingle_HookAskWaitsForApproval(t *testing.T) {
+	runner := &stubRunner{}
+	hooks := &stubHookDispatcher{
+		decision: core.HookDecision{
+			Decision: "ask",
+			Metadata: map[string]any{"reason": "needs approval by hook"},
+		},
+	}
+	waiter := &stubApprovalWaiter{action: ApprovalActionApprove}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         runner,
+		HookDispatcher: hooks,
+		ApprovalWaiter: waiter,
+	})
+
+	result, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_hook_ask",
+			Name:   "write_file",
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single failed: %v", err)
+	}
+	if result.ErrorText != "" {
+		t.Fatalf("expected successful result, got error %q", result.ErrorText)
+	}
+	if len(waiter.request) != 1 {
+		t.Fatalf("expected one approval request from hook ask, got %d", len(waiter.request))
+	}
+	if len(runner.calls) != 1 || !runner.calls[0].Approved {
+		t.Fatalf("runner should execute once with approved=true, calls=%#v", runner.calls)
+	}
+}
+
+func TestExecuteSingle_HookUpdatedInputOverridesCallInput(t *testing.T) {
+	runner := &stubRunner{}
+	hooks := &stubHookDispatcher{
+		decision: core.HookDecision{
+			Decision: "allow",
+			Metadata: map[string]any{
+				"updated_input": map[string]any{
+					"path":    "./rewritten.txt",
+					"content": "from hook",
+				},
+			},
+		},
+	}
+	pipeline := NewPipeline(Dependencies{
+		Runner:         runner,
+		HookDispatcher: hooks,
+	})
+
+	_, err := pipeline.ExecuteSingle(context.Background(), ExecuteSingleRequest{
+		Call: ToolCall{
+			CallID: "call_hook_update",
+			Name:   "write_file",
+			Input: map[string]any{
+				"path":    "./original.txt",
+				"content": "from user",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute single failed: %v", err)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("expected one runner call, got %d", len(runner.calls))
+	}
+	if runner.calls[0].Call.Input["path"] != "./rewritten.txt" {
+		t.Fatalf("expected hook-updated input path, got %#v", runner.calls[0].Call.Input)
+	}
+	if runner.calls[0].Call.Input["content"] != "from hook" {
+		t.Fatalf("expected hook-updated input content, got %#v", runner.calls[0].Call.Input)
+	}
+}

@@ -3,17 +3,19 @@ package httpapi
 type ModelVendorName string
 
 const (
-	ModelVendorOpenAI  ModelVendorName = "OpenAI"
-	ModelVendorGoogle  ModelVendorName = "Google"
-	ModelVendorQwen    ModelVendorName = "Qwen"
-	ModelVendorDoubao  ModelVendorName = "Doubao"
-	ModelVendorZhipu   ModelVendorName = "Zhipu"
-	ModelVendorMiniMax ModelVendorName = "MiniMax"
-	ModelVendorLocal   ModelVendorName = "Local"
+	ModelVendorOpenAI   ModelVendorName = "OpenAI"
+	ModelVendorDeepSeek ModelVendorName = "DeepSeek"
+	ModelVendorGoogle   ModelVendorName = "Google"
+	ModelVendorQwen     ModelVendorName = "Qwen"
+	ModelVendorDoubao   ModelVendorName = "Doubao"
+	ModelVendorZhipu    ModelVendorName = "Zhipu"
+	ModelVendorMiniMax  ModelVendorName = "MiniMax"
+	ModelVendorLocal    ModelVendorName = "Local"
 )
 
 var supportedModelVendors = []ModelVendorName{
 	ModelVendorOpenAI,
+	ModelVendorDeepSeek,
 	ModelVendorGoogle,
 	ModelVendorQwen,
 	ModelVendorDoubao,
@@ -65,14 +67,19 @@ type CatalogRootResponse struct {
 }
 
 type ModelSpec struct {
-	Vendor       ModelVendorName `json:"vendor"`
-	ModelID      string          `json:"model_id"`
-	BaseURL      string          `json:"base_url,omitempty"`
-	BaseURLKey   string          `json:"base_url_key,omitempty"`
-	APIKey       string          `json:"api_key,omitempty"`
-	APIKeyMasked string          `json:"api_key_masked,omitempty"`
-	TimeoutMS    int             `json:"timeout_ms,omitempty"`
-	Params       map[string]any  `json:"params,omitempty"`
+	Vendor         ModelVendorName   `json:"vendor"`
+	ModelID        string            `json:"model_id"`
+	BaseURL        string            `json:"base_url,omitempty"`
+	BaseURLKey     string            `json:"base_url_key,omitempty"`
+	APIKey         string            `json:"api_key,omitempty"`
+	APIKeyMasked   string            `json:"api_key_masked,omitempty"`
+	TokenThreshold *int              `json:"token_threshold,omitempty"`
+	Runtime        *ModelRuntimeSpec `json:"runtime,omitempty"`
+	Params         map[string]any    `json:"params,omitempty"`
+}
+
+type ModelRuntimeSpec struct {
+	RequestTimeoutMS *int `json:"request_timeout_ms,omitempty"`
 }
 
 type RuleSpec struct {
@@ -95,17 +102,20 @@ type McpSpec struct {
 }
 
 type ResourceConfig struct {
-	ID          string       `json:"id"`
-	WorkspaceID string       `json:"workspace_id"`
-	Type        ResourceType `json:"type"`
-	Name        string       `json:"name,omitempty"`
-	Enabled     bool         `json:"enabled"`
-	Model       *ModelSpec   `json:"model,omitempty"`
-	Rule        *RuleSpec    `json:"rule,omitempty"`
-	Skill       *SkillSpec   `json:"skill,omitempty"`
-	MCP         *McpSpec     `json:"mcp,omitempty"`
-	CreatedAt   string       `json:"created_at"`
-	UpdatedAt   string       `json:"updated_at"`
+	ID             string       `json:"id"`
+	WorkspaceID    string       `json:"workspace_id"`
+	Type           ResourceType `json:"type"`
+	Name           string       `json:"name,omitempty"`
+	Enabled        bool         `json:"enabled"`
+	Model          *ModelSpec   `json:"model,omitempty"`
+	Rule           *RuleSpec    `json:"rule,omitempty"`
+	Skill          *SkillSpec   `json:"skill,omitempty"`
+	MCP            *McpSpec     `json:"mcp,omitempty"`
+	TokensInTotal  int          `json:"tokens_in_total"`
+	TokensOutTotal int          `json:"tokens_out_total"`
+	TokensTotal    int          `json:"tokens_total"`
+	CreatedAt      string       `json:"created_at"`
+	UpdatedAt      string       `json:"updated_at"`
 }
 
 type ResourceConfigCreateRequest struct {

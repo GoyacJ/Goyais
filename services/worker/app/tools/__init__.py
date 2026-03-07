@@ -1,2 +1,0 @@
-"""Worker tool extensions."""
-

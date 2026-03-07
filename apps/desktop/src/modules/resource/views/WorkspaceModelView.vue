@@ -6,8 +6,6 @@
     settings-subtitle="Local Settings / Models"
   >
     <section class="model-list-only">
-      <ToastAlert v-if="testNotice.open" :tone="testNotice.tone" :message="testNotice.message" />
-
       <ResourceConfigTable
         title="模型列表"
         :columns="columns"
@@ -31,7 +29,12 @@
         </template>
 
         <template #cell-vendor="{ row }">{{ (row as ResourceConfig).model?.vendor ?? "-" }}</template>
-        <template #cell-model="{ row }">{{ (row as ResourceConfig).model?.model_id ?? "-" }}</template>
+        <template #cell-model="{ row }">
+          {{ (row as ResourceConfig).name?.trim() || (row as ResourceConfig).model?.model_id || "-" }}
+        </template>
+        <template #cell-tokenUsage="{ row }">
+          {{ formatTokenUsage(row as ResourceConfig) }}
+        </template>
         <template #cell-enabled="{ row }">
           <span :class="(row as ResourceConfig).enabled ? 'enabled' : 'disabled'">
             {{ (row as ResourceConfig).enabled ? "启用" : "停用" }}
@@ -65,6 +68,10 @@
           模型
           <BaseSelect v-model="form.selectedCatalogModel" :options="vendorModelOptions" />
         </label>
+        <label>
+          模型名称（可选）
+          <BaseInput v-model="form.name" placeholder="不填则默认使用模型 ID" />
+        </label>
         <label v-if="showVendorEndpointSelector" class="full">
           Endpoint
           <BaseSelect v-model="form.baseUrlKey" :options="vendorEndpointOptions" />
@@ -77,6 +84,12 @@
         <label>
           Timeout (ms)
           <BaseInput v-model="form.timeoutMs" placeholder="30000" />
+          <span class="hint">默认 30000，范围 1000-120000</span>
+        </label>
+        <label>
+          Token 阀值
+          <BaseInput v-model="form.tokenThreshold" placeholder="留空表示不限" />
+          <span class="hint">仅允许正整数；留空表示不限</span>
         </label>
         <label class="full">
           API Key
@@ -121,7 +134,6 @@ import BaseButton from "@/shared/ui/BaseButton.vue";
 import BaseInput from "@/shared/ui/BaseInput.vue";
 import BaseModal from "@/shared/ui/BaseModal.vue";
 import BaseSelect from "@/shared/ui/BaseSelect.vue";
-import ToastAlert from "@/shared/ui/ToastAlert.vue";
 
 const {
   canWrite,
@@ -130,6 +142,7 @@ const {
   enabledOptions,
   form,
   formatTime,
+  formatTokenUsage,
   loadNextResourceConfigsPage,
   loadPreviousResourceConfigsPage,
   onSearch,
@@ -141,7 +154,6 @@ const {
   runModelTest,
   saveConfig,
   tableEmptyText,
-  testNotice,
   deleteConfirm,
   toggleEnabled,
   closeDeleteConfirm,

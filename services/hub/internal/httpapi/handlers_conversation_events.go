@@ -17,13 +17,11 @@ func ConversationEventsHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		conversationID := strings.TrimSpace(r.PathValue("conversation_id"))
-		state.mu.RLock()
-		conversation, exists := state.conversations[conversationID]
-		state.mu.RUnlock()
+		conversationID := runtimeSessionIDFromPath(r)
+		conversation, exists := loadConversationByIDSeed(r.Context(), state, conversationID)
 		if !exists {
 			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
-				"conversation_id": conversationID,
+				"session_id": conversationID,
 			})
 			return
 		}
@@ -32,7 +30,7 @@ func ConversationEventsHandler(state *AppState) http.HandlerFunc {
 			state,
 			r,
 			conversation.WorkspaceID,
-			"conversation.read",
+			"session.read",
 			authorizationResource{WorkspaceID: conversation.WorkspaceID},
 			authorizationContext{OperationType: "read"},
 		)
@@ -77,7 +75,7 @@ func ConversationEventsHandler(state *AppState) http.HandlerFunc {
 		}()
 
 		for _, event := range backlog {
-			if err := writeSSEEvent(w, event); err != nil {
+			if err := writeSSERunEvent(w, event); err != nil {
 				return
 			}
 			flusher.Flush()
@@ -98,7 +96,7 @@ func ConversationEventsHandler(state *AppState) http.HandlerFunc {
 				if !ok {
 					return
 				}
-				if err := writeSSEEvent(w, event); err != nil {
+				if err := writeSSERunEvent(w, event); err != nil {
 					return
 				}
 				flusher.Flush()
@@ -115,7 +113,7 @@ func buildSSEBackfillResyncEvent(conversationID string, lastEventID string, late
 		TraceID:        GenerateTraceID(),
 		Sequence:       0,
 		QueueIndex:     0,
-		Type:           ExecutionEventTypeThinkingDelta,
+		Type:           RunEventTypeThinkingDelta,
 		Timestamp:      time.Now().UTC().Format(time.RFC3339),
 		Payload: map[string]any{
 			"stage":           "sse_resync_required",
@@ -128,8 +126,8 @@ func buildSSEBackfillResyncEvent(conversationID string, lastEventID string, late
 	}
 }
 
-func writeSSEEvent(w http.ResponseWriter, event ExecutionEvent) error {
-	payload, err := json.Marshal(event)
+func writeSSERunEvent(w http.ResponseWriter, event ExecutionEvent) error {
+	payload, err := json.Marshal(mapExecutionEventToRunEvent(event))
 	if err != nil {
 		return err
 	}

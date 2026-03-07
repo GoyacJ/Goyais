@@ -5,6 +5,8 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,8 +23,11 @@ const (
 )
 
 type authzStore struct {
-	db *sql.DB
+	db     *sql.DB
+	dbPath string
 }
+
+var schemaBackupCopyFile = copyFileContents
 
 func openAuthzStore(path string) (*authzStore, error) {
 	if strings.TrimSpace(path) == "" {
@@ -49,7 +54,10 @@ func openAuthzStore(path string) (*authzStore, error) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	store := &authzStore{db: db}
+	store := &authzStore{
+		db:     db,
+		dbPath: dsn,
+	}
 	if err := store.migrate(); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -193,7 +201,7 @@ func (s *authzStore) migrate() error {
 			name TEXT NOT NULL,
 			repo_path TEXT NOT NULL,
 			is_git INTEGER NOT NULL DEFAULT 1,
-			default_model_id TEXT,
+			default_model_config_id TEXT,
 			default_mode TEXT NOT NULL,
 			current_revision INTEGER NOT NULL DEFAULT 0,
 			created_at TEXT NOT NULL,
@@ -203,8 +211,10 @@ func (s *authzStore) migrate() error {
 		`CREATE TABLE IF NOT EXISTS project_configs (
 			project_id TEXT PRIMARY KEY,
 			workspace_id TEXT NOT NULL,
-			model_ids_json TEXT NOT NULL,
-			default_model_id TEXT,
+			model_config_ids_json TEXT NOT NULL,
+			default_model_config_id TEXT,
+			token_threshold INTEGER,
+			model_token_thresholds_json TEXT NOT NULL DEFAULT '{}',
 			rule_ids_json TEXT NOT NULL,
 			skill_ids_json TEXT NOT NULL,
 			mcp_ids_json TEXT NOT NULL,
@@ -218,7 +228,10 @@ func (s *authzStore) migrate() error {
 			name TEXT NOT NULL,
 			queue_state TEXT NOT NULL,
 			default_mode TEXT NOT NULL,
-			model_id TEXT NOT NULL,
+			model_config_id TEXT NOT NULL,
+			rule_ids_json TEXT NOT NULL,
+			skill_ids_json TEXT NOT NULL,
+			mcp_ids_json TEXT NOT NULL,
 			base_revision INTEGER NOT NULL DEFAULT 0,
 			active_execution_id TEXT,
 			created_at TEXT NOT NULL,
@@ -257,6 +270,7 @@ func (s *authzStore) migrate() error {
 			model_id TEXT NOT NULL,
 			mode_snapshot TEXT NOT NULL,
 			model_snapshot_json TEXT NOT NULL,
+			resource_profile_snapshot_json TEXT,
 			agent_config_snapshot_json TEXT,
 			tokens_in INTEGER NOT NULL DEFAULT 0,
 			tokens_out INTEGER NOT NULL DEFAULT 0,
@@ -279,28 +293,32 @@ func (s *authzStore) migrate() error {
 			payload_json TEXT NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_execution_events_conversation_sequence ON execution_events(conversation_id, sequence)`,
-		`CREATE TABLE IF NOT EXISTS execution_control_commands (
+		`CREATE TABLE IF NOT EXISTS hook_policies (
 			id TEXT PRIMARY KEY,
-			execution_id TEXT NOT NULL,
-			type TEXT NOT NULL,
-			payload_json TEXT NOT NULL,
-			seq INTEGER NOT NULL,
-			created_at TEXT NOT NULL
+			scope TEXT NOT NULL,
+			event TEXT NOT NULL,
+			handler_type TEXT NOT NULL,
+			tool_name TEXT NOT NULL,
+			workspace_id TEXT,
+			project_id TEXT,
+			conversation_id TEXT,
+			enabled INTEGER NOT NULL DEFAULT 1,
+			decision_json TEXT NOT NULL,
+			updated_at TEXT NOT NULL
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_execution_control_commands_execution_seq ON execution_control_commands(execution_id, seq)`,
-		`CREATE TABLE IF NOT EXISTS execution_leases (
-			execution_id TEXT PRIMARY KEY,
-			worker_id TEXT NOT NULL,
-			lease_version INTEGER NOT NULL,
-			lease_expires_at TEXT NOT NULL,
-			run_attempt INTEGER NOT NULL
+		`CREATE TABLE IF NOT EXISTS hook_execution_records (
+			id TEXT PRIMARY KEY,
+			run_id TEXT NOT NULL,
+			task_id TEXT,
+			conversation_id TEXT NOT NULL,
+			event TEXT NOT NULL,
+			tool_name TEXT,
+			policy_id TEXT,
+			decision_json TEXT NOT NULL,
+			timestamp TEXT NOT NULL
 		)`,
-		`CREATE TABLE IF NOT EXISTS workers (
-			worker_id TEXT PRIMARY KEY,
-			capabilities_json TEXT NOT NULL,
-			status TEXT NOT NULL,
-			last_heartbeat TEXT NOT NULL
-		)`,
+		`CREATE INDEX IF NOT EXISTS idx_hook_execution_records_run_timestamp ON hook_execution_records(run_id, timestamp)`,
+		`CREATE INDEX IF NOT EXISTS idx_hook_execution_records_conversation_timestamp ON hook_execution_records(conversation_id, timestamp)`,
 		`CREATE TABLE IF NOT EXISTS resource_configs (
 				id TEXT PRIMARY KEY,
 				workspace_id TEXT NOT NULL,
@@ -323,6 +341,90 @@ func (s *authzStore) migrate() error {
 			created_at TEXT NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_resource_test_logs_workspace_created ON resource_test_logs(workspace_id, created_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS hub_schema_versions (
+			component TEXT PRIMARY KEY,
+			version TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS runtime_sessions (
+			id TEXT PRIMARY KEY,
+			workspace_id TEXT NOT NULL,
+			project_id TEXT NOT NULL,
+			name TEXT NOT NULL,
+			default_mode TEXT NOT NULL,
+			model_config_id TEXT NOT NULL,
+			rule_ids_json TEXT NOT NULL,
+			skill_ids_json TEXT NOT NULL,
+			mcp_ids_json TEXT NOT NULL,
+			active_run_id TEXT,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_sessions_workspace_created ON runtime_sessions(workspace_id, created_at, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_sessions_project_created ON runtime_sessions(project_id, created_at, id)`,
+		`CREATE TABLE IF NOT EXISTS runtime_runs (
+			id TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			workspace_id TEXT NOT NULL,
+			message_id TEXT NOT NULL,
+			state TEXT NOT NULL,
+			mode TEXT NOT NULL,
+			model_id TEXT NOT NULL,
+			model_config_id TEXT NOT NULL DEFAULT '',
+			tokens_in INTEGER NOT NULL DEFAULT 0,
+			tokens_out INTEGER NOT NULL DEFAULT 0,
+			trace_id TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_runs_session_created ON runtime_runs(session_id, created_at, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_runs_workspace_created ON runtime_runs(workspace_id, created_at, id)`,
+		`CREATE TABLE IF NOT EXISTS runtime_run_events (
+			event_id TEXT PRIMARY KEY,
+			run_id TEXT NOT NULL,
+			session_id TEXT NOT NULL,
+			sequence INTEGER NOT NULL,
+			type TEXT NOT NULL,
+			timestamp TEXT NOT NULL,
+			payload_json TEXT NOT NULL,
+			occurred_at TEXT NOT NULL
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_runtime_run_events_session_sequence ON runtime_run_events(session_id, sequence)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_run_events_run_sequence ON runtime_run_events(run_id, sequence)`,
+		`CREATE TABLE IF NOT EXISTS runtime_run_tasks (
+			task_id TEXT PRIMARY KEY,
+			run_id TEXT NOT NULL,
+			parent_task_id TEXT,
+			title TEXT NOT NULL,
+			state TEXT NOT NULL,
+			metadata_json TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			finished_at TEXT
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_run_tasks_run_created ON runtime_run_tasks(run_id, created_at, task_id)`,
+		`CREATE TABLE IF NOT EXISTS runtime_change_sets (
+			change_set_id TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			run_id TEXT,
+			payload_json TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_change_sets_session_created ON runtime_change_sets(session_id, created_at, change_set_id)`,
+		`CREATE TABLE IF NOT EXISTS runtime_hook_records (
+			id TEXT PRIMARY KEY,
+			run_id TEXT NOT NULL,
+			session_id TEXT NOT NULL,
+			task_id TEXT,
+			event TEXT NOT NULL,
+			tool_name TEXT,
+			policy_id TEXT,
+			decision_json TEXT NOT NULL,
+			timestamp TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_hook_records_run_timestamp ON runtime_hook_records(run_id, timestamp, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_runtime_hook_records_session_timestamp ON runtime_hook_records(session_id, timestamp, id)`,
 	}
 
 	for _, statement := range statements {
@@ -330,10 +432,238 @@ func (s *authzStore) migrate() error {
 			return fmt.Errorf("apply migration: %w", err)
 		}
 	}
-	if err := s.validateStrictSchema(); err != nil {
-		return err
+	if migrateErr := s.normalizePermissionModes(); migrateErr != nil {
+		return fmt.Errorf("normalize permission modes: %w", migrateErr)
+	}
+	if migrateErr := s.ensureProjectConfigTokenThresholdColumns(); migrateErr != nil {
+		return fmt.Errorf("ensure project config token threshold columns: %w", migrateErr)
+	}
+	if migrateErr := s.ensureRuntimeSchemaVersion(); migrateErr != nil {
+		return fmt.Errorf("ensure runtime schema version: %w", migrateErr)
+	}
+	if migrateErr := s.ensureRuntimeHookTaskIDColumn(); migrateErr != nil {
+		return fmt.Errorf("ensure runtime hook task_id column: %w", migrateErr)
+	}
+	if migrateErr := s.ensureRuntimeRunModelConfigIDColumn(); migrateErr != nil {
+		return fmt.Errorf("ensure runtime run model_config_id column: %w", migrateErr)
+	}
+	if validationErr := s.validateStrictSchema(); validationErr != nil {
+		backupPath := ""
+		if shouldBackupPreviousSchema(s.dbPath, validationErr) {
+			var backupErr error
+			backupPath, backupErr = backupPreviousSchemaDBFile(s.dbPath)
+			if backupErr != nil {
+				return fmt.Errorf("backup previous-schema db before rebuild: %w", backupErr)
+			}
+			log.Printf("previous authz db schema detected (%s); backup created at %s", s.dbPath, backupPath)
+		}
+		if rebuildErr := s.rebuildSchema(statements); rebuildErr != nil {
+			return fmt.Errorf("rebuild schema after validation failure: %w (original: %v)", rebuildErr, validationErr)
+		}
+		if backupPath != "" {
+			log.Printf("previous authz db schema rebuild succeeded (%s) using backup %s", s.dbPath, backupPath)
+		}
 	}
 	return nil
+}
+
+func (s *authzStore) normalizePermissionModes() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	validModes := []string{
+		string(PermissionModeDefault),
+		string(PermissionModeAcceptEdits),
+		string(PermissionModePlan),
+		string(PermissionModeDontAsk),
+		string(PermissionModeBypassPermissions),
+	}
+	inExpr := "'" + strings.Join(validModes, "','") + "'"
+	now := time.Now().UTC().Format(time.RFC3339)
+	updates := []string{
+		fmt.Sprintf(`UPDATE projects
+			SET default_mode='%s', updated_at='%s'
+			WHERE TRIM(default_mode)='' OR LOWER(TRIM(default_mode))='agent' OR default_mode NOT IN (%s)`,
+			string(PermissionModeDefault), now, inExpr),
+		fmt.Sprintf(`UPDATE conversations
+			SET default_mode='%s', updated_at='%s'
+			WHERE TRIM(default_mode)='' OR LOWER(TRIM(default_mode))='agent' OR default_mode NOT IN (%s)`,
+			string(PermissionModeDefault), now, inExpr),
+		fmt.Sprintf(`UPDATE executions
+			SET mode='%s', updated_at='%s'
+			WHERE TRIM(mode)='' OR LOWER(TRIM(mode))='agent' OR mode NOT IN (%s)`,
+			string(PermissionModeDefault), now, inExpr),
+		fmt.Sprintf(`UPDATE executions
+			SET mode_snapshot='%s', updated_at='%s'
+			WHERE TRIM(mode_snapshot)='' OR LOWER(TRIM(mode_snapshot))='agent' OR mode_snapshot NOT IN (%s)`,
+			string(PermissionModeDefault), now, inExpr),
+	}
+	for _, statement := range updates {
+		if _, err := s.db.Exec(statement); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *authzStore) ensureProjectConfigTokenThresholdColumns() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	hasTokenThreshold, hasTokenThresholdErr := tableHasColumn(s.db, "project_configs", "token_threshold")
+	if hasTokenThresholdErr != nil {
+		return hasTokenThresholdErr
+	}
+	if !hasTokenThreshold {
+		if _, err := s.db.Exec(`ALTER TABLE project_configs ADD COLUMN token_threshold INTEGER`); err != nil {
+			return err
+		}
+	}
+
+	hasModelThresholdsJSON, hasModelThresholdsJSONErr := tableHasColumn(s.db, "project_configs", "model_token_thresholds_json")
+	if hasModelThresholdsJSONErr != nil {
+		return hasModelThresholdsJSONErr
+	}
+	if !hasModelThresholdsJSON {
+		if _, err := s.db.Exec(`ALTER TABLE project_configs ADD COLUMN model_token_thresholds_json TEXT NOT NULL DEFAULT '{}'`); err != nil {
+			return err
+		}
+	}
+	_, err := s.db.Exec(`UPDATE project_configs SET model_token_thresholds_json='{}' WHERE model_token_thresholds_json IS NULL OR TRIM(model_token_thresholds_json)=''`)
+	return err
+}
+
+func (s *authzStore) ensureRuntimeSchemaVersion() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := s.db.Exec(
+		`INSERT INTO hub_schema_versions(component, version, updated_at)
+		 VALUES(?,?,?)
+		 ON CONFLICT(component) DO UPDATE SET version=excluded.version, updated_at=excluded.updated_at`,
+		hubRuntimeSchemaComponent,
+		hubRuntimeSchemaVersion,
+		now,
+	)
+	return err
+}
+
+func (s *authzStore) ensureRuntimeHookTaskIDColumn() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	hasTaskID, err := tableHasColumn(s.db, "runtime_hook_records", "task_id")
+	if err != nil {
+		return err
+	}
+	if hasTaskID {
+		return nil
+	}
+	_, err = s.db.Exec(`ALTER TABLE runtime_hook_records ADD COLUMN task_id TEXT`)
+	return err
+}
+
+func (s *authzStore) ensureRuntimeRunModelConfigIDColumn() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	hasModelConfigID, err := tableHasColumn(s.db, "runtime_runs", "model_config_id")
+	if err != nil {
+		return err
+	}
+	if hasModelConfigID {
+		return nil
+	}
+	_, err = s.db.Exec(`ALTER TABLE runtime_runs ADD COLUMN model_config_id TEXT NOT NULL DEFAULT ''`)
+	return err
+}
+
+func shouldBackupPreviousSchema(dbPath string, validationErr error) bool {
+	if validationErr == nil {
+		return false
+	}
+	normalized := strings.TrimSpace(dbPath)
+	if normalized == "" || normalized == ":memory:" {
+		return false
+	}
+	return strings.Contains(strings.ToLower(validationErr.Error()), "previous db schema detected")
+}
+
+func backupPreviousSchemaDBFile(dbPath string) (string, error) {
+	normalized := strings.TrimSpace(dbPath)
+	if normalized == "" || normalized == ":memory:" {
+		return "", nil
+	}
+	info, statErr := os.Stat(normalized)
+	if statErr != nil {
+		return "", fmt.Errorf("stat previous db: %w", statErr)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("previous db path is a directory: %s", normalized)
+	}
+
+	now := time.Now().UTC()
+	backupPath := fmt.Sprintf(
+		"%s.previous-%s%09d.bak",
+		normalized,
+		now.Format("20060102150405"),
+		now.Nanosecond(),
+	)
+	if copyErr := schemaBackupCopyFile(normalized, backupPath); copyErr != nil {
+		return "", copyErr
+	}
+	return backupPath, nil
+}
+
+func (s *authzStore) rebuildSchema(statements []string) error {
+	dropStatements := []string{
+		`DROP TABLE IF EXISTS workspace_connections`,
+		`DROP TABLE IF EXISTS workspace_agent_configs`,
+		`DROP TABLE IF EXISTS sessions`,
+		`DROP TABLE IF EXISTS role_grants`,
+		`DROP TABLE IF EXISTS permission_visibility`,
+		`DROP TABLE IF EXISTS menus`,
+		`DROP TABLE IF EXISTS permissions`,
+		`DROP TABLE IF EXISTS roles`,
+		`DROP TABLE IF EXISTS users`,
+		`DROP TABLE IF EXISTS abac_policies`,
+		`DROP TABLE IF EXISTS audit_logs`,
+		`DROP TABLE IF EXISTS workspace_catalog_roots`,
+		`DROP TABLE IF EXISTS project_configs`,
+		`DROP TABLE IF EXISTS projects`,
+		`DROP TABLE IF EXISTS conversation_snapshots`,
+		`DROP TABLE IF EXISTS conversation_messages`,
+		`DROP TABLE IF EXISTS hook_execution_records`,
+		`DROP TABLE IF EXISTS hook_policies`,
+		`DROP TABLE IF EXISTS execution_events`,
+		`DROP TABLE IF EXISTS executions`,
+		`DROP TABLE IF EXISTS conversations`,
+		`DROP TABLE IF EXISTS execution_control_commands`,
+		`DROP TABLE IF EXISTS execution_leases`,
+		`DROP TABLE IF EXISTS workers`,
+		`DROP TABLE IF EXISTS runtime_hook_records`,
+		`DROP TABLE IF EXISTS runtime_change_sets`,
+		`DROP TABLE IF EXISTS runtime_run_tasks`,
+		`DROP TABLE IF EXISTS runtime_run_events`,
+		`DROP TABLE IF EXISTS runtime_runs`,
+		`DROP TABLE IF EXISTS runtime_sessions`,
+		`DROP TABLE IF EXISTS hub_schema_versions`,
+		`DROP TABLE IF EXISTS resource_test_logs`,
+		`DROP TABLE IF EXISTS resource_configs`,
+		`DROP TABLE IF EXISTS workspaces`,
+	}
+	for _, statement := range dropStatements {
+		if _, err := s.db.Exec(statement); err != nil {
+			return err
+		}
+	}
+	for _, statement := range statements {
+		if _, err := s.db.Exec(statement); err != nil {
+			return err
+		}
+	}
+	return s.validateStrictSchema()
 }
 
 func (s *authzStore) validateStrictSchema() error {
@@ -342,9 +672,24 @@ func (s *authzStore) validateStrictSchema() error {
 		column string
 	}{
 		{table: "projects", column: "current_revision"},
+		{table: "projects", column: "default_model_config_id"},
+		{table: "project_configs", column: "model_config_ids_json"},
+		{table: "project_configs", column: "default_model_config_id"},
+		{table: "project_configs", column: "token_threshold"},
+		{table: "project_configs", column: "model_token_thresholds_json"},
 		{table: "executions", column: "agent_config_snapshot_json"},
+		{table: "executions", column: "resource_profile_snapshot_json"},
 		{table: "executions", column: "tokens_in"},
 		{table: "executions", column: "tokens_out"},
+		{table: "conversations", column: "model_config_id"},
+		{table: "conversations", column: "rule_ids_json"},
+		{table: "conversations", column: "skill_ids_json"},
+		{table: "conversations", column: "mcp_ids_json"},
+		{table: "hook_policies", column: "decision_json"},
+		{table: "hook_policies", column: "workspace_id"},
+		{table: "hook_policies", column: "project_id"},
+		{table: "hook_policies", column: "conversation_id"},
+		{table: "hook_execution_records", column: "decision_json"},
 	}
 	for _, field := range requiredColumns {
 		ok, err := tableHasColumn(s.db, field.table, field.column)
@@ -352,23 +697,37 @@ func (s *authzStore) validateStrictSchema() error {
 			return fmt.Errorf("validate schema %s.%s: %w", field.table, field.column, err)
 		}
 		if !ok {
-			return fmt.Errorf("legacy db schema detected: missing required column %s.%s; remove existing hub db and restart", field.table, field.column)
+			return fmt.Errorf("previous db schema detected: missing required column %s.%s; remove existing hub db and restart", field.table, field.column)
 		}
 	}
 
-	forbiddenLegacyColumns := []struct {
+	forbiddenUnexpectedColumns := []struct {
 		table  string
 		column string
 	}{
 		{table: "resource_configs", column: "name"},
 	}
-	for _, field := range forbiddenLegacyColumns {
+	for _, field := range forbiddenUnexpectedColumns {
 		ok, err := tableHasColumn(s.db, field.table, field.column)
 		if err != nil {
 			return fmt.Errorf("validate schema %s.%s: %w", field.table, field.column, err)
 		}
 		if ok {
-			return fmt.Errorf("legacy db schema detected: unexpected legacy column %s.%s; remove existing hub db and restart", field.table, field.column)
+			return fmt.Errorf("previous db schema detected: unexpected old column %s.%s", field.table, field.column)
+		}
+	}
+	forbiddenUnexpectedTables := []string{
+		"execution_control_commands",
+		"execution_leases",
+		"workers",
+	}
+	for _, table := range forbiddenUnexpectedTables {
+		exists, err := tableExists(s.db, table)
+		if err != nil {
+			return fmt.Errorf("validate schema table %s: %w", table, err)
+		}
+		if exists {
+			return fmt.Errorf("previous db schema detected: unexpected table %s", table)
 		}
 	}
 	return nil
@@ -403,6 +762,46 @@ func tableHasColumn(db *sql.DB, table string, column string) (bool, error) {
 	return false, nil
 }
 
+func tableExists(db *sql.DB, table string) (bool, error) {
+	row := db.QueryRow(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1`, strings.TrimSpace(table))
+	var exists int
+	err := row.Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func copyFileContents(sourcePath string, targetPath string) error {
+	sourceFile, sourceErr := os.Open(sourcePath)
+	if sourceErr != nil {
+		return fmt.Errorf("open source file: %w", sourceErr)
+	}
+	defer sourceFile.Close()
+
+	sourceInfo, sourceInfoErr := sourceFile.Stat()
+	if sourceInfoErr != nil {
+		return fmt.Errorf("read source file metadata: %w", sourceInfoErr)
+	}
+
+	targetFile, targetErr := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, sourceInfo.Mode().Perm())
+	if targetErr != nil {
+		return fmt.Errorf("open target file: %w", targetErr)
+	}
+	defer targetFile.Close()
+
+	if _, copyErr := io.Copy(targetFile, sourceFile); copyErr != nil {
+		return fmt.Errorf("copy file content: %w", copyErr)
+	}
+	if syncErr := targetFile.Sync(); syncErr != nil {
+		return fmt.Errorf("sync target file: %w", syncErr)
+	}
+	return nil
+}
+
 func (s *authzStore) ensureWorkspaceSeeds(workspaceID string) error {
 	if strings.TrimSpace(workspaceID) == "" {
 		return nil
@@ -420,9 +819,9 @@ func (s *authzStore) ensureWorkspaceSeeds(workspaceID string) error {
 	}()
 
 	roles := []AdminRole{
-		{Key: RoleViewer, Name: "Viewer", Permissions: []string{"project.read", "conversation.read", "resource.read"}, Enabled: true},
-		{Key: RoleDeveloper, Name: "Developer", Permissions: []string{"project.read", "project.write", "project_config.read", "conversation.read", "conversation.write", "execution.control", "resource.read", "resource.write", "resource_config.read", "resource_config.write", "model.test", "mcp.connect", "share.request", "share.revoke", "catalog.update_root"}, Enabled: true},
-		{Key: RoleApprover, Name: "Approver", Permissions: []string{"project.read", "project.write", "project_config.read", "conversation.read", "conversation.write", "execution.control", "resource.read", "resource.write", "resource_config.read", "resource_config.write", "resource_config.delete", "model.test", "mcp.connect", "share.request", "share.approve", "share.reject", "share.revoke", "catalog.update_root", "admin.audit.read"}, Enabled: true},
+		{Key: RoleViewer, Name: "Viewer", Permissions: []string{"project.read", "session.read", "resource.read"}, Enabled: true},
+		{Key: RoleDeveloper, Name: "Developer", Permissions: []string{"project.read", "project.write", "project_config.read", "session.read", "session.write", "run.control", "resource.read", "resource.write", "resource_config.read", "resource_config.write", "model.test", "mcp.connect", "share.request", "share.revoke", "catalog.update_root"}, Enabled: true},
+		{Key: RoleApprover, Name: "Approver", Permissions: []string{"project.read", "project.write", "project_config.read", "session.read", "session.write", "run.control", "resource.read", "resource.write", "resource_config.read", "resource_config.write", "resource_config.delete", "model.test", "mcp.connect", "share.request", "share.approve", "share.reject", "share.revoke", "catalog.update_root", "admin.audit.read"}, Enabled: true},
 		{Key: RoleAdmin, Name: "Admin", Permissions: []string{"*"}, Enabled: true},
 	}
 	for _, role := range roles {
@@ -452,9 +851,9 @@ func (s *authzStore) ensureWorkspaceSeeds(workspaceID string) error {
 	defaultPermissions := []adminPermission{
 		{Key: "project.read", Label: "读取项目", Enabled: true},
 		{Key: "project.write", Label: "写入项目", Enabled: true},
-		{Key: "conversation.read", Label: "读取会话", Enabled: true},
-		{Key: "conversation.write", Label: "写入会话", Enabled: true},
-		{Key: "execution.control", Label: "执行控制", Enabled: true},
+		{Key: "session.read", Label: "读取会话", Enabled: true},
+		{Key: "session.write", Label: "写入会话", Enabled: true},
+		{Key: "run.control", Label: "执行控制", Enabled: true},
 		{Key: "resource.read", Label: "读取资源", Enabled: true},
 		{Key: "resource.write", Label: "写入资源", Enabled: true},
 		{Key: "resource_config.read", Label: "读取资源配置", Enabled: true},

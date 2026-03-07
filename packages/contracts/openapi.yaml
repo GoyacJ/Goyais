@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Goyais Contracts
-  version: 0.4.0
+  version: 1.0.0
 servers:
   - url: http://127.0.0.1:8787
 paths:
@@ -78,7 +78,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/WorkspaceIdParam'
         - in: query
-          name: conversation_id
+          name: session_id
           schema:
             type: string
       responses:
@@ -251,22 +251,22 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/projects/{project_id}/conversations:
+  /v1/projects/{project_id}/sessions:
     get:
-      summary: List project conversations
+      summary: List project sessions
       parameters:
         - $ref: '#/components/parameters/ProjectIdParam'
         - $ref: '#/components/parameters/CursorParam'
         - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
-          description: Conversation list
+          description: Session list
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListEnvelope'
     post:
-      summary: Create conversation in project
+      summary: Create session in project
       parameters:
         - $ref: '#/components/parameters/ProjectIdParam'
       requestBody:
@@ -274,14 +274,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateConversationRequest'
+              $ref: '#/components/schemas/CreateSessionRequest'
       responses:
         '201':
-          description: Created conversation
+          description: Created session
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Conversation'
+                $ref: '#/components/schemas/Session'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
@@ -370,9 +370,9 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations:
+  /v1/sessions:
     get:
-      summary: List conversations
+      summary: List sessions
       parameters:
         - in: query
           name: workspace_id
@@ -386,85 +386,131 @@ paths:
         - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
-          description: Conversation list
+          description: Session list
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListEnvelope'
 
-  /v1/conversations/{conversation_id}:
+  /v1/sessions/{session_id}:
     get:
-      summary: Get conversation detail
+      summary: Get session detail
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       responses:
         '200':
-          description: Conversation detail
+          description: Session detail
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConversationDetailResponse'
+                $ref: '#/components/schemas/SessionDetailResponse'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
     patch:
-      summary: Update conversation metadata
+      summary: Update session metadata
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateConversationRequest'
+              $ref: '#/components/schemas/UpdateSessionRequest'
       responses:
         '200':
-          description: Renamed conversation
+          description: Updated session
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Conversation'
+                $ref: '#/components/schemas/Session'
         '400':
           $ref: '#/components/responses/StandardErrorResponse'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
     delete:
-      summary: Delete conversation
+      summary: Delete session
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       responses:
         '204':
           description: Deleted
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/messages:
-    post:
-      summary: Enqueue conversation message and create execution
+  /v1/sessions/{session_id}/input/catalog:
+    get:
+      summary: Get composer input catalog
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
+      responses:
+        '200':
+          description: Composer catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComposerCatalogResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/sessions/{session_id}/input/suggest:
+    post:
+      summary: Suggest composer tokens for draft input
+      parameters:
+        - $ref: '#/components/parameters/SessionIdParam'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ExecutionCreateRequest'
+              $ref: '#/components/schemas/ComposerSuggestRequest'
       responses:
-        '201':
-          description: Created execution
+        '200':
+          description: Composer suggestions
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExecutionCreateResponse'
+                $ref: '#/components/schemas/ComposerSuggestResponse'
         '400':
           $ref: '#/components/responses/StandardErrorResponse'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/events:
-    get:
-      summary: Stream execution events for conversation (SSE)
+  /v1/sessions/{session_id}/runs:
+    post:
+      summary: Submit composer input with strict command and resource validation
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComposerSubmitRequest'
+      responses:
+        '200':
+          description: Command result response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComposerSubmitResponse'
+        '201':
+          description: Run enqueued response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComposerSubmitResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '409':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/sessions/{session_id}/events:
+    get:
+      summary: Stream run events for session (SSE)
+      parameters:
+        - $ref: '#/components/parameters/SessionIdParam'
         - in: query
           name: last_event_id
           schema:
@@ -479,11 +525,11 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/stop:
+  /v1/sessions/{session_id}/stop:
     post:
-      summary: Stop active execution and continue queued items
+      summary: Stop active run and continue queued items
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
       responses:
         '200':
           description: Stop accepted
@@ -494,34 +540,11 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/conversations/{conversation_id}/rollback:
-    post:
-      summary: Rollback conversation to snapshot point
-      parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RollbackRequest'
-      responses:
-        '200':
-          description: Rollback applied
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-        '400':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '404':
-          $ref: '#/components/responses/StandardErrorResponse'
-
-  /v1/conversations/{conversation_id}/export:
+  /v1/sessions/{session_id}/export:
     get:
-      summary: Export conversation as markdown
+      summary: Export session as markdown
       parameters:
-        - $ref: '#/components/parameters/ConversationIdParam'
+        - $ref: '#/components/parameters/SessionIdParam'
         - in: query
           name: format
           required: true
@@ -540,74 +563,270 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/executions:
+  /v1/runs:
     get:
-      summary: List executions
+      summary: List runs
       parameters:
         - in: query
-          name: conversation_id
+          name: session_id
           schema:
             type: string
         - $ref: '#/components/parameters/CursorParam'
         - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
-          description: Execution list
+          description: Run list
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListEnvelope'
 
-  /v1/executions/{execution_id}/diff:
-    get:
-      summary: Get execution diff summary
+  /v1/runs/{run_id}/control:
+    post:
+      summary: Control run with unified actions
       parameters:
-        - $ref: '#/components/parameters/ExecutionIdParam'
+        - $ref: '#/components/parameters/RunIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunControlRequest'
       responses:
         '200':
-          description: Diff list
+          description: Run control applied
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/DiffItem'
+                $ref: '#/components/schemas/RunControlResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
+        '409':
+          $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/executions/{execution_id}/patch:
+  /v1/runs/{run_id}/graph:
     get:
-      summary: Export execution patch
+      summary: Get run task dependency graph
       parameters:
-        - $ref: '#/components/parameters/ExecutionIdParam'
+        - $ref: '#/components/parameters/RunIdParam'
       responses:
         '200':
-          description: Patch content
+          description: Run task graph
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
+                $ref: '#/components/schemas/AgentGraph'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/executions/{execution_id}/{action}:
-    post:
-      summary: Commit or discard execution result
+  /v1/runs/{run_id}/tasks:
+    get:
+      summary: List run tasks
       parameters:
-        - $ref: '#/components/parameters/ExecutionIdParam'
-        - in: path
-          name: action
-          required: true
+        - $ref: '#/components/parameters/RunIdParam'
+        - in: query
+          name: state
           schema:
-            type: string
-            enum: [commit, discard]
+            $ref: '#/components/schemas/TaskState'
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
-          description: Action applied
+          description: Run task list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunTaskListResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/runs/{run_id}/tasks/{task_id}:
+    get:
+      summary: Get run task detail
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+        - $ref: '#/components/parameters/TaskIdParam'
+      responses:
+        '200':
+          description: Run task detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskNode'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/runs/{run_id}/tasks/{task_id}/control:
+    post:
+      summary: Control task execution in run
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+        - $ref: '#/components/parameters/TaskIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskControlRequest'
+      responses:
+        '200':
+          description: Task control applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskControlResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '409':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/hooks/policies:
+    get:
+      summary: List hook policies
+      responses:
+        '200':
+          description: Hook policy list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HookPolicyListResponse'
+    post:
+      summary: Create or update hook policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HookPolicyUpsertRequest'
+      responses:
+        '200':
+          description: Upserted hook policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HookPolicy'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/hooks/runs/{run_id}:
+    get:
+      summary: List hook execution records for run
+      parameters:
+        - $ref: '#/components/parameters/RunIdParam'
+      responses:
+        '200':
+          description: Hook execution list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HookExecutionListResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/sessions/{session_id}/changeset:
+    get:
+      summary: Get session-level pending change set
+      parameters:
+        - $ref: '#/components/parameters/SessionIdParam'
+      responses:
+        '200':
+          description: Pending session changes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionChangeSet'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/sessions/{session_id}/changeset/commit:
+    post:
+      summary: Commit session-level pending change set
+      parameters:
+        - $ref: '#/components/parameters/SessionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeSetCommitRequest'
+      responses:
+        '200':
+          description: Change set committed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeSetCommitResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '409':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/sessions/{session_id}/changeset/discard:
+    post:
+      summary: Discard session-level pending change set
+      parameters:
+        - $ref: '#/components/parameters/SessionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeSetDiscardRequest'
+      responses:
+        '200':
+          description: Change set discarded
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+        '409':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/sessions/{session_id}/changeset/export:
+    post:
+      summary: Export session-level pending changed files as zip archive
+      parameters:
+        - $ref: '#/components/parameters/SessionIdParam'
+      responses:
+        '200':
+          description: Files archive payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunFilesExportResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/sessions/{session_id}/rollback:
+    post:
+      summary: Rollback session to user message anchor
+      parameters:
+        - $ref: '#/components/parameters/SessionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RollbackRequest'
+      responses:
+        '200':
+          description: Rollback applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/StandardErrorResponse'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
@@ -1483,144 +1702,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ListEnvelope'
 
-  /internal/workers/register:
-    post:
-      summary: Worker register endpoint
-      parameters:
-        - $ref: '#/components/parameters/InternalTokenHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WorkerRegisterRequest'
-      responses:
-        '202':
-          description: Worker registered
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-        '401':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '400':
-          $ref: '#/components/responses/StandardErrorResponse'
-
-  /internal/workers/{worker_id}/heartbeat:
-    post:
-      summary: Worker heartbeat endpoint
-      parameters:
-        - in: path
-          name: worker_id
-          required: true
-          schema:
-            type: string
-        - $ref: '#/components/parameters/InternalTokenHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WorkerHeartbeatRequest'
-      responses:
-        '202':
-          description: Heartbeat accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OkResponse'
-        '401':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '400':
-          $ref: '#/components/responses/StandardErrorResponse'
-
-  /internal/executions/claim:
-    post:
-      summary: Worker claims one pending execution with lease
-      parameters:
-        - $ref: '#/components/parameters/InternalTokenHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ExecutionClaimRequest'
-      responses:
-        '200':
-          description: Claim result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExecutionClaimResponse'
-        '401':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '400':
-          $ref: '#/components/responses/StandardErrorResponse'
-
-  /internal/executions/{execution_id}/events/batch:
-    post:
-      summary: Worker uploads execution events in batch
-      parameters:
-        - $ref: '#/components/parameters/ExecutionIdParam'
-        - $ref: '#/components/parameters/InternalTokenHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ExecutionEventBatchRequest'
-      responses:
-        '202':
-          description: Events accepted
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [accepted, events]
-                properties:
-                  accepted:
-                    type: boolean
-                  events:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ExecutionEvent'
-        '401':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '400':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '404':
-          $ref: '#/components/responses/StandardErrorResponse'
-
-  /internal/executions/{execution_id}/control:
-    get:
-      summary: Worker long-polls control commands for an execution
-      parameters:
-        - $ref: '#/components/parameters/ExecutionIdParam'
-        - $ref: '#/components/parameters/InternalTokenHeader'
-        - in: query
-          name: after_seq
-          schema:
-            type: integer
-            minimum: 0
-        - in: query
-          name: wait_ms
-          schema:
-            type: integer
-            minimum: 0
-      responses:
-        '200':
-          description: Control command list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExecutionControlPollResponse'
-        '401':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '404':
-          $ref: '#/components/responses/StandardErrorResponse'
-        '404':
-          $ref: '#/components/responses/StandardErrorResponse'
-
 components:
   parameters:
     CursorParam:
@@ -1638,13 +1719,6 @@ components:
         maximum: 100
         default: 20
       description: Page size for cursor-based pagination.
-    InternalTokenHeader:
-      in: header
-      name: X-Internal-Token
-      required: true
-      schema:
-        type: string
-      description: Shared internal token used by Hub when invoking Worker internal endpoints.
     WorkspaceIdParam:
       in: path
       name: workspace_id
@@ -1657,15 +1731,21 @@ components:
       required: true
       schema:
         type: string
-    ConversationIdParam:
+    SessionIdParam:
       in: path
-      name: conversation_id
+      name: session_id
       required: true
       schema:
         type: string
-    ExecutionIdParam:
+    RunIdParam:
       in: path
-      name: execution_id
+      name: run_id
+      required: true
+      schema:
+        type: string
+    TaskIdParam:
+      in: path
+      name: task_id
       required: true
       schema:
         type: string
@@ -1762,9 +1842,62 @@ components:
         access_token:
           type: string
 
-    ConversationStatus:
+    SessionStatus:
       type: string
       enum: [running, queued, stopped, done, error]
+
+    PermissionMode:
+      type: string
+      enum: [default, acceptEdits, plan, dontAsk, bypassPermissions]
+
+    RunState:
+      type: string
+      enum: [queued, pending, executing, confirming, awaiting_input, completed, failed, cancelled]
+
+    RunControlAction:
+      type: string
+      enum: [stop, approve, deny, resume, answer]
+
+    RunEventType:
+      type: string
+      enum:
+        - message_received
+        - user_prompt_submit
+        - execution_started
+        - thinking_delta
+        - pre_tool_use
+        - permission_request
+        - tool_call
+        - tool_result
+        - post_tool_use
+        - post_tool_use_failure
+        - diff_generated
+        - change_set_updated
+        - change_set_committed
+        - change_set_discarded
+        - change_set_rolled_back
+        - execution_stopped
+        - execution_done
+        - execution_error
+        - task_graph_configured
+        - task_dependencies_updated
+        - task_retry_policy_updated
+        - task_artifact_emitted
+        - task_failed
+        - task_started
+        - task_completed
+        - task_cancelled
+
+    ExecutionUserAnswer:
+      type: object
+      required: [question_id]
+      properties:
+        question_id:
+          type: string
+        selected_option_id:
+          type: string
+        text:
+          type: string
 
     RemoteConnectionResponse:
       type: object
@@ -1781,7 +1914,7 @@ components:
       type: object
       required:
         - workspace_id
-        - conversation_status
+        - session_status
         - hub_url
         - connection_status
         - user_display_name
@@ -1789,10 +1922,10 @@ components:
       properties:
         workspace_id:
           type: string
-        conversation_id:
+        session_id:
           type: string
-        conversation_status:
-          $ref: '#/components/schemas/ConversationStatus'
+        session_status:
+          $ref: '#/components/schemas/SessionStatus'
         hub_url:
           type: string
         connection_status:
@@ -1964,7 +2097,7 @@ components:
 
     Project:
       type: object
-      required: [id, workspace_id, name, repo_path, is_git, current_revision, created_at, updated_at]
+      required: [id, workspace_id, name, repo_path, is_git, current_revision, tokens_in_total, tokens_out_total, tokens_total, created_at, updated_at]
       properties:
         id:
           type: string
@@ -1976,14 +2109,25 @@ components:
           type: string
         is_git:
           type: boolean
-        default_model_id:
+        default_model_config_id:
           type: string
+        token_threshold:
+          type: integer
+          minimum: 1
         default_mode:
-          type: string
-          enum: [agent, plan]
+          $ref: '#/components/schemas/PermissionMode'
         current_revision:
           type: integer
           format: int64
+        tokens_in_total:
+          type: integer
+          minimum: 0
+        tokens_out_total:
+          type: integer
+          minimum: 0
+        tokens_total:
+          type: integer
+          minimum: 0
         created_at:
           type: string
           format: date-time
@@ -2015,16 +2159,24 @@ components:
 
     ProjectConfig:
       type: object
-      required: [project_id, model_ids, rule_ids, skill_ids, mcp_ids, updated_at]
+      required: [project_id, model_config_ids, model_token_thresholds, rule_ids, skill_ids, mcp_ids, updated_at]
       properties:
         project_id:
           type: string
-        model_ids:
+        model_config_ids:
           type: array
           items:
             type: string
-        default_model_id:
+        default_model_config_id:
           type: [string, 'null']
+        token_threshold:
+          type: integer
+          minimum: 1
+        model_token_thresholds:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 1
         rule_ids:
           type: array
           items:
@@ -2043,14 +2195,41 @@ components:
 
     WorkspaceProjectConfigItem:
       type: object
-      required: [project_id, project_name, config]
+      required: [project_id, project_name, config, tokens_in_total, tokens_out_total, tokens_total, model_token_usage_by_config_id]
       properties:
         project_id:
           type: string
         project_name:
           type: string
+        tokens_in_total:
+          type: integer
+          minimum: 0
+        tokens_out_total:
+          type: integer
+          minimum: 0
+        tokens_total:
+          type: integer
+          minimum: 0
+        model_token_usage_by_config_id:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ModelTokenUsage'
         config:
           $ref: '#/components/schemas/ProjectConfig'
+
+    ModelTokenUsage:
+      type: object
+      required: [tokens_in_total, tokens_out_total, tokens_total]
+      properties:
+        tokens_in_total:
+          type: integer
+          minimum: 0
+        tokens_out_total:
+          type: integer
+          minimum: 0
+        tokens_total:
+          type: integer
+          minimum: 0
 
     WorkspaceAgentExecutionConfig:
       type: object
@@ -2071,9 +2250,64 @@ components:
           type: string
           enum: [basic, verbose]
 
+    WorkspaceAgentCapabilityBudgets:
+      type: object
+      required: [prompt_budget_chars, search_threshold_percent]
+      properties:
+        prompt_budget_chars:
+          type: integer
+          minimum: 256
+        search_threshold_percent:
+          type: integer
+          minimum: 1
+          maximum: 100
+
+    WorkspaceAgentMCPSearchConfig:
+      type: object
+      required: [enabled, result_limit]
+      properties:
+        enabled:
+          type: boolean
+        result_limit:
+          type: integer
+          minimum: 1
+
+    WorkspaceAgentSubagentDefaults:
+      type: object
+      required: [max_turns]
+      properties:
+        max_turns:
+          type: integer
+          minimum: 1
+          maximum: 64
+        allowed_tools:
+          type: array
+          items:
+            type: string
+
+    WorkspaceAgentFeatureFlags:
+      type: object
+      required: [enable_tool_search, enable_capability_graph]
+      properties:
+        enable_tool_search:
+          type: boolean
+        enable_capability_graph:
+          type: boolean
+
     WorkspaceAgentConfig:
       type: object
-      required: [workspace_id, execution, display, updated_at]
+      required:
+        - workspace_id
+        - execution
+        - display
+        - default_mode
+        - builtin_tools
+        - capability_budgets
+        - mcp_search
+        - output_style
+        - subagent_defaults
+        - feature_flags
+        - updated_at
       properties:
         workspace_id:
           type: string
@@ -2081,11 +2315,27 @@ components:
           $ref: '#/components/schemas/WorkspaceAgentExecutionConfig'
         display:
           $ref: '#/components/schemas/WorkspaceAgentDisplayConfig'
+        default_mode:
+          $ref: '#/components/schemas/PermissionMode'
+        builtin_tools:
+          type: array
+          items:
+            type: string
+        capability_budgets:
+          $ref: '#/components/schemas/WorkspaceAgentCapabilityBudgets'
+        mcp_search:
+          $ref: '#/components/schemas/WorkspaceAgentMCPSearchConfig'
+        output_style:
+          type: string
+        subagent_defaults:
+          $ref: '#/components/schemas/WorkspaceAgentSubagentDefaults'
+        feature_flags:
+          $ref: '#/components/schemas/WorkspaceAgentFeatureFlags'
         updated_at:
           type: string
           format: date-time
 
-    Conversation:
+    Session:
       type: object
       required:
         - id
@@ -2094,7 +2344,10 @@ components:
         - name
         - queue_state
         - default_mode
-        - model_id
+        - model_config_id
+        - rule_ids
+        - skill_ids
+        - mcp_ids
         - base_revision
         - created_at
         - updated_at
@@ -2111,15 +2364,35 @@ components:
           type: string
           enum: [idle, running, queued]
         default_mode:
+          $ref: '#/components/schemas/PermissionMode'
+        model_config_id:
           type: string
-          enum: [agent, plan]
-        model_id:
-          type: string
+        rule_ids:
+          type: array
+          items:
+            type: string
+        skill_ids:
+          type: array
+          items:
+            type: string
+        mcp_ids:
+          type: array
+          items:
+            type: string
         base_revision:
           type: integer
           format: int64
-        active_execution_id:
+        active_run_id:
           type: [string, 'null']
+        tokens_in_total:
+          type: integer
+          minimum: 0
+        tokens_out_total:
+          type: integer
+          minimum: 0
+        tokens_total:
+          type: integer
+          minimum: 0
         created_at:
           type: string
           format: date-time
@@ -2127,13 +2400,13 @@ components:
           type: string
           format: date-time
 
-    ConversationMessage:
+    SessionMessage:
       type: object
-      required: [id, conversation_id, role, content, created_at]
+      required: [id, session_id, role, content, created_at]
       properties:
         id:
           type: string
-        conversation_id:
+        session_id:
           type: string
         role:
           type: string
@@ -2148,28 +2421,29 @@ components:
           type: string
           format: date-time
 
-    ConversationInspector:
+    SessionInspector:
       type: object
       required: [tab]
       properties:
         tab:
           type: string
+          enum: [diff, run, trace, risk]
 
-    ConversationSnapshot:
+    SessionSnapshot:
       type: object
       required:
         - id
-        - conversation_id
+        - session_id
         - rollback_point_message_id
         - queue_state
         - inspector_state
         - messages
-        - execution_ids
+        - run_ids
         - created_at
       properties:
         id:
           type: string
-        conversation_id:
+        session_id:
           type: string
         rollback_point_message_id:
           type: string
@@ -2179,12 +2453,12 @@ components:
         worktree_ref:
           type: [string, 'null']
         inspector_state:
-          $ref: '#/components/schemas/ConversationInspector'
+          $ref: '#/components/schemas/SessionInspector'
         messages:
           type: array
           items:
-            $ref: '#/components/schemas/ConversationMessage'
-        execution_ids:
+            $ref: '#/components/schemas/SessionMessage'
+        run_ids:
           type: array
           items:
             type: string
@@ -2192,26 +2466,26 @@ components:
           type: string
           format: date-time
 
-    ConversationDetailResponse:
+    SessionDetailResponse:
       type: object
-      required: [conversation, messages, executions, snapshots]
+      required: [session, messages, runs, snapshots]
       properties:
-        conversation:
-          $ref: '#/components/schemas/Conversation'
+        session:
+          $ref: '#/components/schemas/Session'
         messages:
           type: array
           items:
-            $ref: '#/components/schemas/ConversationMessage'
-        executions:
+            $ref: '#/components/schemas/SessionMessage'
+        runs:
           type: array
           items:
-            $ref: '#/components/schemas/Execution'
+            $ref: '#/components/schemas/Run'
         snapshots:
           type: array
           items:
-            $ref: '#/components/schemas/ConversationSnapshot'
+            $ref: '#/components/schemas/SessionSnapshot'
 
-    CreateConversationRequest:
+    CreateSessionRequest:
       type: object
       required: [workspace_id, name]
       properties:
@@ -2220,16 +2494,27 @@ components:
         name:
           type: string
 
-    UpdateConversationRequest:
+    UpdateSessionRequest:
       type: object
       properties:
         name:
           type: string
         mode:
+          $ref: '#/components/schemas/PermissionMode'
+        model_config_id:
           type: string
-          enum: [agent, plan]
-        model_id:
-          type: string
+        rule_ids:
+          type: array
+          items:
+            type: string
+        skill_ids:
+          type: array
+          items:
+            type: string
+        mcp_ids:
+          type: array
+          items:
+            type: string
 
     ModelSnapshot:
       type: object
@@ -2243,15 +2528,23 @@ components:
           type: string
         base_url:
           type: string
-        timeout_ms:
-          type: integer
+        runtime:
+          $ref: '#/components/schemas/ModelRuntimeSpec'
         params:
           type: object
           additionalProperties: true
 
-    ExecutionAgentConfigSnapshot:
+    RunAgentConfigSnapshot:
       type: object
-      required: [max_model_turns, show_process_trace, trace_detail_level]
+      required:
+        - max_model_turns
+        - show_process_trace
+        - trace_detail_level
+        - default_mode
+        - capability_budgets
+        - mcp_search
+        - subagent_defaults
+        - feature_flags
       properties:
         max_model_turns:
           type: integer
@@ -2262,13 +2555,147 @@ components:
         trace_detail_level:
           type: string
           enum: [basic, verbose]
+        default_mode:
+          $ref: '#/components/schemas/PermissionMode'
+        builtin_tools:
+          type: array
+          items:
+            type: string
+        capability_budgets:
+          $ref: '#/components/schemas/WorkspaceAgentCapabilityBudgets'
+        mcp_search:
+          $ref: '#/components/schemas/WorkspaceAgentMCPSearchConfig'
+        output_style:
+          type: string
+        subagent_defaults:
+          $ref: '#/components/schemas/WorkspaceAgentSubagentDefaults'
+        feature_flags:
+          $ref: '#/components/schemas/WorkspaceAgentFeatureFlags'
 
-    Execution:
+    ExecutionAgentConfigSnapshot:
+      allOf:
+        - $ref: '#/components/schemas/RunAgentConfigSnapshot'
+
+    ExecutionMCPServerSnapshot:
+      type: object
+      required: [name, transport]
+      properties:
+        name:
+          type: string
+        transport:
+          type: string
+        endpoint:
+          type: string
+        command:
+          type: string
+        env:
+          type: object
+          additionalProperties:
+            type: string
+        tools:
+          type: array
+          items:
+            type: string
+
+    ExecutionCapabilityDescriptorSnapshot:
+      type: object
+      required:
+        - id
+        - kind
+        - name
+        - description
+        - source
+        - scope
+        - version
+        - risk_level
+        - read_only
+        - concurrency_safe
+        - requires_permissions
+        - visibility_policy
+        - prompt_budget_cost
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [builtin_tool, mcp_tool, mcp_prompt, skill, slash_command, subagent, output_style]
+        name:
+          type: string
+        description:
+          type: string
+        source:
+          type: string
+        scope:
+          type: string
+          enum: [system, workspace, project, user, local, plugin, managed]
+        version:
+          type: string
+        input_schema:
+          type: object
+          additionalProperties: true
+        risk_level:
+          type: string
+        read_only:
+          type: boolean
+        concurrency_safe:
+          type: boolean
+        requires_permissions:
+          type: boolean
+        visibility_policy:
+          type: string
+          enum: [always_loaded, searchable]
+        prompt_budget_cost:
+          type: integer
+
+    RunResourceProfile:
+      type: object
+      required: [model_id]
+      properties:
+        model_config_id:
+          type: string
+        model_id:
+          type: string
+        rule_ids:
+          type: array
+          items:
+            type: string
+        skill_ids:
+          type: array
+          items:
+            type: string
+        mcp_ids:
+          type: array
+          items:
+            type: string
+        project_file_paths:
+          type: array
+          items:
+            type: string
+        rules_dsl:
+          type: string
+        mcp_servers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutionMCPServerSnapshot'
+        always_loaded_capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutionCapabilityDescriptorSnapshot'
+        searchable_capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutionCapabilityDescriptorSnapshot'
+
+    ExecutionResourceProfile:
+      allOf:
+        - $ref: '#/components/schemas/RunResourceProfile'
+
+    Run:
       type: object
       required:
         - id
         - workspace_id
-        - conversation_id
+        - session_id
         - message_id
         - state
         - mode
@@ -2287,25 +2714,24 @@ components:
           type: string
         workspace_id:
           type: string
-        conversation_id:
+        session_id:
           type: string
         message_id:
           type: string
         state:
-          type: string
-          enum: [queued, pending, executing, completed, failed, cancelled]
+          $ref: '#/components/schemas/RunState'
         mode:
-          type: string
-          enum: [agent, plan]
+          $ref: '#/components/schemas/PermissionMode'
         model_id:
           type: string
         mode_snapshot:
-          type: string
-          enum: [agent, plan]
+          $ref: '#/components/schemas/PermissionMode'
         model_snapshot:
           $ref: '#/components/schemas/ModelSnapshot'
+        resource_profile_snapshot:
+          $ref: '#/components/schemas/RunResourceProfile'
         agent_config_snapshot:
-          $ref: '#/components/schemas/ExecutionAgentConfigSnapshot'
+          $ref: '#/components/schemas/RunAgentConfigSnapshot'
         tokens_in:
           type: integer
           minimum: 0
@@ -2326,29 +2752,146 @@ components:
           type: string
           format: date-time
 
-    ExecutionCreateRequest:
+    ComposerCommandCatalogItem:
       type: object
-      required: [content]
+      required: [name, description, kind]
       properties:
-        content:
+        name:
           type: string
-        mode:
+        description:
           type: string
-          enum: [agent, plan]
-        model_id:
+        kind:
+          type: string
+          enum: [control, prompt]
+
+    ComposerCapabilityCatalogItem:
+      type: object
+      required: [id, kind, name]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [model, rule, skill, mcp, file]
+        name:
+          type: string
+        description:
+          type: string
+        source:
+          type: string
+        scope:
           type: string
 
-    ExecutionCreateResponse:
+    ComposerCatalogResponse:
       type: object
-      required: [execution, queue_state, queue_index]
+      required: [revision, commands, capabilities]
       properties:
-        execution:
-          $ref: '#/components/schemas/Execution'
-        queue_state:
+        revision:
           type: string
-          enum: [idle, running, queued]
-        queue_index:
+        commands:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComposerCommandCatalogItem'
+        capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComposerCapabilityCatalogItem'
+
+    ComposerSuggestRequest:
+      type: object
+      required: [draft, cursor]
+      properties:
+        draft:
+          type: string
+        cursor:
           type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+        catalog_revision:
+          type: string
+
+    ComposerSuggestion:
+      type: object
+      required: [kind, label, insert_text, replace_start, replace_end]
+      properties:
+        kind:
+          type: string
+          enum: [command, resource_type, resource]
+        label:
+          type: string
+        detail:
+          type: string
+        insert_text:
+          type: string
+        replace_start:
+          type: integer
+          minimum: 0
+        replace_end:
+          type: integer
+          minimum: 0
+
+    ComposerSuggestResponse:
+      type: object
+      required: [revision, suggestions]
+      properties:
+        revision:
+          type: string
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComposerSuggestion'
+
+    ComposerSubmitRequest:
+      type: object
+      required: [raw_input]
+      properties:
+        raw_input:
+          type: string
+        mode:
+          $ref: '#/components/schemas/PermissionMode'
+        model_config_id:
+          type: string
+        selected_capabilities:
+          type: array
+          items:
+            type: string
+        catalog_revision:
+          type: string
+
+    ComposerCommandResult:
+      type: object
+      required: [command, output]
+      properties:
+        command:
+          type: string
+        output:
+          type: string
+
+    ComposerSubmitResponse:
+      oneOf:
+        - type: object
+          required: [kind, command_result]
+          properties:
+            kind:
+              type: string
+              enum: [command_result]
+            command_result:
+              $ref: '#/components/schemas/ComposerCommandResult'
+        - type: object
+          required: [kind, run, queue_state, queue_index]
+          properties:
+            kind:
+              type: string
+              enum: [run_enqueued]
+            run:
+              $ref: '#/components/schemas/Run'
+            queue_state:
+              type: string
+              enum: [idle, running, queued]
+            queue_index:
+              type: integer
 
     RollbackRequest:
       type: object
@@ -2369,6 +2912,159 @@ components:
           type: string
           enum: [added, modified, deleted]
         summary:
+          type: string
+        added_lines:
+          type: integer
+          minimum: 0
+        deleted_lines:
+          type: integer
+          minimum: 0
+        before_blob:
+          type: string
+        after_blob:
+          type: string
+
+    ChangeEntry:
+      type: object
+      required: [entry_id, message_id, run_id, path, change_type, summary, created_at]
+      properties:
+        entry_id:
+          type: string
+        message_id:
+          type: string
+        run_id:
+          type: string
+        path:
+          type: string
+        change_type:
+          type: string
+          enum: [added, modified, deleted]
+        summary:
+          type: string
+        added_lines:
+          type: integer
+          minimum: 0
+        deleted_lines:
+          type: integer
+          minimum: 0
+        before_blob:
+          type: string
+        after_blob:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ChangeSetCapability:
+      type: object
+      required: [can_commit, can_discard, can_export]
+      properties:
+        can_commit:
+          type: boolean
+        can_discard:
+          type: boolean
+        can_export:
+          type: boolean
+        can_export_patch:
+          type: boolean
+        reason:
+          type: string
+
+    CommitSuggestion:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    CheckpointSummary:
+      type: object
+      required: [checkpoint_id, message, created_at]
+      properties:
+        checkpoint_id:
+          type: string
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        git_commit_id:
+          type: string
+        entries_digest:
+          type: string
+
+    SessionChangeSet:
+      type: object
+      required:
+        - change_set_id
+        - session_id
+        - project_kind
+        - entries
+        - file_count
+        - added_lines
+        - deleted_lines
+        - capability
+        - suggested_message
+      properties:
+        change_set_id:
+          type: string
+        session_id:
+          type: string
+        project_kind:
+          type: string
+          enum: [git, non_git]
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChangeEntry'
+        file_count:
+          type: integer
+          minimum: 0
+        added_lines:
+          type: integer
+          minimum: 0
+        deleted_lines:
+          type: integer
+          minimum: 0
+        capability:
+          $ref: '#/components/schemas/ChangeSetCapability'
+        suggested_message:
+          $ref: '#/components/schemas/CommitSuggestion'
+        last_committed_checkpoint:
+          $ref: '#/components/schemas/CheckpointSummary'
+
+    ChangeSetCommitRequest:
+      type: object
+      required: [message, expected_change_set_id]
+      properties:
+        message:
+          type: string
+        expected_change_set_id:
+          type: string
+
+    ChangeSetDiscardRequest:
+      type: object
+      required: [expected_change_set_id]
+      properties:
+        expected_change_set_id:
+          type: string
+
+    ChangeSetCommitResponse:
+      type: object
+      required: [ok, checkpoint]
+      properties:
+        ok:
+          type: boolean
+        checkpoint:
+          $ref: '#/components/schemas/CheckpointSummary'
+
+    RunFilesExportResponse:
+      type: object
+      required: [file_name, archive_base64]
+      properties:
+        file_name:
+          type: string
+        archive_base64:
           type: string
 
     ProjectFileEntry:
@@ -2489,7 +3185,7 @@ components:
           type: string
         vendor:
           type: string
-          enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+          enum: [OpenAI, DeepSeek, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
         model_id:
           type: string
         enabled:
@@ -2508,7 +3204,7 @@ components:
           type: array
           items:
             type: string
-            enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+            enum: [OpenAI, DeepSeek, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
 
     ModelCatalogModel:
       type: object
@@ -2541,7 +3237,7 @@ components:
       properties:
         name:
           type: string
-          enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+          enum: [OpenAI, DeepSeek, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
         homepage:
           type: string
         docs:
@@ -2608,13 +3304,19 @@ components:
           type: string
           format: date-time
 
+    ModelRuntimeSpec:
+      type: object
+      properties:
+        request_timeout_ms:
+          type: integer
+
     ModelSpec:
       type: object
       required: [vendor, model_id]
       properties:
         vendor:
           type: string
-          enum: [OpenAI, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
+          enum: [OpenAI, DeepSeek, Google, Qwen, Doubao, Zhipu, MiniMax, Local]
         model_id:
           type: string
         base_url:
@@ -2625,8 +3327,11 @@ components:
           type: string
         api_key_masked:
           type: string
-        timeout_ms:
+        token_threshold:
           type: integer
+          minimum: 1
+        runtime:
+          $ref: '#/components/schemas/ModelRuntimeSpec'
         params:
           type: object
           additionalProperties: true
@@ -2674,7 +3379,7 @@ components:
 
     ResourceConfig:
       type: object
-      required: [id, workspace_id, type, enabled, created_at, updated_at]
+      required: [id, workspace_id, type, enabled, tokens_in_total, tokens_out_total, tokens_total, created_at, updated_at]
       properties:
         id:
           type: string
@@ -2695,6 +3400,15 @@ components:
           $ref: '#/components/schemas/SkillSpec'
         mcp:
           $ref: '#/components/schemas/McpSpec'
+        tokens_in_total:
+          type: integer
+          minimum: 0
+        tokens_out_total:
+          type: integer
+          minimum: 0
+        tokens_total:
+          type: integer
+          minimum: 0
         created_at:
           type: string
           format: date-time
@@ -2952,85 +3666,20 @@ components:
         context_expr:
           $ref: '#/components/schemas/ABACExpression'
 
-    WorkerRegisterRequest:
+    RunLifecycleEvent:
       type: object
-      required: [worker_id]
-      properties:
-        worker_id:
-          type: string
-        capabilities:
-          type: object
-          additionalProperties: true
-
-    WorkerHeartbeatRequest:
-      type: object
-      properties:
-        status:
-          type: string
-
-    ExecutionLease:
-      type: object
-      required: [execution_id, worker_id, lease_version, lease_expires_at, run_attempt]
-      properties:
-        execution_id:
-          type: string
-        worker_id:
-          type: string
-        lease_version:
-          type: integer
-        lease_expires_at:
-          type: string
-          format: date-time
-        run_attempt:
-          type: integer
-
-    ExecutionClaimRequest:
-      type: object
-      required: [worker_id]
-      properties:
-        worker_id:
-          type: string
-        lease_seconds:
-          type: integer
-
-    ExecutionClaimEnvelope:
-      type: object
-      required: [execution, lease, content, project_is_git]
-      properties:
-        execution:
-          $ref: '#/components/schemas/Execution'
-        lease:
-          $ref: '#/components/schemas/ExecutionLease'
-        content:
-          type: string
-        project_path:
-          type: string
-        project_is_git:
-          type: boolean
-
-    ExecutionClaimResponse:
-      type: object
-      required: [claimed]
-      properties:
-        claimed:
-          type: boolean
-        execution:
-          $ref: '#/components/schemas/ExecutionClaimEnvelope'
-
-    ExecutionEvent:
-      type: object
-      required: [event_id, execution_id, conversation_id, type, sequence, queue_index]
+      required: [event_id, run_id, session_id, type, sequence, queue_index]
       properties:
         event_id:
           type: string
-        execution_id:
+        run_id:
           type: string
-        conversation_id:
+        session_id:
           type: string
         trace_id:
           type: string
         type:
-          type: string
+          $ref: '#/components/schemas/RunEventType'
         sequence:
           type: integer
         queue_index:
@@ -3042,42 +3691,330 @@ components:
           type: object
           additionalProperties: true
 
-    ExecutionEventBatchRequest:
+    RunLifecycleEventBatchRequest:
       type: object
       required: [events]
       properties:
         events:
           type: array
           items:
-            $ref: '#/components/schemas/ExecutionEvent'
+            $ref: '#/components/schemas/RunLifecycleEvent'
 
-    ExecutionControlCommand:
+    RunControlRequest:
       type: object
-      required: [id, execution_id, type, payload, seq, created_at]
+      required: [action]
       properties:
-        id:
+        action:
+          $ref: '#/components/schemas/RunControlAction'
+        answer:
+          $ref: '#/components/schemas/ExecutionUserAnswer'
+
+    RunControlResponse:
+      type: object
+      required: [ok, run_id, state, previous_state]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        run_id:
           type: string
-        execution_id:
+        state:
+          $ref: '#/components/schemas/RunState'
+        previous_state:
+          $ref: '#/components/schemas/RunState'
+
+    TaskState:
+      type: string
+      enum: [queued, blocked, running, retrying, completed, failed, cancelled]
+
+    TaskArtifact:
+      type: object
+      required: [task_id, kind]
+      properties:
+        task_id:
           type: string
-        type:
+        kind:
           type: string
-          enum: [stop]
-        payload:
+          enum: [patch, summary, report, json]
+        uri:
+          type: string
+        summary:
+          type: string
+        metadata:
           type: object
           additionalProperties: true
-        seq:
+
+    TaskNode:
+      type: object
+      required: [task_id, run_id, title, state, depends_on, retry_count, max_retries, created_at, updated_at]
+      properties:
+        task_id:
+          type: string
+        run_id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        state:
+          $ref: '#/components/schemas/TaskState'
+        agent_id:
+          type: string
+        depends_on:
+          type: array
+          items:
+            type: string
+        children:
+          type: array
+          items:
+            type: string
+        retry_count:
           type: integer
+          minimum: 0
+        max_retries:
+          type: integer
+          minimum: 0
+        artifact:
+          $ref: '#/components/schemas/TaskArtifact'
+        last_error:
+          type: [string, 'null']
         created_at:
           type: string
           format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
-    ExecutionControlPollResponse:
+    RunGraphEdge:
       type: object
-      required: [commands, last_seq]
+      required: [from_task_id, to_task_id]
       properties:
-        commands:
+        from_task_id:
+          type: string
+        to_task_id:
+          type: string
+
+    AgentGraph:
+      type: object
+      required: [run_id, max_parallelism, tasks, edges]
+      properties:
+        run_id:
+          type: string
+        max_parallelism:
+          type: integer
+          minimum: 1
+        tasks:
           type: array
           items:
-            $ref: '#/components/schemas/ExecutionControlCommand'
-        last_seq:
-          type: integer
+            $ref: '#/components/schemas/TaskNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/RunGraphEdge'
+
+    RunTaskListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskNode'
+        next_cursor:
+          type: [string, 'null']
+
+    TaskControlRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [cancel, retry, pause, resume]
+        reason:
+          type: string
+
+    TaskControlResponse:
+      type: object
+      required: [ok, run_id, task_id, state, previous_state]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        run_id:
+          type: string
+        task_id:
+          type: string
+        state:
+          type: string
+        previous_state:
+          type: string
+
+    HookScope:
+      type: string
+      enum: [global, project, local, plugin]
+
+    HookEventType:
+      type: string
+      enum:
+        - session_start
+        - session_end
+        - user_prompt_submit
+        - pre_tool_use
+        - permission_request
+        - post_tool_use
+        - post_tool_use_failure
+        - subagent_start
+        - stop
+        - subagent_stop
+        - teammate_idle
+        - task_completed
+        - notification
+        - config_change
+        - worktree_create
+        - worktree_remove
+        - pre_compact
+
+    HookHandlerType:
+      type: string
+      enum: [command, http, prompt, agent]
+
+    HookDecisionAction:
+      type: string
+      enum: [allow, deny, ask]
+
+    HookDecision:
+      type: object
+      required: [action]
+      properties:
+        action:
+          $ref: '#/components/schemas/HookDecisionAction'
+        reason:
+          type: string
+        updated_input:
+          type: object
+          additionalProperties: true
+        additional_context:
+          type: object
+          additionalProperties: true
+
+    HookPolicy:
+      type: object
+      required: [id, scope, event, handler_type, enabled, decision, updated_at]
+      properties:
+        id:
+          type: string
+        scope:
+          $ref: '#/components/schemas/HookScope'
+        event:
+          $ref: '#/components/schemas/HookEventType'
+        handler_type:
+          $ref: '#/components/schemas/HookHandlerType'
+        tool_name:
+          type: string
+        workspace_id:
+          type: string
+        project_id:
+          type: string
+        session_id:
+          type: string
+        enabled:
+          type: boolean
+        decision:
+          $ref: '#/components/schemas/HookDecision'
+        updated_at:
+          type: string
+          format: date-time
+
+    HookPolicyUpsertRequest:
+      type: object
+      required: [id, scope, event, handler_type, decision]
+      properties:
+        id:
+          type: string
+        scope:
+          $ref: '#/components/schemas/HookScope'
+        event:
+          $ref: '#/components/schemas/HookEventType'
+        handler_type:
+          $ref: '#/components/schemas/HookHandlerType'
+        tool_name:
+          type: string
+        workspace_id:
+          type: string
+        project_id:
+          type: string
+        session_id:
+          type: string
+        enabled:
+          type: boolean
+        decision:
+          $ref: '#/components/schemas/HookDecision'
+      oneOf:
+        - properties:
+            scope:
+              const: global
+          not:
+            anyOf:
+              - required: [project_id]
+              - required: [session_id]
+        - properties:
+            scope:
+              const: project
+          required: [project_id]
+          not:
+            required: [session_id]
+        - properties:
+            scope:
+              const: local
+          required: [session_id]
+          not:
+            required: [project_id]
+        - properties:
+            scope:
+              const: plugin
+          not:
+            anyOf:
+              - required: [project_id]
+              - required: [session_id]
+
+    HookPolicyListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HookPolicy'
+
+    HookExecutionRecord:
+      type: object
+      required: [id, run_id, session_id, event, decision, timestamp]
+      properties:
+        id:
+          type: string
+        run_id:
+          type: string
+        task_id:
+          type: string
+        session_id:
+          type: string
+        event:
+          $ref: '#/components/schemas/HookEventType'
+        tool_name:
+          type: string
+        policy_id:
+          type: string
+        decision:
+          $ref: '#/components/schemas/HookDecision'
+        timestamp:
+          type: string
+          format: date-time
+
+    HookExecutionListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HookExecutionRecord'

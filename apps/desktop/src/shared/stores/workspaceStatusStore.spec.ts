@@ -8,14 +8,14 @@ import { resetWorkspaceStore, setCurrentWorkspace, setWorkspaces } from "@/share
 import type { WorkspaceStatusResponse } from "@/shared/types/api";
 
 const getWorkspaceStatusMock = vi.fn();
-const streamConversationEventsMock = vi.fn();
+const streamSessionEventsMock = vi.fn();
 
 vi.mock("@/modules/workspace/services", () => ({
   getWorkspaceStatus: (...args: unknown[]) => getWorkspaceStatusMock(...args)
 }));
 
-vi.mock("@/modules/conversation/services", () => ({
-  streamConversationEvents: (...args: unknown[]) => streamConversationEventsMock(...args)
+vi.mock("@/modules/session/services", () => ({
+  streamSessionEvents: (...args: unknown[]) => streamSessionEventsMock(...args)
 }));
 
 describe("workspace status sync", () => {
@@ -23,7 +23,7 @@ describe("workspace status sync", () => {
     resetWorkspaceStore();
     resetAuthStore();
     getWorkspaceStatusMock.mockReset();
-    streamConversationEventsMock.mockReset();
+    streamSessionEventsMock.mockReset();
     vi.stubGlobal("EventSource", class {});
   });
 
@@ -37,7 +37,7 @@ describe("workspace status sync", () => {
     };
     let streamOptions: StreamOptions | undefined;
     const close = vi.fn();
-    streamConversationEventsMock.mockImplementation((_conversationID: string, options: StreamOptions) => {
+    streamSessionEventsMock.mockImplementation((_sessionID: string, options: StreamOptions) => {
       streamOptions = options;
       return {
         close
@@ -45,17 +45,17 @@ describe("workspace status sync", () => {
     });
 
     getWorkspaceStatusMock
-      .mockResolvedValueOnce(buildStatusResponse({ conversation_status: "queued", conversation_id: "conv_sync" }))
-      .mockResolvedValueOnce(buildStatusResponse({ conversation_status: "running", conversation_id: "conv_sync" }));
+      .mockResolvedValueOnce(buildStatusResponse({ session_status: "queued", session_id: "conv_sync" }))
+      .mockResolvedValueOnce(buildStatusResponse({ session_status: "running", session_id: "conv_sync" }));
 
     const harness = mountHarness("conv_sync");
     await flushPromises();
 
     expect(getWorkspaceStatusMock).toHaveBeenNthCalledWith(1, "ws_remote", {
-      conversationId: "conv_sync",
+      sessionId: "conv_sync",
       token: "at_remote"
     });
-    expect(streamConversationEventsMock).toHaveBeenCalledWith(
+    expect(streamSessionEventsMock).toHaveBeenCalledWith(
       "conv_sync",
       expect.objectContaining({
         token: "at_remote"
@@ -78,7 +78,7 @@ describe("workspace status sync", () => {
 
     const closeFirst = vi.fn();
     const closeSecond = vi.fn();
-    streamConversationEventsMock
+    streamSessionEventsMock
       .mockImplementationOnce(() => ({
         close: closeFirst
       }))
@@ -87,8 +87,8 @@ describe("workspace status sync", () => {
       }));
 
     getWorkspaceStatusMock
-      .mockResolvedValueOnce(buildStatusResponse({ conversation_id: "conv_a", conversation_status: "queued" }))
-      .mockResolvedValueOnce(buildStatusResponse({ conversation_id: "conv_b", conversation_status: "done" }));
+      .mockResolvedValueOnce(buildStatusResponse({ session_id: "conv_a", session_status: "queued" }))
+      .mockResolvedValueOnce(buildStatusResponse({ session_id: "conv_b", session_status: "done" }));
 
     const harness = mountHarness("conv_a");
     await flushPromises();
@@ -97,11 +97,11 @@ describe("workspace status sync", () => {
     await flushPromises();
 
     expect(getWorkspaceStatusMock).toHaveBeenCalledWith("ws_remote", {
-      conversationId: "conv_b",
+      sessionId: "conv_b",
       token: "at_remote"
     });
     expect(closeFirst).toHaveBeenCalledTimes(1);
-    expect(streamConversationEventsMock).toHaveBeenNthCalledWith(2, "conv_b", expect.any(Object));
+    expect(streamSessionEventsMock).toHaveBeenNthCalledWith(2, "conv_b", expect.any(Object));
     expect(harness.api?.conversationStatus.value).toBe("done");
 
     harness.wrapper.unmount();
@@ -115,7 +115,7 @@ describe("workspace status sync", () => {
     const harness = mountHarness("conv_error");
     await flushPromises();
 
-    expect(streamConversationEventsMock).not.toHaveBeenCalled();
+    expect(streamSessionEventsMock).not.toHaveBeenCalled();
     expect(harness.api?.conversationStatus.value).toBe("stopped");
     expect(harness.api?.connectionStatus.value).toBe("disconnected");
     expect(harness.api?.error.value).toContain("status unavailable");
@@ -187,8 +187,8 @@ function mountHarness(conversationId: string) {
 function buildStatusResponse(partial: Partial<WorkspaceStatusResponse>): WorkspaceStatusResponse {
   return {
     workspace_id: "ws_remote",
-    conversation_id: "conv_sync",
-    conversation_status: "stopped",
+    session_id: "conv_sync",
+    session_status: "stopped",
     hub_url: "https://hub.example.com",
     connection_status: "connected",
     user_display_name: "Remote User",

@@ -1,7 +1,10 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
+	runtimeapplication "goyais/services/hub/internal/runtime/application"
+	runtimedomain "goyais/services/hub/internal/runtime/domain"
 	"log"
 	"sort"
 )
@@ -24,11 +27,12 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 	s.executions = map[string]Execution{}
 	s.executionEvents = map[string][]ExecutionEvent{}
 	s.executionDiffs = map[string][]DiffItem{}
-	s.executionControlQueues = map[string][]ExecutionControlCommand{}
-	s.executionControlSeq = map[string]int{}
+	s.hookPolicies = map[string]HookPolicy{}
+	s.hookExecutionRecords = map[string][]HookExecutionRecord{}
+	s.conversationChangeLedgers = map[string]*ConversationChangeLedger{}
 	s.conversationEventSeq = map[string]int{}
-	s.executionLeases = map[string]ExecutionLease{}
-	s.workers = map[string]WorkerRegistration{}
+	s.executionRunIDs = map[string]string{}
+	s.conversationSessionIDs = map[string]string{}
 
 	for _, conversation := range snapshot.Conversations {
 		s.conversations[conversation.ID] = conversation
@@ -63,30 +67,43 @@ func (s *AppState) hydrateExecutionDomainFromStore() {
 		})
 		s.conversationExecutionOrder[conversationID] = ids
 	}
+	events := make([]runtimedomain.Event, 0, len(snapshot.ExecutionEvents))
 	for _, event := range snapshot.ExecutionEvents {
-		conversationID := event.ConversationID
-		s.executionEvents[conversationID] = append(s.executionEvents[conversationID], event)
-		if event.Sequence > s.conversationEventSeq[conversationID] {
-			s.conversationEventSeq[conversationID] = event.Sequence
-		}
-		if event.Type == ExecutionEventTypeDiffGenerated && event.ExecutionID != "" {
-			s.executionDiffs[event.ExecutionID] = parseDiffItemsFromPayload(event.Payload)
-		}
+		events = append(events, toRuntimeDomainEvent(event))
 	}
-	for _, command := range snapshot.ExecutionControlCommands {
-		executionID := command.ExecutionID
-		s.executionControlQueues[executionID] = append(s.executionControlQueues[executionID], command)
-		if command.Seq > s.executionControlSeq[executionID] {
-			s.executionControlSeq[executionID] = command.Seq
-		}
+	readModel := runtimeapplication.BuildExecutionEventReadModel(events, runtimeapplication.ReplayOptions{
+		ParseDiff: func(payload map[string]any) []runtimedomain.DiffItem {
+			return toRuntimeDomainDiffItems(parseDiffItemsFromPayload(payload))
+		},
+		MergeDiff: func(existing []runtimedomain.DiffItem, incoming []runtimedomain.DiffItem) []runtimedomain.DiffItem {
+			return toRuntimeDomainDiffItems(mergeDiffItems(
+				toHTTPAPIDiffItems(existing),
+				toHTTPAPIDiffItems(incoming),
+			))
+		},
+	})
+	for _, event := range readModel.OrderedEvents {
+		httpEvent := toHTTPAPIExecutionEvent(event)
+		conversationID := httpEvent.ConversationID
+		s.executionEvents[conversationID] = append(s.executionEvents[conversationID], httpEvent)
+		applyExecutionEventToChangeLedgerLocked(s, httpEvent)
 	}
-	for _, lease := range snapshot.ExecutionLeases {
-		s.executionLeases[lease.ExecutionID] = lease
+	s.conversationEventSeq = readModel.LastSequenceByConversation
+	s.executionDiffs = map[string][]DiffItem{}
+	for executionID, items := range readModel.DiffsByExecution {
+		s.executionDiffs[executionID] = toHTTPAPIDiffItems(items)
 	}
-	for _, worker := range snapshot.Workers {
-		s.workers[worker.WorkerID] = worker
+	for _, policy := range snapshot.HookPolicies {
+		copyPolicy := policy
+		copyPolicy.Decision.UpdatedInput = cloneMapAny(policy.Decision.UpdatedInput)
+		copyPolicy.Decision.AdditionalContext = cloneMapAny(policy.Decision.AdditionalContext)
+		s.hookPolicies[copyPolicy.ID] = copyPolicy
+	}
+	for _, record := range snapshot.HookExecutionRecords {
+		appendHookExecutionRecordLocked(s, record)
 	}
 	s.mu.Unlock()
+	syncRuntimeSnapshotBestEffort(s, snapshot)
 }
 
 func syncExecutionDomainBestEffort(state *AppState) {
@@ -97,6 +114,105 @@ func syncExecutionDomainBestEffort(state *AppState) {
 	if err := state.authz.replaceExecutionDomainSnapshot(snapshot); err != nil {
 		log.Printf("failed to persist execution domain snapshot: %v", err)
 	}
+	syncRuntimeSnapshotBestEffort(state, snapshot)
+}
+
+func syncRuntimeSnapshotBestEffort(state *AppState, snapshot executionDomainSnapshot) {
+	if state == nil || state.authz == nil || state.authz.db == nil {
+		return
+	}
+	repositories := NewSQLiteRuntimeRepositorySet(state.authz.db)
+	ctx := context.Background()
+
+	sessions := make([]RuntimeSessionRecord, 0, len(snapshot.Conversations))
+	for _, conversation := range snapshot.Conversations {
+		sessions = append(sessions, RuntimeSessionRecord{
+			ID:            conversation.ID,
+			WorkspaceID:   conversation.WorkspaceID,
+			ProjectID:     conversation.ProjectID,
+			Name:          conversation.Name,
+			DefaultMode:   string(conversation.DefaultMode),
+			ModelConfigID: conversation.ModelConfigID,
+			RuleIDs:       append([]string{}, conversation.RuleIDs...),
+			SkillIDs:      append([]string{}, conversation.SkillIDs...),
+			MCPIDs:        append([]string{}, conversation.MCPIDs...),
+			ActiveRunID:   cloneOptionalString(conversation.ActiveExecutionID),
+			CreatedAt:     conversation.CreatedAt,
+			UpdatedAt:     conversation.UpdatedAt,
+		})
+	}
+	if err := repositories.Sessions.ReplaceAll(ctx, sessions); err != nil {
+		log.Printf("failed to persist runtime sessions snapshot: %v", err)
+		return
+	}
+
+	runs := make([]RuntimeRunRecord, 0, len(snapshot.Executions))
+	for _, execution := range snapshot.Executions {
+		runs = append(runs, RuntimeRunRecord{
+			ID:            execution.ID,
+			SessionID:     execution.ConversationID,
+			WorkspaceID:   execution.WorkspaceID,
+			MessageID:     execution.MessageID,
+			State:         string(execution.State),
+			Mode:          string(execution.Mode),
+			ModelID:       execution.ModelID,
+			ModelConfigID: resolveExecutionModelConfigID(execution),
+			TokensIn:      execution.TokensIn,
+			TokensOut:     execution.TokensOut,
+			TraceID:       execution.TraceID,
+			CreatedAt:     execution.CreatedAt,
+			UpdatedAt:     execution.UpdatedAt,
+		})
+	}
+	if err := repositories.Runs.ReplaceAll(ctx, runs); err != nil {
+		log.Printf("failed to persist runtime runs snapshot: %v", err)
+		return
+	}
+
+	events := make([]RuntimeRunEventRecord, 0, len(snapshot.ExecutionEvents))
+	for _, event := range snapshot.ExecutionEvents {
+		events = append(events, RuntimeRunEventRecord{
+			EventID:    event.EventID,
+			RunID:      event.ExecutionID,
+			SessionID:  event.ConversationID,
+			Sequence:   int64(event.Sequence),
+			Type:       string(event.Type),
+			Timestamp:  event.Timestamp,
+			Payload:    cloneMapAny(event.Payload),
+			OccurredAt: event.Timestamp,
+		})
+	}
+	if err := repositories.RunEvents.ReplaceAll(ctx, events); err != nil {
+		log.Printf("failed to persist runtime run events snapshot: %v", err)
+		return
+	}
+
+	if err := repositories.RunTasks.ReplaceAll(ctx, []RuntimeRunTaskRecord{}); err != nil {
+		log.Printf("failed to persist runtime run tasks snapshot: %v", err)
+		return
+	}
+	if err := repositories.ChangeSets.ReplaceAll(ctx, []RuntimeChangeSetRecord{}); err != nil {
+		log.Printf("failed to persist runtime change sets snapshot: %v", err)
+		return
+	}
+
+	hookRecords := make([]RuntimeHookRecord, 0, len(snapshot.HookExecutionRecords))
+	for _, record := range snapshot.HookExecutionRecords {
+		hookRecords = append(hookRecords, RuntimeHookRecord{
+			ID:        record.ID,
+			RunID:     record.RunID,
+			SessionID: record.SessionID,
+			TaskID:    stringPtrOrNil(record.TaskID),
+			Event:     string(record.Event),
+			ToolName:  stringPtrOrNil(record.ToolName),
+			PolicyID:  stringPtrOrNil(record.PolicyID),
+			Decision:  record.Decision,
+			Timestamp: record.Timestamp,
+		})
+	}
+	if err := repositories.HookRecords.ReplaceAll(ctx, hookRecords); err != nil {
+		log.Printf("failed to persist runtime hook records snapshot: %v", err)
+	}
 }
 
 func captureExecutionDomainSnapshot(state *AppState) executionDomainSnapshot {
@@ -104,14 +220,13 @@ func captureExecutionDomainSnapshot(state *AppState) executionDomainSnapshot {
 		return executionDomainSnapshot{}
 	}
 	snapshot := executionDomainSnapshot{
-		Conversations:            []Conversation{},
-		ConversationMessages:     []ConversationMessage{},
-		ConversationSnapshots:    []ConversationSnapshot{},
-		Executions:               []Execution{},
-		ExecutionEvents:          []ExecutionEvent{},
-		ExecutionControlCommands: []ExecutionControlCommand{},
-		ExecutionLeases:          []ExecutionLease{},
-		Workers:                  []WorkerRegistration{},
+		Conversations:         []Conversation{},
+		ConversationMessages:  []ConversationMessage{},
+		ConversationSnapshots: []ConversationSnapshot{},
+		Executions:            []Execution{},
+		ExecutionEvents:       []ExecutionEvent{},
+		HookPolicies:          []HookPolicy{},
+		HookExecutionRecords:  []HookExecutionRecord{},
 	}
 
 	state.mu.RLock()
@@ -134,6 +249,7 @@ func captureExecutionDomainSnapshot(state *AppState) executionDomainSnapshot {
 	for _, execution := range state.executions {
 		copyExecution := execution
 		copyExecution.ModelSnapshot = cloneModelSnapshot(execution.ModelSnapshot)
+		copyExecution.ResourceProfileSnapshot = cloneExecutionResourceProfile(execution.ResourceProfileSnapshot)
 		copyExecution.AgentConfigSnapshot = cloneExecutionAgentConfigSnapshot(execution.AgentConfigSnapshot)
 		snapshot.Executions = append(snapshot.Executions, copyExecution)
 	}
@@ -144,20 +260,19 @@ func captureExecutionDomainSnapshot(state *AppState) executionDomainSnapshot {
 			snapshot.ExecutionEvents = append(snapshot.ExecutionEvents, copyEvent)
 		}
 	}
-	for _, commands := range state.executionControlQueues {
-		for _, command := range commands {
-			copyCommand := command
-			copyCommand.Payload = cloneMapAny(command.Payload)
-			snapshot.ExecutionControlCommands = append(snapshot.ExecutionControlCommands, copyCommand)
+	for _, policy := range state.hookPolicies {
+		copyPolicy := policy
+		copyPolicy.Decision.UpdatedInput = cloneMapAny(policy.Decision.UpdatedInput)
+		copyPolicy.Decision.AdditionalContext = cloneMapAny(policy.Decision.AdditionalContext)
+		snapshot.HookPolicies = append(snapshot.HookPolicies, copyPolicy)
+	}
+	for _, records := range state.hookExecutionRecords {
+		for _, record := range records {
+			copyRecord := record
+			copyRecord.Decision.UpdatedInput = cloneMapAny(record.Decision.UpdatedInput)
+			copyRecord.Decision.AdditionalContext = cloneMapAny(record.Decision.AdditionalContext)
+			snapshot.HookExecutionRecords = append(snapshot.HookExecutionRecords, copyRecord)
 		}
-	}
-	for _, lease := range state.executionLeases {
-		snapshot.ExecutionLeases = append(snapshot.ExecutionLeases, lease)
-	}
-	for _, worker := range state.workers {
-		copyWorker := worker
-		copyWorker.Capabilities = cloneMapAny(worker.Capabilities)
-		snapshot.Workers = append(snapshot.Workers, copyWorker)
 	}
 	state.mu.RUnlock()
 
@@ -166,8 +281,24 @@ func captureExecutionDomainSnapshot(state *AppState) executionDomainSnapshot {
 
 func cloneModelSnapshot(input ModelSnapshot) ModelSnapshot {
 	output := input
+	output.Runtime = cloneModelRuntimeSpec(input.Runtime)
 	output.Params = cloneMapAny(input.Params)
 	return output
+}
+
+func cloneExecutionResourceProfile(input *ExecutionResourceProfile) *ExecutionResourceProfile {
+	if input == nil {
+		return nil
+	}
+	output := *input
+	output.RuleIDs = append([]string{}, input.RuleIDs...)
+	output.SkillIDs = append([]string{}, input.SkillIDs...)
+	output.MCPIDs = append([]string{}, input.MCPIDs...)
+	output.ProjectFilePaths = append([]string{}, input.ProjectFilePaths...)
+	output.MCPServers = cloneExecutionMCPServerSnapshots(input.MCPServers)
+	output.AlwaysLoadedCapabilities = cloneExecutionCapabilityDescriptorSnapshots(input.AlwaysLoadedCapabilities)
+	output.SearchableCapabilities = cloneExecutionCapabilityDescriptorSnapshots(input.SearchableCapabilities)
+	return &output
 }
 
 func cloneMapAny(input map[string]any) map[string]any {
@@ -190,4 +321,72 @@ func cloneMapAny(input map[string]any) map[string]any {
 		}
 	}
 	return output
+}
+
+func toRuntimeDomainEvent(event ExecutionEvent) runtimedomain.Event {
+	return runtimedomain.Event{
+		ID:             event.EventID,
+		ConversationID: event.ConversationID,
+		ExecutionID:    event.ExecutionID,
+		TraceID:        event.TraceID,
+		Sequence:       event.Sequence,
+		QueueIndex:     event.QueueIndex,
+		Type:           runtimedomain.EventType(event.Type),
+		Timestamp:      event.Timestamp,
+		Payload:        cloneMapAny(event.Payload),
+	}
+}
+
+func toHTTPAPIExecutionEvent(event runtimedomain.Event) ExecutionEvent {
+	return ExecutionEvent{
+		EventID:        event.ID,
+		ExecutionID:    event.ExecutionID,
+		ConversationID: event.ConversationID,
+		TraceID:        event.TraceID,
+		Sequence:       event.Sequence,
+		QueueIndex:     event.QueueIndex,
+		Type:           RunEventType(event.Type),
+		Timestamp:      event.Timestamp,
+		Payload:        cloneMapAny(event.Payload),
+	}
+}
+
+func toRuntimeDomainDiffItems(items []DiffItem) []runtimedomain.DiffItem {
+	if len(items) == 0 {
+		return []runtimedomain.DiffItem{}
+	}
+	result := make([]runtimedomain.DiffItem, 0, len(items))
+	for _, item := range items {
+		result = append(result, runtimedomain.DiffItem{
+			ID:           item.ID,
+			Path:         item.Path,
+			ChangeType:   item.ChangeType,
+			Summary:      item.Summary,
+			AddedLines:   normalizeOptionalDiffLineCount(item.AddedLines),
+			DeletedLines: normalizeOptionalDiffLineCount(item.DeletedLines),
+			BeforeBlob:   item.BeforeBlob,
+			AfterBlob:    item.AfterBlob,
+		})
+	}
+	return result
+}
+
+func toHTTPAPIDiffItems(items []runtimedomain.DiffItem) []DiffItem {
+	if len(items) == 0 {
+		return []DiffItem{}
+	}
+	result := make([]DiffItem, 0, len(items))
+	for _, item := range items {
+		result = append(result, DiffItem{
+			ID:           item.ID,
+			Path:         item.Path,
+			ChangeType:   item.ChangeType,
+			Summary:      item.Summary,
+			AddedLines:   normalizeOptionalDiffLineCount(item.AddedLines),
+			DeletedLines: normalizeOptionalDiffLineCount(item.DeletedLines),
+			BeforeBlob:   item.BeforeBlob,
+			AfterBlob:    item.AfterBlob,
+		})
+	}
+	return result
 }

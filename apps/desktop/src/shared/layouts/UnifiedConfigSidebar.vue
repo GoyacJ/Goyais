@@ -13,6 +13,10 @@
         <AppIcon name="house" :size="12" />
         <span>主界面</span>
       </button>
+      <div v-if="workspaceStore.connectionState === 'auth_required' && workspaceStore.mode === 'remote'" class="auth-required-card">
+        <p class="auth-title">远程鉴权已失效</p>
+        <button class="menu-item auth-login-btn" type="button" @click="requestWorkspaceLogin">重新登录</button>
+      </div>
       <template v-for="section in sections" :key="section.title">
         <p class="group-title">{{ section.title }}</p>
         <nav class="menu-list">
@@ -51,10 +55,10 @@
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 
-import { createRemoteConnection } from "@/modules/workspace/services";
+import { createRemoteConnection, loginWorkspace } from "@/modules/workspace/services";
 import { setWorkspaceConnection, switchWorkspaceContext, upsertWorkspace } from "@/modules/workspace/store";
 import type { MenuEntry } from "@/shared/navigation/pageMenus";
-import { authStore, setWorkspaceToken } from "@/shared/stores/authStore";
+import { authStore, refreshMeForCurrentWorkspace, setWorkspaceToken } from "@/shared/stores/authStore";
 import { workspaceStore } from "@/shared/stores/workspaceStore";
 import AppIcon from "@/shared/ui/AppIcon.vue";
 import UserProfileMenuCard from "@/shared/ui/sidebar/UserProfileMenuCard.vue";
@@ -191,6 +195,30 @@ async function submitWorkspaceCreate(payload: { hub_url: string; username: strin
   await switchWorkspace(result.workspace.id);
 }
 
+async function requestWorkspaceLogin(): Promise<void> {
+  const workspaceId = workspaceStore.currentWorkspaceId.trim();
+  if (workspaceId === "") {
+    return;
+  }
+
+  const username = window.prompt("用户名（可空）", "") ?? "";
+  const password = window.prompt("密码（可空）", "") ?? "";
+  const token = window.prompt("Token（可空）", "") ?? "";
+
+  try {
+    const response = await loginWorkspace({
+      workspace_id: workspaceId,
+      username: username.trim() === "" ? undefined : username.trim(),
+      password: password.trim() === "" ? undefined : password,
+      token: token.trim() === "" ? undefined : token.trim()
+    });
+    setWorkspaceToken(workspaceId, response.access_token, response.refresh_token);
+    await refreshMeForCurrentWorkspace();
+  } catch (error) {
+    authStore.error = error instanceof Error ? error.message : "登录失败";
+  }
+}
+
 function resolveMenuIcon(key: string): string {
   return menuIconByKey[key] ?? "settings";
 }
@@ -231,6 +259,27 @@ const menuIconByKey: Record<string, string> = {
   font-size: var(--global-font-size-11);
   color: var(--semantic-text-subtle);
   font-weight: var(--global-font-weight-600);
+}
+
+.auth-required-card {
+  margin-top: var(--global-space-8);
+  border: 1px dashed var(--semantic-border);
+  border-radius: var(--global-radius-8);
+  background: var(--semantic-bg);
+  padding: var(--global-space-8);
+  display: grid;
+  gap: var(--global-space-8);
+}
+
+.auth-title {
+  margin: 0;
+  color: var(--semantic-text-muted);
+  font-size: var(--global-font-size-12);
+}
+
+.auth-login-btn {
+  min-height: 44px;
+  justify-content: center;
 }
 
 .menu-list {
