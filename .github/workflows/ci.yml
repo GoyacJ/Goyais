@@ -17,6 +17,8 @@ jobs:
       - name: Hub tests
         working-directory: services/hub
         run: go test ./...
+      - name: Hub migration smoke
+        run: HUB_DB_PATH="${RUNNER_TEMP}/hub-stage0.sqlite3" scripts/migrate-to-v050.sh
       - name: Hub refactor gate (strict)
         run: scripts/refactor/gate-check.sh --strict
 

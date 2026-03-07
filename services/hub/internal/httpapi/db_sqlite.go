@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	stagesqlite "goyais/services/hub/internal/infrastructure/sqlite"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -463,6 +465,9 @@ func (s *authzStore) migrate() error {
 		if backupPath != "" {
 			log.Printf("previous authz db schema rebuild succeeded (%s) using backup %s", s.dbPath, backupPath)
 		}
+	}
+	if err := stagesqlite.NewMigrator().Apply(s.db); err != nil {
+		return fmt.Errorf("apply stage migrations: %w", err)
 	}
 	return nil
 }

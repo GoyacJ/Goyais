@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	agenthttpapi "goyais/services/hub/internal/agent/adapters/httpapi"
 )
 
 func TestOpenAuthzStoreRebuildsLegacyResourceConfigsSchema(t *testing.T) {
@@ -257,6 +259,77 @@ func TestAuthzStoreCreatesProjectSchema(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected project_configs column %s to exist", column)
 		}
+	}
+}
+
+func TestOpenAuthzStoreAppliesStageZeroMigrations(t *testing.T) {
+	store, err := openAuthzStore(":memory:")
+	if err != nil {
+		t.Fatalf("open authz store failed: %v", err)
+	}
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+
+	requiredTables := []string{
+		"schema_migrations",
+		"domain_sessions",
+		"domain_runs",
+		"domain_run_events",
+	}
+	for _, table := range requiredTables {
+		exists, existsErr := tableExists(store.db, table)
+		if existsErr != nil {
+			t.Fatalf("check table %s failed: %v", table, existsErr)
+		}
+		if !exists {
+			t.Fatalf("expected %s to exist after openAuthzStore migration", table)
+		}
+	}
+}
+
+func TestNewAppStatePersistsRuntimeSessionsWhenSQLiteRepositoryFlagEnabled(t *testing.T) {
+	t.Setenv("FEATURE_SQLITE_REPO", "true")
+	store, err := openAuthzStore(":memory:")
+	if err != nil {
+		t.Fatalf("open authz store failed: %v", err)
+	}
+	defer func() {
+		if closeErr := store.close(); closeErr != nil {
+			t.Fatalf("close authz store failed: %v", closeErr)
+		}
+	}()
+
+	state := NewAppState(store)
+	started, err := state.runtimeService.StartSession(context.Background(), agenthttpapi.StartSessionRequest{
+		WorkingDir: "/tmp/persistent-runtime",
+	})
+	if err != nil {
+		t.Fatalf("start runtime session failed: %v", err)
+	}
+	if _, err := state.runtimeService.Submit(context.Background(), agenthttpapi.SubmitRequest{
+		SessionID: started.SessionID,
+		Input:     "hello",
+	}); err != nil {
+		t.Fatalf("submit runtime run failed: %v", err)
+	}
+
+	var sessionCount int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM domain_sessions`).Scan(&sessionCount); err != nil {
+		t.Fatalf("count domain sessions failed: %v", err)
+	}
+	if sessionCount != 1 {
+		t.Fatalf("expected 1 persisted domain session, got %d", sessionCount)
+	}
+
+	var runCount int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM domain_runs`).Scan(&runCount); err != nil {
+		t.Fatalf("count domain runs failed: %v", err)
+	}
+	if runCount != 1 {
+		t.Fatalf("expected 1 persisted domain run, got %d", runCount)
 	}
 }
 

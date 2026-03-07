@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"goyais/services/hub/internal/agent/core"
+	"goyais/services/hub/internal/agent/core/statemachine"
 	"goyais/services/hub/internal/agent/policy/approval"
 	"goyais/services/hub/internal/agent/runtime/compaction"
 	transportevents "goyais/services/hub/internal/agent/transport/events"
@@ -30,6 +31,144 @@ type contextBuilderFunc func(ctx context.Context, req core.BuildContextRequest) 
 
 func (f contextBuilderFunc) Build(ctx context.Context, req core.BuildContextRequest) (core.PromptContext, error) {
 	return f(ctx, req)
+}
+
+type persistenceRecorder struct {
+	mu       sync.Mutex
+	sessions []PersistedSession
+	runs     []PersistedRun
+	loaded   PersistenceSnapshot
+}
+
+func (p *persistenceRecorder) SaveSession(_ context.Context, session PersistedSession) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.sessions = append(p.sessions, session)
+	return nil
+}
+
+func (p *persistenceRecorder) SaveRun(_ context.Context, run PersistedRun) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.runs = append(p.runs, run)
+	return nil
+}
+
+func (p *persistenceRecorder) Load(_ context.Context) (PersistenceSnapshot, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.loaded, nil
+}
+
+func TestEngineStartSessionPersistsSnapshot(t *testing.T) {
+	recorder := &persistenceRecorder{}
+	engine := NewEngineWithDeps(Dependencies{
+		Executor:    executorFunc(func(_ context.Context, _ ExecuteRequest) (ExecuteResult, error) { return ExecuteResult{}, nil }),
+		Persistence: recorder,
+	})
+
+	session, err := engine.StartSession(context.Background(), core.StartSessionRequest{
+		WorkingDir:            "/tmp/persisted",
+		AdditionalDirectories: []string{"/tmp/a", "/tmp/b"},
+	})
+	if err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+
+	recorder.mu.Lock()
+	defer recorder.mu.Unlock()
+	if len(recorder.sessions) != 1 {
+		t.Fatalf("expected one persisted session, got %#v", recorder.sessions)
+	}
+	if recorder.sessions[0].SessionID != session.SessionID {
+		t.Fatalf("expected persisted session id %s, got %#v", session.SessionID, recorder.sessions[0])
+	}
+	if recorder.sessions[0].WorkingDir != "/tmp/persisted" {
+		t.Fatalf("expected persisted working dir, got %#v", recorder.sessions[0])
+	}
+}
+
+func TestEngineSubmitPersistsQueuedRun(t *testing.T) {
+	recorder := &persistenceRecorder{}
+	engine := NewEngineWithDeps(Dependencies{
+		Executor:    executorFunc(func(_ context.Context, _ ExecuteRequest) (ExecuteResult, error) { return ExecuteResult{}, nil }),
+		Persistence: recorder,
+	})
+
+	session, err := engine.StartSession(context.Background(), core.StartSessionRequest{WorkingDir: "/tmp/project"})
+	if err != nil {
+		t.Fatalf("start session: %v", err)
+	}
+	runID, err := engine.Submit(context.Background(), string(session.SessionID), core.UserInput{Text: "persist me"})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+
+	recorder.mu.Lock()
+	defer recorder.mu.Unlock()
+	if len(recorder.runs) == 0 {
+		t.Fatalf("expected persisted runs, got none")
+	}
+	found := false
+	for _, run := range recorder.runs {
+		if run.RunID == core.RunID(runID) {
+			found = true
+			if run.InputText != "persist me" {
+				t.Fatalf("expected persisted input text, got %#v", run)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected persisted run %s, got %#v", runID, recorder.runs)
+	}
+}
+
+func TestEngineHydrateFromPersistenceRestoresSessionsAndRuns(t *testing.T) {
+	recorder := &persistenceRecorder{
+		loaded: PersistenceSnapshot{
+			Sessions: []PersistedSession{
+				{
+					SessionID:             core.SessionID("sess_7"),
+					CreatedAt:             time.Unix(1700000000, 0).UTC(),
+					WorkingDir:            "/tmp/restored",
+					AdditionalDirectories: []string{"/tmp/restored/docs"},
+					NextSequence:          3,
+				},
+			},
+			Runs: []PersistedRun{
+				{
+					RunID:                 core.RunID("run_11"),
+					SessionID:             core.SessionID("sess_7"),
+					State:                 statemachine.RunStateQueued,
+					InputText:             "restored",
+					WorkingDir:            "/tmp/restored",
+					AdditionalDirectories: []string{"/tmp/restored/docs"},
+				},
+			},
+		},
+	}
+	engine := NewEngineWithDeps(Dependencies{
+		Executor:    executorFunc(func(_ context.Context, _ ExecuteRequest) (ExecuteResult, error) { return ExecuteResult{}, nil }),
+		Persistence: recorder,
+	})
+
+	if err := engine.HydrateFromPersistence(context.Background()); err != nil {
+		t.Fatalf("hydrate from persistence: %v", err)
+	}
+
+	if _, err := engine.Subscribe(context.Background(), "sess_7", ""); err != nil {
+		t.Fatalf("subscribe restored session: %v", err)
+	}
+	if err := engine.Control(context.Background(), core.ControlRequest{
+		RunID:   "run_11",
+		Action:  core.ControlActionStop,
+	}); err != nil {
+		t.Fatalf("control restored run: %v", err)
+	}
+	if _, err := engine.Submit(context.Background(), "sess_7", core.UserInput{Text: "fresh"}); err != nil {
+		t.Fatalf("submit on restored session: %v", err)
+	}
 }
 
 func TestEngineSubmitRunLifecycle(t *testing.T) {

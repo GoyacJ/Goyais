@@ -54,7 +54,7 @@ type Executor interface {
 
 // Engine is the session/run scheduler implementing core.Engine.
 type Engine struct {
-	mu sync.Mutex
+	mu sync.RWMutex
 
 	executor       Executor
 	contextBuilder core.ContextBuilder
@@ -62,6 +62,7 @@ type Engine struct {
 	approvalRouter *approval.Router
 	subscriberCfg  subscribers.Config
 	compactor      *compaction.Manager
+	persistence    Persistence
 
 	nextSessionID uint64
 	nextRunID     uint64
@@ -71,6 +72,8 @@ type Engine struct {
 }
 
 type sessionRuntime struct {
+	mu sync.Mutex
+
 	id                    core.SessionID
 	createdAt             time.Time
 	workingDir            string
@@ -125,6 +128,7 @@ type Dependencies struct {
 	ApprovalRouter *approval.Router
 	SubscriberCfg  subscribers.Config
 	Compactor      *compaction.Manager
+	Persistence    Persistence
 }
 
 func (defaultExecutor) Execute(ctx context.Context, req ExecuteRequest) (ExecuteResult, error) {
@@ -175,6 +179,7 @@ func NewEngineWithDeps(deps Dependencies) *Engine {
 		approvalRouter: deps.ApprovalRouter,
 		subscriberCfg:  subscriberCfg,
 		compactor:      deps.Compactor,
+		persistence:    deps.Persistence,
 		sessions:       map[core.SessionID]*sessionRuntime{},
 		runs:           map[core.RunID]*runRuntime{},
 	}
@@ -200,6 +205,10 @@ func (e *Engine) StartSession(_ context.Context, req core.StartSessionRequest) (
 		subscriberManager:     subscribers.NewManager(e.subscriberCfg),
 		queue:                 make([]core.RunID, 0, 8),
 	}
+	if err := e.persistSessionLocked(context.Background(), e.sessions[sessionID]); err != nil {
+		delete(e.sessions, sessionID)
+		return core.SessionHandle{}, err
+	}
 
 	return core.SessionHandle{
 		SessionID: sessionID,
@@ -218,16 +227,16 @@ func (e *Engine) Submit(_ context.Context, sessionID string, input core.UserInpu
 		return "", core.ErrSessionNotFound
 	}
 
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	session, exists := e.sessions[normalizedSessionID]
+	session, exists := e.sessionByID(normalizedSessionID)
 	if !exists {
 		return "", core.ErrSessionNotFound
 	}
 
+	e.mu.Lock()
 	e.nextRunID++
 	newRunID := core.RunID(fmt.Sprintf("run_%d", e.nextRunID))
+	e.mu.Unlock()
+
 	machine, machineErr := statemachine.NewMachine(statemachine.RunStateQueued)
 	if machineErr != nil {
 		return "", machineErr
@@ -242,7 +251,13 @@ func (e *Engine) Submit(_ context.Context, sessionID string, input core.UserInpu
 		machine:               machine,
 	}
 
+	e.mu.Lock()
 	e.runs[newRunID] = run
+	e.mu.Unlock()
+
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
 	if e.compactor != nil {
 		e.compactor.AppendMessage(normalizedSessionID, "user", input.Text, 0)
 	}
@@ -250,6 +265,15 @@ func (e *Engine) Submit(_ context.Context, sessionID string, input core.UserInpu
 		e.approvalRouter.Register(newRunID)
 	}
 	session.queue = append(session.queue, newRunID)
+	if err := e.persistRunLocked(context.Background(), run); err != nil {
+		session.queue = removeRunFromQueue(session.queue, newRunID)
+		session.active = ""
+		e.mu.Lock()
+		delete(e.runs, newRunID)
+		e.mu.Unlock()
+		return "", err
+	}
+	_ = e.persistSessionLocked(context.Background(), session)
 	e.emitEventLocked(session, newSequencedEvent(session, newRunID, eventscore.RunQueuedEventSpec, core.RunQueuedPayload{
 		QueuePosition: len(session.queue),
 	}))
@@ -269,17 +293,17 @@ func (e *Engine) Control(_ context.Context, req core.ControlRequest) error {
 	}
 	action := core.ControlAction(strings.TrimSpace(string(req.Action)))
 
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	run, exists := e.runs[normalizedRunID]
+	run, exists := e.runByID(normalizedRunID)
 	if !exists {
 		return core.ErrRunNotFound
 	}
-	session, sessionExists := e.sessions[run.sessionID]
+	session, sessionExists := e.sessionByID(run.sessionID)
 	if !sessionExists {
 		return core.ErrSessionNotFound
 	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
 	if e.approvalRouter != nil {
 		var answer *approval.UserAnswer
 		if req.Answer != nil {
@@ -315,9 +339,15 @@ func (e *Engine) Control(_ context.Context, req core.ControlRequest) error {
 		if e.approvalRouter != nil {
 			e.approvalRouter.Unregister(run.id)
 		}
+		_ = e.persistRunLocked(context.Background(), run)
+		_ = e.persistSessionLocked(context.Background(), session)
 		return nil
 	case core.ControlActionApprove, core.ControlActionResume, core.ControlActionAnswer:
-		return run.machine.ApplyControl(statemachine.ControlAction(action))
+		if err := run.machine.ApplyControl(statemachine.ControlAction(action)); err != nil {
+			return err
+		}
+		_ = e.persistRunLocked(context.Background(), run)
+		return nil
 	default:
 		return fmt.Errorf("unsupported control action %q", action)
 	}
@@ -339,10 +369,8 @@ func (e *Engine) Subscribe(_ context.Context, sessionID string, cursor string) (
 		minSequence = parsed
 	}
 
-	e.mu.Lock()
-	session, exists := e.sessions[normalizedSessionID]
+	session, exists := e.sessionByID(normalizedSessionID)
 	if !exists {
-		e.mu.Unlock()
 		return nil, core.ErrSessionNotFound
 	}
 	live := session.subscriberManager.Subscribe()
@@ -351,7 +379,6 @@ func (e *Engine) Subscribe(_ context.Context, sessionID string, cursor string) (
 	if bufferSize <= 0 {
 		bufferSize = 128
 	}
-	e.mu.Unlock()
 
 	out := make(chan core.EventEnvelope, bufferSize)
 	done := make(chan struct{})
@@ -407,8 +434,8 @@ func (e *Engine) startNextIfIdleLocked(session *sessionRuntime) {
 	session.queue = session.queue[1:]
 	session.active = nextRunID
 
-	run := e.runs[nextRunID]
-	if run == nil {
+	run, exists := e.runByID(nextRunID)
+	if !exists || run == nil {
 		session.active = ""
 		return
 	}
@@ -419,6 +446,8 @@ func (e *Engine) startNextIfIdleLocked(session *sessionRuntime) {
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	run.cancel = cancel
+	_ = e.persistSessionLocked(context.Background(), session)
+	_ = e.persistRunLocked(context.Background(), run)
 
 	e.emitEventLocked(session, newSequencedEvent(session, nextRunID, eventscore.RunStartedEventSpec, core.RunStartedPayload{}))
 	go e.executeRun(runCtx, run)
@@ -481,13 +510,12 @@ func (e *Engine) executeRun(ctx context.Context, run *runRuntime) {
 		_, _, _ = e.compactor.MaybeCompact(ctx, run.sessionID)
 	}
 
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	session := e.sessions[run.sessionID]
-	if session == nil {
+	session, exists := e.sessionByID(run.sessionID)
+	if !exists || session == nil {
 		return
 	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
 
 	switch {
 	case ctx.Err() != nil:
@@ -516,10 +544,153 @@ func (e *Engine) executeRun(ctx context.Context, run *runRuntime) {
 	if session.active == run.id {
 		session.active = ""
 	}
+	_ = e.persistRunLocked(context.Background(), run)
+	_ = e.persistSessionLocked(context.Background(), session)
 	if e.approvalRouter != nil {
 		e.approvalRouter.Unregister(run.id)
 	}
 	e.startNextIfIdleLocked(session)
+}
+
+func (e *Engine) HydrateFromPersistence(ctx context.Context) error {
+	if e == nil || e.persistence == nil {
+		return nil
+	}
+
+	snapshot, err := e.persistence.Load(ctx)
+	if err != nil {
+		return err
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	for _, item := range snapshot.Sessions {
+		sessionID := item.SessionID
+		if sessionID == "" {
+			continue
+		}
+		if _, exists := e.sessions[sessionID]; exists {
+			continue
+		}
+		e.sessions[sessionID] = &sessionRuntime{
+			id:                    sessionID,
+			createdAt:             item.CreatedAt,
+			workingDir:            strings.TrimSpace(item.WorkingDir),
+			additionalDirectories: sanitizeDirectories(item.AdditionalDirectories),
+			nextSequence:          item.NextSequence,
+			subscriberManager:     subscribers.NewManager(e.subscriberCfg),
+			queue:                 make([]core.RunID, 0, 8),
+			active:                item.ActiveRunID,
+		}
+		if next := numericSuffix(string(sessionID), "sess_"); next > e.nextSessionID {
+			e.nextSessionID = next
+		}
+	}
+
+	for _, item := range snapshot.Runs {
+		runID := item.RunID
+		if runID == "" {
+			continue
+		}
+		if _, exists := e.runs[runID]; exists {
+			continue
+		}
+		machine, machineErr := statemachine.NewMachine(item.State)
+		if machineErr != nil {
+			return machineErr
+		}
+		run := &runRuntime{
+			id:                    runID,
+			sessionID:             item.SessionID,
+			input:                 core.UserInput{Text: item.InputText},
+			workingDir:            strings.TrimSpace(item.WorkingDir),
+			additionalDirectories: sanitizeDirectories(item.AdditionalDirectories),
+			machine:               machine,
+		}
+		e.runs[runID] = run
+		if next := numericSuffix(string(runID), "run_"); next > e.nextRunID {
+			e.nextRunID = next
+		}
+
+		session := e.sessions[item.SessionID]
+		if session == nil {
+			continue
+		}
+		if item.State == statemachine.RunStateQueued {
+			session.queue = append(session.queue, runID)
+		}
+		if session.active == "" && item.State == statemachine.RunStateRunning {
+			session.active = runID
+		}
+	}
+
+	return nil
+}
+
+func (e *Engine) persistSessionLocked(ctx context.Context, session *sessionRuntime) error {
+	if e == nil || e.persistence == nil || session == nil {
+		return nil
+	}
+	return e.persistence.SaveSession(ctx, PersistedSession{
+		SessionID:             session.id,
+		CreatedAt:             session.createdAt,
+		WorkingDir:            session.workingDir,
+		AdditionalDirectories: append([]string(nil), session.additionalDirectories...),
+		NextSequence:          session.nextSequence,
+		ActiveRunID:           session.active,
+	})
+}
+
+func (e *Engine) persistRunLocked(ctx context.Context, run *runRuntime) error {
+	if e == nil || e.persistence == nil || run == nil {
+		return nil
+	}
+	state := statemachine.RunStateQueued
+	if run.machine != nil {
+		state = run.machine.State()
+	}
+	return e.persistence.SaveRun(ctx, PersistedRun{
+		RunID:                 run.id,
+		SessionID:             run.sessionID,
+		State:                 state,
+		InputText:             run.input.Text,
+		WorkingDir:            run.workingDir,
+		AdditionalDirectories: append([]string(nil), run.additionalDirectories...),
+	})
+}
+
+func numericSuffix(value string, prefix string) uint64 {
+	trimmed := strings.TrimSpace(value)
+	if !strings.HasPrefix(trimmed, prefix) {
+		return 0
+	}
+	raw := strings.TrimPrefix(trimmed, prefix)
+	parsed, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return parsed
+}
+
+func (e *Engine) sessionByID(sessionID core.SessionID) (*sessionRuntime, bool) {
+	if e == nil {
+		return nil, false
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	session, exists := e.sessions[sessionID]
+	return session, exists
+}
+
+func (e *Engine) runByID(runID core.RunID) (*runRuntime, bool) {
+	if e == nil {
+		return nil, false
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	run, exists := e.runs[runID]
+	return run, exists
 }
 
 func (e *Engine) executeManualCompact(ctx context.Context, run *runRuntime) {
@@ -534,13 +705,12 @@ func (e *Engine) executeManualCompact(ctx context.Context, run *runRuntime) {
 		})
 	}
 
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	session := e.sessions[run.sessionID]
-	if session == nil {
+	session, exists := e.sessionByID(run.sessionID)
+	if !exists || session == nil {
 		return
 	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
 
 	switch {
 	case ctx.Err() != nil:
@@ -569,6 +739,8 @@ func (e *Engine) executeManualCompact(ctx context.Context, run *runRuntime) {
 	if session.active == run.id {
 		session.active = ""
 	}
+	_ = e.persistRunLocked(context.Background(), run)
+	_ = e.persistSessionLocked(context.Background(), session)
 	if e.approvalRouter != nil {
 		e.approvalRouter.Unregister(run.id)
 	}
@@ -576,13 +748,12 @@ func (e *Engine) executeManualCompact(ctx context.Context, run *runRuntime) {
 }
 
 func (e *Engine) finishRunAsFailed(run *runRuntime, code string, cause error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	session := e.sessions[run.sessionID]
-	if session == nil {
+	session, exists := e.sessionByID(run.sessionID)
+	if !exists || session == nil {
 		return
 	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
 	_ = run.machine.Transition(statemachine.RunStateFailed)
 	e.emitEventLocked(session, newSequencedEvent(session, run.id, eventscore.RunFailedEventSpec, core.RunFailedPayload{
 		Code:    strings.TrimSpace(code),
@@ -591,6 +762,8 @@ func (e *Engine) finishRunAsFailed(run *runRuntime, code string, cause error) {
 	if session.active == run.id {
 		session.active = ""
 	}
+	_ = e.persistRunLocked(context.Background(), run)
+	_ = e.persistSessionLocked(context.Background(), session)
 	if e.approvalRouter != nil {
 		e.approvalRouter.Unregister(run.id)
 	}
@@ -598,13 +771,12 @@ func (e *Engine) finishRunAsFailed(run *runRuntime, code string, cause error) {
 }
 
 func (e *Engine) finishRunAsCancelled(run *runRuntime, reason string) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	session := e.sessions[run.sessionID]
-	if session == nil {
+	session, exists := e.sessionByID(run.sessionID)
+	if !exists || session == nil {
 		return
 	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
 	_ = run.machine.Transition(statemachine.RunStateCancelled)
 	e.emitEventLocked(session, newSequencedEvent(session, run.id, eventscore.RunCancelledEventSpec, core.RunCancelledPayload{
 		Reason: strings.TrimSpace(reason),
@@ -612,6 +784,8 @@ func (e *Engine) finishRunAsCancelled(run *runRuntime, reason string) {
 	if session.active == run.id {
 		session.active = ""
 	}
+	_ = e.persistRunLocked(context.Background(), run)
+	_ = e.persistSessionLocked(context.Background(), session)
 	if e.approvalRouter != nil {
 		e.approvalRouter.Unregister(run.id)
 	}
@@ -632,17 +806,16 @@ func (e *Engine) emitRunOutputDelta(runID core.RunID, payload core.OutputDeltaPa
 	if e == nil {
 		return
 	}
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	run, exists := e.runs[runID]
+	run, exists := e.runByID(runID)
 	if !exists {
 		return
 	}
-	session := e.sessions[run.sessionID]
-	if session == nil {
+	session, sessionExists := e.sessionByID(run.sessionID)
+	if !sessionExists || session == nil {
 		return
 	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
 	e.emitEventLocked(session, newSequencedEvent(session, run.id, eventscore.RunOutputDeltaEventSpec, payload))
 }
 
@@ -650,17 +823,16 @@ func (e *Engine) emitRunApprovalNeeded(runID core.RunID, payload core.ApprovalNe
 	if e == nil {
 		return
 	}
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	run, exists := e.runs[runID]
+	run, exists := e.runByID(runID)
 	if !exists {
 		return
 	}
-	session := e.sessions[run.sessionID]
-	if session == nil {
+	session, sessionExists := e.sessionByID(run.sessionID)
+	if !sessionExists || session == nil {
 		return
 	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
 	e.emitEventLocked(session, newSequencedEvent(session, run.id, eventscore.RunApprovalNeededEventSpec, payload))
 }
 
@@ -668,18 +840,23 @@ func (e *Engine) setRunMachineState(runID core.RunID, next core.RunState) {
 	if e == nil {
 		return
 	}
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	run, exists := e.runs[runID]
+	run, exists := e.runByID(runID)
 	if !exists || run.machine == nil {
 		return
 	}
+	session, sessionExists := e.sessionByID(run.sessionID)
+	if !sessionExists {
+		return
+	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
 	current := run.machine.State()
 	if current == statemachine.RunState(next) {
 		return
 	}
 	_ = run.machine.Transition(statemachine.RunState(next))
+	_ = e.persistRunLocked(context.Background(), run)
 }
 
 func newSequencedEvent[P eventscore.EventPayload](
@@ -694,9 +871,7 @@ func newSequencedEvent[P eventscore.EventPayload](
 }
 
 func (e *Engine) subscriptionStats(sessionID core.SessionID) subscribers.Stats {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	session, exists := e.sessions[sessionID]
+	session, exists := e.sessionByID(sessionID)
 	if !exists || session.subscriberManager == nil {
 		return subscribers.Stats{}
 	}
@@ -705,9 +880,13 @@ func (e *Engine) subscriptionStats(sessionID core.SessionID) subscribers.Stats {
 }
 
 func (e *Engine) pruneAllSubscribers(now time.Time) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	e.mu.RLock()
+	sessions := make([]*sessionRuntime, 0, len(e.sessions))
 	for _, session := range e.sessions {
+		sessions = append(sessions, session)
+	}
+	e.mu.RUnlock()
+	for _, session := range sessions {
 		if session == nil || session.subscriberManager == nil {
 			continue
 		}

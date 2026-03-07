@@ -9,6 +9,8 @@ import (
 	agenthttpapi "goyais/services/hub/internal/agent/adapters/httpapi"
 	agentcore "goyais/services/hub/internal/agent/core"
 	"goyais/services/hub/internal/agent/runtime/loop"
+	"goyais/services/hub/internal/config"
+	infrasqlite "goyais/services/hub/internal/infrastructure/sqlite"
 )
 
 const localWorkspaceID = "ws_local"
@@ -104,7 +106,15 @@ func NewAppState(store *authzStore) *AppState {
 		}
 		state.hydrateExecutionDomainFromStore()
 	}
-	engine := loop.NewEngine(nil)
+	flags := config.LoadFeatureFlagsFromEnv()
+	engineDeps := loop.Dependencies{}
+	if flags.UseSQLiteRepository && state.authz != nil && state.authz.db != nil {
+		engineDeps.Persistence = infrasqlite.NewLoopPersistenceStore(state.authz.db)
+	}
+	engine := loop.NewEngineWithDeps(engineDeps)
+	if flags.UseSQLiteRepository {
+		_ = engine.HydrateFromPersistence(context.Background())
+	}
 	state.runtimeEngine = engine
 	state.runtimeService = agenthttpapi.NewService(engine)
 
