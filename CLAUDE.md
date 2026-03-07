@@ -4,7 +4,203 @@
 
 | 日期 | 版本 | 说明 |
 |---|---|---|
+| 2026-03-07 | v2 | 添加 AI 协作指引总览 |
 | 2026-03-07 | 初始生成 | 由架构扫描脚本自动生成，覆盖率约 37% |
+
+---
+
+## AI 协作指引总览 (AI Guidance Overview)
+
+### 重构总原则
+
+**彻底重构，零技术债，不做兼容**
+- 本次重构目标：消除所有技术债，建立清晰的架构边界
+- 不保留废弃代码，不做兼容性实现，不妥协设计原则
+- 优先级：正确性 > 可维护性 > 性能 > 开发速度
+- 类型安全优先：TypeScript 严格模式，Go 接口驱动设计
+
+### 全局架构约束（不可违反）
+
+**1. 契约优先 (Contract-First)**
+- 所有 API 变更必须先修改 `packages/contracts/openapi.yaml`
+- 运行 `pnpm contracts:generate` 生成 TypeScript 类型
+- 提交前运行 `pnpm contracts:check` 验证同步
+- 前端/后端类型定义以 OpenAPI 为唯一真相来源
+
+**2. 依赖方向（单向，不可逆）**
+```
+apps/desktop ──┐
+apps/mobile ───┼──> packages/shared-core ──> packages/contracts
+               │
+               └──> services/hub (HTTP API)
+
+services/hub 内部：
+httpapi -> adapters -> runtime -> extensions -> core
+```
+
+**3. 核心不可变文件（修改需架构评审）**
+- `services/hub/internal/agent/core/interfaces.go` — Agent v4 核心接口
+- `services/hub/internal/agent/core/statemachine/` — Run 状态机
+- `packages/contracts/openapi.yaml` — API 契约规范
+
+**4. 运行时能力分支**
+- Desktop/Mobile/Web 差异通过 `isRuntimeCapabilitySupported()` 统一处理
+- 禁止硬编码平台判断（如 `if (isMobile)`）
+- 共享组件必须处理所有运行时目标
+
+### 修改决策树
+
+**我应该修改哪个模块？**
+
+```
+需求：添加新 API 端点
+├─ 1. packages/contracts/openapi.yaml (定义契约)
+├─ 2. pnpm contracts:generate (生成类型)
+├─ 3. services/hub/internal/httpapi/ (实现后端)
+└─ 4. apps/desktop/src/shared/services/ (实现前端调用)
+
+需求：修改前端 UI
+├─ 判断：Desktop 专属 or 共享？
+│   ├─ Desktop 专属 → apps/desktop/src/modules/
+│   └─ 共享 → apps/desktop/src/shared/ (考虑 Mobile 兼容)
+└─ 添加 Vitest 测试
+
+需求：修改后端逻辑
+├─ 判断：涉及核心接口？
+│   ├─ 是 → services/hub/internal/agent/core/ (需架构评审)
+│   └─ 否 → services/hub/internal/agent/runtime/
+└─ 添加 Go 测试
+
+需求：修改类型定义
+├─ 判断：API 相关？
+│   ├─ 是 → packages/contracts/openapi.yaml
+│   └─ 否 → packages/shared-core/src/api.ts (手写辅助类型)
+└─ 运行 pnpm contracts:generate
+```
+
+### 全局反模式 (Global Anti-patterns)
+
+**禁止的做法（任何模块）**
+- ❌ 先写代码，后补契约（必须契约优先）
+- ❌ 手动修改自动生成的文件（`openapi.ts`）
+- ❌ 跨层直接调用（违反依赖方向）
+- ❌ 硬编码配置（端口、URL、令牌）
+- ❌ 使用 `any` 类型逃避类型检查
+- ❌ 在组件中直接调用 HTTP API（必须通过 Pinia store）
+- ❌ 硬编码颜色值（必须用 CSS token）
+- ❌ 提交前不运行质量门禁
+
+**常见错误模式**
+- 忘记运行 `pnpm contracts:generate` 导致类型过期
+- 修改 `openapi.yaml` 后未同步更新 Hub 实现
+- 在共享组件中使用 Desktop 专属 API
+- 测试中未 mock Tauri/Hub 依赖
+- 错误处理未包含 `traceId`（影响调试）
+
+### 跨模块协调规则
+
+**API 变更流程（涉及 3 个模块）**
+1. `packages/contracts` — 修改 `openapi.yaml`
+2. `packages/shared-core` — 运行 `contracts:generate`
+3. `services/hub` — 实现 Go handler
+4. `apps/desktop` — 实现前端调用
+5. 全局 — 运行 `pnpm contracts:check` + `make test`
+
+**前端组件共享（Desktop ↔ Mobile）**
+1. 共享组件放在 `apps/desktop/src/shared/`
+2. 使用 `isRuntimeCapabilitySupported()` 处理差异
+3. 在 `mobile-runtime.spec.ts` 添加测试
+4. 避免使用 Desktop 专属 Tauri 插件
+
+**后端分层协调（Hub 内部）**
+1. `core` 定义接口（零外部依赖）
+2. `runtime` 实现业务逻辑
+3. `adapters` 适配协议（HTTP/ACP/CLI）
+4. `httpapi` 暴露 REST 端点
+
+### 质量门禁（提交前必过）
+
+**自动化检查**
+```bash
+# 契约同步检查
+pnpm contracts:check
+
+# TypeScript 类型检查
+pnpm lint
+
+# 单元测试
+pnpm test
+
+# 覆盖率门禁
+pnpm coverage:gate
+
+# 质量门禁（文件大小 + 圈复杂度）
+pnpm quality:gate
+
+# CSS Token 漂移检查
+pnpm check:tokens
+
+# Go 测试
+make test-hub
+
+# Go vet
+make lint-hub
+
+# E2E 烟雾测试
+pnpm e2e:smoke
+```
+
+**手动检查清单**
+- [ ] 是否修改了 P0 级文件？（需架构评审）
+- [ ] 是否违反了依赖方向？
+- [ ] 是否添加了对应的测试？
+- [ ] 是否更新了相关文档？
+- [ ] 是否考虑了 Mobile 兼容性？（如修改共享组件）
+- [ ] 是否包含 `traceId` 用于错误追踪？
+
+### 模块优先级与影响范围
+
+**P0: 核心架构（修改影响全局）**
+- `packages/contracts/openapi.yaml`
+- `services/hub/internal/agent/core/interfaces.go`
+- `apps/desktop/src/router/index.ts`
+- `apps/desktop/src/shared/runtime/index.ts`
+
+**P1: 关键实现（修改影响单模块）**
+- `services/hub/internal/agent/runtime/`
+- `apps/desktop/src/modules/session/store/`
+- `apps/desktop/src/shared/services/http.ts`
+
+**P2: 辅助代码（修改影响局部）**
+- `services/hub/internal/httpapi/handlers_*.go`
+- `apps/desktop/src/modules/*/views/*.vue`
+- `apps/desktop/src/shared/ui/*.vue`
+
+### 模块文档索引
+
+每个模块都有详细的 AI 协作指引，包含：
+- 模块特定的重构原则
+- 不可变文件列表
+- 常见任务决策树
+- 反模式与常见错误
+- 文件优先级
+- 跨模块协调规则
+
+**查看模块文档：**
+- [services/hub](./services/hub/CLAUDE.md) — Go 后端服务
+- [packages/contracts](./packages/contracts/CLAUDE.md) — OpenAPI 契约
+- [packages/shared-core](./packages/shared-core/CLAUDE.md) — 共享类型
+- [apps/desktop](./apps/desktop/CLAUDE.md) — 桌面客户端
+- [apps/mobile](./apps/mobile/CLAUDE.md) — 移动客户端
+
+### 快速参考
+
+**我需要...**
+- 添加新 API → 先看 [contracts](./packages/contracts/CLAUDE.md)
+- 修改后端逻辑 → 先看 [hub](./services/hub/CLAUDE.md)
+- 修改前端 UI → 先看 [desktop](./apps/desktop/CLAUDE.md)
+- 处理类型定义 → 先看 [shared-core](./packages/shared-core/CLAUDE.md)
+- 适配移动端 → 先看 [mobile](./apps/mobile/CLAUDE.md)
 
 ---
 
