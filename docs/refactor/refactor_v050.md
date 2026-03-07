@@ -1,12 +1,205 @@
 # Goyais v0.5.0 重构方案
 
-**文档版本**: 3.0
+**文档版本**: 4.0
 **创建日期**: 2026-03-07
 **更新日期**: 2026-03-07
 **目标版本**: v0.5.0
 **重构类型**: 架构级重构（Breaking Changes）
-**架构评审**: Claude Code Agent 首席架构师评估完成（v3.0 技术调整版）
+**架构评审**: Claude Code Agent 首席架构师评估完成（v4.0 AI 协作策略版）
 **数据库选型**: SQLite（v0.5.0）→ PostgreSQL（v0.6.0+）
+**AI 协作工具**: Codex (高推理) + Gemini (前端) + Claude (实施)
+**DDD/CQRS 目录策略**: 严格新建目录结构（零技术债）
+
+---
+
+## AI 协作重构策略
+
+### Codex 推理级别选择
+
+本次重构采用**分层推理策略**，根据任务复杂度动态选择：
+
+#### 高推理 (High) — 主力选择 ✅ (80% 任务)
+
+**适用场景**：
+- 修改 P1/P2 级文件（非核心架构）
+- 实现新功能（已有明确设计）
+- 重构单个模块内部逻辑
+- 添加测试覆盖
+- 修复 bug
+
+**优势**：
+- 深度足够理解架构约束
+- 能推理跨模块依赖关系
+- 速度与质量平衡良好
+- 成本可控
+
+#### 超高推理 (Ultra-high) — 关键决策 🎯 (20% 任务)
+
+**适用场景**：
+- 修改 P0 级文件（`core/interfaces.go`、`openapi.yaml`）
+- 跨 3+ 模块的架构变更
+- 状态机逻辑修改
+- 复杂的依赖方向重构
+- 首次接触某个复杂模块
+
+**优势**：
+- 最深层次的架构理解
+- 能发现隐藏的约束冲突
+- 多层次影响分析
+- 降低返工风险
+
+#### 实战工作流
+
+```bash
+# 阶段 1: 架构理解（Ultra-high）
+"请用超高推理分析 services/hub/internal/agent/core 的架构设计，
+识别所有不可变约束和依赖关系"
+
+# 阶段 2: 重构规划（High）
+"请用高推理制定 [具体模块] 的重构计划，
+遵循 CLAUDE.md 中的约束，输出分步骤方案"
+
+# 阶段 3: 实施（High）
+"请用高推理实施 [具体任务]，
+严格遵循契约优先原则，添加完整测试"
+
+# 阶段 4: 审查（Ultra-high）
+"请用超高推理审查本次重构，
+检查是否违反了任何架构约束或反模式"
+```
+
+### DDD/CQRS 目录结构决策
+
+**最终决策**: **严格按 DDD/CQRS 新建目录结构** ✅
+
+**核心理由**：
+1. `agent/runtime` 和 DDD 领域层职责不同，应该共存而非复用
+2. 符合"彻底重构、零技术债、不做兼容"原则
+3. 为未来扩展打下坚实基础
+4. 便于执行 CQRS 读写分离
+
+**目录结构**：
+
+```
+services/hub/internal/
+├── agent/                    # Agent 编排层（保留，重构）
+│   ├── core/                # 接口定义（P0 不可变）
+│   ├── runtime/             # 执行引擎（保留，作为基础设施）
+│   │   ├── loop/           # Session 调度器
+│   │   ├── model/          # 模型调用
+│   │   └── compaction/     # 上下文压缩
+│   ├── adapters/           # 协议适配器
+│   └── extensions/         # MCP/Hooks/Skills
+│
+├── domain/                  # DDD 领域层（新建）
+│   ├── workspace/          # 工作区限界上下文
+│   │   ├── entity.go       # Workspace 实体
+│   │   ├── repository.go   # 仓储接口
+│   │   ├── service.go      # 领域服务
+│   │   └── events.go       # 领域事件
+│   ├── session/            # 会话限界上下文
+│   │   ├── aggregate.go    # Session 聚合根
+│   │   ├── run.go          # Run 实体
+│   │   ├── changeset.go    # ChangeSet 值对象
+│   │   └── repository.go
+│   ├── resource/           # 资源配置限界上下文
+│   │   ├── model.go
+│   │   ├── rule.go
+│   │   ├── skill.go
+│   │   └── mcp.go
+│   └── shared/             # 共享内核
+│       ├── types.go        # 共享值对象
+│       └── errors.go       # 领域错误
+│
+├── application/            # CQRS 应用层（新建）
+│   ├── commands/           # 命令处理
+│   │   ├── workspace/
+│   │   │   ├── create_workspace.go
+│   │   │   └── handler.go
+│   │   ├── session/
+│   │   │   ├── start_session.go
+│   │   │   ├── submit_message.go
+│   │   │   └── handler.go
+│   │   └── bus.go          # 命令总线
+│   ├── queries/            # 查询处理
+│   │   ├── workspace/
+│   │   │   ├── get_workspace.go
+│   │   │   ├── list_workspaces.go
+│   │   │   └── handler.go
+│   │   ├── session/
+│   │   │   ├── get_session.go
+│   │   │   └── handler.go
+│   │   └── bus.go          # 查询总线
+│   └── services/           # 应用服务
+│       ├── session_orchestrator.go  # 协调 Agent runtime
+│       └── event_publisher.go
+│
+├── infrastructure/         # 基础设施层（新建）
+│   ├── persistence/        # 持久化实现
+│   │   ├── sqlite/
+│   │   │   ├── workspace_repo.go
+│   │   │   ├── session_repo.go
+│   │   │   └── migrations/
+│   │   └── memory/         # 内存实现（测试用）
+│   ├── external/           # 外部服务
+│   │   └── model_client.go
+│   └── eventbus/           # 事件总线实现
+│
+└── httpapi/                # 表示层（重构）
+    ├── handlers/           # 按领域组织
+    │   ├── workspace/
+    │   │   ├── create.go   # 调用 commands
+    │   │   └── list.go     # 调用 queries
+    │   ├── session/
+    │   └── resource/
+    ├── middleware/
+    ├── router.go
+    └── dto/                # 数据传输对象
+```
+
+**Agent Runtime 定位**：
+
+```go
+// agent/runtime 作为基础设施，被 application 层调用
+// application/services/session_orchestrator.go
+
+type SessionOrchestrator struct {
+    agentEngine   agent.Engine          // 来自 agent/runtime
+    sessionRepo   domain.SessionRepository
+    commandBus    commands.Bus
+}
+
+func (s *SessionOrchestrator) ExecuteRun(ctx context.Context, cmd commands.SubmitMessage) error {
+    // 1. 领域逻辑：验证会话状态
+    session, err := s.sessionRepo.Get(cmd.SessionID)
+    if err != nil { return err }
+
+    if !session.CanSubmitMessage() {
+        return domain.ErrInvalidSessionState
+    }
+
+    // 2. 调用 Agent 引擎（基础设施）
+    runID, err := s.agentEngine.Submit(ctx, cmd.Message)
+
+    // 3. 领域逻辑：更新聚合状态
+    session.AddRun(runID)
+    return s.sessionRepo.Save(session)
+}
+```
+
+**依赖方向**：
+
+```
+httpapi (handlers)
+    ↓
+application (commands/queries)
+    ↓
+domain (entities/aggregates)
+    ↑
+infrastructure (repositories)
+
+agent/runtime 作为基础设施，被 application 调用
+```
 
 ---
 
