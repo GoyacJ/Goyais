@@ -9,6 +9,7 @@ import (
 	"time"
 
 	agentcore "goyais/services/hub/internal/agent/core"
+	appcommands "goyais/services/hub/internal/application/commands"
 )
 
 type runControlRequest struct {
@@ -84,7 +85,7 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			r,
 			executionSeed.WorkspaceID,
 			"run.control",
-			authorizationResource{WorkspaceID: executionSeed.WorkspaceID},
+			authorizationResource{WorkspaceID: executionSeed.WorkspaceID, ResourceType: "execution", TargetID: runID},
 			authorizationContext{OperationType: "write", ABACRequired: true},
 		)
 		if authErr != nil {
@@ -92,6 +93,62 @@ func RunControlHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 		conversationSeed, hasConversationSeed := loadRunControlConversationSeed(r.Context(), state, executionSeed.ConversationID)
+		if state.features.EnableCQRS && state.sessionCommands != nil {
+			previousState := executionSeed.State
+			state.mu.RLock()
+			if currentExecution, exists := state.executions[runID]; exists {
+				previousState = currentExecution.State
+			}
+			state.mu.RUnlock()
+			var answerCommand *appcommands.ControlAnswer
+			if input.Answer != nil {
+				answerCommand = &appcommands.ControlAnswer{
+					QuestionID:       input.Answer.QuestionID,
+					SelectedOptionID: input.Answer.SelectedOptionID,
+					Text:             input.Answer.Text,
+				}
+			}
+			result, err := state.sessionCommands.ControlRun(r.Context(), appcommands.ControlRunCommand{
+				RunID:  runID,
+				Action: input.Action,
+				Answer: answerCommand,
+			})
+			if err != nil {
+				writeSessionCommandError(w, r, err)
+				return
+			}
+			state.mu.RLock()
+			execution, exists := state.executions[runID]
+			state.mu.RUnlock()
+			if !exists {
+				WriteStandardError(w, r, http.StatusInternalServerError, "RUN_CONTROL_FAILED", "Controlled run is not available", map[string]any{
+					"run_id": runID,
+				})
+				return
+			}
+			if state.authz != nil {
+				_ = state.authz.appendAudit(
+					execution.WorkspaceID,
+					session.UserID,
+					"run.control",
+					"execution",
+					execution.ID,
+					"success",
+					map[string]any{
+						"action": string(action),
+						"run_id": execution.ID,
+					},
+					TraceIDFromContext(r.Context()),
+				)
+			}
+			writeJSON(w, http.StatusOK, map[string]any{
+				"ok":             result.OK,
+				"run_id":         execution.ID,
+				"state":          execution.State,
+				"previous_state": previousState,
+			})
+			return
+		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
 		cancelExecutionID := ""

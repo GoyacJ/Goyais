@@ -107,25 +107,30 @@ func purgeProjectConversations(state *AppState, projectID string) projectConvers
 		return projectConversationsPurgeResult{}
 	}
 	state.mu.Lock()
-	result, executionIDsToCancel := purgeProjectConversationsLocked(state, normalizedProjectID)
+	result, executionIDsToCancel, sessionIDsToDelete := purgeProjectConversationsLocked(state, normalizedProjectID)
 	state.mu.Unlock()
 
 	for _, executionID := range executionIDsToCancel {
 		state.cancelExecutionBestEffort(context.Background(), executionID)
 		state.clearExecutionRuntimeMapping(executionID)
 	}
+	for _, sessionID := range sessionIDsToDelete {
+		_ = deleteSessionResourceSnapshots(state, sessionID)
+	}
 	return result
 }
 
-func purgeProjectConversationsLocked(state *AppState, projectID string) (projectConversationsPurgeResult, []string) {
+func purgeProjectConversationsLocked(state *AppState, projectID string) (projectConversationsPurgeResult, []string, []string) {
 	result := projectConversationsPurgeResult{}
 	executionIDsToCancel := make([]string, 0)
+	sessionIDsToDelete := make([]string, 0)
 
 	for conversationID, conversation := range state.conversations {
 		if conversation.ProjectID != projectID {
 			continue
 		}
 		result.PurgedConversations++
+		sessionIDsToDelete = append(sessionIDsToDelete, conversationID)
 		for executionID, execution := range state.executions {
 			if execution.ConversationID != conversationID {
 				continue
@@ -137,6 +142,7 @@ func purgeProjectConversationsLocked(state *AppState, projectID string) (project
 			result.PurgedExecutions++
 		}
 		delete(state.conversations, conversationID)
+		delete(state.sessionResourceSnapshots, conversationID)
 		delete(state.conversationMessages, conversationID)
 		delete(state.conversationSnapshots, conversationID)
 		delete(state.conversationExecutionOrder, conversationID)
@@ -150,7 +156,7 @@ func purgeProjectConversationsLocked(state *AppState, projectID string) (project
 		}
 	}
 
-	return result, executionIDsToCancel
+	return result, executionIDsToCancel, sessionIDsToDelete
 }
 
 func getProjectConfigFromStore(state *AppState, project Project) (ProjectConfig, error) {

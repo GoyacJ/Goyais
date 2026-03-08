@@ -129,6 +129,15 @@ func ResourceConfigsHandler(state *AppState) http.HandlerFunc {
 					"type":      created.Type,
 				}, TraceIDFromContext(r.Context()))
 			}
+			emitWorkspaceResourceEvent(state, WorkspaceResourceEvent{
+				EventID:         "wev_" + randomHex(8),
+				WorkspaceID:     workspaceID,
+				Type:            WorkspaceResourceEventTypeCreated,
+				ConfigID:        created.ID,
+				ConfigType:      created.Type,
+				ResourceVersion: created.Version,
+				Timestamp:       nowUTC(),
+			})
 			writeJSON(w, http.StatusCreated, created)
 		default:
 			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
@@ -186,6 +195,15 @@ func ResourceConfigByIDHandler(state *AppState) http.HandlerFunc {
 				WriteStandardError(w, r, http.StatusInternalServerError, "RESOURCE_CONFIG_UPDATE_FAILED", "Failed to update resource config", map[string]any{})
 				return
 			}
+			emitWorkspaceResourceEvent(state, WorkspaceResourceEvent{
+				EventID:         "wev_" + randomHex(8),
+				WorkspaceID:     workspaceID,
+				Type:            WorkspaceResourceEventTypeUpdated,
+				ConfigID:        updated.ID,
+				ConfigType:      updated.Type,
+				ResourceVersion: updated.Version,
+				Timestamp:       nowUTC(),
+			})
 			writeJSON(w, http.StatusOK, updated)
 		case http.MethodDelete:
 			_, authErr := authorizeAction(state, r, workspaceID, "resource_config.delete", authorizationResource{WorkspaceID: workspaceID}, authorizationContext{OperationType: "write", ABACRequired: true}, RoleAdmin, RoleApprover)
@@ -193,10 +211,28 @@ func ResourceConfigByIDHandler(state *AppState) http.HandlerFunc {
 				authErr.write(w, r)
 				return
 			}
+			origin, exists, err := loadWorkspaceResourceConfigRaw(state, workspaceID, configID)
+			if err != nil || !exists {
+				WriteStandardError(w, r, http.StatusNotFound, "RESOURCE_CONFIG_NOT_FOUND", "Resource config does not exist", map[string]any{"config_id": configID})
+				return
+			}
 			if err := removeWorkspaceResourceConfig(state, workspaceID, configID); err != nil {
 				WriteStandardError(w, r, http.StatusNotFound, "RESOURCE_CONFIG_NOT_FOUND", "Resource config does not exist", map[string]any{"config_id": configID})
 				return
 			}
+			if err := applyResourceConfigDeletionEffects(state, workspaceID, origin); err != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "RESOURCE_CONFIG_DELETE_FAILED", "Failed to apply session fallback for deleted resource config", map[string]any{"config_id": configID})
+				return
+			}
+			emitWorkspaceResourceEvent(state, WorkspaceResourceEvent{
+				EventID:         "wev_" + randomHex(8),
+				WorkspaceID:     workspaceID,
+				Type:            WorkspaceResourceEventTypeDeleted,
+				ConfigID:        origin.ID,
+				ConfigType:      origin.Type,
+				ResourceVersion: origin.Version + 1,
+				Timestamp:       nowUTC(),
+			})
 			writeJSON(w, http.StatusNoContent, map[string]any{})
 		default:
 			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{"method": r.Method, "path": r.URL.Path})

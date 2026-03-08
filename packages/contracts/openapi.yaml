@@ -807,9 +807,22 @@ paths:
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
-  /v1/sessions/{session_id}/rollback:
+  /v1/sessions/{session_id}/checkpoints:
+    get:
+      summary: List checkpoints for one session
+      parameters:
+        - $ref: '#/components/parameters/SessionIdParam'
+      responses:
+        '200':
+          description: Checkpoint list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckpointListResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
     post:
-      summary: Rollback session to user message anchor
+      summary: Create checkpoint for one session
       parameters:
         - $ref: '#/components/parameters/SessionIdParam'
       requestBody:
@@ -817,16 +830,36 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RollbackRequest'
+              $ref: '#/components/schemas/CheckpointCreateRequest'
       responses:
-        '200':
-          description: Rollback applied
+        '201':
+          description: Created checkpoint
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OkResponse'
+                $ref: '#/components/schemas/Checkpoint'
         '400':
           $ref: '#/components/responses/StandardErrorResponse'
+        '404':
+          $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/sessions/{session_id}/checkpoints/{checkpoint_id}/rollback:
+    post:
+      summary: Rollback session to checkpoint
+      parameters:
+        - $ref: '#/components/parameters/SessionIdParam'
+        - in: path
+          name: checkpoint_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Checkpoint rollback applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckpointRollbackResponse'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
 
@@ -1113,6 +1146,24 @@ paths:
                 $ref: '#/components/schemas/McpConnectResult'
         '404':
           $ref: '#/components/responses/StandardErrorResponse'
+
+  /v1/workspaces/{workspace_id}/resource-events:
+    get:
+      summary: Stream workspace resource change events
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceIdParam'
+        - in: query
+          name: last_event_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: SSE stream of workspace resource events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-sent event stream carrying WorkspaceResourceEvent payloads
 
   /v1/workspaces/{workspace_id}/mcps/export:
     get:
@@ -2468,7 +2519,7 @@ components:
 
     SessionDetailResponse:
       type: object
-      required: [session, messages, runs, snapshots]
+      required: [session, messages, runs, snapshots, resource_snapshots]
       properties:
         session:
           $ref: '#/components/schemas/Session'
@@ -2484,6 +2535,38 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SessionSnapshot'
+        resource_snapshots:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionResourceSnapshot'
+
+    SessionResourceSnapshot:
+      type: object
+      required:
+        - session_id
+        - resource_config_id
+        - resource_type
+        - resource_version
+        - is_deprecated
+        - snapshot_at
+      properties:
+        session_id:
+          type: string
+        resource_config_id:
+          type: string
+        resource_type:
+          type: string
+          enum: [model, rule, skill, mcp]
+        resource_version:
+          type: integer
+          minimum: 1
+        is_deprecated:
+          type: boolean
+        fallback_resource_id:
+          type: [string, 'null']
+        snapshot_at:
+          type: string
+          format: date-time
 
     CreateSessionRequest:
       type: object
@@ -2893,13 +2976,6 @@ components:
             queue_index:
               type: integer
 
-    RollbackRequest:
-      type: object
-      required: [message_id]
-      properties:
-        message_id:
-          type: string
-
     DiffItem:
       type: object
       required: [id, path, change_type, summary]
@@ -2979,12 +3055,15 @@ components:
 
     CheckpointSummary:
       type: object
-      required: [checkpoint_id, message, created_at]
+      required: [checkpoint_id, message, created_at, project_kind]
       properties:
         checkpoint_id:
           type: string
         message:
           type: string
+        project_kind:
+          type: string
+          enum: [git, non_git]
         created_at:
           type: string
           format: date-time
@@ -2992,6 +3071,46 @@ components:
           type: string
         entries_digest:
           type: string
+
+    Checkpoint:
+      allOf:
+        - $ref: '#/components/schemas/CheckpointSummary'
+        - type: object
+          required: [session_id]
+          properties:
+            session_id:
+              type: string
+            parent_checkpoint_id:
+              type: string
+            session:
+              $ref: '#/components/schemas/Session'
+
+    CheckpointListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Checkpoint'
+
+    CheckpointCreateRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    CheckpointRollbackResponse:
+      type: object
+      required: [ok, checkpoint, session]
+      properties:
+        ok:
+          type: boolean
+        checkpoint:
+          $ref: '#/components/schemas/Checkpoint'
+        session:
+          $ref: '#/components/schemas/Session'
 
     SessionChangeSet:
       type: object
@@ -3379,7 +3498,7 @@ components:
 
     ResourceConfig:
       type: object
-      required: [id, workspace_id, type, enabled, tokens_in_total, tokens_out_total, tokens_total, created_at, updated_at]
+      required: [id, workspace_id, type, enabled, version, is_deleted, tokens_in_total, tokens_out_total, tokens_total, created_at, updated_at]
       properties:
         id:
           type: string
@@ -3392,6 +3511,14 @@ components:
           type: string
         enabled:
           type: boolean
+        version:
+          type: integer
+          minimum: 1
+        is_deleted:
+          type: boolean
+        deleted_at:
+          type: string
+          format: date-time
         model:
           $ref: '#/components/schemas/ModelSpec'
         rule:
@@ -3415,6 +3542,41 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    WorkspaceResourceEventType:
+      type: string
+      enum:
+        - resource_config_created
+        - resource_config_updated
+        - resource_config_deleted
+        - resource_snapshot_deprecated
+
+    WorkspaceResourceEvent:
+      type: object
+      required: [event_id, workspace_id, type, config_id, config_type, resource_version, timestamp]
+      properties:
+        event_id:
+          type: string
+        workspace_id:
+          type: string
+        type:
+          $ref: '#/components/schemas/WorkspaceResourceEventType'
+        config_id:
+          type: string
+        config_type:
+          type: string
+          enum: [model, rule, skill, mcp]
+        resource_version:
+          type: integer
+          minimum: 1
+        session_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true
 
     ResourceConfigCreateRequest:
       type: object

@@ -15,6 +15,46 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 		conversationSeed, hasConversationSeed := loadConversationByIDSeed(r.Context(), state, conversationID)
 		switch r.Method {
 		case http.MethodGet:
+			if state.features.EnableCQRS && state.sessionQueries != nil {
+				detail, exists, err := state.sessionQueries.GetSessionDetail(r.Context(), conversationID)
+				if err != nil {
+					WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to load session detail", map[string]any{
+						"session_id": conversationID,
+						"error":      err.Error(),
+					})
+					return
+				}
+				if !exists {
+					WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{
+						"session_id": conversationID,
+					})
+					return
+				}
+				conversation := fromApplicationSession(detail.Session)
+				session, authErr := authorizeAction(
+					state,
+					r,
+					conversation.WorkspaceID,
+					"session.read",
+					authorizationResource{WorkspaceID: conversation.WorkspaceID, ResourceType: "conversation", TargetID: conversationID},
+					authorizationContext{OperationType: "read"},
+				)
+				if authErr != nil {
+					authErr.write(w, r)
+					return
+				}
+				recordBusinessOperationAudit(r.Context(), state, session, "session.read", "conversation", conversationID, map[string]any{
+					"operation": "get_session_detail",
+				})
+				writeJSON(w, http.StatusOK, ConversationDetailResponse{
+					Conversation:      conversation,
+					Messages:          fromApplicationSessionMessages(detail.Messages),
+					Executions:        fromApplicationRuns(detail.Runs),
+					Snapshots:         fromApplicationSessionSnapshots(detail.Snapshots),
+					ResourceSnapshots: fromApplicationSessionResourceSnapshots(detail.ResourceSnapshots),
+				})
+				return
+			}
 			state.mu.RLock()
 			conversation, exists := state.conversations[conversationID]
 			if !exists {
@@ -34,12 +74,12 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			conversation = decorateConversationUsageFromExecutions(conversation, executions)
 			state.mu.RUnlock()
 
-			_, authErr := authorizeAction(
+			session, authErr := authorizeAction(
 				state,
 				r,
 				conversation.WorkspaceID,
 				"session.read",
-				authorizationResource{WorkspaceID: conversation.WorkspaceID},
+				authorizationResource{WorkspaceID: conversation.WorkspaceID, ResourceType: "conversation", TargetID: conversationID},
 				authorizationContext{OperationType: "read"},
 			)
 			if authErr != nil {
@@ -63,12 +103,23 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			sortConversationMessages(messages)
 			sortConversationSnapshots(snapshots)
 			sortConversationExecutions(executions)
+			resourceSnapshots, resourceSnapshotErr := loadSessionResourceSnapshots(state, conversationID)
+			if resourceSnapshotErr != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "RESOURCE_SNAPSHOT_READ_FAILED", "Failed to load session resource snapshots", map[string]any{
+					"session_id": conversationID,
+				})
+				return
+			}
 
 			writeJSON(w, http.StatusOK, ConversationDetailResponse{
-				Conversation: conversation,
-				Messages:     messages,
-				Executions:   executions,
-				Snapshots:    snapshots,
+				Conversation:      conversation,
+				Messages:          messages,
+				Executions:        executions,
+				Snapshots:         snapshots,
+				ResourceSnapshots: resourceSnapshots,
+			})
+			recordBusinessOperationAudit(r.Context(), state, session, "session.read", "conversation", conversationID, map[string]any{
+				"operation": "get_session_detail",
 			})
 		case http.MethodPatch:
 			if !hasConversationSeed {
@@ -82,7 +133,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				r,
 				conversationSeed.WorkspaceID,
 				"session.write",
-				authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
+				authorizationResource{WorkspaceID: conversationSeed.WorkspaceID, ResourceType: "conversation", TargetID: conversationID},
 				authorizationContext{OperationType: "write", ABACRequired: true},
 			)
 			if authErr != nil {
@@ -116,20 +167,24 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			}
 
 			resourceSelectionChanged := input.ModelConfigID != nil || input.RuleIDs != nil || input.SkillIDs != nil || input.MCPIDs != nil
+			nextModelConfigID := strings.TrimSpace(conversationSeed.ModelConfigID)
+			nextRuleIDs := append([]string{}, conversationSeed.RuleIDs...)
+			nextSkillIDs := append([]string{}, conversationSeed.SkillIDs...)
+			nextMCPIDs := append([]string{}, conversationSeed.MCPIDs...)
 			if resourceSelectionChanged {
-				nextModelConfigID := strings.TrimSpace(conversationSeed.ModelConfigID)
 				if input.ModelConfigID != nil {
 					nextModelConfigID = strings.TrimSpace(*input.ModelConfigID)
+					if nextModelConfigID == "" {
+						WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "model_config_id cannot be empty", map[string]any{})
+						return
+					}
 				}
-				nextRuleIDs := append([]string{}, conversationSeed.RuleIDs...)
 				if input.RuleIDs != nil {
 					nextRuleIDs = sanitizeIDList(input.RuleIDs)
 				}
-				nextSkillIDs := append([]string{}, conversationSeed.SkillIDs...)
 				if input.SkillIDs != nil {
 					nextSkillIDs = sanitizeIDList(input.SkillIDs)
 				}
-				nextMCPIDs := append([]string{}, conversationSeed.MCPIDs...)
 				if input.MCPIDs != nil {
 					nextMCPIDs = sanitizeIDList(input.MCPIDs)
 				}
@@ -143,6 +198,26 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 					nextMCPIDs,
 				); err != nil {
 					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
+			}
+			updateTime := time.Now().UTC().Format(time.RFC3339)
+			nextResourceSnapshots := []SessionResourceSnapshot{}
+			if resourceSelectionChanged {
+				nextResourceSnapshots, projectErr = captureSessionResourceSnapshots(
+					state,
+					conversationID,
+					conversationSeed.WorkspaceID,
+					nextModelConfigID,
+					nextRuleIDs,
+					nextSkillIDs,
+					nextMCPIDs,
+					updateTime,
+				)
+				if projectErr != nil {
+					WriteStandardError(w, r, http.StatusInternalServerError, "RESOURCE_SNAPSHOT_CREATE_FAILED", "Failed to snapshot session resources", map[string]any{
+						"session_id": conversationID,
+					})
 					return
 				}
 			}
@@ -180,11 +255,6 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 			}
 			if input.ModelConfigID != nil {
 				modelConfigID := strings.TrimSpace(*input.ModelConfigID)
-				if modelConfigID == "" {
-					state.mu.Unlock()
-					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "model_config_id cannot be empty", map[string]any{})
-					return
-				}
 				conversation.ModelConfigID = modelConfigID
 				changed = true
 				configChanged = true
@@ -213,7 +283,7 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "at least one conversation field must be updated", map[string]any{})
 				return
 			}
-			conversation.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+			conversation.UpdatedAt = updateTime
 			state.conversations[conversationID] = conversation
 			configChangeExecution := Execution{}
 			hasConfigChangeExecution := false
@@ -227,6 +297,14 @@ func ConversationByIDHandler(state *AppState) http.HandlerFunc {
 				}
 			}
 			state.mu.Unlock()
+			if resourceSelectionChanged {
+				if err := replaceSessionResourceSnapshots(state, conversationID, nextResourceSnapshots); err != nil {
+					WriteStandardError(w, r, http.StatusInternalServerError, "RESOURCE_SNAPSHOT_CREATE_FAILED", "Failed to persist session resource snapshot", map[string]any{
+						"session_id": conversationID,
+					})
+					return
+				}
+			}
 			if configChanged && hasConfigChangeExecution {
 				decision, matchedPolicyID := evaluateHookDecisionWithState(state, configChangeExecution, HookEventTypeConfigChange, "")
 				appendHookExecutionRecordAndEventWithState(

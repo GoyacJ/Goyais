@@ -260,6 +260,25 @@ func TestAuthzStoreCreatesProjectSchema(t *testing.T) {
 			t.Fatalf("expected project_configs column %s to exist", column)
 		}
 	}
+
+	projectResourceBindingColumns := []string{
+		"project_id",
+		"resource_config_id",
+		"resource_type",
+		"binding_index",
+		"is_default",
+		"created_at",
+		"updated_at",
+	}
+	for _, column := range projectResourceBindingColumns {
+		ok, hasErr := tableHasColumn(store.db, "project_resource_bindings", column)
+		if hasErr != nil {
+			t.Fatalf("check project_resource_bindings column %s failed: %v", column, hasErr)
+		}
+		if !ok {
+			t.Fatalf("expected project_resource_bindings column %s to exist", column)
+		}
+	}
 }
 
 func TestOpenAuthzStoreAppliesStageZeroMigrations(t *testing.T) {

@@ -236,6 +236,39 @@ func TestRunnerRunPromptSlashCommandUsesCommandBus(t *testing.T) {
 	}
 }
 
+func TestRunnerRunPromptSlashPromptCommandSubmitsExpandedPrompt(t *testing.T) {
+	engine := &engineStub{sub: newEventSubStub(8), runID: "run_prompt"}
+	writer := &writerStub{}
+	cmdBus := &commandBusStub{resp: core.CommandResponse{
+		Output: "project-plan is running...",
+		Metadata: map[string]any{
+			"kind":            "prompt",
+			"expanded_prompt": "Draft plan for telemetry pipeline",
+		},
+	}}
+	runner := Runner{Engine: engine, CommandBus: cmdBus, Writer: writer}
+
+	result, err := runner.RunPrompt(context.Background(), RunRequest{SessionID: "sess_cmd", Prompt: "/project-plan telemetry pipeline"})
+	if err != nil {
+		t.Fatalf("run slash prompt command failed: %v", err)
+	}
+	if result.IsCommand {
+		t.Fatalf("expected prompt command to continue as run, got %#v", result)
+	}
+	if result.RunID != "run_prompt" {
+		t.Fatalf("run id = %q, want run_prompt", result.RunID)
+	}
+	if engine.submitCalls != 1 {
+		t.Fatalf("expected engine submit to be called once, got %d", engine.submitCalls)
+	}
+	if engine.submitInput.Text != "Draft plan for telemetry pipeline" {
+		t.Fatalf("submit prompt = %q", engine.submitInput.Text)
+	}
+	if len(writer.frames) == 0 || writer.frames[0].Type == "command_response" {
+		t.Fatalf("expected run events instead of command response, got %#v", writer.frames)
+	}
+}
+
 func TestRunnerRunPromptWriterError(t *testing.T) {
 	engine := &engineStub{sub: newEventSubStub(8)}
 	runner := Runner{Engine: engine, Writer: &writerStub{err: errors.New("write failed")}}

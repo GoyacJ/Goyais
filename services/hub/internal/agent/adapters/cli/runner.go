@@ -14,6 +14,7 @@ import (
 
 	"goyais/services/hub/internal/agent/core"
 	eventscore "goyais/services/hub/internal/agent/core/events"
+	slashruntime "goyais/services/hub/internal/agent/runtime/slash"
 )
 
 // EventFrame is the CLI-facing event wire shape.
@@ -93,14 +94,20 @@ func (r Runner) RunPrompt(ctx context.Context, req RunRequest) (RunResult, error
 	}
 
 	if strings.HasPrefix(prompt, "/") && r.CommandBus != nil {
-		result, err := r.runSlashCommand(ctx, sessionID, prompt)
+		result, handled, err := r.runSlashCommand(ctx, sessionID, prompt, cloneStringMap(req.Metadata), strings.TrimSpace(req.Cursor))
 		if err != nil {
 			return RunResult{}, err
 		}
-		return result, nil
+		if handled {
+			return result, nil
+		}
 	}
 
-	subscription, err := r.Engine.Subscribe(ctx, sessionID, strings.TrimSpace(req.Cursor))
+	return r.runSubmittedPrompt(ctx, sessionID, prompt, cloneStringMap(req.Metadata), strings.TrimSpace(req.Cursor))
+}
+
+func (r Runner) runSubmittedPrompt(ctx context.Context, sessionID string, prompt string, metadata map[string]string, cursor string) (RunResult, error) {
+	subscription, err := r.Engine.Subscribe(ctx, sessionID, cursor)
 	if err != nil {
 		return RunResult{}, err
 	}
@@ -108,7 +115,7 @@ func (r Runner) RunPrompt(ctx context.Context, req RunRequest) (RunResult, error
 
 	runID, err := r.Engine.Submit(ctx, sessionID, core.UserInput{
 		Text:     prompt,
-		Metadata: cloneStringMap(req.Metadata),
+		Metadata: cloneStringMap(metadata),
 	})
 	if err != nil {
 		return RunResult{}, err
@@ -155,14 +162,18 @@ func (r Runner) RunPrompt(ctx context.Context, req RunRequest) (RunResult, error
 	}
 }
 
-func (r Runner) runSlashCommand(ctx context.Context, sessionID string, prompt string) (RunResult, error) {
-	command, err := parseSlashCommand(prompt)
+func (r Runner) runSlashCommand(ctx context.Context, sessionID string, prompt string, metadata map[string]string, cursor string) (RunResult, bool, error) {
+	command, err := slashruntime.Parse(prompt)
 	if err != nil {
-		return RunResult{}, err
+		return RunResult{}, true, err
 	}
 	response, err := r.CommandBus.Execute(ctx, sessionID, command)
 	if err != nil {
-		return RunResult{}, err
+		return RunResult{}, true, err
+	}
+	if expandedPrompt, ok := slashruntime.PromptExpansion(response); ok {
+		result, runErr := r.runSubmittedPrompt(ctx, sessionID, expandedPrompt, metadata, cursor)
+		return result, true, runErr
 	}
 	frame := EventFrame{
 		Type:      "command_response",
@@ -177,36 +188,13 @@ func (r Runner) runSlashCommand(ctx context.Context, sessionID string, prompt st
 		},
 	}
 	if writeErr := r.writeFrame(frame); writeErr != nil {
-		return RunResult{}, writeErr
+		return RunResult{}, true, writeErr
 	}
 	return RunResult{
 		SessionID:     sessionID,
 		CommandOutput: strings.TrimSpace(response.Output),
 		IsCommand:     true,
-	}, nil
-}
-
-func parseSlashCommand(raw string) (core.SlashCommand, error) {
-	trimmed := strings.TrimSpace(raw)
-	if !strings.HasPrefix(trimmed, "/") {
-		return core.SlashCommand{}, fmt.Errorf("slash command must start with /")
-	}
-	parts := strings.Fields(strings.TrimPrefix(trimmed, "/"))
-	if len(parts) == 0 {
-		return core.SlashCommand{}, errors.New("slash command name is required")
-	}
-	cmd := core.SlashCommand{
-		Name:      strings.TrimSpace(parts[0]),
-		Raw:       trimmed,
-		Arguments: nil,
-	}
-	if len(parts) > 1 {
-		cmd.Arguments = append([]string(nil), parts[1:]...)
-	}
-	if err := cmd.Validate(); err != nil {
-		return core.SlashCommand{}, err
-	}
-	return cmd, nil
+	}, true, nil
 }
 
 func (r Runner) writeFrame(frame EventFrame) error {

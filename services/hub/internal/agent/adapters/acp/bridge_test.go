@@ -11,6 +11,7 @@ import (
 	"time"
 
 	cliadapter "goyais/services/hub/internal/agent/adapters/cli"
+	agenthttpapi "goyais/services/hub/internal/agent/adapters/httpapi"
 	"goyais/services/hub/internal/agent/core"
 )
 
@@ -108,6 +109,20 @@ func (s *bridgeProjectorStub) ProjectRunEvent(_ context.Context, event core.Even
 	return nil
 }
 
+type bridgeCheckpointServiceStub struct {
+	req  agenthttpapi.SessionCheckpointRollbackRequest
+	resp agenthttpapi.SessionStateResponse
+	err  error
+}
+
+func (s *bridgeCheckpointServiceStub) RollbackToCheckpoint(_ context.Context, req agenthttpapi.SessionCheckpointRollbackRequest) (agenthttpapi.SessionStateResponse, error) {
+	s.req = req
+	if s.err != nil {
+		return agenthttpapi.SessionStateResponse{}, s.err
+	}
+	return s.resp, nil
+}
+
 func TestBridgeNewSessionDelegatesToEngine(t *testing.T) {
 	engine := &engineStub{handle: core.SessionHandle{SessionID: core.SessionID("sess_new"), CreatedAt: time.Date(2026, 3, 3, 9, 0, 0, 0, time.UTC)}}
 	bridge := NewBridge(engine, nil)
@@ -176,6 +191,38 @@ func TestBridgePromptSlashUsesCommandBus(t *testing.T) {
 	}
 }
 
+func TestBridgePromptSlashPromptCommandSubmitsExpandedPrompt(t *testing.T) {
+	engine := &engineStub{sub: newEventSubStub(4), runID: "run_prompt"}
+	cmdBus := &commandBusStub{resp: core.CommandResponse{
+		Output: "project-plan is running...",
+		Metadata: map[string]any{
+			"kind":            "prompt",
+			"expanded_prompt": "Draft plan for telemetry pipeline",
+		},
+	}}
+	bridge := NewBridge(engine, cmdBus)
+
+	resp, err := bridge.Prompt(context.Background(), PromptRequest{SessionID: "sess_1", Prompt: "/project-plan telemetry pipeline"})
+	if err != nil {
+		t.Fatalf("prompt slash failed: %v", err)
+	}
+	if resp.IsCommand {
+		t.Fatalf("expected prompt command to continue as run, got %#v", resp)
+	}
+	if resp.RunID != "run_prompt" {
+		t.Fatalf("run id = %q, want run_prompt", resp.RunID)
+	}
+	if engine.submitCalls != 1 {
+		t.Fatalf("expected engine submit once, got %d", engine.submitCalls)
+	}
+	if engine.submitInput.Text != "Draft plan for telemetry pipeline" {
+		t.Fatalf("submit prompt = %q", engine.submitInput.Text)
+	}
+	if len(resp.Updates) == 0 || resp.Updates[0].Kind == "command_result" {
+		t.Fatalf("expected run updates, got %#v", resp.Updates)
+	}
+}
+
 func TestBridgePromptProjectsEventsWhenProjectorConfigured(t *testing.T) {
 	engine := &engineStub{sub: newEventSubStub(4)}
 	projector := &bridgeProjectorStub{}
@@ -201,5 +248,32 @@ func TestBridgePromptProjectsEventsWhenProjectorConfigured(t *testing.T) {
 		if string(call.event.RunID) == "" {
 			t.Fatalf("call %d run id should not be empty", index)
 		}
+	}
+}
+
+func TestBridgeRewindSessionUsesCheckpointServiceWhenConfigured(t *testing.T) {
+	engine := &engineStub{}
+	checkpoints := &bridgeCheckpointServiceStub{
+		resp: agenthttpapi.SessionStateResponse{
+			SessionID:        "sess_checkpoint",
+			LastCheckpointID: "cp_checkpoint",
+			NextCursor:       7,
+			PermissionMode:   "acceptEdits",
+		},
+	}
+	bridge := NewBridgeWithOptions(engine, nil, BridgeOptions{CheckpointService: checkpoints})
+
+	resp, err := bridge.RewindSession(context.Background(), "sess_checkpoint", "cp_checkpoint", 7, true)
+	if err != nil {
+		t.Fatalf("rewind session failed: %v", err)
+	}
+	if checkpoints.req.SessionID != "sess_checkpoint" || checkpoints.req.CheckpointID != "cp_checkpoint" {
+		t.Fatalf("unexpected checkpoint request %#v", checkpoints.req)
+	}
+	if checkpoints.req.TargetCursor != 7 || !checkpoints.req.ClearTempPermissions {
+		t.Fatalf("unexpected checkpoint request %#v", checkpoints.req)
+	}
+	if resp.LastCheckpointID != "cp_checkpoint" || resp.NextCursor != 7 || resp.PermissionMode != "acceptEdits" {
+		t.Fatalf("unexpected rewind response %#v", resp)
 	}
 }

@@ -11,7 +11,11 @@ func resolveSession(state *AppState, r *http.Request) (Session, *apiError) {
 }
 
 func resolveSessionForWorkspace(state *AppState, r *http.Request, workspaceHint string) (Session, *apiError) {
-	token := strings.TrimSpace(extractAccessToken(r))
+	return resolveSessionForAccessToken(state, extractAccessToken(r), workspaceHint)
+}
+
+func resolveSessionForAccessToken(state *AppState, accessToken string, workspaceHint string) (Session, *apiError) {
+	token := strings.TrimSpace(accessToken)
 	if token == "" {
 		if strings.TrimSpace(workspaceHint) != "" && strings.TrimSpace(workspaceHint) != localWorkspaceID {
 			return Session{}, &apiError{

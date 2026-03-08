@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	agenthttpapi "goyais/services/hub/internal/agent/adapters/httpapi"
 	"goyais/services/hub/internal/agent/core"
 	runtimesession "goyais/services/hub/internal/agent/runtime/session"
 )
@@ -26,6 +27,14 @@ type serverHarness struct {
 }
 
 func newServerHarness(t *testing.T, engine core.Engine, lifecycle SessionLifecycle) *serverHarness {
+	t.Helper()
+	return newServerHarnessWithOptions(t, ServerOptions{
+		Bridge:    NewBridge(engine, nil),
+		Lifecycle: lifecycle,
+	})
+}
+
+func newServerHarnessWithOptions(t *testing.T, opts ServerOptions) *serverHarness {
 	t.Helper()
 
 	peer := NewPeer()
@@ -44,7 +53,7 @@ func newServerHarness(t *testing.T, engine core.Engine, lifecycle SessionLifecyc
 		h.mu.Unlock()
 		return nil
 	})
-	_ = NewServer(peer, ServerOptions{Bridge: NewBridge(engine, nil), Lifecycle: lifecycle})
+	_ = NewServer(peer, opts)
 	return h
 }
 
@@ -101,6 +110,20 @@ type lifecycleStub struct {
 	handoffReq      runtimesession.HandoffRequest
 	handoffSnapshot runtimesession.HandoffSnapshot
 	handoffErr      error
+}
+
+type checkpointServiceStub struct {
+	req  agenthttpapi.SessionCheckpointRollbackRequest
+	resp agenthttpapi.SessionStateResponse
+	err  error
+}
+
+func (s *checkpointServiceStub) RollbackToCheckpoint(_ context.Context, req agenthttpapi.SessionCheckpointRollbackRequest) (agenthttpapi.SessionStateResponse, error) {
+	s.req = req
+	if s.err != nil {
+		return agenthttpapi.SessionStateResponse{}, s.err
+	}
+	return s.resp, nil
 }
 
 func (s *lifecycleStub) Resume(_ context.Context, req runtimesession.ResumeRequest) (runtimesession.State, error) {
@@ -686,6 +709,78 @@ func TestServerSessionRewindUsesLifecycle(t *testing.T) {
 		t.Fatalf("unexpected rewind result %#v", result)
 	}
 	if asInt(result["targetCursor"], -1) != 5 {
+		t.Fatalf("unexpected rewind cursor %#v", result)
+	}
+}
+
+func TestServerSessionRewindUsesCheckpointServiceWhenConfigured(t *testing.T) {
+	workspace := t.TempDir()
+	engine := &acpEngineStub{}
+	lifecycle := &lifecycleStub{
+		rewindState: runtimesession.State{
+			SessionID:        core.SessionID("sess_lifecycle"),
+			LastCheckpointID: core.CheckpointID("cp_lifecycle"),
+			NextCursor:       1,
+		},
+	}
+	checkpoints := &checkpointServiceStub{
+		resp: agenthttpapi.SessionStateResponse{
+			SessionID:        "sess_checkpoint",
+			WorkingDir:       workspace,
+			PermissionMode:   "plan",
+			LastCheckpointID: "cp_checkpoint",
+			NextCursor:       9,
+		},
+	}
+	harness := newServerHarnessWithOptions(t, ServerOptions{
+		Bridge:            NewBridge(engine, nil),
+		Lifecycle:         lifecycle,
+		CheckpointService: checkpoints,
+	})
+
+	newResp, _ := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "session.start",
+		"params":  map[string]any{"cwd": workspace},
+	})
+	sessionID := strings.TrimSpace(asString(asMap(newResp["result"])["sessionId"]))
+	if sessionID == "" {
+		t.Fatalf("missing session id from session/start")
+	}
+
+	rewindResp, rewindMsgs := harness.call(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "session/rewind",
+		"params": map[string]any{
+			"sessionId":            sessionID,
+			"checkpointId":         "cp_checkpoint",
+			"targetCursor":         9,
+			"clearTempPermissions": true,
+		},
+	})
+	if rewindResp["error"] != nil {
+		t.Fatalf("session/rewind error: %#v", rewindResp["error"])
+	}
+	if checkpoints.req.SessionID != sessionID || checkpoints.req.CheckpointID != "cp_checkpoint" {
+		t.Fatalf("unexpected checkpoint request %#v", checkpoints.req)
+	}
+	if checkpoints.req.TargetCursor != 9 || !checkpoints.req.ClearTempPermissions {
+		t.Fatalf("unexpected checkpoint request %#v", checkpoints.req)
+	}
+	if lifecycle.rewindReq.SessionID != "" {
+		t.Fatalf("expected lifecycle rewind bypass, got %#v", lifecycle.rewindReq)
+	}
+	if !containsUpdate(rewindMsgs, "current_mode_update") {
+		t.Fatalf("expected current_mode_update notification after rewind")
+	}
+
+	result := asMap(rewindResp["result"])
+	if asString(result["checkpointId"]) != "cp_checkpoint" {
+		t.Fatalf("unexpected rewind result %#v", result)
+	}
+	if asInt(result["targetCursor"], -1) != 9 {
 		t.Fatalf("unexpected rewind cursor %#v", result)
 	}
 }

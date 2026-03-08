@@ -9,6 +9,9 @@ import (
 	agenthttpapi "goyais/services/hub/internal/agent/adapters/httpapi"
 	agentcore "goyais/services/hub/internal/agent/core"
 	"goyais/services/hub/internal/agent/runtime/loop"
+	slashruntime "goyais/services/hub/internal/agent/runtime/slash"
+	appcommands "goyais/services/hub/internal/application/commands"
+	appqueries "goyais/services/hub/internal/application/queries"
 	"goyais/services/hub/internal/config"
 	infrasqlite "goyais/services/hub/internal/infrastructure/sqlite"
 )
@@ -26,9 +29,12 @@ type AppState struct {
 	projects                      map[string]Project
 	projectConfigs                map[string]ProjectConfig
 	conversations                 map[string]Conversation
+	sessionResourceSnapshots      map[string][]SessionResourceSnapshot
 	conversationMessages          map[string][]ConversationMessage
 	conversationSnapshots         map[string][]ConversationSnapshot
 	conversationExecutionOrder    map[string][]string
+	conversationCheckpoints       map[string][]Checkpoint
+	checkpointSessionPayloads     map[string]string
 	executions                    map[string]Execution
 	pendingUserQuestions          map[string]pendingUserQuestion
 	executionEvents               map[string][]ExecutionEvent
@@ -44,19 +50,27 @@ type AppState struct {
 	conversationProjectionCancels map[string]context.CancelFunc
 	conversationProjectionLastSeq map[string]int64
 
-	resources             map[string]Resource
-	resourceConfigs       map[string]ResourceConfig
-	resourceTestLogs      []ResourceTestLog
-	workspaceCatalogRoots map[string]CatalogRootResponse
-	modelCatalogCache     map[string]modelCatalogCacheEntry
-	shareRequests         map[string]ShareRequest
+	resources                  map[string]Resource
+	resourceConfigs            map[string]ResourceConfig
+	resourceTestLogs           []ResourceTestLog
+	workspaceResourceEvents    map[string][]WorkspaceResourceEvent
+	workspaceResourceEventSubs map[string]map[string]chan WorkspaceResourceEvent
+	workspaceCatalogRoots      map[string]CatalogRootResponse
+	modelCatalogCache          map[string]modelCatalogCacheEntry
+	shareRequests              map[string]ShareRequest
 
 	adminUsers map[string]AdminUser
 	adminRoles map[Role]AdminRole
 	adminAudit []AdminAuditEvent
 
-	runtimeEngine  agentcore.Engine
-	runtimeService runtimeRunBridgeService
+	runtimeEngine         agentcore.Engine
+	runtimeService        runtimeRunBridgeService
+	commandBus            agentcore.CommandBus
+	features              config.FeatureFlags
+	sessionCommands       sessionCommandApplication
+	sessionQueries        sessionQueryApplication
+	checkpointService     checkpointApplicationService
+	unifiedPermissionGate authorizationGate
 }
 
 func NewAppState(store *authzStore) *AppState {
@@ -67,9 +81,12 @@ func NewAppState(store *authzStore) *AppState {
 		projects:                      map[string]Project{},
 		projectConfigs:                map[string]ProjectConfig{},
 		conversations:                 map[string]Conversation{},
+		sessionResourceSnapshots:      map[string][]SessionResourceSnapshot{},
 		conversationMessages:          map[string][]ConversationMessage{},
 		conversationSnapshots:         map[string][]ConversationSnapshot{},
 		conversationExecutionOrder:    map[string][]string{},
+		conversationCheckpoints:       map[string][]Checkpoint{},
+		checkpointSessionPayloads:     map[string]string{},
 		executions:                    map[string]Execution{},
 		pendingUserQuestions:          map[string]pendingUserQuestion{},
 		executionEvents:               map[string][]ExecutionEvent{},
@@ -87,6 +104,8 @@ func NewAppState(store *authzStore) *AppState {
 		resources:                     map[string]Resource{},
 		resourceConfigs:               map[string]ResourceConfig{},
 		resourceTestLogs:              []ResourceTestLog{},
+		workspaceResourceEvents:       map[string][]WorkspaceResourceEvent{},
+		workspaceResourceEventSubs:    map[string]map[string]chan WorkspaceResourceEvent{},
 		workspaceCatalogRoots:         map[string]CatalogRootResponse{},
 		modelCatalogCache:             map[string]modelCatalogCacheEntry{},
 		shareRequests:                 map[string]ShareRequest{},
@@ -107,6 +126,7 @@ func NewAppState(store *authzStore) *AppState {
 		state.hydrateExecutionDomainFromStore()
 	}
 	flags := config.LoadFeatureFlagsFromEnv()
+	state.features = flags
 	engineDeps := loop.Dependencies{}
 	if flags.UseSQLiteRepository && state.authz != nil && state.authz.db != nil {
 		engineDeps.Persistence = infrasqlite.NewLoopPersistenceStore(state.authz.db)
@@ -117,6 +137,11 @@ func NewAppState(store *authzStore) *AppState {
 	}
 	state.runtimeEngine = engine
 	state.runtimeService = agenthttpapi.NewService(engine)
+	state.commandBus = slashruntime.NewBus(appStateCommandContextResolver{state: state})
+	state.sessionCommands = appcommands.NewSessionService(applicationSessionCommandHandler{state: state})
+	state.sessionQueries = appqueries.NewSessionService(applicationSessionReadModel{state: state})
+	state.checkpointService = newCheckpointApplicationService(state)
+	state.unifiedPermissionGate = newUnifiedAuthorizationGate(state)
 
 	state.adminRoles = defaultRoles()
 	state.adminUsers["u_local_admin"] = AdminUser{

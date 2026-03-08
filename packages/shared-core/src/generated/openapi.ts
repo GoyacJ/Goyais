@@ -2138,6 +2138,113 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/checkpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List checkpoints for one session */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Checkpoint list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CheckpointListResponse"];
+                    };
+                };
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        put?: never;
+        /** Create checkpoint for one session */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CheckpointCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description Created checkpoint */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Checkpoint"];
+                    };
+                };
+                400: components["responses"]["StandardErrorResponse"];
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/checkpoints/{checkpoint_id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rollback session to checkpoint */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    checkpoint_id: string;
+                    session_id: components["parameters"]["SessionIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Checkpoint rollback applied */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CheckpointRollbackResponse"];
+                    };
+                };
+                404: components["responses"]["StandardErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/events": {
         parameters: {
             query?: never;
@@ -2292,50 +2399,6 @@ export type paths = {
                     };
                     content: {
                         "application/json": components["schemas"]["ComposerSuggestResponse"];
-                    };
-                };
-                400: components["responses"]["StandardErrorResponse"];
-                404: components["responses"]["StandardErrorResponse"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/sessions/{session_id}/rollback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Rollback session to user message anchor */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    session_id: components["parameters"]["SessionIdParam"];
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["RollbackRequest"];
-                };
-            };
-            responses: {
-                /** @description Rollback applied */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["OkResponse"];
                     };
                 };
                 400: components["responses"]["StandardErrorResponse"];
@@ -3045,6 +3108,46 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/resource-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream workspace resource change events */
+        get: {
+            parameters: {
+                query?: {
+                    last_event_id?: string;
+                };
+                header?: never;
+                path: {
+                    workspace_id: components["parameters"]["WorkspaceIdParam"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description SSE stream of workspace resource events */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/event-stream": string;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/resource-imports": {
         parameters: {
             query?: never;
@@ -3349,6 +3452,22 @@ export type components = {
         ChangeSetDiscardRequest: {
             expected_change_set_id: string;
         };
+        Checkpoint: components["schemas"]["CheckpointSummary"] & {
+            parent_checkpoint_id?: string;
+            session?: components["schemas"]["Session"];
+            session_id: string;
+        };
+        CheckpointCreateRequest: {
+            message: string;
+        };
+        CheckpointListResponse: {
+            items: components["schemas"]["Checkpoint"][];
+        };
+        CheckpointRollbackResponse: {
+            checkpoint: components["schemas"]["Checkpoint"];
+            ok: boolean;
+            session: components["schemas"]["Session"];
+        };
         CheckpointSummary: {
             checkpoint_id: string;
             /** Format: date-time */
@@ -3356,6 +3475,8 @@ export type components = {
             entries_digest?: string;
             git_commit_id?: string;
             message: string;
+            /** @enum {string} */
+            project_kind: "git" | "non_git";
         };
         CommitSuggestion: {
             message: string;
@@ -3829,8 +3950,11 @@ export type components = {
         ResourceConfig: {
             /** Format: date-time */
             created_at: string;
+            /** Format: date-time */
+            deleted_at?: string;
             enabled: boolean;
             id: string;
+            is_deleted: boolean;
             mcp?: components["schemas"]["McpSpec"];
             model?: components["schemas"]["ModelSpec"];
             name?: string;
@@ -3843,6 +3967,7 @@ export type components = {
             type: "model" | "rule" | "skill" | "mcp";
             /** Format: date-time */
             updated_at: string;
+            version: number;
             workspace_id: string;
         };
         ResourceConfigCreateRequest: {
@@ -3875,9 +4000,6 @@ export type components = {
                 [key: string]: components["schemas"]["PermissionVisibility"];
             };
             role_key: components["schemas"]["Role"];
-        };
-        RollbackRequest: {
-            message_id: string;
         };
         RuleSpec: {
             content: string;
@@ -4014,6 +4136,7 @@ export type components = {
         };
         SessionDetailResponse: {
             messages: components["schemas"]["SessionMessage"][];
+            resource_snapshots: components["schemas"]["SessionResourceSnapshot"][];
             runs: components["schemas"]["Run"][];
             session: components["schemas"]["Session"];
             snapshots: components["schemas"]["SessionSnapshot"][];
@@ -4032,6 +4155,17 @@ export type components = {
             /** @enum {string} */
             role: "user" | "assistant" | "system";
             session_id: string;
+        };
+        SessionResourceSnapshot: {
+            fallback_resource_id?: string | null;
+            is_deprecated: boolean;
+            resource_config_id: string;
+            /** @enum {string} */
+            resource_type: "model" | "rule" | "skill" | "mcp";
+            resource_version: number;
+            session_id: string;
+            /** Format: date-time */
+            snapshot_at: string;
         };
         SessionSnapshot: {
             /** Format: date-time */
@@ -4202,6 +4336,23 @@ export type components = {
             tokens_out_total: number;
             tokens_total: number;
         };
+        WorkspaceResourceEvent: {
+            config_id: string;
+            /** @enum {string} */
+            config_type: "model" | "rule" | "skill" | "mcp";
+            event_id: string;
+            payload?: {
+                [key: string]: unknown;
+            };
+            resource_version: number;
+            session_id?: string;
+            /** Format: date-time */
+            timestamp: string;
+            type: components["schemas"]["WorkspaceResourceEventType"];
+            workspace_id: string;
+        };
+        /** @enum {string} */
+        WorkspaceResourceEventType: "resource_config_created" | "resource_config_updated" | "resource_config_deleted" | "resource_snapshot_deprecated";
         WorkspaceStatusResponse: {
             /** @enum {string} */
             connection_status: "connected" | "reconnecting" | "disconnected";

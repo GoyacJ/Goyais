@@ -40,13 +40,15 @@ func TestOpenAPIContainsV040CriticalRoutes(t *testing.T) {
 		"/v1/sessions/{session_id}/changeset/commit:",
 		"/v1/sessions/{session_id}/changeset/discard:",
 		"/v1/sessions/{session_id}/changeset/export:",
-		"/v1/sessions/{session_id}/rollback:",
+		"/v1/sessions/{session_id}/checkpoints:",
+		"/v1/sessions/{session_id}/checkpoints/{checkpoint_id}/rollback:",
 		"/v1/workspaces/{workspace_id}/model-catalog:",
 		"/v1/workspaces/{workspace_id}/catalog-root:",
 		"/v1/workspaces/{workspace_id}/resource-configs:",
 		"/v1/workspaces/{workspace_id}/resource-configs/{config_id}:",
 		"/v1/workspaces/{workspace_id}/resource-configs/{config_id}/test:",
 		"/v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect:",
+		"/v1/workspaces/{workspace_id}/resource-events:",
 		"/v1/workspaces/{workspace_id}/mcps/export:",
 		"/v1/workspaces/{workspace_id}/project-configs:",
 		"/v1/workspaces/{workspace_id}/agent-config:",
@@ -114,6 +116,7 @@ func TestOpenAPIDoesNotContainRemovedAliasRoutes(t *testing.T) {
 		"/v1/conversations/{conversation_id}/changeset/export:",
 		"/v1/conversations/{conversation_id}/rollback:",
 		"/v1/executions:",
+		"/v1/sessions/{session_id}/rollback:",
 		"/v2/conversations/{conversation_id}/changeset:",
 		"/v2/conversations/{conversation_id}/changeset/commit:",
 		"/v2/conversations/{conversation_id}/changeset/discard:",
@@ -155,6 +158,8 @@ func TestOpenAPISessionDetailResponseShape(t *testing.T) {
 		"$ref: '#/components/schemas/Run'",
 		"snapshots:",
 		"$ref: '#/components/schemas/SessionSnapshot'",
+		"resource_snapshots:",
+		"$ref: '#/components/schemas/SessionResourceSnapshot'",
 	}
 	for _, marker := range requiredMarkers {
 		if !strings.Contains(spec, marker) {
@@ -163,10 +168,33 @@ func TestOpenAPISessionDetailResponseShape(t *testing.T) {
 	}
 }
 
+func TestOpenAPISessionResourceSnapshotSchemaShape(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"SessionResourceSnapshot:",
+		"session_id:",
+		"resource_config_id:",
+		"resource_type:",
+		"resource_version:",
+		"is_deprecated:",
+		"fallback_resource_id:",
+		"snapshot_at:",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing session resource snapshot marker: %s", marker)
+		}
+	}
+}
+
 func TestOpenAPISessionChangeSetSchemaShape(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	requiredMarkers := []string{
 		"ChangeEntry:",
+		"Checkpoint:",
+		"CheckpointListResponse:",
+		"CheckpointCreateRequest:",
+		"CheckpointRollbackResponse:",
 		"SessionChangeSet:",
 		"ChangeSetCapability:",
 		"CommitSuggestion:",
@@ -177,6 +205,8 @@ func TestOpenAPISessionChangeSetSchemaShape(t *testing.T) {
 		"RunFilesExportResponse:",
 		"file_name:",
 		"archive_base64:",
+		"/v1/sessions/{session_id}/checkpoints:",
+		"/v1/sessions/{session_id}/checkpoints/{checkpoint_id}/rollback:",
 		"/v1/sessions/{session_id}/changeset/export:",
 	}
 	for _, marker := range requiredMarkers {
@@ -222,6 +252,24 @@ func TestOpenAPIHookSchemaShape(t *testing.T) {
 	for _, marker := range requiredMarkers {
 		if !strings.Contains(spec, marker) {
 			t.Fatalf("openapi missing hook marker: %s", marker)
+		}
+	}
+}
+
+func TestOpenAPIResourceConfigVersioningAndEventsShape(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	requiredMarkers := []string{
+		"ResourceConfig:",
+		"version:",
+		"is_deleted:",
+		"deleted_at:",
+		"WorkspaceResourceEvent:",
+		"WorkspaceResourceEventType:",
+		"/v1/workspaces/{workspace_id}/resource-events:",
+	}
+	for _, marker := range requiredMarkers {
+		if !strings.Contains(spec, marker) {
+			t.Fatalf("openapi missing resource event/versioning marker: %s", marker)
 		}
 	}
 }

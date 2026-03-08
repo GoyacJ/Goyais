@@ -99,6 +99,9 @@ func (s *authzStore) deleteProject(projectID string) error {
 	if _, err = tx.Exec(`DELETE FROM project_configs WHERE project_id=?`, projectID); err != nil {
 		return err
 	}
+	if _, err = tx.Exec(`DELETE FROM project_resource_bindings WHERE project_id=?`, projectID); err != nil {
+		return err
+	}
 	result, err := tx.Exec(`DELETE FROM projects WHERE id=?`, projectID)
 	if err != nil {
 		return err

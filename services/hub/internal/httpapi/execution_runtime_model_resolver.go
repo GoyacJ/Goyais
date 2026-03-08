@@ -53,11 +53,17 @@ func resolveRuntimeModelConfigForExecution(state *AppState, execution Execution)
 		return runtimeModelConfig{}, fmt.Errorf("model config is not resolvable for execution %s", strings.TrimSpace(execution.ID))
 	}
 
-	modelConfig, exists, modelConfigErr := getWorkspaceEnabledModelConfigByID(state, workspaceID, modelConfigID)
+	modelConfig, exists, modelConfigErr := resolveSessionResourceConfig(
+		state,
+		execution.ConversationID,
+		workspaceID,
+		modelConfigID,
+		ResourceTypeModel,
+	)
 	if modelConfigErr != nil {
 		return runtimeModelConfig{}, fmt.Errorf("load model config %s failed: %w", modelConfigID, modelConfigErr)
 	}
-	if !exists || modelConfig.Model == nil {
+	if !exists || modelConfig.Model == nil || !modelConfig.Enabled {
 		return runtimeModelConfig{}, fmt.Errorf("model config %s is not available", modelConfigID)
 	}
 	modelSpec := modelConfig.Model
@@ -136,13 +142,12 @@ func resolveRuntimeToolingConfigForExecution(state *AppState, execution Executio
 	if workspaceID == "" {
 		return runtimeToolingConfig{}, fmt.Errorf("workspace_id is required")
 	}
-
 	ruleIDs, skillIDs, mcpIDs, projectRepoPath := resolveExecutionToolResourceIDs(state, execution)
 	workspaceAgentConfig, workspaceAgentConfigErr := loadWorkspaceAgentConfigFromStore(state, workspaceID)
 	if workspaceAgentConfigErr != nil {
 		return runtimeToolingConfig{}, fmt.Errorf("load workspace agent config failed: %w", workspaceAgentConfigErr)
 	}
-	return resolveRuntimeToolingConfig(
+	tooling, err := resolveRuntimeToolingConfig(
 		state,
 		workspaceID,
 		resolveExecutionPermissionModeForRuntime(state, execution),
@@ -152,6 +157,86 @@ func resolveRuntimeToolingConfigForExecution(state *AppState, execution Executio
 		projectRepoPath,
 		workspaceAgentConfig,
 	)
+	if err != nil {
+		return runtimeToolingConfig{}, err
+	}
+	if execution.ResourceProfileSnapshot == nil {
+		return tooling, nil
+	}
+	if rulesDSL := strings.TrimSpace(execution.ResourceProfileSnapshot.RulesDSL); rulesDSL != "" {
+		tooling.RulesDSL = rulesDSL
+	}
+	if len(execution.ResourceProfileSnapshot.MCPServers) > 0 {
+		tooling.MCPServers = toRuntimeMCPServerConfigs(execution.ResourceProfileSnapshot.MCPServers)
+	}
+	if len(execution.ResourceProfileSnapshot.AlwaysLoadedCapabilities) > 0 {
+		tooling.AlwaysLoadedCapabilities = toRuntimeCapabilityDescriptors(execution.ResourceProfileSnapshot.AlwaysLoadedCapabilities)
+	}
+	if len(execution.ResourceProfileSnapshot.SearchableCapabilities) > 0 {
+		tooling.SearchableCapabilities = toRuntimeCapabilityDescriptors(execution.ResourceProfileSnapshot.SearchableCapabilities)
+	}
+	if execution.AgentConfigSnapshot != nil {
+		tooling.BuiltinTools = append([]string{}, execution.AgentConfigSnapshot.BuiltinTools...)
+		tooling.PromptBudgetChars = execution.AgentConfigSnapshot.CapabilityBudgets.PromptBudgetChars
+		tooling.MCPSearchEnabled = execution.AgentConfigSnapshot.MCPSearch.Enabled && execution.AgentConfigSnapshot.FeatureFlags.EnableToolSearch
+		tooling.SearchThresholdRatio = float64(execution.AgentConfigSnapshot.CapabilityBudgets.SearchThresholdPercent) / 100
+	}
+	return tooling, nil
+}
+
+func resolveRuntimeToolingConfigForSession(
+	state *AppState,
+	sessionID string,
+	workspaceID string,
+	permissionMode PermissionMode,
+	ruleIDs []string,
+	skillIDs []string,
+	mcpIDs []string,
+	projectRepoPath string,
+	workspaceAgentConfig WorkspaceAgentConfig,
+) (runtimeToolingConfig, error) {
+	normalizedWorkspaceID := strings.TrimSpace(workspaceID)
+	if normalizedWorkspaceID == "" {
+		return runtimeToolingConfig{}, fmt.Errorf("workspace_id is required")
+	}
+
+	rulesDSL, err := resolveMergedRuleDSLForSession(state, sessionID, normalizedWorkspaceID, ruleIDs)
+	if err != nil {
+		return runtimeToolingConfig{}, err
+	}
+	mcpServers, err := resolveMCPServersForSession(state, sessionID, normalizedWorkspaceID, mcpIDs)
+	if err != nil {
+		return runtimeToolingConfig{}, err
+	}
+	normalizedAgentConfig := normalizeWorkspaceAgentConfig(normalizedWorkspaceID, workspaceAgentConfig, workspaceAgentConfig.UpdatedAt)
+	builtinSpecs := selectRuntimeBuiltinToolSpecs(normalizedAgentConfig.BuiltinTools)
+	capabilities := make([]core.CapabilityDescriptor, 0, 32)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, capabilitygraph.BuildBuiltinToolDescriptors(builtinSpecs)...)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, capabilitygraph.BuildMCPToolDescriptors(mcpServers)...)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, resolveWorkspaceSkillCapabilitiesForSession(state, sessionID, normalizedWorkspaceID, skillIDs)...)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, discoverFilesystemSkillCapabilities(projectRepoPath)...)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, discoverSlashCapabilities(projectRepoPath)...)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, discoverOutputStyleCapabilities(projectRepoPath)...)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, discoverSubagentCapabilities(projectRepoPath)...)
+	capabilities = appendUniqueRuntimeCapabilities(capabilities, discoverMCPPromptCapabilities(projectRepoPath)...)
+	resolvedCapabilities := capabilitygraph.ResolveTooling(capabilitygraph.ResolveRequest{
+		Capabilities:         capabilities,
+		PromptBudgetChars:    normalizedAgentConfig.CapabilityBudgets.PromptBudgetChars,
+		EnableMCPSearch:      normalizedAgentConfig.MCPSearch.Enabled && normalizedAgentConfig.FeatureFlags.EnableToolSearch,
+		SearchThresholdRatio: float64(normalizedAgentConfig.CapabilityBudgets.SearchThresholdPercent) / 100,
+	})
+
+	return runtimeToolingConfig{
+		PermissionMode:           string(permissionMode),
+		RulesDSL:                 rulesDSL,
+		MCPServers:               mcpServers,
+		BuiltinTools:             append([]string{}, normalizedAgentConfig.BuiltinTools...),
+		AlwaysLoadedCapabilities: resolvedCapabilities.AlwaysLoaded,
+		SearchableCapabilities:   resolvedCapabilities.Searchable,
+		PromptBudgetChars:        normalizedAgentConfig.CapabilityBudgets.PromptBudgetChars,
+		MCPSearchEnabled:         normalizedAgentConfig.MCPSearch.Enabled && normalizedAgentConfig.FeatureFlags.EnableToolSearch,
+		SearchThresholdRatio:     float64(normalizedAgentConfig.CapabilityBudgets.SearchThresholdPercent) / 100,
+	}, nil
 }
 
 func resolveRuntimeToolingConfig(
@@ -309,6 +394,28 @@ func resolveMergedRuleDSLForRuntime(state *AppState, workspaceID string, ruleIDs
 	return strings.TrimSpace(strings.Join(segments, "\n")), nil
 }
 
+func resolveMergedRuleDSLForSession(state *AppState, sessionID string, workspaceID string, ruleIDs []string) (string, error) {
+	if len(ruleIDs) == 0 {
+		return "", nil
+	}
+	items, err := resolveSessionResourceConfigs(state, sessionID, workspaceID, ruleIDs, ResourceTypeRule)
+	if err != nil {
+		return "", err
+	}
+	segments := make([]string, 0, len(items))
+	for _, item := range items {
+		if !item.Enabled || item.Rule == nil {
+			continue
+		}
+		content := strings.TrimSpace(item.Rule.Content)
+		if content == "" {
+			continue
+		}
+		segments = append(segments, content)
+	}
+	return strings.TrimSpace(strings.Join(segments, "\n")), nil
+}
+
 func resolveMCPServersForRuntime(state *AppState, workspaceID string, mcpIDs []string) ([]core.MCPServerConfig, error) {
 	normalizedWorkspaceID := strings.TrimSpace(workspaceID)
 	if normalizedWorkspaceID == "" {
@@ -325,6 +432,35 @@ func resolveMCPServersForRuntime(state *AppState, workspaceID string, mcpIDs []s
 			return nil, fmt.Errorf("load mcp config %s failed: %w", mcpID, err)
 		}
 		if !exists || item.Type != ResourceTypeMCP || !item.Enabled || item.MCP == nil {
+			continue
+		}
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			name = strings.TrimSpace(item.ID)
+		}
+		if name == "" {
+			continue
+		}
+		servers = append(servers, core.MCPServerConfig{
+			Name:      name,
+			Transport: strings.TrimSpace(item.MCP.Transport),
+			Endpoint:  strings.TrimSpace(item.MCP.Endpoint),
+			Command:   strings.TrimSpace(item.MCP.Command),
+			Env:       cloneStringMapForRuntime(item.MCP.Env),
+			Tools:     sanitizeIDList(item.MCP.Tools),
+		})
+	}
+	return servers, nil
+}
+
+func resolveMCPServersForSession(state *AppState, sessionID string, workspaceID string, mcpIDs []string) ([]core.MCPServerConfig, error) {
+	items, err := resolveSessionResourceConfigs(state, sessionID, workspaceID, mcpIDs, ResourceTypeMCP)
+	if err != nil {
+		return nil, err
+	}
+	servers := make([]core.MCPServerConfig, 0, len(items))
+	for _, item := range items {
+		if !item.Enabled || item.MCP == nil {
 			continue
 		}
 		name := strings.TrimSpace(item.Name)
@@ -381,6 +517,44 @@ func appendUniqueRuntimeCapabilities(target []core.CapabilityDescriptor, items .
 		target = append(target, item)
 	}
 	return target
+}
+
+func toRuntimeMCPServerConfigs(items []ExecutionMCPServerSnapshot) []core.MCPServerConfig {
+	out := make([]core.MCPServerConfig, 0, len(items))
+	for _, item := range items {
+		out = append(out, core.MCPServerConfig{
+			Name:      strings.TrimSpace(item.Name),
+			Transport: strings.TrimSpace(item.Transport),
+			Endpoint:  strings.TrimSpace(item.Endpoint),
+			Command:   strings.TrimSpace(item.Command),
+			Env:       cloneStringMapForRuntime(item.Env),
+			Tools:     sanitizeIDList(item.Tools),
+		})
+	}
+	return out
+}
+
+func toRuntimeCapabilityDescriptors(items []ExecutionCapabilityDescriptorSnapshot) []core.CapabilityDescriptor {
+	out := make([]core.CapabilityDescriptor, 0, len(items))
+	for _, item := range items {
+		out = append(out, core.CapabilityDescriptor{
+			ID:                  strings.TrimSpace(item.ID),
+			Kind:                core.CapabilityKind(strings.TrimSpace(item.Kind)),
+			Name:                strings.TrimSpace(item.Name),
+			Description:         strings.TrimSpace(item.Description),
+			Source:              strings.TrimSpace(item.Source),
+			Scope:               core.CapabilityScope(strings.TrimSpace(item.Scope)),
+			Version:             strings.TrimSpace(item.Version),
+			InputSchema:         cloneMapAny(item.InputSchema),
+			RiskLevel:           strings.TrimSpace(item.RiskLevel),
+			ReadOnly:            item.ReadOnly,
+			ConcurrencySafe:     item.ConcurrencySafe,
+			RequiresPermissions: item.RequiresPermissions,
+			VisibilityPolicy:    core.CapabilityVisibilityPolicy(strings.TrimSpace(item.VisibilityPolicy)),
+			PromptBudgetCost:    item.PromptBudgetCost,
+		})
+	}
+	return out
 }
 
 func selectRuntimeBuiltinToolSpecs(enabled []string) []toolspec.ToolSpec {

@@ -1,6 +1,9 @@
 package httpapi
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestDecodeResourceConfigPayload_ModelAPIKeyRedactionModes(t *testing.T) {
 	encoded, err := encodeResourceConfigPayload(ResourceConfig{
@@ -69,5 +72,78 @@ func TestDecodeResourceConfigPayload_LegacyTimeoutMigratesToRuntime(t *testing.T
 	}
 	if got := *decoded.Model.Runtime.RequestTimeoutMS; got != 5000 {
 		t.Fatalf("expected migrated runtime timeout 5000, got %d", got)
+	}
+}
+
+func TestEncodeResourceConfigPayload_DefaultsVersionAndSoftDeleteState(t *testing.T) {
+	encoded, err := encodeResourceConfigPayload(ResourceConfig{
+		ID:          "rc_defaults",
+		WorkspaceID: "ws_test",
+		Type:        ResourceTypeRule,
+		Name:        "Defaults",
+		Enabled:     true,
+		Rule:        &RuleSpec{Content: "always verify"},
+	})
+	if err != nil {
+		t.Fatalf("encode payload failed: %v", err)
+	}
+
+	payload := map[string]any{}
+	if err := json.Unmarshal([]byte(encoded), &payload); err != nil {
+		t.Fatalf("decode encoded payload failed: %v", err)
+	}
+	versionRaw, ok := payload["version"].(float64)
+	if !ok {
+		t.Fatalf("expected version in encoded payload, got %#v", payload["version"])
+	}
+	if got := int(versionRaw); got != 1 {
+		t.Fatalf("expected default version 1, got %d", got)
+	}
+	if got, ok := payload["is_deleted"].(bool); !ok || got {
+		t.Fatalf("expected is_deleted=false in payload, got %#v", payload["is_deleted"])
+	}
+}
+
+func TestAuthzStoreDeleteResourceConfigSoftDeletesRecord(t *testing.T) {
+	store, err := openAuthzStore(":memory:")
+	if err != nil {
+		t.Fatalf("open authz store failed: %v", err)
+	}
+	defer store.close()
+
+	_, err = store.upsertResourceConfig(ResourceConfig{
+		ID:          "rc_soft_delete",
+		WorkspaceID: "ws_test",
+		Type:        ResourceTypeRule,
+		Name:        "Soft Delete",
+		Enabled:     true,
+		Rule:        &RuleSpec{Content: "always verify"},
+	})
+	if err != nil {
+		t.Fatalf("upsert resource config failed: %v", err)
+	}
+
+	if err := store.deleteResourceConfig("ws_test", "rc_soft_delete"); err != nil {
+		t.Fatalf("soft delete resource config failed: %v", err)
+	}
+
+	var rowCount int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM resource_configs WHERE workspace_id=? AND id=?`, "ws_test", "rc_soft_delete").Scan(&rowCount); err != nil {
+		t.Fatalf("count resource config rows failed: %v", err)
+	}
+	if rowCount != 1 {
+		t.Fatalf("expected row to remain for soft delete, got %d", rowCount)
+	}
+
+	var payload string
+	if err := store.db.QueryRow(`SELECT payload_json FROM resource_configs WHERE workspace_id=? AND id=?`, "ws_test", "rc_soft_delete").Scan(&payload); err != nil {
+		t.Fatalf("load resource config payload failed: %v", err)
+	}
+	decoded := map[string]any{}
+	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
+		t.Fatalf("decode payload failed: %v", err)
+	}
+	if got, ok := decoded["is_deleted"].(bool); !ok || !got {
+		t.Fatalf("expected is_deleted=true after soft delete, got %#v", decoded["is_deleted"])
 	}
 }

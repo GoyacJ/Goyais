@@ -99,6 +99,12 @@ type runRuntime struct {
 	promptContext core.PromptContext
 }
 
+// SessionContextSnapshot is the copy-safe command/session lookup payload.
+type SessionContextSnapshot struct {
+	WorkingDir            string
+	AdditionalDirectories []string
+}
+
 type eventSubscription struct {
 	ch      <-chan core.EventEnvelope
 	closeFn func() error
@@ -681,6 +687,20 @@ func (e *Engine) sessionByID(sessionID core.SessionID) (*sessionRuntime, bool) {
 	defer e.mu.RUnlock()
 	session, exists := e.sessions[sessionID]
 	return session, exists
+}
+
+// LookupSessionContext returns the immutable execution context for one session.
+func (e *Engine) LookupSessionContext(sessionID string) (SessionContextSnapshot, bool) {
+	session, exists := e.sessionByID(core.SessionID(strings.TrimSpace(sessionID)))
+	if !exists {
+		return SessionContextSnapshot{}, false
+	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return SessionContextSnapshot{
+		WorkingDir:            session.workingDir,
+		AdditionalDirectories: append([]string(nil), session.additionalDirectories...),
+	}, true
 }
 
 func (e *Engine) runByID(runID core.RunID) (*runRuntime, bool) {

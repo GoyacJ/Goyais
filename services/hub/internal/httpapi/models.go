@@ -271,13 +271,13 @@ type WorkspaceAgentDisplayConfig struct {
 }
 
 type WorkspaceAgentCapabilityBudgets struct {
-	PromptBudgetChars     int `json:"prompt_budget_chars"`
+	PromptBudgetChars      int `json:"prompt_budget_chars"`
 	SearchThresholdPercent int `json:"search_threshold_percent"`
 }
 
 type WorkspaceAgentMCPSearchConfig struct {
-	Enabled    bool `json:"enabled"`
-	ResultLimit int `json:"result_limit"`
+	Enabled     bool `json:"enabled"`
+	ResultLimit int  `json:"result_limit"`
 }
 
 type WorkspaceAgentSubagentDefaults struct {
@@ -291,17 +291,17 @@ type WorkspaceAgentFeatureFlags struct {
 }
 
 type WorkspaceAgentConfig struct {
-	WorkspaceID       string                         `json:"workspace_id"`
-	Execution         WorkspaceAgentExecutionConfig  `json:"execution"`
-	Display           WorkspaceAgentDisplayConfig    `json:"display"`
-	DefaultMode       PermissionMode                 `json:"default_mode"`
-	BuiltinTools      []string                       `json:"builtin_tools"`
+	WorkspaceID       string                          `json:"workspace_id"`
+	Execution         WorkspaceAgentExecutionConfig   `json:"execution"`
+	Display           WorkspaceAgentDisplayConfig     `json:"display"`
+	DefaultMode       PermissionMode                  `json:"default_mode"`
+	BuiltinTools      []string                        `json:"builtin_tools"`
 	CapabilityBudgets WorkspaceAgentCapabilityBudgets `json:"capability_budgets"`
-	MCPSearch         WorkspaceAgentMCPSearchConfig  `json:"mcp_search"`
-	OutputStyle       string                         `json:"output_style"`
-	SubagentDefaults  WorkspaceAgentSubagentDefaults `json:"subagent_defaults"`
-	FeatureFlags      WorkspaceAgentFeatureFlags     `json:"feature_flags"`
-	UpdatedAt         string                         `json:"updated_at"`
+	MCPSearch         WorkspaceAgentMCPSearchConfig   `json:"mcp_search"`
+	OutputStyle       string                          `json:"output_style"`
+	SubagentDefaults  WorkspaceAgentSubagentDefaults  `json:"subagent_defaults"`
+	FeatureFlags      WorkspaceAgentFeatureFlags      `json:"feature_flags"`
+	UpdatedAt         string                          `json:"updated_at"`
 }
 
 type CreateWorkspaceRequest struct {
@@ -456,10 +456,11 @@ type Conversation struct {
 }
 
 type ConversationDetailResponse struct {
-	Conversation Conversation           `json:"conversation"`
-	Messages     []ConversationMessage  `json:"messages"`
-	Executions   []Execution            `json:"executions"`
-	Snapshots    []ConversationSnapshot `json:"snapshots"`
+	Conversation      Conversation              `json:"conversation"`
+	Messages          []ConversationMessage     `json:"messages"`
+	Executions        []Execution               `json:"executions"`
+	Snapshots         []ConversationSnapshot    `json:"snapshots"`
+	ResourceSnapshots []SessionResourceSnapshot `json:"resource_snapshots"`
 }
 
 type MessageRole string
@@ -490,6 +491,17 @@ type ConversationSnapshot struct {
 	Messages               []ConversationMessage `json:"messages"`
 	ExecutionIDs           []string              `json:"run_ids"`
 	CreatedAt              string                `json:"created_at"`
+}
+
+type SessionResourceSnapshot struct {
+	SessionID          string         `json:"session_id"`
+	ResourceConfigID   string         `json:"resource_config_id"`
+	ResourceType       ResourceType   `json:"resource_type"`
+	ResourceVersion    int            `json:"resource_version"`
+	IsDeprecated       bool           `json:"is_deprecated"`
+	FallbackResourceID *string        `json:"fallback_resource_id,omitempty"`
+	SnapshotAt         string         `json:"snapshot_at"`
+	CapturedConfig     ResourceConfig `json:"-"`
 }
 
 type ConversationInspector struct {
@@ -612,16 +624,16 @@ type ExecutionCapabilityDescriptorSnapshot struct {
 }
 
 type ExecutionResourceProfile struct {
-	ModelConfigID           string                                `json:"model_config_id,omitempty"`
-	ModelID                 string                                `json:"model_id"`
-	RuleIDs                 []string                              `json:"rule_ids,omitempty"`
-	SkillIDs                []string                              `json:"skill_ids,omitempty"`
-	MCPIDs                  []string                              `json:"mcp_ids,omitempty"`
-	ProjectFilePaths        []string                              `json:"project_file_paths,omitempty"`
-	RulesDSL                string                                `json:"rules_dsl,omitempty"`
-	MCPServers              []ExecutionMCPServerSnapshot          `json:"mcp_servers,omitempty"`
+	ModelConfigID            string                                  `json:"model_config_id,omitempty"`
+	ModelID                  string                                  `json:"model_id"`
+	RuleIDs                  []string                                `json:"rule_ids,omitempty"`
+	SkillIDs                 []string                                `json:"skill_ids,omitempty"`
+	MCPIDs                   []string                                `json:"mcp_ids,omitempty"`
+	ProjectFilePaths         []string                                `json:"project_file_paths,omitempty"`
+	RulesDSL                 string                                  `json:"rules_dsl,omitempty"`
+	MCPServers               []ExecutionMCPServerSnapshot            `json:"mcp_servers,omitempty"`
 	AlwaysLoadedCapabilities []ExecutionCapabilityDescriptorSnapshot `json:"always_loaded_capabilities,omitempty"`
-	SearchableCapabilities  []ExecutionCapabilityDescriptorSnapshot `json:"searchable_capabilities,omitempty"`
+	SearchableCapabilities   []ExecutionCapabilityDescriptorSnapshot `json:"searchable_capabilities,omitempty"`
 }
 
 type ModelSnapshot struct {
@@ -645,11 +657,11 @@ const (
 )
 
 type ComposerSubmitRequest struct {
-	RawInput             string             `json:"raw_input"`
-	Mode                 ConversationMode   `json:"mode"`
-	ModelConfigID        string             `json:"model_config_id,omitempty"`
-	SelectedCapabilities []string           `json:"selected_capabilities,omitempty"`
-	CatalogRevision      string             `json:"catalog_revision,omitempty"`
+	RawInput             string           `json:"raw_input"`
+	Mode                 ConversationMode `json:"mode"`
+	ModelConfigID        string           `json:"model_config_id,omitempty"`
+	SelectedCapabilities []string         `json:"selected_capabilities,omitempty"`
+	CatalogRevision      string           `json:"catalog_revision,omitempty"`
 }
 
 type ComposerCommandCatalogItem struct {
@@ -707,10 +719,6 @@ type ComposerSubmitResponse struct {
 	QueueIndex    *int                   `json:"queue_index,omitempty"`
 }
 
-type RollbackRequest struct {
-	MessageID string `json:"message_id"`
-}
-
 type DiffItem struct {
 	ID           string `json:"id"`
 	Path         string `json:"path"`
@@ -755,9 +763,31 @@ type CommitSuggestion struct {
 type CheckpointSummary struct {
 	CheckpointID  string `json:"checkpoint_id"`
 	Message       string `json:"message"`
+	ProjectKind   string `json:"project_kind"`
 	CreatedAt     string `json:"created_at"`
 	GitCommitID   string `json:"git_commit_id,omitempty"`
 	EntriesDigest string `json:"entries_digest,omitempty"`
+}
+
+type Checkpoint struct {
+	CheckpointSummary
+	SessionID          string        `json:"session_id"`
+	ParentCheckpointID string        `json:"parent_checkpoint_id,omitempty"`
+	Session            *Conversation `json:"session,omitempty"`
+}
+
+type CheckpointCreateRequest struct {
+	Message string `json:"message"`
+}
+
+type CheckpointListResponse struct {
+	Items []Checkpoint `json:"items"`
+}
+
+type CheckpointRollbackResponse struct {
+	OK         bool         `json:"ok"`
+	Checkpoint Checkpoint   `json:"checkpoint"`
+	Session    Conversation `json:"session"`
 }
 
 type ConversationChangeSet struct {

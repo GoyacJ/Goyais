@@ -19,7 +19,7 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 				r,
 				workspaceID,
 				"project.read",
-				authorizationResource{WorkspaceID: workspaceID},
+				authorizationResource{WorkspaceID: workspaceID, ResourceType: "project", TargetID: workspaceID},
 				authorizationContext{OperationType: "read"},
 			)
 			if authErr != nil {
@@ -97,7 +97,7 @@ func ProjectsHandler(state *AppState) http.HandlerFunc {
 				r,
 				strings.TrimSpace(input.WorkspaceID),
 				"project.write",
-				authorizationResource{WorkspaceID: strings.TrimSpace(input.WorkspaceID)},
+				authorizationResource{WorkspaceID: strings.TrimSpace(input.WorkspaceID), ResourceType: "project", TargetID: strings.TrimSpace(input.RepoPath)},
 				authorizationContext{OperationType: "write", ABACRequired: true},
 			)
 			if authErr != nil {
@@ -176,7 +176,7 @@ func ProjectsImportHandler(state *AppState) http.HandlerFunc {
 			r,
 			strings.TrimSpace(input.WorkspaceID),
 			"project.write",
-			authorizationResource{WorkspaceID: strings.TrimSpace(input.WorkspaceID)},
+			authorizationResource{WorkspaceID: strings.TrimSpace(input.WorkspaceID), ResourceType: "project", TargetID: strings.TrimSpace(input.DirectoryPath)},
 			authorizationContext{OperationType: "write", ABACRequired: true},
 		)
 		if authErr != nil {
@@ -253,7 +253,7 @@ func ProjectByIDHandler(state *AppState) http.HandlerFunc {
 			r,
 			workspaceID,
 			"project.write",
-			authorizationResource{WorkspaceID: workspaceID},
+			authorizationResource{WorkspaceID: workspaceID, ResourceType: "project", TargetID: projectID},
 			authorizationContext{OperationType: "write", ABACRequired: true},
 		)
 		if authErr != nil {

@@ -18,6 +18,7 @@ import (
 	"goyais/services/hub/internal/agent/core"
 	eventscore "goyais/services/hub/internal/agent/core/events"
 	"goyais/services/hub/internal/agent/runtime/loop"
+	slashruntime "goyais/services/hub/internal/agent/runtime/slash"
 )
 
 // SessionRecord captures one local CLI-visible session snapshot.
@@ -66,9 +67,10 @@ type StreamSessionRequest struct {
 
 // SessionRunRunner adapts CLI requests to core.Engine using session/run terms.
 type SessionRunRunner struct {
-	engine core.Engine
-	stdout io.Writer
-	stderr io.Writer
+	engine      core.Engine
+	commandBus  core.CommandBus
+	stdout      io.Writer
+	stderr      io.Writer
 
 	mu           sync.RWMutex
 	sessions     map[string]SessionRecord
@@ -83,8 +85,10 @@ func NewSessionRunRunner(stdout io.Writer, stderr io.Writer) *SessionRunRunner {
 	if stderr == nil {
 		stderr = io.Discard
 	}
+	engine := loop.NewEngine(nil)
 	return &SessionRunRunner{
-		engine:       loop.NewEngine(nil),
+		engine:       engine,
+		commandBus:   slashruntime.NewBus(slashruntime.NewLoopContextResolver(engine)),
 		stdout:       stdout,
 		stderr:       stderr,
 		sessions:     map[string]SessionRecord{},
@@ -179,8 +183,9 @@ func (r *SessionRunRunner) SubmitRun(
 	}
 
 	runner := cliadapter.Runner{
-		Engine: r.engine,
-		Writer: writerForFormat(req.OutputFormat, stdout, stderr),
+		Engine:     r.engine,
+		CommandBus: r.commandBus,
+		Writer:     writerForFormat(req.OutputFormat, stdout, stderr),
 	}
 	result, err := runner.RunPrompt(ctx, cliadapter.RunRequest{
 		SessionID:             strings.TrimSpace(req.SessionID),

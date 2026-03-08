@@ -16,6 +16,7 @@ import (
 	agenthttpapi "goyais/services/hub/internal/agent/adapters/httpapi"
 	"goyais/services/hub/internal/agent/core"
 	eventscore "goyais/services/hub/internal/agent/core/events"
+	slashruntime "goyais/services/hub/internal/agent/runtime/slash"
 )
 
 // NewSessionRequest is ACP-facing session create request.
@@ -63,8 +64,9 @@ type ControlRequest struct {
 
 // BridgeOptions configures optional ACP bridge integrations.
 type BridgeOptions struct {
-	Projector cliadapter.RunEventProjector
-	Lifecycle SessionLifecycle
+	Projector         cliadapter.RunEventProjector
+	Lifecycle         SessionLifecycle
+	CheckpointService agenthttpapi.SessionCheckpointService
 }
 
 // Bridge delegates ACP operations to Session/Run service.
@@ -73,8 +75,9 @@ type Bridge struct {
 	commandBus core.CommandBus
 	projector  cliadapter.RunEventProjector
 
-	lifecycle   SessionLifecycle
-	sessionRuns *agenthttpapi.Service
+	lifecycle         SessionLifecycle
+	checkpointService agenthttpapi.SessionCheckpointService
+	sessionRuns       *agenthttpapi.Service
 }
 
 // NewBridge creates ACP bridge for one shared engine instance.
@@ -85,11 +88,12 @@ func NewBridge(engine core.Engine, commandBus core.CommandBus) *Bridge {
 // NewBridgeWithOptions creates ACP bridge with optional runtime projections.
 func NewBridgeWithOptions(engine core.Engine, commandBus core.CommandBus, options BridgeOptions) *Bridge {
 	bridge := &Bridge{
-		engine:      engine,
-		commandBus:  commandBus,
-		projector:   options.Projector,
-		lifecycle:   options.Lifecycle,
-		sessionRuns: nil,
+		engine:            engine,
+		commandBus:        commandBus,
+		projector:         options.Projector,
+		lifecycle:         options.Lifecycle,
+		checkpointService: options.CheckpointService,
+		sessionRuns:       nil,
 	}
 	bridge.sessionRuns = bridge.newSessionRunService()
 	return bridge
@@ -101,6 +105,15 @@ func (b *Bridge) SetLifecycle(lifecycle SessionLifecycle) {
 		return
 	}
 	b.lifecycle = lifecycle
+	b.sessionRuns = b.newSessionRunService()
+}
+
+// SetCheckpointService wires checkpoint rollback operations after bridge creation.
+func (b *Bridge) SetCheckpointService(checkpointService agenthttpapi.SessionCheckpointService) {
+	if b == nil {
+		return
+	}
+	b.checkpointService = checkpointService
 	b.sessionRuns = b.newSessionRunService()
 }
 
@@ -148,14 +161,25 @@ func (b *Bridge) Prompt(ctx context.Context, req PromptRequest) (PromptResponse,
 	}
 
 	if strings.HasPrefix(prompt, "/") && b.commandBus != nil {
-		commandResp, commandErr := b.runSlashCommand(ctx, sessionID, prompt)
+		commandResp, handled, commandErr := b.runSlashCommand(ctx, sessionID, prompt, cloneStringMap(req.Metadata), strings.TrimSpace(req.Cursor))
 		if commandErr != nil {
 			return PromptResponse{}, commandErr
 		}
-		return commandResp, nil
+		if handled {
+			return commandResp, nil
+		}
 	}
 
-	subscription, err := b.engine.Subscribe(ctx, sessionID, strings.TrimSpace(req.Cursor))
+	return b.executePromptRun(ctx, sessionID, prompt, cloneStringMap(req.Metadata), strings.TrimSpace(req.Cursor))
+}
+
+func (b *Bridge) executePromptRun(ctx context.Context, sessionID string, prompt string, metadata map[string]string, cursor string) (PromptResponse, error) {
+	service := b.sessionRunService()
+	if service == nil {
+		return PromptResponse{}, core.ErrEngineNotConfigured
+	}
+
+	subscription, err := b.engine.Subscribe(ctx, sessionID, cursor)
 	if err != nil {
 		return PromptResponse{}, err
 	}
@@ -164,7 +188,7 @@ func (b *Bridge) Prompt(ctx context.Context, req PromptRequest) (PromptResponse,
 	submitResp, submitErr := service.Submit(ctx, agenthttpapi.SubmitRequest{
 		SessionID: sessionID,
 		Input:     prompt,
-		Metadata:  cloneStringMap(req.Metadata),
+		Metadata:  cloneStringMap(metadata),
 	})
 	if submitErr != nil {
 		return PromptResponse{}, submitErr
@@ -316,20 +340,24 @@ func (b *Bridge) newSessionRunService() *agenthttpapi.Service {
 	if b == nil {
 		return nil
 	}
-	if b.lifecycle != nil {
-		return agenthttpapi.NewServiceWithLifecycle(b.engine, b.lifecycle)
+	if b.lifecycle != nil || b.checkpointService != nil {
+		return agenthttpapi.NewServiceWithLifecycleAndCheckpoints(b.engine, b.lifecycle, b.checkpointService)
 	}
 	return agenthttpapi.NewService(b.engine)
 }
 
-func (b *Bridge) runSlashCommand(ctx context.Context, sessionID string, prompt string) (PromptResponse, error) {
-	command, err := parseSlashCommand(prompt)
+func (b *Bridge) runSlashCommand(ctx context.Context, sessionID string, prompt string, metadata map[string]string, cursor string) (PromptResponse, bool, error) {
+	command, err := slashruntime.Parse(prompt)
 	if err != nil {
-		return PromptResponse{}, err
+		return PromptResponse{}, true, err
 	}
 	resp, err := b.commandBus.Execute(ctx, sessionID, command)
 	if err != nil {
-		return PromptResponse{}, err
+		return PromptResponse{}, true, err
+	}
+	if expandedPrompt, ok := slashruntime.PromptExpansion(resp); ok {
+		result, runErr := b.executePromptRun(ctx, sessionID, expandedPrompt, metadata, cursor)
+		return result, true, runErr
 	}
 	update := Update{
 		Kind: "command_result",
@@ -344,30 +372,7 @@ func (b *Bridge) runSlashCommand(ctx context.Context, sessionID string, prompt s
 		CommandOutput: strings.TrimSpace(resp.Output),
 		IsCommand:     true,
 		Updates:       []Update{update},
-	}, nil
-}
-
-func parseSlashCommand(raw string) (core.SlashCommand, error) {
-	trimmed := strings.TrimSpace(raw)
-	if !strings.HasPrefix(trimmed, "/") {
-		return core.SlashCommand{}, fmt.Errorf("slash command must start with /")
-	}
-	parts := strings.Fields(strings.TrimPrefix(trimmed, "/"))
-	if len(parts) == 0 {
-		return core.SlashCommand{}, errors.New("slash command name is required")
-	}
-	cmd := core.SlashCommand{
-		Name:      strings.TrimSpace(parts[0]),
-		Raw:       trimmed,
-		Arguments: nil,
-	}
-	if len(parts) > 1 {
-		cmd.Arguments = append([]string(nil), parts[1:]...)
-	}
-	if err := cmd.Validate(); err != nil {
-		return core.SlashCommand{}, err
-	}
-	return cmd, nil
+	}, true, nil
 }
 
 func mapEventEnvelopeToUpdate(event core.EventEnvelope) (Update, error) {

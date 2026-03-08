@@ -67,32 +67,33 @@ func (r *handlerServiceRegistry) controlplaneHandlers() controlplaneroutes.Handl
 
 func (r *handlerServiceRegistry) runtimeHandlers() runtimeroutes.Handlers {
 	return runtimeroutes.Handlers{
-		Projects:                     r.project.ProjectsHandler(),
-		ProjectsImport:               r.project.ProjectsImportHandler(),
-		ProjectByID:                  r.project.ProjectByIDHandler(),
-		ProjectConversations:         r.project.ProjectConversationsHandler(),
-		ProjectConfig:                r.project.ProjectConfigHandler(),
-		ProjectFiles:                 r.project.ProjectFilesHandler(),
-		ProjectFileContent:           r.project.ProjectFileContentHandler(),
-		Conversations:                r.sessionRun.ConversationsHandler(),
-		ConversationByID:             r.sessionRun.ConversationByIDHandler(),
-		ConversationInputCatalog:     r.sessionRun.ConversationInputCatalogHandler(),
-		ConversationInputSuggest:     r.sessionRun.ConversationInputSuggestHandler(),
-		ConversationInputSubmit:      r.sessionRun.ConversationInputSubmitHandler(),
-		ConversationEvents:           r.sessionRun.ConversationEventsHandler(),
-		ConversationStop:             r.sessionRun.ConversationStopHandler(),
-		ConversationExport:           r.sessionRun.ConversationExportHandler(),
-		ConversationChangeSet:        r.sessionRun.ConversationChangeSetHandler(),
-		ConversationChangeSetCommit:  r.sessionRun.ConversationChangeSetCommitHandler(),
-		ConversationChangeSetDiscard: r.sessionRun.ConversationChangeSetDiscardHandler(),
-		ConversationChangeSetExport:  r.sessionRun.ConversationChangeSetExportHandler(),
-		ConversationRollback:         r.sessionRun.ConversationRollbackHandler(),
-		Executions:                   r.sessionRun.ExecutionsHandler(),
-		RunControl:                   r.sessionRun.RunControlHandler(),
-		RunGraph:                     r.sessionRun.RunGraphHandler(),
-		RunTasks:                     r.sessionRun.RunTasksHandler(),
-		RunTaskByID:                  r.sessionRun.RunTaskByIDHandler(),
-		RunTaskControl:               r.sessionRun.RunTaskControlHandler(),
+		Projects:                       r.project.ProjectsHandler(),
+		ProjectsImport:                 r.project.ProjectsImportHandler(),
+		ProjectByID:                    r.project.ProjectByIDHandler(),
+		ProjectConversations:           r.project.ProjectConversationsHandler(),
+		ProjectConfig:                  r.project.ProjectConfigHandler(),
+		ProjectFiles:                   r.project.ProjectFilesHandler(),
+		ProjectFileContent:             r.project.ProjectFileContentHandler(),
+		Conversations:                  r.sessionRun.ConversationsHandler(),
+		ConversationByID:               r.sessionRun.ConversationByIDHandler(),
+		ConversationInputCatalog:       r.sessionRun.ConversationInputCatalogHandler(),
+		ConversationInputSuggest:       r.sessionRun.ConversationInputSuggestHandler(),
+		ConversationInputSubmit:        r.sessionRun.ConversationInputSubmitHandler(),
+		ConversationEvents:             r.sessionRun.ConversationEventsHandler(),
+		ConversationStop:               r.sessionRun.ConversationStopHandler(),
+		ConversationExport:             r.sessionRun.ConversationExportHandler(),
+		ConversationChangeSet:          r.sessionRun.ConversationChangeSetHandler(),
+		ConversationChangeSetCommit:    r.sessionRun.ConversationChangeSetCommitHandler(),
+		ConversationChangeSetDiscard:   r.sessionRun.ConversationChangeSetDiscardHandler(),
+		ConversationChangeSetExport:    r.sessionRun.ConversationChangeSetExportHandler(),
+		ConversationCheckpoints:        r.sessionRun.ConversationCheckpointsHandler(),
+		ConversationCheckpointRollback: r.sessionRun.ConversationCheckpointRollbackHandler(),
+		Executions:                     r.sessionRun.ExecutionsHandler(),
+		RunControl:                     r.sessionRun.RunControlHandler(),
+		RunGraph:                       r.sessionRun.RunGraphHandler(),
+		RunTasks:                       r.sessionRun.RunTasksHandler(),
+		RunTaskByID:                    r.sessionRun.RunTaskByIDHandler(),
+		RunTaskControl:                 r.sessionRun.RunTaskControlHandler(),
 	}
 }
 
@@ -108,6 +109,7 @@ func (r *handlerServiceRegistry) integrationHandlers() integrationroutes.Handler
 		ResourceConfigByID:      r.resource.ResourceConfigByIDHandler(),
 		ResourceConfigTest:      r.resource.ResourceConfigTestHandler(),
 		ResourceConfigConnect:   r.resource.ResourceConfigConnectHandler(),
+		WorkspaceResourceEvents: r.resource.WorkspaceResourceEventsHandler(),
 		MCPExport:               r.resource.MCPExportHandler(),
 		WorkspaceProjectConfigs: r.resource.WorkspaceProjectConfigsHandler(),
 		WorkspaceAgentConfig:    r.resource.WorkspaceAgentConfigHandler(),
@@ -306,8 +308,12 @@ func (s *sessionRunRouteService) ConversationChangeSetExportHandler() http.Handl
 	return ConversationChangeSetExportHandler(s.state)
 }
 
-func (s *sessionRunRouteService) ConversationRollbackHandler() http.HandlerFunc {
-	return ConversationRollbackHandler(s.state)
+func (s *sessionRunRouteService) ConversationCheckpointsHandler() http.HandlerFunc {
+	return SessionCheckpointsHandler(s.state)
+}
+
+func (s *sessionRunRouteService) ConversationCheckpointRollbackHandler() http.HandlerFunc {
+	return SessionCheckpointRollbackHandler(s.state)
 }
 
 func (s *sessionRunRouteService) ExecutionsHandler() http.HandlerFunc {
@@ -376,6 +382,10 @@ func (s *resourceRouteService) ResourceConfigTestHandler() http.HandlerFunc {
 
 func (s *resourceRouteService) ResourceConfigConnectHandler() http.HandlerFunc {
 	return ResourceConfigConnectHandler(s.state)
+}
+
+func (s *resourceRouteService) WorkspaceResourceEventsHandler() http.HandlerFunc {
+	return WorkspaceResourceEventsHandler(s.state)
 }
 
 func (s *resourceRouteService) MCPExportHandler() http.HandlerFunc {

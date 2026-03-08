@@ -12,22 +12,45 @@ import (
 	runtimehooks "goyais/services/hub/internal/runtime/hooks"
 )
 
+type hookEvaluationContext struct {
+	WorkspaceID      string
+	ProjectID        string
+	SessionID        string
+	ToolName         string
+	IsLocalWorkspace bool
+}
+
 func evaluateHookDecisionWithState(state *AppState, execution Execution, eventType HookEventType, toolName string) (HookDecision, string) {
+	scope := hookEvaluationContext{
+		WorkspaceID:      execution.WorkspaceID,
+		SessionID:        execution.ConversationID,
+		ToolName:         strings.TrimSpace(toolName),
+		IsLocalWorkspace: strings.TrimSpace(execution.WorkspaceID) == localWorkspaceID,
+	}
+	if state != nil {
+		state.mu.RLock()
+		if conversation, ok := state.conversations[execution.ConversationID]; ok {
+			scope.ProjectID = conversation.ProjectID
+		}
+		state.mu.RUnlock()
+	}
+	return evaluateHookDecisionForContextWithState(state, scope, eventType)
+}
+
+func evaluateHookDecisionForContextWithState(state *AppState, scope hookEvaluationContext, eventType HookEventType) (HookDecision, string) {
 	if state == nil {
 		return HookDecision{Action: HookDecisionActionAllow}, ""
 	}
 
 	scopeContext := controlplanepolicy.HookScopeContext{
-		WorkspaceID:      execution.WorkspaceID,
-		ConversationID:   execution.ConversationID,
-		ToolName:         strings.TrimSpace(toolName),
-		IsLocalWorkspace: strings.TrimSpace(execution.WorkspaceID) == localWorkspaceID,
+		WorkspaceID:      strings.TrimSpace(scope.WorkspaceID),
+		ProjectID:        strings.TrimSpace(scope.ProjectID),
+		ConversationID:   strings.TrimSpace(scope.SessionID),
+		ToolName:         strings.TrimSpace(scope.ToolName),
+		IsLocalWorkspace: scope.IsLocalWorkspace,
 	}
 	state.mu.RLock()
 	policies := listHookPoliciesLocked(state)
-	if conversation, ok := state.conversations[execution.ConversationID]; ok {
-		scopeContext.ProjectID = conversation.ProjectID
-	}
 	state.mu.RUnlock()
 	if len(policies) == 0 {
 		return HookDecision{
@@ -60,7 +83,7 @@ func evaluateHookDecisionWithState(state *AppState, execution Execution, eventTy
 	}
 	decision := runtimehooks.Evaluate(hookPolicies, runtimehooks.EventInput{
 		EventType: runtimehooks.EventType(eventType),
-		ToolName:  toolName,
+		ToolName:  strings.TrimSpace(scope.ToolName),
 	})
 	return HookDecision{
 		Action:            HookDecisionAction(decision.Action),

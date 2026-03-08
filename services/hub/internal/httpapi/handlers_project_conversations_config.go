@@ -6,6 +6,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	appcommands "goyais/services/hub/internal/application/commands"
+	appqueries "goyais/services/hub/internal/application/queries"
 )
 
 func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
@@ -25,12 +28,12 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 
 		switch r.Method {
 		case http.MethodGet:
-			_, authErr := authorizeAction(
+			session, authErr := authorizeAction(
 				state,
 				r,
 				workspaceID,
 				"session.read",
-				authorizationResource{WorkspaceID: workspaceID},
+				authorizationResource{WorkspaceID: workspaceID, ResourceType: "project", TargetID: projectID},
 				authorizationContext{OperationType: "read"},
 			)
 			if authErr != nil {
@@ -41,6 +44,33 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{
 					"project_id": projectID,
 				})
+				return
+			}
+			if state.features.EnableCQRS && state.sessionQueries != nil {
+				start, limit := parseCursorLimit(r)
+				items, next, err := state.sessionQueries.ListSessions(r.Context(), appqueries.ListSessionsRequest{
+					WorkspaceID: workspaceID,
+					ProjectID:   projectID,
+					Offset:      start,
+					Limit:       limit,
+				})
+				if err != nil {
+					WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to load project sessions", map[string]any{
+						"project_id":   projectID,
+						"workspace_id": workspaceID,
+						"error":        err.Error(),
+					})
+					return
+				}
+				raw := make([]any, 0, len(items))
+				for _, item := range items {
+					raw = append(raw, fromApplicationSession(item))
+				}
+				recordBusinessOperationAudit(r.Context(), state, session, "session.read", "project", projectID, map[string]any{
+					"operation":    "list_project_sessions",
+					"workspace_id": workspaceID,
+				})
+				writeJSON(w, http.StatusOK, ListEnvelope{Items: raw, NextCursor: next})
 				return
 			}
 			queryService, hasQueryService := newRunQueryService(state)
@@ -111,6 +141,10 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 			}
 			start, limit := parseCursorLimit(r)
 			paged, next := paginateAny(raw, start, limit)
+			recordBusinessOperationAudit(r.Context(), state, session, "session.read", "project", projectID, map[string]any{
+				"operation":    "list_project_sessions",
+				"workspace_id": workspaceID,
+			})
 			writeJSON(w, http.StatusOK, ListEnvelope{Items: paged, NextCursor: next})
 		case http.MethodPost:
 			input := CreateConversationRequest{}
@@ -123,7 +157,7 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				r,
 				workspaceID,
 				"session.write",
-				authorizationResource{WorkspaceID: workspaceID},
+				authorizationResource{WorkspaceID: workspaceID, ResourceType: "project", TargetID: projectID},
 				authorizationContext{OperationType: "write", ABACRequired: true},
 			)
 			if authErr != nil {
@@ -136,6 +170,34 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 				})
 				return
 			}
+			if state.features.EnableCQRS && state.sessionCommands != nil {
+				result, err := state.sessionCommands.CreateSession(r.Context(), appcommands.CreateSessionCommand{
+					WorkspaceID: project.WorkspaceID,
+					ProjectID:   projectID,
+					Name:        strings.TrimSpace(input.Name),
+				})
+				if err != nil {
+					writeSessionCommandError(w, r, err)
+					return
+				}
+				state.mu.RLock()
+				conversation, exists := state.conversations[result.SessionID]
+				state.mu.RUnlock()
+				if !exists {
+					WriteStandardError(w, r, http.StatusInternalServerError, "SESSION_CREATE_FAILED", "Created session is not available", map[string]any{
+						"session_id": result.SessionID,
+						"project_id": projectID,
+					})
+					return
+				}
+				writeJSON(w, http.StatusCreated, conversation)
+				if state.authz != nil {
+					_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "session.write", "conversation", conversation.ID, "success", map[string]any{
+						"operation": "create",
+					}, TraceIDFromContext(r.Context()))
+				}
+				return
+			}
 			config, err := getProjectConfigFromStore(state, project)
 			if err != nil {
 				WriteStandardError(w, r, http.StatusInternalServerError, "PROJECT_CONFIG_READ_FAILED", "Failed to read project config", map[string]any{
@@ -146,8 +208,25 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 
 			now := time.Now().UTC().Format(time.RFC3339)
 			defaultModelConfigID := firstNonEmpty(derefString(config.DefaultModelConfigID), project.DefaultModelConfigID)
+			conversationID := "conv_" + randomHex(6)
+			resourceSnapshots, snapshotErr := captureSessionResourceSnapshots(
+				state,
+				conversationID,
+				project.WorkspaceID,
+				defaultModelConfigID,
+				config.RuleIDs,
+				config.SkillIDs,
+				config.MCPIDs,
+				now,
+			)
+			if snapshotErr != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "RESOURCE_SNAPSHOT_CREATE_FAILED", "Failed to snapshot session resources", map[string]any{
+					"project_id": projectID,
+				})
+				return
+			}
 			conversation := Conversation{
-				ID:                "conv_" + randomHex(6),
+				ID:                conversationID,
 				WorkspaceID:       project.WorkspaceID,
 				ProjectID:         projectID,
 				Name:              firstNonEmpty(strings.TrimSpace(input.Name), "Conversation"),
@@ -166,6 +245,12 @@ func ProjectConversationsHandler(state *AppState) http.HandlerFunc {
 			state.conversations[conversation.ID] = conversation
 			state.conversationMessages[conversation.ID] = []ConversationMessage{}
 			state.mu.Unlock()
+			if err := replaceSessionResourceSnapshots(state, conversation.ID, resourceSnapshots); err != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "RESOURCE_SNAPSHOT_CREATE_FAILED", "Failed to persist session resource snapshot", map[string]any{
+					"session_id": conversation.ID,
+				})
+				return
+			}
 			syncExecutionDomainBestEffort(state)
 
 			writeJSON(w, http.StatusCreated, conversation)
@@ -315,6 +400,7 @@ func syncProjectConversationsModelConfig(
 	now := nowUTC()
 	result := projectConversationModelSyncResult{}
 	restartExecutionIDs := make([]string, 0, 4)
+	snapshotRefreshIDs := make([]string, 0, 4)
 
 	var selectedModelConfig ResourceConfig
 	hasSelectedModelConfig := false
@@ -336,6 +422,7 @@ func syncProjectConversationsModelConfig(
 			conversation.UpdatedAt = now
 			state.conversations[conversationID] = conversation
 			result.UpdatedConversations++
+			snapshotRefreshIDs = append(snapshotRefreshIDs, conversationID)
 		}
 
 		for executionID, execution := range state.executions {
@@ -385,6 +472,28 @@ func syncProjectConversationsModelConfig(
 		}
 	}
 	state.mu.Unlock()
+
+	for _, conversationID := range snapshotRefreshIDs {
+		state.mu.RLock()
+		conversation, exists := state.conversations[conversationID]
+		state.mu.RUnlock()
+		if !exists {
+			continue
+		}
+		snapshots, snapshotErr := captureSessionResourceSnapshots(
+			state,
+			conversationID,
+			normalizedWorkspaceID,
+			conversation.ModelConfigID,
+			conversation.RuleIDs,
+			conversation.SkillIDs,
+			conversation.MCPIDs,
+			now,
+		)
+		if snapshotErr == nil {
+			_ = replaceSessionResourceSnapshots(state, conversationID, snapshots)
+		}
+	}
 
 	for _, executionID := range restartExecutionIDs {
 		state.cancelExecutionBestEffort(context.Background(), executionID)

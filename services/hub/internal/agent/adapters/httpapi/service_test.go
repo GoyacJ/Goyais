@@ -111,6 +111,20 @@ type lifecycleStub struct {
 	handoffErr error
 }
 
+type checkpointServiceStub struct {
+	req  SessionCheckpointRollbackRequest
+	resp SessionStateResponse
+	err  error
+}
+
+func (s *checkpointServiceStub) RollbackToCheckpoint(_ context.Context, req SessionCheckpointRollbackRequest) (SessionStateResponse, error) {
+	s.req = req
+	if s.err != nil {
+		return SessionStateResponse{}, s.err
+	}
+	return s.resp, nil
+}
+
 func (s *lifecycleStub) Resume(_ context.Context, req runtimesession.ResumeRequest) (runtimesession.State, error) {
 	s.resumeReq = req
 	if s.resumeErr != nil {
@@ -170,6 +184,48 @@ func TestServiceStartSessionDelegatesToEngine(t *testing.T) {
 	}
 	if engine.startReq.WorkingDir != "/tmp/work" {
 		t.Fatalf("engine start working dir = %q", engine.startReq.WorkingDir)
+	}
+}
+
+func TestServiceRewindSessionUsesCheckpointServiceWhenConfigured(t *testing.T) {
+	engine := &engineStub{}
+	lifecycle := &lifecycleStub{
+		state: runtimesession.State{
+			SessionID:        core.SessionID("sess_lifecycle"),
+			LastCheckpointID: core.CheckpointID("cp_lifecycle"),
+			NextCursor:       1,
+		},
+	}
+	checkpoints := &checkpointServiceStub{
+		resp: SessionStateResponse{
+			SessionID:        "sess_checkpoint",
+			LastCheckpointID: "cp_checkpoint",
+			NextCursor:       5,
+			PermissionMode:   "plan",
+		},
+	}
+	svc := NewServiceWithLifecycleAndCheckpoints(engine, lifecycle, checkpoints)
+
+	rewound, err := svc.RewindSession(context.Background(), RewindSessionRequest{
+		SessionID:            "sess_checkpoint",
+		CheckpointID:         "cp_checkpoint",
+		TargetCursor:         5,
+		ClearTempPermissions: true,
+	})
+	if err != nil {
+		t.Fatalf("rewind session failed: %v", err)
+	}
+	if checkpoints.req.SessionID != "sess_checkpoint" || checkpoints.req.CheckpointID != "cp_checkpoint" {
+		t.Fatalf("unexpected checkpoint request %#v", checkpoints.req)
+	}
+	if checkpoints.req.TargetCursor != 5 || !checkpoints.req.ClearTempPermissions {
+		t.Fatalf("unexpected checkpoint request %#v", checkpoints.req)
+	}
+	if lifecycle.rewindReq.SessionID != "" {
+		t.Fatalf("expected lifecycle rewind to be bypassed, got %#v", lifecycle.rewindReq)
+	}
+	if rewound.LastCheckpointID != "cp_checkpoint" || rewound.NextCursor != 5 || rewound.PermissionMode != "plan" {
+		t.Fatalf("unexpected rewind response %#v", rewound)
 	}
 }
 

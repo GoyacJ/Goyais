@@ -68,7 +68,11 @@ func (s *authzStore) getProjectConfig(projectID string) (ProjectConfig, bool, er
 	item.DefaultModelConfigID = nullStringToPointer(defaultModelConfigID)
 	item.TokenThreshold = nullInt64ToPositiveIntPointer(tokenThreshold)
 	item.ModelTokenThresholds = modelTokenThresholds
-	item = normalizeProjectConfigForStorage(item)
+	bindings, err := s.listProjectResourceBindings(item.ProjectID)
+	if err != nil {
+		return ProjectConfig{}, false, err
+	}
+	item = applyProjectResourceBindings(item, bindings)
 	return item, true, nil
 }
 
@@ -97,7 +101,17 @@ func (s *authzStore) upsertProjectConfig(workspaceID string, input ProjectConfig
 		return ProjectConfig{}, err
 	}
 
-	_, err = s.db.Exec(
+	tx, err := s.db.Begin()
+	if err != nil {
+		return ProjectConfig{}, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	_, err = tx.Exec(
 		`INSERT INTO project_configs(project_id, workspace_id, model_config_ids_json, default_model_config_id, token_threshold, model_token_thresholds_json, rule_ids_json, skill_ids_json, mcp_ids_json, updated_at)
 		 VALUES(?,?,?,?,?,?,?,?,?,?)
 		 ON CONFLICT(project_id) DO UPDATE SET
@@ -122,6 +136,12 @@ func (s *authzStore) upsertProjectConfig(workspaceID string, input ProjectConfig
 		config.UpdatedAt,
 	)
 	if err != nil {
+		return ProjectConfig{}, err
+	}
+	if err = replaceProjectResourceBindingsTx(tx, config.ProjectID, buildProjectResourceBindings(config)); err != nil {
+		return ProjectConfig{}, err
+	}
+	if err = tx.Commit(); err != nil {
 		return ProjectConfig{}, err
 	}
 	return config, nil
@@ -246,14 +266,24 @@ func (s *authzStore) listWorkspaceProjectConfigItems(workspaceID string) ([]work
 			}
 		}
 
-		config = normalizeProjectConfigForStorage(config)
 		items = append(items, workspaceProjectConfigItem{
 			ProjectID:   projectID,
 			ProjectName: projectName,
 			Config:      config,
 		})
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for index := range items {
+		bindings, err := s.listProjectResourceBindings(items[index].ProjectID)
+		if err != nil {
+			return nil, err
+		}
+		items[index].Config = applyProjectResourceBindings(items[index].Config, bindings)
+	}
+	return items, nil
 }
 
 func normalizeProjectConfigForStorage(input ProjectConfig) ProjectConfig {

@@ -145,6 +145,16 @@ func NewManager(deps Dependencies) *Manager {
 	}
 }
 
+// SetStarter updates the session starter used by fork operations.
+func (m *Manager) SetStarter(starter SessionStarter) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.starter = starter
+	m.mu.Unlock()
+}
+
 // Register stores one session snapshot for later lifecycle operations.
 func (m *Manager) Register(req RegisterRequest) (State, error) {
 	if m == nil {

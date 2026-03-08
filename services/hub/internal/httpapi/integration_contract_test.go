@@ -147,8 +147,19 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 	}
 	msg1Payload := map[string]any{}
 	mustDecodeJSON(t, msg1.Body.Bytes(), &msg1Payload)
-	exec1 := msg1Payload["run"].(map[string]any)
-	messageID := exec1["message_id"].(string)
+
+	checkpointCreateRes := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/checkpoints", map[string]any{
+		"message": "after first message",
+	}, authHeaders)
+	if checkpointCreateRes.Code != http.StatusCreated {
+		t.Fatalf("expected checkpoint create 201, got %d (%s)", checkpointCreateRes.Code, checkpointCreateRes.Body.String())
+	}
+	checkpointPayload := map[string]any{}
+	mustDecodeJSON(t, checkpointCreateRes.Body.Bytes(), &checkpointPayload)
+	checkpointID := checkpointPayload["checkpoint_id"].(string)
+	if checkpointID == "" {
+		t.Fatalf("expected checkpoint id in create response")
+	}
 
 	msg2 := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
 		"raw_input":       "second",
@@ -170,9 +181,7 @@ func TestProjectConversationFlowWithCursorPagination(t *testing.T) {
 		t.Fatalf("expected stop 200, got %d (%s)", stopRes.Code, stopRes.Body.String())
 	}
 
-	rollbackRes := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/rollback", map[string]any{
-		"message_id": messageID,
-	}, authHeaders)
+	rollbackRes := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/checkpoints/"+checkpointID+"/rollback", map[string]any{}, authHeaders)
 	if rollbackRes.Code != http.StatusOK {
 		t.Fatalf("expected rollback 200, got %d (%s)", rollbackRes.Code, rollbackRes.Body.String())
 	}

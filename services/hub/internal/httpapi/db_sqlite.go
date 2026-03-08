@@ -223,6 +223,17 @@ func (s *authzStore) migrate() error {
 			updated_at TEXT NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_project_configs_workspace_updated ON project_configs(workspace_id, updated_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS project_resource_bindings (
+			project_id TEXT NOT NULL,
+			resource_config_id TEXT NOT NULL,
+			resource_type TEXT NOT NULL,
+			binding_index INTEGER NOT NULL DEFAULT 0,
+			is_default INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			PRIMARY KEY(project_id, resource_config_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_project_resource_bindings_project_type_order ON project_resource_bindings(project_id, resource_type, binding_index, resource_config_id)`,
 		`CREATE TABLE IF NOT EXISTS conversations (
 			id TEXT PRIMARY KEY,
 			workspace_id TEXT NOT NULL,
@@ -262,6 +273,32 @@ func (s *authzStore) migrate() error {
 			created_at TEXT NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_conversation_snapshots_conversation_created ON conversation_snapshots(conversation_id, created_at)`,
+		`CREATE TABLE IF NOT EXISTS session_resource_snapshots (
+			session_id TEXT NOT NULL,
+			resource_config_id TEXT NOT NULL,
+			resource_type TEXT NOT NULL,
+			resource_version INTEGER NOT NULL DEFAULT 1,
+			is_deprecated INTEGER NOT NULL DEFAULT 0,
+			fallback_resource_id TEXT,
+			payload_json TEXT NOT NULL,
+			snapshot_at TEXT NOT NULL,
+			PRIMARY KEY (session_id, resource_config_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_resource_snapshots_session_snapshot ON session_resource_snapshots(session_id, snapshot_at, resource_config_id)`,
+		`CREATE TABLE IF NOT EXISTS session_checkpoints (
+			checkpoint_id TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			workspace_id TEXT NOT NULL,
+			project_id TEXT NOT NULL,
+			project_kind TEXT NOT NULL,
+			message TEXT NOT NULL,
+			parent_checkpoint_id TEXT,
+			git_commit_id TEXT,
+			entries_digest TEXT,
+			session_json TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_checkpoints_session_created ON session_checkpoints(session_id, created_at DESC, checkpoint_id)`,
 		`CREATE TABLE IF NOT EXISTS executions (
 			id TEXT PRIMARY KEY,
 			workspace_id TEXT NOT NULL,
@@ -635,8 +672,11 @@ func (s *authzStore) rebuildSchema(statements []string) error {
 		`DROP TABLE IF EXISTS abac_policies`,
 		`DROP TABLE IF EXISTS audit_logs`,
 		`DROP TABLE IF EXISTS workspace_catalog_roots`,
+		`DROP TABLE IF EXISTS project_resource_bindings`,
 		`DROP TABLE IF EXISTS project_configs`,
 		`DROP TABLE IF EXISTS projects`,
+		`DROP TABLE IF EXISTS session_checkpoints`,
+		`DROP TABLE IF EXISTS session_resource_snapshots`,
 		`DROP TABLE IF EXISTS conversation_snapshots`,
 		`DROP TABLE IF EXISTS conversation_messages`,
 		`DROP TABLE IF EXISTS hook_execution_records`,
@@ -682,6 +722,8 @@ func (s *authzStore) validateStrictSchema() error {
 		{table: "project_configs", column: "default_model_config_id"},
 		{table: "project_configs", column: "token_threshold"},
 		{table: "project_configs", column: "model_token_thresholds_json"},
+		{table: "project_resource_bindings", column: "binding_index"},
+		{table: "project_resource_bindings", column: "is_default"},
 		{table: "executions", column: "agent_config_snapshot_json"},
 		{table: "executions", column: "resource_profile_snapshot_json"},
 		{table: "executions", column: "tokens_in"},

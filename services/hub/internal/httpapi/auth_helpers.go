@@ -14,6 +14,13 @@ type apiError struct {
 	details map[string]any
 }
 
+func (e *apiError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return e.message
+}
+
 func (e *apiError) write(w http.ResponseWriter, r *http.Request) {
 	WriteStandardError(w, r, e.status, e.code, e.message, e.details)
 }

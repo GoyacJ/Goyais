@@ -19,6 +19,8 @@ import (
 
 	composerctx "goyais/services/hub/internal/agent/context/composer"
 	"goyais/services/hub/internal/agent/core"
+	slashruntime "goyais/services/hub/internal/agent/runtime/slash"
+	appcommands "goyais/services/hub/internal/application/commands"
 	composercommands "goyais/services/hub/internal/legacybridge/composercommands"
 )
 
@@ -152,6 +154,57 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			err.write(w, r)
 			return
 		}
+		if state.features.EnableCQRS && state.sessionCommands != nil {
+			result, err := state.sessionCommands.SubmitMessage(r.Context(), appcommands.SubmitMessageCommand{
+				SessionID:            conversationID,
+				RawInput:             input.RawInput,
+				Mode:                 string(input.Mode),
+				ModelConfigID:        input.ModelConfigID,
+				SelectedCapabilities: append([]string{}, input.SelectedCapabilities...),
+				CatalogRevision:      input.CatalogRevision,
+			})
+			if err != nil {
+				writeSessionCommandError(w, r, err)
+				return
+			}
+			if strings.TrimSpace(result.Kind) == "command_result" {
+				commandResult := &ComposerCommandResult{}
+				if result.CommandResult != nil {
+					commandResult.Command = result.CommandResult.Command
+					commandResult.Output = result.CommandResult.Output
+				}
+				if state.authz != nil {
+					_ = state.authz.appendAudit(conversationSeed.WorkspaceID, session.UserID, "session.write", "conversation", conversationID, "success", map[string]any{"operation": "submit_command"}, TraceIDFromContext(r.Context()))
+				}
+				writeJSON(w, http.StatusOK, ComposerSubmitResponse{
+					Kind:          "command_result",
+					CommandResult: commandResult,
+				})
+				return
+			}
+			state.mu.RLock()
+			execution, executionExists := state.executions[result.RunID]
+			conversation := state.conversations[conversationID]
+			state.mu.RUnlock()
+			if !executionExists {
+				WriteStandardError(w, r, http.StatusInternalServerError, "RUN_ENQUEUE_FAILED", "Created run is not available", map[string]any{
+					"run_id":     result.RunID,
+					"session_id": conversationID,
+				})
+				return
+			}
+			if state.authz != nil {
+				_ = state.authz.appendAudit(conversationSeed.WorkspaceID, session.UserID, "session.write", "conversation", conversationID, "success", map[string]any{"operation": "submit_prompt"}, TraceIDFromContext(r.Context()))
+			}
+			queueIndexValue := execution.QueueIndex
+			writeJSON(w, http.StatusCreated, ComposerSubmitResponse{
+				Kind:       "run_enqueued",
+				Run:        &execution,
+				QueueState: conversation.QueueState,
+				QueueIndex: &queueIndexValue,
+			})
+			return
+		}
 
 		rawInput := strings.TrimSpace(input.RawInput)
 		if rawInput == "" {
@@ -190,21 +243,16 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 		}
 
 		if parsed.IsCommand {
-			composerEnv := envFromSystem()
-			commandRegistry, registryErr := composercommands.NewComposerCommandRegistry(context.Background(), project.RepoPath, composerEnv)
-			if registryErr != nil {
-				WriteStandardError(w, r, http.StatusBadRequest, "COMMAND_DISPATCH_FAILED", registryErr.Error(), map[string]any{})
+			if state.commandBus == nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "COMMAND_DISPATCH_FAILED", "Command bus is not configured", map[string]any{})
 				return
 			}
-			dispatch, dispatchErr := composerctx.DispatchCommand(
-				context.Background(),
-				parsed.CommandText,
-				commandRegistry,
-				composerctx.DispatchRequest{
-					WorkingDir: project.RepoPath,
-					Env:        composerEnv,
-				},
-			)
+			command, commandErr := slashruntime.Parse(rawInput)
+			if commandErr != nil {
+				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", commandErr.Error(), map[string]any{})
+				return
+			}
+			commandResp, dispatchErr := state.commandBus.Execute(r.Context(), conversationID, command)
 			if dispatchErr != nil {
 				if errors.Is(dispatchErr, composerctx.ErrUnknownCommand) {
 					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", dispatchErr.Error(), map[string]any{})
@@ -214,8 +262,8 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 				return
 			}
 
-			if dispatch.Kind == composerctx.CommandKindControl {
-				if err := appendCommandResultMessages(state, conversationID, rawInput, dispatch.Output); err != nil {
+			if expandedPrompt, ok := slashruntime.PromptExpansion(commandResp); !ok {
+				if err := appendCommandResultMessages(state, conversationID, rawInput, commandResp.Output); err != nil {
 					WriteStandardError(w, r, http.StatusInternalServerError, "COMMAND_RESULT_PERSIST_FAILED", "Failed to persist command result", map[string]any{})
 					return
 				}
@@ -225,23 +273,23 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 				writeJSON(w, http.StatusOK, ComposerSubmitResponse{
 					Kind: "command_result",
 					CommandResult: &ComposerCommandResult{
-						Command: dispatch.Name,
-						Output:  dispatch.Output,
+						Command: command.Name,
+						Output:  commandResp.Output,
 					},
 				})
 				return
-			}
-
-			parsed = composerctx.ParsePrompt(dispatch.ExpandedPrompt)
-			selectionByType, err = validateSelectedCapabilitiesAgainstMentions(parsed.MentionedRefs, input.SelectedCapabilities)
-			if err != nil {
-				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
-				return
-			}
-			projectFilePaths, err = validateComposerProjectFileSelections(project.RepoPath, selectionByType[ComposerCapabilityKindFile])
-			if err != nil {
-				WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
-				return
+			} else {
+				parsed = composerctx.ParsePrompt(expandedPrompt)
+				selectionByType, err = validateSelectedCapabilitiesAgainstMentions(parsed.MentionedRefs, input.SelectedCapabilities)
+				if err != nil {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
+				projectFilePaths, err = validateComposerProjectFileSelections(project.RepoPath, selectionByType[ComposerCapabilityKindFile])
+				if err != nil {
+					WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{})
+					return
+				}
 			}
 		}
 
@@ -305,16 +353,18 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		selectedModelConfig, modelConfigExists, modelConfigErr := getWorkspaceEnabledModelConfigByID(
+		selectedModelConfig, modelConfigExists, modelConfigErr := resolveSessionResourceConfig(
 			state,
+			conversationSeed.ID,
 			conversationSeed.WorkspaceID,
 			resolvedModelConfigID,
+			ResourceTypeModel,
 		)
 		if modelConfigErr != nil {
 			WriteStandardError(w, r, http.StatusInternalServerError, "RESOURCE_CONFIG_LOAD_FAILED", "Failed to load model config", map[string]any{})
 			return
 		}
-		if !modelConfigExists {
+		if !modelConfigExists || !selectedModelConfig.Enabled || selectedModelConfig.Model == nil {
 			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "model_config_id is not resolvable from project config", map[string]any{})
 			return
 		}
@@ -334,8 +384,9 @@ func ConversationInputSubmitHandler(state *AppState) http.HandlerFunc {
 			WriteStandardError(w, r, http.StatusInternalServerError, "WORKSPACE_AGENT_CONFIG_READ_FAILED", "Failed to read workspace agent config", map[string]any{})
 			return
 		}
-		runtimeToolingSnapshot, runtimeToolingErr := resolveRuntimeToolingConfig(
+		runtimeToolingSnapshot, runtimeToolingErr := resolveRuntimeToolingConfigForSession(
 			state,
+			conversationSeed.ID,
 			conversationSeed.WorkspaceID,
 			PermissionMode(resolvedMode),
 			resolvedRuleIDs,
@@ -563,7 +614,7 @@ func loadConversationInputContext(
 		r,
 		conversationSeed.WorkspaceID,
 		permission,
-		authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
+		authorizationResource{WorkspaceID: conversationSeed.WorkspaceID, ResourceType: "conversation", TargetID: conversationID},
 		authorizationContext{OperationType: permissionOperationType(permission), ABACRequired: permission != "session.read"},
 	)
 	if authErr != nil {

@@ -107,6 +107,9 @@ type ResourceConfig struct {
 	Type           ResourceType `json:"type"`
 	Name           string       `json:"name,omitempty"`
 	Enabled        bool         `json:"enabled"`
+	Version        int          `json:"version"`
+	IsDeleted      bool         `json:"is_deleted"`
+	DeletedAt      *string      `json:"deleted_at,omitempty"`
 	Model          *ModelSpec   `json:"model,omitempty"`
 	Rule           *RuleSpec    `json:"rule,omitempty"`
 	Skill          *SkillSpec   `json:"skill,omitempty"`
@@ -116,6 +119,27 @@ type ResourceConfig struct {
 	TokensTotal    int          `json:"tokens_total"`
 	CreatedAt      string       `json:"created_at"`
 	UpdatedAt      string       `json:"updated_at"`
+}
+
+type WorkspaceResourceEventType string
+
+const (
+	WorkspaceResourceEventTypeCreated            WorkspaceResourceEventType = "resource_config_created"
+	WorkspaceResourceEventTypeUpdated            WorkspaceResourceEventType = "resource_config_updated"
+	WorkspaceResourceEventTypeDeleted            WorkspaceResourceEventType = "resource_config_deleted"
+	WorkspaceResourceEventTypeSnapshotDeprecated WorkspaceResourceEventType = "resource_snapshot_deprecated"
+)
+
+type WorkspaceResourceEvent struct {
+	EventID         string                     `json:"event_id"`
+	WorkspaceID     string                     `json:"workspace_id"`
+	Type            WorkspaceResourceEventType `json:"type"`
+	ConfigID        string                     `json:"config_id"`
+	ConfigType      ResourceType               `json:"config_type"`
+	ResourceVersion int                        `json:"resource_version"`
+	SessionID       string                     `json:"session_id,omitempty"`
+	Timestamp       string                     `json:"timestamp"`
+	Payload         map[string]any             `json:"payload,omitempty"`
 }
 
 type ResourceConfigCreateRequest struct {

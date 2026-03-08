@@ -1,10 +1,12 @@
 package httpapi
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
-	"slices"
 	"strings"
+
+	unifiedpolicy "goyais/services/hub/internal/agent/policy/unified"
 )
 
 type actionSpec struct {
@@ -20,6 +22,7 @@ type authorizationResource struct {
 	Scope        string
 	ResourceType string
 	ShareStatus  string
+	TargetID     string
 }
 
 type authorizationContext struct {
@@ -57,128 +60,73 @@ var actionSpecs = map[string]actionSpec{
 }
 
 func authorizeAction(state *AppState, r *http.Request, workspaceID string, action string, resource authorizationResource, input authorizationContext, allowedRoles ...Role) (Session, *apiError) {
-	session, err := resolveSessionForWorkspace(state, r, workspaceID)
-	if err != nil {
-		appendAuthzAudit(state, r, workspaceID, "", action, resource, "denied", map[string]any{"reason": err.code})
-		return Session{}, err
-	}
-
-	normalizedWorkspace := strings.TrimSpace(workspaceID)
-	if normalizedWorkspace == "" {
-		normalizedWorkspace = strings.TrimSpace(session.WorkspaceID)
-	}
-	if normalizedWorkspace != "" && session.WorkspaceID != localWorkspaceID && session.WorkspaceID != normalizedWorkspace {
-		appendAuthzAudit(state, r, normalizedWorkspace, session.UserID, action, resource, "denied", map[string]any{"reason": "workspace_mismatch"})
+	if state == nil {
 		return Session{}, &apiError{
-			status:  http.StatusForbidden,
-			code:    "ACCESS_DENIED",
-			message: "Workspace access is denied",
-			details: map[string]any{"workspace_id": normalizedWorkspace},
+			status:  500,
+			code:    "AUTHZ_INTERNAL_ERROR",
+			message: "Authorization state is not configured",
+			details: map[string]any{},
 		}
 	}
-	if len(allowedRoles) > 0 && !slices.Contains(allowedRoles, session.Role) {
-		appendAuthzAudit(state, r, normalizedWorkspace, session.UserID, action, resource, "denied", map[string]any{"reason": "role_forbidden"})
+	gate := state.unifiedPermissionGate
+	if gate == nil {
+		gate = newUnifiedAuthorizationGate(state)
+	}
+	if gate == nil {
 		return Session{}, &apiError{
-			status:  http.StatusForbidden,
-			code:    "ACCESS_DENIED",
-			message: "Permission is denied",
-			details: map[string]any{"required_roles": allowedRoles},
-		}
-	}
-	if session.WorkspaceID == localWorkspaceID {
-		targetWorkspace := resolveTargetWorkspace(session, normalizedWorkspace, resource)
-		if targetWorkspace != "" && targetWorkspace != localWorkspaceID {
-			appendAuthzAudit(state, r, targetWorkspace, session.UserID, action, resource, "denied", map[string]any{"reason": "workspace_mismatch"})
-			return Session{}, &apiError{
-				status:  http.StatusForbidden,
-				code:    "ACCESS_DENIED",
-				message: "Workspace access is denied",
-				details: map[string]any{"workspace_id": targetWorkspace},
-			}
-		}
-		appendAuthzAudit(state, r, localWorkspaceID, session.UserID, action, resource, "success", map[string]any{"mode": "local"})
-		return session, nil
-	}
-
-	spec := actionSpecs[action]
-	permissionKey := spec.PermissionKey
-	if strings.TrimSpace(permissionKey) == "" {
-		permissionKey = action
-	}
-	if state.authz != nil {
-		permissions, loadErr := state.authz.listRolePermissions(normalizedWorkspace, session.Role)
-		if loadErr != nil {
-			return Session{}, &apiError{
-				status:  http.StatusInternalServerError,
-				code:    "AUTHZ_INTERNAL_ERROR",
-				message: "Failed to load role permissions",
-				details: map[string]any{},
-			}
-		}
-		if !containsPermission(permissions, permissionKey) {
-			appendAuthzAudit(state, r, normalizedWorkspace, session.UserID, action, resource, "denied", map[string]any{"reason": "rbac_forbidden", "permission": permissionKey})
-			return Session{}, &apiError{
-				status:  http.StatusForbidden,
-				code:    "ACCESS_DENIED",
-				message: "Permission is denied",
-				details: map[string]any{"permission": permissionKey},
-			}
+			status:  500,
+			code:    "AUTHZ_INTERNAL_ERROR",
+			message: "Unified permission gate is not configured",
+			details: map[string]any{},
 		}
 	}
 
-	ctx := authorizationContext{
-		RiskLevel:     firstNonEmpty(input.RiskLevel, spec.RiskLevel, "low"),
-		OperationType: firstNonEmpty(input.OperationType, spec.OperationType, "read"),
-		RequestSource: firstNonEmpty(input.RequestSource, "api"),
-		ABACRequired:  input.ABACRequired || spec.ABACRequired || input.OperationType == "write",
+	roles := make([]string, 0, len(allowedRoles))
+	for _, role := range allowedRoles {
+		roles = append(roles, string(role))
 	}
-	resource.WorkspaceID = firstNonEmpty(resource.WorkspaceID, normalizedWorkspace)
-
-	if state.authz != nil && ctx.ABACRequired {
-		policies, loadErr := state.authz.listABACPolicies(normalizedWorkspace)
-		if loadErr != nil {
-			return Session{}, &apiError{
-				status:  http.StatusInternalServerError,
-				code:    "AUTHZ_INTERNAL_ERROR",
-				message: "Failed to load ABAC policies",
-				details: map[string]any{},
-			}
-		}
-		allowMatched := false
-		for _, policy := range policies {
-			if !policy.Enabled {
-				continue
-			}
-			if !matchABACPolicy(policy, session, resource, action, ctx) {
-				continue
-			}
-			if policy.Effect == ABACEffectDeny {
-				appendAuthzAudit(state, r, normalizedWorkspace, session.UserID, action, resource, "denied", map[string]any{"reason": "abac_deny", "policy_id": policy.ID})
-				return Session{}, &apiError{
-					status:  http.StatusForbidden,
-					code:    "ACCESS_DENIED",
-					message: "Permission is denied by ABAC policy",
-					details: map[string]any{"policy_id": policy.ID},
-				}
-			}
-			allowMatched = true
-		}
-		if !allowMatched {
-			appendAuthzAudit(state, r, normalizedWorkspace, session.UserID, action, resource, "denied", map[string]any{"reason": "abac_no_allow"})
-			return Session{}, &apiError{
-				status:  http.StatusForbidden,
-				code:    "ACCESS_DENIED",
-				message: "Permission is denied by ABAC policy",
-				details: map[string]any{"action": action},
-			}
-		}
-	}
-
-	appendAuthzAudit(state, r, normalizedWorkspace, session.UserID, action, resource, "success", map[string]any{
-		"risk_level":     ctx.RiskLevel,
-		"operation_type": ctx.OperationType,
+	decision, err := gate.Authorize(r.Context(), unifiedpolicy.Request{
+		Action:       action,
+		WorkspaceID:  strings.TrimSpace(workspaceID),
+		AccessToken:  extractAccessToken(r),
+		TraceID:      TraceIDFromContext(r.Context()),
+		AllowedRoles: roles,
+		Resource: unifiedpolicy.Resource{
+			WorkspaceID:  strings.TrimSpace(resource.WorkspaceID),
+			OwnerUserID:  strings.TrimSpace(resource.OwnerUserID),
+			Scope:        strings.TrimSpace(resource.Scope),
+			ResourceType: strings.TrimSpace(resource.ResourceType),
+			ShareStatus:  strings.TrimSpace(resource.ShareStatus),
+			TargetID:     firstNonEmpty(strings.TrimSpace(resource.TargetID), strings.TrimSpace(resource.OwnerUserID), strings.TrimSpace(resource.WorkspaceID), "unknown"),
+		},
+		Context: unifiedpolicy.Context{
+			RiskLevel:     strings.TrimSpace(input.RiskLevel),
+			OperationType: strings.TrimSpace(input.OperationType),
+			RequestSource: strings.TrimSpace(input.RequestSource),
+			ABACRequired:  input.ABACRequired,
+		},
 	})
-	return session, nil
+	if err != nil {
+		var authErr *apiError
+		if errors.As(err, &authErr) {
+			return Session{}, authErr
+		}
+		return Session{}, &apiError{
+			status:  500,
+			code:    "AUTHZ_INTERNAL_ERROR",
+			message: "Authorization evaluation failed",
+			details: map[string]any{"error": err.Error()},
+		}
+	}
+	if !decision.Allowed {
+		return Session{}, &apiError{
+			status:  decision.StatusCode,
+			code:    decision.Code,
+			message: decision.Message,
+			details: cloneMapAny(decision.Details),
+		}
+	}
+	return sessionFromSubject(decision.Subject), nil
 }
 
 func matchABACPolicy(policy ABACPolicy, session Session, resource authorizationResource, action string, input authorizationContext) bool {

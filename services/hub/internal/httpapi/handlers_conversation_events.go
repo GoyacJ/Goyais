@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	appqueries "goyais/services/hub/internal/application/queries"
 )
 
 func ConversationEventsHandler(state *AppState) http.HandlerFunc {
@@ -26,18 +28,21 @@ func ConversationEventsHandler(state *AppState) http.HandlerFunc {
 			return
 		}
 
-		_, authErr := authorizeAction(
+		session, authErr := authorizeAction(
 			state,
 			r,
 			conversation.WorkspaceID,
 			"session.read",
-			authorizationResource{WorkspaceID: conversation.WorkspaceID},
+			authorizationResource{WorkspaceID: conversation.WorkspaceID, ResourceType: "conversation", TargetID: conversationID},
 			authorizationContext{OperationType: "read"},
 		)
 		if authErr != nil {
 			authErr.write(w, r)
 			return
 		}
+		recordBusinessOperationAudit(r.Context(), state, session, "session.read", "conversation", conversationID, map[string]any{
+			"operation": "stream_run_events",
+		})
 
 		flusher, ok := w.(http.Flusher)
 		if !ok {
@@ -55,17 +60,36 @@ func ConversationEventsHandler(state *AppState) http.HandlerFunc {
 		w.Header().Set("Connection", "keep-alive")
 		w.Header().Set("X-Accel-Buffering", "no")
 
-		state.mu.Lock()
-		backlog, resyncRequired := listExecutionEventsSinceLocked(state, conversationID, lastEventID)
-		if resyncRequired {
-			latestEventID := ""
-			if len(backlog) > 0 {
-				latestEventID = backlog[len(backlog)-1].EventID
+		backlog := []ExecutionEvent{}
+		if state.features.EnableCQRS && state.sessionQueries != nil {
+			events, err := state.sessionQueries.GetRunEvents(r.Context(), appqueries.GetRunEventsRequest{
+				SessionID:   conversationID,
+				LastEventID: lastEventID,
+			})
+			if err != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to load session event backlog", map[string]any{
+					"session_id": conversationID,
+					"error":      err.Error(),
+				})
+				return
 			}
-			backlog = append([]ExecutionEvent{
-				buildSSEBackfillResyncEvent(conversationID, lastEventID, latestEventID, len(backlog)),
-			}, backlog...)
+			backlog = fromApplicationRunEvents(events)
+		} else {
+			state.mu.Lock()
+			var resyncRequired bool
+			backlog, resyncRequired = listExecutionEventsSinceLocked(state, conversationID, lastEventID)
+			if resyncRequired {
+				latestEventID := ""
+				if len(backlog) > 0 {
+					latestEventID = backlog[len(backlog)-1].EventID
+				}
+				backlog = append([]ExecutionEvent{
+					buildSSEBackfillResyncEvent(conversationID, lastEventID, latestEventID, len(backlog)),
+				}, backlog...)
+			}
+			state.mu.Unlock()
 		}
+		state.mu.Lock()
 		subscriberID, subscriber := registerConversationEventSubscriberLocked(state, conversationID)
 		state.mu.Unlock()
 		defer func() {

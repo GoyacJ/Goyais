@@ -47,6 +47,35 @@ func resolveWorkspaceSkillCapabilities(state *AppState, workspaceID string, skil
 	return out
 }
 
+func resolveWorkspaceSkillCapabilitiesForSession(state *AppState, sessionID string, workspaceID string, skillIDs []string) []core.CapabilityDescriptor {
+	items, err := resolveSessionResourceConfigs(state, sessionID, workspaceID, skillIDs, ResourceTypeSkill)
+	if err != nil || len(items) == 0 {
+		return nil
+	}
+	out := make([]core.CapabilityDescriptor, 0, len(items))
+	for _, item := range items {
+		if !item.Enabled || item.Skill == nil {
+			continue
+		}
+		name := firstNonEmpty(strings.TrimSpace(item.Name), strings.TrimSpace(item.ID))
+		description := firstNonEmpty(firstCapabilityContentLine(item.Skill.Content), "Workspace skill "+name)
+		out = append(out, buildRuntimeCapabilityDescriptor(
+			"skill:"+strings.TrimSpace(item.ID),
+			core.CapabilityKindSkill,
+			name,
+			description,
+			strings.TrimSpace(item.ID),
+			core.CapabilityScopeWorkspace,
+			true,
+			true,
+			false,
+			"low",
+		))
+	}
+	sortRuntimeCapabilities(out)
+	return out
+}
+
 func discoverSlashCapabilities(projectRepoPath string) []core.CapabilityDescriptor {
 	items, err := slashext.DiscoverCatalogCommands(context.Background(), slashext.BuildOptions{
 		WorkingDir: strings.TrimSpace(projectRepoPath),

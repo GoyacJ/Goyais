@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	appqueries "goyais/services/hub/internal/application/queries"
 )
 
 func ConversationsHandler(state *AppState) http.HandlerFunc {
@@ -39,6 +41,33 @@ func ConversationsHandler(state *AppState) http.HandlerFunc {
 		}
 		if workspaceID == "" {
 			workspaceID = session.WorkspaceID
+		}
+		if state.features.EnableCQRS && state.sessionQueries != nil {
+			start, limit := parseCursorLimit(r)
+			items, next, err := state.sessionQueries.ListSessions(r.Context(), appqueries.ListSessionsRequest{
+				WorkspaceID: workspaceID,
+				ProjectID:   projectID,
+				Offset:      start,
+				Limit:       limit,
+			})
+			if err != nil {
+				WriteStandardError(w, r, http.StatusInternalServerError, "RUNTIME_QUERY_FAILED", "Failed to load sessions", map[string]any{
+					"workspace_id": workspaceID,
+					"project_id":   projectID,
+					"error":        err.Error(),
+				})
+				return
+			}
+			raw := make([]any, 0, len(items))
+			for _, item := range items {
+				raw = append(raw, fromApplicationSession(item))
+			}
+			recordBusinessOperationAudit(r.Context(), state, session, "session.read", "workspace", workspaceID, map[string]any{
+				"operation":  "list_sessions",
+				"project_id": projectID,
+			})
+			writeJSON(w, http.StatusOK, ListEnvelope{Items: raw, NextCursor: next})
+			return
 		}
 		queryService, hasQueryService := newRunQueryService(state)
 		items := make([]Conversation, 0)
@@ -113,6 +142,10 @@ func ConversationsHandler(state *AppState) http.HandlerFunc {
 		}
 		start, limit := parseCursorLimit(r)
 		paged, next := paginateAny(raw, start, limit)
+		recordBusinessOperationAudit(r.Context(), state, session, "session.read", "workspace", workspaceID, map[string]any{
+			"operation":  "list_sessions",
+			"project_id": projectID,
+		})
 		writeJSON(w, http.StatusOK, ListEnvelope{Items: paged, NextCursor: next})
 	}
 }
@@ -295,215 +328,6 @@ func ConversationStopHandler(state *AppState) http.HandlerFunc {
 			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "run.control", "conversation", conversationID, "success", map[string]any{"operation": "stop"}, TraceIDFromContext(r.Context()))
 		}
 
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-	}
-}
-
-func ConversationRollbackHandler(state *AppState) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			WriteStandardError(w, r, http.StatusNotImplemented, "INTERNAL_NOT_IMPLEMENTED", "Route is not implemented yet", map[string]any{
-				"method": r.Method, "path": r.URL.Path,
-			})
-			return
-		}
-
-		conversationID := runtimeSessionIDFromPath(r)
-		input := RollbackRequest{}
-		if err := decodeJSONBody(r, &input); err != nil {
-			err.write(w, r)
-			return
-		}
-		if strings.TrimSpace(input.MessageID) == "" {
-			WriteStandardError(w, r, http.StatusBadRequest, "VALIDATION_ERROR", "message_id is required", map[string]any{})
-			return
-		}
-		conversationSeed, exists := loadExecutionFlowConversationSeed(r.Context(), state, conversationID)
-		if !exists {
-			WriteStandardError(w, r, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "Conversation does not exist", map[string]any{"session_id": conversationID})
-			return
-		}
-		session, authErr := authorizeAction(
-			state,
-			r,
-			conversationSeed.WorkspaceID,
-			"run.control",
-			authorizationResource{WorkspaceID: conversationSeed.WorkspaceID},
-			authorizationContext{OperationType: "write", ABACRequired: true},
-		)
-		if authErr != nil {
-			authErr.write(w, r)
-			return
-		}
-
-		now := time.Now().UTC().Format(time.RFC3339)
-		state.mu.Lock()
-		conversation, exists := state.conversations[conversationID]
-		if !exists {
-			conversation = conversationSeed
-			state.conversations[conversationID] = conversation
-		}
-
-		snapshot, found := findSnapshotByMessageID(state.conversationSnapshots[conversationID], input.MessageID)
-		if !found {
-			fallbackSnapshot, fallbackFound := buildRollbackSnapshotFromMessagesLocked(state, conversationID, input.MessageID)
-			if !fallbackFound {
-				state.mu.Unlock()
-				WriteStandardError(w, r, http.StatusNotFound, "SNAPSHOT_NOT_FOUND", "Rollback snapshot does not exist", map[string]any{"message_id": input.MessageID})
-				return
-			}
-			snapshot = fallbackSnapshot
-		}
-		project, projectExists := state.projects[conversation.ProjectID]
-		if !projectExists {
-			state.mu.Unlock()
-			WriteStandardError(w, r, http.StatusNotFound, "PROJECT_NOT_FOUND", "Project does not exist", map[string]any{
-				"project_id": conversation.ProjectID,
-			})
-			return
-		}
-		projectSupportsGitRestore := project.IsGit && isGitRepositoryPath(project.RepoPath)
-		keptExecutions := map[string]bool{}
-		for _, id := range snapshot.ExecutionIDs {
-			keptExecutions[id] = true
-		}
-		rollbackExecutionIDs := make([]string, 0)
-		rollbackDiffItems := make([]DiffItem, 0)
-		for id, exec := range state.executions {
-			if exec.ConversationID != conversationID {
-				continue
-			}
-			if keptExecutions[id] {
-				continue
-			}
-			rollbackExecutionIDs = append(rollbackExecutionIDs, id)
-			rollbackDiffItems = mergeDiffItems(rollbackDiffItems, state.executionDiffs[id])
-		}
-		rollbackExecutionIDSet := make(map[string]struct{}, len(rollbackExecutionIDs))
-		for _, rollbackExecutionID := range rollbackExecutionIDs {
-			rollbackExecutionIDSet[rollbackExecutionID] = struct{}{}
-		}
-		rollbackEntries := make([]ChangeEntry, 0)
-		if ledger := state.conversationChangeLedgers[conversationID]; ledger != nil {
-			for _, entry := range ledger.Entries {
-				if _, exists := rollbackExecutionIDSet[strings.TrimSpace(entry.ExecutionID)]; exists {
-					rollbackEntries = append(rollbackEntries, entry)
-				}
-			}
-		}
-		if projectSupportsGitRestore && strings.TrimSpace(project.RepoPath) != "" && len(rollbackDiffItems) == 0 {
-			fallbackDiffItems, fallbackErr := collectGitChangedDiffItems(project.RepoPath)
-			if fallbackErr == nil && len(fallbackDiffItems) > 0 {
-				rollbackDiffItems = fallbackDiffItems
-			}
-		}
-		if projectSupportsGitRestore && strings.TrimSpace(project.RepoPath) != "" && len(rollbackDiffItems) > 0 {
-			if err := restoreGitWorkingTreePaths(project.RepoPath, rollbackDiffItems); err != nil {
-				state.mu.Unlock()
-				WriteStandardError(w, r, http.StatusInternalServerError, "ROLLBACK_RESTORE_FAILED", "Failed to restore project files during rollback", map[string]any{
-					"session_id": conversationID,
-					"error":      err.Error(),
-				})
-				return
-			}
-		}
-		if !projectSupportsGitRestore && strings.TrimSpace(project.RepoPath) != "" && len(rollbackEntries) > 0 {
-			if err := restoreNonGitWorkingTreePaths(project.RepoPath, rollbackEntries); err != nil {
-				state.mu.Unlock()
-				WriteStandardError(w, r, http.StatusInternalServerError, "ROLLBACK_RESTORE_FAILED", "Failed to restore non-git files during rollback", map[string]any{
-					"session_id": conversationID,
-					"error":      err.Error(),
-				})
-				return
-			}
-		}
-		appendExecutionEventLocked(state, ExecutionEvent{
-			ExecutionID:    "",
-			ConversationID: conversationID,
-			TraceID:        TraceIDFromContext(r.Context()),
-			QueueIndex:     0,
-			Type:           RunEventTypeThinkingDelta,
-			Timestamp:      now,
-			Payload: map[string]any{
-				"stage":      "rollback_requested",
-				"message_id": input.MessageID,
-			},
-		})
-		for _, id := range rollbackExecutionIDs {
-			delete(state.executions, id)
-			delete(state.executionDiffs, id)
-		}
-		ordered := make([]string, 0, len(snapshot.ExecutionIDs))
-		for _, id := range snapshot.ExecutionIDs {
-			if _, ok := state.executions[id]; ok {
-				ordered = append(ordered, id)
-			}
-		}
-		state.conversationExecutionOrder[conversationID] = ordered
-		state.conversationMessages[conversationID] = cloneMessages(snapshot.Messages)
-		state.conversationSnapshots[conversationID] = keepSnapshotsUntil(state.conversationSnapshots[conversationID], snapshot.CreatedAt)
-		appendExecutionEventLocked(state, ExecutionEvent{
-			ExecutionID:    "",
-			ConversationID: conversationID,
-			TraceID:        TraceIDFromContext(r.Context()),
-			QueueIndex:     0,
-			Type:           RunEventTypeThinkingDelta,
-			Timestamp:      now,
-			Payload: map[string]any{
-				"stage":      "snapshot_applied",
-				"message_id": input.MessageID,
-			},
-		})
-
-		conversation.QueueState = snapshot.QueueState
-		conversation.ActiveExecutionID = nil
-		for _, id := range ordered {
-			exec := state.executions[id]
-			if exec.State == RunStateExecuting || exec.State == RunStatePending || exec.State == RunStateConfirming || exec.State == RunStateAwaitingInput {
-				conversation.ActiveExecutionID = &id
-				break
-			}
-		}
-		conversation.QueueState = deriveQueueStateLocked(state, conversationID, conversation.ActiveExecutionID)
-		conversation.UpdatedAt = now
-		state.conversations[conversationID] = conversation
-		appendExecutionEventLocked(state, ExecutionEvent{
-			ExecutionID:    "",
-			ConversationID: conversationID,
-			TraceID:        TraceIDFromContext(r.Context()),
-			QueueIndex:     0,
-			Type:           RunEventTypeThinkingDelta,
-			Timestamp:      now,
-			Payload: map[string]any{
-				"stage":      "rollback_completed",
-				"message_id": input.MessageID,
-			},
-		})
-		appendExecutionEventLocked(state, ExecutionEvent{
-			ExecutionID:    "",
-			ConversationID: conversationID,
-			TraceID:        TraceIDFromContext(r.Context()),
-			QueueIndex:     0,
-			Type:           RunEventTypeChangeSetRolledBack,
-			Timestamp:      now,
-			Payload: map[string]any{
-				"rolled_back_message_id": input.MessageID,
-			},
-		})
-		rebuildConversationChangeLedgerFromStateLocked(state, conversationID)
-		state.mu.Unlock()
-		syncExecutionDomainBestEffort(state)
-
-		state.AppendAudit(AdminAuditEvent{
-			Actor:    actorFromSession(session),
-			Action:   "conversation.rollback",
-			Resource: conversationID,
-			Result:   "success",
-			TraceID:  TraceIDFromContext(r.Context()),
-		})
-		if state.authz != nil {
-			_ = state.authz.appendAudit(conversation.WorkspaceID, session.UserID, "run.control", "conversation", conversationID, "success", map[string]any{"operation": "rollback"}, TraceIDFromContext(r.Context()))
-		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	}
 }
@@ -883,89 +707,6 @@ func startNextQueuedExecutionLocked(state *AppState, conversationID string) stri
 		return id
 	}
 	return ""
-}
-
-func findSnapshotByMessageID(items []ConversationSnapshot, messageID string) (ConversationSnapshot, bool) {
-	for index := len(items) - 1; index >= 0; index-- {
-		if items[index].RollbackPointMessageID == messageID {
-			return items[index], true
-		}
-	}
-	return ConversationSnapshot{}, false
-}
-
-func buildRollbackSnapshotFromMessagesLocked(state *AppState, conversationID string, messageID string) (ConversationSnapshot, bool) {
-	if strings.TrimSpace(conversationID) == "" || strings.TrimSpace(messageID) == "" {
-		return ConversationSnapshot{}, false
-	}
-	messages := state.conversationMessages[conversationID]
-	if len(messages) == 0 {
-		return ConversationSnapshot{}, false
-	}
-	targetIndex := -1
-	targetQueueIndex := -1
-	for index, message := range messages {
-		if message.ID != messageID {
-			continue
-		}
-		if message.Role != MessageRoleUser {
-			return ConversationSnapshot{}, false
-		}
-		targetIndex = index
-		if message.QueueIndex != nil {
-			targetQueueIndex = *message.QueueIndex
-		}
-		break
-	}
-	if targetIndex < 0 {
-		return ConversationSnapshot{}, false
-	}
-	keptMessages := cloneMessages(messages[:targetIndex+1])
-	if targetQueueIndex < 0 {
-		targetQueueIndex = maxQueueIndexOfMessages(keptMessages)
-	}
-	keptExecutionIDs := make([]string, 0)
-	for _, executionID := range state.conversationExecutionOrder[conversationID] {
-		execution, exists := state.executions[executionID]
-		if !exists {
-			continue
-		}
-		if targetQueueIndex >= 0 && execution.QueueIndex > targetQueueIndex {
-			continue
-		}
-		keptExecutionIDs = append(keptExecutionIDs, executionID)
-	}
-	return ConversationSnapshot{
-		ID:                     "snap_fallback_" + randomHex(6),
-		ConversationID:         conversationID,
-		RollbackPointMessageID: messageID,
-		QueueState:             QueueStateIdle,
-		WorktreeRef:            nil,
-		InspectorState:         ConversationInspector{Tab: "diff"},
-		Messages:               keptMessages,
-		ExecutionIDs:           keptExecutionIDs,
-		CreatedAt:              time.Now().UTC().Format(time.RFC3339),
-	}, true
-}
-
-func maxQueueIndexOfMessages(messages []ConversationMessage) int {
-	maxValue := -1
-	for _, message := range messages {
-		if message.QueueIndex != nil && *message.QueueIndex > maxValue {
-			maxValue = *message.QueueIndex
-		}
-	}
-	return maxValue
-}
-
-func keepSnapshotsUntil(items []ConversationSnapshot, inclusiveCreatedAt string) []ConversationSnapshot {
-	result := make([]ConversationSnapshot, 0)
-	for _, item := range items {
-		if item.CreatedAt <= inclusiveCreatedAt {
-			result = append(result, item)
-		}
-	}
-	return result
 }
 
 func cloneMessages(items []ConversationMessage) []ConversationMessage {

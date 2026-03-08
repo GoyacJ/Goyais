@@ -104,6 +104,13 @@ func TestRemovedDeprecatedRoutesReturn404(t *testing.T) {
 		t.Fatalf("expected removed conversation rollback route to return 404, got %d", removedConversationRollback.Code)
 	}
 
+	removedSessionRollback := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/sess_removed/rollback", map[string]any{
+		"message_id": "msg_removed",
+	}, nil)
+	if removedSessionRollback.Code != http.StatusNotFound {
+		t.Fatalf("expected removed session rollback route to return 404, got %d", removedSessionRollback.Code)
+	}
+
 	removedConversationList := performJSONRequest(t, router, http.MethodGet, "/v1/conversations", nil, nil)
 	if removedConversationList.Code != http.StatusNotFound {
 		t.Fatalf("expected removed conversation list route to return 404, got %d", removedConversationList.Code)

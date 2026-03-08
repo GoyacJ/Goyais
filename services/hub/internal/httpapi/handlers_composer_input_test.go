@@ -1,13 +1,34 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"goyais/services/hub/internal/agent/core"
 )
+
+type composerCommandBusStub struct {
+	calls         int
+	lastSessionID string
+	lastCommand   core.SlashCommand
+	resp          core.CommandResponse
+	err           error
+}
+
+func (s *composerCommandBusStub) Execute(_ context.Context, sessionID string, cmd core.SlashCommand) (core.CommandResponse, error) {
+	s.calls++
+	s.lastSessionID = sessionID
+	s.lastCommand = cmd
+	if s.err != nil {
+		return core.CommandResponse{}, s.err
+	}
+	return s.resp, nil
+}
 
 func TestConversationInputSubmit_AppliesExplicitRuleSelectionPerMessage(t *testing.T) {
 	state, conversationID := seedConversationMessageValidationState(t)
@@ -114,6 +135,32 @@ func TestConversationInputSubmit_HelpReturnsCommandResultWithoutExecution(t *tes
 	}
 }
 
+func TestConversationInputSubmit_UsesConfiguredCommandBusForControlCommand(t *testing.T) {
+	state, conversationID := seedConversationMessageValidationState(t)
+	state.commandBus = &composerCommandBusStub{resp: core.CommandResponse{Output: "from command bus"}}
+	router := composerInputTestMux(state)
+
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
+		"raw_input": "/help",
+	}, nil)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected command submit 200, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	result, ok := payload["command_result"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected command_result payload, got %#v", payload["command_result"])
+	}
+	if got := strings.TrimSpace(asString(result["output"])); got != "from command bus" {
+		t.Fatalf("expected command bus output, got %q", got)
+	}
+	if len(state.executions) != 0 {
+		t.Fatalf("expected no execution for control command, got %d", len(state.executions))
+	}
+}
+
 func TestConversationInputSubmit_DynamicPromptCommandEnqueuesExecution(t *testing.T) {
 	state, conversationID := seedConversationMessageValidationState(t)
 	conversation := state.conversations[conversationID]
@@ -149,6 +196,38 @@ func TestConversationInputSubmit_DynamicPromptCommandEnqueuesExecution(t *testin
 	lastMessage := state.conversationMessages[conversationID][len(state.conversationMessages[conversationID])-1]
 	if !strings.Contains(lastMessage.Content, "Draft plan for telemetry pipeline") {
 		t.Fatalf("expected expanded prompt content, got %q", lastMessage.Content)
+	}
+}
+
+func TestConversationInputSubmit_UsesCommandBusPromptExpansion(t *testing.T) {
+	state, conversationID := seedConversationMessageValidationState(t)
+	state.commandBus = &composerCommandBusStub{resp: core.CommandResponse{
+		Output: "project-plan is running...",
+		Metadata: map[string]any{
+			"kind":            "prompt",
+			"expanded_prompt": "Draft plan from command bus",
+		},
+	}}
+	router := composerInputTestMux(state)
+
+	res := performJSONRequest(t, router, http.MethodPost, "/v1/sessions/"+conversationID+"/runs", map[string]any{
+		"raw_input": "/project-plan telemetry pipeline",
+	}, nil)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("expected prompt command submit 201, got %d (%s)", res.Code, res.Body.String())
+	}
+
+	payload := map[string]any{}
+	mustDecodeJSON(t, res.Body.Bytes(), &payload)
+	if got := strings.TrimSpace(asString(payload["kind"])); got != "run_enqueued" {
+		t.Fatalf("expected run_enqueued, got %q", got)
+	}
+	if len(state.executions) != 1 {
+		t.Fatalf("expected execution created from command bus prompt, got %d", len(state.executions))
+	}
+	lastMessage := state.conversationMessages[conversationID][len(state.conversationMessages[conversationID])-1]
+	if got := strings.TrimSpace(lastMessage.Content); got != "Draft plan from command bus" {
+		t.Fatalf("expected expanded prompt from command bus, got %q", got)
 	}
 }
 

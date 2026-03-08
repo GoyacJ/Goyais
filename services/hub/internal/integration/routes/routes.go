@@ -13,6 +13,7 @@ type Handlers struct {
 	ResourceConfigByID      http.HandlerFunc
 	ResourceConfigTest      http.HandlerFunc
 	ResourceConfigConnect   http.HandlerFunc
+	WorkspaceResourceEvents http.HandlerFunc
 	MCPExport               http.HandlerFunc
 	WorkspaceProjectConfigs http.HandlerFunc
 	WorkspaceAgentConfig    http.HandlerFunc
@@ -29,6 +30,7 @@ func Register(mux *http.ServeMux, handlers Handlers) {
 	mustHandle(mux, "/v1/workspaces/{workspace_id}/resource-configs/{config_id}", handlers.ResourceConfigByID)
 	mustHandle(mux, "/v1/workspaces/{workspace_id}/resource-configs/{config_id}/test", handlers.ResourceConfigTest)
 	mustHandle(mux, "/v1/workspaces/{workspace_id}/resource-configs/{config_id}/connect", handlers.ResourceConfigConnect)
+	mustHandle(mux, "/v1/workspaces/{workspace_id}/resource-events", handlers.WorkspaceResourceEvents)
 	mustHandle(mux, "/v1/workspaces/{workspace_id}/mcps/export", handlers.MCPExport)
 	mustHandle(mux, "/v1/workspaces/{workspace_id}/project-configs", handlers.WorkspaceProjectConfigs)
 	mustHandle(mux, "/v1/workspaces/{workspace_id}/agent-config", handlers.WorkspaceAgentConfig)

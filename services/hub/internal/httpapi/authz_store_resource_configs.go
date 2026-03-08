@@ -41,6 +41,26 @@ func (s *authzStore) getCatalogRoot(workspaceID string) (CatalogRootResponse, bo
 }
 
 func (s *authzStore) upsertResourceConfig(input ResourceConfig) (ResourceConfig, error) {
+	existing, exists, err := s.getResourceConfigWithMode(input.WorkspaceID, input.ID, false)
+	if err != nil {
+		return ResourceConfig{}, err
+	}
+	if !exists {
+		input.Version = normalizeResourceConfigVersion(input.Version)
+		input.IsDeleted = false
+		if input.DeletedAt != nil && strings.TrimSpace(*input.DeletedAt) == "" {
+			input.DeletedAt = nil
+		}
+	} else {
+		nextVersion := existing.Version + 1
+		if input.Version > nextVersion {
+			nextVersion = input.Version
+		}
+		input.Version = normalizeResourceConfigVersion(nextVersion)
+		if input.CreatedAt == "" {
+			input.CreatedAt = existing.CreatedAt
+		}
+	}
 	encoded, err := encodeResourceConfigPayload(input)
 	if err != nil {
 		return ResourceConfig{}, err
@@ -91,6 +111,9 @@ func (s *authzStore) listResourceConfigs(workspaceID string, query resourceConfi
 		if err != nil {
 			return nil, err
 		}
+		if item.IsDeleted {
+			continue
+		}
 		if query.Query != "" && !matchesResourceConfigQuery(item, query.Query) {
 			continue
 		}
@@ -129,27 +152,52 @@ func (s *authzStore) getResourceConfigWithMode(workspaceID string, configID stri
 	if err != nil {
 		return ResourceConfig{}, false, err
 	}
+	if item.IsDeleted {
+		return ResourceConfig{}, false, nil
+	}
 	normalizeResourceConfigForStorage(&item)
 	return item, true, nil
 }
 
 func (s *authzStore) deleteResourceConfig(workspaceID string, configID string) error {
-	result, err := s.db.Exec(
-		`DELETE FROM resource_configs WHERE workspace_id=? AND id=?`,
+	row := s.db.QueryRow(
+		`SELECT payload_json FROM resource_configs WHERE workspace_id=? AND id=?`,
 		strings.TrimSpace(workspaceID),
 		strings.TrimSpace(configID),
 	)
+	var payload string
+	if err := row.Scan(&payload); err != nil {
+		if err == sql.ErrNoRows {
+			return sql.ErrNoRows
+		}
+		return err
+	}
+	item, err := decodeResourceConfigPayload(payload, false)
 	if err != nil {
 		return err
 	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
+	if item.IsDeleted {
 		return sql.ErrNoRows
 	}
-	return nil
+	now := time.Now().UTC().Format(time.RFC3339)
+	item.IsDeleted = true
+	item.Enabled = false
+	item.DeletedAt = &now
+	item.UpdatedAt = now
+	item.Version = normalizeResourceConfigVersion(item.Version + 1)
+	encoded, err := encodeResourceConfigPayload(item)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(
+		`UPDATE resource_configs SET enabled=?, payload_json=?, updated_at=? WHERE workspace_id=? AND id=?`,
+		boolToInt(item.Enabled),
+		encoded,
+		item.UpdatedAt,
+		strings.TrimSpace(workspaceID),
+		strings.TrimSpace(configID),
+	)
+	return err
 }
 
 func (s *authzStore) appendResourceTestLog(item ResourceTestLog) error {
@@ -177,6 +225,10 @@ func (s *authzStore) appendResourceTestLog(item ResourceTestLog) error {
 
 func encodeResourceConfigPayload(input ResourceConfig) (string, error) {
 	safe := input
+	safe.Version = normalizeResourceConfigVersion(safe.Version)
+	if safe.DeletedAt != nil && strings.TrimSpace(*safe.DeletedAt) == "" {
+		safe.DeletedAt = nil
+	}
 	if safe.Model != nil {
 		model := *safe.Model
 		if strings.TrimSpace(model.APIKey) != "" {
@@ -210,6 +262,7 @@ func decodeResourceConfigPayload(payload string, redactSecret bool) (ResourceCon
 	if err := json.Unmarshal([]byte(payload), &legacy); err != nil {
 		return ResourceConfig{}, err
 	}
+	item.Version = normalizeResourceConfigVersion(item.Version)
 	if item.Model != nil {
 		model := *item.Model
 		if (model.Runtime == nil || model.Runtime.RequestTimeoutMS == nil) && legacy.Model != nil && legacy.Model.TimeoutMS != nil {
@@ -232,4 +285,11 @@ func decodeResourceConfigPayload(payload string, redactSecret bool) (ResourceCon
 		item.Model = &model
 	}
 	return item, nil
+}
+
+func normalizeResourceConfigVersion(version int) int {
+	if version <= 0 {
+		return 1
+	}
+	return version
 }

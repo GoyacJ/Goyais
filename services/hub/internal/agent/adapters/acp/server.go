@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	agenthttpapi "goyais/services/hub/internal/agent/adapters/httpapi"
 	"goyais/services/hub/internal/agent/core"
 	runtimesession "goyais/services/hub/internal/agent/runtime/session"
 )
@@ -24,8 +25,9 @@ const (
 
 // ServerOptions configures ACP server dependencies.
 type ServerOptions struct {
-	Bridge    *Bridge
-	Lifecycle SessionLifecycle
+	Bridge            *Bridge
+	Lifecycle         SessionLifecycle
+	CheckpointService agenthttpapi.SessionCheckpointService
 }
 
 // SessionLifecycle defines optional session resume delegation for ACP load.
@@ -74,6 +76,7 @@ func NewServer(peer *Peer, opts ServerOptions) *Server {
 		server.bridge = NewBridge(nil, nil)
 	}
 	server.bridge.SetLifecycle(opts.Lifecycle)
+	server.bridge.SetCheckpointService(opts.CheckpointService)
 	server.registerMethods()
 	return server
 }

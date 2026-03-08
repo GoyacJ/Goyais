@@ -1007,6 +1007,38 @@ func cloneChangeEntries(items []ChangeEntry) []ChangeEntry {
 	return result
 }
 
+func changeEntriesFromDiffItems(items []DiffItem) []ChangeEntry {
+	if len(items) == 0 {
+		return nil
+	}
+	result := make([]ChangeEntry, 0, len(items))
+	for _, item := range items {
+		path := normalizeDiffPath(item.Path)
+		if path == "" {
+			continue
+		}
+		createdAt := itemTimestamp(item, "")
+		if createdAt == "" {
+			createdAt = time.Now().UTC().Format(time.RFC3339)
+		}
+		result = append(result, ChangeEntry{
+			EntryID:      "chg_" + randomHex(6),
+			Path:         path,
+			ChangeType:   normalizeDiffChangeType(item.ChangeType),
+			Summary:      strings.TrimSpace(item.Summary),
+			AddedLines:   normalizeOptionalDiffLineCount(item.AddedLines),
+			DeletedLines: normalizeOptionalDiffLineCount(item.DeletedLines),
+			BeforeBlob:   strings.TrimSpace(item.BeforeBlob),
+			AfterBlob:    strings.TrimSpace(item.AfterBlob),
+			CreatedAt:    createdAt,
+		})
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
 func uniqueEntryPaths(entries []ChangeEntry) []string {
 	unique := map[string]struct{}{}
 	paths := make([]string, 0, len(entries))

@@ -26,8 +26,9 @@ var ErrSessionLifecycleNotConfigured = errors.New("session lifecycle is not conf
 
 // Service is a thin adapter around core.Engine.
 type Service struct {
-	engine    core.Engine
-	lifecycle SessionLifecycle
+	engine            core.Engine
+	lifecycle         SessionLifecycle
+	checkpointService SessionCheckpointService
 }
 
 // StartSessionRequest is the transport-facing start-session input.
@@ -52,6 +53,11 @@ type SessionLifecycle interface {
 	Handoff(ctx context.Context, req runtimesession.HandoffRequest) (runtimesession.HandoffSnapshot, error)
 }
 
+// SessionCheckpointService defines checkpoint-centered session rollback.
+type SessionCheckpointService interface {
+	RollbackToCheckpoint(ctx context.Context, req SessionCheckpointRollbackRequest) (SessionStateResponse, error)
+}
+
 // ResumeSessionRequest is the transport-facing resume request.
 type ResumeSessionRequest struct {
 	SessionID string
@@ -66,6 +72,14 @@ type ForkSessionRequest struct {
 
 // RewindSessionRequest is the transport-facing rewind request.
 type RewindSessionRequest struct {
+	SessionID            string
+	CheckpointID         string
+	TargetCursor         int64
+	ClearTempPermissions bool
+}
+
+// SessionCheckpointRollbackRequest is the transport-facing checkpoint rollback request.
+type SessionCheckpointRollbackRequest struct {
 	SessionID            string
 	CheckpointID         string
 	TargetCursor         int64
@@ -171,9 +185,16 @@ func NewService(engine core.Engine) *Service {
 // NewServiceWithLifecycle creates a thin HTTP adapter with session lifecycle
 // delegation enabled.
 func NewServiceWithLifecycle(engine core.Engine, lifecycle SessionLifecycle) *Service {
+	return NewServiceWithLifecycleAndCheckpoints(engine, lifecycle, nil)
+}
+
+// NewServiceWithLifecycleAndCheckpoints creates a thin HTTP adapter with
+// session lifecycle and checkpoint delegation enabled.
+func NewServiceWithLifecycleAndCheckpoints(engine core.Engine, lifecycle SessionLifecycle, checkpointService SessionCheckpointService) *Service {
 	return &Service{
-		engine:    engine,
-		lifecycle: lifecycle,
+		engine:            engine,
+		lifecycle:         lifecycle,
+		checkpointService: checkpointService,
 	}
 }
 
@@ -307,6 +328,14 @@ func (s *Service) ForkSession(ctx context.Context, req ForkSessionRequest) (Sess
 
 // RewindSession delegates to runtime/session lifecycle manager.
 func (s *Service) RewindSession(ctx context.Context, req RewindSessionRequest) (SessionStateResponse, error) {
+	if s != nil && s.checkpointService != nil {
+		return s.checkpointService.RollbackToCheckpoint(ctx, SessionCheckpointRollbackRequest{
+			SessionID:            strings.TrimSpace(req.SessionID),
+			CheckpointID:         strings.TrimSpace(req.CheckpointID),
+			TargetCursor:         req.TargetCursor,
+			ClearTempPermissions: req.ClearTempPermissions,
+		})
+	}
 	lifecycle, err := s.requireLifecycle()
 	if err != nil {
 		return SessionStateResponse{}, err
