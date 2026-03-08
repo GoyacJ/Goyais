@@ -1,63 +1,16 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
 	"strings"
+
+	"goyais/services/hub/internal/domain"
 )
 
 func validateProjectConfigResourceReferences(state *AppState, workspaceID string, config ProjectConfig) error {
-	workspaceID = strings.TrimSpace(workspaceID)
-	if workspaceID == "" {
-		return fmt.Errorf("workspace_id is required")
-	}
-	if err := validateOptionalPositiveThreshold("token_threshold", config.TokenThreshold); err != nil {
-		return err
-	}
-
-	for _, modelConfigID := range sanitizeIDList(config.ModelConfigIDs) {
-		if err := validateWorkspaceModelConfigReference(state, workspaceID, modelConfigID); err != nil {
-			return err
-		}
-	}
-	for modelConfigID, threshold := range config.ModelTokenThresholds {
-		normalizedModelConfigID := strings.TrimSpace(modelConfigID)
-		if normalizedModelConfigID == "" {
-			return fmt.Errorf("model_token_thresholds contains empty model_config_id")
-		}
-		if threshold <= 0 {
-			return fmt.Errorf("model_token_thresholds.%s must be a positive integer", normalizedModelConfigID)
-		}
-		if !containsString(config.ModelConfigIDs, normalizedModelConfigID) {
-			return fmt.Errorf("model_token_thresholds.%s must be included in model_config_ids", normalizedModelConfigID)
-		}
-	}
-	for _, ruleID := range sanitizeIDList(config.RuleIDs) {
-		if err := validateWorkspaceResourceReference(state, workspaceID, ruleID, ResourceTypeRule); err != nil {
-			return err
-		}
-	}
-	for _, skillID := range sanitizeIDList(config.SkillIDs) {
-		if err := validateWorkspaceResourceReference(state, workspaceID, skillID, ResourceTypeSkill); err != nil {
-			return err
-		}
-	}
-	for _, mcpID := range sanitizeIDList(config.MCPIDs) {
-		if err := validateWorkspaceResourceReference(state, workspaceID, mcpID, ResourceTypeMCP); err != nil {
-			return err
-		}
-	}
-	if config.DefaultModelConfigID != nil {
-		defaultModelConfigID := strings.TrimSpace(*config.DefaultModelConfigID)
-		if defaultModelConfigID != "" {
-			if !containsString(config.ModelConfigIDs, defaultModelConfigID) {
-				return fmt.Errorf("default_model_config_id must be included in model_config_ids")
-			}
-			if err := validateWorkspaceModelConfigReference(state, workspaceID, defaultModelConfigID); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	service := newResourceConfigDomainService(state)
+	return service.ValidateProjectConfig(context.Background(), domain.WorkspaceID(strings.TrimSpace(workspaceID)), toDomainProjectResourceConfig(config))
 }
 
 func validateConversationResourceSelection(
@@ -69,42 +22,15 @@ func validateConversationResourceSelection(
 	skillIDs []string,
 	mcpIDs []string,
 ) error {
-	modelConfigID = strings.TrimSpace(modelConfigID)
-	if modelConfigID == "" {
-		return fmt.Errorf("model_config_id cannot be empty")
-	}
-	if !containsString(projectConfig.ModelConfigIDs, modelConfigID) {
-		return fmt.Errorf("model_config_id must be included in project model_config_ids")
-	}
-	if err := validateWorkspaceModelConfigReference(state, workspaceID, modelConfigID); err != nil {
-		return err
-	}
-
-	for _, ruleID := range sanitizeIDList(ruleIDs) {
-		if !containsString(projectConfig.RuleIDs, ruleID) {
-			return fmt.Errorf("rule_id %s is not allowed by project config", ruleID)
-		}
-		if err := validateWorkspaceResourceReference(state, workspaceID, ruleID, ResourceTypeRule); err != nil {
-			return err
-		}
-	}
-	for _, skillID := range sanitizeIDList(skillIDs) {
-		if !containsString(projectConfig.SkillIDs, skillID) {
-			return fmt.Errorf("skill_id %s is not allowed by project config", skillID)
-		}
-		if err := validateWorkspaceResourceReference(state, workspaceID, skillID, ResourceTypeSkill); err != nil {
-			return err
-		}
-	}
-	for _, mcpID := range sanitizeIDList(mcpIDs) {
-		if !containsString(projectConfig.MCPIDs, mcpID) {
-			return fmt.Errorf("mcp_id %s is not allowed by project config", mcpID)
-		}
-		if err := validateWorkspaceResourceReference(state, workspaceID, mcpID, ResourceTypeMCP); err != nil {
-			return err
-		}
-	}
-	return nil
+	service := newResourceConfigDomainService(state)
+	return service.ValidateSessionSelection(context.Background(), domain.ValidateSessionSelectionRequest{
+		WorkspaceID:   domain.WorkspaceID(strings.TrimSpace(workspaceID)),
+		ProjectConfig: toDomainProjectResourceConfig(projectConfig),
+		ModelConfigID: strings.TrimSpace(modelConfigID),
+		RuleIDs:       append([]string{}, ruleIDs...),
+		SkillIDs:      append([]string{}, skillIDs...),
+		MCPIDs:        append([]string{}, mcpIDs...),
+	})
 }
 
 func validateWorkspaceResourceReference(state *AppState, workspaceID string, configID string, expectedType ResourceType) error {

@@ -7,38 +7,39 @@ import (
 	"path/filepath"
 	"testing"
 
-	appservices "goyais/services/hub/internal/application/services"
+	"goyais/services/hub/internal/domain"
 )
 
-type checkpointRepositoryServiceStub struct {
-	listItems          []appservices.Checkpoint
-	createCheckpoint   appservices.Checkpoint
-	rollbackCheckpoint appservices.Checkpoint
-	rollbackSession    appservices.Session
+type checkpointDomainServiceStub struct {
+	listItems       []domain.Checkpoint
+	createCheckpoint domain.Checkpoint
+	rollbackResult  domain.RollbackResult
 }
 
-func (s *checkpointRepositoryServiceStub) ListSessionCheckpoints(_ context.Context, _ string) ([]appservices.Checkpoint, error) {
-	return append([]appservices.Checkpoint{}, s.listItems...), nil
+func (s *checkpointDomainServiceStub) ListSessionCheckpoints(_ context.Context, _ domain.SessionID) ([]domain.Checkpoint, error) {
+	return append([]domain.Checkpoint{}, s.listItems...), nil
 }
 
-func (s *checkpointRepositoryServiceStub) CreateCheckpoint(_ context.Context, _ appservices.CreateCheckpointRequest) (appservices.Checkpoint, error) {
+func (s *checkpointDomainServiceStub) CreateCheckpoint(_ context.Context, _ domain.CreateCheckpointRequest) (domain.Checkpoint, error) {
 	return s.createCheckpoint, nil
 }
 
-func (s *checkpointRepositoryServiceStub) RollbackToCheckpoint(_ context.Context, _ string, _ string) (appservices.Checkpoint, appservices.Session, error) {
-	return s.rollbackCheckpoint, s.rollbackSession, nil
+func (s *checkpointDomainServiceStub) RollbackToCheckpoint(_ context.Context, _ domain.SessionID, _ string) (domain.RollbackResult, error) {
+	return s.rollbackResult, nil
 }
 
 func TestCheckpointApplicationServiceAdapterCreatePreservesCheckpointFields(t *testing.T) {
-	repository := &checkpointRepositoryServiceStub{
-		createCheckpoint: appservices.Checkpoint{
+	service := &checkpointDomainServiceStub{
+		createCheckpoint: domain.Checkpoint{
 			CheckpointID:       "cp_create",
 			SessionID:          "sess_create",
+			WorkspaceID:        localWorkspaceID,
+			ProjectID:          "proj_create",
 			Message:            "checkpoint create",
-			ProjectKind:        "git",
+			ProjectKind:        domain.CheckpointProjectKindGit,
 			CreatedAt:          "2026-03-08T00:00:00Z",
 			ParentCheckpointID: "cp_parent",
-			Session: &appservices.Session{
+			Session: &domain.CheckpointSession{
 				ID:            "sess_create",
 				WorkspaceID:   localWorkspaceID,
 				ProjectID:     "proj_create",
@@ -50,7 +51,7 @@ func TestCheckpointApplicationServiceAdapterCreatePreservesCheckpointFields(t *t
 		},
 	}
 	adapter := &checkpointApplicationServiceAdapter{
-		service: appservices.NewCheckpointService(repository),
+		service: service,
 	}
 
 	checkpoint, err := adapter.CreateSessionCheckpoint(context.Background(), "sess_create", "save")
@@ -70,37 +71,41 @@ func TestCheckpointApplicationServiceAdapterCreatePreservesCheckpointFields(t *t
 
 func TestCheckpointApplicationServiceAdapterRollbackPreservesRestoredSessionFields(t *testing.T) {
 	activeExecutionID := "exec_rollback"
-	repository := &checkpointRepositoryServiceStub{
-		rollbackCheckpoint: appservices.Checkpoint{
-			CheckpointID:       "cp_rollback",
-			SessionID:          "sess_rollback",
-			Message:            "checkpoint rollback",
-			ProjectKind:        "non_git",
-			CreatedAt:          "2026-03-08T00:01:00Z",
-			ParentCheckpointID: "cp_before",
-		},
-		rollbackSession: appservices.Session{
-			ID:                "sess_rollback",
-			WorkspaceID:       localWorkspaceID,
-			ProjectID:         "proj_rollback",
-			Name:              "Restored Session",
-			QueueState:        string(QueueStateIdle),
-			DefaultMode:       string(PermissionModePlan),
-			ModelConfigID:     "model_rollback",
-			RuleIDs:           []string{"rule_a"},
-			SkillIDs:          []string{"skill_a"},
-			MCPIDs:            []string{"mcp_a"},
-			BaseRevision:      42,
-			ActiveExecutionID: &activeExecutionID,
-			TokensInTotal:     7,
-			TokensOutTotal:    9,
-			TokensTotal:       16,
-			CreatedAt:         "2026-03-08T00:00:00Z",
-			UpdatedAt:         "2026-03-08T00:02:00Z",
+	service := &checkpointDomainServiceStub{
+		rollbackResult: domain.RollbackResult{
+			Checkpoint: domain.Checkpoint{
+				CheckpointID:       "cp_rollback",
+				SessionID:          "sess_rollback",
+				WorkspaceID:        localWorkspaceID,
+				ProjectID:          "proj_rollback",
+				Message:            "checkpoint rollback",
+				ProjectKind:        domain.CheckpointProjectKindNonGit,
+				CreatedAt:          "2026-03-08T00:01:00Z",
+				ParentCheckpointID: "cp_before",
+			},
+			Session: domain.CheckpointSession{
+				ID:                "sess_rollback",
+				WorkspaceID:       localWorkspaceID,
+				ProjectID:         "proj_rollback",
+				Name:              "Restored Session",
+				QueueState:        string(QueueStateIdle),
+				DefaultMode:       string(PermissionModePlan),
+				ModelConfigID:     "model_rollback",
+				RuleIDs:           []string{"rule_a"},
+				SkillIDs:          []string{"skill_a"},
+				MCPIDs:            []string{"mcp_a"},
+				BaseRevision:      42,
+				ActiveExecutionID: &activeExecutionID,
+				TokensInTotal:     7,
+				TokensOutTotal:    9,
+				TokensTotal:       16,
+				CreatedAt:         "2026-03-08T00:00:00Z",
+				UpdatedAt:         "2026-03-08T00:02:00Z",
+			},
 		},
 	}
 	adapter := &checkpointApplicationServiceAdapter{
-		service: appservices.NewCheckpointService(repository),
+		service: service,
 	}
 
 	checkpoint, session, err := adapter.RollbackSessionToCheckpoint(context.Background(), "sess_rollback", "cp_rollback")
@@ -209,16 +214,16 @@ func TestCheckpointRepositoryAdapterRollbackUsesCapturedRuntimeMetadata(t *testi
 		CreatedAt:      now,
 	})
 
-	repository := &checkpointRepositoryAdapter{state: state}
-	_, session, err := repository.RollbackToCheckpoint(context.Background(), sessionID, checkpoint.CheckpointID)
+	service := newCheckpointDomainService(state)
+	result, err := service.RollbackToCheckpoint(context.Background(), domain.SessionID(sessionID), checkpoint.CheckpointID)
 	if err != nil {
 		t.Fatalf("rollback checkpoint failed: %v", err)
 	}
-	if session.WorkingDir != projectRepo {
-		t.Fatalf("working dir = %q, want %q", session.WorkingDir, projectRepo)
+	if result.Runtime.WorkingDir != projectRepo {
+		t.Fatalf("working dir = %q, want %q", result.Runtime.WorkingDir, projectRepo)
 	}
-	if session.HistoryEntries != 2 {
-		t.Fatalf("history entries = %d, want 2", session.HistoryEntries)
+	if result.Runtime.HistoryEntries != 2 {
+		t.Fatalf("history entries = %d, want 2", result.Runtime.HistoryEntries)
 	}
 	if got := state.conversationSessionIDs[sessionID]; got != "rt_sess_original" {
 		t.Fatalf("runtime session id = %q, want rt_sess_original", got)

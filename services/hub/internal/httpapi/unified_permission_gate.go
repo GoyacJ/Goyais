@@ -18,10 +18,6 @@ type authorizationEvaluator struct {
 	state *AppState
 }
 
-type authorizationAuditLogger struct {
-	state *AppState
-}
-
 type authorizationHookObserver struct {
 	state *AppState
 }
@@ -33,7 +29,7 @@ func newUnifiedAuthorizationGate(state *AppState) authorizationGate {
 	return unifiedpolicy.NewGate(
 		authorizationEvaluator{state: state},
 		unifiedpolicy.Options{
-			AuditLogger:  authorizationAuditLogger{state: state},
+			AuditLogger:  newAuthorizationAuditLogger(state),
 			HookObserver: authorizationHookObserver{state: state},
 		},
 	)
@@ -215,19 +211,25 @@ func (e authorizationEvaluator) Evaluate(_ context.Context, req unifiedpolicy.Re
 	}, nil
 }
 
-func (l authorizationAuditLogger) Record(_ context.Context, event unifiedpolicy.AuditEvent) error {
-	if l.state == nil {
+func newAuthorizationAuditLogger(state *AppState) unifiedpolicy.AuditLogger {
+	return unifiedpolicy.AuditLoggerFunc(func(_ context.Context, event unifiedpolicy.AuditEvent) error {
+		return recordAuthorizationAudit(state, event)
+	})
+}
+
+func recordAuthorizationAudit(state *AppState, event unifiedpolicy.AuditEvent) error {
+	if state == nil {
 		return nil
 	}
-	l.state.AppendAudit(AdminAuditEvent{
+	state.AppendAudit(AdminAuditEvent{
 		Actor:    firstNonEmpty(event.ActorID, "anonymous"),
 		Action:   strings.TrimSpace(event.Action),
 		Resource: firstNonEmpty(event.TargetID, "unknown"),
 		Result:   strings.TrimSpace(event.Result),
 		TraceID:  strings.TrimSpace(event.TraceID),
 	})
-	if l.state.authz != nil {
-		_ = l.state.authz.appendAudit(
+	if state.authz != nil {
+		_ = state.authz.appendAudit(
 			firstNonEmpty(event.WorkspaceID, localWorkspaceID),
 			event.ActorID,
 			event.Action,
@@ -284,7 +286,7 @@ func (o authorizationHookObserver) Observe(ctx context.Context, req unifiedpolic
 		targetType = "project"
 	}
 
-	return authorizationAuditLogger{state: o.state}.Record(ctx, unifiedpolicy.AuditEvent{
+	return recordAuthorizationAudit(o.state, unifiedpolicy.AuditEvent{
 		WorkspaceID: firstNonEmpty(strings.TrimSpace(scope.WorkspaceID), localWorkspaceID),
 		ActorID: firstNonEmpty(
 			strings.TrimSpace(decision.Subject.ID),
@@ -439,5 +441,5 @@ func recordBusinessOperationAudit(ctx context.Context, state *AppState, session 
 		_ = state.unifiedPermissionGate.RecordOperation(ctx, event)
 		return
 	}
-	_ = authorizationAuditLogger{state: state}.Record(ctx, event)
+	_ = recordAuthorizationAudit(state, event)
 }

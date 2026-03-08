@@ -1,6 +1,11 @@
 package httpapi
 
-import "strings"
+import (
+	"context"
+	"strings"
+
+	"goyais/services/hub/internal/domain"
+)
 
 func applyResourceConfigDeletionEffects(state *AppState, workspaceID string, deleted ResourceConfig) error {
 	normalizedWorkspaceID := strings.TrimSpace(workspaceID)
@@ -47,7 +52,11 @@ func applyResourceConfigDeletionEffects(state *AppState, workspaceID string, del
 		return nil
 	}
 
+	service := newResourceConfigDomainService(state)
+	candidates := make([]domain.AffectedSessionResources, 0, len(affected))
+	sessionsByID := make(map[string]Conversation, len(affected))
 	for _, item := range affected {
+		sessionsByID[item.sessionID] = item.session
 		project, exists, err := getProjectFromStore(state, item.session.ProjectID)
 		if err != nil {
 			return err
@@ -60,62 +69,36 @@ func applyResourceConfigDeletionEffects(state *AppState, workspaceID string, del
 			return err
 		}
 
-		snapshots, err := loadSessionResourceSnapshots(state, item.sessionID)
-		if err != nil {
-			return err
-		}
-		fallbackResourceID := ""
-		updatedSession := item.session
-		switch deleted.Type {
-		case ResourceTypeModel:
-			fallbackResourceID = resolveProjectFallbackModelConfigID(state, normalizedWorkspaceID, project, projectConfig, normalizedConfigID)
-			updatedSession.ModelConfigID = fallbackResourceID
-		case ResourceTypeRule:
-			updatedSession.RuleIDs = removeStringID(updatedSession.RuleIDs, normalizedConfigID)
-		case ResourceTypeSkill:
-			updatedSession.SkillIDs = removeStringID(updatedSession.SkillIDs, normalizedConfigID)
-		case ResourceTypeMCP:
-			updatedSession.MCPIDs = removeStringID(updatedSession.MCPIDs, normalizedConfigID)
-		}
-		updatedSession.UpdatedAt = nowUTC()
-
-		nextSnapshots := markSessionResourceSnapshotDeprecated(snapshots, item.sessionID, deleted, fallbackResourceID, updatedSession.UpdatedAt)
-		if deleted.Type == ResourceTypeModel && fallbackResourceID != "" {
-			fallbackSnapshots, err := captureSessionResourceSnapshots(
-				state,
-				item.sessionID,
-				normalizedWorkspaceID,
-				fallbackResourceID,
-				updatedSession.RuleIDs,
-				updatedSession.SkillIDs,
-				updatedSession.MCPIDs,
-				updatedSession.UpdatedAt,
-			)
-			if err != nil {
-				return err
-			}
-			nextSnapshots = mergeSessionResourceSnapshots(nextSnapshots, fallbackSnapshots)
-		}
-
-		state.mu.Lock()
-		state.conversations[item.sessionID] = updatedSession
-		state.mu.Unlock()
-		if err := replaceSessionResourceSnapshots(state, item.sessionID, nextSnapshots); err != nil {
-			return err
-		}
-		emitWorkspaceResourceEvent(state, WorkspaceResourceEvent{
-			EventID:         "wev_" + randomHex(8),
-			WorkspaceID:     normalizedWorkspaceID,
-			Type:            WorkspaceResourceEventTypeSnapshotDeprecated,
-			ConfigID:        normalizedConfigID,
-			ConfigType:      deleted.Type,
-			ResourceVersion: deleted.Version,
-			SessionID:       item.sessionID,
-			Timestamp:       updatedSession.UpdatedAt,
-			Payload: map[string]any{
-				"fallback_resource_id": strings.TrimSpace(fallbackResourceID),
-			},
+		candidates = append(candidates, domain.AffectedSessionResources{
+			Session:       toDomainSessionResourceState(item.session),
+			ProjectConfig: toDomainProjectResourceConfig(projectConfig),
 		})
+	}
+
+	plans, err := service.PlanDeletedResource(context.Background(), domain.PlanDeletedResourceRequest{
+		WorkspaceID:      domain.WorkspaceID(normalizedWorkspaceID),
+		DeletedConfig:    toDomainResourceConfig(deleted),
+		AffectedSessions: candidates,
+		Timestamp:        nowUTC(),
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, plan := range plans {
+		sessionID := strings.TrimSpace(string(plan.Session.SessionID))
+		updatedSession := fromDomainSessionResourceState(plan.Session, sessionsByID[sessionID])
+		state.mu.Lock()
+		state.conversations[sessionID] = updatedSession
+		state.mu.Unlock()
+		if err := replaceSessionResourceSnapshots(state, sessionID, fromDomainSessionResourceSnapshots(plan.Snapshots)); err != nil {
+			return err
+		}
+		event := fromDomainResourceEvent(plan.Event)
+		if strings.TrimSpace(event.EventID) == "" {
+			event.EventID = "wev_" + randomHex(8)
+		}
+		emitWorkspaceResourceEvent(state, event)
 	}
 
 	syncExecutionDomainBestEffort(state)

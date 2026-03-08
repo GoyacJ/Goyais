@@ -1,12 +1,15 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os/exec"
 	"sort"
 	"strings"
 	"time"
+
+	"goyais/services/hub/internal/domain"
 )
 
 type checkpointSessionState struct {
@@ -198,146 +201,44 @@ func SessionCheckpointRollbackHandler(state *AppState) http.HandlerFunc {
 }
 
 func createSessionCheckpoint(state *AppState, sessionID string, message string) (Checkpoint, error) {
-	project, projectExists, projectErr := checkpointProjectForSession(state, sessionID)
-	if projectErr != nil {
-		return Checkpoint{}, projectErr
-	}
-	if !projectExists {
-		return Checkpoint{}, errProjectNotFoundForCheckpoint(sessionID)
-	}
-
-	var (
-		checkpoint Checkpoint
-		payload    string
-	)
-	parentCheckpointID := ""
-	existingCheckpoints, err := listSessionCheckpoints(state, sessionID)
-	if err != nil {
-		return Checkpoint{}, err
-	}
-	if len(existingCheckpoints) > 0 {
-		parentCheckpointID = strings.TrimSpace(existingCheckpoints[0].CheckpointID)
-	}
-	state.mu.Lock()
-	defer state.mu.Unlock()
-
-	snapshot, exists := captureCheckpointSessionStateLocked(state, sessionID)
-	if !exists {
-		return Checkpoint{}, errConversationNotFoundForCheckpoint(sessionID)
-	}
-	encoded, err := json.Marshal(checkpointPayloadEnvelope{
-		Version:      checkpointPayloadVersion,
-		SessionState: snapshot,
-		Runtime:      captureCheckpointRuntimeMetadataLocked(state, sessionID, snapshot),
+	service := newCheckpointDomainService(state)
+	checkpoint, err := service.CreateCheckpoint(context.Background(), domain.CreateCheckpointRequest{
+		SessionID: domain.SessionID(strings.TrimSpace(sessionID)),
+		Message:   strings.TrimSpace(message),
 	})
 	if err != nil {
 		return Checkpoint{}, err
 	}
-	payload = string(encoded)
-
-	createdAt := time.Now().UTC().Format(time.RFC3339)
-	checkpoint = Checkpoint{
-		CheckpointSummary: CheckpointSummary{
-			CheckpointID:  "cp_" + randomHex(8),
-			Message:       strings.TrimSpace(message),
-			ProjectKind:   checkpointProjectKind(project.IsGit),
-			CreatedAt:     createdAt,
-			GitCommitID:   checkpointGitHead(project),
-			EntriesDigest: digestChangeEntries(snapshotChangeEntriesLocked(state, sessionID)),
-		},
-		SessionID:          sessionID,
-		ParentCheckpointID: parentCheckpointID,
-		Session:            cloneConversationPtr(&snapshot.Session),
-	}
-	appendCheckpointLocked(state, checkpoint, payload)
-	return checkpoint, persistCheckpointLocked(state, checkpoint, payload)
+	return fromDomainCheckpoint(checkpoint), nil
 }
 
 func listSessionCheckpoints(state *AppState, sessionID string) ([]Checkpoint, error) {
-	if state == nil {
-		return []Checkpoint{}, nil
+	service := newCheckpointDomainService(state)
+	items, err := service.ListSessionCheckpoints(context.Background(), domain.SessionID(strings.TrimSpace(sessionID)))
+	if err != nil {
+		return nil, err
 	}
-	if state.authz != nil {
-		rows, err := state.authz.listSessionCheckpoints(sessionID)
-		if err != nil {
-			return nil, err
-		}
-		items := make([]Checkpoint, 0, len(rows))
-		for _, row := range rows {
-			checkpoint := row.Checkpoint
-			if checkpoint.Session == nil {
-				checkpoint.Session = &Conversation{ID: sessionID}
-			}
-			items = append(items, checkpoint)
-		}
-		return items, nil
+	out := make([]Checkpoint, 0, len(items))
+	for _, item := range items {
+		out = append(out, fromDomainCheckpoint(item))
 	}
-	state.mu.RLock()
-	defer state.mu.RUnlock()
-	items := append([]Checkpoint{}, state.conversationCheckpoints[sessionID]...)
-	return items, nil
+	return out, nil
 }
 
 func rollbackSessionToCheckpoint(state *AppState, sessionID string, checkpointID string) (Checkpoint, Conversation, checkpointRuntimeMetadata, error) {
-	checkpoint, payload, exists, err := loadCheckpointPayload(state, sessionID, checkpointID)
+	service := newCheckpointDomainService(state)
+	result, err := service.RollbackToCheckpoint(context.Background(), domain.SessionID(strings.TrimSpace(sessionID)), strings.TrimSpace(checkpointID))
 	if err != nil {
 		return Checkpoint{}, Conversation{}, checkpointRuntimeMetadata{}, err
 	}
-	if !exists {
-		return Checkpoint{}, Conversation{}, checkpointRuntimeMetadata{}, errCheckpointNotFound(checkpointID)
-	}
-	snapshot, runtimeMetadata, err := decodeCheckpointPayload(payload)
-	if err != nil {
-		return Checkpoint{}, Conversation{}, checkpointRuntimeMetadata{}, err
-	}
-
-	project, projectExists, projectErr := checkpointProjectForSession(state, sessionID)
-	if projectErr != nil {
-		return Checkpoint{}, Conversation{}, checkpointRuntimeMetadata{}, projectErr
-	}
-	if !projectExists {
-		return Checkpoint{}, Conversation{}, checkpointRuntimeMetadata{}, errProjectNotFoundForCheckpoint(sessionID)
-	}
-
-	now := time.Now().UTC().Format(time.RFC3339)
-	state.mu.Lock()
-	rollbackExecutionIDs := collectCheckpointRollbackExecutionIDsLocked(state, sessionID, snapshot.ExecutionOrder)
-	rollbackDiffItems := make([]DiffItem, 0)
-	rollbackExecutionIDSet := make(map[string]struct{}, len(rollbackExecutionIDs))
-	for _, executionID := range rollbackExecutionIDs {
-		rollbackExecutionIDSet[executionID] = struct{}{}
-		rollbackDiffItems = mergeDiffItems(rollbackDiffItems, state.executionDiffs[executionID])
-	}
-	rollbackEntries := changeEntriesFromDiffItems(rollbackDiffItems)
-	if len(rollbackEntries) == 0 {
-		if ledger := state.conversationChangeLedgers[sessionID]; ledger != nil {
-			for _, entry := range ledger.Entries {
-				if _, exists := rollbackExecutionIDSet[strings.TrimSpace(entry.ExecutionID)]; exists {
-					rollbackEntries = append(rollbackEntries, entry)
-				}
-			}
-		}
-	}
-	state.mu.Unlock()
-
-	projectSupportsGitRestore := project.IsGit && isGitRepositoryPath(project.RepoPath)
-	if projectSupportsGitRestore && strings.TrimSpace(project.RepoPath) != "" && len(rollbackDiffItems) > 0 {
-		if err := restoreGitWorkingTreePaths(project.RepoPath, rollbackDiffItems); err != nil {
-			return Checkpoint{}, Conversation{}, checkpointRuntimeMetadata{}, err
-		}
-	}
-	if !projectSupportsGitRestore && strings.TrimSpace(project.RepoPath) != "" && len(rollbackEntries) > 0 {
-		if err := restoreNonGitWorkingTreePaths(project.RepoPath, rollbackEntries); err != nil {
-			return Checkpoint{}, Conversation{}, checkpointRuntimeMetadata{}, err
-		}
-	}
-
-	state.mu.Lock()
-	restoreCheckpointSessionStateLocked(state, sessionID, checkpointID, snapshot, runtimeMetadata, now)
-	state.mu.Unlock()
-	syncExecutionDomainBestEffort(state)
-
-	return checkpoint, snapshot.Session, runtimeMetadata, nil
+	return fromDomainCheckpoint(result.Checkpoint), fromDomainCheckpointSession(result.Session), checkpointRuntimeMetadata{
+		RuntimeSessionID:      strings.TrimSpace(result.Runtime.RuntimeSessionID),
+		WorkingDir:            strings.TrimSpace(result.Runtime.WorkingDir),
+		AdditionalDirectories: append([]string{}, result.Runtime.AdditionalDirectories...),
+		TemporaryPermissions:  append([]string{}, result.Runtime.TemporaryPermissions...),
+		HistoryEntries:        result.Runtime.HistoryEntries,
+		Summary:               strings.TrimSpace(result.Runtime.Summary),
+	}, nil
 }
 
 func checkpointProjectForSession(state *AppState, sessionID string) (Project, bool, error) {
@@ -468,46 +369,6 @@ func restoreCheckpointSessionStateLocked(state *AppState, sessionID string, chec
 	})
 }
 
-func appendCheckpointLocked(state *AppState, checkpoint Checkpoint, payload string) {
-	state.conversationCheckpoints[checkpoint.SessionID] = append([]Checkpoint{checkpoint}, state.conversationCheckpoints[checkpoint.SessionID]...)
-	state.checkpointSessionPayloads[checkpoint.CheckpointID] = payload
-}
-
-func persistCheckpointLocked(state *AppState, checkpoint Checkpoint, payload string) error {
-	if state.authz == nil {
-		return nil
-	}
-	return state.authz.insertSessionCheckpoint(storedSessionCheckpoint{
-		Checkpoint:  checkpoint,
-		SessionJSON: payload,
-	})
-}
-
-func loadCheckpointPayload(state *AppState, sessionID string, checkpointID string) (Checkpoint, string, bool, error) {
-	if state == nil {
-		return Checkpoint{}, "", false, nil
-	}
-	if state.authz != nil {
-		row, exists, err := state.authz.getSessionCheckpoint(sessionID, checkpointID)
-		if err != nil || !exists {
-			return Checkpoint{}, "", exists, err
-		}
-		return row.Checkpoint, row.SessionJSON, true, nil
-	}
-	state.mu.RLock()
-	defer state.mu.RUnlock()
-	payload, ok := state.checkpointSessionPayloads[checkpointID]
-	if !ok {
-		return Checkpoint{}, "", false, nil
-	}
-	for _, checkpoint := range state.conversationCheckpoints[sessionID] {
-		if checkpoint.CheckpointID == checkpointID {
-			return checkpoint, payload, true, nil
-		}
-	}
-	return Checkpoint{}, "", false, nil
-}
-
 func collectCheckpointRollbackExecutionIDsLocked(state *AppState, sessionID string, keptExecutionIDs []string) []string {
 	kept := make(map[string]struct{}, len(keptExecutionIDs))
 	for _, executionID := range keptExecutionIDs {
@@ -537,13 +398,6 @@ func snapshotChangeEntriesLocked(state *AppState, sessionID string) []ChangeEntr
 	return nil
 }
 
-func checkpointProjectKind(isGit bool) string {
-	if isGit {
-		return "git"
-	}
-	return "non_git"
-}
-
 func checkpointGitHead(project Project) string {
 	if !project.IsGit || !isGitRepositoryPath(project.RepoPath) {
 		return ""
@@ -553,21 +407,6 @@ func checkpointGitHead(project Project) string {
 		return ""
 	}
 	return strings.TrimSpace(string(output))
-}
-
-func cloneConversationPtr(input *Conversation) *Conversation {
-	if input == nil {
-		return nil
-	}
-	copyValue := *input
-	if input.ActiveExecutionID != nil {
-		active := strings.TrimSpace(*input.ActiveExecutionID)
-		copyValue.ActiveExecutionID = &active
-	}
-	copyValue.RuleIDs = append([]string{}, input.RuleIDs...)
-	copyValue.SkillIDs = append([]string{}, input.SkillIDs...)
-	copyValue.MCPIDs = append([]string{}, input.MCPIDs...)
-	return &copyValue
 }
 
 type checkpointError string
@@ -580,8 +419,4 @@ func errConversationNotFoundForCheckpoint(sessionID string) error {
 
 func errProjectNotFoundForCheckpoint(sessionID string) error {
 	return checkpointError("project not found for session checkpoint: " + strings.TrimSpace(sessionID))
-}
-
-func errCheckpointNotFound(checkpointID string) error {
-	return checkpointError("checkpoint not found: " + strings.TrimSpace(checkpointID))
 }

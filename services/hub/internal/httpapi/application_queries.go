@@ -3,8 +3,6 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
-	"sort"
-	"strconv"
 	"strings"
 
 	appqueries "goyais/services/hub/internal/application/queries"
@@ -20,121 +18,133 @@ type applicationSessionReadModel struct {
 	state *AppState
 }
 
+type applicationSessionQuerySource struct {
+	state *AppState
+}
+
 func (m applicationSessionReadModel) ListSessions(ctx context.Context, req appqueries.ListSessionsRequest) ([]appqueries.Session, *string, error) {
+	return appqueries.NewBackingStoreReadModel(applicationSessionQuerySource{state: m.state}).ListSessions(ctx, req)
+}
+
+func (m applicationSessionReadModel) GetSessionDetail(ctx context.Context, sessionID string) (appqueries.SessionDetail, bool, error) {
+	return appqueries.NewBackingStoreReadModel(applicationSessionQuerySource{state: m.state}).GetSessionDetail(ctx, sessionID)
+}
+
+func (m applicationSessionReadModel) GetRunEvents(ctx context.Context, req appqueries.GetRunEventsRequest) ([]appqueries.RunEvent, error) {
+	return appqueries.NewBackingStoreReadModel(applicationSessionQuerySource{state: m.state}).GetRunEvents(ctx, req)
+}
+
+func (s applicationSessionQuerySource) ListSessions(ctx context.Context, workspaceID string, projectID string) ([]appqueries.Session, error) {
 	items := make([]Conversation, 0)
-	loadedFromRepository := false
-	queryService, hasQueryService := newRunQueryService(m.state)
+	queryService, hasQueryService := newRunQueryService(s.state)
 	if hasQueryService {
-		repositoryItems, err := listExecutionFlowConversationsFromRepository(ctx, queryService, strings.TrimSpace(req.WorkspaceID), strings.TrimSpace(req.ProjectID))
+		repositoryItems, err := listExecutionFlowConversationsFromRepository(ctx, queryService, strings.TrimSpace(workspaceID), strings.TrimSpace(projectID))
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		items = repositoryItems
-		loadedFromRepository = true
-		m.state.mu.Lock()
+		s.state.mu.Lock()
 		for _, item := range repositoryItems {
-			m.state.conversations[item.ID] = item
+			s.state.conversations[item.ID] = item
 		}
-		m.state.mu.Unlock()
-	}
-	if !loadedFromRepository {
-		m.state.mu.RLock()
-		for _, conversation := range m.state.conversations {
-			if strings.TrimSpace(req.ProjectID) != "" && conversation.ProjectID != strings.TrimSpace(req.ProjectID) {
+		s.state.mu.Unlock()
+	} else {
+		s.state.mu.RLock()
+		for _, conversation := range s.state.conversations {
+			if strings.TrimSpace(projectID) != "" && conversation.ProjectID != strings.TrimSpace(projectID) {
 				continue
 			}
-			if strings.TrimSpace(req.WorkspaceID) != "" && conversation.WorkspaceID != strings.TrimSpace(req.WorkspaceID) {
+			if strings.TrimSpace(workspaceID) != "" && conversation.WorkspaceID != strings.TrimSpace(workspaceID) {
 				continue
 			}
 			items = append(items, conversation)
 		}
 		for index := range items {
-			items[index] = decorateConversationUsageLocked(m.state, items[index])
+			items[index] = decorateConversationUsageLocked(s.state, items[index])
 		}
-		m.state.mu.RUnlock()
-	} else {
-		conversationIDs := make([]string, 0, len(items))
-		for _, item := range items {
-			conversationIDs = append(conversationIDs, item.ID)
-		}
-		totalsByConversation, err := queryService.ComputeConversationTokenUsage(ctx, conversationIDs)
-		if err != nil {
-			return nil, nil, err
-		}
-		for index := range items {
-			totals := totalsByConversation[items[index].ID]
-			items[index].TokensInTotal = totals.Input
-			items[index].TokensOutTotal = totals.Output
-			items[index].TokensTotal = totals.Total
-		}
+		s.state.mu.RUnlock()
 	}
-	sortConversationsByCreatedAt(items)
-	offset, limit := normalizePage(req.Offset, req.Limit)
-	if offset >= len(items) {
-		return []appqueries.Session{}, nil, nil
-	}
-	end := offset + limit
-	next := (*string)(nil)
-	if end < len(items) {
-		cursor := strconv.Itoa(end)
-		next = &cursor
-	} else {
-		end = len(items)
-	}
-	result := make([]appqueries.Session, 0, end-offset)
-	for _, item := range items[offset:end] {
+	result := make([]appqueries.Session, 0, len(items))
+	for _, item := range items {
 		result = append(result, toApplicationSession(item))
 	}
-	return result, next, nil
+	return result, nil
 }
 
-func (m applicationSessionReadModel) GetSessionDetail(ctx context.Context, sessionID string) (appqueries.SessionDetail, bool, error) {
-	conversation, exists := loadConversationByIDSeed(ctx, m.state, sessionID)
-	if !exists {
-		return appqueries.SessionDetail{}, false, nil
+func (s applicationSessionQuerySource) ComputeSessionUsage(ctx context.Context, sessionIDs []string) (map[string]appqueries.UsageTotals, error) {
+	queryService, hasQueryService := newRunQueryService(s.state)
+	if !hasQueryService || len(sessionIDs) == 0 {
+		out := make(map[string]appqueries.UsageTotals, len(sessionIDs))
+		for _, sessionID := range sessionIDs {
+			s.state.mu.RLock()
+			conversation, exists := s.state.conversations[sessionID]
+			s.state.mu.RUnlock()
+			if exists {
+				out[sessionID] = appqueries.UsageTotals{
+					Input:  conversation.TokensInTotal,
+					Output: conversation.TokensOutTotal,
+					Total:  conversation.TokensTotal,
+				}
+			}
+		}
+		return out, nil
 	}
+	totalsByConversation, err := queryService.ComputeConversationTokenUsage(ctx, sessionIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]appqueries.UsageTotals, len(totalsByConversation))
+	for sessionID, totals := range totalsByConversation {
+		out[sessionID] = appqueries.UsageTotals{
+			Input:  totals.Input,
+			Output: totals.Output,
+			Total:  totals.Total,
+		}
+	}
+	return out, nil
+}
 
-	m.state.mu.RLock()
-	currentConversation, currentExists := m.state.conversations[sessionID]
+func (s applicationSessionQuerySource) GetSessionDetailState(ctx context.Context, sessionID string) (appqueries.Session, []appqueries.SessionMessage, []appqueries.SessionSnapshot, []appqueries.Run, bool, error) {
+	conversation, exists := loadConversationByIDSeed(ctx, s.state, sessionID)
+	if !exists {
+		return appqueries.Session{}, nil, nil, nil, false, nil
+	}
+	s.state.mu.RLock()
+	currentConversation, currentExists := s.state.conversations[sessionID]
 	if currentExists {
 		conversation = currentConversation
 	}
-	messages := append([]ConversationMessage{}, m.state.conversationMessages[sessionID]...)
-	snapshots := cloneConversationSnapshots(m.state.conversationSnapshots[sessionID])
-	executions := append([]Execution{}, listConversationExecutionsLocked(m.state, sessionID)...)
-	conversation = decorateConversationUsageFromExecutions(conversation, executions)
-	m.state.mu.RUnlock()
-
-	if queryService, ok := newRunQueryService(m.state); ok {
-		repositoryExecutions, err := queryService.ListAllByConversation(ctx, sessionID)
-		if err != nil {
-			return appqueries.SessionDetail{}, false, err
-		}
-		executions = repositoryExecutions
-		conversation = decorateConversationUsageFromExecutions(conversation, executions)
-	}
-
-	sortConversationMessages(messages)
-	sortConversationSnapshots(snapshots)
-	sortConversationExecutions(executions)
-	resourceSnapshots, resourceSnapshotErr := loadSessionResourceSnapshots(m.state, sessionID)
-	if resourceSnapshotErr != nil {
-		return appqueries.SessionDetail{}, false, resourceSnapshotErr
-	}
-
-	return appqueries.SessionDetail{
-		Session:           toApplicationSession(conversation),
-		Messages:          toApplicationSessionMessages(messages),
-		Snapshots:         toApplicationSessionSnapshots(snapshots),
-		Runs:              toApplicationRuns(executions),
-		ResourceSnapshots: toApplicationSessionResourceSnapshots(resourceSnapshots),
-	}, true, nil
+	messages := append([]ConversationMessage{}, s.state.conversationMessages[sessionID]...)
+	snapshots := cloneConversationSnapshots(s.state.conversationSnapshots[sessionID])
+	executions := append([]Execution{}, listConversationExecutionsLocked(s.state, sessionID)...)
+	s.state.mu.RUnlock()
+	return toApplicationSession(conversation), toApplicationSessionMessages(messages), toApplicationSessionSnapshots(snapshots), toApplicationRuns(executions), true, nil
 }
 
-func (m applicationSessionReadModel) GetRunEvents(_ context.Context, req appqueries.GetRunEventsRequest) ([]appqueries.RunEvent, error) {
-	m.state.mu.RLock()
-	events, _ := listExecutionEventsSinceLocked(m.state, strings.TrimSpace(req.SessionID), strings.TrimSpace(req.LastEventID))
-	m.state.mu.RUnlock()
+func (s applicationSessionQuerySource) GetProjectedRuns(ctx context.Context, sessionID string) ([]appqueries.Run, bool, error) {
+	queryService, ok := newRunQueryService(s.state)
+	if !ok {
+		return nil, false, nil
+	}
+	repositoryExecutions, err := queryService.ListAllByConversation(ctx, sessionID)
+	if err != nil {
+		return nil, false, err
+	}
+	return toApplicationRuns(repositoryExecutions), true, nil
+}
+
+func (s applicationSessionQuerySource) LoadSessionResourceSnapshots(_ context.Context, sessionID string) ([]appqueries.SessionResourceSnapshot, error) {
+	resourceSnapshots, err := loadSessionResourceSnapshots(s.state, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return toApplicationSessionResourceSnapshots(resourceSnapshots), nil
+}
+
+func (s applicationSessionQuerySource) ListRunEvents(_ context.Context, sessionID string, lastEventID string) ([]appqueries.RunEvent, error) {
+	s.state.mu.RLock()
+	events, _ := listExecutionEventsSinceLocked(s.state, strings.TrimSpace(sessionID), strings.TrimSpace(lastEventID))
+	s.state.mu.RUnlock()
 	return toApplicationRunEvents(events), nil
 }
 
@@ -375,23 +385,6 @@ func fromApplicationRunEvents(items []appqueries.RunEvent) []ExecutionEvent {
 		})
 	}
 	return result
-}
-
-func sortConversationsByCreatedAt(items []Conversation) {
-	sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt < items[j].CreatedAt })
-}
-
-func normalizePage(offset int, limit int) (int, int) {
-	if offset < 0 {
-		offset = 0
-	}
-	if limit <= 0 {
-		limit = defaultPageLimit
-	}
-	if limit > maxPageLimit {
-		limit = maxPageLimit
-	}
-	return offset, limit
 }
 
 func cloneStringPointer(input *string) *string {

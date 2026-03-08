@@ -1,8 +1,10 @@
 package httpapi
 
 import (
-	"fmt"
+	"context"
 	"strings"
+
+	"goyais/services/hub/internal/domain"
 )
 
 func loadSessionResourceSnapshots(state *AppState, sessionID string) ([]SessionResourceSnapshot, error) {
@@ -83,53 +85,20 @@ func captureSessionResourceSnapshots(
 	mcpIDs []string,
 	snapshotAt string,
 ) ([]SessionResourceSnapshot, error) {
-	items := make([]SessionResourceSnapshot, 0, 1+len(ruleIDs)+len(skillIDs)+len(mcpIDs))
-	appendSnapshot := func(configID string, expectedType ResourceType) error {
-		normalizedConfigID := strings.TrimSpace(configID)
-		if normalizedConfigID == "" {
-			return nil
-		}
-		item, exists, err := loadWorkspaceResourceConfigRaw(state, workspaceID, normalizedConfigID)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return fmt.Errorf("resource config %s does not exist", normalizedConfigID)
-		}
-		if item.Type != expectedType {
-			return fmt.Errorf("resource config %s type mismatch: expected %s", normalizedConfigID, expectedType)
-		}
-		items = append(items, SessionResourceSnapshot{
-			SessionID:        strings.TrimSpace(sessionID),
-			ResourceConfigID: normalizedConfigID,
-			ResourceType:     expectedType,
-			ResourceVersion:  item.Version,
-			IsDeprecated:     false,
-			SnapshotAt:       strings.TrimSpace(snapshotAt),
-			CapturedConfig:   item,
-		})
-		return nil
-	}
-
-	if err := appendSnapshot(modelConfigID, ResourceTypeModel); err != nil {
+	service := newResourceConfigDomainService(state)
+	items, err := service.CaptureSessionSnapshots(context.Background(), domain.CaptureSessionSnapshotsRequest{
+		SessionID:     domain.SessionID(strings.TrimSpace(sessionID)),
+		WorkspaceID:   domain.WorkspaceID(strings.TrimSpace(workspaceID)),
+		ModelConfigID: strings.TrimSpace(modelConfigID),
+		RuleIDs:       append([]string{}, ruleIDs...),
+		SkillIDs:      append([]string{}, skillIDs...),
+		MCPIDs:        append([]string{}, mcpIDs...),
+		SnapshotAt:    strings.TrimSpace(snapshotAt),
+	})
+	if err != nil {
 		return nil, err
 	}
-	for _, ruleID := range sanitizeIDList(ruleIDs) {
-		if err := appendSnapshot(ruleID, ResourceTypeRule); err != nil {
-			return nil, err
-		}
-	}
-	for _, skillID := range sanitizeIDList(skillIDs) {
-		if err := appendSnapshot(skillID, ResourceTypeSkill); err != nil {
-			return nil, err
-		}
-	}
-	for _, mcpID := range sanitizeIDList(mcpIDs) {
-		if err := appendSnapshot(mcpID, ResourceTypeMCP); err != nil {
-			return nil, err
-		}
-	}
-	return items, nil
+	return fromDomainSessionResourceSnapshots(items), nil
 }
 
 func resolveSessionResourceConfig(
@@ -139,43 +108,18 @@ func resolveSessionResourceConfig(
 	configID string,
 	expectedType ResourceType,
 ) (ResourceConfig, bool, error) {
-	normalizedSessionID := strings.TrimSpace(sessionID)
-	normalizedWorkspaceID := strings.TrimSpace(workspaceID)
-	normalizedConfigID := strings.TrimSpace(configID)
-	if normalizedWorkspaceID == "" || normalizedConfigID == "" {
-		return ResourceConfig{}, false, nil
+	service := newResourceConfigDomainService(state)
+	item, exists, err := service.ResolveSessionResourceConfig(
+		context.Background(),
+		domain.SessionID(strings.TrimSpace(sessionID)),
+		domain.WorkspaceID(strings.TrimSpace(workspaceID)),
+		strings.TrimSpace(configID),
+		domain.ResourceType(strings.TrimSpace(string(expectedType))),
+	)
+	if err != nil || !exists {
+		return ResourceConfig{}, exists, err
 	}
-
-	if normalizedSessionID != "" {
-		items, err := loadSessionResourceSnapshots(state, normalizedSessionID)
-		if err != nil {
-			return ResourceConfig{}, false, err
-		}
-		for _, item := range items {
-			if strings.TrimSpace(item.ResourceConfigID) != normalizedConfigID {
-				continue
-			}
-			if item.ResourceType != expectedType {
-				continue
-			}
-			if item.IsDeprecated {
-				if item.FallbackResourceID != nil && strings.TrimSpace(*item.FallbackResourceID) != "" {
-					return resolveSessionResourceConfig(state, normalizedSessionID, normalizedWorkspaceID, *item.FallbackResourceID, expectedType)
-				}
-				return ResourceConfig{}, false, nil
-			}
-			return item.CapturedConfig, true, nil
-		}
-	}
-
-	item, exists, err := loadWorkspaceResourceConfigRaw(state, normalizedWorkspaceID, normalizedConfigID)
-	if err != nil {
-		return ResourceConfig{}, false, err
-	}
-	if !exists || item.Type != expectedType {
-		return ResourceConfig{}, false, nil
-	}
-	return item, true, nil
+	return fromDomainResourceConfig(item), true, nil
 }
 
 func resolveSessionResourceConfigs(
